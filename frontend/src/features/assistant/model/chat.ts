@@ -67,17 +67,14 @@ export interface Chat {
   turns: Turn[];
 }
 
-/** How the panel shows: a launcher, a window over the page, or a column beside it. */
-export type Placement = "folded" | "floating" | "docked";
 /** `ask`: actions wait for a press; `act`: the first is taken at once, and can be undone. */
 export type Approval = "ask" | "act";
 
 interface State {
   chats: Chat[];
   current: string | null;
-  placement: Placement;
-  /** Where it opens back to from the launcher. */
-  opens: Exclude<Placement, "folded">;
+  /** The column beside the page, else its launcher. */
+  open: boolean;
   width: number;
   approval: Approval;
   /** An answer finished while folded. */
@@ -85,9 +82,9 @@ interface State {
 }
 
 // shortcut: chats live in this browser's localStorage (≈5 MB, image previews included; a full one throws); server-side with the real assistant.
-const KEY = "sa:assistant";
+const KEY = "sa:assistant/2";
 export const WIDTH = { min: 340, max: 760, initial: 420 } as const;
-const INITIAL: State = { chats: [], current: null, placement: "folded", opens: "floating", width: WIDTH.initial, approval: "ask", unread: false };
+const INITIAL: State = { chats: [], current: null, open: false, width: WIDTH.initial, approval: "ask", unread: false };
 
 let state: State | null = null;
 const listeners = new Set<() => void>();
@@ -123,8 +120,8 @@ export function useAssistant(): State {
 
 export const newId = () => crypto.randomUUID();
 
-export function place(placement: Placement): void {
-  set((s) => ({ ...s, placement, ...(placement !== "folded" && { opens: placement, unread: false }) }));
+export function setOpen(open: boolean): void {
+  set((s) => ({ ...s, open, unread: open ? false : s.unread }));
 }
 
 export function setWidth(width: number): void {
@@ -169,7 +166,7 @@ export function updateTurn(chat: string, turn: string, change: (t: AssistantTurn
 
 /** An answer just finished: told on the launcher if nobody was looking. */
 export function finished(): void {
-  set((s) => ({ ...s, unread: s.placement === "folded" }));
+  set((s) => ({ ...s, unread: !s.open }));
 }
 
 function titleOf(text: string): string {

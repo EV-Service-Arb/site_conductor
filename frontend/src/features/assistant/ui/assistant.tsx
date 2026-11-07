@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ChatMarker,
   ChatPanel,
   ConfirmDialog,
   DropdownMenu,
@@ -17,32 +16,32 @@ import {
   PopoverTrigger,
   cn,
 } from "@evinvest/uikit";
-import { ChevronDown, ChevronsRight, Ellipsis, Minus, PanelRight, PictureInPicture2, Search, Sparkles, SquarePen, Trash2, Upload } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronsRight, CornerDownRight, Ellipsis, FileText, MapPin, PanelRight, Pencil, Search, Sparkles, SquarePen, Trash2, Upload } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { type Listed, narrowed, useGmails, useGmbTags, useOnMap } from "@/entities/gmb";
-import { useLocale, useT } from "@/shared/i18n";
+import { type Listed, narrowed, setOnMap, useGmails, useGmbTags, useOnMap } from "@/entities/gmb";
+import { useT } from "@/shared/i18n";
 import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
 
 import { ask, asMentions, script, stop, suggestions } from "../model/canned";
-import { type Chat, type Mention, WIDTH, openChat, place, removeChat, renameChat, setWidth, useAssistant } from "../model/chat";
+import { type Chat, type Mention, type Source, WIDTH, openChat, removeChat, renameChat, setOpen, setWidth, useAssistant } from "../model/chat";
 import { Composer, type ComposerHandle, type Draft } from "./composer";
-import { AssistantTurnView, UserTurnView } from "./turns";
+import { AssistantTurnView, UserTurnView, When } from "./turns";
 
 const SHORTCUT = "j";
 
 /**
- * The assistant on every signed-in page: a launcher in the bottom-right corner, opening to a window over the page or
- * a column beside it (resizable). It knows the location the page is on, and any other the asker names with `@`.
- * Mounted inside the content row, which it positions against.
+ * The assistant on every signed-in page: a launcher in the bottom-right corner, opening to a column beside the page
+ * (resizable; the whole content row on a phone). It knows the location the page is on, and any other the asker names
+ * with `@`. Mounted inside the content row, which it positions against.
  */
 export function Assistant() {
   const t = useT();
   const s = useAssistant();
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const launcher = useRef<HTMLButtonElement>(null);
-  const placement = s.placement === "docked" && !desktop ? "floating" : s.placement;
   const running = s.chats.some((c) => {
     const last = c.turns.at(-1);
     return last?.role === "assistant" && (last.state === "working" || last.state === "writing");
@@ -52,26 +51,26 @@ export function Assistant() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() !== SHORTCUT || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
       e.preventDefault();
-      place(s.placement === "folded" ? s.opens : "folded");
+      setOpen(!s.open);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [s.placement, s.opens]);
+  }, [s.open]);
 
   const fold = () => {
-    place("folded");
+    setOpen(false);
     requestAnimationFrame(() => launcher.current?.focus());
   };
 
-  if (placement === "folded")
+  if (!s.open)
     return (
       <button
         ref={launcher}
         type="button"
-        onClick={() => place(s.opens)}
+        onClick={() => setOpen(true)}
         aria-label={t("assistant.open")}
         title={`${t("assistant.open")} · Ctrl+J`}
-        className="group/launch absolute right-4 bottom-4 z-30 flex size-11 items-center justify-center rounded-full border border-border-strong bg-card text-ink shadow-elevated outline-none transition-[translate,box-shadow] hover:-translate-y-0.5 hover:shadow-overlay focus-visible:ring-2 focus-visible:ring-ring"
+        className="absolute right-4 bottom-4 z-30 flex size-10 items-center justify-center rounded-full border border-border bg-secondary text-ink outline-none transition-[translate,background-color] hover:-translate-y-0.5 hover:bg-popover focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Sparkles aria-hidden className={cn("size-5", running && "animate-pulse")} />
         {running && <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary [animation-duration:1.4s]" />}
@@ -79,21 +78,16 @@ export function Assistant() {
       </button>
     );
 
-  const view = <ChatView placement={placement} onFold={fold} desktop={desktop} />;
-  if (placement === "docked") return <Dock width={s.width}>{view}</Dock>;
+  const view = <ChatView onFold={fold} />;
+  if (desktop) return <Dock width={s.width}>{view}</Dock>;
   return (
     <section
       aria-label={t("assistant")}
-      data-enter="rise"
       onKeyDown={(e) => {
-        // A menu or popover is portalled out of the window: its Escape closes it, not the window.
+        // A menu or popover is portalled out: its Escape closes it, not the assistant.
         if (e.key === "Escape" && !e.defaultPrevented && e.currentTarget.contains(e.target as Node)) fold();
       }}
-      className={cn(
-        "absolute z-30 flex flex-col overflow-hidden bg-card",
-        desktop ? "right-3 bottom-3 rounded-panel border border-border-strong shadow-overlay" : "inset-0",
-      )}
-      style={desktop ? { width: 440, height: "min(640px, calc(100% - 1.5rem))", maxWidth: "calc(100% - 1.5rem)" } : undefined}
+      className="absolute inset-0 z-30 flex flex-col bg-card"
     >
       {view}
     </section>
@@ -139,7 +133,7 @@ function Dock({ width, children }: { width: number; children: React.ReactNode })
 }
 
 /** Header, conversation and composer; the same in the window and the column. */
-function ChatView({ placement, onFold, desktop }: { placement: "floating" | "docked"; onFold: () => void; desktop: boolean }) {
+function ChatView({ onFold }: { onFold: () => void }) {
   const t = useT();
   const s = useAssistant();
   const chat = s.chats.find((c) => c.id === s.current) ?? null;
@@ -179,7 +173,7 @@ function ChatView({ placement, onFold, desktop }: { placement: "floating" | "doc
         composer.current?.attach([...e.dataTransfer.files]);
       }}
     >
-      <Header chat={chat} placement={placement} onFold={onFold} desktop={desktop} onDelete={setDeleting} />
+      <Header chat={chat} onFold={onFold} onDelete={setDeleting} />
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(open) => {
@@ -197,8 +191,7 @@ function ChatView({ placement, onFold, desktop }: { placement: "floating" | "doc
         labels={{ jump: t("assistant.jump"), log: t("assistant.log") }}
         empty={<Empty subject={subject} onAsk={(text) => send({ text, mentions: [], files: [], subjectOff: false })} />}
         composer={
-          <>
-            <Composer
+          <Composer
               key={chat?.id ?? ""}
               handle={composer}
               chat={chat?.id ?? null}
@@ -212,21 +205,15 @@ function ChatView({ placement, onFold, desktop }: { placement: "floating" | "doc
                 if (asked) setEditing(asked.id);
               }}
             />
-            <p className="mt-1.5 text-center text-caption text-ink-faint">{t("assistant.preview")}</p>
-          </>
         }
       >
-        {chat?.turns.flatMap((turn, i) => {
-          const before = chat.turns[i - 1];
-          const marker = (before === undefined || turn.at - before.at > 30 * 60_000) && <ChatMarker key={`${turn.id}-at`} type="separator">{<When at={turn.at} />}</ChatMarker>;
-          const view =
-            turn.role === "user" ? (
-              <UserTurnView key={turn.id} turn={turn} editing={editing === turn.id} onEditing={(on) => setEditing(on ? turn.id : null)} onEdit={(text) => again(i, text)} />
-            ) : (
-              <AssistantTurnView key={turn.id} chat={chat.id} turn={turn} last={i === chat.turns.length - 1} onRetry={() => again(i - 1, (chat.turns[i - 1] as { text: string }).text)} />
-            );
-          return marker ? [marker, view] : [view];
-        })}
+        {chat?.turns.map((turn, i) =>
+          turn.role === "user" ? (
+            <UserTurnView key={turn.id} turn={turn} editing={editing === turn.id} onEditing={(on) => setEditing(on ? turn.id : null)} onEdit={(text) => again(i, text)} />
+          ) : (
+            <AssistantTurnView key={turn.id} chat={chat.id} turn={turn} last={i === chat.turns.length - 1} onRetry={() => again(i - 1, (chat.turns[i - 1] as { text: string }).text)} />
+          ),
+        )}
       </ChatPanel>
       {dropping > 0 && (
         <div className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-2 rounded-panel border-2 border-dashed border-ring bg-card/90 text-body text-ink">
@@ -247,31 +234,12 @@ function useSubject(all: readonly Listed[]): Listed | null {
   return all.find((l) => l.gmb.id === id) ?? null;
 }
 
-function When({ at }: { at: number }) {
-  const locale = useLocale();
-  const d = new Date(at);
-  const today = new Date().toDateString() === d.toDateString();
-  return new Intl.DateTimeFormat(locale, today ? { hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(d);
-}
-
-function Header({
-  chat,
-  placement,
-  onFold,
-  desktop,
-  onDelete,
-}: {
-  chat: Chat | null;
-  placement: "floating" | "docked";
-  onFold: () => void;
-  desktop: boolean;
-  onDelete: (chat: Chat) => void;
-}) {
+function Header({ chat, onFold, onDelete }: { chat: Chat | null; onFold: () => void; onDelete: (chat: Chat) => void }) {
   const t = useT();
   const [renaming, setRenaming] = useState(false);
   const title = chat?.title ?? t("assistant.newChat");
   return (
-    <header className="flex h-11 shrink-0 items-center gap-0.5 border-b border-border-subtle pr-1.5 pl-2">
+    <header className="flex h-11 shrink-0 items-center gap-0.5 px-2">
       {renaming && chat ? (
         <Input
           autoFocus
@@ -294,38 +262,93 @@ function Header({
       ) : (
         <History title={title} onDelete={onDelete} />
       )}
-      <IconButton size="sm" aria-label={t("assistant.new")} title={`${t("assistant.new")}`} disabled={chat === null} onClick={() => openChat(null)}>
-        <SquarePen />
-      </IconButton>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <IconButton size="sm" aria-label={t("assistant.more")} title={t("assistant.more")} disabled={chat === null}>
-            <Ellipsis />
+      <span className="flex-1" />
+      {chat !== null && (
+        <>
+          <IconButton size="sm" aria-label={t("assistant.new")} title={t("assistant.new")} onClick={() => openChat(null)}>
+            <SquarePen />
           </IconButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => setRenaming(true)}>{t("assistant.rename")}</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => onDelete(chat!)}>
-            <Trash2 aria-hidden />
-            {t("assistant.delete")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {desktop && (
-        <IconButton
-          size="sm"
-          aria-label={t(placement === "docked" ? "assistant.float" : "assistant.dock")}
-          title={t(placement === "docked" ? "assistant.float" : "assistant.dock")}
-          onClick={() => place(placement === "docked" ? "floating" : "docked")}
-        >
-          {placement === "docked" ? <PictureInPicture2 /> : <PanelRight />}
-        </IconButton>
+          <Context chat={chat} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <IconButton size="sm" aria-label={t("assistant.more")} title={t("assistant.more")}>
+                <Ellipsis />
+              </IconButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setRenaming(true)}>
+                <Pencil aria-hidden />
+                {t("assistant.rename")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={() => onDelete(chat)}>
+                <Trash2 aria-hidden />
+                {t("assistant.delete")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
       )}
       <IconButton size="sm" aria-label={t("assistant.fold")} title={`${t("assistant.fold")} · Ctrl+J`} onClick={onFold}>
-        {placement === "docked" ? <ChevronsRight /> : <Minus />}
+        <ChevronsRight />
       </IconButton>
     </header>
+  );
+}
+
+/** What the chat has touched: the locations named in it and what its answers read. */
+function Context({ chat }: { chat: Chat }) {
+  const t = useT();
+  const locations = new Map<number, Mention>();
+  const read = new Map<string, Source>();
+  for (const turn of chat.turns) {
+    if (turn.role === "user") for (const m of turn.mentions) locations.set(m.id, m);
+    else {
+      for (const [, label, id] of turn.text.matchAll(/@\[([^\]]*)\]\(location:(\d+)\)/g)) locations.set(Number(id), { kind: "location", id: Number(id), label: label! });
+      for (const source of turn.sources) read.set(source.label, source);
+    }
+  }
+  if (locations.size === 0 && read.size === 0) return null;
+  const row = "flex h-8 items-center gap-2 rounded-md px-2 text-body-s text-ink outline-none hover:bg-hover focus-visible:bg-hover";
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <IconButton size="sm" aria-label={t("assistant.context")} title={t("assistant.context")} className="data-[state=open]:bg-hover">
+          <PanelRight />
+        </IconButton>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="flex w-80 flex-col gap-2 rounded-xl p-1.5">
+        {locations.size > 0 && (
+          <section className="flex flex-col">
+            <h3 className="px-2 py-1 text-caption text-ink-soft">{t("assistant.context.locations")}</h3>
+            {[...locations.values()].map((m) => (
+              <Link key={m.id} href="/" onClick={() => setOnMap({ peeked: m.id })} className={row}>
+                <MapPin aria-hidden className="size-4 shrink-0 text-ink-soft" />
+                <span className="truncate">{m.label}</span>
+              </Link>
+            ))}
+          </section>
+        )}
+        {read.size > 0 && (
+          <section className="flex flex-col">
+            <h3 className="px-2 py-1 text-caption text-ink-soft">{t("assistant.context.read")}</h3>
+            {[...read.values()].map((source) =>
+              source.href === null ? (
+                <span key={source.label} className={cn(row, "hover:bg-transparent")}>
+                  <BookOpen aria-hidden className="size-4 shrink-0 text-ink-soft" />
+                  <span className="truncate">{source.label}</span>
+                </span>
+              ) : (
+                <Link key={source.label} href={source.href} className={row}>
+                  <FileText aria-hidden className="size-4 shrink-0 text-ink-soft" />
+                  <span className="truncate">{source.label}</span>
+                </Link>
+              ),
+            )}
+          </section>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -357,11 +380,14 @@ function History({ title, onDelete }: { title: string; onDelete: (chat: Chat) =>
         setActive(0);
       }}
     >
-      <PopoverTrigger className="flex h-7 min-w-0 flex-1 items-center gap-1 rounded-md px-1.5 text-left text-body font-medium text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring">
+      <PopoverTrigger className="flex h-7 min-w-0 items-center gap-1.5 rounded-md pr-1.5 pl-1 text-left text-body text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-hover">
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-hover">
+          <Sparkles aria-hidden className="size-3 text-ink-mid" />
+        </span>
         <span className="truncate">{title}</span>
         <ChevronDown aria-hidden className="size-3.5 shrink-0 text-ink-soft" />
       </PopoverTrigger>
-      <PopoverContent align="start" className="flex w-80 flex-col gap-1 p-1.5">
+      <PopoverContent align="start" className="flex w-80 flex-col gap-1 rounded-xl p-1.5">
         <div className="relative">
           <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-ink-soft" />
           <Input
@@ -429,18 +455,18 @@ function History({ title, onDelete }: { title: string; onDelete: (chat: Chat) =>
   );
 }
 
-/** A chat not started: what it can do here, and a few questions worth one press. */
+/** A chat not started: what it can do here, and a few questions worth one press, just above the composer. */
 function Empty({ subject, onAsk }: { subject: Listed | null; onAsk: (text: string) => void }) {
   const t = useT();
   const { tags } = useGmbTags();
   const name = subject ? (subject.gmb.name ?? subject.gmb.place_id) : null;
   return (
-    <div className="flex flex-col gap-5 py-6">
-      <div className="flex flex-col gap-2">
-        <span className="flex size-9 items-center justify-center rounded-xl bg-tint-primary-wash text-primary-ink">
+    <div className="mt-auto flex flex-col gap-3 pb-2">
+      <div className="flex flex-col gap-2 px-2">
+        <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-ink">
           <Sparkles aria-hidden className="size-5" />
         </span>
-        <h2 className="text-h3 text-ink">{name ? t("assistant.empty.about", { name }) : t("assistant.empty")}</h2>
+        <h2 className="text-body-l font-semibold text-ink">{name ? t("assistant.empty.about", { name }) : t("assistant.empty")}</h2>
         <p className="text-body-s text-ink-soft">
           {t("assistant.empty.hint.before")}
           <Kbd>@</Kbd>
@@ -449,21 +475,19 @@ function Empty({ subject, onAsk }: { subject: Listed | null; onAsk: (text: strin
           {t("assistant.empty.hint.after")}
         </p>
       </div>
-      <div className="flex flex-col items-start gap-1.5">
-        <span className="text-caption text-ink-soft">{name ? t("assistant.suggest.for", { name }) : t("assistant.suggest")}</span>
-        <div data-enter="stagger" className="flex flex-col items-start gap-1.5">
-          {suggestions(subject, tags).map((q) => (
-            <button
-              key={q}
-              type="button"
-              onClick={() => onAsk(q)}
-              className="flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-left text-body-s text-ink outline-none hover:border-border-strong hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Sparkles aria-hidden className="size-3.5 shrink-0 text-primary-ink" />
-              {q}
-            </button>
-          ))}
-        </div>
+      <div role="menu" aria-label={t("assistant.suggest")} data-enter="stagger" className="flex flex-col">
+        {suggestions(subject, tags).map((q) => (
+          <button
+            key={q}
+            type="button"
+            role="menuitem"
+            onClick={() => onAsk(q)}
+            className="flex h-8 items-center gap-2.5 rounded-md px-2 text-left text-body-s text-ink outline-none hover:bg-hover focus-visible:bg-hover"
+          >
+            <CornerDownRight aria-hidden className="size-4 shrink-0 text-ink-soft" />
+            <span className="truncate">{q}</span>
+          </button>
+        ))}
       </div>
     </div>
   );

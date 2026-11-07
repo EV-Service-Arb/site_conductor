@@ -34,6 +34,10 @@ export interface ComposerHandle {
   attach: (files: readonly File[]) => void;
 }
 
+// Notion's raised field: a surface step and a hairline in place of the kit's focus ring; the send button a round fill.
+const SURFACE =
+  "gap-0 rounded-2xl border-0 bg-secondary p-0 ring-1 ring-border focus-within:ring-1 focus-within:ring-border-strong [&>div:first-child]:px-3 [&>div:first-child]:pt-3 [&>div:last-child]:px-2 [&>div:last-child]:pt-1 [&>div:last-child]:pb-2 [&_textarea]:min-h-11 [&_textarea]:px-3.5 [&_textarea]:pt-3 [&_textarea]:text-body [&_[data-variant=outline]]:size-7 [&_[data-variant=outline]]:rounded-full [&_[data-variant=outline]]:border-0 [&_[data-variant=outline]]:bg-hover [&_[data-variant=outline]:enabled]:bg-primary [&_[data-variant=outline]:enabled]:text-on-primary";
+
 // A draft outlives the panel folding and switching chats, not a reload.
 const drafts = new Map<string, Draft>();
 const EMPTY: Draft = { text: "", mentions: [], files: [], subjectOff: false };
@@ -162,7 +166,7 @@ export function Composer({
           role="listbox"
           id="assistant-picker"
           aria-label={t(picking.kind === "mention" ? "assistant.pick.locations" : "assistant.pick.commands")}
-          className="absolute inset-x-0 bottom-full z-10 mb-1.5 flex flex-col overflow-hidden rounded-lg border border-border bg-popover p-1 shadow-overlay"
+          className="absolute inset-x-0 bottom-full z-10 mb-1.5 flex flex-col overflow-hidden rounded-xl border border-border bg-popover p-1.5 shadow-overlay"
           onMouseDown={(e) => e.preventDefault()}
         >
           <div className="px-2 pt-1 pb-1.5 text-caption text-ink-soft">{t(picking.kind === "mention" ? "assistant.pick.locations" : "assistant.pick.commands")}</div>
@@ -184,6 +188,7 @@ export function Composer({
         </div>
       )}
       <ChatComposer
+        className={SURFACE}
         value={draft.text}
         onValueChange={(text) => setDraft((d) => ({ ...d, text }))}
         onSend={send}
@@ -220,7 +225,7 @@ export function Composer({
           <>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <IconButton size="sm" aria-label={t("assistant.add")} title={t("assistant.add")}>
+                <IconButton size="sm" aria-label={t("assistant.add")} title={t("assistant.add")} className="rounded-full">
                   <Plus />
                 </IconButton>
               </DropdownMenuTrigger>
@@ -244,7 +249,6 @@ export function Composer({
             <ApprovalChip approval={approval} t={t} />
           </>
         }
-        hint={draft.text === "" ? t("assistant.hint") : undefined}
         onPaste={(e) => {
           const files = [...e.clipboardData.files];
           if (files.length === 0) return;
@@ -315,7 +319,7 @@ function ApprovalChip({ approval, t }: { approval: Approval; t: T }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`${t("assistant.approval")}: ${t(`assistant.approval.${approval}`)}`}
-        className="inline-flex h-6.5 items-center gap-1 rounded-chip py-1 pr-1.5 pl-2 text-body-s text-ink-mid outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+        className="inline-flex h-7 items-center gap-1 rounded-full pr-2 pl-2.5 text-body-s text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-hover"
       >
         {t(`assistant.approval.${approval}`)}
         <ChevronDown aria-hidden className="size-3.5" />

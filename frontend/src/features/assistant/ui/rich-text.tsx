@@ -74,7 +74,7 @@ export function LocationToken({ mention, className }: { mention: Mention; classN
       title={mention.label}
       onClick={() => setOnMap({ peeked: mention.id })}
       className={cn(
-        "rounded-sm px-0.5 font-medium text-ink underline decoration-border-strong underline-offset-3 outline-none wrap-anywhere hover:bg-hover hover:decoration-ink-soft focus-visible:ring-2 focus-visible:ring-ring",
+        "rounded-sm px-0.5 font-medium text-ink outline-none wrap-anywhere hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}
     >

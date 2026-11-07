@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { useT } from "@/shared/i18n";
+import { useLocale, useT } from "@/shared/i18n";
 
 import { type Action, type AssistantTurn, type Turn, updateTurn } from "../model/chat";
 import { LocationToken, RichText } from "./rich-text";
@@ -30,6 +30,14 @@ function CopyButton({ text, disabled = false }: { text: string; disabled?: boole
       {copied ? <Check /> : <Copy />}
     </IconButton>
   );
+}
+
+/** A turn's time: the hour today, the date before. */
+export function When({ at }: { at: number }) {
+  const locale = useLocale();
+  const d = new Date(at);
+  const today = new Date().toDateString() === d.toDateString();
+  return new Intl.DateTimeFormat(locale, today ? { hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(d);
 }
 
 const HOVER_TOOLS = "flex gap-0.5 opacity-0 transition-opacity group-hover/turn:opacity-100 group-focus-within/turn:opacity-100";
@@ -76,11 +84,14 @@ export function UserTurnView({ turn, editing, onEdit, onEditing }: { turn: UserT
             </IconButton>
             <CopyButton text={turn.text} />
           </div>
-          <div className="max-w-5/6 rounded-2xl rounded-br-md bg-hover px-3.5 py-2 text-body whitespace-pre-wrap break-words text-ink">
+          <div className="max-w-5/6 rounded-3xl bg-hover px-3.5 py-2.5 text-body whitespace-pre-wrap break-words text-ink">
             <Asked text={turn.text} mentions={turn.mentions} />
           </div>
         </div>
       )}
+      <span className="text-caption text-ink-faint opacity-0 transition-opacity group-hover/turn:opacity-100">
+        <When at={turn.at} />
+      </span>
     </div>
   );
 }
@@ -164,6 +175,9 @@ export function AssistantTurnView({ chat, turn, last, onRetry }: { chat: string;
           <IconButton size="sm" aria-label={t("assistant.feedback.down")} title={t("assistant.feedback.down")} aria-pressed={turn.feedback === "down"} onClick={() => feedback("down")}>
             <ThumbsDown className={cn(turn.feedback === "down" && "fill-current text-ink")} />
           </IconButton>
+          <span className="ml-1.5 self-center text-caption text-ink-faint opacity-0 transition-opacity group-hover/turn:opacity-100">
+            <When at={turn.ended ?? turn.at} />
+          </span>
         </div>
       )}
     </div>
@@ -215,7 +229,7 @@ function ActionCard({ action, primary, set }: { action: Action; primary: boolean
   const t = useT();
   if (action.state === "done")
     return (
-      <div className="flex items-center gap-2.5 rounded-lg border border-tint-positive-edge bg-tint-positive-wash px-3 py-2">
+      <div className="flex items-center gap-2.5 rounded-xl border border-tint-positive-edge bg-tint-positive-wash px-3.5 py-2">
         <Check aria-hidden className="size-4 shrink-0 text-positive" />
         <span className="min-w-0 flex-1 text-body-s text-ink">{action.done}</span>
         <Button size="sm" variant="ghost" onClick={() => set("proposed")}>
@@ -225,8 +239,8 @@ function ActionCard({ action, primary, set }: { action: Action; primary: boolean
       </div>
     );
   const look = cn(
-    "group/action flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-    primary ? "border-transparent bg-secondary hover:bg-hover" : "border-border hover:bg-hover",
+    "group/action flex w-full items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+    primary ? "border-border bg-secondary hover:bg-hover" : "border-border-subtle hover:bg-hover",
   );
   const body = (
     <>
