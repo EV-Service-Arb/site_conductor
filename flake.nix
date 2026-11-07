@@ -328,7 +328,7 @@
         # app does not depend on them, so naming a cargo build skips the Nix one.
         localStack = pkgs.writeShellApplication {
           name = "local-stack";
-          runtimeInputs = with pkgs; [ coreutils curl gawk git gnused procps util-linux nodejs_22 watchexec litestream sops yq-go openssh gnutar ];
+          runtimeInputs = with pkgs; [ coreutils curl gawk git gnused iproute2 procps util-linux nodejs_22 watchexec litestream sops yq-go openssh gnutar ];
           text = lib.concatStrings (lib.mapAttrsToList (k: v: "export ${k}=${v}\n") localEnv) + builtins.readFile ./scripts/local-stack.sh;
         };
 
@@ -363,7 +363,7 @@
           };
           publish = v_flakes.utils.publish pkgs;
           gen = { type = "app"; program = lib.getExe gen; meta.description = "the front end's mirror of the Rust types (pre-commit runs it too)"; };
-          dev = { type = "app"; program = lib.getExe dev; meta.description = "the conductor and its peers under watch, each started unless it already serves (docs/LOCAL.md)"; };
+          dev = { type = "app"; program = lib.getExe dev; meta.description = "the conductor and its peers under watch: a conductor already serving is replaced, a peer used (docs/LOCAL.md)"; };
           figma = { type = "app"; program = lib.getExe figma; meta.description = "the front end's screens into Figma over the stub, gridded on a new page of figmaFile; `-- frames` lists them"; };
           local-stack = { type = "app"; program = lib.getExe localStack; meta.description = "the conductor, its Grafana, sites_panel, review_archive and both landings, wired together on this machine (docs/LOCAL.md)"; };
         };

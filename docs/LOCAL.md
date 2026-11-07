@@ -55,8 +55,11 @@ nix run .#dev                  # the conductor, sites_panel and review_archive u
 nix run .#dev -- --port <n>    # the conductor on n and its next dev on n+1, beside the usual one
 ```
 
-Each part already answering `/health` on its port is used as it is; the rest are started under
-`--watch`, and Ctrl-C stops only those. The peers are the services whose bundles the front end
+A conductor or its `next dev` already listening on their ports (another run's, another
+checkout's) is stopped, together with the run that started it and whatever else that run served,
+and this checkout's take their place. A peer already answering `/health` on its port is used as it
+is; the rest are started under `--watch`, and Ctrl-C stops only those. Something else on the
+conductor's ports is let be. The peers are the services whose bundles the front end
 mounts — `devPeers` in flake.nix — each from `../<name>` beside the main checkout; one not there
 is skipped with a warning. `devUsers` in flake.nix gives a user (`id -un`) another `path` for a
 peer (relative to the main checkout, or absolute), or a `command`, run as is in the peer's

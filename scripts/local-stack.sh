@@ -12,7 +12,8 @@
 #   nix run .#local-stack -- --port-offset 1000   every port moved by 1000: a second stack, e.g. a worktree's
 #   nix run .#local-stack -- --reset --from-prod   prod's databases, from their litestream replicas
 #   nix run .#dev [-- --port <n>]          the conductor, sites_panel and review_archive under --watch,
-#                                          each started unless it already serves; the conductor on n
+#                                          a peer started unless it already serves, a conductor already
+#                                          serving stopped and replaced; the conductor on n
 #
 # The conductor and its front end come from `nix build .#bin` / `.#frontend` of this checkout,
 # unless PANEL_BIN / PANEL_WEB_DIR name others (PANEL_BIN=target/debug/panel for a cargo build);
@@ -85,8 +86,9 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod]
   (the keys from ../devops's sops), and review_archive's blobs over ssh (PROD_SSH), into a state
   with none of them: with --reset.
   Dev sign-in is one user whatever --role (DEV_EMAIL, at the top of the script): prod's, when copied.
-  dev (--dev): --watch without the landings, each of the conductor, sites_panel and review_archive
-  started unless it already answers on its port, a peer without a checkout skipped with a warning.
+  dev (--dev): --watch without the landings. A conductor or its next dev already on their ports is
+  stopped, with the run that started it, and replaced; sites_panel and review_archive are started
+  unless they already answer on their ports, a peer without a checkout skipped with a warning.
   --port <n>: the conductor on n and its next dev on n+1, in SA_PORT_RANGE, with a state of its own.
 EOF
 		exit 0
@@ -191,7 +193,49 @@ answers() { curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$1/health" 2>/
 run_panel=1
 run_sites=1
 run_review_archive=1
+# `take_over <port>`: a conductor or its next dev listening there stops, with the run that started it
+# (whatever else that run serves goes too, and is started here instead); anything else is let be.
+take_over() {
+	local pid root p
+	pid="$(ss -ltnpH "sport = :$1" | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1)"
+	[ -n "$pid" ] || return 0
+	case "$(ps -o comm= -p "$pid")" in
+	panel | next-server*) ;;
+	*) return 0 ;;
+	esac
+	root="$pid"
+	for p in $(ancestors "$pid"); do
+		[ "$(ps -o comm= -p "$p")" = local-stack ] && root="$p"
+	done
+	say "stopping the conductor's instance on :$1 (pid $root and what it started) to serve this checkout"
+	local pids=("$root")
+	tree() {
+		local c
+		for c in $(pgrep -P "$1"); do
+			pids+=("$c")
+			tree "$c"
+		done
+	}
+	tree "$root"
+	kill -TERM "${pids[@]}" 2>/dev/null || true # some exit on their parent's TERM before theirs
+	for _ in $(seq 10); do
+		busy "$1" || return 0
+		sleep 1
+	done
+	kill -KILL "${pids[@]}" 2>/dev/null || true # gone already, or the port would still be held
+	for _ in $(seq 5); do
+		busy "$1" || return 0
+		sleep 1
+	done
+	die ":$1 is still held after killing pid $root's tree"
+}
+ancestors() {
+	local p="$1"
+	while p="$(ps -o ppid= -p "$p" | tr -d ' ')" && [ "$p" -gt 1 ]; do echo "$p"; done
+}
 if [ "$dev" = 1 ]; then
+	take_over "$PANEL_PORT"
+	take_over "$WEB_DEV_PORT"
 	if answers "$PANEL_PORT"; then
 		say "the conductor already serves http://127.0.0.1:$PANEL_PORT: using it"
 		run_panel=0
