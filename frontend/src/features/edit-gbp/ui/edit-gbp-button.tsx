@@ -82,7 +82,13 @@ export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => v
 
   return (
     <>
-      <Button variant="ghost" size={button("sm")} icon aria-label={title} title={title} onClick={() => setOpen(true)}>
+      <Button variant="ghost" size={button("sm")} icon aria-label={title}
+        title={title}
+        onClick={() => {
+          reset();
+          setOpen(true);
+        }}
+      >
         <Pencil aria-hidden />
       </Button>
       <Dialog

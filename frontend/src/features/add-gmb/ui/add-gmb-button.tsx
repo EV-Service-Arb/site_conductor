@@ -115,7 +115,14 @@ export function AddGmbButton({ gmailId, onAdded }: { gmailId: number | null; onA
 
   return (
     <>
-      <Button variant="ghost" size={button("sm")} icon aria-label={t("gmbs.gmb.add")} title={t("gmbs.gmb.add")} onClick={() => setOpen(true)}>
+      <Button variant="ghost" size={button("sm")} icon aria-label={t("gmbs.gmb.add")}
+        title={t("gmbs.gmb.add")}
+        onClick={() => {
+          reset();
+          setOnGoogle(gmailId !== null);
+          setOpen(true);
+        }}
+      >
         <Plus aria-hidden />
       </Button>
       <Dialog
