@@ -5,6 +5,7 @@
 //!                      PKCE verifier sealed into the pre-login cookie
 //!                      → 302 concierge /api/auth/authorize?client_id=sa&…&code_challenge
 //!                      [&prompt=select_account, as asked]
+//!                      [as=<email>: dev sign-in only, else 400; sealed in the pre-login]
 //! GET /auth/callback   state from the cookie = state in the URL (constant time), and the
 //!                      state not redeemed before, else 400 and the code is never presented;
 //!                      ExchangeCode(code, verifier); the browser's previous session closed
@@ -27,7 +28,8 @@
 //!
 //! Under `PANEL_DEV_SIGN_IN` (development, loopback only) there is no concierge:
 //! `/auth/login` sends the browser straight to `/auth/callback` with [`DEV_CODE`], and
-//! [`Concierge::dev`] answers for one made-up user; everything else above runs unchanged.
+//! [`Concierge::dev`] answers for the configured user, or `?as=`'s; everything else above runs
+//! unchanged.
 
 use std::{
 	collections::HashMap,
@@ -55,7 +57,7 @@ use uuid::Uuid;
 
 use crate::{
 	api::ApiError,
-	concierge::{CLIENT_ID, Concierge, ConciergeError, DEV_CODE, Me},
+	concierge::{CLIENT_ID, Concierge, ConciergeError, DEV_CODE, DevIdentity, Me},
 	cookies::{self, Cookies},
 	http::Section,
 };
@@ -69,6 +71,9 @@ pub const PAGE_CSP: &str = "default-src 'self'; frame-ancestors 'none'; base-uri
 
 /// Longest `return_to`: a path the panel links to, with room for its query.
 const MAX_RETURN_TO: usize = 512;
+
+/// Longest dev sign-in `as`: RFC 5321's longest address.
+const MAX_DEV_AS: usize = 254;
 
 /// What signing in needs.
 #[derive(Clone, Debug)]
@@ -161,6 +166,8 @@ pub struct Caller {
 pub struct Login {
 	return_to: Option<String>,
 	prompt: Option<Prompt>,
+	#[serde(rename = "as")]
+	dev_as: Option<String>,
 }
 
 /// `GET /auth/login`.
@@ -168,7 +175,10 @@ pub async fn login(State(s): State<SignIn>, Query(q): Query<Login>) -> Response 
 	if q.return_to.as_deref().is_some_and(|p| !same_origin_path(p)) {
 		return private(page(StatusCode::BAD_REQUEST, "Sign-in failed", "This sign-in link is not valid here. Start again."));
 	}
-	let begun = match s.panel.begin_sign_in(q.return_to.as_deref(), Timestamp::now()) {
+	if q.dev_as.as_deref().is_some_and(|e| !s.concierge.is_dev() || !dev_email(e)) {
+		return private(page(StatusCode::BAD_REQUEST, "Sign-in failed", "This sign-in link is not valid here. Start again."));
+	}
+	let begun = match s.panel.begin_sign_in(q.return_to.as_deref(), q.dev_as.as_deref(), Timestamp::now()) {
 		Ok(b) => b,
 		Err(e) => {
 			crate::report(&e, "starting a sign-in");
@@ -253,7 +263,17 @@ pub async fn callback(State(s): State<SignIn>, headers: HeaderMap, Query(q): Que
 			return with_clear(page(StatusCode::INTERNAL_SERVER_ERROR, "Sign-in failed", "Something went wrong on our side. Try again."));
 		}
 	}
-	let issued = match s.concierge.exchange_code(code, &s.redirect_uri(), &pre.verifier).await {
+	let concierge = match pre.dev_as {
+		None => s.concierge.clone(),
+		Some(email) => match DevIdentity::user_of(&s.panel, &email).await {
+			Ok(user_id) => s.concierge.dev_as(user_id, email),
+			Err(e) => {
+				crate::report(&e, "finding the dev sign-in's user");
+				return with_clear(page(StatusCode::INTERNAL_SERVER_ERROR, "Sign-in failed", "Something went wrong on our side. Try again."));
+			}
+		},
+	};
+	let issued = match concierge.exchange_code(code, &s.redirect_uri(), &pre.verifier).await {
 		Ok(i) => i,
 		Err(ConciergeError::Refused(tonic::Code::PermissionDenied)) =>
 			return with_clear(page(
@@ -380,6 +400,10 @@ enum Prompt {
 /// ASCII (no control character, no space).
 fn same_origin_path(path: &str) -> bool {
 	path.len() <= MAX_RETURN_TO && path.starts_with('/') && !path[1..].starts_with('/') && !path.contains('\\') && path.bytes().all(|b| b.is_ascii_graphic())
+}
+
+fn dev_email(email: &str) -> bool {
+	email.len() <= MAX_DEV_AS && email.contains('@') && email.bytes().all(|b| b.is_ascii_graphic())
 }
 
 fn signed_out(s: &SignIn, mut res: Response) -> Response {

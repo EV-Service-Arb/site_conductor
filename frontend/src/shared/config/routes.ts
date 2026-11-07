@@ -6,6 +6,8 @@ export const ROUTES = {
   account: "/account",
   alerts: "/alerts",
   wallet: "/wallet",
+  /** The assistant full screen; `?chat=` the chat. */
+  assistant: "/assistant/",
   /** sites_panel's page; its views are the element's to route (CONTRACT §7). */
   sites: "/sites/",
   reviewArchive: "/review_archive/",

@@ -2,110 +2,63 @@
 
 import { useSyncExternalStore } from "react";
 
-/** Something a turn is about: a GMB today; other kinds (a lead, a site) join with their own picker. */
-export interface Mention {
-  kind: "location";
-  id: number;
-  label: string;
-}
-
-export interface Attachment {
-  name: string;
-  /** An image's preview, downscaled (it is kept in this browser); `null` for any other file. */
-  preview: { url: string; width: number; height: number } | null;
-  bytes: number;
-}
-
-export interface Step {
-  label: string;
-  done: boolean;
-}
-
-export interface Action {
-  id: string;
-  label: string;
-  detail: string;
-  /** Where it goes, for one that opens a page instead of doing something. */
-  href: string | null;
-  /** Said once it is done: "Appealed 4 reviews". */
-  done: string;
-  state: "proposed" | "done";
-}
-
-export interface Source {
-  label: string;
-  /** `null`: read, but nowhere in the panel to open. */
-  href: string | null;
-}
-
-export type Turn =
-  | { role: "user"; id: string; at: number; text: string; mentions: Mention[]; files: Attachment[] }
-  | {
-      role: "assistant";
-      id: string;
-      at: number;
-      /** When the answer stopped growing; `null` while it runs. */
-      ended: number | null;
-      /** How long its steps took, once they are over. */
-      worked: number | null;
-      steps: Step[];
-      /** `**bold**`, `- ` items, `@[label](location:id)` and `[n]` for `sources[n-1]`. */
-      text: string;
-      sources: Source[];
-      actions: Action[];
-      state: "working" | "writing" | "done" | "stopped";
-      feedback: "up" | "down" | null;
-    };
-
-export type AssistantTurn = Extract<Turn, { role: "assistant" }>;
-
-export interface Chat {
-  id: string;
-  /** `null` until named by its first question, or renamed. */
-  title: string | null;
-  updated: number;
-  turns: Turn[];
-}
+import { type AssistantTurn, type Chat, type Turn, type UserTurn, createChat, fetchChat, putTurns } from "@/entities/assistant";
+import { ApiError } from "@/shared/api";
 
 /** `ask`: actions wait for a press; `act`: the first is taken at once, and can be undone. */
 export type Approval = "ask" | "act";
 
-interface State {
-  chats: Chat[];
-  current: string | null;
-  /** The column beside the page, else its launcher. */
+/** Where the assistant sits beside the page; full screen is its own page, `/assistant/`. */
+export type Mode = "sidebar" | "floating";
+export type Display = Mode | "full";
+
+/** The answer being written in this tab: its question and itself, from turn `from` of `chat`, until the server has both. */
+export interface Running {
+  chat: string;
+  from: number;
+  asked: UserTurn;
+  answer: AssistantTurn;
+  /** The chat's version once the settled answer is written: the server's copy shows it from then. */
+  written: number | null;
+}
+
+interface Prefs {
+  /** The sidebar or the floating window, else its launcher. */
   open: boolean;
   width: number;
   approval: Approval;
-  /** An answer finished while folded. */
+  mode: Mode;
+  /** The chat in the sidebar or the floating window; `null` for a new one. */
+  current: string | null;
+  /** Something happened in a chat while folded. */
   unread: boolean;
 }
 
-// shortcut: chats live in this browser's localStorage (≈5 MB, image previews included; a full one throws); server-side with the real assistant.
-const KEY = "sa:assistant/2";
+interface State extends Prefs {
+  running: Running | null;
+}
+
+const KEY = "sa:assistant/3";
+const PREFS = ["open", "width", "approval", "mode", "current", "unread"] as const satisfies readonly (keyof Prefs)[];
 export const WIDTH = { min: 340, max: 760, initial: 420 } as const;
-const INITIAL: State = { chats: [], current: null, open: false, width: WIDTH.initial, approval: "ask", unread: false };
+const INITIAL: State = { open: false, width: WIDTH.initial, approval: "ask", mode: "sidebar", current: null, unread: false, running: null };
 
 let state: State | null = null;
 const listeners = new Set<() => void>();
 
-function load(): State {
-  const kept = localStorage.getItem(KEY);
-  if (kept === null) return INITIAL;
-  const read = JSON.parse(kept) as State;
-  // An answer a reload cut short stays cut.
-  const chats = read.chats.map((c) => ({ ...c, turns: c.turns.map((t) => (t.role === "assistant" && t.ended === null ? { ...t, state: "stopped" as const, ended: t.at } : t)) }));
-  return { ...read, chats };
-}
-
 function current(): State {
-  state ??= load();
+  if (state === null) {
+    const kept = localStorage.getItem(KEY);
+    state = kept === null ? INITIAL : { ...(JSON.parse(kept) as Prefs), running: null };
+  }
   return state;
 }
 
 function set(change: (s: State) => State): void {
-  state = change(current());
-  localStorage.setItem(KEY, JSON.stringify(state));
+  const was = current();
+  state = change(was);
+  const next = state;
+  if (PREFS.some((k) => next[k] !== was[k])) localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(PREFS.map((k) => [k, next[k]]))));
   for (const l of listeners) l();
 }
 
@@ -132,41 +85,98 @@ export function setApproval(approval: Approval): void {
   set((s) => ({ ...s, approval }));
 }
 
-export function openChat(id: string | null): void {
-  set((s) => ({ ...s, current: id }));
+/** `chat` in the sidebar or the floating window, opened in `mode` when given. */
+export function openChat(id: string | null, mode?: Mode): void {
+  set((s) => ({ ...s, current: id, ...(mode && { mode, open: true }) }));
 }
 
-export function removeChat(id: string): void {
-  set((s) => ({ ...s, chats: s.chats.filter((c) => c.id !== id), current: s.current === id ? null : s.current }));
-}
-
-export function renameChat(id: string, title: string): void {
-  set((s) => ({ ...s, chats: s.chats.map((c) => (c.id === id ? { ...c, title: title.trim() || null } : c)) }));
-}
-
-/** The chat's turns from `from` on replaced by `turns`; a chat made for them when `chat` is `null`. Answers the chat's id. */
-export function putTurns(chat: string | null, from: number, turns: Turn[]): string {
-  const id = chat ?? newId();
-  set((s) => {
-    const existing = s.chats.find((c) => c.id === id);
-    const first = turns.find((t) => t.role === "user");
-    const made: Chat = existing ?? { id, title: first?.role === "user" ? titleOf(first.text) : null, updated: Date.now(), turns: [] };
-    const next = { ...made, updated: Date.now(), turns: [...made.turns.slice(0, from), ...turns] };
-    return { ...s, current: id, chats: [next, ...s.chats.filter((c) => c.id !== id)] };
-  });
-  return id;
-}
-
-export function updateTurn(chat: string, turn: string, change: (t: AssistantTurn) => AssistantTurn): void {
-  set((s) => ({
-    ...s,
-    chats: s.chats.map((c) => (c.id === chat ? { ...c, turns: c.turns.map((t) => (t.id === turn && t.role === "assistant" ? change(t) : t)) } : c)),
-  }));
-}
-
-/** An answer just finished: told on the launcher if nobody was looking. */
-export function finished(): void {
+/** Something happened in a chat: told on the launcher if nobody was looking. */
+export function notice(): void {
   set((s) => ({ ...s, unread: !s.open }));
+}
+
+/** What a chat shows: the server's turns, with the answer this tab is writing in place of their tail until the server has it. */
+export function shown(chat: Chat | null, id: string | null, running: Running | null): Turn[] {
+  const turns = chat?.turns ?? [];
+  if (running === null || running.chat !== id || (running.written !== null && chat !== null && chat.version >= running.written)) return turns;
+  return [...turns.slice(0, running.from), running.asked, running.answer];
+}
+
+function updateRunning(change: (r: Running) => Running): void {
+  set((s) => ({ ...s, running: s.running && change(s.running) }));
+}
+
+let stopping: AbortController | null = null;
+/** The last answer's write: a question asked meanwhile is written after it, on the version it left. */
+let settling: Promise<{ chat: string; version: number } | null> = Promise.resolve(null);
+
+export function stop(): void {
+  stopping?.abort();
+}
+
+/**
+ * `asked` put at turn `from` of `chat` (a new chat for `null`), everything after it dropped, and answered by `play`
+ * through `put`. Answers the chat's id at once, and `written`: whether the question reached the server. Once settled
+ * the answer is written after it; `failed` hears why it was not (a conflict: someone wrote in the chat after the
+ * question). One answer runs at a time, across chats; it goes on while the assistant is folded or another chat is open.
+ */
+export function ask(
+  chat: Chat | null,
+  from: number,
+  asked: Omit<UserTurn, "role" | "id" | "at">,
+  play: (put: (change: (t: AssistantTurn) => AssistantTurn) => void, signal: AbortSignal) => Promise<void>,
+  failed: (e: unknown) => void,
+): { id: string; written: Promise<void> } {
+  stopping?.abort();
+  const id = chat?.id ?? newId();
+  const at = Date.now();
+  const question: UserTurn = { role: "user", id: newId(), at, ...asked };
+  let answer: AssistantTurn = { role: "assistant", id: newId(), at, ended: null, worked: null, steps: [], text: "", sources: [], actions: [], state: "working", feedback: null };
+  const mine = (r: Running | null) => r?.answer.id === answer.id;
+  const put = (change: (t: AssistantTurn) => AssistantTurn) => {
+    answer = change(answer);
+    updateRunning((r) => (mine(r) ? { ...r, answer } : r));
+  };
+  set((s) => ({ ...s, running: { chat: id, from, asked: question, answer, written: null } }));
+  const run = new AbortController();
+  stopping = run;
+  const wrote = settling.then((last) =>
+    chat === null ? createChat(id, titleOf(question.text), [question]) : putTurns(id, last?.chat === id ? Math.max(last.version, chat.version) : chat.version, from, [question]),
+  );
+  const written = wrote.then(
+    () => undefined,
+    (e: unknown) => {
+      run.abort();
+      set((s) => ({ ...s, running: mine(s.running) ? null : s.running }));
+      throw e;
+    },
+  );
+  settling = (async () => {
+    const base = await wrote.then(
+      (c) => c.version,
+      // The question's own failure is `written`'s to tell.
+      () => null,
+    );
+    await play(put, run.signal);
+    if (stopping === run) stopping = null;
+    if (base === null) return null;
+    try {
+      const saved = await putTurns(id, base, from + 1, [answer]).catch(async (e: unknown) => {
+        if (!(e instanceof ApiError && e.failure.kind === "conflict")) throw e;
+        const now = await fetchChat(id);
+        if (now === null || now.turns.length !== from + 1 || now.turns[from]?.id !== question.id) throw e;
+        return putTurns(id, now.version, from + 1, [answer]);
+      });
+      updateRunning((r) => (mine(r) ? { ...r, written: saved.version } : r));
+      if (answer.state === "done") notice();
+      return { chat: id, version: saved.version };
+    } catch (e) {
+      set((s) => ({ ...s, running: mine(s.running) ? null : s.running }));
+      failed(e);
+      return null;
+    }
+  })();
+  return { id, written };
 }
 
 function titleOf(text: string): string {

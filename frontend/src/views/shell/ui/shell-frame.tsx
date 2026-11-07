@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 
 import { PANEL } from "@config";
 
@@ -10,6 +11,7 @@ import { seesSites, useMe } from "@/entities/session";
 import { Assistant } from "@/features/assistant";
 import { goToSignIn } from "@/shared/api";
 import { useT } from "@/shared/i18n";
+import { ROUTES } from "@/shared/config/routes";
 import { useLiveSocket } from "@/shared/lib/live";
 
 import { followTitleCount } from "../model/title-count";
@@ -24,6 +26,7 @@ const UNAUTHENTICATED_EVENT = "sa:unauthenticated";
 export function ShellFrame({ onForbidden, children }: { onForbidden: () => void; children: ReactNode }) {
   const t = useT();
   const me = useMe();
+  const pathname = usePathname();
   const live = useLiveSocket({ onUnauthenticated: goToSignIn, onForbidden });
   const leads = t("title.leads");
   useEffect(() => followTitleCount(window, document, leads), [leads]);
@@ -42,7 +45,7 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
             <Outline />
           </aside>
           <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
-          {PANEL.assistant && <Assistant />}
+          {PANEL.assistant && !`${pathname}/`.startsWith(ROUTES.assistant) && <Assistant />}
         </div>
         <PanelHotbar live={live} />
       </div>

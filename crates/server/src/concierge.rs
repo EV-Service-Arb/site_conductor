@@ -3,18 +3,22 @@
 //! secret; `GetMe` with the user's access token, the only RPC that token opens.
 //!
 //! In development there may be no concierge at all: [`Concierge::dev`] answers the sign-in's
-//! three calls for one made-up user (`PANEL_DEV_SIGN_IN`, refused outside development and off
+//! three calls for made-up users (`PANEL_DEV_SIGN_IN`, refused outside development and off
 //! loopback by the settings), so the sign-in, the sessions and the gate run as they would.
 
 use std::{sync::Arc, time::Duration};
 
+use eyre::WrapErr as _;
 use jiff::{SignedDuration, Timestamp};
 use sa_auth::{Catalog, PermissionSet};
 use sa_contracts::concierge::v1::{
 	CatalogAlias, ClientTokenResponse, ExchangeCodeRequest, GetMeRequest, PublishCatalogRequest, RefreshClientTokenRequest, UserProfile, auth_service_client::AuthServiceClient,
 	user_directory_client::UserDirectoryClient,
 };
-use sa_panel::session::{RefreshError, Refresher, Tokens, random_token};
+use sa_panel::{
+	Panel,
+	session::{RefreshError, Refresher, Tokens, random_token},
+};
 use sha2::{Digest, Sha256};
 use tonic::{
 	Code, Request, Status,
@@ -113,12 +117,25 @@ impl Concierge {
 		})
 	}
 
-	/// No concierge: every sign-in is `who`. Development only — the settings refuse
-	/// `PANEL_DEV_SIGN_IN` in any other profile and on any origin but loopback.
+	/// No concierge: a sign-in is `who`, unless it asks for another email ([`Self::dev_as`]).
+	/// Development only — the settings refuse `PANEL_DEV_SIGN_IN` in any other profile and on
+	/// any origin but loopback.
 	pub fn dev(who: DevIdentity) -> Self {
 		Self {
 			backend: Backend::Dev(Arc::new(who)),
 		}
+	}
+
+	/// This dev sign-in for another user, holding the same permissions.
+	pub fn dev_as(&self, user_id: Uuid, email: String) -> Self {
+		let Backend::Dev(who) = &self.backend else {
+			panic!("`/auth/login` takes `as` only under dev sign-in");
+		};
+		Self::dev(DevIdentity {
+			user_id,
+			email,
+			permissions: who.permissions.clone(),
+		})
 	}
 
 	/// Whether this is [`Concierge::dev`]: `/auth/login` then skips the trip to concierge.
@@ -187,9 +204,7 @@ impl Concierge {
 	pub async fn me(&self, access: &str) -> Result<Me, ConciergeError> {
 		let directory = match &self.backend {
 			Backend::Grpc(g) => &g.directory,
-			// The token is the session's own, read from its sealed row: whoever holds the
-			// session is the dev user.
-			Backend::Dev(who) => return Ok(who.me()),
+			Backend::Dev(who) => return who.of_token(access).map(|w| w.me()).ok_or(ConciergeError::Refused(Code::Unauthenticated)),
 		};
 		let mut req = Request::new(GetMeRequest {});
 		let bearer: MetadataValue<_> = format!("Bearer {access}")
@@ -200,7 +215,7 @@ impl Concierge {
 	}
 }
 
-/// Who [`Concierge::dev`] signs everyone in as.
+/// Whom [`Concierge::dev`] signs in.
 #[derive(Clone, Debug)]
 pub struct DevIdentity {
 	pub user_id: Uuid,
@@ -215,9 +230,14 @@ impl DevIdentity {
 		uuid::Builder::from_custom_bytes(digest[..16].try_into().expect("SHA-256 is 32 bytes")).into_uuid()
 	}
 
-	/// What the panel shows as the user's name: the sidebar says that this is dev sign-in.
-	pub fn display_name(&self) -> String {
-		format!("Dev sign-in ({})", self.email)
+	/// The database's user of `email` when it has one (a copy of prod's), else [`Self::named`].
+	pub async fn user_of(panel: &Panel, email: &str) -> eyre::Result<Uuid> {
+		let mut conn = panel.store().pool().acquire().await.wrap_err("a connection to find the dev user")?;
+		match sa_panel::store::users::by_email(&mut conn, email).await?.as_slice() {
+			[] => Ok(Self::named(email)),
+			[one] => Ok(*one),
+			many => eyre::bail!("{} users are {email}: dev sign-in cannot be all of them", many.len()),
+		}
 	}
 
 	fn me(&self) -> Me {
@@ -225,16 +245,32 @@ impl DevIdentity {
 			user_id: self.user_id,
 			email: self.email.clone(),
 			email_verified: true,
-			preferred_name: self.display_name(),
+			preferred_name: format!("Dev sign-in ({})", self.email), // the sidebar says that this is dev sign-in
 			permissions: self.permissions.clone(),
 		}
 	}
 
+	/// The user a token of [`Self::tokens`] was issued to.
+	fn of_token(&self, token: &str) -> Option<Self> {
+		let (user_id, email) = token.split_once(':')?.1.split_once(':')?;
+		Some(Self {
+			user_id: Uuid::parse_str(user_id).ok()?,
+			email: email.to_owned(),
+			permissions: self.permissions.clone(),
+		})
+	}
+
 	/// A pair as concierge would issue one; the access token outlives a working day, so a dev
-	/// session rarely rotates (when it does, it rotates through [`Refresher`] as usual).
+	/// session rarely rotates (when it does, it rotates through [`Refresher`] as usual). Each
+	/// names its user: they are sealed in the session row, which is all a dev session has to say
+	/// whose it is, across restarts and rotations.
 	fn tokens(&self) -> Result<Tokens, ConciergeError> {
 		let now = Timestamp::now();
-		let token = || random_token().map(Zeroizing::new).map_err(|e| ConciergeError::Failed(format!("{e:#}")));
+		let token = || {
+			random_token()
+				.map(|r| Zeroizing::new(format!("{r}:{}:{}", self.user_id, self.email)))
+				.map_err(|e| ConciergeError::Failed(format!("{e:#}")))
+		};
 		Ok(Tokens {
 			access: token()?,
 			access_expires_at: now + SignedDuration::from_hours(12),
@@ -269,7 +305,12 @@ impl Refresher for Concierge {
 	async fn refresh(&self, refresh_token: &str) -> Result<Tokens, RefreshError> {
 		let (auth, secret) = match &self.backend {
 			Backend::Grpc(g) => (&g.auth, &g.secret),
-			Backend::Dev(who) => return who.tokens().map_err(|e| RefreshError::Failed(eyre::eyre!(e))),
+			Backend::Dev(who) =>
+				return who
+					.of_token(refresh_token)
+					.ok_or(RefreshError::Rejected)?
+					.tokens()
+					.map_err(|e| RefreshError::Failed(eyre::eyre!(e))),
 		};
 		let answer = auth
 			.clone()

@@ -141,6 +141,8 @@ the browser straight to `/auth/callback`, which opens a real session for that em
 holding those permissions: the database's user of that email when it has one (a copy of prod's),
 else one named by it. The email is the same whatever the permissions, so is the user and what
 they hold; the stack's is `DEV_EMAIL` in `scripts/local-stack.sh`, prod's `admin@evinvest.ltd`.
+`/auth/login?as=<email>` signs that browser in as another email's user (same rule, same
+permissions) instead, so several browser contexts can be several people on one conductor.
 An unknown permission fails the boot, named. The account menu shows the user as **Dev sign-in
 (<email>)**, `GET /api/v1/me` answers
 `"dev_sign_in": true` (for a UI badge), and `serve` logs `DEV SIGN-IN ON` at start.

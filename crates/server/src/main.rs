@@ -359,16 +359,8 @@ async fn serve(
 			(concierge, config)
 		}
 		Identity::Dev(d) => {
-			// a copied database's user of that email is whom dev sign-in is (docs/LOCAL.md)
-			let mut conn = panel.store().pool().acquire().await.wrap_err("a connection to find the dev user")?;
-			let user_id = match sa_panel::store::users::by_email(&mut conn, &d.email).await?.as_slice() {
-				[] => DevIdentity::named(&d.email),
-				[one] => *one,
-				many => eyre::bail!("{} users are {}: dev sign-in cannot be all of them", many.len(), d.email),
-			};
-			drop(conn);
 			let who = DevIdentity {
-				user_id,
+				user_id: DevIdentity::user_of(&panel, &d.email).await?,
 				permissions: d.permissions,
 				email: d.email,
 			};
@@ -377,7 +369,7 @@ async fn serve(
 				email = who.email,
 				user_id = %who.user_id,
 				panel_origin = d.panel_origin,
-				"DEV SIGN-IN ON (PANEL_DEV_SIGN_IN): /auth/login signs anyone in as this user, no concierge — development only"
+				"DEV SIGN-IN ON (PANEL_DEV_SIGN_IN): /auth/login signs anyone in as this user (or ?as=<email>), no concierge — development only"
 			);
 			let config = SignInConfig {
 				concierge_origin: d.panel_origin.clone(),

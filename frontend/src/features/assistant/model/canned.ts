@@ -2,7 +2,9 @@ import { ISSUES, type Issue, type Listed, type Tags, issueOf, issueText } from "
 import { ROUTES } from "@/shared/config/routes";
 import type { T } from "@/shared/i18n";
 
-import { type Action, type Approval, type AssistantTurn, type Mention, type Source, type Turn, finished, newId, putTurns, updateTurn } from "./chat";
+import type { Action, AssistantTurn, Mention, Source } from "@/entities/assistant";
+
+import { type Approval, newId } from "./chat";
 
 // shortcut: canned answers, English only, from what the panel already read; replace with the assistant's stream once one exists.
 
@@ -154,16 +156,15 @@ const STEP_MS = 700;
 const WORD_MS = 28;
 
 /**
- * Plays `s` into the turn: each step, then the text a few words at a time, then the actions (the first taken at
- * once under `act`). Stops where it is when `signal` aborts.
+ * Plays `s` into the answer this tab is writing: each step, then the text a few words at a time, then the actions (the
+ * first taken at once under `act`). Stops where it is when `signal` aborts.
  */
-export async function play(chat: string, turn: string, s: Script, approval: Approval, signal: AbortSignal): Promise<void> {
+export async function play(s: Script, approval: Approval, put: (change: (t: AssistantTurn) => AssistantTurn) => void, signal: AbortSignal): Promise<void> {
   const wait = (ms: number) =>
     new Promise<void>((done, fail) => {
       const id = setTimeout(done, ms);
       signal.addEventListener("abort", () => (clearTimeout(id), fail(signal.reason)), { once: true });
     });
-  const put = (change: (t: AssistantTurn) => AssistantTurn) => updateTurn(chat, turn, change);
   try {
     for (const [i, label] of s.steps.entries()) {
       put((t) => ({ ...t, steps: [...t.steps.slice(0, i).map((x) => ({ ...x, done: true })), { label, done: false }] }));
@@ -179,34 +180,10 @@ export async function play(chat: string, turn: string, s: Script, approval: Appr
     }
     const actions: Action[] = s.actions.map((a, i) => ({ ...a, id: newId(), state: approval === "act" && i === 0 && a.href === null ? "done" : "proposed" }));
     put((t) => ({ ...t, actions, state: "done", ended: Date.now() }));
-    finished();
   } catch (e) {
     if (!signal.aborted) throw e;
     put((t) => ({ ...t, state: "stopped", ended: Date.now(), worked: t.worked ?? Date.now() - t.at, steps: t.steps.map((x) => ({ ...x, done: true })) }));
   }
-}
-
-// One answer runs at a time, across chats: it goes on while the panel is folded or another chat is open.
-let running: AbortController | null = null;
-
-type Question = Pick<Extract<Turn, { role: "user" }>, "text" | "mentions" | "files">;
-
-/** `asked` put at turn `from` of `chat` (a new chat for `null`), everything after it dropped, and answered with `s`. Answers the chat's id. */
-export function ask(chat: string | null, from: number, asked: Question, s: Script, approval: Approval): string {
-  running?.abort();
-  const at = Date.now();
-  const answer: AssistantTurn = { role: "assistant", id: newId(), at, ended: null, worked: null, steps: [], text: "", sources: [], actions: [], state: "working", feedback: null };
-  const id = putTurns(chat, from, [{ role: "user", id: newId(), at, ...asked }, answer]);
-  const run = new AbortController();
-  running = run;
-  void play(id, answer.id, s, approval, run.signal).finally(() => {
-    if (running === run) running = null;
-  });
-  return id;
-}
-
-export function stop(): void {
-  running?.abort();
 }
 
 export function asMentions(listed: Listed[]): Mention[] {

@@ -167,7 +167,7 @@ pub struct Begun {
 	pub state: String,
 	/// `BASE64URL(SHA-256(verifier))`, the `code_challenge` (S256).
 	pub challenge: String,
-	/// The sealed pre-login: state, verifier, where to land and when it was made.
+	/// The sealed pre-login: state, verifier, where to land, whom dev sign-in signs in and when it was made.
 	pub cookie: String,
 }
 
@@ -178,6 +178,8 @@ pub struct PreLogin {
 	pub verifier: Zeroizing<String>,
 	/// The path `/auth/login` was asked to come back to, checked there.
 	pub return_to: Option<String>,
+	/// Dev sign-in's `?as=`: the email to sign in as, checked there.
+	pub dev_as: Option<String>,
 }
 
 /// 256 random bits as 64 hex characters: states, verifiers, session ids, CSRF tokens.
@@ -197,6 +199,7 @@ struct PreLoginPlain {
 	state: String,
 	verifier: String,
 	return_to: Option<String>,
+	dev_as: Option<String>,
 	issued_at: i64,
 }
 
@@ -218,9 +221,9 @@ fn token_aad(which: Which, key: &SessionKey) -> Vec<u8> {
 }
 
 impl Panel {
-	/// A fresh state and PKCE verifier, and the cookie that carries them and `return_to` to
-	/// the callback.
-	pub fn begin_sign_in(&self, return_to: Option<&str>, now: Timestamp) -> eyre::Result<Begun> {
+	/// A fresh state and PKCE verifier, and the cookie that carries them, `return_to` and
+	/// `dev_as` to the callback.
+	pub fn begin_sign_in(&self, return_to: Option<&str>, dev_as: Option<&str>, now: Timestamp) -> eyre::Result<Begun> {
 		let state = random_token()?;
 		// 64 hex characters: inside PKCE's 43–128 unreserved characters.
 		let verifier = Zeroizing::new(random_token()?);
@@ -229,6 +232,7 @@ impl Panel {
 				state: state.clone(),
 				verifier: verifier.to_string(),
 				return_to: return_to.map(str::to_owned),
+				dev_as: dev_as.map(str::to_owned),
 				issued_at: now.as_second(),
 			})
 			.wrap_err("serializing a pre-login")?,
@@ -259,6 +263,7 @@ impl Panel {
 			state: pre.state,
 			verifier,
 			return_to: pre.return_to,
+			dev_as: pre.dev_as,
 		})
 	}
 

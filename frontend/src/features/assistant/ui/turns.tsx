@@ -8,10 +8,9 @@ import { useEffect, useState } from "react";
 
 import { useLocale, useT } from "@/shared/i18n";
 
-import { type Action, type AssistantTurn, type Turn, updateTurn } from "../model/chat";
-import { LocationToken, RichText } from "./rich-text";
+import type { Action, AssistantTurn, UserTurn } from "@/entities/assistant";
 
-type UserTurn = Extract<Turn, { role: "user" }>;
+import { LocationToken, RichText } from "./rich-text";
 
 const plain = (text: string) => text.replace(/@\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/ ?\[\d+\]/g, "");
 
@@ -26,7 +25,7 @@ function CopyButton({ text, disabled = false }: { text: string; disabled?: boole
   }, [copied]);
   const label = copied ? t("assistant.copied") : t("assistant.copy");
   return (
-    <IconButton size="sm" aria-label={label} title={label} disabled={disabled} onClick={() => void navigator.clipboard.writeText(text).then(() => setCopied(true))}>
+    <IconButton size="sm" aria-label={label} tooltip={label} disabled={disabled} onClick={() => void navigator.clipboard.writeText(text).then(() => setCopied(true))}>
       {copied ? <Check /> : <Copy />}
     </IconButton>
   );
@@ -43,7 +42,7 @@ export function When({ at }: { at: number }) {
 const HOVER_TOOLS = "flex gap-0.5 opacity-0 transition-opacity group-hover/turn:opacity-100 group-focus-within/turn:opacity-100";
 
 /** A question: its files and the context it was asked in above it, the asker's tools beside it on hover. */
-export function UserTurnView({ turn, editing, onEdit, onEditing }: { turn: UserTurn; editing: boolean; onEdit: (text: string) => void; onEditing: (on: boolean) => void }) {
+export function UserTurnView({ turn, editing, onEdit, onEditing }: { turn: UserTurn; editing: boolean; onEdit: (text: string) => void; onEditing: ((on: boolean) => void) | null }) {
   const t = useT();
   const unnamed = turn.mentions.filter((m) => !turn.text.includes(`@${m.label}`));
   return (
@@ -74,14 +73,16 @@ export function UserTurnView({ turn, editing, onEdit, onEditing }: { turn: UserT
           ))}
         </div>
       )}
-      {editing ? (
+      {editing && onEditing !== null ? (
         <EditBox text={turn.text} onCancel={() => onEditing(false)} onSave={onEdit} />
       ) : (
         <div className="flex w-full items-start justify-end gap-1">
           <div className={cn(HOVER_TOOLS, "pt-1")}>
-            <IconButton size="sm" aria-label={t("assistant.edit")} title={t("assistant.edit")} onClick={() => onEditing(true)}>
-              <Pencil />
-            </IconButton>
+            {onEditing !== null && (
+              <IconButton size="sm" aria-label={t("assistant.edit")} tooltip={t("assistant.edit")} onClick={() => onEditing(true)}>
+                <Pencil />
+              </IconButton>
+            )}
             <CopyButton text={turn.text} />
           </div>
           <div className="max-w-5/6 rounded-3xl bg-hover px-3.5 py-2.5 text-body whitespace-pre-wrap break-words text-ink">
@@ -144,11 +145,10 @@ function EditBox({ text, onCancel, onSave }: { text: string; onCancel: () => voi
 }
 
 /** An answer: what it did to get there, what it says, what it proposes, and the reader's tools under it. */
-export function AssistantTurnView({ chat, turn, last, onRetry }: { chat: string; turn: AssistantTurn; last: boolean; onRetry: () => void }) {
+/** `onChange` and `onRetry`: `null` for a reader who cannot interact. */
+export function AssistantTurnView({ turn, last, onChange, onRetry }: { turn: AssistantTurn; last: boolean; onChange: ((turn: AssistantTurn) => void) | null; onRetry: (() => void) | null }) {
   const t = useT();
   const running = turn.state === "working" || turn.state === "writing";
-  const put = (change: (x: AssistantTurn) => AssistantTurn) => updateTurn(chat, turn.id, change);
-  const feedback = (f: "up" | "down") => put((x) => ({ ...x, feedback: x.feedback === f ? null : f }));
   return (
     <div data-enter="rise" className="group/turn flex flex-col gap-2.5">
       <Work turn={turn} />
@@ -157,24 +157,31 @@ export function AssistantTurnView({ chat, turn, last, onRetry }: { chat: string;
       {turn.actions.length > 0 && (
         <div data-enter="stagger" className="flex flex-col gap-1.5">
           {turn.actions.map((a, i) => (
-            <ActionCard key={a.id} action={a} primary={i === 0} set={(state) => put((x) => ({ ...x, actions: x.actions.map((y) => (y.id === a.id ? { ...y, state } : y)) }))} />
+            <ActionCard key={a.id} action={a} primary={i === 0} set={onChange && ((state) => onChange({ ...turn, actions: turn.actions.map((y) => (y.id === a.id ? { ...y, state } : y)) }))} />
           ))}
         </div>
       )}
       {!running && (
         <div className={cn("-ml-1.5 flex gap-0.5", !last && HOVER_TOOLS)}>
           <CopyButton text={plain(turn.text)} disabled={turn.text === ""} />
-          {last && (
-            <IconButton size="sm" aria-label={t("assistant.retry")} title={t("assistant.retry")} onClick={onRetry}>
+          {last && onRetry !== null && (
+            <IconButton size="sm" aria-label={t("assistant.retry")} tooltip={t("assistant.retry")} onClick={onRetry}>
               <RotateCcw />
             </IconButton>
           )}
-          <IconButton size="sm" aria-label={t("assistant.feedback.up")} title={t("assistant.feedback.up")} aria-pressed={turn.feedback === "up"} onClick={() => feedback("up")}>
-            <ThumbsUp className={cn(turn.feedback === "up" && "fill-current text-ink")} />
-          </IconButton>
-          <IconButton size="sm" aria-label={t("assistant.feedback.down")} title={t("assistant.feedback.down")} aria-pressed={turn.feedback === "down"} onClick={() => feedback("down")}>
-            <ThumbsDown className={cn(turn.feedback === "down" && "fill-current text-ink")} />
-          </IconButton>
+          {onChange !== null &&
+            (["up", "down"] as const).map((f) => (
+              <IconButton
+                key={f}
+                size="sm"
+                aria-label={t(`assistant.feedback.${f}`)}
+                tooltip={t(`assistant.feedback.${f}`)}
+                aria-pressed={turn.feedback === f}
+                onClick={() => onChange({ ...turn, feedback: turn.feedback === f ? null : f })}
+              >
+                {f === "up" ? <ThumbsUp className={cn(turn.feedback === f && "fill-current text-ink")} /> : <ThumbsDown className={cn(turn.feedback === f && "fill-current text-ink")} />}
+              </IconButton>
+            ))}
           <span className="ml-1.5 self-center text-caption text-ink-faint opacity-0 transition-opacity group-hover/turn:opacity-100">
             <When at={turn.ended ?? turn.at} />
           </span>
@@ -225,17 +232,19 @@ function Work({ turn }: { turn: AssistantTurn }) {
   );
 }
 
-function ActionCard({ action, primary, set }: { action: Action; primary: boolean; set: (state: Action["state"]) => void }) {
+function ActionCard({ action, primary, set }: { action: Action; primary: boolean; set: ((state: Action["state"]) => void) | null }) {
   const t = useT();
   if (action.state === "done")
     return (
       <div className="flex items-center gap-2.5 rounded-xl border border-tint-positive-edge bg-tint-positive-wash px-3.5 py-2">
         <Check aria-hidden className="size-4 shrink-0 text-positive" />
         <span className="min-w-0 flex-1 text-body-s text-ink">{action.done}</span>
-        <Button size="sm" variant="ghost" onClick={() => set("proposed")}>
-          <Undo2 aria-hidden />
-          {t("assistant.undo")}
-        </Button>
+        {set !== null && (
+          <Button size="sm" variant="ghost" onClick={() => set("proposed")}>
+            <Undo2 aria-hidden />
+            {t("assistant.undo")}
+          </Button>
+        )}
       </div>
     );
   const look = cn(
@@ -256,7 +265,7 @@ function ActionCard({ action, primary, set }: { action: Action; primary: boolean
       {body}
     </Link>
   ) : (
-    <button type="button" className={look} onClick={() => set("done")}>
+    <button type="button" className={look} disabled={set === null} onClick={() => set?.("done")}>
       {body}
     </button>
   );

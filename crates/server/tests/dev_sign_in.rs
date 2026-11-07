@@ -158,7 +158,11 @@ impl Browser {
 
 	/// `/auth/login`, then wherever it sends the browser, on this origin.
 	async fn sign_in(&mut self, app: &Router) -> (StatusCode, String) {
-		let (status, location, _) = self.send(app, Method::GET, "/auth/login").await;
+		self.sign_in_from(app, "/auth/login").await
+	}
+
+	async fn sign_in_from(&mut self, app: &Router, login: &str) -> (StatusCode, String) {
+		let (status, location, _) = self.send(app, Method::GET, login).await;
 		assert_eq!(status, StatusCode::FOUND);
 		let location = location.unwrap();
 		let path = location.strip_prefix(ORIGIN).unwrap_or_else(|| panic!("not back to the panel: {location}"));
@@ -234,4 +238,46 @@ async fn dev_sign_in_still_checks_the_callback() {
 	let path = location.unwrap().strip_prefix(ORIGIN).unwrap().replace(DEV_CODE, "forged");
 	assert_eq!(b.send(&app, Method::GET, &path).await.0, StatusCode::BAD_REQUEST);
 	assert!(!b.jar.contains_key("sa_session"));
+}
+
+/// `?as=` signs one browser in as another user than the configured one, with the same
+/// permissions; each browser's `/me` stays its own.
+#[tokio::test]
+async fn dev_sign_in_as_another_email() {
+	let db = TestDb::create().await;
+	let app = dev_app(&db, operator(), "dev-a@localhost").await;
+	let mut a = Browser::default();
+	let mut b = Browser::default();
+	a.sign_in(&app).await;
+	assert_eq!(
+		b.sign_in_from(&app, "/auth/login?as=dev-b%40localhost&return_to=%2Fchats").await,
+		(StatusCode::SEE_OTHER, "/chats".to_owned())
+	);
+
+	for (browser, email) in [(&mut a, "dev-a@localhost"), (&mut b, "dev-b@localhost")] {
+		let (status, _, me) = browser.send(&app, Method::GET, "/api/v1/me").await;
+		assert_eq!(status, StatusCode::OK, "{me}");
+		assert_eq!(me["email"], email);
+		assert_eq!(me["user_id"], DevIdentity::named(email).to_string());
+		assert_eq!(serde_json::from_value::<PermissionSet>(me["permissions"].clone()).unwrap(), operator());
+	}
+
+	for bad in ["", "nobody", "a%20b@localhost"] {
+		let (status, ..) = Browser::default().send(&app, Method::GET, &format!("/auth/login?as={bad}")).await;
+		assert_eq!(status, StatusCode::BAD_REQUEST, "{bad:?}");
+	}
+}
+
+#[tokio::test]
+async fn as_is_refused_without_dev_sign_in() {
+	let db = TestDb::create().await;
+	let config = SignInConfig {
+		panel_origin: ORIGIN.to_owned(),
+		concierge_origin: "https://evinvest.ltd".to_owned(),
+	};
+	let concierge = Concierge::try_new("http://127.0.0.1:1", "secret").unwrap(); // never asked: `/auth/login` refuses first
+	let app = http::app(SignIn::new(panel(&db).await, concierge, config), None, None, Default::default(), None, None);
+	assert_eq!(Browser::default().send(&app, Method::GET, "/auth/login").await.0, StatusCode::FOUND, "to concierge");
+	let (status, location, _) = Browser::default().send(&app, Method::GET, "/auth/login?as=dev-b%40localhost").await;
+	assert_eq!((status, location), (StatusCode::BAD_REQUEST, None));
 }

@@ -17,10 +17,11 @@ import { AtSign, ChevronDown, FileText, MapPin, Paperclip, Plus, Slash, X } from
 import Image from "next/image";
 import { type RefObject, useEffect, useImperativeHandle, useRef, useState } from "react";
 
+import type { Attachment, Mention } from "@/entities/assistant";
 import { type Listed, narrowed, useGmails } from "@/entities/gmb";
 import { type T, useT } from "@/shared/i18n";
 
-import { type Approval, type Attachment, type Mention, setApproval } from "../model/chat";
+import { type Approval, setApproval } from "../model/chat";
 
 export interface Draft {
   text: string;
@@ -42,6 +43,11 @@ const SURFACE =
 // A draft outlives the panel folding and switching chats, not a reload.
 const drafts = new Map<string, Draft>();
 const EMPTY: Draft = { text: "", mentions: [], files: [], subjectOff: false };
+
+/** `draft` back in `chat`'s composer, the next time it is made: a question the server did not take. */
+export function keepDraft(chat: string | null, draft: Draft): void {
+  drafts.set(chat ?? "", draft);
+}
 
 const COMMANDS = [
   { id: "status", prompt: (s: string | null) => (s ? `How is @${s} doing?` : "Which locations need me today?") },
@@ -220,7 +226,7 @@ export function Composer({
           <>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <IconButton size="sm" aria-label={t("assistant.add")} title={t("assistant.add")} className="rounded-full">
+                <IconButton size="sm" aria-label={t("assistant.add")} tooltip={t("assistant.add")} className="rounded-full">
                   <Plus />
                 </IconButton>
               </DropdownMenuTrigger>

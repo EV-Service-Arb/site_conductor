@@ -5,8 +5,7 @@ import { MapPin } from "lucide-react";
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 
-
-import type { Mention, Source } from "../model/chat";
+import type { Mention, Source } from "@/entities/assistant";
 
 const INLINE = /(\*\*[^*]+\*\*|@\[[^\]]*\]\(location:\d+\)|\[\d+\])/g;
 
