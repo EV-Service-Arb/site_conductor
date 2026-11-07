@@ -1,6 +1,6 @@
 //! The HTTP surface: `/health`, the sign-in (`/auth/*`, [`crate::signin`]), the conductor's own
 //! `/api/v1` ([`crate::api`], [`crate::access`], [`crate::gmbs`], [`crate::tokens`],
-//! [`crate::alerts`]) and its live socket
+//! [`crate::alerts`], [`crate::assistant`]) and its live socket
 //! (`/api/v1/live`, [`crate::live`]); with the forward configured, ingest (`ingest.rs`) and
 //! the services behind the origin ([`crate::forward`]).
 
@@ -25,7 +25,7 @@ use tower_http::timeout::TimeoutLayer;
 use crate::{
 	access,
 	alerts::{self, Telegram},
-	api, connected,
+	api, assistant, connected,
 	forward::{Forward, Services},
 	gmbs,
 	grafana::Grafana,
@@ -78,7 +78,7 @@ impl ApiRoute {
 
 /// Every `/api/v1` route on `ApiState`.
 pub fn api_routes() -> Vec<ApiRoute> {
-	[api::routes(), access::routes(), alerts::routes(), gmbs::routes(), tokens::routes()]
+	[api::routes(), access::routes(), alerts::routes(), gmbs::routes(), tokens::routes(), assistant::routes()]
 		.into_iter()
 		.flatten()
 		.collect()

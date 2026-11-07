@@ -8,6 +8,7 @@
 pub mod access;
 pub mod alerts;
 pub mod api;
+pub mod assistant;
 pub mod concierge;
 mod connected;
 pub mod cookies;

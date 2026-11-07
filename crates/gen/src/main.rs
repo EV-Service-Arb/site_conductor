@@ -10,6 +10,7 @@ use sa_panel::tokens::Kind;
 use sa_server::{
 	access::AccessRequestDto,
 	alerts::AlertsDto,
+	assistant::{AccessDto, ChatDto, ChatsDto, PeopleDto},
 	gmbs::{CandidatesDto, GmailsDto, MapDto},
 	signin::Caller,
 	tokens::{BalanceChangeDto, BalanceDto, LedgerDto, TokenHoldersDto, TokensDto, UsageDto},
@@ -60,4 +61,5 @@ fn main() {
 			},
 		],
 	);
+	Ts::write(&root.join("entities/assistant/model/generated.ts"), &[Ts::types::<(ChatsDto, ChatDto, AccessDto, PeopleDto)>()]);
 }

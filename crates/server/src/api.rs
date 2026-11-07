@@ -34,6 +34,7 @@ pub enum ApiError {
 	Forbidden,
 	NotFound,
 	Conflict(String),
+	TooLarge(String),
 	/// Not now: the message says until when.
 	Unavailable(String),
 	Internal(eyre::Report),
@@ -60,6 +61,7 @@ impl IntoResponse for ApiError {
 			Self::Forbidden => (StatusCode::FORBIDDEN, "your permissions do not allow this".to_owned()),
 			Self::NotFound => (StatusCode::NOT_FOUND, "not found".to_owned()),
 			Self::Conflict(m) => (StatusCode::CONFLICT, m),
+			Self::TooLarge(m) => (StatusCode::PAYLOAD_TOO_LARGE, m),
 			Self::Unavailable(m) => (StatusCode::SERVICE_UNAVAILABLE, m),
 			Self::Internal(e) => {
 				crate::report(&e, "the conductor's API");
@@ -81,7 +83,9 @@ impl From<Refused> for ApiError {
 		match r {
 			Refused::Invalid(m) => Self::BadRequest(m),
 			Refused::NotFound => Self::NotFound,
+			Refused::Forbidden => Self::Forbidden,
 			Refused::Conflict(m) => Self::Conflict(m),
+			Refused::TooLarge(m) => Self::TooLarge(m),
 			Refused::Closed => Self::Unavailable(r.to_string()),
 		}
 	}
@@ -95,7 +99,10 @@ impl From<Invalid> for ApiError {
 
 /// A JSON body, its rejection turned into our error shape.
 pub(crate) fn body<T: DeserializeOwned>(b: Result<Json<T>, JsonRejection>) -> ApiResult<T> {
-	b.map(|Json(v)| v).map_err(|e| ApiError::BadRequest(e.body_text()))
+	b.map(|Json(v)| v).map_err(|e| match e.status() {
+		StatusCode::PAYLOAD_TOO_LARGE => ApiError::TooLarge(e.body_text()),
+		_ => ApiError::BadRequest(e.body_text()),
+	})
 }
 
 async fn me(Extension(caller): Extension<Caller>) -> Json<Caller> {

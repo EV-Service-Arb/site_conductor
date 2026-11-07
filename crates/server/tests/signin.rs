@@ -873,7 +873,21 @@ async fn no_permission_opens_no_section() {
 			"/tokens",
 			"/tokens/ledger",
 			"/tokens/usage",
-			"/tokens/claim"
+			"/tokens/claim",
+			"/assistant/chats",
+			"/assistant/chats",
+			"/assistant/chats/{id}",
+			"/assistant/chats/{id}/turns",
+			"/assistant/chats/{id}/title",
+			"/assistant/chats/{id}/pinned",
+			"/assistant/chats/{id}/archived",
+			"/assistant/chats/{id}",
+			"/assistant/archived",
+			"/assistant/chats/{id}/access",
+			"/assistant/chats/{id}/members",
+			"/assistant/chats/{id}/members/{user}",
+			"/assistant/chats/{id}/general",
+			"/assistant/people"
 		],
 		"every other route sits under a section"
 	);

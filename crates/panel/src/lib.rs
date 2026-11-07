@@ -6,10 +6,12 @@
 //! follow; [`access`] the access requests; [`gmbs`] people's gmails and the GMBs they manage;
 //! [`tokens`] their balances and review_archive's charges, and [`import`] both from there;
 //! [`alerts`] the hub: users' destinations and rules, the feeds fanned out to them; [`telegram`]
-//! the method that reaches them; [`live`] the bus that tells the server's sockets what changed.
+//! the method that reaches them; [`live`] the bus that tells the server's sockets what changed;
+//! [`assistant`] the assistant's chats.
 
 pub mod access;
 pub mod alerts;
+pub mod assistant;
 pub mod gmbs;
 pub mod import;
 pub mod live;
@@ -64,7 +66,7 @@ pub struct SignedBatch<'a> {
 	pub body: &'a [u8],
 }
 
-/// Why a person's request about their gmails, GMBs or tokens is refused.
+/// Why a person's request is refused.
 #[derive(Debug, thiserror::Error)]
 pub enum Refused {
 	/// The caller's mistake: the message is what they are told.
@@ -72,8 +74,13 @@ pub enum Refused {
 	Invalid(String),
 	#[error("not found")]
 	NotFound,
+	/// They may read it, not do this.
+	#[error("not allowed")]
+	Forbidden,
 	#[error("{0}")]
 	Conflict(String),
+	#[error("{0}")]
+	TooLarge(String),
 	/// Before the import from review_archive (see [`import`]).
 	#[error("tokens and GMBs open after the import from review_archive")]
 	Closed,

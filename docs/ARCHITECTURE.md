@@ -34,7 +34,7 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          Directory and Feeds ports), `telegram` (the method: links, chats, outbox,
                          delivery, buttons; the Bot port), `live` (the in-process bus), `gmbs`,
                          `tokens` (the ledger, review_archive's charges, the snapshot), `import`
-                         (review_archive's, once)
+                         (review_archive's, once), `assistant` (the assistant's chats)
 crates/alerts/           no I/O: the alert rules, and the notes a service publishes to the
                          conductor and their check; sites and review_archive take it too
 crates/auth/             the `sa` permissions (concierge_iam derives), the aliases `sa:operator` /
@@ -62,13 +62,14 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/live.rs            GET /api/v1/live, and the follower of sites' change feed
   src/gmbs.rs            /api/v1/gmails, /api/v1/gmbs
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
+  src/assistant.rs       /api/v1/assistant; the turns' shape
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
                          work in `serve`
   src/telegram.rs        the Bot API, its long poll
   src/web.rs             the front end's static export (PANEL_WEB_DIR), behind every other route
   src/settings.rs        the environment (ev_lib `settings!`)
 crates/gen/              `nix run .#gen`: the front end's mirror of Rust types (ev_lib `ts_gen`),
-                         into frontend/src/entities/{session,source,gmb,tokens,alerts}/model/generated.ts,
+                         into frontend/src/entities/{session,source,gmb,tokens,alerts,assistant}/model/generated.ts,
                          committed;
                          the pre-commit hook re-runs it
 contracts/proto/concierge/v1/  concierge's auth and directory protos, vendored at the commit in
@@ -104,7 +105,7 @@ POST /auth/logout    CSRF; every session of the user is closed
   concrete `sa` permissions the user holds (no alias, no wildcard; anything outside `sa` is a
   failed answer). Every `/api/v1` route sits under one section — Admin
   (`sa:admin:sources:manage`), Tokens (`sa:admin:tokens:grant`) — or none (`/me`,
-  `/access/requests*`, `/alerts*`, the caller's own gmails, GMBs and tokens). Each fresh
+  `/access/requests*`, `/alerts*`, `/assistant*`, the caller's own gmails, GMBs and tokens). Each fresh
   `GetMe` upserts the user (`users`: id, email, name), whom tokens and gmails belong to.
   `http::api_routes` is the table the router is built from and the tests walk.
 - **The catalog.** `serve` publishes `Catalog::collect("sa", PANEL_BUILD_EPOCH)` — the whole `sa`
@@ -256,7 +257,7 @@ when the key is issued, or once with `set-origin` for a key issued before origin
 
 ## The conductor's API, `/api/v1`
 
-JSON; timestamps RFC 3339; errors `{"error": "…"}` with 400 / 403 / 404 / 409 / 503.
+JSON; timestamps RFC 3339; errors `{"error": "…"}` with 400 / 403 / 404 / 409 / 413 / 503.
 
 ```text
 GET    /me                                  {user_id, email, preferred_name, permissions,
@@ -309,9 +310,32 @@ POST   /tokens/claim                        → 200 as GET /tokens
 GET    /admin/tokens         Tokens         {users: [{user_id, email, name, balance}]}
 POST   /admin/tokens/{user}  Tokens, fresh  {set: n, note?} | {add: n, note?} | {grant: n, note}
                                             → 200 {balance}; a grant is owed until claimed
+GET    /assistant/chats                     {chats}: owned and joined, the caller's marks, newest
+                                            first
+POST   /assistant/chats                     {id, title, turns} → 201 the chat (version 1); 409 the
+                                            id taken
+GET    /assistant/chats/{id}                the chat: its turns, version, the caller's role
+PUT    /assistant/chats/{id}/turns          {base, from, turns} → 200 the chat: turns[..from] kept,
+                                            the rest replaced; 409 `base` not the version, 400
+                                            `from` past the end
+PUT    /assistant/chats/{id}/title          {title} → 200 the chat; empty unnames it
+PUT    /assistant/chats/{id}/{pinned,archived}  {on} → 204, the caller's own
+DELETE /assistant/chats/{id}                204; the owner's
+DELETE /assistant/archived                  204: the caller's archived chats deleted, or left
+GET    /assistant/chats/{id}/access         {owner, members, general}
+POST   /assistant/chats/{id}/members        {users} → 200 as access; 400 an unknown user
+DELETE /assistant/chats/{id}/members/{user} 204; the owner anyone, a member themselves
+PUT    /assistant/chats/{id}/general        {general: none|view} → 200 as access; the owner's
+GET    /assistant/people?q=                 {people}: whom the caller shares a chat with, by name
+                                            or email, and whoever has `q` as their whole email
 ```
 
-An id in a path that is not the caller's is a 404. Before the import (below) the gmail and GMB
+An id in a path that is not the caller's is a 404.
+**The assistant's chats** are the conductor's own; nothing forwards them, no service stores their
+ids, so they are deleted, with their members and marks. Owner and members write (turns, a title,
+invites; a member leaves); `general: view` lets anyone holding a `sa` permission read one, 403 on
+any write; anyone else is answered 404. Turns are written whole from an index, on the version
+read; a body ≤ 4 MiB (images ride as data URLs), a chat's turns ≤ 16 MiB, else 413. Before the import (below) the gmail and GMB
 writes and every tokens route answer 503.
 **Connected sites** (`GET /sources/sites`): for every active site key at once, its landing's own
 report and sites' view of it, all asked together (joined, nothing spawned):
@@ -356,8 +380,9 @@ closes              4401 the session ended   1001 the server is stopping
   for 60 s is followed again after 1 s, doubling to 30 s, so what was missed meanwhile is read
   again.
 - **The conductor's own topics:** `sources` (a key minted or revoked; holders of
-  `sa:admin:sources:manage`) and `alerts` (the user's destinations added, removed, found dead
-  or revived; their rules; that user only).
+  `sa:admin:sources:manage`), `alerts` (the user's destinations added, removed, found dead
+  or revived; their rules; that user only) and `assistant` (`id` a chat: any change, to its owner
+  and members, those it removed too; a pin or archive to whose it is; viewers are not told).
 - **The shell relays.** The front end holds the one socket and re-dispatches on `window`, as
   `CustomEvent`s: `sa:live` (each server message as is, and a `{type:"resync"}` after the shell
   reconnects), `sa:live-status` (`{status}`; answered to an element's

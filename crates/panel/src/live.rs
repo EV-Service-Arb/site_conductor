@@ -10,6 +10,8 @@
 //! add_source, revoke,   the signing keys, a site's origin                             → sources
 //!   set_site_origin
 //! alerts                destinations added, removed, dead, revived; rules             → alerts (its user only)
+//! assistant             a chat's turns, title, members, general access, deletion       → assistant (its owner and
+//!                       (a mark: whose it is)                                            members, the removed too)
 //! sessions closed       logout, a sign-in replacing one, a refusal  → the sockets of that session end
 //! ```
 //!
@@ -38,7 +40,7 @@ pub const DEFAULT_CAPACITY: usize = 1024;
 pub enum Audience {
 	/// Whoever holds this permission: the one that reads what changed.
 	Holders(String),
-	/// One user: their alerts.
+	/// One user: their alerts, their chats.
 	User(Uuid),
 }
 

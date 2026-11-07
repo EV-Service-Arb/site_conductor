@@ -10,6 +10,7 @@
 
 pub mod access;
 pub mod alerts;
+pub mod assistant;
 pub mod gmbs;
 pub mod sessions;
 pub mod sources;
