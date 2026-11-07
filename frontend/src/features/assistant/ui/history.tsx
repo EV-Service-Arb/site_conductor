@@ -213,7 +213,7 @@ function RowMenu({ chat, onRename }: { chat: ChatSummary; onRename: () => void }
       <span className={cn("text-caption text-ink-faint group-hover/row:hidden", open && "hidden")}>{age(chat.updated_at, locale)}</span>
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
-          <IconButton size="sm" aria-label={t("assistant.more")} className={cn("hidden size-6 group-hover/row:inline-flex", open && "inline-flex")} onClick={(e) => e.stopPropagation()}>
+          <IconButton size="sm" aria-label={t("assistant.more")} className={cn("hidden size-6 group-hover/row:inline-flex hover:bg-active aria-expanded:bg-active", open && "inline-flex")} onClick={(e) => e.stopPropagation()}>
             <Ellipsis />
           </IconButton>
         </DropdownMenuTrigger>

@@ -49,7 +49,7 @@ export function Header({
   };
   const history = (
     <History current={chat?.id ?? null} onOpen={onOpen}>
-      <IconButton size="sm" aria-label={t("assistant.history")} tooltip={t("assistant.history")} className="size-6 aria-expanded:bg-hover">
+      <IconButton size="sm" aria-label={t("assistant.history")} tooltip={t("assistant.history")} className="size-6 aria-expanded:bg-active">
         <ChevronDown />
       </IconButton>
     </History>
@@ -112,7 +112,7 @@ export function Header({
       </IconButton>
       {chat !== null ? (
         <Share chat={chat}>
-          <IconButton size="sm" aria-label={t("assistant.share")} tooltip={t("assistant.share")} className="aria-expanded:bg-hover">
+          <IconButton size="sm" aria-label={t("assistant.share")} tooltip={t("assistant.share")} className="aria-expanded:bg-active">
             <ShareIcon />
           </IconButton>
         </Share>
@@ -141,7 +141,7 @@ export function Header({
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <IconButton size="sm" aria-label={t("assistant.more")} tooltip={t("assistant.more")} disabled={chat === null}>
+          <IconButton size="sm" aria-label={t("assistant.more")} tooltip={t("assistant.more")} disabled={chat === null} className="aria-expanded:bg-active">
             <Ellipsis />
           </IconButton>
         </DropdownMenuTrigger>
@@ -191,7 +191,7 @@ function Context({ turns }: { turns: readonly Turn[] }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <IconButton size="sm" aria-label={t("assistant.context")} tooltip={t("assistant.context")} disabled={locations.length === 0 && read.length === 0} className="aria-expanded:bg-hover">
+        <IconButton size="sm" aria-label={t("assistant.context")} tooltip={t("assistant.context")} disabled={locations.length === 0 && read.length === 0} className="aria-expanded:bg-active">
           <PanelRight />
         </IconButton>
       </PopoverTrigger>
