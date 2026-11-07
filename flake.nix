@@ -78,6 +78,7 @@
           enable = true;
           lastSupportedVersion = "nightly-2026-09-03";
           containerRelease = { registry = "ghcr.io/ev-service-arb"; };
+          figma = { };
           jobs.default = true;
           lfs = false;
         };
