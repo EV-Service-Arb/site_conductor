@@ -33,7 +33,6 @@ import { useEffect, useState } from "react";
 import {
   type Gmail,
   ISSUES,
-  type Issue,
   type Listed,
   type SiteTag,
   type Tags,
@@ -42,15 +41,19 @@ import {
   issueCounts,
   issueOf,
   issueText,
-  narrowed,
+  peek,
   removeGmail,
   removeGmb,
+  setFilter,
   setOnMap,
+  setOnly,
   switchGmbs,
   useGmailScope,
   useGmails,
   useGmbTags,
   useOnMap,
+  usePeeked,
+  useSelection,
 } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { AddGmailButton } from "@/features/add-gmail";
@@ -84,12 +87,12 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   const me = useMe();
   const gmails = useGmails();
   const scope = useGmailScope();
-  const { inView, hovered, peeked } = useOnMap();
+  const { inView, hovered } = useOnMap();
+  const peeked = usePeeked();
   const pathname = usePathname();
   const { sites, tags } = useGmbTags();
   const linked = may(me, "sa:sites:work:places:edit") ? tags.sites : null;
-  const [filter, setFilter] = useState("");
-  const [only, setOnly] = useState<Issue | null>(null);
+  const selection = useSelection();
 
   // a scoped gmail removed, here or in another tab: back to all of them
   const known = gmails.status === "ok" ? gmails.data : null;
@@ -112,17 +115,12 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
 
   if (gmails.status === "loading") return <Skeleton className="mx-2 h-24" />;
   if (gmails.status === "error") return <ErrorState failure={gmails.failure} onRetry={gmails.reload} />;
-  const scoped = gmails.data.find((g) => g.id === scope) ?? null;
-  const found = narrowed(gmails.data, scoped?.id ?? null, filter);
+  if (selection === null) throw new Error("the gmails are read, so is the selection");
+  const { scoped, filter, only, found, selected: listed } = selection;
   const counts = issueCounts(
     found.map((l) => l.gmb),
     tags,
   );
-  const rank = (l: Listed) => {
-    const issue = issueOf(l.gmb, tags);
-    return issue === null ? ISSUES.length : ISSUES.indexOf(issue);
-  };
-  const listed = found.filter((l) => only === null || issueOf(l.gmb, tags) === only).sort((a, b) => rank(a) - rank(b));
   const onMap = pathname === "/" && inView !== null;
   const row = (l: Listed) => (
     <GmbRow
@@ -321,7 +319,7 @@ function GmbRow({
     >
       <span aria-hidden className={cn("ml-1 size-2 shrink-0 rounded-full", gmb.enabled ? "bg-positive" : "bg-ink-soft", gmb.location === null && "opacity-40")} />
       {onMap ? (
-        <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => setOnMap({ peeked: gmb.id })}>
+        <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => peek(gmb.id)}>
           {label}
         </button>
       ) : (

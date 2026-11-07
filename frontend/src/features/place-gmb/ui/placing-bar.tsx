@@ -4,7 +4,7 @@ import { Button } from "@evinvest/uikit";
 import { importLibrary } from "@googlemaps/js-api-loader";
 import { useEffect, useRef, useState } from "react";
 
-import { type Gmb, type LatLng, placeGmb, setOnMap, useGmails } from "@/entities/gmb";
+import { type Gmb, type LatLng, peek, placeGmb, setOnMap, useGmails } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -56,7 +56,8 @@ export function PlacingBar({ gmb, map, at, onMove }: { gmb: Gmb; map: google.map
     try {
       await placeGmb(gmb.id, at);
       gmails.reload();
-      setOnMap({ placing: null, peeked: gmb.id });
+      setOnMap({ placing: null });
+      peek(gmb.id);
     } catch (e) {
       notifyFailure(e, t);
     } finally {

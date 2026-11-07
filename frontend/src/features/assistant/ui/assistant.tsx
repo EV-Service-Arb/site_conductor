@@ -21,7 +21,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { type Listed, narrowed, setOnMap, useGmails, useGmbTags, useOnMap } from "@/entities/gmb";
+import { type Listed, narrowed, useGmails, useGmbTags, usePeeked } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
 
@@ -228,7 +228,7 @@ function ChatView({ onFold }: { onFold: () => void }) {
 /** The location the page is on: a GMB's archive page, or the card open on the map. */
 function useSubject(all: readonly Listed[]): Listed | null {
   const pathname = usePathname();
-  const { peeked } = useOnMap();
+  const peeked = usePeeked();
   const route = /^\/review_archive\/gmbs\/(\d+)/.exec(pathname);
   const id = route ? Number(route[1]) : pathname === "/" ? peeked : null;
   return all.find((l) => l.gmb.id === id) ?? null;
@@ -322,7 +322,7 @@ function Context({ chat }: { chat: Chat }) {
           <section className="flex flex-col">
             <h3 className="px-2 py-1 text-caption text-ink-soft">{t("assistant.context.locations")}</h3>
             {[...locations.values()].map((m) => (
-              <Link key={m.id} href="/" onClick={() => setOnMap({ peeked: m.id })} className={row}>
+              <Link key={m.id} href={`/?gmb=${m.id}`} className={row}>
                 <MapPin aria-hidden className="size-4 shrink-0 text-ink-soft" />
                 <span className="truncate">{m.label}</span>
               </Link>

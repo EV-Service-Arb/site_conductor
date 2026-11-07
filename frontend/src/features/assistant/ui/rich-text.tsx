@@ -5,7 +5,6 @@ import { MapPin } from "lucide-react";
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 
-import { setOnMap } from "@/entities/gmb";
 
 import type { Mention, Source } from "../model/chat";
 
@@ -70,9 +69,8 @@ function Inline({ text, sources }: { text: string; sources: readonly Source[] })
 export function LocationToken({ mention, className }: { mention: Mention; className?: string }) {
   return (
     <Link
-      href="/"
+      href={`/?gmb=${mention.id}`}
       title={mention.label}
-      onClick={() => setOnMap({ peeked: mention.id })}
       className={cn(
         "rounded-sm px-0.5 font-medium text-ink outline-none wrap-anywhere hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring",
         className,

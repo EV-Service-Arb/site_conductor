@@ -4,5 +4,6 @@ export { GmailsProvider, useGmails, useGmbTags } from "./model/gmails-context";
 export type { ArchiveTag, Candidate, Gmail, Gmb, LatLng, MapConfig, SiteTag, SitesPlace } from "./model/gmb";
 export { ISSUES, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
 export { type Listed, byView, narrowed } from "./model/narrow";
-export { type OnMap, setOnMap, useOnMap } from "./model/on-map";
+export { type OnMap, peek, setOnMap, useOnMap, usePeeked } from "./model/on-map";
 export { chooseGmailScope, useGmailScope } from "./model/scope";
+export { PublishSelection, type Selection, setFilter, setOnly, useSelection } from "./model/selection";

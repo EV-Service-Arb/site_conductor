@@ -5,7 +5,7 @@ import { useEffect } from "react";
 
 import { PANEL } from "@config";
 
-import { GmailsProvider } from "@/entities/gmb";
+import { GmailsProvider, PublishSelection } from "@/entities/gmb";
 import { seesSites, useMe } from "@/entities/session";
 import { Assistant } from "@/features/assistant";
 import { goToSignIn } from "@/shared/api";
@@ -33,6 +33,7 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
   }, []);
   return (
     <GmailsProvider seesSites={seesSites(me)}>
+      <PublishSelection />
       <div className="flex h-svh flex-col">
         <PanelTopBar />
         <div className="relative flex min-h-0 flex-1">

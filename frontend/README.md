@@ -83,3 +83,13 @@ on their topic, a `resync`, or the socket back after a drop re-reads them. The s
 elements do the same for theirs. The elements also tell the host: `sa:title-count`
 (the tab title's new leads: `(3) Leads — Service-Arb panel`), `sa:unauthenticated`
 (their API's 401: the sign-in), `ev:navigate` (a link the host routes).
+
+## The selection
+
+The outline is one selection of GMBs, which every app narrows to: a gmail
+(`?gmail=`), a search (`?find=`) and an issue (`?issue=`). They are the outline's
+keys of the query (`shared/lib/query`), kept from page to page; the map's own,
+`?gmb=` (the open card) and `?at=` (`<lat>,<lng>,<zoom>`), are `/`'s. The host
+tells the elements the selected ids as `sa:gmbs` `{ids}` on each change (`null`:
+nothing narrowed, every GMB the caller has), and again on `sa:gmbs-request`
+(CONTRACT §9).

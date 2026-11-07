@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { type ReactNode, Suspense, useEffect, useState } from "react";
 
 import { MeProvider, fetchMe } from "@/entities/session";
+import { syncQuery } from "@/shared/lib/query";
 import { useResource } from "@/shared/lib/use-resource";
 import { ErrorState } from "@/shared/ui/error-state";
 
@@ -37,6 +38,7 @@ function RoutedElements() {
   const pathname = usePathname();
   const search = useSearchParams().toString();
   useEffect(() => {
+    syncQuery();
     window.dispatchEvent(new PopStateEvent("popstate"));
   }, [pathname, search]);
   return null;
