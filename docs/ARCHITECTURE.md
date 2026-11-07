@@ -9,6 +9,10 @@ conductor signs for a request; none of them sees a session, and none calls the c
 reads them. Live updates and alerts are its hubs, fed by what the services tell it; tokens are
 charged from what review_archive tells it.
 
+**The unit is the GBP** (Google Business Profile; a GMB in code): a site, its leads, its reviews,
+a walk's charge are each about one. A gmail is a managing gmail, a scope of GBPs: several sit on
+one, a GBP on one.
+
 ```text
 browser ─session──▶ conductor ─x-sa-assertion (User)──────────────▶ sites /api/v1, review_archive, playbook
 landings/bots ─HMAC▶ conductor ─x-sa-assertion (Source) + raw body ▶ sites /api/ingest/v1
