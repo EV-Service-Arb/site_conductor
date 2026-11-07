@@ -84,6 +84,25 @@ elements do the same for theirs. The elements also tell the host: `sa:title-coun
 (the tab title's new leads: `(3) Leads — Service-Arb panel`), `sa:unauthenticated`
 (their API's 401: the sign-in), `ev:navigate` (a link the host routes).
 
+## Keys
+
+Everything sits behind one leader, `Alt+S` (`⌥S` on macOS), through `@evinvest/uikit`'s
+`KeymapProvider` in the shell; a feature contributes its keys with `useBinding` while it is
+mounted. The page claims nothing else, and a key typed into a field never acts.
+
+```text
+Alt+S ─┬─ A   assistant: show / hide          (not on its full-screen page)
+       ├─ N   assistant: new chat
+       ├─ L   assistant: copy the chat's link (once a chat has started)
+       ├─ P   map: Google's places on / off   (only on /; the hotbar shows it)
+       ├─ G ──┬─ H  home      S  sites       R  review archive
+       │      ├─ C  sources   T  tokens      U  usage
+       │      └─ W  wallet    E  alerts      Y  account
+       │      (each only when the caller may open it)
+       └─ ?   keybinds: every key bound right now
+Esc closes the hint and the help.
+```
+
 ## The selection
 
 The outline holds the selection every app narrows to. Gmails (`?gmail=2,12`), a search

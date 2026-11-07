@@ -1,6 +1,6 @@
 "use client";
 
-import { Hotbar, type HotbarAction, StatusItem, type StatusTone } from "@evinvest/uikit";
+import { Hotbar, type HotbarAction, StatusItem, type StatusTone, useBinding } from "@evinvest/uikit";
 import { MapPin } from "lucide-react";
 import { usePathname } from "next/navigation";
 
@@ -15,8 +15,10 @@ export function PanelHotbar({ live }: { live: LiveStatus }) {
   const t = useT();
   const pathname = usePathname();
   const places = usePlacesShown();
-  const actions: HotbarAction[] =
-    pathname === "/" ? [{ id: "places", label: t("hotbar.places"), icon: MapPin, shortcut: "P", pressed: places, onSelect: () => showPlaces(!places) }] : [];
+  const onMap = pathname === "/";
+  const togglePlaces = () => showPlaces(!places);
+  useBinding({ on: { key: "p" }, run: { id: "places", label: t("hotbar.places"), run: onMap ? togglePlaces : null } });
+  const actions: HotbarAction[] = onMap ? [{ id: "places", label: t("hotbar.places"), icon: MapPin, binding: "places", pressed: places, onSelect: togglePlaces }] : [];
   return (
     <Hotbar
       actions={actions}

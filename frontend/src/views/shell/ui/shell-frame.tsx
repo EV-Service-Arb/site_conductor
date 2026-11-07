@@ -1,5 +1,6 @@
 "use client";
 
+import { KeymapProvider } from "@evinvest/uikit";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
@@ -15,9 +16,13 @@ import { ROUTES } from "@/shared/config/routes";
 import { useLiveSocket } from "@/shared/lib/live";
 
 import { followTitleCount } from "../model/title-count";
+import { NavKeys } from "./nav-keys";
 import { Outline } from "./outline";
 import { PanelHotbar } from "./panel-hotbar";
 import { PanelTopBar } from "./panel-top-bar";
+
+/** Option on macOS too: the keymap reads the key's Latin label when Option composes `ß`, and a field keeps typing it. */
+const LEADER = { key: "s", alt: true };
 
 /** CONTRACT §9: an element's API answered 401. */
 const UNAUTHENTICATED_EVENT = "sa:unauthenticated";
@@ -35,20 +40,23 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
     return () => window.removeEventListener(UNAUTHENTICATED_EVENT, goToSignIn);
   }, []);
   return (
-    <GmailsProvider seesSites={seesSites(me)}>
-      <PublishSelection />
-      <div className="flex h-svh flex-col">
-        <PanelTopBar />
-        <div className="relative flex min-h-0 flex-1">
-          {/* `hidden`, not unmounted, on a phone: the outline keeps `mfe-sites-nav` mounted */}
-          <aside className="hidden w-72 shrink-0 overflow-y-auto border-r border-border p-2 md:block">
-            <Outline />
-          </aside>
-          <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
-          {PANEL.assistant && !`${pathname}/`.startsWith(ROUTES.assistant) && <Assistant />}
+    <KeymapProvider leader={LEADER} labels={{ title: t("keys.help") }}>
+      <GmailsProvider seesSites={seesSites(me)}>
+        <PublishSelection />
+        <NavKeys />
+        <div className="flex h-svh flex-col">
+          <PanelTopBar />
+          <div className="relative flex min-h-0 flex-1">
+            {/* `hidden`, not unmounted, on a phone: the outline keeps `mfe-sites-nav` mounted */}
+            <aside className="hidden w-72 shrink-0 overflow-y-auto border-r border-border p-2 md:block">
+              <Outline />
+            </aside>
+            <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
+            {PANEL.assistant && !`${pathname}/`.startsWith(ROUTES.assistant) && <Assistant />}
+          </div>
+          <PanelHotbar live={live} />
         </div>
-        <PanelHotbar live={live} />
-      </div>
-    </GmailsProvider>
+      </GmailsProvider>
+    </KeymapProvider>
   );
 }

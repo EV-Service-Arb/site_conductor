@@ -1,0 +1,35 @@
+"use client";
+
+import { type KeyBinding, useBinding } from "@evinvest/uikit";
+import { useRouter } from "next/navigation";
+
+import { PANEL } from "@config";
+
+import { ownScreens, seesSites, useMe } from "@/entities/session";
+import { ROUTES } from "@/shared/config/routes";
+import { useT } from "@/shared/i18n";
+
+/** `leader g …`: every screen the caller may open, by key. */
+export function NavKeys() {
+  const t = useT();
+  const me = useMe();
+  const router = useRouter();
+  const own = ownScreens(me, PANEL.walletPage);
+  const go = (key: string, label: string, href: string, may = true): KeyBinding => ({ on: { key }, run: { label, run: may ? () => router.push(href) : null } });
+  useBinding({
+    on: { key: "g" },
+    label: t("keys.go"),
+    children: [
+      go("h", t("nav.home"), "/"),
+      go("s", t("nav.sites"), ROUTES.sites, seesSites(me)),
+      go("r", t("nav.reviewArchive"), ROUTES.reviewArchive),
+      go("c", t("nav.sources"), ROUTES.sources, own.includes("sources")),
+      go("t", t("nav.tokens"), ROUTES.tokens, own.includes("tokens")),
+      go("u", t("usage.title"), ROUTES.usage, own.includes("usage")),
+      go("w", t("nav.wallet"), ROUTES.wallet, own.includes("wallet")),
+      go("e", t("nav.alerts"), ROUTES.alerts),
+      go("y", t("nav.account"), ROUTES.account),
+    ],
+  });
+  return null;
+}

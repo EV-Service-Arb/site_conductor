@@ -373,5 +373,9 @@
   "assistant.share.general": "Общий доступ",
   "assistant.share.everyone": "Все в Service-Arb",
   "assistant.share.view": "Может смотреть",
-  "assistant.share.none": "Нет доступа"
+  "assistant.share.none": "Нет доступа",
+  "keys.help": "Клавиши",
+  "keys.go": "Перейти",
+  "keys.assistant": "Ассистент: показать или скрыть",
+  "nav.home": "Главная"
 }

@@ -373,5 +373,9 @@
   "assistant.share.general": "General access",
   "assistant.share.everyone": "Everyone in Service-Arb",
   "assistant.share.view": "Can view",
-  "assistant.share.none": "No access"
+  "assistant.share.none": "No access",
+  "keys.help": "Keybinds",
+  "keys.go": "Go to",
+  "keys.assistant": "Assistant: show or hide",
+  "nav.home": "Home"
 }
