@@ -5,25 +5,33 @@
  */
 export type Candidates = { candidates: Array<Place>, };
 /**
- * A gmail of the caller's, with the GMBs it manages.
+ * A gmail of the caller's.
  */
 export type Gmail = { id: number, gmail: string, 
 /**
  * RFC 3339.
  */
-created_at: string, gmbs: Array<Gmb>, };
+created_at: string, };
 /**
  * `GET /gmails`.
  */
-export type Gmails = { gmails: Array<Gmail>, };
+export type Gmails = { gmails: Array<Gmail>, gmbs: Array<Gmb>, };
 /**
- * A GMB under one of the caller's gmails.
+ * A GBP of the caller's.
  */
 export type Gmb = { id: number, 
 /**
- * Google's place id.
+ * `null`: a draft no gmail manages yet.
  */
-place_id: string, name: string | null, address: string | null, gbp_account: string | null, gbp_location: string | null, 
+gmail_id: number | null, 
+/**
+ * Google's place id; `null` while a draft, and only then.
+ */
+place_id: string | null, name: string, address: string | null, state: "draft" | "verifying" | "verified" | "suspended", 
+/**
+ * `by_hand`: set by the caller, Google having none.
+ */
+country: { code: "FR" | "US" | "CA" | "GB", by_hand: boolean } | null, phone: string | null, 
 /**
  * RFC 3339.
  */
@@ -33,8 +41,8 @@ created_at: string,
  */
 enabled: boolean, 
 /**
- * `null`: added without a Places key and not located since, or a service-area place not
- * placed yet. `placed`: on the map by hand.
+ * `null`: none on Google (a service-area place, a draft) and none placed yet. `placed`: on
+ * the map by hand.
  */
 location: { lat: number, lng: number, placed: boolean } | null, };
 /**

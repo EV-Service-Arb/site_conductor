@@ -22,10 +22,14 @@ use hmac::{Hmac, KeyInit, Mac};
 use jiff::{SignedDuration, Timestamp};
 use sa_alerts::{Origin, Rule};
 use sa_auth::{PermissionSet, Principal, Service};
-use sa_core::notify::{Locale, Rendered};
+use sa_core::{
+	gbp::{Country, State as GbpState},
+	notify::{Locale, Rendered},
+};
 use sa_panel::{
 	Panel, Refused,
 	alerts::{Access, Directory, DirectoryError, Hub, Identity},
+	gmbs::Existing,
 	import::Export,
 	seal::DataKey,
 	session::{RefreshError, Refresher, Tokens},
@@ -417,7 +421,14 @@ impl Setup {
 			.await
 			.unwrap();
 		let gmail = self.panel.add_gmail(user, gmail, t0()).await.unwrap().unwrap();
-		let gmb = self.panel.add_gmb(Some(user), gmail.id, place, t0()).await.unwrap().unwrap();
+		let existing = Existing {
+			gmail_id: gmail.id,
+			place: place.to_owned(),
+			state: GbpState::Verified,
+			name: Some(place.to_owned()),
+			country: Some(Country::FR),
+		};
+		let gmb = self.panel.add_gmb(Some(user), existing, t0()).await.unwrap().unwrap();
 		(gmail.id, gmb.id)
 	}
 }
@@ -788,9 +799,9 @@ async fn a_review_goes_to_its_gmbs_owners_only() {
 	let nobody: PermissionSet = std::iter::empty::<&str>().collect();
 	let (owner, scoped, other, switched_off) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
 	let (_, royat) = s.owner(owner, "a@gmail.com", ROYAT).await;
-	let (_, scoped_gmb) = s.owner(scoped, "b@gmail.com", ROYAT).await;
+	let (_, scoped_gmb) = s.owner(scoped, "b@gmail.com", "ChIJLU7jZClu5kcR4PcOOO6p3I1").await;
 	let (_, chamalieres) = s.owner(other, "c@gmail.com", CHAMALIERES).await;
-	let (_, off) = s.owner(switched_off, "d@gmail.com", ROYAT).await;
+	let (_, off) = s.owner(switched_off, "d@gmail.com", "ChIJLU7jZClu5kcR4PcOOO6p3I2").await;
 	for (user, chat) in [(owner, 1), (scoped, 2), (other, 3), (switched_off, 4)] {
 		s.link(user, nobody.clone(), chat, t0()).await;
 	}
@@ -825,7 +836,7 @@ async fn a_review_goes_to_its_gmbs_owners_only() {
 	assert_eq!(s.private_of(scoped).await.unwrap().gmail_id, None);
 
 	// A gmail removed takes its GMBs out of every audience.
-	s.panel.remove_gmail(owner, s.panel.gmails(owner).await.unwrap()[0].0.id, t0()).await.unwrap().unwrap();
+	s.panel.remove_gmail(owner, s.panel.gmails(owner).await.unwrap().0[0].id, t0()).await.unwrap().unwrap();
 	s.review("review_gone", t0(), &[royat], None);
 	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 0);
 }

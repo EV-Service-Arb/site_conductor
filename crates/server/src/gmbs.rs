@@ -1,12 +1,16 @@
-//! The caller's gmails and the GMBs they manage (`sa_panel::gmbs`), open to every signed-in user:
+//! The caller's gmails and the GBPs they manage (`sa_panel::gmbs`), open to every signed-in user:
 //! each sees and changes only their own.
 //!
 //! ```text
-//! GET    /api/v1/gmails               Gmails: theirs, each with its GMBs; the removed left out
+//! GET    /api/v1/gmails               Gmails: theirs, and their GBPs; the removed left out
 //! POST   /api/v1/gmails {gmail}       → 201 Gmail; 409 theirs already
-//! DELETE /api/v1/gmails/{id}          → 204 (removed; its GMBs with it)
+//! DELETE /api/v1/gmails/{id}          → 204 (removed; its GBPs with it)
 //! GET    /api/v1/gmbs/resolve?place=  Candidates
-//! POST   /api/v1/gmails/{id}/gmbs {place_id}  → 201 Gmb; 409 that gmail has it
+//! POST   /api/v1/gmbs {name}          → 201 Gmb, a draft; 409 the name taken
+//! POST   /api/v1/gmails/{id}/gmbs {place_id, state, name?, country?}  → 201 Gmb, on Google
+//!                                     already; 409 the name or the place taken
+//! PATCH  /api/v1/gmbs/{id} {name?, gmail_id?, phone?}  → 200 Gmb; 409 a name not a draft's
+//! PUT    /api/v1/gmbs/{id}/state {state, place?}  → 200 Gmb; 400 a move State::next refuses
 //! DELETE /api/v1/gmbs/{id}            → 204
 //! PUT    /api/v1/gmbs/enabled {gmbs, enabled}  → 204; 404 one is not theirs, and none switched
 //! PUT    /api/v1/gmbs/{id}/location {lat, lng}  → 204; 409 Google has its point
@@ -26,9 +30,10 @@ use axum::{
 	response::{IntoResponse, Response},
 };
 use jiff::Timestamp;
+use sa_core::gbp::State as GbpState;
 use sa_panel::{
 	Panel,
-	gmbs::{Gmail, Gmb},
+	gmbs::{Edit, Existing, Gmail, Gmb},
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -46,29 +51,36 @@ pub struct MapDto {
 	pub key: String,
 }
 
-/// A GMB under one of the caller's gmails.
+/// A GBP of the caller's.
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(rename = "Gmb")]
 pub struct GmbDto {
 	#[ts(type = "number")]
 	pub id: i64,
-	/// Google's place id.
-	pub place_id: String,
-	pub name: Option<String>,
+	/// `null`: a draft no gmail manages yet.
+	#[ts(type = "number | null")]
+	pub gmail_id: Option<i64>,
+	/// Google's place id; `null` while a draft, and only then.
+	pub place_id: Option<String>,
+	pub name: String,
 	pub address: Option<String>,
-	pub gbp_account: Option<String>,
-	pub gbp_location: Option<String>,
+	#[ts(type = "\"draft\" | \"verifying\" | \"verified\" | \"suspended\"")]
+	pub state: GbpState,
+	/// `by_hand`: set by the caller, Google having none.
+	#[ts(type = "{ code: \"FR\" | \"US\" | \"CA\" | \"GB\", by_hand: boolean } | null")]
+	pub country: Option<sa_panel::gmbs::GbpCountry>,
+	pub phone: Option<String>,
 	/// RFC 3339.
 	pub created_at: String,
 	/// The caller's switch; review_archive inherits it.
 	pub enabled: bool,
-	/// `null`: added without a Places key and not located since, or a service-area place not
-	/// placed yet. `placed`: on the map by hand.
+	/// `null`: none on Google (a service-area place, a draft) and none placed yet. `placed`: on
+	/// the map by hand.
 	#[ts(type = "{ lat: number, lng: number, placed: boolean } | null")]
 	pub location: Option<sa_panel::gmbs::Point>,
 }
 
-/// A gmail of the caller's, with the GMBs it manages.
+/// A gmail of the caller's.
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(rename = "Gmail")]
 pub struct GmailDto {
@@ -77,7 +89,6 @@ pub struct GmailDto {
 	pub gmail: String,
 	/// RFC 3339.
 	pub created_at: String,
-	pub gmbs: Vec<GmbDto>,
 }
 
 /// `GET /gmails`.
@@ -85,6 +96,7 @@ pub struct GmailDto {
 #[ts(rename = "Gmails")]
 pub struct GmailsDto {
 	pub gmails: Vec<GmailDto>,
+	pub gmbs: Vec<GmbDto>,
 }
 
 /// A place a pasted input may mean.
@@ -112,7 +124,10 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::POST, "/gmails", None, Cached, add_gmail),
 		ApiRoute::new(M::DELETE, "/gmails/{id}", None, Cached, remove_gmail),
 		ApiRoute::new(M::GET, "/gmbs/resolve", None, Cached, resolve),
+		ApiRoute::new(M::POST, "/gmbs", None, Cached, create_draft),
 		ApiRoute::new(M::POST, "/gmails/{id}/gmbs", None, Cached, add_gmb),
+		ApiRoute::new(M::PATCH, "/gmbs/{id}", None, Cached, edit),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/state", None, Cached, advance),
 		ApiRoute::new(M::DELETE, "/gmbs/{id}", None, Cached, remove_gmb),
 		ApiRoute::new(M::PUT, "/gmbs/enabled", None, Cached, switch),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/location", None, Cached, place),
@@ -125,11 +140,13 @@ impl From<Gmb> for GmbDto {
 	fn from(b: Gmb) -> Self {
 		Self {
 			id: b.id,
+			gmail_id: b.gmail_id,
 			place_id: b.place_id,
 			name: b.name,
 			address: b.address,
-			gbp_account: b.gbp_account,
-			gbp_location: b.gbp_location,
+			state: b.state,
+			country: b.country,
+			phone: b.phone,
 			created_at: b.created_at.to_string(),
 			enabled: b.enabled,
 			location: b.location,
@@ -137,13 +154,12 @@ impl From<Gmb> for GmbDto {
 	}
 }
 
-impl From<(Gmail, Vec<Gmb>)> for GmailDto {
-	fn from((g, gmbs): (Gmail, Vec<Gmb>)) -> Self {
+impl From<Gmail> for GmailDto {
+	fn from(g: Gmail) -> Self {
 		Self {
 			id: g.id,
 			gmail: g.gmail,
 			created_at: g.created_at.to_string(),
-			gmbs: gmbs.into_iter().map(GmbDto::from).collect(),
 		}
 	}
 }
@@ -154,9 +170,10 @@ fn id(raw: &str) -> ApiResult<i64> {
 }
 
 async fn gmails(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<GmailsDto>> {
-	let gmails = panel.gmails(caller.user_id).await?;
+	let (gmails, gmbs) = panel.gmails(caller.user_id).await?;
 	Ok(Json(GmailsDto {
 		gmails: gmails.into_iter().map(GmailDto::from).collect(),
+		gmbs: gmbs.into_iter().map(GmbDto::from).collect(),
 	}))
 }
 
@@ -169,7 +186,7 @@ struct NewGmail {
 async fn add_gmail(State(panel): State<Panel>, Extension(caller): Extension<Caller>, b: Result<Json<NewGmail>, JsonRejection>) -> ApiResult<Response> {
 	let added = panel.add_gmail(caller.user_id, &body(b)?.gmail, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = added.id, "gmail added");
-	Ok((StatusCode::CREATED, Json(GmailDto::from((added, Vec::new())))).into_response())
+	Ok((StatusCode::CREATED, Json(GmailDto::from(added))).into_response())
 }
 
 async fn remove_gmail(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<StatusCode> {
@@ -206,19 +223,79 @@ async fn map(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct NewDraft {
+	name: String,
+}
+
+async fn create_draft(State(panel): State<Panel>, Extension(caller): Extension<Caller>, b: Result<Json<NewDraft>, JsonRejection>) -> ApiResult<Response> {
+	let added = panel.create_draft(caller.user_id, &body(b)?.name, Timestamp::now()).await??;
+	tracing::info!(user_id = %caller.user_id, gmb_id = added.id, "draft GBP created");
+	Ok((StatusCode::CREATED, Json(GmbDto::from(added))).into_response())
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct NewGmb {
 	place_id: String,
+	state: String,
+	name: Option<String>,
+	country: Option<String>,
 }
 
 async fn add_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<NewGmb>, JsonRejection>) -> ApiResult<Response> {
 	let gmail = id(&raw)?;
-	let place_id = body(b)?.place_id;
+	let NewGmb { place_id, state, name, country } = body(b)?;
 	if !sa_places::parse::looks_like_place_id(&place_id) {
 		return Err(ApiError::BadRequest(format!("{place_id:?} is not a place id")));
 	}
-	let added = panel.add_gmb(Some(caller.user_id), gmail, &place_id, Timestamp::now()).await??;
-	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, gmb_id = added.id, "GMB added");
+	let existing = Existing {
+		gmail_id: gmail,
+		place: place_id,
+		state: state.parse()?,
+		name,
+		country: country.as_deref().map(str::parse).transpose()?,
+	};
+	let added = panel.add_gmb(Some(caller.user_id), existing, Timestamp::now()).await??;
+	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, gmb_id = added.id, "GBP added");
 	Ok((StatusCode::CREATED, Json(GmbDto::from(added))).into_response())
+}
+
+/// A present `null` is `Some(None)`; an absent field `None`, by `#[serde(default)]`.
+fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<String>>, D::Error> {
+	Option::<String>::deserialize(d).map(Some)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EditBody {
+	name: Option<String>,
+	gmail_id: Option<i64>,
+	#[serde(default, deserialize_with = "present")]
+	phone: Option<Option<String>>,
+}
+
+async fn edit(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<EditBody>, JsonRejection>) -> ApiResult<Json<GmbDto>> {
+	let gmb = id(&raw)?;
+	let EditBody { name, gmail_id, phone } = body(b)?;
+	let edited = panel.edit_gmb(caller.user_id, gmb, Edit { name, gmail_id, phone }).await??;
+	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, "GBP edited");
+	Ok(Json(GmbDto::from(edited)))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Advance {
+	state: String,
+	place: Option<String>,
+}
+
+async fn advance(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<Advance>, JsonRejection>) -> ApiResult<Json<GmbDto>> {
+	let gmb = id(&raw)?;
+	let Advance { state, place } = body(b)?;
+	let to: GbpState = state.parse()?;
+	let moved = panel.advance(Some(caller.user_id), gmb, to, place.as_deref()).await??;
+	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, %to, "GBP's state moved");
+	Ok(Json(GmbDto::from(moved)))
 }
 
 async fn remove_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<StatusCode> {

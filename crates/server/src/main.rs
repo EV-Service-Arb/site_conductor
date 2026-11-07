@@ -14,7 +14,7 @@ use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_auth::{Catalog, SourceKind};
 use sa_core::ids::{BrandId, SiteOrigin};
-use sa_panel::{Panel, alerts::Hub, seal::DataKey, store::Store, tokens::Change};
+use sa_panel::{Panel, alerts::Hub, gmbs::Existing, seal::DataKey, store::Store, tokens::Change};
 use sa_server::{
 	alerts::{self, Telegram},
 	concierge::{Concierge, DevIdentity},
@@ -108,8 +108,21 @@ enum GmailCmd {
 
 #[derive(Subcommand)]
 enum GmbCmd {
-	/// Add a GMB under a gmail: a place id, or a Maps URL (a name in it needs GOOGLE_MAPS_KEYS).
-	Add { gmail_id: i64, place: String },
+	/// Add a GBP on Google already under a gmail: a place id, or a Maps URL (a name in it needs
+	/// GOOGLE_MAPS_KEYS).
+	Add {
+		gmail_id: i64,
+		place: String,
+		/// verifying | verified | suspended
+		#[arg(long)]
+		state: String,
+		/// Its name, when Google gives none.
+		#[arg(long)]
+		name: Option<String>,
+		/// Its country (FR, US, CA, GB), when Google gives none.
+		#[arg(long)]
+		country: Option<String>,
+	},
 	/// Locate every GMB's place that has no point or no country of Google's yet, through the
 	/// Places cache: run once after a deploy that brings points or countries, and after
 	/// `local-stack --from-prod`.
@@ -257,9 +270,22 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 			println!("gmail {}: {}", added.id, added.gmail);
 			Ok(())
 		}
-		Cmd::Gmb(GmbCmd::Add { gmail_id, place }) => {
-			let added = connect().await?.add_gmb(None, gmail_id, &place, Timestamp::now()).await??;
-			println!("GMB {}: {} {}", added.id, added.place_id, added.name.as_deref().unwrap_or("(unnamed: no GOOGLE_MAPS_KEYS)"));
+		Cmd::Gmb(GmbCmd::Add {
+			gmail_id,
+			place,
+			state,
+			name,
+			country,
+		}) => {
+			let existing = Existing {
+				gmail_id,
+				place,
+				state: state.parse()?,
+				name,
+				country: country.as_deref().map(str::parse).transpose()?,
+			};
+			let added = connect().await?.add_gmb(None, existing, Timestamp::now()).await??;
+			println!("GBP {}: {} {}", added.id, added.place_id.expect("on Google"), added.name);
 			Ok(())
 		}
 		Cmd::Gmb(GmbCmd::Locate) => {

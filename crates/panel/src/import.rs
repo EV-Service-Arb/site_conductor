@@ -148,8 +148,25 @@ impl Panel {
 			eyre::ensure!(added.is_some_and(|a| a.id == g.id), "gmail {} ({}) clashes with another", g.id, g.gmail);
 		}
 		for b in &export.gmbs {
-			let added = gmbs_db::add_gmb(&mut tx, Some(b.id), b.gmail_id, &b.place_id, b.name.as_deref(), b.address.as_deref(), None, b.created_at).await?;
-			eyre::ensure!(added.is_some_and(|a| a.id == b.id), "GMB {} (gmail {}, {}) clashes with another", b.id, b.gmail_id, b.place_id);
+			// shortcut: review_archive's GMBs carry no country, which the schema refuses of a verified one; the import is historical and fresh installs import none
+			let owner = gmbs_db::gmail_owner(&mut tx, b.gmail_id)
+				.await?
+				.ok_or_else(|| eyre::eyre!("GMB {} is under gmail {}, not imported", b.id, b.gmail_id))?;
+			let name = b.name.as_deref().ok_or_else(|| eyre::eyre!("GMB {} on {} has no name", b.id, b.place_id))?;
+			let new = gmbs_db::NewGmb {
+				owner,
+				gmail_id: Some(b.gmail_id),
+				place_id: Some(&b.place_id),
+				name,
+				address: b.address.as_deref(),
+				state: sa_core::gbp::State::Verified,
+				country: None,
+				country_by_hand: false,
+				at: None,
+			};
+			gmbs_db::add_gmb(&mut tx, Some(b.id), &new, b.created_at)
+				.await
+				.wrap_err_with(|| format!("GMB {} (gmail {}, {})", b.id, b.gmail_id, b.place_id))?;
 		}
 		for e in &export.ledger {
 			let entry = Entry {

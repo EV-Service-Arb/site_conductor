@@ -1,8 +1,10 @@
 //! A GMB's switch: its owner's to turn, and what review_archive's snapshot carries.
 
 use jiff::Timestamp;
+use sa_core::gbp::{Country, State};
 use sa_panel::{
 	Refused,
+	gmbs::Existing,
 	import::Export,
 	testing::{TestDb, panel},
 	tokens::User,
@@ -48,15 +50,22 @@ async fn a_gmb_is_switched_by_its_owner_and_review_archive_is_told() {
 	let owner = person(&p, "owner@localhost").await;
 	let other = person(&p, "other@localhost").await;
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
-	let one = p.add_gmb(Some(owner), gmail.id, "ChIJLU7jZClu5kcR4PcOOO6p3I0", now()).await.unwrap().unwrap();
-	let two = p.add_gmb(Some(owner), gmail.id, "ChIJD7fiBh9u5kcRYJSMaMOCCwQ", now()).await.unwrap().unwrap();
+	let existing = |place: &str, name: &str| Existing {
+		gmail_id: gmail.id,
+		place: place.to_owned(),
+		state: State::Verified,
+		name: Some(name.to_owned()),
+		country: Some(Country::FR),
+	};
+	let one = p.add_gmb(Some(owner), existing("ChIJLU7jZClu5kcR4PcOOO6p3I0", "One"), now()).await.unwrap().unwrap();
+	let two = p.add_gmb(Some(owner), existing("ChIJD7fiBh9u5kcRYJSMaMOCCwQ", "Two"), now()).await.unwrap().unwrap();
 	assert!(snapshot_switch(&p, one.id).await, "a GMB starts on");
 
 	p.switch_gmbs(owner, &[one.id, two.id], false).await.unwrap().unwrap();
 	assert!(!snapshot_switch(&p, one.id).await);
 	assert!(!snapshot_switch(&p, two.id).await);
 	let listed = p.gmails(owner).await.unwrap();
-	assert!(listed[0].1.iter().all(|b| !b.enabled), "the owner sees them off");
+	assert!(listed.1.iter().all(|b| !b.enabled), "the owner sees them off");
 
 	p.switch_gmbs(owner, &[two.id], true).await.unwrap().unwrap();
 	assert!(!snapshot_switch(&p, one.id).await);
