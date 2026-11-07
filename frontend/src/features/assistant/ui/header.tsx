@@ -71,11 +71,11 @@ export function Header({
           onFocus={(e) => e.currentTarget.select()}
           onBlur={(e) => rename(e.currentTarget.value)}
           onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              e.preventDefault();
-              e.currentTarget.value = chat.title ?? "";
-            }
-            if (e.key === "Enter" || e.key === "Escape") e.currentTarget.blur();
+            if (e.key !== "Enter" && e.key !== "Escape") return;
+            // Kept from the composer, which takes focus as the field goes.
+            e.preventDefault();
+            if (e.key === "Escape") e.currentTarget.value = chat.title ?? "";
+            e.currentTarget.blur();
           }}
         />
       ) : interacts ? (
@@ -145,7 +145,7 @@ export function Header({
             <Ellipsis />
           </IconButton>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-45">
+        <DropdownMenuContent align="end" className="w-52">
           {chat !== null && <ChatActions chat={chat} onRename={() => setRenaming(true)} pinOutside={full} />}
         </DropdownMenuContent>
       </DropdownMenu>

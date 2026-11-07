@@ -136,10 +136,11 @@ function Invite({ chat, access, onInvited }: { chat: string; access: Access; onI
             className="h-6 min-w-24 flex-1 bg-transparent px-1 text-body-s text-ink outline-none placeholder:text-ink-faint"
           />
         </div>
-        {picking && (
+        {picking && (found.length > 0 || query !== "") && (
           <CommandList id={list} className="absolute inset-x-0 top-full z-10 mt-1 max-h-60 rounded-xl border border-border bg-popover p-1 shadow-overlay">
-            <CommandGroup heading={t("assistant.share.pick")}>
-              {found.map((p) => (
+            {found.length > 0 && (
+              <CommandGroup heading={t("assistant.share.pick")}>
+                {found.map((p) => (
                 <CommandItem
                   key={p.id}
                   value={p.id}
@@ -150,8 +151,9 @@ function Invite({ chat, access, onInvited }: { chat: string; access: Access; onI
                 >
                   <PersonRow person={p} />
                 </CommandItem>
-              ))}
-            </CommandGroup>
+                ))}
+              </CommandGroup>
+            )}
             <CommandEmpty>{t(query.includes("@") ? "assistant.share.nobody" : "assistant.share.typeEmail")}</CommandEmpty>
           </CommandList>
         )}

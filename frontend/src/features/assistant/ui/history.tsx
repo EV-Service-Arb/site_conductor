@@ -2,7 +2,7 @@
 
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, Input, Popover, PopoverContent, PopoverTrigger, Spinner, cn } from "@evinvest/uikit";
 import { Archive, ArchiveRestore, ArrowLeft, Ellipsis, MessageCircle, Search, Users } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 
 import { type ChatSummary, archiveChat, renameChat, useChats } from "@/entities/assistant";
 import { type MessageKey, useLocale, useT } from "@/shared/i18n";
@@ -53,14 +53,23 @@ function Chats({ current, onOpen }: { current: string | null; onOpen: (id: strin
   const [filter, setFilter] = useState("");
   const [active, setActive] = useState(0);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const search = useRef<HTMLInputElement>(null);
   const needle = filter.trim().toLowerCase();
   const all = list.status === "ok" ? list.data : [];
   const found = all.filter((c) => (c.archived_at !== null) === archived && (needle === "" || (c.title ?? t("assistant.newChat")).toLowerCase().includes(needle)));
   const groups = archived ? [{ label: "assistant.history.archived" as const, chats: found }] : groupsOf(found);
   const flat = groups.flatMap((g) => g.chats);
+  // A row's menu or a whole view going away would leave focus nowhere: it comes back to the search.
+  const refocus = () => requestAnimationFrame(() => search.current?.focus());
   const changed = () => {
     controls.onChanged();
     list.reload();
+    refocus();
+  };
+  const view = (to: boolean) => {
+    setArchived(to);
+    setActive(0);
+    refocus();
   };
   const rename = (c: ChatSummary, title: string) => {
     setRenaming(null);
@@ -69,9 +78,20 @@ function Chats({ current, onOpen }: { current: string | null; onOpen: (id: strin
 
   return (
     <ControlsContext.Provider value={{ ...controls, onChanged: changed }}>
+      <div
+        className="contents"
+        onKeyDownCapture={(e) => {
+          // Typing anywhere in the list searches it.
+          if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey || e.target instanceof HTMLInputElement) return;
+          e.preventDefault();
+          setFilter((f) => f + e.key);
+          setActive(0);
+          search.current?.focus();
+        }}
+      >
       {archived ? (
         <div className="flex items-center gap-1 px-1.5 pt-1.5">
-          <IconButton size="sm" aria-label={t("assistant.history.back")} tooltip={t("assistant.history.back")} onClick={() => setArchived(false)}>
+          <IconButton size="sm" aria-label={t("assistant.history.back")} tooltip={t("assistant.history.back")} onClick={() => view(false)}>
             <ArrowLeft />
           </IconButton>
           <h3 className="flex-1 text-body-s font-medium text-ink">{t("assistant.history.archived")}</h3>
@@ -83,6 +103,7 @@ function Chats({ current, onOpen }: { current: string | null; onOpen: (id: strin
       <div className="relative mx-1.5 mt-1.5">
         <Search aria-hidden className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-ink-soft" />
         <Input
+          ref={search}
           autoFocus
           value={filter}
           placeholder={t("assistant.history.search")}
@@ -125,11 +146,10 @@ function Chats({ current, onOpen }: { current: string | null; onOpen: (id: strin
                   onFocus={(e) => e.currentTarget.select()}
                   onBlur={(e) => rename(c, e.currentTarget.value)}
                   onKeyDown={(e) => {
+                    if (e.key !== "Enter" && e.key !== "Escape") return;
+                    e.preventDefault();
                     if (e.key === "Enter") rename(c, e.currentTarget.value);
-                    if (e.key === "Escape") {
-                      e.preventDefault();
-                      setRenaming(null);
-                    }
+                    else setRenaming(null);
                   }}
                 />
               ) : (
@@ -170,10 +190,7 @@ function Chats({ current, onOpen }: { current: string | null; onOpen: (id: strin
         <div className="border-t border-border-subtle p-1">
           <button
             type="button"
-            onClick={() => {
-              setArchived(true);
-              setActive(0);
-            }}
+            onClick={() => view(true)}
             className="flex h-7 items-center gap-2 rounded-md px-2 text-body-s text-ink-mid outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Archive aria-hidden className="size-3.5" />
@@ -181,6 +198,7 @@ function Chats({ current, onOpen }: { current: string | null; onOpen: (id: strin
           </button>
         </div>
       )}
+      </div>
     </ControlsContext.Provider>
   );
 }
@@ -199,7 +217,7 @@ function RowMenu({ chat, onRename }: { chat: ChatSummary; onRename: () => void }
             <Ellipsis />
           </IconButton>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-45" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenuContent align="start" className="w-52" onClick={(e) => e.stopPropagation()}>
           <ChatActions chat={chat} onRename={onRename} />
         </DropdownMenuContent>
       </DropdownMenu>

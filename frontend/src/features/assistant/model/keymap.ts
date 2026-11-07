@@ -35,6 +35,8 @@ export function useKeymap(keys: Keys): void {
 
 /** Escape inside the sidebar or the floating window hides it, unless a menu, the picker or an edit box took it first. */
 export function hideOnEscape(e: React.KeyboardEvent<HTMLElement>, hide: () => void): void {
-  // `defaultPrevented`: a menu, the picker or an edit box took it.
-  if (e.key === "Escape" && !e.defaultPrevented && e.currentTarget.contains(e.target as Node)) hide();
+  if (e.key !== "Escape" || e.defaultPrevented || !e.currentTarget.contains(e.target as Node)) return;
+  // An open menu, popover or dialog takes Escape itself, from the document, after this has heard it.
+  if (document.querySelector('[data-state="open"][data-slot$="content"]:not([data-slot="tooltip-content"])') !== null) return;
+  hide();
 }

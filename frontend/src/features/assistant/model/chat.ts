@@ -95,11 +95,15 @@ export function notice(): void {
   set((s) => ({ ...s, unread: !s.open }));
 }
 
-/** What a chat shows: the server's turns, with the answer this tab is writing in place of their tail until the server has it. */
+/** Whether `running` stands in for the tail of chat `id`: until the server's copy has its answer, or the chat is gone. */
+export function overlaid(chat: Chat | null, id: string | null, running: Running | null): running is Running {
+  return running !== null && running.chat === id && (running.written === null || (chat !== null && chat.version < running.written));
+}
+
+/** What a chat shows: the server's turns, with the answer this tab is writing in place of their tail. */
 export function shown(chat: Chat | null, id: string | null, running: Running | null): Turn[] {
   const turns = chat?.turns ?? [];
-  if (running === null || running.chat !== id || (running.written !== null && chat !== null && chat.version >= running.written)) return turns;
-  return [...turns.slice(0, running.from), running.asked, running.answer];
+  return overlaid(chat, id, running) ? [...turns.slice(0, running.from), running.asked, running.answer] : turns;
 }
 
 function updateRunning(change: (r: Running) => Running): void {

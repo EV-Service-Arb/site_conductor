@@ -14,7 +14,7 @@ import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 
 import { asMentions, play, script, suggestions } from "../model/canned";
-import { type Display, ask, openChat, shown, stop, useAssistant } from "../model/chat";
+import { type Display, ask, openChat, overlaid, shown, stop, useAssistant } from "../model/chat";
 import { type Confirm, type Controls, ControlsContext } from "./chat-actions";
 import { Composer, type ComposerHandle, type Draft, keepDraft } from "./composer";
 import { ContextCard, Header } from "./header";
@@ -47,7 +47,7 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [context, setContext] = useState(true);
   const seen = useRef(new Set<string>());
-  const runningHere = s.running !== null && s.running.chat === id;
+  const runningHere = overlaid(chat, id, s.running);
   const streaming = runningHere && (s.running!.answer.state === "working" || s.running!.answer.state === "writing");
   const gone = id !== null && read.status === "ok" && read.fresh && read.data === null && !runningHere;
   const interacts = id === null || chat?.role === "owner" || chat?.role === "member" || (chat === null && runningHere);
@@ -57,7 +57,8 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
     if (chat !== null) seen.current.add(chat.id);
   }, [chat]);
   useEffect(() => {
-    if (!gone || (display === "full" && !seen.current.has(id))) return;
+    // Full screen is a link's page: it says so in place. Beside a page, the chat gives way to a new one.
+    if (!gone || display === "full") return;
     if (seen.current.has(id)) toast(t("assistant.gone"));
     onOpen(null);
   }, [gone, id, display, onOpen, t]);
@@ -128,6 +129,8 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
   const header = <Header chat={chat} turns={turns} onOpen={onOpen} onHide={onHide} onRenamed={() => composer.current?.focus()} context={display === "full" ? context : null} onContext={() => setContext((c) => !c)} />;
   const notShared = gone && display === "full";
   const loading = id !== null && chat === null && !runningHere && !gone;
+  // Gone beside a page: blank for the moment until the effect above opens a new chat.
+  const blank = gone || loading;
   const conversation = (
     <ChatPanel
       streaming={streaming}
@@ -142,7 +145,7 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
         )
       }
       composer={
-        notShared || loading ? null : interacts ? (
+        blank ? null : interacts ? (
           <Composer
             key={`${id ?? ""}:${composed}`}
             handle={composer}
@@ -165,7 +168,7 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
         )
       }
     >
-      {notShared || loading ? null : turns.map((turn: Turn, i) =>
+      {blank ? null : turns.map((turn: Turn, i) =>
         turn.role === "user" ? (
           <UserTurnView
             key={turn.id}
