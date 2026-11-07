@@ -4,7 +4,7 @@ import { Button } from "@evinvest/uikit";
 import { MapPinPlus, Move } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 
-import { type Gmb, setOnMap } from "@/entities/gmb";
+import { type Gmb, peek, setOnMap } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
 
@@ -18,7 +18,8 @@ export function PlaceButton({ gmb, onNavigate }: { gmb: Gmb; onNavigate?: () => 
   const label = t(gmb.location === null ? "gmbs.place.set" : "gmbs.place.move");
   const open = () => {
     if (pathname !== "/") router.push("/");
-    setOnMap({ placing: gmb.id, peeked: null });
+    else peek(null);
+    setOnMap({ placing: gmb.id });
     onNavigate?.();
   };
   return (

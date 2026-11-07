@@ -25,15 +25,14 @@ import {
   buttonVariants,
   cn,
 } from "@evinvest/uikit";
-import { ChevronDown, Mail, Search, Trash2 } from "lucide-react";
+import { ChevronDown, CircleMinus, CirclePlus, Mail, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import {
   type Gmail,
   ISSUES,
-  type Issue,
   type Listed,
   type SiteTag,
   type Tags,
@@ -42,15 +41,20 @@ import {
   issueCounts,
   issueOf,
   issueText,
-  narrowed,
+  peek,
   removeGmail,
   removeGmb,
+  select,
+  setFilter,
   setOnMap,
+  setOnly,
   switchGmbs,
   useGmailScope,
   useGmails,
   useGmbTags,
   useOnMap,
+  usePeeked,
+  useSelection,
 } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { AddGmailButton } from "@/features/add-gmail";
@@ -65,8 +69,10 @@ import { useButtonSize } from "@/shared/ui/touch";
 
 const ROW = "group flex min-w-0 items-center gap-1 rounded-md pr-1 text-sm hover:bg-hover/50";
 /** Shown on the row's hover or focus only, so the names keep the width. */
-const ON_HOVER = "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100";
+const ON_HOVER = "hidden group-hover:flex group-focus-within:flex";
 const HEADING = "flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-medium tracking-wide text-ink-soft uppercase";
+const SUBHEADING = "flex items-center gap-1 px-2 pt-1.5 pb-0.5 text-xs text-ink-soft";
+const DRAGGED = "application/x-sa-gmb";
 
 /** The GMB the review archive's page is on, if any. */
 function pointedAt(pathname: string): number | null {
@@ -75,21 +81,22 @@ function pointedAt(pathname: string): number | null {
 }
 
 /**
- * The caller's GMBs, under a gmail scope every app shares: the outline every page sits beside. On
- * the map, split by its viewport, and a row opens the GMB's card; elsewhere a row opens the GMB in
- * the review archive. A GMB's switch is the conductor's; the services inherit it.
+ * The caller's GMBs, the outline every page sits beside: the selection every app narrows to, and the
+ * rest, rows dragged between them; the gmail, search and issue narrow the rows only. On the map the
+ * selection is split by its viewport, and a row opens the GMB's card; elsewhere a row opens the GMB
+ * in the review archive. A GMB's switch is the conductor's; the services inherit it.
  */
 export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   const t = useT();
   const me = useMe();
   const gmails = useGmails();
   const scope = useGmailScope();
-  const { inView, hovered, peeked } = useOnMap();
+  const { inView, hovered } = useOnMap();
+  const peeked = usePeeked();
   const pathname = usePathname();
   const { sites, tags } = useGmbTags();
   const linked = may(me, "sa:sites:work:places:edit") ? tags.sites : null;
-  const [filter, setFilter] = useState("");
-  const [only, setOnly] = useState<Issue | null>(null);
+  const selection = useSelection();
 
   // a scoped gmail removed, here or in another tab: back to all of them
   const known = gmails.status === "ok" ? gmails.data : null;
@@ -112,17 +119,12 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
 
   if (gmails.status === "loading") return <Skeleton className="mx-2 h-24" />;
   if (gmails.status === "error") return <ErrorState failure={gmails.failure} onRetry={gmails.reload} />;
-  const scoped = gmails.data.find((g) => g.id === scope) ?? null;
-  const found = narrowed(gmails.data, scoped?.id ?? null, filter);
+  if (selection === null) throw new Error("the gmails are read, so is the selection");
+  const { scoped, filter, only, found, shown, chosen, isSelected, move } = selection;
   const counts = issueCounts(
     found.map((l) => l.gmb),
     tags,
   );
-  const rank = (l: Listed) => {
-    const issue = issueOf(l.gmb, tags);
-    return issue === null ? ISSUES.length : ISSUES.indexOf(issue);
-  };
-  const listed = found.filter((l) => only === null || issueOf(l.gmb, tags) === only).sort((a, b) => rank(a) - rank(b));
   const onMap = pathname === "/" && inView !== null;
   const row = (l: Listed) => (
     <GmbRow
@@ -133,13 +135,19 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
       onMap={onMap}
       lit={l.gmb.id === hovered || l.gmb.id === peeked}
       current={l.gmb.id === pointedAt(pathname)}
+      selected={isSelected(l.gmb.id)}
       linked={linked}
+      onMove={move}
       onFlip={flip}
       onChanged={changed}
       {...(onNavigate && { onNavigate })}
     />
   );
-  const split = onMap ? byView(listed, inView) : null;
+  const inSelection = shown.filter((l) => isSelected(l.gmb.id));
+  const outOfSelection = shown.filter((l) => !isSelected(l.gmb.id));
+  const split = onMap ? byView(inSelection, inView) : null;
+  const narrowing = scoped !== null || filter.trim() !== "" || only !== null;
+  const exactlyShown = chosen !== null && chosen.size === shown.length && shown.every((l) => chosen.has(l.gmb.id));
 
   return (
     <section aria-label={t("gmbs.title")} className="flex flex-col gap-1">
@@ -169,29 +177,53 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
           ))}
         </div>
       )}
-      {split ? (
-        <>
-          <h3 className={HEADING}>
-            {t("gmbs.inView")} <span className="tabular-nums">{split.inView.length + split.offInView.length}</span>
-          </h3>
-          <ul className="flex flex-col">{split.inView.map(row)}</ul>
-          {split.offInView.length > 0 && (
-            <>
-              <h4 className={cn(HEADING, "mx-2 border-t border-border px-0 font-normal")}>
-                {t("gmbs.issue.off")} <span className="tabular-nums">{split.offInView.length}</span>
-              </h4>
-              <ul className="flex flex-col">{split.offInView.map(row)}</ul>
-            </>
-          )}
-          <h3 className={HEADING}>
-            {t("gmbs.elsewhere")} <span className="tabular-nums">{split.elsewhere.length}</span>
-          </h3>
-          <ul className="flex flex-col">{split.elsewhere.map(row)}</ul>
-        </>
+      {shown.length === 0 ? (
+        <p className="px-2 py-1.5 text-xs text-ink-soft">{t(filter.trim() === "" ? "gmbs.none" : "gmbs.none.filtered")}</p>
       ) : (
-        <ul className="flex flex-col pt-1">{listed.map(row)}</ul>
+        <>
+          <Group
+            into
+            heading={t("gmbs.selected")}
+            count={inSelection.length}
+            empty={t("gmbs.selected.empty")}
+            onMove={move}
+            action={narrowing && !exactlyShown && <HeadAction onClick={() => select(shown.map((l) => l.gmb.id))}>{t("gmbs.onlyThese")}</HeadAction>}
+          >
+            {split ? (
+              <>
+                <h4 className={SUBHEADING}>
+                  {t("gmbs.inView")} <span className="tabular-nums">{split.inView.length + split.offInView.length}</span>
+                </h4>
+                <ul className="flex flex-col">{split.inView.map(row)}</ul>
+                {split.offInView.length > 0 && (
+                  <>
+                    <h4 className={cn(SUBHEADING, "mx-2 border-t border-border px-0")}>
+                      {t("gmbs.issue.off")} <span className="tabular-nums">{split.offInView.length}</span>
+                    </h4>
+                    <ul className="flex flex-col">{split.offInView.map(row)}</ul>
+                  </>
+                )}
+                <h4 className={SUBHEADING}>
+                  {t("gmbs.elsewhere")} <span className="tabular-nums">{split.elsewhere.length}</span>
+                </h4>
+                <ul className="flex flex-col">{split.elsewhere.map(row)}</ul>
+              </>
+            ) : (
+              <ul className="flex flex-col">{inSelection.map(row)}</ul>
+            )}
+          </Group>
+          <Group
+            into={false}
+            heading={t("gmbs.unselected")}
+            count={outOfSelection.length}
+            empty={t("gmbs.unselected.empty")}
+            onMove={move}
+            action={chosen !== null && <HeadAction onClick={() => select(null)}>{t("gmbs.selectAll")}</HeadAction>}
+          >
+            <ul className="flex flex-col">{outOfSelection.map(row)}</ul>
+          </Group>
+        </>
       )}
-      {listed.length === 0 && <p className="px-2 py-1.5 text-xs text-ink-soft">{t(filter.trim() === "" ? "gmbs.none" : "gmbs.none.filtered")}</p>}
       {scoped && (
         <div className="flex items-center gap-1 px-1 text-sm text-ink-soft">
           <AddGmbButton gmailId={scoped.id} onAdded={changed} />
@@ -202,7 +234,65 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-/** Which gmail's GMBs every app shows: all, or one; and each gmail's switch, count and actions. */
+/** A side of the selection, which a row dragged onto it moves to. */
+function Group({
+  into,
+  heading,
+  count,
+  empty,
+  action,
+  onMove,
+  children,
+}: {
+  into: boolean;
+  heading: string;
+  count: number;
+  empty: string;
+  action: ReactNode;
+  onMove: (gmbs: readonly number[], into: boolean) => void;
+  children: ReactNode;
+}) {
+  const [over, setOver] = useState(false);
+  return (
+    <section
+      aria-label={heading}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(DRAGGED)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        const id = Number(e.dataTransfer.getData(DRAGGED));
+        if (!Number.isSafeInteger(id)) throw new Error(`dropped a GMB without an id: ${e.dataTransfer.getData(DRAGGED)}`);
+        onMove([id], into);
+      }}
+      className={cn("rounded-md transition-colors", over && "bg-hover/40 ring-1 ring-ring")}
+    >
+      <h3 className={HEADING}>
+        {heading} <span className="tabular-nums">{count}</span>
+        <span className="flex-1" />
+        {action}
+      </h3>
+      {count === 0 ? <p className="px-2 py-1.5 text-xs text-ink-soft">{empty}</p> : children}
+    </section>
+  );
+}
+
+function HeadAction({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} className="rounded px-1 text-xs font-normal tracking-normal normal-case outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+      {children}
+    </button>
+  );
+}
+
+/** Which gmail's GMBs the outline lists: all, or one; and each gmail's switch, count and actions. */
 function Scope({ gmails, scoped, onFlip, onChanged }: { gmails: Gmail[]; scoped: Gmail | null; onFlip: (ids: number[], enabled: boolean) => Promise<void>; onChanged: () => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -270,7 +360,9 @@ function GmbRow({
   onMap,
   lit,
   current,
+  selected,
   linked,
+  onMove,
   onFlip,
   onChanged,
   onNavigate,
@@ -281,13 +373,17 @@ function GmbRow({
   onMap: boolean;
   lit: boolean;
   current: boolean;
+  selected: boolean;
   linked: ReadonlyMap<number, SiteTag> | null;
+  onMove: (gmbs: readonly number[], into: boolean) => void;
   onFlip: (ids: number[], enabled: boolean) => Promise<void>;
   onChanged: () => void;
   onNavigate?: () => void;
 }) {
   const t = useT();
+  const button = useButtonSize();
   const name = gmb.name ?? gmb.place_id;
+  const move = t(selected ? "gmbs.deselect" : "gmbs.select", { name });
   const issue = issueOf(gmb, tags);
   const archive = tags.archive?.get(gmb.id);
   const site = tags.sites?.get(gmb.id);
@@ -316,12 +412,17 @@ function GmbRow({
   return (
     <li
       className={cn(ROW, (current || lit) && "bg-hover/50")}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DRAGGED, String(gmb.id));
+        e.dataTransfer.effectAllowed = "move";
+      }}
       onMouseEnter={() => setOnMap({ hovered: gmb.id })}
       onMouseLeave={() => setOnMap({ hovered: null })}
     >
       <span aria-hidden className={cn("ml-1 size-2 shrink-0 rounded-full", gmb.enabled ? "bg-positive" : "bg-ink-soft", gmb.location === null && "opacity-40")} />
       {onMap ? (
-        <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => setOnMap({ peeked: gmb.id })}>
+        <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => peek(gmb.id)}>
           {label}
         </button>
       ) : (
@@ -336,6 +437,9 @@ function GmbRow({
         </Link>
       )}
       <span className={cn("flex items-center", ON_HOVER)}>
+        <Button variant="ghost" size={button("sm")} icon aria-label={move} title={move} onClick={() => onMove([gmb.id], !selected)}>
+          {selected ? <CircleMinus aria-hidden /> : <CirclePlus aria-hidden />}
+        </Button>
         <PlaceButton gmb={gmb} {...(onNavigate && { onNavigate })} />
         {linked && <LinkPlaceButton gmbId={gmb.id} linked={linked} onDone={onChanged} />}
         <Remove title={t("gmbs.gmb.remove.title", { name })} body={t("gmbs.gmb.remove.body")} remove={() => removeGmb(gmb.id)} onRemoved={onChanged} />

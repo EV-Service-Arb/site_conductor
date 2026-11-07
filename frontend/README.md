@@ -83,3 +83,14 @@ on their topic, a `resync`, or the socket back after a drop re-reads them. The s
 elements do the same for theirs. The elements also tell the host: `sa:title-count`
 (the tab title's new leads: `(3) Leads — Service-Arb panel`), `sa:unauthenticated`
 (their API's 401: the sign-in), `ev:navigate` (a link the host routes).
+
+## The selection
+
+The outline holds the selection every app narrows to: GMB ids, `?gmbs=` (absent:
+every GMB, those added later too; empty: none), rows dragged between "Selected" and
+"Not selected". A gmail (`?gmail=`), a search (`?find=`) and an issue (`?issue=`)
+narrow the rows only. These are the outline's keys of the query
+(`shared/lib/query`), kept from page to page; `?gmb=` (the open card) and `?at=`
+(`<lat>,<lng>,<zoom>`) are `/`'s. The host tells the elements the selection as
+`sa:gmbs` `{ids}` (`null`: every GMB) on each change and again on
+`sa:gmbs-request`; an element selects with `sa:gmbs-select` `{ids}` (CONTRACT §9).
