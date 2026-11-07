@@ -332,7 +332,7 @@ function Scope({ gmails, selection, onFlip, onChanged }: { gmails: Gmail[]; sele
           <span className="flex-1" />
           <span className="tabular-nums">{t("gmbs.scope.counts", { gmails: gmails.length, gmbs: total })}</span>
         </div>
-        <button type="button" onClick={() => select(null)} aria-pressed={chosen === null} className={cn(ROW, "w-full py-1.5 pl-2", chosen === null && "bg-hover/50")}>
+        <button type="button" onClick={() => select(null)} aria-pressed={chosen === null} className={cn(ROW, "w-full py-1.5 pl-2", chosen === null && "bg-hover font-medium ring-1 ring-accent-info ring-inset")}>
           <span className="flex-1 text-left">{t("gmbs.scope.all")}</span>
           <span className="text-xs text-ink-soft tabular-nums">{total}</span>
         </button>
@@ -344,7 +344,7 @@ function Scope({ gmails, selection, onFlip, onChanged }: { gmails: Gmail[]; sele
             const unfolded = opened.has(g.id);
             return (
               <li key={g.id}>
-                <div className={cn(ROW, full && "bg-hover", k > 0 && !full && "bg-hover/40")}>
+                <div className={cn(ROW, full && "bg-hover ring-1 ring-accent-info ring-inset", k > 0 && !full && "bg-hover/40 ring-1 ring-accent-info/40 ring-inset")}>
                   <button
                     type="button"
                     onClick={() => unfold(g.id)}
@@ -384,7 +384,7 @@ function Scope({ gmails, selection, onFlip, onChanged }: { gmails: Gmail[]; sele
                             title={b.address ? `${b.name ?? b.place_id}\n${b.address}` : (b.name ?? b.place_id)}
                             className={cn(
                               "flex w-full items-center gap-1 rounded-md py-1 pr-1 pl-2 text-left text-sm outline-none hover:bg-hover/50 focus-visible:ring-2 focus-visible:ring-ring",
-                              picked && "bg-hover font-medium",
+                              picked && "bg-hover font-medium ring-1 ring-accent-info ring-inset",
                               b.enabled ? "text-ink" : "text-ink-soft",
                             )}
                           >
