@@ -11,7 +11,7 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::get,
 };
-use sa_core::gbp::{Country, State as GbpState};
+use sa_gbp::{Country, OnGoogle};
 use sa_panel::{
 	Panel,
 	gmbs::{Existing, Located},
@@ -168,7 +168,7 @@ fn existing(gmail_id: i64, place: &str) -> Existing {
 	Existing {
 		gmail_id,
 		place: place.to_owned(),
-		state: GbpState::Verified,
+		state: OnGoogle::Verified,
 		name: Some(place.to_owned()),
 		country: Some(Country::FR),
 	}

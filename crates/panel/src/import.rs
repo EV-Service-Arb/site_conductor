@@ -159,7 +159,7 @@ impl Panel {
 				place_id: Some(&b.place_id),
 				name,
 				address: b.address.as_deref(),
-				state: sa_core::gbp::State::Verified,
+				state: sa_gbp::State::Verified,
 				country: None,
 				country_by_hand: false,
 				at: None,

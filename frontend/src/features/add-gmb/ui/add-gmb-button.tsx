@@ -25,12 +25,11 @@ import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 
-import { COUNTRIES, type Candidate, type Country, type State, addGmb, createDraft, editGmb, resolvePlace, setOnMap, useGmails } from "@/entities/gmb";
+import { COUNTRIES, type Candidate, type Country, ON_GOOGLE, type OnGoogle, addGmb, createDraft, editGmb, resolvePlace, setOnMap, useGmails } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
-const ON_GOOGLE = ["verifying", "verified", "suspended"] as const satisfies readonly State[];
 const GOOGLES = "google";
 
 /**
@@ -52,7 +51,7 @@ export function AddGmbButton({ gmailId, onAdded }: { gmailId: number | null; onA
   const [place, setPlace] = useState("");
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
-  const [state, setState] = useState<(typeof ON_GOOGLE)[number]>("verified");
+  const [state, setState] = useState<OnGoogle>("verified");
   const [country, setCountry] = useState<Country | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -220,7 +219,7 @@ export function AddGmbButton({ gmailId, onAdded }: { gmailId: number | null; onA
               <div className="flex gap-2">
                 <Field className="flex min-w-0 flex-1 flex-col gap-1">
                   <FieldLabel htmlFor={`${id}-state`}>{t("gmbs.gbp.state")}</FieldLabel>
-                  <Select value={state} onValueChange={(v) => setState(v as (typeof ON_GOOGLE)[number])}>
+                  <Select value={state} onValueChange={(v) => setState(v as OnGoogle)}>
                     <SelectTrigger id={`${id}-state`} size={size} className="w-full">
                       <SelectValue />
                     </SelectTrigger>

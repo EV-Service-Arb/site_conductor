@@ -1,7 +1,7 @@
 //! A GMB's switch: its owner's to turn, and what review_archive's snapshot carries.
 
 use jiff::Timestamp;
-use sa_core::gbp::{Country, State};
+use sa_gbp::Country;
 use sa_panel::{
 	Refused,
 	gmbs::Existing,
@@ -53,7 +53,7 @@ async fn a_gmb_is_switched_by_its_owner_and_review_archive_is_told() {
 	let existing = |place: &str, name: &str| Existing {
 		gmail_id: gmail.id,
 		place: place.to_owned(),
-		state: State::Verified,
+		state: sa_gbp::OnGoogle::Verified,
 		name: Some(name.to_owned()),
 		country: Some(Country::FR),
 	};

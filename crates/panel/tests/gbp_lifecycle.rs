@@ -2,7 +2,7 @@
 //! along `State::next`; a GBP with a place has its gmail and its country.
 
 use jiff::Timestamp;
-use sa_core::gbp::{Country, State};
+use sa_gbp::{Country, OnGoogle, State};
 use sa_panel::{
 	Panel, Refused,
 	gmbs::{Edit, Existing},
@@ -48,7 +48,7 @@ fn existing(gmail_id: i64, place: &str, name: &str, country: Option<Country>) ->
 	Existing {
 		gmail_id,
 		place: place.to_owned(),
-		state: State::Verified,
+		state: OnGoogle::Verified,
 		name: Some(name.to_owned()),
 		country,
 	}
@@ -182,7 +182,7 @@ async fn a_state_moves_only_along_its_transitions_and_a_place_is_set_once() {
 }
 
 #[tokio::test]
-async fn the_snapshot_carries_placed_gbps_with_their_state_and_language() {
+async fn the_snapshot_carries_placed_gbps_with_their_state_and_country() {
 	let db = TestDb::create().await;
 	let p = opened(&db).await;
 	let owner = person(&p, "owner@localhost").await;
@@ -206,8 +206,8 @@ async fn the_snapshot_carries_placed_gbps_with_their_state_and_language() {
 	let snap = p.snapshot(now()).await.unwrap().unwrap();
 	let [m] = snap.gmbs.as_slice() else { panic!("the draft has no place: {:?}", snap.gmbs) };
 	assert_eq!(
-		(m.id, m.gmail_id, m.state, m.lang, m.name.as_str()),
-		(gbp.id, other.id, State::Suspended, Some("en"), "Procope"),
+		(m.id, m.gmail_id, m.state, m.country, m.name.as_str()),
+		(gbp.id, other.id, OnGoogle::Suspended, Some(Country::US), "Procope"),
 		"moved to its owner's other gmail"
 	);
 }

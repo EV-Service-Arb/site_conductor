@@ -17,12 +17,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use eyre::WrapErr;
 use jiff::{Timestamp, civil::Date, tz::TimeZone};
 use sa_core::tokens::{Renewal, split};
-use serde::{Deserialize, Serialize};
+use sa_gbp::Snapshot;
+use serde::Deserialize;
 use sqlx::SqliteConnection;
 use uuid::Uuid;
 
 pub use crate::store::{
-	gmbs::Managed,
 	tokens::{Charged, Entry, Kickback, Kind, Owed},
 	users::User,
 };
@@ -58,17 +58,6 @@ pub struct Charge {
 pub struct ChargePage {
 	pub charges: Vec<Charge>,
 	pub next: i64,
-}
-
-/// What review_archive is told (`PUT /api/conductor/gmbs`).
-#[derive(Clone, Debug, Serialize)]
-pub struct Snapshot {
-	/// Every GMB there ever was.
-	pub gmbs: Vec<Managed>,
-	/// Every user's, renewed up to the snapshot.
-	pub balances: BTreeMap<Uuid, i64>,
-	/// The last of its charges in these balances.
-	pub charges_through: i64,
 }
 
 /// An admin's change to a balance.

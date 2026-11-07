@@ -6,6 +6,7 @@ use std::path::Path;
 use ev_lib::ts_gen::Ts;
 use sa_alerts::Rule;
 use sa_auth::{Catalog, SourceKind};
+use sa_gbp::OnGoogle;
 use sa_panel::tokens::Kind;
 use sa_server::{
 	access::AccessRequestDto,
@@ -38,7 +39,7 @@ fn main() {
 			},
 		],
 	);
-	Ts::write(&root.join("entities/gmb/model/generated.ts"), &[Ts::types::<(GmailsDto, CandidatesDto, MapDto)>()]);
+	Ts::write(&root.join("entities/gmb/model/generated.ts"), &[Ts::types::<(GmailsDto, CandidatesDto, MapDto, OnGoogle)>()]);
 	Ts::write(
 		&root.join("entities/tokens/model/generated.ts"),
 		&[

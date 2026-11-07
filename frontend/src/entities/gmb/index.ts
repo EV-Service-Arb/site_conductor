@@ -1,7 +1,7 @@
 export { addGmail, addGmb, createDraft, editGmb, fetchGmails, fetchMapConfig, fetchSitesPlaces, linkPlace, moveGmb, placeGmb, removeGmail, removeGmb, resolvePlace, setCountry, switchGmbs } from "./api/gmbs";
 export { fetchArchive } from "./api/tags";
 export { GmailsProvider, useGmails, useGmbTags } from "./model/gmails-context";
-export { COUNTRIES, type Country, NEXT, STATES, type State } from "./model/gmb";
+export { COUNTRIES, type Country, ON_GOOGLE, type OnGoogle, type State } from "./model/gmb";
 export type { ArchiveTag, Candidate, Gmail, Gmails, Gmb, LatLng, MapConfig, SiteTag, SitesPlace } from "./model/gmb";
 export { ISSUES, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
 export { type Listed, byView, narrowed, under } from "./model/narrow";

@@ -11,6 +11,7 @@ const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
   address: null,
   gmail_id: GMAIL,
   state: "verified",
+  next: ["suspended", "verifying"],
   country: { code: "FR", by_hand: false },
   phone: null,
   created_at: "2026-11-06T00:00:00Z",

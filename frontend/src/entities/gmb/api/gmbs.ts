@@ -57,7 +57,7 @@ export function editGmb(id: number, edit: { name?: string; gmail_id?: number; ph
   return http.send("PATCH", `/api/v1/gmbs/${id}`, edit, gmbParser);
 }
 
-/** `place` (pasted) takes a draft onto Google; refused for a move `NEXT` does not allow. */
+/** `place` (pasted) takes a draft onto Google; refused for a move not in its `next`. */
 export function moveGmb(id: number, state: State, place?: string): Promise<Gmb> {
   return http.send("PUT", `/api/v1/gmbs/${id}/state`, place === undefined ? { state } : { state, place }, gmbParser);
 }

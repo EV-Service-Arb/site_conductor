@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::gbp::{Country, State};
+use sa_gbp::{Country, OnGoogle, State};
 use sa_places::{Ask, LatLng, Place};
 use uuid::Uuid;
 
@@ -38,7 +38,7 @@ pub struct Existing {
 	pub gmail_id: i64,
 	/// What a person pastes: a place id, a Maps URL.
 	pub place: String,
-	pub state: State,
+	pub state: OnGoogle,
 	/// Used when Google gives none, as `country`.
 	pub name: Option<String>,
 	pub country: Option<Country>,
@@ -91,7 +91,7 @@ fn phone(raw: &str) -> Result<String, Refused> {
 fn google_country(place: Option<&Place>) -> Result<Option<Country>, Refused> {
 	match place.and_then(|p| p.country.as_deref()) {
 		None => Ok(None),
-		Some(c) => c.parse().map(Some).map_err(|e: sa_core::Invalid| Refused::Invalid(format!("Google places it in a {e}"))),
+		Some(c) => c.parse().map(Some).map_err(|e: sa_gbp::Invalid| Refused::Invalid(format!("Google places it in a {e}"))),
 	}
 }
 
@@ -174,11 +174,6 @@ impl Panel {
 	/// its country by Places when there is a key, `e` filling what Google lacks. `owner` is whose
 	/// the gmail must be; `None`, the operator's CLI.
 	pub async fn add_gmb(&self, owner: Option<Uuid>, e: Existing, now: Timestamp) -> eyre::Result<Result<Gmb, Refused>> {
-		if e.state == State::Draft {
-			return Ok(Err(Refused::Invalid(
-				"a GBP on Google is verifying, verified or suspended; a draft is created by its name".to_owned(),
-			)));
-		}
 		let (place_id, place) = match self.google.resolve(&e.place).await {
 			Ok(found) => found,
 			Err(err) => return Ok(Err(places_error(err)?)),
@@ -216,7 +211,7 @@ impl Panel {
 			place_id: Some(&place_id),
 			name: &name,
 			address: place.as_ref().and_then(|p| p.address.as_deref()),
-			state: e.state,
+			state: e.state.into(),
 			country: Some(country),
 			country_by_hand: by_hand,
 			at: place.as_ref().and_then(|p| p.location),
@@ -292,7 +287,7 @@ impl Panel {
 			return Ok(Err(Refused::NotFound));
 		};
 		if let Err(e) = gbp.state.next(to) {
-			return Ok(Err(Refused::Invalid(e.0)));
+			return Ok(Err(Refused::Invalid(e.to_string())));
 		}
 		match placed {
 			Some(_) if gbp.state != read.state => return Ok(Err(Refused::Conflict(format!("GBP {id} became {} meanwhile", gbp.state)))),

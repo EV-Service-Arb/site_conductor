@@ -21,7 +21,7 @@ import {
 import { Pencil } from "lucide-react";
 import { useId, useState } from "react";
 
-import { COUNTRIES, type Country, type Gmb, NEXT, type State, editGmb, moveGmb, setCountry, useGmails } from "@/entities/gmb";
+import { COUNTRIES, type Country, type Gmb, type State, editGmb, moveGmb, setCountry, useGmails } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -175,7 +175,7 @@ export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => v
             )}
             <div className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
               {t("gmbs.gbp.move")}
-              {NEXT[gmb.state].map((to) => (
+              {gmb.next.map((to) => (
                 <Button key={to} variant="outline" size={button("sm")} disabled={busy || (draft && !place.trim())} onClick={() => void move(to)}>
                   {t(`gmbs.state.${to}`)}
                 </Button>

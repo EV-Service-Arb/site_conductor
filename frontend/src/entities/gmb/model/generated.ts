@@ -5,6 +5,15 @@
  */
 export type Candidates = { candidates: Array<Place>, };
 /**
+ * ISO 3166-1 alpha-2, of the countries GBPs are in.
+ */
+export type Country = "FR" | "US" | "CA" | "GB";
+export type GbpCountry = { code: Country, 
+/**
+ * Set by hand, Google having none.
+ */
+by_hand: boolean, };
+/**
  * A gmail of the caller's.
  */
 export type Gmail = { id: number, gmail: string, 
@@ -27,11 +36,15 @@ gmail_id: number | null,
 /**
  * Google's place id; `null` while a draft, and only then.
  */
-place_id: string | null, name: string, address: string | null, state: "draft" | "verifying" | "verified" | "suspended", 
+place_id: string | null, name: string, address: string | null, state: State, 
+/**
+ * The states it may move to.
+ */
+next: Array<State>, 
 /**
  * `by_hand`: set by the caller, Google having none.
  */
-country: { code: "FR" | "US" | "CA" | "GB", by_hand: boolean } | null, phone: string | null, 
+country: GbpCountry | null, phone: string | null, 
 /**
  * RFC 3339.
  */
@@ -50,6 +63,10 @@ location: { lat: number, lng: number, placed: boolean } | null, };
  */
 export type MapConfig = { key: string, };
 /**
+ * A [`State`] with a place on Google: every one but a draft.
+ */
+export type OnGoogle = "verifying" | "verified" | "suspended";
+/**
  * A place a pasted input may mean.
  */
 export type Place = { place_id: string, 
@@ -57,3 +74,11 @@ export type Place = { place_id: string,
  * Named and addressed only with the conductor's Places API key.
  */
 name: string | null, address: string | null, };
+/**
+ * ```text
+ * Draft ─▶ Verifying ─▶ Verified ⇄ Suspended
+ *             ▲ └──────────┘          │
+ *             └───────────────────────┘
+ * ```
+ */
+export type State = "draft" | "verifying" | "verified" | "suspended";

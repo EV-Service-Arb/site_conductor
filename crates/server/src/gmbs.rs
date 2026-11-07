@@ -30,7 +30,7 @@ use axum::{
 	response::{IntoResponse, Response},
 };
 use jiff::Timestamp;
-use sa_core::gbp::State as GbpState;
+use sa_gbp::{Country, State as GbpState};
 use sa_panel::{
 	Panel,
 	gmbs::{Edit, Existing, Gmail, Gmb},
@@ -64,10 +64,10 @@ pub struct GmbDto {
 	pub place_id: Option<String>,
 	pub name: String,
 	pub address: Option<String>,
-	#[ts(type = "\"draft\" | \"verifying\" | \"verified\" | \"suspended\"")]
 	pub state: GbpState,
+	/// The states it may move to.
+	pub next: Vec<GbpState>,
 	/// `by_hand`: set by the caller, Google having none.
-	#[ts(type = "{ code: \"FR\" | \"US\" | \"CA\" | \"GB\", by_hand: boolean } | null")]
 	pub country: Option<sa_panel::gmbs::GbpCountry>,
 	pub phone: Option<String>,
 	/// RFC 3339.
@@ -145,6 +145,7 @@ impl From<Gmb> for GmbDto {
 			name: b.name,
 			address: b.address,
 			state: b.state,
+			next: b.state.nexts().to_vec(),
 			country: b.country,
 			phone: b.phone,
 			created_at: b.created_at.to_string(),
@@ -335,7 +336,7 @@ struct SetCountry {
 
 async fn set_country(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<SetCountry>, JsonRejection>) -> ApiResult<StatusCode> {
 	let gmb = id(&raw)?;
-	let country: sa_core::gbp::Country = body(b)?.country.parse()?;
+	let country: Country = body(b)?.country.parse()?;
 	panel.set_country(Some(caller.user_id), gmb, country).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, %country, "GMB's country set");
 	Ok(StatusCode::NO_CONTENT)

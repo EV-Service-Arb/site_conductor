@@ -1,23 +1,15 @@
 import { type Infer, type Parser, arrayOf, bool, nullable, num, object, oneOf, str } from "@/shared/lib/parse";
 
-import type { Candidates, Gmails, Gmb, MapConfig, Place } from "./generated";
+import type { Candidates, Country, Gmails, Gmb, MapConfig, OnGoogle, Place, State } from "./generated";
 
-export type { Gmail, Gmails, Gmb, MapConfig, Place as Candidate } from "./generated";
+export type { Country, Gmail, Gmails, Gmb, MapConfig, OnGoogle, Place as Candidate, State } from "./generated";
 
 export type LatLng = { lat: number; lng: number };
 
-/** Draft → verifying → verified ⇄ suspended; `next` is where each may move (sa_core::gbp::State::next). */
-export const STATES = ["draft", "verifying", "verified", "suspended"] as const;
-export type State = Gmb["state"];
-export const NEXT: Record<State, readonly State[]> = {
-  draft: ["verifying"],
-  verifying: ["verified"],
-  verified: ["suspended", "verifying"],
-  suspended: ["verified", "verifying"],
-};
-
-export const COUNTRIES = ["FR", "US", "CA", "GB"] as const;
-export type Country = (typeof COUNTRIES)[number];
+/** Each a key, so the compiler holds the lists to the generated unions. */
+const STATES = Object.keys({ draft: true, verifying: true, verified: true, suspended: true } satisfies Record<State, true>) as State[];
+export const ON_GOOGLE = Object.keys({ verifying: true, verified: true, suspended: true } satisfies Record<OnGoogle, true>) as OnGoogle[];
+export const COUNTRIES = Object.keys({ FR: true, US: true, CA: true, GB: true } satisfies Record<Country, true>) as Country[];
 
 export const gmbParser: Parser<Gmb> = object({
   id: num,
@@ -26,6 +18,7 @@ export const gmbParser: Parser<Gmb> = object({
   name: str,
   address: nullable(str),
   state: oneOf(STATES),
+  next: arrayOf(oneOf(STATES)),
   country: nullable(object({ code: oneOf(COUNTRIES), by_hand: bool })),
   phone: nullable(str),
   created_at: str,

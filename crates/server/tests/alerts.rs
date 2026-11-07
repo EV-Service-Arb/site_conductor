@@ -22,10 +22,8 @@ use hmac::{Hmac, KeyInit, Mac};
 use jiff::{SignedDuration, Timestamp};
 use sa_alerts::{Origin, Rule};
 use sa_auth::{PermissionSet, Principal, Service};
-use sa_core::{
-	gbp::{Country, State as GbpState},
-	notify::{Locale, Rendered},
-};
+use sa_core::notify::{Locale, Rendered};
+use sa_gbp::{Country, OnGoogle};
 use sa_panel::{
 	Panel, Refused,
 	alerts::{Access, Directory, DirectoryError, Hub, Identity},
@@ -424,7 +422,7 @@ impl Setup {
 		let existing = Existing {
 			gmail_id: gmail.id,
 			place: place.to_owned(),
-			state: GbpState::Verified,
+			state: OnGoogle::Verified,
 			name: Some(place.to_owned()),
 			country: Some(Country::FR),
 		};

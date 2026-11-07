@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::gbp::{Country, State};
+use sa_gbp::{Country, Managed, State};
 use sa_places::LatLng;
 use sqlx::SqliteConnection;
 use uuid::Uuid;
@@ -53,30 +53,11 @@ pub struct Point {
 	pub placed: bool,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, ts_rs::TS)]
 pub struct GbpCountry {
 	pub code: Country,
 	/// Set by hand, Google having none.
 	pub by_hand: bool,
-}
-
-/// A GBP with a place, as the services are told of it.
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
-pub struct Managed {
-	pub id: i64,
-	pub gmail_id: i64,
-	pub gmail: String,
-	pub owner: Uuid,
-	/// The GBP's or its gmail's.
-	pub removed: bool,
-	pub place_id: String,
-	/// Its owner's switch.
-	pub enabled: bool,
-	pub state: State,
-	/// Its country's; `None` only for a removed GBP from before countries.
-	pub lang: Option<&'static str>,
-	pub name: String,
-	pub address: Option<String>,
 }
 
 /// What a new GBP row holds; `gmail_id` and `place_id` absent for a draft.
@@ -404,8 +385,8 @@ pub async fn managed(conn: &mut SqliteConnection) -> eyre::Result<Vec<Managed>> 
 			let (Some(gmail_id), Some(gmail)) = (gmail_id, gmail) else {
 				eyre::bail!("GMB {id} is on {place_id} with no gmail, which the schema refuses");
 			};
-			let lang = country.as_deref().map(str::parse::<Country>).transpose()?.map(Country::lang);
-			eyre::ensure!(removed || lang.is_some(), "GMB {id} is live on {place_id} with no country, which the schema refuses");
+			let country = country.as_deref().map(str::parse::<Country>).transpose()?;
+			eyre::ensure!(removed || country.is_some(), "GMB {id} is live on {place_id} with no country, which the schema refuses");
 			Ok(Managed {
 				id,
 				gmail_id,
@@ -415,7 +396,7 @@ pub async fn managed(conn: &mut SqliteConnection) -> eyre::Result<Vec<Managed>> 
 				place_id,
 				enabled,
 				state: state.parse()?,
-				lang,
+				country,
 				name,
 				address,
 			})
