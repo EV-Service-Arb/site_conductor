@@ -86,11 +86,11 @@ elements do the same for theirs. The elements also tell the host: `sa:title-coun
 
 ## The selection
 
-The outline holds the selection every app narrows to: GMB ids, `?gmbs=` (absent:
-every GMB, those added later too; empty: none), rows dragged between "Selected" and
-"Not selected". A gmail (`?gmail=`), a search (`?find=`) and an issue (`?issue=`)
-narrow the rows only. These are the outline's keys of the query
-(`shared/lib/query`), kept from page to page; `?gmb=` (the open card) and `?at=`
-(`<lat>,<lng>,<zoom>`) are `/`'s. The host tells the elements the selection as
-`sa:gmbs` `{ids}` (`null`: every GMB) on each change and again on
-`sa:gmbs-request`; an element selects with `sa:gmbs-select` `{ids}` (CONTRACT §9).
+The outline holds the selection every app narrows to. A gmail (`?gmail=`), a search
+(`?find=`) and an issue (`?issue=`) select what they match, every GMB without them;
+rows dragged between "Selected" and "Not selected" edit that, `?gmbs=` (empty: none),
+until a filter changes. These are the outline's keys of the query (`shared/lib/query`),
+kept from page to page; `?gmb=` (the open card) and `?at=` (`<lat>,<lng>,<zoom>`) are
+`/`'s. The host tells the elements the selection as `sa:gmbs` `{ids}` (`null`: every
+GMB) on each change and again on `sa:gmbs-request`; an element selects with
+`sa:gmbs-select` `{ids}`, which clears the filters (CONTRACT §9).

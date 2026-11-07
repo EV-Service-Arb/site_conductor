@@ -12,5 +12,5 @@ export function useGmailScope(): number | null {
 }
 
 export function chooseGmailScope(gmail: number | null): void {
-  setQuery({ gmail: gmail === null ? null : String(gmail) });
+  setQuery({ gmail: gmail === null ? null : String(gmail), gmbs: null });
 }

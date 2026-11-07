@@ -21,19 +21,19 @@ export interface Selection {
   only: Issue | null;
   /** Under the scope and the filter: what the issue chips count. */
   found: Listed[];
-  /** `found` under the chip, the most pressing first: the outline's rows. */
-  shown: Listed[];
+  /** Every GMB, the most pressing first: the outline's rows. */
+  rows: Listed[];
   /** The selected ids; `null`: every GMB, those added later too. */
   chosen: ReadonlySet<number> | null;
-  /** Every selected GMB, whatever the outline shows: what the apps narrow to. */
+  /** What the apps narrow to. */
   selected: Listed[];
   isSelected: (gmb: number) => boolean;
-  /** Moves `gmbs` into the selection, or out of it. */
+  /** Moves `gmbs` into the selection, or out of it: an edit of what the filters select. */
   move: (gmbs: readonly number[], into: boolean) => void;
 }
 
-/** `?gmbs`: absent, every GMB; empty, none. */
-function chosenOf(raw: string | null): ReadonlySet<number> | null {
+/** `?gmbs`, an edit of what the filters select: absent, none made; empty, nothing selected. */
+function editOf(raw: string | null): ReadonlySet<number> | null {
   if (raw === null) return null;
   return new Set(
     raw === ""
@@ -46,8 +46,11 @@ function chosenOf(raw: string | null): ReadonlySet<number> | null {
   );
 }
 
+const joined = (gmbs: Iterable<number>) => [...gmbs].sort((a, b) => a - b).join(",");
+
+/** Selects exactly `gmbs` (`null`: every GMB); the filters no longer say what is selected, so they go. */
 export function select(gmbs: Iterable<number> | null): void {
-  setQuery({ gmbs: gmbs === null ? null : [...gmbs].sort((a, b) => a - b).join(",") });
+  setQuery({ gmbs: gmbs === null ? null : joined(gmbs), gmail: null, find: null, issue: null });
 }
 
 /** The selection, and the outline's rows beside it; `null` while the gmails load. */
@@ -57,7 +60,7 @@ export function useSelection(): Selection | null {
   const { tags } = useGmbTags();
   const filter = useQuery("find") ?? "";
   const only = useQuery("issue");
-  const chosen = chosenOf(useQuery("gmbs"));
+  const edit = editOf(useQuery("gmbs"));
   if (only !== null && !(ISSUES as readonly string[]).includes(only)) throw new Error(`?issue=${only}: not one of ${ISSUES.join(", ")}`);
   if (gmails.status !== "ok") return null;
   const scoped = gmails.data.find((g) => g.id === scope) ?? null;
@@ -66,26 +69,28 @@ export function useSelection(): Selection | null {
     const issue = issueOf(l.gmb, tags);
     return issue === null ? ISSUES.length : ISSUES.indexOf(issue);
   };
-  const shown = found.filter((l) => only === null || issueOf(l.gmb, tags) === only).sort((a, b) => rank(a) - rank(b));
-  const all = narrowed(gmails.data, null, "");
+  const rows = narrowed(gmails.data, null, "").sort((a, b) => rank(a) - rank(b));
+  const filtered = scoped !== null || filter.trim() !== "" || only !== null;
+  const chosen = edit ?? (filtered ? new Set(found.filter((l) => only === null || issueOf(l.gmb, tags) === only).map((l) => l.gmb.id)) : null);
   const isSelected = (gmb: number) => chosen === null || chosen.has(gmb);
   const move = (gmbs: readonly number[], into: boolean) => {
-    const next = new Set(chosen ?? all.map((l) => l.gmb.id));
+    const next = new Set(chosen ?? rows.map((l) => l.gmb.id));
     for (const id of gmbs) {
       if (into) next.add(id);
       else next.delete(id);
     }
-    select(all.every((l) => next.has(l.gmb.id)) ? null : next);
+    if (rows.every((l) => next.has(l.gmb.id))) select(null);
+    else setQuery({ gmbs: joined(next) });
   };
-  return { scoped, filter, only: only as Issue | null, found, shown, chosen, selected: all.filter((l) => isSelected(l.gmb.id)), isSelected, move };
+  return { scoped, filter, only: only as Issue | null, found, rows, chosen, selected: rows.filter((l) => isSelected(l.gmb.id)), isSelected, move };
 }
 
 export function setFilter(filter: string): void {
-  setQuery({ find: filter === "" ? null : filter });
+  setQuery({ find: filter === "" ? null : filter, gmbs: null });
 }
 
 export function setOnly(issue: Issue | null): void {
-  setQuery({ issue });
+  setQuery({ issue, gmbs: null });
 }
 
 /** Tells the elements the selected ids (`null`: every GMB) on each change and to one that asks, and takes the selection an element makes. */
@@ -93,13 +98,14 @@ export function PublishSelection() {
   const selection = useSelection();
   const gmails = useGmails();
   const chosen = selection?.chosen;
+  const edit = editOf(useQuery("gmbs"));
   const known = gmails.status === "ok" ? new Set(gmails.data.flatMap((g) => g.gmbs.map((b) => b.id))) : undefined;
   const told = chosen === undefined ? undefined : JSON.stringify(chosen === null ? null : [...chosen].sort((a, b) => a - b));
 
   // a selected GMB removed, here or elsewhere: out of the selection
-  const stale = chosen != null && known !== undefined && [...chosen].some((id) => !known.has(id));
+  const stale = edit !== null && known !== undefined && [...edit].some((id) => !known.has(id));
   useEffect(() => {
-    if (stale && chosen != null && known !== undefined) select([...chosen].filter((id) => known.has(id)));
+    if (stale && edit !== null && known !== undefined) setQuery({ gmbs: joined([...edit].filter((id) => known.has(id))) });
   });
 
   useEffect(() => {

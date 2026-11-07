@@ -120,7 +120,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   if (gmails.status === "loading") return <Skeleton className="mx-2 h-24" />;
   if (gmails.status === "error") return <ErrorState failure={gmails.failure} onRetry={gmails.reload} />;
   if (selection === null) throw new Error("the gmails are read, so is the selection");
-  const { scoped, filter, only, found, shown, chosen, isSelected, move } = selection;
+  const { scoped, filter, only, found, rows, chosen, isSelected, move } = selection;
   const counts = issueCounts(
     found.map((l) => l.gmb),
     tags,
@@ -143,11 +143,9 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
       {...(onNavigate && { onNavigate })}
     />
   );
-  const inSelection = shown.filter((l) => isSelected(l.gmb.id));
-  const outOfSelection = shown.filter((l) => !isSelected(l.gmb.id));
+  const inSelection = rows.filter((l) => isSelected(l.gmb.id));
+  const outOfSelection = rows.filter((l) => !isSelected(l.gmb.id));
   const split = onMap ? byView(inSelection, inView) : null;
-  const narrowing = scoped !== null || filter.trim() !== "" || only !== null;
-  const exactlyShown = chosen !== null && chosen.size === shown.length && shown.every((l) => chosen.has(l.gmb.id));
 
   return (
     <section aria-label={t("gmbs.title")} className="flex flex-col gap-1">
@@ -177,8 +175,8 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
           ))}
         </div>
       )}
-      {shown.length === 0 ? (
-        <p className="px-2 py-1.5 text-xs text-ink-soft">{t(filter.trim() === "" ? "gmbs.none" : "gmbs.none.filtered")}</p>
+      {rows.length === 0 ? (
+        <p className="px-2 py-1.5 text-xs text-ink-soft">{t("gmbs.none")}</p>
       ) : (
         <>
           <Group
@@ -187,7 +185,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
             count={inSelection.length}
             empty={t("gmbs.selected.empty")}
             onMove={move}
-            action={narrowing && !exactlyShown && <HeadAction onClick={() => select(shown.map((l) => l.gmb.id))}>{t("gmbs.onlyThese")}</HeadAction>}
+            action={null}
           >
             {split ? (
               <>
