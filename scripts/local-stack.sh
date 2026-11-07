@@ -461,6 +461,7 @@ set -m
 groups=()
 stop_all() {
 	trap - INT TERM EXIT
+	set +e # a closed terminal fails the writes below; under -e that would leave every part running
 	echo >&2
 	say "stopping"
 	local pg
