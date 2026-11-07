@@ -86,7 +86,7 @@ elements do the same for theirs. The elements also tell the host: `sa:title-coun
 
 ## The selection
 
-The outline holds the selection every app narrows to. A gmail (`?gmail=`), a search
+The outline holds the selection every app narrows to. Gmails (`?gmail=2,12`), a search
 (`?find=`) and an issue (`?issue=`) select what they match, every GMB without them;
 rows dragged between "Selected" and "Not selected" edit that, `?gmbs=` (empty: none),
 until a filter changes. These are the outline's keys of the query (`shared/lib/query`),
