@@ -43,7 +43,7 @@ export function script(prompt: string, about: Listed[], all: Listed[], tags: Tag
         "",
         "The playbook says to appeal within 7 days, while the snapshots are fresh [2]. I drafted one appeal per review:",
         `- each cites its snapshot as proof`,
-        `- they go out from the GMB's own gmail, ${subject.gmail.gmail}`,
+        `- they go out from the GMB's own gmail, ${subject.gmail?.gmail ?? "once it has one"}`,
       ].join("\n"),
       sources: [archiveSource, { label: "Playbook · suspension", href: null }],
       actions: [

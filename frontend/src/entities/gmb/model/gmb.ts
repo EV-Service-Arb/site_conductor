@@ -1,18 +1,33 @@
-import { type Infer, type Parser, arrayOf, bool, nullable, num, object, str } from "@/shared/lib/parse";
+import { type Infer, type Parser, arrayOf, bool, nullable, num, object, oneOf, str } from "@/shared/lib/parse";
 
 import type { Candidates, Gmails, Gmb, MapConfig, Place } from "./generated";
 
-export type { Gmail, Gmb, MapConfig, Place as Candidate } from "./generated";
+export type { Gmail, Gmails, Gmb, MapConfig, Place as Candidate } from "./generated";
 
 export type LatLng = { lat: number; lng: number };
 
+/** Draft → verifying → verified ⇄ suspended; `next` is where each may move (sa_core::gbp::State::next). */
+export const STATES = ["draft", "verifying", "verified", "suspended"] as const;
+export type State = Gmb["state"];
+export const NEXT: Record<State, readonly State[]> = {
+  draft: ["verifying"],
+  verifying: ["verified"],
+  verified: ["suspended", "verifying"],
+  suspended: ["verified", "verifying"],
+};
+
+export const COUNTRIES = ["FR", "US", "CA", "GB"] as const;
+export type Country = (typeof COUNTRIES)[number];
+
 export const gmbParser: Parser<Gmb> = object({
   id: num,
-  place_id: str,
-  name: nullable(str),
+  gmail_id: nullable(num),
+  place_id: nullable(str),
+  name: str,
   address: nullable(str),
-  gbp_account: nullable(str),
-  gbp_location: nullable(str),
+  state: oneOf(STATES),
+  country: nullable(object({ code: oneOf(COUNTRIES), by_hand: bool })),
+  phone: nullable(str),
   created_at: str,
   enabled: bool,
   location: nullable(object({ lat: num, lng: num, placed: bool })),
@@ -20,7 +35,7 @@ export const gmbParser: Parser<Gmb> = object({
 
 export const mapConfigParser: Parser<MapConfig> = object({ key: str });
 
-export const gmailsParser: Parser<Gmails> = object({ gmails: arrayOf(object({ id: num, gmail: str, created_at: str, gmbs: arrayOf(gmbParser) })) });
+export const gmailsParser: Parser<Gmails> = object({ gmails: arrayOf(object({ id: num, gmail: str, created_at: str })), gmbs: arrayOf(gmbParser) });
 
 const candidateParser: Parser<Place> = object({ place_id: str, name: nullable(str), address: nullable(str) });
 export const candidatesParser: Parser<Candidates> = object({ candidates: arrayOf(candidateParser) });

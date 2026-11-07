@@ -112,7 +112,7 @@ export interface Http {
   get<T>(path: string, parser: Parser<T>, query?: Query): Promise<T>;
   /** Every write carries the CSRF header; the backend refuses one without it. `headers` adds others (an Idempotency-Key). */
   send<T>(
-    method: "POST" | "PUT" | "DELETE",
+    method: "POST" | "PUT" | "PATCH" | "DELETE",
     path: string,
     body: unknown,
     parser: Parser<T>,

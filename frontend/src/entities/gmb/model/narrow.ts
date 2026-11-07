@@ -1,17 +1,28 @@
-import type { Gmail, Gmb } from "./gmb";
+import type { Gmail, Gmails, Gmb } from "./gmb";
 
 export interface Listed {
   gmb: Gmb;
-  gmail: Gmail;
+  /** `null`: a draft no gmail manages yet. */
+  gmail: Gmail | null;
 }
 
-/** The GMBs under `scope` (`null`: every gmail) whose name, address, place id or gmail holds `filter`. */
-export function narrowed(gmails: readonly Gmail[], scope: ReadonlySet<number> | null, filter: string): Listed[] {
+/** The GBPs under `scope` (`null`: every gmail, and the drafts under none) whose name, address, place id or gmail holds `filter`. */
+export function narrowed(data: Gmails, scope: ReadonlySet<number> | null, filter: string): Listed[] {
   const needle = filter.trim().toLowerCase();
-  return gmails
-    .filter((g) => scope === null || scope.has(g.id))
-    .flatMap((gmail) => gmail.gmbs.map((gmb) => ({ gmb, gmail })))
-    .filter(({ gmb, gmail }) => needle === "" || [gmb.name, gmb.address, gmb.place_id, gmail.gmail].some((s) => s?.toLowerCase().includes(needle)));
+  const gmails = new Map(data.gmails.map((g) => [g.id, g]));
+  return data.gmbs
+    .filter((gmb) => scope === null || (gmb.gmail_id !== null && scope.has(gmb.gmail_id)))
+    .map((gmb) => {
+      const gmail = gmb.gmail_id === null ? null : gmails.get(gmb.gmail_id);
+      if (gmail === undefined) throw new Error(`GBP ${gmb.id} is under gmail ${gmb.gmail_id}, which is not listed`);
+      return { gmb, gmail };
+    })
+    .filter(({ gmb, gmail }) => needle === "" || [gmb.name, gmb.address, gmb.place_id, gmail?.gmail].some((s) => s?.toLowerCase().includes(needle)));
+}
+
+/** The GBPs `gmail` manages. */
+export function under(data: Gmails, gmail: number): Gmb[] {
+  return data.gmbs.filter((b) => b.gmail_id === gmail);
 }
 
 /** In the viewport on, in it off, and elsewhere: those without a point too. */

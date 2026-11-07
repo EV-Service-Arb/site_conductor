@@ -66,7 +66,7 @@ export function useSelection(): Selection | null {
   const edit = editOf(useQuery("gmbs"));
   if (only !== null && !(ISSUES as readonly string[]).includes(only)) throw new Error(`?issue=${only}: not one of ${ISSUES.join(", ")}`);
   if (gmails.status !== "ok") return null;
-  const scoped = gmails.data.filter((g) => scope?.has(g.id));
+  const scoped = gmails.data.gmails.filter((g) => scope?.has(g.id));
   const found = narrowed(gmails.data, scope, filter);
   const rank = (l: Listed) => {
     const issue = issueOf(l.gmb, tags);
@@ -103,7 +103,7 @@ export function PublishSelection() {
   const gmails = useGmails();
   const chosen = selection?.chosen;
   const edit = editOf(useQuery("gmbs"));
-  const known = gmails.status === "ok" ? new Set(gmails.data.flatMap((g) => g.gmbs.map((b) => b.id))) : undefined;
+  const known = gmails.status === "ok" ? new Set(gmails.data.gmbs.map((b) => b.id)) : undefined;
   const told = chosen === undefined ? undefined : JSON.stringify(chosen === null ? null : [...chosen].sort((a, b) => a - b));
 
   // a selected GMB removed, here or elsewhere: out of the selection

@@ -114,8 +114,7 @@ export function Composer({
   useImperativeHandle(handle, () => ({ attach, focus: () => field()?.focus() }));
 
   const gmails = useGmails();
-  const all = gmails.status === "ok" ? gmails.data : [];
-  const locations = picking?.kind === "mention" ? narrowed(all, null, picking.query).slice(0, 7) : [];
+  const locations = picking?.kind === "mention" && gmails.status === "ok" ? narrowed(gmails.data, null, picking.query).slice(0, 7) : [];
   const commands = picking?.kind === "command" ? COMMANDS.filter((c) => c.id.startsWith(picking.query.toLowerCase())) : [];
   const options = picking?.kind === "mention" ? locations.length : commands.length;
 
@@ -182,7 +181,7 @@ export function Composer({
                 <Option key={l.gmb.id} active={i === active} onHover={() => setActive(i)} onChoose={() => choose(i)}>
                   <MapPin aria-hidden className="size-4 shrink-0 text-ink-soft" />
                   <span className="truncate text-ink">{l.gmb.name ?? l.gmb.place_id}</span>
-                  <span className="ml-auto truncate pl-3 text-caption text-ink-faint">{l.gmb.address ?? l.gmail.gmail}</span>
+                  <span className="ml-auto truncate pl-3 text-caption text-ink-faint">{l.gmb.address ?? l.gmail?.gmail}</span>
                 </Option>
               ))
             : commands.map((c, i) => (

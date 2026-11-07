@@ -32,10 +32,13 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import {
   type Gmail,
+  type Gmails,
+  type Gmb,
   ISSUES,
   type Listed,
   type Selection,
   type SiteTag,
+  type State,
   type Tags,
   byView,
   chooseGmailScope,
@@ -50,6 +53,7 @@ import {
   setOnMap,
   setOnly,
   switchGmbs,
+  under,
   useGmailScope,
   useGmails,
   useGmbTags,
@@ -60,6 +64,7 @@ import {
 import { may, useMe } from "@/entities/session";
 import { AddGmailButton } from "@/features/add-gmail";
 import { AddGmbButton } from "@/features/add-gmb";
+import { EditGbpButton } from "@/features/edit-gbp";
 import { LinkPlaceButton } from "@/features/link-gmb-place";
 import { PlaceButton } from "@/features/place-gmb";
 import { ROUTES } from "@/shared/config/routes";
@@ -74,6 +79,13 @@ const ON_HOVER = "hidden group-hover:flex group-focus-within:flex";
 const HEADING = "flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-medium tracking-wide text-ink-soft uppercase";
 const SUBHEADING = "flex items-center gap-1 px-2 pt-1.5 pb-0.5 text-xs text-ink-soft";
 const DRAGGED = "application/x-sa-gmb";
+/** The status dot by state: hollow while a draft. */
+const DOT: Record<State, string> = {
+  draft: "border border-positive",
+  verifying: "bg-accent-warn",
+  verified: "bg-positive",
+  suspended: "bg-accent-error",
+};
 
 /** The GMB the review archive's page is on, if any. */
 function pointedAt(pathname: string): number | null {
@@ -100,7 +112,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   const selection = useSelection();
 
   // a scoped gmail removed, here or in another tab: out of the scope
-  const known = gmails.status === "ok" ? gmails.data : null;
+  const known = gmails.status === "ok" ? gmails.data.gmails : null;
   useEffect(() => {
     if (known !== null && scope !== null && [...scope].some((id) => !known.some((g) => g.id === id))) chooseGmailScope([...scope].filter((id) => known.some((g) => g.id === id)));
   }, [known, scope]);
@@ -150,7 +162,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <section aria-label={t("gmbs.title")} className="flex flex-col gap-1">
-      <Scope gmails={gmails.data} selection={selection} onFlip={flip} onChanged={changed} />
+      <Scope data={gmails.data} selection={selection} onFlip={flip} onChanged={changed} />
       <InputGroup className="mx-0.5 w-auto">
         <InputGroupAddon>
           <Search aria-hidden />
@@ -223,9 +235,9 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
           </Group>
         </>
       )}
-      {scoped.length === 1 && (
+      {scoped.length <= 1 && (
         <div className="flex items-center gap-1 px-1 text-sm text-ink-soft">
-          <AddGmbButton gmailId={scoped[0]!.id} onAdded={changed} />
+          <AddGmbButton gmailId={scoped[0]?.id ?? null} onAdded={changed} />
           {t("gmbs.gmb.add")}
         </div>
       )}
@@ -292,15 +304,17 @@ function HeadAction({ onClick, children }: { onClick: () => void; children: Reac
 }
 
 /** Which gmails' GMBs are selected, and which of each: a gmail toggles among the filters (or, after a move, all its GMBs), a location opened under it toggles alone. */
-function Scope({ gmails, selection, onFlip, onChanged }: { gmails: Gmail[]; selection: Selection; onFlip: (ids: number[], enabled: boolean) => Promise<void>; onChanged: () => void }) {
+function Scope({ data, selection, onFlip, onChanged }: { data: Gmails; selection: Selection; onFlip: (ids: number[], enabled: boolean) => Promise<void>; onChanged: () => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [opened, setOpened] = useState<ReadonlySet<number>>(new Set());
   const { scoped, chosen, edited, isSelected, move } = selection;
-  const total = gmails.reduce((n, g) => n + g.gmbs.length, 0);
-  const covered = (g: Gmail) => g.gmbs.filter((b) => isSelected(b.id)).length;
+  const { gmails } = data;
+  const total = data.gmbs.length;
+  const covered = (gmbs: Gmb[]) => gmbs.filter((b) => isSelected(b.id)).length;
   const pick = (g: Gmail) => {
-    if (edited) return move(g.gmbs.map((b) => b.id), covered(g) < g.gmbs.length);
+    const gmbs = under(data, g.id);
+    if (edited) return move(gmbs.map((b) => b.id), covered(gmbs) < gmbs.length);
     const next = new Set(scoped.map((s) => s.id));
     if (next.has(g.id)) next.delete(g.id);
     else next.add(g.id);
@@ -338,9 +352,10 @@ function Scope({ gmails, selection, onFlip, onChanged }: { gmails: Gmail[]; sele
         </button>
         <ul className="flex flex-col">
           {gmails.map((g) => {
-            const on = g.gmbs.length > 0 && g.gmbs.every((b) => b.enabled);
-            const k = chosen === null ? 0 : covered(g);
-            const full = k > 0 && k === g.gmbs.length;
+            const gmbs = under(data, g.id);
+            const on = gmbs.length > 0 && gmbs.every((b) => b.enabled);
+            const k = chosen === null ? 0 : covered(gmbs);
+            const full = k > 0 && k === gmbs.length;
             const unfolded = opened.has(g.id);
             return (
               <li key={g.id}>
@@ -367,13 +382,13 @@ function Scope({ gmails, selection, onFlip, onChanged }: { gmails: Gmail[]; sele
                     <AddGmbButton gmailId={g.id} onAdded={onChanged} />
                     <Remove title={t("gmbs.gmail.remove.title", { gmail: g.gmail })} body={t("gmbs.gmail.remove.body")} remove={() => removeGmail(g.id)} onRemoved={onChanged} />
                   </span>
-                  <span className="text-xs text-ink-soft tabular-nums">{k > 0 && !full ? `${k}/${g.gmbs.length}` : g.gmbs.length}</span>
-                  <Switch aria-label={t("gmbs.switch", { name: g.gmail })} checked={on} disabled={g.gmbs.length === 0} onCheckedChange={(v) => void onFlip(g.gmbs.map((b) => b.id), v)} />
+                  <span className="text-xs text-ink-soft tabular-nums">{k > 0 && !full ? `${k}/${gmbs.length}` : gmbs.length}</span>
+                  <Switch aria-label={t("gmbs.switch", { name: g.gmail })} checked={on} disabled={gmbs.length === 0} onCheckedChange={(v) => void onFlip(gmbs.map((b) => b.id), v)} />
                 </div>
                 {unfolded && (
                   <ul className="ml-4 flex flex-col border-l border-border pl-1">
-                    {g.gmbs.length === 0 && <li className="px-2 py-1.5 text-xs text-ink-soft">{t("gmbs.gmail.empty")}</li>}
-                    {g.gmbs.map((b) => {
+                    {gmbs.length === 0 && <li className="px-2 py-1.5 text-xs text-ink-soft">{t("gmbs.gmail.empty")}</li>}
+                    {gmbs.map((b) => {
                       const picked = chosen !== null && isSelected(b.id);
                       return (
                         <li key={b.id}>
@@ -381,14 +396,14 @@ function Scope({ gmails, selection, onFlip, onChanged }: { gmails: Gmail[]; sele
                             type="button"
                             onClick={() => move([b.id], !picked)}
                             aria-pressed={picked}
-                            title={b.address ? `${b.name ?? b.place_id}\n${b.address}` : (b.name ?? b.place_id)}
+                            title={b.address ? `${b.name}\n${b.address}` : b.name}
                             className={cn(
                               "flex w-full items-center gap-1 rounded-md py-1 pr-1 pl-2 text-left text-sm outline-none hover:bg-hover/50 focus-visible:ring-2 focus-visible:ring-ring",
                               picked && "bg-hover font-medium ring-1 ring-accent-info ring-inset",
                               b.enabled ? "text-ink" : "text-ink-soft",
                             )}
                           >
-                            <span className="min-w-0 flex-1 truncate">{b.name ?? b.place_id}</span>
+                            <span className="min-w-0 flex-1 truncate">{b.name}</span>
                             {picked && <Check aria-hidden className="size-3.5 shrink-0" />}
                           </button>
                         </li>
@@ -437,7 +452,7 @@ function GmbRow({
 }) {
   const t = useT();
   const button = useButtonSize();
-  const name = gmb.name ?? gmb.place_id;
+  const name = gmb.name;
   const move = t(selected ? "gmbs.deselect" : "gmbs.select", { name });
   const issue = issueOf(gmb, tags);
   const archive = tags.archive?.get(gmb.id);
@@ -457,9 +472,10 @@ function GmbRow({
         )}
       </span>
       <span className="block truncate text-xs text-ink-soft">
+        {gmb.state !== "verified" && <span className={cn("font-medium", gmb.state === "suspended" && "text-accent-error")}>{t(`gmbs.state.${gmb.state}`)} · </span>}
         {issue && <span className={cn("font-medium", issue === "off" ? "text-ink-soft" : "text-accent-error")}>{issueText(issue, gmb.id, tags, t)}</span>}
-        {issue && (gmb.address || showGmail) && " · "}
-        {[gmb.address, showGmail ? gmail.gmail : null].filter(Boolean).join(" · ")}
+        {issue && (gmb.address || (showGmail && gmail)) && " · "}
+        {[gmb.address, showGmail ? gmail?.gmail : null].filter(Boolean).join(" · ")}
       </span>
     </>
   );
@@ -475,11 +491,15 @@ function GmbRow({
       onMouseEnter={() => setOnMap({ hovered: gmb.id })}
       onMouseLeave={() => setOnMap({ hovered: null })}
     >
-      <span aria-hidden className={cn("ml-1 size-2 shrink-0 rounded-full", gmb.enabled ? "bg-positive" : "bg-ink-soft", gmb.location === null && "opacity-40")} />
+      <span aria-hidden className={cn("ml-1 size-2 shrink-0 rounded-full", DOT[gmb.state], !gmb.enabled && "border-ink-soft bg-ink-soft", gmb.location === null && "opacity-40")} />
       {onMap ? (
         <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => peek(gmb.id)}>
           {label}
         </button>
+      ) : gmb.state === "draft" ? (
+        <span className={body} title={name}>
+          {label}
+        </span>
       ) : (
         <Link
           href={`${ROUTES.reviewArchive}gmbs/${gmb.id}`}
@@ -495,6 +515,7 @@ function GmbRow({
         <Button variant="ghost" size={button("sm")} icon aria-label={move} title={move} onClick={() => onMove([gmb.id], !selected)}>
           {selected ? <CircleMinus aria-hidden /> : <CirclePlus aria-hidden />}
         </Button>
+        <EditGbpButton gmb={gmb} onChanged={onChanged} />
         <PlaceButton gmb={gmb} {...(onNavigate && { onNavigate })} />
         {linked && <LinkPlaceButton gmbId={gmb.id} linked={linked} onDone={onChanged} />}
         <Remove title={t("gmbs.gmb.remove.title", { name })} body={t("gmbs.gmb.remove.body")} remove={() => removeGmb(gmb.id)} onRemoved={onChanged} />

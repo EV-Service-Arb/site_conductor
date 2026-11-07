@@ -67,7 +67,7 @@ export function AlertsView() {
       ) : !alerts.data.enabled ? (
         <p className="text-sm text-ink-soft">{t("alerts.off")}</p>
       ) : (
-        <Page alerts={alerts.data} gmails={gmails.status === "ok" ? gmails.data : []} busy={busy} act={act} />
+        <Page alerts={alerts.data} gmails={gmails.status === "ok" ? gmails.data.gmails : []} busy={busy} act={act} />
       )}
     </PageFrame>
   );

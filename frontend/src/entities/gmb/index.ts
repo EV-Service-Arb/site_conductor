@@ -1,9 +1,10 @@
-export { addGmail, addGmb, fetchGmails, fetchMapConfig, fetchSitesPlaces, linkPlace, placeGmb, removeGmail, removeGmb, resolvePlace, switchGmbs } from "./api/gmbs";
+export { addGmail, addGmb, createDraft, editGmb, fetchGmails, fetchMapConfig, fetchSitesPlaces, linkPlace, moveGmb, placeGmb, removeGmail, removeGmb, resolvePlace, setCountry, switchGmbs } from "./api/gmbs";
 export { fetchArchive } from "./api/tags";
 export { GmailsProvider, useGmails, useGmbTags } from "./model/gmails-context";
-export type { ArchiveTag, Candidate, Gmail, Gmb, LatLng, MapConfig, SiteTag, SitesPlace } from "./model/gmb";
+export { COUNTRIES, type Country, NEXT, STATES, type State } from "./model/gmb";
+export type { ArchiveTag, Candidate, Gmail, Gmails, Gmb, LatLng, MapConfig, SiteTag, SitesPlace } from "./model/gmb";
 export { ISSUES, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
-export { type Listed, byView, narrowed } from "./model/narrow";
+export { type Listed, byView, narrowed, under } from "./model/narrow";
 export { type OnMap, peek, setOnMap, useOnMap, usePeeked } from "./model/on-map";
 export { chooseGmailScope, useGmailScope } from "./model/scope";
 export { PublishSelection, type Selection, select, setFilter, setOnly, useSelection } from "./model/selection";

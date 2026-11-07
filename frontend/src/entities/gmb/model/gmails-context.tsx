@@ -6,13 +6,13 @@ import { type Resource, useResource } from "@/shared/lib/use-resource";
 
 import { fetchGmails } from "../api/gmbs";
 import { fetchArchive, fetchSiteTags } from "../api/tags";
-import type { Archive, Gmail, SiteTag } from "./gmb";
+import type { Archive, Gmails, SiteTag } from "./gmb";
 import type { Tags } from "./issues";
 
 type Read<T> = Resource<T> & { reload: () => void };
 
 interface Gmbs {
-  gmails: Read<Gmail[]>;
+  gmails: Read<Gmails>;
   archive: Read<Archive | null>;
   sites: Read<Map<number, SiteTag> | null>;
 }
@@ -33,7 +33,7 @@ function useGmbs(): Gmbs {
   return gmbs;
 }
 
-export function useGmails(): Read<Gmail[]> {
+export function useGmails(): Read<Gmails> {
   return useGmbs().gmails;
 }
 

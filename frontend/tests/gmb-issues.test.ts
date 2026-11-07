@@ -3,13 +3,16 @@ import { describe, expect, it } from "vitest";
 import type { ArchiveTag, Gmb, SiteTag } from "@/entities/gmb/model/gmb";
 import { type Issue, type Tags, issueCounts, issueOf } from "@/entities/gmb/model/issues";
 
+const GMAIL = 1;
 const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
   id,
   place_id: `ChIJplace${id}`,
   name: `GMB ${id}`,
   address: null,
-  gbp_account: null,
-  gbp_location: null,
+  gmail_id: GMAIL,
+  state: "verified",
+  country: { code: "FR", by_hand: false },
+  phone: null,
   created_at: "2026-11-06T00:00:00Z",
   enabled,
   location: located ? { lat: 45.76, lng: 4.83, placed: false } : null,

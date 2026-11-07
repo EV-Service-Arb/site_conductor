@@ -17,7 +17,7 @@ export function Peek({ listed: { gmb, gmail }, onClose }: { listed: Listed; onCl
   const archive = tags.archive?.get(gmb.id);
   const site = tags.sites?.get(gmb.id);
   const issue = issueOf(gmb, tags);
-  const name = gmb.name ?? gmb.place_id;
+  const name = gmb.name;
   const reviewsNote = archive && (archive.suspended > 0 ? t("gmbs.tag.suspended", { n: archive.suspended }) : archive.failing ? t("gmbs.issue.failing") : null);
   const numbers = [
     archive?.rating != null && archive.reviews !== null && t("home.peek.rating", { rating: archive.rating.toFixed(1), n: archive.reviews }),
@@ -30,7 +30,7 @@ export function Peek({ listed: { gmb, gmail }, onClose }: { listed: Listed; onCl
           <CardTitle className="truncate" title={name}>
             {name}
           </CardTitle>
-          <CardDescription>{[gmb.address, gmail.gmail].filter(Boolean).join(" · ")}</CardDescription>
+          <CardDescription>{[gmb.address, gmail?.gmail].filter(Boolean).join(" · ")}</CardDescription>
         </div>
         <Button variant="ghost" size={button("sm")} icon aria-label={t("home.peek.close")} title={t("home.peek.close")} onClick={onClose}>
           <X aria-hidden />

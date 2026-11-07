@@ -4,7 +4,7 @@ import { Skeleton, cn } from "@evinvest/uikit";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { type LatLng, type Listed, type MapConfig, type Tags, fetchMapConfig, issueOf, peek, setOnMap, useGmails, useGmbTags, useOnMap, usePeeked, useSelection } from "@/entities/gmb";
+import { type LatLng, type Listed, type MapConfig, type Tags, fetchMapConfig, issueOf, narrowed, peek, setOnMap, useGmails, useGmbTags, useOnMap, usePeeked, useSelection } from "@/entities/gmb";
 import { PlacingBar } from "@/features/place-gmb";
 import { takeReturnPage } from "@/shared/api";
 import { useT } from "@/shared/i18n";
@@ -115,7 +115,7 @@ function GmbMap({ config }: { config: MapConfig }) {
     const made = markers.current;
     for (const l of locatedRef.current) {
       const dot = document.createElement("span");
-      dot.title = l.gmb.name ?? l.gmb.place_id;
+      dot.title = l.gmb.name;
       dot.addEventListener("mouseenter", () => setOnMap({ hovered: l.gmb.id }));
       dot.addEventListener("mouseleave", () => setOnMap({ hovered: null }));
       dot.addEventListener("click", () => peek(l.gmb.id));
@@ -130,7 +130,7 @@ function GmbMap({ config }: { config: MapConfig }) {
 
   useEffect(() => styleDots(markers.current, { hovered, peeked, tags }), [hovered, peeked, tags, shown]);
 
-  const placed = placing === null || gmails.status !== "ok" ? undefined : gmails.data.flatMap((g) => g.gmbs).find((b) => b.id === placing);
+  const placed = placing === null || gmails.status !== "ok" ? undefined : gmails.data.gmbs.find((b) => b.id === placing);
   const placedRef = useRef(placed);
   useEffect(() => {
     placedRef.current = placed;
@@ -147,7 +147,7 @@ function GmbMap({ config }: { config: MapConfig }) {
     if (centre === undefined) throw new Error("the map has no centre while shown");
     const at = gmb.location ?? centre.toJSON();
     const dot = document.createElement("span");
-    dot.title = gmb.name ?? gmb.place_id;
+    dot.title = gmb.name;
     dot.className = "block size-5 rounded-full border-2 border-background bg-accent-error shadow-md ring-2 ring-ink";
     dot.style.zIndex = "3";
     placingPin.current = pin(map.map, dot, at, move);
@@ -162,7 +162,7 @@ function GmbMap({ config }: { config: MapConfig }) {
     if (placingPin.current && moved) placingPin.current.move(moved.at);
   }, [moved]);
 
-  const peekedListed = gmails.status === "ok" ? gmails.data.flatMap((gmail) => gmail.gmbs.map((gmb) => ({ gmb, gmail }))).find((l) => l.gmb.id === peeked) : undefined;
+  const peekedListed = gmails.status === "ok" ? narrowed(gmails.data, null, "").find((l) => l.gmb.id === peeked) : undefined;
   useEffect(() => {
     const at = peekedListed?.gmb.location;
     if (map.status === "ok" && at) map.map.panTo(at);

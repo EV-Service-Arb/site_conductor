@@ -1,9 +1,23 @@
 import { ApiError, http, ignoreBody } from "@/shared/api";
 
-import { type Candidate, type Gmail, type Gmb, type LatLng, type MapConfig, type SitesPlace, candidatesParser, gmailsParser, gmbParser, mapConfigParser, sitesPlacesParser } from "../model/gmb";
+import {
+  type Candidate,
+  type Country,
+  type Gmails,
+  type Gmb,
+  type LatLng,
+  type MapConfig,
+  type SitesPlace,
+  type State,
+  candidatesParser,
+  gmailsParser,
+  gmbParser,
+  mapConfigParser,
+  sitesPlacesParser,
+} from "../model/gmb";
 
-export async function fetchGmails(): Promise<Gmail[]> {
-  return (await http.get("/api/v1/gmails", gmailsParser)).gmails;
+export function fetchGmails(): Promise<Gmails> {
+  return http.get("/api/v1/gmails", gmailsParser);
 }
 
 /** `null`: the conductor has no browser key, so there is no map. */
@@ -28,8 +42,29 @@ export async function resolvePlace(place: string): Promise<Candidate[]> {
   return (await http.get("/api/v1/gmbs/resolve", candidatesParser, { place })).candidates;
 }
 
-export function addGmb(gmailId: number, placeId: string): Promise<Gmb> {
-  return http.send("POST", `/api/v1/gmails/${gmailId}/gmbs`, { place_id: placeId }, gmbParser);
+/** A GBP on Google already; `name` and `country` fill what Google lacks. */
+export function addGmb(gmailId: number, add: { place_id: string; state: State; name?: string; country?: Country }): Promise<Gmb> {
+  return http.send("POST", `/api/v1/gmails/${gmailId}/gmbs`, add, gmbParser);
+}
+
+/** A GBP not on Google yet; refused when a live one has the name. */
+export function createDraft(name: string): Promise<Gmb> {
+  return http.send("POST", "/api/v1/gmbs", { name }, gmbParser);
+}
+
+/** `name` a draft's only; `phone: null` clears it. */
+export function editGmb(id: number, edit: { name?: string; gmail_id?: number; phone?: string | null }): Promise<Gmb> {
+  return http.send("PATCH", `/api/v1/gmbs/${id}`, edit, gmbParser);
+}
+
+/** `place` (pasted) takes a draft onto Google; refused for a move `NEXT` does not allow. */
+export function moveGmb(id: number, state: State, place?: string): Promise<Gmb> {
+  return http.send("PUT", `/api/v1/gmbs/${id}/state`, place === undefined ? { state } : { state, place }, gmbParser);
+}
+
+/** Refused when Google gives the GBP its country. */
+export async function setCountry(id: number, country: Country): Promise<void> {
+  await http.send("PUT", `/api/v1/gmbs/${id}/country`, { country }, ignoreBody);
 }
 
 /** Refused when Google has the place's point: only one it has none of is placed by hand. */
