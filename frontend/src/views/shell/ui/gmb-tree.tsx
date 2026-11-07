@@ -25,7 +25,7 @@ import {
   buttonVariants,
   cn,
 } from "@evinvest/uikit";
-import { ChevronDown, CircleMinus, CirclePlus, Mail, Search, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, CircleMinus, CirclePlus, Mail, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
@@ -34,6 +34,7 @@ import {
   type Gmail,
   ISSUES,
   type Listed,
+  type Selection,
   type SiteTag,
   type Tags,
   byView,
@@ -98,10 +99,10 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   const linked = may(me, "sa:sites:work:places:edit") ? tags.sites : null;
   const selection = useSelection();
 
-  // a scoped gmail removed, here or in another tab: back to all of them
+  // a scoped gmail removed, here or in another tab: out of the scope
   const known = gmails.status === "ok" ? gmails.data : null;
   useEffect(() => {
-    if (known !== null && scope !== null && !known.some((g) => g.id === scope)) chooseGmailScope(null);
+    if (known !== null && scope !== null && [...scope].some((id) => !known.some((g) => g.id === id))) chooseGmailScope([...scope].filter((id) => known.some((g) => g.id === id)));
   }, [known, scope]);
 
   const flip = async (ids: number[], enabled: boolean) => {
@@ -131,7 +132,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
       key={l.gmb.id}
       listed={l}
       tags={tags}
-      showGmail={scoped === null}
+      showGmail={scoped.length !== 1}
       onMap={onMap}
       lit={l.gmb.id === hovered || l.gmb.id === peeked}
       current={l.gmb.id === pointedAt(pathname)}
@@ -149,7 +150,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <section aria-label={t("gmbs.title")} className="flex flex-col gap-1">
-      <Scope gmails={gmails.data} scoped={scoped} onFlip={flip} onChanged={changed} />
+      <Scope gmails={gmails.data} selection={selection} onFlip={flip} onChanged={changed} />
       <InputGroup className="mx-0.5 w-auto">
         <InputGroupAddon>
           <Search aria-hidden />
@@ -222,9 +223,9 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
           </Group>
         </>
       )}
-      {scoped && (
+      {scoped.length === 1 && (
         <div className="flex items-center gap-1 px-1 text-sm text-ink-soft">
-          <AddGmbButton gmailId={scoped.id} onAdded={changed} />
+          <AddGmbButton gmailId={scoped[0]!.id} onAdded={changed} />
           {t("gmbs.gmb.add")}
         </div>
       )}
@@ -290,24 +291,38 @@ function HeadAction({ onClick, children }: { onClick: () => void; children: Reac
   );
 }
 
-/** Which gmail's GMBs the outline lists: all, or one; and each gmail's switch, count and actions. */
-function Scope({ gmails, scoped, onFlip, onChanged }: { gmails: Gmail[]; scoped: Gmail | null; onFlip: (ids: number[], enabled: boolean) => Promise<void>; onChanged: () => void }) {
+/** Which gmails' GMBs are selected, and which of each: a gmail toggles among the filters (or, after a move, all its GMBs), a location opened under it toggles alone. */
+function Scope({ gmails, selection, onFlip, onChanged }: { gmails: Gmail[]; selection: Selection; onFlip: (ids: number[], enabled: boolean) => Promise<void>; onChanged: () => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [opened, setOpened] = useState<ReadonlySet<number>>(new Set());
+  const { scoped, chosen, edited, isSelected, move } = selection;
   const total = gmails.reduce((n, g) => n + g.gmbs.length, 0);
-  const choose = (id: number | null) => {
-    chooseGmailScope(id);
-    setOpen(false);
+  const covered = (g: Gmail) => g.gmbs.filter((b) => isSelected(b.id)).length;
+  const pick = (g: Gmail) => {
+    if (edited) return move(g.gmbs.map((b) => b.id), covered(g) < g.gmbs.length);
+    const next = new Set(scoped.map((s) => s.id));
+    if (next.has(g.id)) next.delete(g.id);
+    else next.add(g.id);
+    chooseGmailScope(next);
+  };
+  const unfold = (id: number) => {
+    const next = new Set(opened);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setOpened(next);
   };
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger className="mx-0.5 flex items-center gap-2 rounded-md border border-border px-2.5 py-2 text-sm text-ink outline-none hover:bg-hover/50 focus-visible:ring-2 focus-visible:ring-ring">
         <Mail aria-hidden className="size-4 text-ink-soft" />
-        <span className="min-w-0 flex-1 truncate text-left">{scoped ? scoped.gmail : t("gmbs.scope.all")}</span>
-        <span className="text-xs text-ink-soft tabular-nums">{scoped ? scoped.gmbs.length : gmails.length}</span>
+        <span className="min-w-0 flex-1 truncate text-left">
+          {scoped.length === 0 ? t("gmbs.scope.all") : scoped.length === 1 ? scoped[0]!.gmail : t("gmbs.scope.many", { n: scoped.length })}
+        </span>
+        <span className="text-xs text-ink-soft tabular-nums">{selection.selected.length}</span>
         <ChevronDown aria-hidden className="size-4 text-ink-soft" />
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-1">
+      <PopoverContent align="start" className="max-h-[70svh] w-80 overflow-y-auto p-1">
         <div className={cn(HEADING, "pt-1")}>
           {t("gmbs.title")}
           <InfoTip>
@@ -317,32 +332,74 @@ function Scope({ gmails, scoped, onFlip, onChanged }: { gmails: Gmail[]; scoped:
           <span className="flex-1" />
           <span className="tabular-nums">{t("gmbs.scope.counts", { gmails: gmails.length, gmbs: total })}</span>
         </div>
-        <button type="button" onClick={() => choose(null)} aria-current={scoped === null ? "true" : undefined} className={cn(ROW, "w-full py-1.5 pl-2", scoped === null && "bg-hover/50")}>
+        <button type="button" onClick={() => select(null)} aria-pressed={chosen === null} className={cn(ROW, "w-full py-1.5 pl-2", chosen === null && "bg-hover/50")}>
           <span className="flex-1 text-left">{t("gmbs.scope.all")}</span>
           <span className="text-xs text-ink-soft tabular-nums">{total}</span>
         </button>
-        {gmails.map((g) => {
-          const on = g.gmbs.length > 0 && g.gmbs.every((b) => b.enabled);
-          return (
-            <div key={g.id} className={cn(ROW, g.id === scoped?.id && "bg-hover/50")}>
-              <button
-                type="button"
-                onClick={() => choose(g.id)}
-                aria-current={g.id === scoped?.id ? "true" : undefined}
-                className={cn("min-w-0 flex-1 truncate py-1.5 pl-2 text-left", on ? "text-ink" : "text-ink-soft")}
-                title={g.gmail}
-              >
-                {g.gmail}
-              </button>
-              <span className={cn("flex items-center", ON_HOVER)}>
-                <AddGmbButton gmailId={g.id} onAdded={onChanged} />
-                <Remove title={t("gmbs.gmail.remove.title", { gmail: g.gmail })} body={t("gmbs.gmail.remove.body")} remove={() => removeGmail(g.id)} onRemoved={onChanged} />
-              </span>
-              <span className="text-xs text-ink-soft tabular-nums">{g.gmbs.length}</span>
-              <Switch aria-label={t("gmbs.switch", { name: g.gmail })} checked={on} disabled={g.gmbs.length === 0} onCheckedChange={(v) => void onFlip(g.gmbs.map((b) => b.id), v)} />
-            </div>
-          );
-        })}
+        <ul className="flex flex-col">
+          {gmails.map((g) => {
+            const on = g.gmbs.length > 0 && g.gmbs.every((b) => b.enabled);
+            const k = chosen === null ? 0 : covered(g);
+            const full = k > 0 && k === g.gmbs.length;
+            const unfolded = opened.has(g.id);
+            return (
+              <li key={g.id}>
+                <div className={cn(ROW, full && "bg-hover", k > 0 && !full && "bg-hover/40")}>
+                  <button
+                    type="button"
+                    onClick={() => unfold(g.id)}
+                    aria-expanded={unfolded}
+                    aria-label={t(unfolded ? "gmbs.collapse" : "gmbs.expand", { gmail: g.gmail })}
+                    className="rounded p-1 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <ChevronRight aria-hidden className={cn("size-3.5 transition-transform", unfolded && "rotate-90")} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => pick(g)}
+                    aria-pressed={full ? true : k > 0 ? "mixed" : false}
+                    className={cn("min-w-0 flex-1 truncate py-1.5 text-left", on ? "text-ink" : "text-ink-soft", k > 0 && "font-medium")}
+                    title={g.gmail}
+                  >
+                    {g.gmail}
+                  </button>
+                  <span className={cn("flex items-center", ON_HOVER)}>
+                    <AddGmbButton gmailId={g.id} onAdded={onChanged} />
+                    <Remove title={t("gmbs.gmail.remove.title", { gmail: g.gmail })} body={t("gmbs.gmail.remove.body")} remove={() => removeGmail(g.id)} onRemoved={onChanged} />
+                  </span>
+                  <span className="text-xs text-ink-soft tabular-nums">{k > 0 && !full ? `${k}/${g.gmbs.length}` : g.gmbs.length}</span>
+                  <Switch aria-label={t("gmbs.switch", { name: g.gmail })} checked={on} disabled={g.gmbs.length === 0} onCheckedChange={(v) => void onFlip(g.gmbs.map((b) => b.id), v)} />
+                </div>
+                {unfolded && (
+                  <ul className="ml-4 flex flex-col border-l border-border pl-1">
+                    {g.gmbs.length === 0 && <li className="px-2 py-1.5 text-xs text-ink-soft">{t("gmbs.gmail.empty")}</li>}
+                    {g.gmbs.map((b) => {
+                      const picked = chosen !== null && isSelected(b.id);
+                      return (
+                        <li key={b.id}>
+                          <button
+                            type="button"
+                            onClick={() => move([b.id], !picked)}
+                            aria-pressed={picked}
+                            title={b.address ? `${b.name ?? b.place_id}\n${b.address}` : (b.name ?? b.place_id)}
+                            className={cn(
+                              "flex w-full items-center gap-1 rounded-md py-1 pr-1 pl-2 text-left text-sm outline-none hover:bg-hover/50 focus-visible:ring-2 focus-visible:ring-ring",
+                              picked && "bg-hover font-medium",
+                              b.enabled ? "text-ink" : "text-ink-soft",
+                            )}
+                          >
+                            <span className="min-w-0 flex-1 truncate">{b.name ?? b.place_id}</span>
+                            {picked && <Check aria-hidden className="size-3.5 shrink-0" />}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+        </ul>
         <div className="border-t border-border pt-1">
           <AddGmailButton onAdded={onChanged} />
         </div>

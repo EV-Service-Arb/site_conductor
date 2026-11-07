@@ -26,13 +26,13 @@ describe("the outline's GMBs", () => {
   it("are the scoped gmail's, matched on name, address, place id or gmail", () => {
     for (const [scope, filter, want] of [
       [null, "", [10, 11, 12, 20]],
-      [2, "", [20]],
+      [new Set([2]), "", [20]],
       [null, "lyon 7E", [11]],
       [null, "ChIJplace20", [20]],
       [null, "aquafix.top", [10, 11, 12]],
-      [1, "same day", []],
+      [new Set([1]), "same day", []],
     ] as const) {
-      expect(ids(narrowed(gmails, scope, filter)), `${scope} ${filter}`).toEqual(want);
+      expect(ids(narrowed(gmails, scope, filter)), `${scope && [...scope]} ${filter}`).toEqual(want);
     }
   });
 

@@ -6,10 +6,10 @@ export interface Listed {
 }
 
 /** The GMBs under `scope` (`null`: every gmail) whose name, address, place id or gmail holds `filter`. */
-export function narrowed(gmails: readonly Gmail[], scope: number | null, filter: string): Listed[] {
+export function narrowed(gmails: readonly Gmail[], scope: ReadonlySet<number> | null, filter: string): Listed[] {
   const needle = filter.trim().toLowerCase();
   return gmails
-    .filter((g) => scope === null || g.id === scope)
+    .filter((g) => scope === null || scope.has(g.id))
     .flatMap((gmail) => gmail.gmbs.map((gmb) => ({ gmb, gmail })))
     .filter(({ gmb, gmail }) => needle === "" || [gmb.name, gmb.address, gmb.place_id, gmail.gmail].some((s) => s?.toLowerCase().includes(needle)));
 }

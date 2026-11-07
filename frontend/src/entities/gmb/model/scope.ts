@@ -2,15 +2,20 @@
 
 import { setQuery, useQuery } from "@/shared/lib/query";
 
-/** The gmail every app's GMBs are narrowed to, `null` for all of them. */
-export function useGmailScope(): number | null {
+/** The gmails whose GMBs the filters select, `null` for every gmail. */
+export function useGmailScope(): ReadonlySet<number> | null {
   const raw = useQuery("gmail");
   if (raw === null) return null;
-  const id = Number(raw);
-  if (!Number.isSafeInteger(id)) throw new Error(`?gmail=${raw}: not a gmail id`);
-  return id;
+  return new Set(
+    raw.split(",").map((s) => {
+      const id = Number(s);
+      if (!Number.isSafeInteger(id)) throw new Error(`?gmail=${raw}: not gmail ids`);
+      return id;
+    }),
+  );
 }
 
-export function chooseGmailScope(gmail: number | null): void {
-  setQuery({ gmail: gmail === null ? null : String(gmail), gmbs: null });
+export function chooseGmailScope(gmails: Iterable<number> | null): void {
+  const ids = gmails === null ? [] : [...gmails].sort((a, b) => a - b);
+  setQuery({ gmail: ids.length === 0 ? null : ids.join(","), gmbs: null });
 }

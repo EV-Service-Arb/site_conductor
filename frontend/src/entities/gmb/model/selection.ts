@@ -16,7 +16,8 @@ const GMBS_REQUEST_EVENT = "sa:gmbs-request";
 const GMBS_SELECT_EVENT = "sa:gmbs-select";
 
 export interface Selection {
-  scoped: Gmail | null;
+  /** The gmails the filters select by; none: every gmail. */
+  scoped: Gmail[];
   filter: string;
   only: Issue | null;
   /** Under the scope and the filter: what the issue chips count. */
@@ -27,8 +28,10 @@ export interface Selection {
   chosen: ReadonlySet<number> | null;
   /** What the apps narrow to. */
   selected: Listed[];
+  /** Whether rows were moved since the filters last changed. */
+  edited: boolean;
   isSelected: (gmb: number) => boolean;
-  /** Moves `gmbs` into the selection, or out of it: an edit of what the filters select. */
+  /** Moves `gmbs` into the selection, or out of it: an edit of what the filters select. Into a selection of every GMB, it becomes them alone. */
   move: (gmbs: readonly number[], into: boolean) => void;
 }
 
@@ -63,17 +66,18 @@ export function useSelection(): Selection | null {
   const edit = editOf(useQuery("gmbs"));
   if (only !== null && !(ISSUES as readonly string[]).includes(only)) throw new Error(`?issue=${only}: not one of ${ISSUES.join(", ")}`);
   if (gmails.status !== "ok") return null;
-  const scoped = gmails.data.find((g) => g.id === scope) ?? null;
-  const found = narrowed(gmails.data, scoped?.id ?? null, filter);
+  const scoped = gmails.data.filter((g) => scope?.has(g.id));
+  const found = narrowed(gmails.data, scope, filter);
   const rank = (l: Listed) => {
     const issue = issueOf(l.gmb, tags);
     return issue === null ? ISSUES.length : ISSUES.indexOf(issue);
   };
   const rows = narrowed(gmails.data, null, "").sort((a, b) => rank(a) - rank(b));
-  const filtered = scoped !== null || filter.trim() !== "" || only !== null;
+  const filtered = scope !== null || filter.trim() !== "" || only !== null;
   const chosen = edit ?? (filtered ? new Set(found.filter((l) => only === null || issueOf(l.gmb, tags) === only).map((l) => l.gmb.id)) : null);
   const isSelected = (gmb: number) => chosen === null || chosen.has(gmb);
   const move = (gmbs: readonly number[], into: boolean) => {
+    if (chosen === null && into) return setQuery({ gmbs: joined(gmbs) });
     const next = new Set(chosen ?? rows.map((l) => l.gmb.id));
     for (const id of gmbs) {
       if (into) next.add(id);
@@ -82,7 +86,7 @@ export function useSelection(): Selection | null {
     if (rows.every((l) => next.has(l.gmb.id))) select(null);
     else setQuery({ gmbs: joined(next) });
   };
-  return { scoped, filter, only: only as Issue | null, found, rows, chosen, selected: rows.filter((l) => isSelected(l.gmb.id)), isSelected, move };
+  return { scoped, filter, only: only as Issue | null, found, rows, chosen, selected: rows.filter((l) => isSelected(l.gmb.id)), edited: edit !== null, isSelected, move };
 }
 
 export function setFilter(filter: string): void {
