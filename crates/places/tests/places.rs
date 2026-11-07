@@ -74,7 +74,8 @@ impl Stub {
 }
 
 fn procope() -> Value {
-	json!({ "id": PROCOPE, "displayName": { "text": "Le Procope" }, "formattedAddress": "13 Rue de l'Ancienne Comédie, Paris", "location": { "latitude": 48.853, "longitude": 2.3389 } })
+	json!({ "id": PROCOPE, "displayName": { "text": "Le Procope" }, "formattedAddress": "13 Rue de l'Ancienne Comédie, Paris", "location": { "latitude": 48.853, "longitude": 2.3389 },
+		"addressComponents": [{ "shortText": "Paris", "types": ["locality"] }, { "shortText": "FR", "types": ["country", "political"] }] })
 }
 
 /// A service-area business: Places answers it with no address and no point.
@@ -139,7 +140,10 @@ async fn every_place_bearing_the_name_is_found_and_the_search_is_biased_to_the_m
 	assert_eq!(ids, [PROCOPE, "ChIJnamesakenamesakena"]);
 	assert_eq!(got[0].1.as_ref().unwrap().location.unwrap().lat, 48.853);
 	let (key, mask, body) = s.got.lock().unwrap()[0].clone();
-	assert_eq!((key.as_str(), mask.as_str()), ("key-123", "places.id,places.displayName,places.formattedAddress,places.location"));
+	assert_eq!(
+		(key.as_str(), mask.as_str()),
+		("key-123", "places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents")
+	);
 	assert_eq!(body["locationBias"]["circle"]["center"], json!({ "latitude": 48.853, "longitude": 2.3389 }));
 }
 
@@ -168,8 +172,9 @@ async fn a_place_added_by_its_id_is_named_and_located_and_an_unknown_id_refused(
 	let got = got.unwrap();
 	assert_eq!((got.name.as_deref(), got.address.as_deref()), (Some("Le Procope"), Some("13 Rue de l'Ancienne Comédie, Paris")));
 	assert_eq!(got.location, Some(LatLng { lat: 48.853, lng: 2.3389 }));
+	assert_eq!(got.country.as_deref(), Some("FR"));
 	assert!(matches!(unknown, Error::Invalid(_)), "{unknown:#}");
-	assert_eq!(s.got.lock().unwrap()[0].1, "id,displayName,formattedAddress,location");
+	assert_eq!(s.got.lock().unwrap()[0].1, "id,displayName,formattedAddress,location,addressComponents");
 }
 
 #[tokio::test]
@@ -178,7 +183,7 @@ async fn a_service_area_place_has_no_point() {
 	let detailed = google.details(MOLD_ASSIST, Ask::Afresh).await.unwrap();
 	let (_, searched) = google.resolve("https://www.google.com/maps/place/Mold+Assist").await.unwrap();
 	server.abort();
-	assert_eq!((detailed.name.as_deref(), detailed.location), (Some("Mold Assist"), None));
+	assert_eq!((detailed.name.as_deref(), detailed.location, detailed.country), (Some("Mold Assist"), None, None));
 	assert_eq!(searched.unwrap().location, None);
 }
 

@@ -10,6 +10,7 @@
 //! DELETE /api/v1/gmbs/{id}            → 204
 //! PUT    /api/v1/gmbs/enabled {gmbs, enabled}  → 204; 404 one is not theirs, and none switched
 //! PUT    /api/v1/gmbs/{id}/location {lat, lng}  → 204; 409 Google has its point
+//! PUT    /api/v1/gmbs/{id}/country {country}   → 204; 409 Google has its country
 //! GET    /api/v1/map                  Map: what the browser loads Maps JS with; 404 without it
 //! ```
 //!
@@ -115,6 +116,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::DELETE, "/gmbs/{id}", None, Cached, remove_gmb),
 		ApiRoute::new(M::PUT, "/gmbs/enabled", None, Cached, switch),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/location", None, Cached, place),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/country", None, Cached, set_country),
 		ApiRoute::new(M::GET, "/map", None, Cached, map),
 	]
 }
@@ -245,5 +247,19 @@ async fn place(State(panel): State<Panel>, Extension(caller): Extension<Caller>,
 	let at = body(b)?;
 	panel.place_gmb(caller.user_id, gmb, at).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, ?at, "GMB placed");
+	Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SetCountry {
+	country: String,
+}
+
+async fn set_country(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<SetCountry>, JsonRejection>) -> ApiResult<StatusCode> {
+	let gmb = id(&raw)?;
+	let country: sa_core::gbp::Country = body(b)?.country.parse()?;
+	panel.set_country(Some(caller.user_id), gmb, country).await??;
+	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, %country, "GMB's country set");
 	Ok(StatusCode::NO_CONTENT)
 }

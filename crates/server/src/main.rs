@@ -110,9 +110,12 @@ enum GmailCmd {
 enum GmbCmd {
 	/// Add a GMB under a gmail: a place id, or a Maps URL (a name in it needs GOOGLE_MAPS_KEYS).
 	Add { gmail_id: i64, place: String },
-	/// Locate every GMB's place that has no point yet, through the Places cache: run once after
-	/// a deploy that brings points, and after `local-stack --from-prod`.
+	/// Locate every GMB's place that has no point or no country of Google's yet, through the
+	/// Places cache: run once after a deploy that brings points or countries, and after
+	/// `local-stack --from-prod`.
 	Locate,
+	/// Set a GMB's country (FR, US, CA, GB) while Google gives it none.
+	Country { gmb_id: i64, country: String },
 }
 
 #[derive(Subcommand)]
@@ -261,14 +264,21 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 		}
 		Cmd::Gmb(GmbCmd::Locate) => {
 			eyre::ensure!(!settings.places_keys().is_empty(), "locating asks Places: GOOGLE_MAPS_KEYS must be set");
-			let (located, unplaceable, refused) = connect().await?.locate().await?;
-			println!("{located} places located");
-			if !unplaceable.is_empty() {
-				println!("{} have no point on Google: place them on the map", unplaceable.len());
+			let done = connect().await?.locate().await?;
+			println!("{} places located", done.located);
+			if !done.no_point.is_empty() {
+				println!("{} have no point on Google: place them on the map", done.no_point.len());
 			}
-			for (place_id, why) in &refused {
+			for place_id in &done.no_country {
+				println!("{place_id}: no country on Google; `panel gmb country` it");
+			}
+			for (place_id, why) in &done.refused {
 				println!("{place_id}: {why}");
 			}
+			Ok(())
+		}
+		Cmd::Gmb(GmbCmd::Country { gmb_id, country }) => {
+			connect().await?.set_country(None, gmb_id, country.parse()?).await??;
 			Ok(())
 		}
 		Cmd::Tokens(cmd) => {

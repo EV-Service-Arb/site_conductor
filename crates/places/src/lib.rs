@@ -13,9 +13,9 @@ pub use keys::{Keys, Spent};
 use parse::Parsed;
 use serde::{Deserialize, Serialize};
 
-const SEARCH_MASK: &str = "places.id,places.displayName,places.formattedAddress,places.location";
+const SEARCH_MASK: &str = "places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents";
 
-const DETAILS_MASK: &str = "id,displayName,formattedAddress,location";
+const DETAILS_MASK: &str = "id,displayName,formattedAddress,location,addressComponents";
 /// A GMB created on Google today is findable by name tomorrow.
 const SEARCH_AGE: Duration = Duration::from_secs(86_400);
 /// A Google place, as Places answers for it.
@@ -27,6 +27,8 @@ pub struct Place {
 	pub address: Option<String>,
 	/// None for a service-area business: Google shows it no point.
 	pub location: Option<LatLng>,
+	/// ISO 3166-1 alpha-2; None for a service-area business, as its point.
+	pub country: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
@@ -238,6 +240,15 @@ struct Hit {
 	display_name: Option<Text>,
 	formatted_address: Option<String>,
 	location: Option<Location>,
+	#[serde(default)]
+	address_components: Vec<Component>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Component {
+	short_text: String,
+	types: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -258,6 +269,7 @@ impl From<Hit> for Place {
 			name: h.display_name.map(|t| t.text),
 			address: h.formatted_address,
 			location: h.location.map(|l| LatLng { lat: l.latitude, lng: l.longitude }),
+			country: h.address_components.into_iter().find(|c| c.types.iter().any(|t| t == "country")).map(|c| c.short_text),
 		}
 	}
 }

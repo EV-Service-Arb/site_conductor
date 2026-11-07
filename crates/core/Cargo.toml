@@ -14,6 +14,7 @@ hmac.workspace = true
 jiff.workspace = true
 sa_alerts.workspace = true
 sa_auth.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 subtle.workspace = true

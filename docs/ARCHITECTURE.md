@@ -304,6 +304,7 @@ DELETE /gmbs/{id}                           204
 PUT    /gmbs/enabled                        {gmbs: [id], enabled} → 204: every one switched, or none
                                             (404 one not the caller's)
 PUT    /gmbs/{id}/location                  {lat, lng} → 204, placed by hand; 409 Google has its point
+PUT    /gmbs/{id}/country                   {country} → 204, set by hand; 409 Google has its country
 GET    /map                                 {key}: the browser's Maps JS key; 404 without
                                             GOOGLE_MAPS_BROWSER_KEY
 GET    /tokens                              {balance, daily, cap, kickbacks}: renewed, the
@@ -440,6 +441,10 @@ push (a change, a page, 60 s)
   named it; a GMB added without a key, or imported, has none until `panel gmb locate` asks for the
   missing ones and lists those Google gives no point: a command, so the spend is explicit; run
   after a deploy that brings points, and after `local-stack --from-prod`.
+- **A GMB's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
+  language table) follows the point's rule: Google's (its address), else set by hand
+  (`PUT /gmbs/{id}/country`, `panel gmb country`); `locate` asks for the missing ones too and
+  lists those Google gives none.
 
 ## Alerts
 

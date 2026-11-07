@@ -8,11 +8,25 @@ use std::collections::BTreeSet;
 
 use eyre::WrapErr;
 use jiff::Timestamp;
+use sa_core::gbp::Country;
 use sa_places::{Ask, LatLng, Place};
 use uuid::Uuid;
 
 pub use crate::store::gmbs::{Gmail, Gmb, Point};
 use crate::{Panel, Refused, store::gmbs as db, tokens::is_open};
+
+/// What [`Panel::locate`] did.
+#[derive(Debug, Default, PartialEq)]
+pub struct Located {
+	/// Places given a point or a country.
+	pub located: usize,
+	/// Service-area places not placed yet: for the map to place.
+	pub no_point: Vec<String>,
+	/// For a person to set the country of.
+	pub no_country: Vec<String>,
+	/// Places Places refused, or put in a country not served, and why.
+	pub refused: Vec<(String, String)>,
+}
 
 fn places_error(e: sa_places::Error) -> eyre::Result<Refused> {
 	match e {
@@ -100,11 +114,15 @@ impl Panel {
 			Some(o) if owner.is_none_or(|owner| owner == o) => {}
 			_ => return Ok(Err(Refused::NotFound)),
 		}
+		let country = match place.as_ref().and_then(|p| p.country.as_deref()).map(str::parse::<Country>).transpose() {
+			Ok(c) => c,
+			Err(e) => return Ok(Err(Refused::Invalid(format!("Google places {place_id} in a {e}")))),
+		};
 		if let Some(at) = place.as_ref().and_then(|p| p.location) {
 			db::set_point(&mut tx, &place_id, at).await?;
 		}
 		let (name, address) = place.as_ref().map_or((None, None), |p| (p.name.as_deref(), p.address.as_deref()));
-		let Some(added) = db::add_gmb(&mut tx, None, gmail_id, &place_id, name, address, now).await? else {
+		let Some(added) = db::add_gmb(&mut tx, None, gmail_id, &place_id, name, address, country, now).await? else {
 			return Ok(Err(Refused::Conflict(format!("gmail {gmail_id} has place {place_id} already"))));
 		};
 		tx.commit().await.wrap_err("committing a GMB")?;
@@ -112,26 +130,59 @@ impl Panel {
 		Ok(Ok(added))
 	}
 
-	/// Every place a GMB is on without a point, asked of Places (its cache first) and located.
-	/// Returns how many were, the places Places gives no point (service-area ones, for the map to
-	/// place), and the places Places refused with why.
-	pub async fn locate(&self) -> eyre::Result<(usize, Vec<String>, Vec<(String, String)>)> {
+	/// Every place a GMB is on without a point or a country of Google's, asked of Places (its
+	/// cache first: the field mask keys it, so an answer from before countries is asked again).
+	pub async fn locate(&self) -> eyre::Result<Located> {
 		let unlocated = db::unlocated(&mut *self.store.pool().acquire().await.wrap_err("a connection for the unlocated")?).await?;
-		let (mut located, mut unplaceable, mut refused) = (0, Vec::new(), Vec::new());
-		for place_id in unlocated {
-			match self.google.details(&place_id, Ask::Cached).await {
-				Ok(Place { location: Some(at), .. }) => {
-					let mut tx = self.store.begin_write().await?;
-					db::set_point(&mut tx, &place_id, at).await?;
-					tx.commit().await.wrap_err("committing a point")?;
-					located += 1;
+		let mut out = Located::default();
+		for (place_id, pointless) in unlocated {
+			let place = match self.google.details(&place_id, Ask::Cached).await {
+				Ok(p) => p,
+				Err(sa_places::Error::Invalid(why)) => {
+					out.refused.push((place_id, why));
+					continue;
 				}
-				Ok(Place { location: None, .. }) => unplaceable.push(place_id),
-				Err(sa_places::Error::Invalid(why)) => refused.push((place_id, why)),
 				Err(e) => return Err(eyre::eyre!(e).wrap_err(format!("locating {place_id}"))),
+			};
+			let country = match place.country.as_deref().map(str::parse::<Country>).transpose() {
+				Ok(c) => c,
+				Err(e) => {
+					out.refused.push((place_id, e.to_string()));
+					continue;
+				}
+			};
+			let mut tx = self.store.begin_write().await?;
+			match place.location {
+				Some(at) => db::set_point(&mut tx, &place_id, at).await?,
+				None if pointless => out.no_point.push(place_id.clone()),
+				None => {}
+			}
+			match country {
+				Some(c) => db::set_country(&mut tx, &place_id, c).await?,
+				None => out.no_country.push(place_id.clone()),
+			}
+			tx.commit().await.wrap_err("committing a place's point and country")?;
+			if place.location.is_some() || country.is_some() {
+				out.located += 1;
 			}
 		}
-		Ok((located, unplaceable, refused))
+		self.snapshot_due.notify_one();
+		Ok(out)
+	}
+
+	/// GMB `id` in `country`, while Google gives it none. `owner` is whose it must be; `None`, the
+	/// operator's CLI.
+	pub async fn set_country(&self, owner: Option<Uuid>, id: i64, country: Country) -> eyre::Result<Result<(), Refused>> {
+		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		if let Err(r) = db::set_country_by_hand(&mut tx, owner, id, country).await? {
+			return Ok(Err(r));
+		}
+		tx.commit().await.wrap_err("committing a country")?;
+		self.snapshot_due.notify_one();
+		Ok(Ok(()))
 	}
 
 	/// The owner's GMB `id` placed at `at` on the map: its place's point while Places has none.

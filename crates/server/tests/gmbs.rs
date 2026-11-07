@@ -13,6 +13,7 @@ use axum::{
 };
 use sa_panel::{
 	Panel,
+	gmbs::Located,
 	import::Export,
 	seal::DataKey,
 	testing::{TestDb, operator, panel_on},
@@ -42,7 +43,11 @@ async fn places() -> (Arc<Mutex<Vec<String>>>, String) {
 			ASSIST => return Json(json!({ "id": id, "displayName": { "text": "Mold Assist" } })).into_response(),
 			_ => return (StatusCode::NOT_FOUND, "not found").into_response(),
 		};
-		Json(json!({ "id": id, "displayName": { "text": id }, "formattedAddress": "Paris", "location": { "latitude": lat, "longitude": lng } })).into_response()
+		Json(
+			json!({ "id": id, "displayName": { "text": id }, "formattedAddress": "Paris", "location": { "latitude": lat, "longitude": lng },
+			"addressComponents": [{ "shortText": "FR", "types": ["country", "political"] }] }),
+		)
+		.into_response()
 	}
 	let asked = Arc::<Mutex<Vec<String>>>::default();
 	let app = Router::new().route("/v1/places/{id}", get(details)).with_state(asked.clone());
@@ -146,10 +151,20 @@ async fn locate_fills_only_the_missing_points_and_pays_for_each_once() {
 	}
 
 	let keyed = panel(&db, Some(&base), cache.path()).await;
-	assert_eq!(keyed.locate().await.unwrap(), (2, vec![], vec![]));
+	assert_eq!(keyed.locate().await.unwrap(), located(2, &[], &[]));
 	assert!(keyed.gmails(owner).await.unwrap()[0].1.iter().all(|b| b.location.is_some()));
-	assert_eq!(keyed.locate().await.unwrap(), (0, vec![], vec![]));
+	assert_eq!(keyed.locate().await.unwrap(), located(0, &[], &[]));
 	assert_eq!(asked.lock().unwrap().len(), 2, "a second run asks nothing");
+}
+
+fn located(n: usize, no_point: &[&str], no_country: &[&str]) -> Located {
+	let owned = |places: &[&str]| places.iter().map(|p| p.to_string()).collect();
+	Located {
+		located: n,
+		no_point: owned(no_point),
+		no_country: owned(no_country),
+		refused: vec![],
+	}
 }
 
 async fn seen(p: &Panel, email: &str) -> uuid::Uuid {
@@ -179,11 +194,7 @@ async fn a_service_area_gmb_has_no_point_until_placed_on_the_map() {
 	b.sign_in(&app).await;
 	let (status, assist) = call(&mut b, &app, Method::POST, &format!("/api/v1/gmails/{}/gmbs", gmail.id), Some(json!({ "place_id": ASSIST }))).await;
 	assert_eq!((status, &assist["location"]), (StatusCode::CREATED, &Value::Null), "{assist}");
-	assert_eq!(
-		keyed.locate().await.unwrap(),
-		(1, vec![ASSIST.to_owned()], vec![]),
-		"listed, and the run goes on to the next place"
-	);
+	assert_eq!(keyed.locate().await.unwrap(), located(1, &[ASSIST], &[ASSIST]), "listed, and the run goes on to the next place");
 
 	let location = format!("/api/v1/gmbs/{}/location", assist["id"]);
 	let point = |gmails: &Value| gmails["gmails"][0]["gmbs"].as_array().unwrap().iter().find(|g| g["id"] == assist["id"]).unwrap()["location"].clone();
@@ -193,8 +204,8 @@ async fn a_service_area_gmb_has_no_point_until_placed_on_the_map() {
 		let (_, listed) = call(&mut b, &app, Method::GET, "/api/v1/gmails", None).await;
 		assert_eq!(point(&listed), json!({ "lat": lat, "lng": lng, "placed": true }), "placed, then moved");
 	}
-	assert_eq!(keyed.locate().await.unwrap(), (0, vec![], vec![]));
-	assert_eq!(*asked.lock().unwrap(), [ASSIST, FLORE], "a placed place is not asked of Places again");
+	assert_eq!(keyed.locate().await.unwrap(), located(0, &[], &[ASSIST]), "placed, still without a country");
+	assert_eq!(*asked.lock().unwrap(), [ASSIST, FLORE], "a place is not paid for again");
 }
 
 #[tokio::test]
