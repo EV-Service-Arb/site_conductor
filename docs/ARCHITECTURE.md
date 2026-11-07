@@ -292,14 +292,23 @@ PUT    /alerts/destinations/{id}/rules      {rules: {new_lead: false, …}} → 
 PUT    /alerts/destinations/{id}/gmail      {gmail_id} → 200 as GET; 404 not theirs
 POST   /alerts/destinations/{id}/test       204; 400 with what Telegram said
 DELETE /alerts/destinations/{id}            204, 404
-GET    /gmails                              {gmails: [{id, gmail, created_at, gmbs: [{id, place_id,
-                                            name, address, gbp_account, gbp_location, created_at,
-                                            enabled, location: {lat, lng, placed} | null}]}]} the
-                                            caller's, removed ones left out
+GET    /gmails                              {gmails: [{id, gmail, created_at}], gmbs: [{id, gmail_id,
+                                            place_id, name, address, state, country: {code,
+                                            by_hand} | null, phone, created_at, enabled, location:
+                                            {lat, lng, placed} | null}]} the caller's, removed ones
+                                            left out; a draft's gmail_id and place_id may be null
 POST   /gmails                              {gmail} → 201 the gmail; 409 held already
-DELETE /gmails/{id}                         204; its GMBs count as removed
+DELETE /gmails/{id}                         204; its GBPs removed with it
 GET    /gmbs/resolve?place=                 {candidates: [{place_id, name, address}]} (sa_places)
-POST   /gmails/{id}/gmbs                    {place_id} → 201 the GMB; 409 under that gmail already
+POST   /gmbs                                {name} → 201 a draft; 409 the name a live GBP's
+POST   /gmails/{id}/gmbs                    {place_id, state, name?, country?} → 201 a GBP on Google
+                                            already (state not draft; name and country fill what
+                                            Google lacks, else 400); 409 the name or place taken
+PATCH  /gmbs/{id}                           {name?, gmail_id?, phone?} → 200 the GBP: name a draft's
+                                            only (409), gmail_id another of the caller's (a
+                                            transfer), phone null clears it
+PUT    /gmbs/{id}/state                     {state, place?} → 200 the GBP; 400 a move the drawing
+                                            below lacks; a draft goes to verifying with its place
 DELETE /gmbs/{id}                           204
 PUT    /gmbs/enabled                        {gmbs: [id], enabled} → 204: every one switched, or none
                                             (404 one not the caller's)
@@ -401,13 +410,33 @@ closes              4401 the session ended   1001 the server is stopping
   socket of the user), a sign-in replacing the browser's session, concierge refusing a rotation
   or `GetMe`. Concierge unreachable keeps the socket.
 
-## Tokens and GMBs
+## Tokens and GBPs
 
-A person's gmails and the GMBs (Google places) each manages are the conductor's; the services
-store their ids. A GMB is on or off by its owner's switch (`gmbs_off`), which the services inherit
-for their own work: off, review_archive walks none of its tracks. Tokens are a ledger: a balance is its rows' sum, renewed a day's worth when
-read (`TOKENS_DAILY` up to `TOKENS_CAP`; a first balance `TOKENS_START_CAP_MULTIPLE` caps). What
-spends them — today review_archive's walks — charges after the fact.
+A person's gmails and the GBPs each manages are the conductor's; the services store their ids. A
+GBP is on or off by its owner's switch (`gmbs_off`), which the services inherit for their own
+work: off, review_archive walks none of its tracks. Tokens are a ledger: a balance is its rows'
+sum, renewed a day's worth when read (`TOKENS_DAILY` up to `TOKENS_CAP`; a first balance
+`TOKENS_START_CAP_MULTIPLE` caps). What spends them — today review_archive's walks — charges
+after the fact.
+
+**A GBP's life** (`sa_core::gbp::State::next`; the schema checks each move again):
+
+```text
+             name (unique)        + gmail, place_id, country       walked
+ ┌───────┐  ─────────────▶ ┌───────────┐ ─────────▶ ┌──────────┐ ◀────────▶ ┌───────────┐
+ │ Draft │                 │ Verifying │            │ Verified │            │ Suspended │
+ └───────┘                 └───────────┘ ◀───────── └──────────┘            └───────────┘
+  phone, point,             place guaranteed;  Google re-asks │  ▲ reinstated        │
+  gmail/country optional    snapshot → archive               └──┼──────────────────┘
+                            track exists, not walked             └ re-verify ◀──────┘
+```
+
+- A name, and a place, is one live GBP's. The name is a draft's to change; the place is set once,
+  onto Google (draft → verifying), with Google's address, point and country.
+- **A GBP with a place has a gmail and a country** (the schema's CHECK on live rows): the archive
+  reads its language from it. One on Google already is added verifying, verified or suspended.
+- A transfer moves it to another gmail of its owner's. Removed is once, apart from the state; a
+  gmail removed removes its GBPs.
 
 ```text
 follow (10 s)   GET review_archive /api/conductor/charges?after=<cursor>&limit=500 (Conductor)
@@ -416,9 +445,10 @@ follow (10 s)   GET review_archive /api/conductor/charges?after=<cursor>&limit=5
                 `charge` row each (service, key `run:<id>`, label), what a failed walk owes back
                 as kick-backs, the cursor moved; an unknown sub fails the page, the cursor stays
 push (a change, a page, 60 s)
-                PUT review_archive /api/conductor/gmbs (Conductor): every GMB ever (removed ones
-                marked, each on or off), every user's balance renewed, and the cursor they were read at, from
-                one transaction
+                PUT review_archive /api/conductor/gmbs (Conductor): every GBP that ever had a place
+                ({id, gmail_id, gmail, owner, place_id, state, lang (its country's), name, address,
+                removed, enabled}), every user's balance renewed, and the cursor they were read at,
+                from one transaction; review_archive gives each live one its track
 ```
 
 - **The archive's allowance** is that snapshot's balance less its own charges past the cursor,
@@ -428,20 +458,20 @@ push (a change, a page, 60 s)
 - **A 404 on `/api/conductor/*`** is an archive not cut over yet: told once at info, asked again
   every 60 s.
 - **The import opens it.** `panel import review-archive <file>` (review_archive's
-  `scripts/export_members.sql`) writes its people, gmails, GMBs (ids kept), ledger and pending
-  kick-backs in one transaction, refused unless the tables are empty, and creates the cursor.
-  Until then tokens and GMBs are closed and `serve` neither follows nor pushes: a balance read
+  `scripts/export_members.sql`) writes its people, gmails, GMBs (ids kept; with no country, so
+  only an empty list passes), ledger and pending kick-backs in one transaction, refused unless
+  the tables are empty, and creates the cursor. Until then tokens and GMBs are closed and `serve` neither follows nor pushes: a balance read
   writes a renewal, which would make the import refuse. A fresh install imports an empty
   document.
 - **A place's site** is sites': its `places.gmb_id`, linked from the outline through the forward;
   sites down or refusing leaves the GMBs without the link.
-- **A GMB's point** is its place's (`place_points`, keyed by place id): Google's, else one the
-  operator places on the map (a service-area place has none on Google). Google's replaces a placed
-  one, a placed one never replaces Google's. Google's is written with the GMB from the answer that
-  named it; a GMB added without a key, or imported, has none until `panel gmb locate` asks for the
+- **A GBP's point** is on its row: Google's, else one the operator places on the map (a
+  service-area place has none on Google, a draft no place). Google's replaces a placed one, a
+  placed one never replaces Google's. Google's is written with the GBP from the answer that named
+  it; a GBP added without a key, or imported, has none until `panel gmb locate` asks for the
   missing ones and lists those Google gives no point: a command, so the spend is explicit; run
   after a deploy that brings points, and after `local-stack --from-prod`.
-- **A GMB's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
+- **A GBP's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
   language table) follows the point's rule: Google's (its address), else set by hand
   (`PUT /gmbs/{id}/country`, `panel gmb country`); `locate` asks for the missing ones too and
   lists those Google gives none.
@@ -559,8 +589,10 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **A Google answer is paid for once.** Every Places request goes through sa_places' cache; a
   place a search returned is not asked about again.
 - **The ledger is append-only, and nothing a service stores an id of is deleted.**
-  `token_ledger` refuses UPDATE and DELETE; gmails and GMBs only get `removed_at`, kick-backs
+  `token_ledger` refuses UPDATE and DELETE; gmails and GBPs only get `removed_at`, kick-backs
   only `claimed_at`, each once.
+- **A GBP with a place is tracked in review_archive; it is walked only while Verified.** The
+  snapshot carries every GBP with a place, its state and language; the archive derives the track.
 - **One file, migrated on open.** `PANEL_DB_PATH` names it (`/data/panel.db` in the image); every
   command creates it if missing and applies the migrations it lacks first (`panel migrate` does
   only that). A migration newer than the build is let be. Tables are STRICT, foreign keys
