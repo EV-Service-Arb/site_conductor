@@ -454,25 +454,33 @@ fi
 
 # ── run ──────────────────────────────────────────────────────────────────────────────────
 
-# Job control: each background job below gets a process group of its own, which a signal
-# stops whole — npm and next under `nix run .#dev` included — without touching whoever started
-# this script (`kill 0` would, when that is a non-interactive shell sharing our group).
+# Job control: each background job below in a process group of its own, so a Ctrl-C reaches this
+# script alone and stop_all stops the rest.
 set -m
-groups=()
 stop_all() {
 	trap - INT TERM EXIT
 	set +e # a closed terminal fails the writes below; under -e that would leave every part running
 	echo >&2
 	say "stopping"
-	local pg
-	for pg in ${groups[@]+"${groups[@]}"}; do kill -TERM -- "-$pg" 2>/dev/null || true; done
+	# Every descendant, not the jobs' groups: watchexec runs its command in a group of its own, and
+	# quitting may stop only that command's shell, leaving the server under it to serve on.
+	local pids=() p
+	descendants() {
+		local c
+		for c in $(pgrep -P "$1"); do
+			pids+=("$c")
+			descendants "$c"
+		done
+	}
+	descendants $$
+	kill -TERM ${pids[@]+"${pids[@]}"} 2>/dev/null
 	for _ in $(seq 10); do
 		local alive=0
-		for pg in ${groups[@]+"${groups[@]}"}; do kill -0 -- "-$pg" 2>/dev/null && alive=1; done
+		for p in ${pids[@]+"${pids[@]}"}; do kill -0 "$p" 2>/dev/null && alive=1; done
 		[ "$alive" = 0 ] && return 0
 		sleep 1
 	done
-	for pg in ${groups[@]+"${groups[@]}"}; do kill -KILL -- "-$pg" 2>/dev/null || true; done
+	kill -KILL ${pids[@]+"${pids[@]}"} 2>/dev/null
 }
 trap stop_all EXIT
 trap 'stop_all; exit 130' INT TERM
@@ -528,7 +536,6 @@ essential=()
 custom() {
 	say "starting $1 from $2 with \`$3\`"
 	(cd "$2" && prefixed "$1" bash -c "$3") &
-	groups+=("$!")
 	essential+=("$!")
 }
 
@@ -539,12 +546,10 @@ if [ "$run_sites" = 1 ]; then
 	else
 		say "starting sites_panel on $sites_origin"
 		serving sites "$SITES_DIR" "cargo b -q -p panel_server" "sites_panel serve --bind 127.0.0.1:$SITES_PORT" -e rs,toml,sql,lock &
-		groups+=("$!")
 		essential+=("$!")
 		wait_for sites "$sites_origin/health" 30 "$!" || die "sites_panel did not start"
 		if [ "$watch" = 1 ]; then
 			prefixed sites-mfe watched "$SITES_DIR" --postpone -w frontend/src -w frontend/messages -- "cd frontend && npm run -s build" &
-			groups+=("$!")
 		fi
 	fi
 fi
@@ -557,15 +562,12 @@ if [ "$run_review_archive" = 1 ]; then
 		say "starting review_archive on $review_archive_origin"
 		mkdir -p "$REVIEW_ARCHIVE_DATA_DIR"
 		flock "$REVIEW_ARCHIVE_DATA_DIR/serve.lock" sleep infinity &
-		groups+=("$!")
 		serving review_archive "$REVIEW_ARCHIVE_DIR" "cargo b -q -p review_archive_server" "review_archive serve --no-login-check" \
 			-w grafana -i 'crates/review_archive_web/**' -e rs,toml,sql,json,lock &
-		groups+=("$!")
 		essential+=("$!")
 		wait_for review_archive "$review_archive_origin/health" 60 "$!" || die "review_archive did not start"
 		if [ "$watch" = 1 ]; then
 			prefixed review_archive-mfe watched "$REVIEW_ARCHIVE_DIR" --postpone -w crates/review_archive_web -w crates/review_archive_client -w crates/review_archive_core -e rs,css,html,toml -- "$REVIEW_ARCHIVE_WEB_BUILD" &
-			groups+=("$!")
 		fi
 	fi
 fi
@@ -573,7 +575,6 @@ fi
 if [ "$run_panel" = 1 ]; then
 	say "starting the conductor on $origin (dev sign-in: $role)"
 	serving panel "$root" "cargo b -q -p sa_server" "panel serve --bind 127.0.0.1:$PANEL_PORT" -i 'crates/gen/**' -e rs,toml,sql,lock &
-	groups+=("$!")
 	essential+=("$!")
 	wait_for panel "$origin/health" 30 "$!" || die "the conductor did not start"
 fi
@@ -582,13 +583,14 @@ if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
 	say "starting the front end's next dev on $public_origin"
 	(
 		cd "$root/frontend"
-		# npm ci stamps node_modules/.package-lock.json: a lockfile pulled since is newer
-		[ node_modules/.package-lock.json -nt package-lock.json ] || prefixed web npm ci
+		# npm ci stamps node_modules/.package-lock.json: a lockfile pulled since is newer. In the dev
+		# shell, whose js-local lays our packages' checkouts over the install (frontend/_.js-local.json)
+		prefixed web in_shell "$root" bash -c \
+			'cd frontend && if [ node_modules/.package-lock.json -nt package-lock.json ]; then js-local; else npm ci; fi'
 		PANEL_DEV_BACKEND="$origin" \
 			prefixed web npx next dev --port "$WEB_DEV_PORT"
 	) &
 	web_pid=$!
-	groups+=("$web_pid")
 	wait_for web "$public_origin/" 300 "$web_pid" || die "next dev did not start"
 fi
 
@@ -613,7 +615,6 @@ start_site() {
 			LEADS_DB_PATH="$state/$name-leads.db" \
 			nix run .#dev
 	) &
-	groups+=("$!")
 	started+=("$name:$port:$!")
 }
 if [ "$sites" = 1 ]; then
