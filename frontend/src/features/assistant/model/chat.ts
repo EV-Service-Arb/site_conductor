@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 
 import { type AssistantTurn, type Chat, type Turn, type UserTurn, createChat, fetchChat, putTurns } from "@/entities/assistant";
 import { ApiError } from "@/shared/api";
+import { setQuery } from "@/shared/lib/query";
 
 /** `ask`: actions wait for a press; `act`: the first is taken at once, and can be undone. */
 export type Approval = "ask" | "act";
@@ -23,10 +24,9 @@ export interface Running {
 }
 
 interface Prefs {
-  /** The sidebar or the floating window, else its launcher. */
-  open: boolean;
   width: number;
   approval: Approval;
+  /** The last shown, which the launcher opens; the one open is `?assistant=`. */
   mode: Mode;
   /** The chat in the sidebar or the floating window; `null` for a new one. */
   current: string | null;
@@ -39,9 +39,9 @@ interface State extends Prefs {
 }
 
 const KEY = "sa:assistant/3";
-const PREFS = ["open", "width", "approval", "mode", "current", "unread"] as const satisfies readonly (keyof Prefs)[];
+const PREFS = ["width", "approval", "mode", "current", "unread"] as const satisfies readonly (keyof Prefs)[];
 export const WIDTH = { min: 340, max: 760, initial: 420 } as const;
-const INITIAL: State = { open: false, width: WIDTH.initial, approval: "ask", mode: "sidebar", current: null, unread: false, running: null };
+const INITIAL: State = { width: WIDTH.initial, approval: "ask", mode: "sidebar", current: null, unread: false, running: null };
 
 let state: State | null = null;
 const listeners = new Set<() => void>();
@@ -73,8 +73,10 @@ export function useAssistant(): State {
 
 export const newId = () => crypto.randomUUID();
 
-export function setOpen(open: boolean): void {
-  set((s) => ({ ...s, open, unread: open ? false : s.unread }));
+/** The sidebar or the floating window, else (`null`) its launcher. */
+export function show(mode: Mode | null): void {
+  setQuery({ assistant: mode });
+  if (mode !== null) set((s) => ({ ...s, mode, unread: false }));
 }
 
 export function setWidth(width: number): void {
@@ -87,12 +89,13 @@ export function setApproval(approval: Approval): void {
 
 /** `chat` in the sidebar or the floating window, opened in `mode` when given. */
 export function openChat(id: string | null, mode?: Mode): void {
-  set((s) => ({ ...s, current: id, ...(mode && { mode, open: true }) }));
+  set((s) => ({ ...s, current: id }));
+  if (mode) show(mode);
 }
 
-/** Something happened in a chat: told on the launcher if nobody was looking. */
+/** Something happened in a chat: told on the launcher, and seen at once while the assistant is open. */
 export function notice(): void {
-  set((s) => ({ ...s, unread: !s.open }));
+  set((s) => ({ ...s, unread: true }));
 }
 
 /** Whether `running` stands in for the tail of chat `id`: until the server's copy has its answer, or the chat is gone. */

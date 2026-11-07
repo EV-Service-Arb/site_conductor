@@ -139,6 +139,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   if (path === "/tokens/ledger") return send(res, 200, { entries: ledger, next: null });
   if (path === "/tokens/usage") return send(res, 200, { days: usageDays });
   if (path === "/admin/tokens") return send(res, 200, { users: [{ user_id: USER_ID, email: "stub@example.test", name: `Stub ${ROLE}`, balance: tokens.balance }] });
+  if (path === "/assistant/chats" && !write) return send(res, 200, { chats: [] });
   if (path.startsWith("/sources") && ROLE !== "admin") return send(res, 403, { error: "your permissions do not allow this" });
   if (path === "/sources" && req.method === "GET") return send(res, 200, { sources });
   if (path === "/sources/sites" && req.method === "GET") return send(res, 200, connectedSites());

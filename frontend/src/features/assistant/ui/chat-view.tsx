@@ -105,7 +105,11 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
     onDisplay: (chatId, to) => {
       if (to === display && chatId === id) return;
       if (to === "full") {
-        back = display === "full" ? back : `${pathname}${window.location.search}`;
+        if (display !== "full") {
+          const here = new URL(window.location.href);
+          here.searchParams.delete("assistant"); // the display chosen on the way back is the one shown
+          back = `${pathname}${here.search}`;
+        }
         router.push(`${ROUTES.assistant}?chat=${chatId}`);
       } else {
         openChat(chatId, to);

@@ -6,9 +6,10 @@ import { useEffect, useRef, useState } from "react";
 
 import { type ChatSummary, useChats } from "@/entities/assistant";
 import { useT } from "@/shared/i18n";
+import { useQuery } from "@/shared/lib/query";
 import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
 
-import { WIDTH, notice, openChat, setOpen, setWidth, useAssistant } from "../model/chat";
+import { type Mode, WIDTH, notice, openChat, setWidth, show, useAssistant } from "../model/chat";
 import { hideOnEscape, useKeymap } from "../model/keymap";
 import { copyLink } from "./chat-actions";
 import { ChatView } from "./chat-view";
@@ -22,28 +23,34 @@ export function Assistant() {
   const t = useT();
   const s = useAssistant();
   const desktop = useMediaQuery(DESKTOP_QUERY);
+  const shown = useQuery("assistant") as Mode | null;
+  if (shown !== null && shown !== "sidebar" && shown !== "floating") throw new Error(`?assistant=${String(shown)}: not sidebar or floating`);
+  // A link's display is the last shown, and whatever happens while open is seen.
+  useEffect(() => {
+    if (shown !== null) show(shown);
+  }, [shown, s.unread]);
   // Folded by a press or a key, the launcher takes focus; not on a page loaded folded.
   const [folded, setFolded] = useState(false);
 
   const fold = () => {
     setFolded(true);
-    setOpen(false);
+    show(null);
   };
   useKeymap({
-    toggle: () => (s.open ? fold() : setOpen(true)),
-    newChat: () => openChat(null, s.mode),
-    copyLink: s.open && s.current !== null ? () => copyLink(s.current!, t) : null,
+    toggle: () => (shown !== null ? fold() : show(s.mode)),
+    newChat: () => openChat(null, shown ?? s.mode),
+    copyLink: shown !== null && s.current !== null ? () => copyLink(s.current!, t) : null,
   });
 
-  if (!s.open) return <Launcher focus={folded} />;
-  const view = <ChatView id={s.current} display={s.mode} onOpen={openChat} onHide={fold} />;
+  if (shown === null) return <Launcher focus={folded} />;
+  const view = <ChatView id={s.current} display={shown} onOpen={openChat} onHide={fold} />;
   if (!desktop)
     return (
       <section aria-label={t("assistant")} onKeyDown={(e) => hideOnEscape(e, fold)} className="absolute inset-0 z-30 flex flex-col bg-card">
         {view}
       </section>
     );
-  if (s.mode === "floating")
+  if (shown === "floating")
     return (
       <section
         aria-label={t("assistant")}
@@ -70,7 +77,7 @@ function Launcher({ focus }: { focus: boolean }) {
     <button
       autoFocus={focus}
       type="button"
-      onClick={() => setOpen(true)}
+      onClick={() => show(s.mode)}
       aria-label={t("assistant.open")}
       title={`${t("assistant.open")} · Ctrl+J`}
       className="absolute right-4 bottom-4 z-30 flex size-10 items-center justify-center rounded-full border border-border bg-secondary text-ink outline-none transition-[translate,background-color] hover:-translate-y-0.5 hover:bg-popover focus-visible:ring-2 focus-visible:ring-ring"
