@@ -21,7 +21,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { type Listed, narrowed, useGmails, useGmbTags, usePeeked } from "@/entities/gmb";
+import { type Listed, narrowed, setOnMap, useGmails, useGmbTags, useOnMap } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
 
@@ -47,20 +47,21 @@ export function Assistant() {
     return last?.role === "assistant" && (last.state === "working" || last.state === "writing");
   });
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() !== SHORTCUT || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
-      e.preventDefault();
-      setOpen(!s.open);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [s.open]);
-
   const fold = () => {
     setOpen(false);
     requestAnimationFrame(() => launcher.current?.focus());
   };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== SHORTCUT || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+      e.preventDefault();
+      if (s.open) fold();
+      else setOpen(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [s.open]);
 
   if (!s.open)
     return (
@@ -157,6 +158,7 @@ function ChatView({ onFold }: { onFold: () => void }) {
     const asked = chat!.turns[at];
     if (asked?.role !== "user") throw new Error("a question is re-asked from its own turn");
     setEditing(null);
+    composer.current?.focus();
     ask(chat!.id, at, { text, mentions: asked.mentions, files: asked.files }, script(text, resolve(asked.mentions), all, tags, t), s.approval);
   };
 
@@ -173,7 +175,7 @@ function ChatView({ onFold }: { onFold: () => void }) {
         composer.current?.attach([...e.dataTransfer.files]);
       }}
     >
-      <Header chat={chat} onFold={onFold} onDelete={setDeleting} />
+      <Header chat={chat} onFold={onFold} onDelete={setDeleting} onRenamed={() => composer.current?.focus()} />
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(open) => {
@@ -209,7 +211,10 @@ function ChatView({ onFold }: { onFold: () => void }) {
       >
         {chat?.turns.map((turn, i) =>
           turn.role === "user" ? (
-            <UserTurnView key={turn.id} turn={turn} editing={editing === turn.id} onEditing={(on) => setEditing(on ? turn.id : null)} onEdit={(text) => again(i, text)} />
+            <UserTurnView key={turn.id} turn={turn} editing={editing === turn.id} onEditing={(on) => {
+                setEditing(on ? turn.id : null);
+                if (!on) composer.current?.focus();
+              }} onEdit={(text) => again(i, text)} />
           ) : (
             <AssistantTurnView key={turn.id} chat={chat.id} turn={turn} last={i === chat.turns.length - 1} onRetry={() => again(i - 1, (chat.turns[i - 1] as { text: string }).text)} />
           ),
@@ -228,13 +233,13 @@ function ChatView({ onFold }: { onFold: () => void }) {
 /** The location the page is on: a GMB's archive page, or the card open on the map. */
 function useSubject(all: readonly Listed[]): Listed | null {
   const pathname = usePathname();
-  const peeked = usePeeked();
+  const { peeked } = useOnMap();
   const route = /^\/review_archive\/gmbs\/(\d+)/.exec(pathname);
   const id = route ? Number(route[1]) : pathname === "/" ? peeked : null;
   return all.find((l) => l.gmb.id === id) ?? null;
 }
 
-function Header({ chat, onFold, onDelete }: { chat: Chat | null; onFold: () => void; onDelete: (chat: Chat) => void }) {
+function Header({ chat, onFold, onDelete, onRenamed }: { chat: Chat | null; onFold: () => void; onDelete: (chat: Chat) => void; onRenamed: () => void }) {
   const t = useT();
   const [renaming, setRenaming] = useState(false);
   const title = chat?.title ?? t("assistant.newChat");
@@ -256,39 +261,38 @@ function Header({ chat, onFold, onDelete }: { chat: Chat | null; onFold: () => v
               e.preventDefault();
               e.currentTarget.value = chat.title ?? "";
             }
-            if (e.key === "Enter" || e.key === "Escape") e.currentTarget.blur();
+            if (e.key === "Enter" || e.key === "Escape") {
+              e.currentTarget.blur();
+              onRenamed();
+            }
           }}
         />
       ) : (
         <History title={title} onDelete={onDelete} />
       )}
       <span className="flex-1" />
-      {chat !== null && (
-        <>
-          <IconButton size="sm" aria-label={t("assistant.new")} title={t("assistant.new")} onClick={() => openChat(null)}>
-            <SquarePen />
+      <IconButton size="sm" aria-label={t("assistant.new")} title={t("assistant.new")} disabled={chat === null} onClick={() => openChat(null)}>
+        <SquarePen />
+      </IconButton>
+      <Context chat={chat} />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <IconButton size="sm" aria-label={t("assistant.more")} title={t("assistant.more")} disabled={chat === null}>
+            <Ellipsis />
           </IconButton>
-          <Context chat={chat} />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <IconButton size="sm" aria-label={t("assistant.more")} title={t("assistant.more")}>
-                <Ellipsis />
-              </IconButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setRenaming(true)}>
-                <Pencil aria-hidden />
-                {t("assistant.rename")}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={() => onDelete(chat)}>
-                <Trash2 aria-hidden />
-                {t("assistant.delete")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </>
-      )}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setRenaming(true)}>
+            <Pencil aria-hidden />
+            {t("assistant.rename")}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={() => onDelete(chat!)}>
+            <Trash2 aria-hidden />
+            {t("assistant.delete")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <IconButton size="sm" aria-label={t("assistant.fold")} title={`${t("assistant.fold")} · Ctrl+J`} onClick={onFold}>
         <ChevronsRight />
       </IconButton>
@@ -297,23 +301,23 @@ function Header({ chat, onFold, onDelete }: { chat: Chat | null; onFold: () => v
 }
 
 /** What the chat has touched: the locations named in it and what its answers read. */
-function Context({ chat }: { chat: Chat }) {
+function Context({ chat }: { chat: Chat | null }) {
   const t = useT();
   const locations = new Map<number, Mention>();
   const read = new Map<string, Source>();
-  for (const turn of chat.turns) {
+  for (const turn of chat?.turns ?? []) {
     if (turn.role === "user") for (const m of turn.mentions) locations.set(m.id, m);
     else {
       for (const [, label, id] of turn.text.matchAll(/@\[([^\]]*)\]\(location:(\d+)\)/g)) locations.set(Number(id), { kind: "location", id: Number(id), label: label! });
       for (const source of turn.sources) read.set(source.label, source);
     }
   }
-  if (locations.size === 0 && read.size === 0) return null;
+  const none = locations.size === 0 && read.size === 0;
   const row = "flex h-8 items-center gap-2 rounded-md px-2 text-body-s text-ink outline-none hover:bg-hover focus-visible:bg-hover";
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <IconButton size="sm" aria-label={t("assistant.context")} title={t("assistant.context")} className="data-[state=open]:bg-hover">
+        <IconButton size="sm" aria-label={t("assistant.context")} title={t("assistant.context")} disabled={none} className="aria-expanded:bg-hover">
           <PanelRight />
         </IconButton>
       </PopoverTrigger>
@@ -322,7 +326,7 @@ function Context({ chat }: { chat: Chat }) {
           <section className="flex flex-col">
             <h3 className="px-2 py-1 text-caption text-ink-soft">{t("assistant.context.locations")}</h3>
             {[...locations.values()].map((m) => (
-              <Link key={m.id} href={`/?gmb=${m.id}`} className={row}>
+              <Link key={m.id} href="/" onClick={() => setOnMap({ peeked: m.id })} className={row}>
                 <MapPin aria-hidden className="size-4 shrink-0 text-ink-soft" />
                 <span className="truncate">{m.label}</span>
               </Link>
@@ -380,7 +384,7 @@ function History({ title, onDelete }: { title: string; onDelete: (chat: Chat) =>
         setActive(0);
       }}
     >
-      <PopoverTrigger className="flex h-7 min-w-0 items-center gap-1.5 rounded-md pr-1.5 pl-1 text-left text-body text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-hover">
+      <PopoverTrigger className="flex h-7 min-w-0 items-center gap-1.5 rounded-md pr-1.5 pl-1 text-left text-body text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring aria-expanded:bg-hover">
         <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-hover">
           <Sparkles aria-hidden className="size-3 text-ink-mid" />
         </span>

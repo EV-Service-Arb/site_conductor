@@ -4,11 +4,10 @@ import { Skeleton, cn } from "@evinvest/uikit";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { type LatLng, type Listed, type MapConfig, type Tags, fetchMapConfig, issueOf, peek, setOnMap, useGmails, useGmbTags, useOnMap, usePeeked, useSelection } from "@/entities/gmb";
+import { type LatLng, type Listed, type MapConfig, type Tags, fetchMapConfig, issueOf, narrowed, setOnMap, useGmailScope, useGmails, useGmbTags, useOnMap } from "@/entities/gmb";
 import { PlacingBar } from "@/features/place-gmb";
 import { takeReturnPage } from "@/shared/api";
 import { useT } from "@/shared/i18n";
-import { setQuery, useQuery } from "@/shared/lib/query";
 import { useResource } from "@/shared/lib/use-resource";
 import { pin, useTheMap } from "@/shared/map";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -42,19 +41,16 @@ export function Home() {
   );
 }
 
-/** Fitted to the GMBs once per page session, unless `?at` names where: the map outlives the page, and so does where it was left. */
+/** Fitted to the GMBs once per page session: the map outlives the page, and so does where it was left. */
 let fitted = false;
 
 function GmbMap({ config }: { config: MapConfig }) {
   const gmails = useGmails();
-  const selection = useSelection();
-  const { hovered, placing } = useOnMap();
-  const peeked = usePeeked();
-  // `?at` as the page opened: what it says after is where the map has since moved
-  const [left] = useState(useQuery("at"));
+  const scope = useGmailScope();
+  const { hovered, peeked, placing } = useOnMap();
   const { tags } = useGmbTags();
   const { host, map } = useTheMap(config.key);
-  const listed = selection?.selected ?? [];
+  const listed = gmails.status === "ok" ? narrowed(gmails.data, scope, "") : [];
   const located = listed.filter((l) => l.gmb.location !== null);
   const locatedRef = useRef(located);
   // first of the effects, so each one after reads this render's
@@ -68,7 +64,7 @@ function GmbMap({ config }: { config: MapConfig }) {
     styling.current = { hovered, peeked, tags };
   });
 
-  useEffect(() => () => setOnMap({ inView: null, hovered: null }), []);
+  useEffect(() => () => setOnMap({ inView: null, hovered: null, peeked: null }), []);
 
   useEffect(() => {
     if (map.status !== "ok") return;
@@ -77,10 +73,6 @@ function GmbMap({ config }: { config: MapConfig }) {
       const bounds = m.getBounds();
       if (bounds === undefined) return; // before the first render: the next idle tells
       setOnMap({ inView: new Set(locatedRef.current.filter((l) => l.gmb.location && bounds.contains(l.gmb.location)).map((l) => l.gmb.id)) });
-      const centre = m.getCenter();
-      const zoom = m.getZoom();
-      if (centre === undefined || zoom === undefined) throw new Error("the map has bounds but no centre or zoom");
-      setQuery({ at: `${centre.lat().toFixed(5)},${centre.lng().toFixed(5)},${zoom}` });
     };
     const idle = m.addListener("idle", update);
     update();
@@ -88,16 +80,7 @@ function GmbMap({ config }: { config: MapConfig }) {
   }, [map, shown]);
 
   useEffect(() => {
-    if (map.status !== "ok" || left === null) return;
-    const [lat, lng, zoom] = left.split(",").map(Number);
-    if (lat === undefined || lng === undefined || zoom === undefined || ![lat, lng, zoom].every(Number.isFinite)) throw new Error(`?at=${left}: not <lat>,<lng>,<zoom>`);
-    fitted = true;
-    map.map.setCenter({ lat, lng });
-    map.map.setZoom(zoom);
-  }, [map, left]);
-
-  useEffect(() => {
-    if (map.status !== "ok" || fitted || left !== null || gmails.status !== "ok") return;
+    if (map.status !== "ok" || fitted || gmails.status !== "ok") return;
     fitted = true;
     const points = locatedRef.current.flatMap((l) => (l.gmb.location ? [l.gmb.location] : []));
     if (points.length === 1) {
@@ -108,7 +91,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       for (const p of points) bounds.extend(p);
       map.map.fitBounds(bounds, 48);
     }
-  }, [map, left, gmails.status]);
+  }, [map, gmails.status]);
 
   useEffect(() => {
     if (map.status !== "ok") return;
@@ -118,7 +101,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       dot.title = l.gmb.name ?? l.gmb.place_id;
       dot.addEventListener("mouseenter", () => setOnMap({ hovered: l.gmb.id }));
       dot.addEventListener("mouseleave", () => setOnMap({ hovered: null }));
-      dot.addEventListener("click", () => peek(l.gmb.id));
+      dot.addEventListener("click", () => setOnMap({ peeked: l.gmb.id }));
       made.set(l.gmb.id, { remove: pin(map.map, dot, l.gmb.location!).remove, dot, listed: l });
     }
     styleDots(made, styling.current);
@@ -176,7 +159,7 @@ function GmbMap({ config }: { config: MapConfig }) {
           <ErrorState failure={{ kind: "invalid", message: map.message }} />
         </div>
       )}
-      {peekedListed && placed === undefined && <Peek listed={peekedListed} onClose={() => peek(null)} />}
+      {peekedListed && placed === undefined && <Peek listed={peekedListed} onClose={() => setOnMap({ peeked: null })} />}
       {map.status === "ok" && placed !== undefined && placedAt !== null && <PlacingBar gmb={placed} map={map.map} at={placedAt} onMove={(at) => setMoved({ gmb: placed.id, at })} />}
     </>
   );

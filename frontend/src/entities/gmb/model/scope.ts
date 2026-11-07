@@ -1,16 +1,32 @@
 "use client";
 
-import { setQuery, useQuery } from "@/shared/lib/query";
+import { useSyncExternalStore } from "react";
 
-/** The gmail every app's GMBs are narrowed to, `null` for all of them. */
-export function useGmailScope(): number | null {
-  const raw = useQuery("gmail");
-  if (raw === null) return null;
-  const id = Number(raw);
-  if (!Number.isSafeInteger(id)) throw new Error(`?gmail=${raw}: not a gmail id`);
+const KEY = "sa:gmail-scope";
+const CHOSEN_EVENT = "sa:gmail-scope-chosen";
+
+const subscribe = (onChange: () => void) => {
+  for (const e of ["storage", CHOSEN_EVENT]) window.addEventListener(e, onChange);
+  return () => {
+    for (const e of ["storage", CHOSEN_EVENT]) window.removeEventListener(e, onChange);
+  };
+};
+
+function current(): number | null {
+  const kept = localStorage.getItem(KEY);
+  if (kept === null) return null;
+  const id = Number(kept);
+  if (!Number.isSafeInteger(id)) throw new Error(`${KEY}: not a gmail id: ${kept}`);
   return id;
 }
 
+/** The gmail every app's GMBs are narrowed to, `null` for all of them; kept in this browser. */
+export function useGmailScope(): number | null {
+  return useSyncExternalStore(subscribe, current, () => null);
+}
+
 export function chooseGmailScope(gmail: number | null): void {
-  setQuery({ gmail: gmail === null ? null : String(gmail) });
+  if (gmail === null) localStorage.removeItem(KEY);
+  else localStorage.setItem(KEY, String(gmail));
+  window.dispatchEvent(new Event(CHOSEN_EVENT));
 }

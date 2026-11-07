@@ -32,6 +32,7 @@ export interface Draft {
 
 export interface ComposerHandle {
   attach: (files: readonly File[]) => void;
+  focus: () => void;
 }
 
 // Notion's raised field: a surface step and a hairline in place of the kit's focus ring; the send button a round fill.
@@ -104,7 +105,7 @@ export function Composer({
       follow(el);
     });
   };
-  useImperativeHandle(handle, () => ({ attach }));
+  useImperativeHandle(handle, () => ({ attach, focus: () => field()?.focus() }));
 
   const gmails = useGmails();
   const all = gmails.status === "ok" ? gmails.data : [];
@@ -157,7 +158,7 @@ export function Composer({
 
   const subjectShown = subject !== null && !draft.subjectOff && !draft.mentions.some((m) => m.id === subject.gmb.id);
   const name = subject ? (subject.gmb.name ?? subject.gmb.place_id) : null;
-  const chips = subjectShown || draft.mentions.length > 0 || draft.files.length > 0;
+  const chips = subjectShown || draft.files.length > 0;
 
   return (
     <div ref={root} className="relative">
@@ -190,7 +191,7 @@ export function Composer({
       <ChatComposer
         className={SURFACE}
         value={draft.text}
-        onValueChange={(text) => setDraft((d) => ({ ...d, text }))}
+        onValueChange={(text) => setDraft((d) => ({ ...d, text, mentions: d.mentions.filter((m) => text.includes(`@${m.label}`)) }))}
         onSend={send}
         streaming={streaming}
         onStop={onStop}
@@ -206,12 +207,6 @@ export function Composer({
                   <span className="shrink-0 text-ink-faint">· {t("assistant.context.here")}</span>
                 </Chip>
               )}
-              {draft.mentions.map((m) => (
-                <Chip key={m.id} onRemove={() => setDraft((d) => ({ ...d, mentions: d.mentions.filter((x) => x.id !== m.id) }))} removeLabel={t("assistant.context.remove", { name: m.label })}>
-                  <MapPin aria-hidden className="size-3.5 shrink-0 text-ink-soft" />
-                  <span className="max-w-48 truncate">{m.label}</span>
-                </Chip>
-              ))}
               {draft.files.map((f, i) => (
                 <Chip key={i} onRemove={() => setDraft((d) => ({ ...d, files: d.files.filter((_, j) => j !== i) }))} removeLabel={t("assistant.context.remove", { name: f.name })}>
                   {f.preview !== null ? <Image unoptimized src={f.preview.url} alt="" width={16} height={16} className="size-4 rounded-sm object-cover" /> : <FileText aria-hidden className="size-3.5 text-ink-soft" />}

@@ -70,7 +70,7 @@ export function AddGmbButton({ gmailId, onAdded }: { gmailId: number; onAdded: (
       onAdded();
       if (added.location === null) {
         router.push("/");
-        setOnMap({ placing: added.id });
+        setOnMap({ placing: added.id, peeked: null });
       }
     });
 
