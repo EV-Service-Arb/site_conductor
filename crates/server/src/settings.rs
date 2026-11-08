@@ -59,6 +59,9 @@ ev_lib::settings! {
 		/// and the hubs' feeds.
 		#[required_in("production")]
 		panel_sites_url: Option<String>,
+		/// gmaps_optimal_placement (`serve --behind-conductor`), from inside the cluster: the home
+		/// map's overlay. Optional; needs the forward's four.
+		panel_placement_url: Option<String>,
 		/// The conductor's bot (`@evinvest_sa_bot`; not `telegram_token_main`). Unset: no Telegram
 		/// notifications, and `serve` says so. Needs the forward configured too: sites' notes
 		/// are what it sends.
@@ -170,7 +173,9 @@ impl Settings {
 		];
 		let set = |v: &Option<String>| v.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned);
 		let missing: Vec<&str> = vars.iter().filter(|(_, v)| set(v).is_none()).map(|(name, _)| *name).collect();
+		let placement = self.panel_placement_url.as_deref().map(str::trim).filter(|v| !v.is_empty());
 		if missing.len() == vars.len() {
+			eyre::ensure!(placement.is_none(), "PANEL_PLACEMENT_URL needs the forward's four too");
 			return Ok(None);
 		}
 		eyre::ensure!(missing.is_empty(), "signing in needs {} too", missing.join(", "));
@@ -201,7 +206,9 @@ impl Settings {
 			("PANEL_SITES_URL", &self.panel_sites_url),
 		];
 		let missing: Vec<&str> = vars.iter().filter(|(_, v)| v.as_deref().is_none_or(|v| v.trim().is_empty())).map(|(name, _)| *name).collect();
+		let placement = self.panel_placement_url.as_deref().map(str::trim).filter(|v| !v.is_empty());
 		if missing.len() == vars.len() {
+			eyre::ensure!(placement.is_none(), "PANEL_PLACEMENT_URL needs the forward's four too");
 			return Ok(None);
 		}
 		eyre::ensure!(missing.is_empty(), "the forward needs {} too", missing.join(", "));
@@ -210,6 +217,7 @@ impl Settings {
 			review_archive: uri("PANEL_REVIEW_ARCHIVE_URL", &self.panel_review_archive_url)?,
 			playbook: uri("PANEL_PLAYBOOK_URL", &self.panel_playbook_url)?,
 			sites: uri("PANEL_SITES_URL", &self.panel_sites_url)?,
+			placement: placement.map(|v| bare_http_origin("PANEL_PLACEMENT_URL", v)).transpose()?,
 			signer: self
 				.panel_assertion_key
 				.as_deref()
@@ -410,6 +418,7 @@ mod tests {
 				"PANEL_REVIEW_ARCHIVE_URL",
 				"PANEL_PLAYBOOK_URL",
 				"PANEL_SITES_URL",
+				"PANEL_PLACEMENT_URL",
 				"TELEGRAM_BOT_TOKEN",
 				"TELEGRAM_BOT_USERNAME",
 				"TELEGRAM_LOCALE",

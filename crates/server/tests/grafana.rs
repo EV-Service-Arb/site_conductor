@@ -321,7 +321,10 @@ async fn grafana_is_provisioned_with_a_datasource_per_services_api_on_its_loopba
 		assert!(env.lines().any(|l| l == "GF_SERVER_ROOT_URL=https://sa.test/grafana/"), "{env}");
 		let provisioned: Value = serde_json::from_slice(&std::fs::read(dir.path().join("grafana/provisioning/datasources/services.yaml")).unwrap()).unwrap();
 		let datasources = provisioned["datasources"].as_array().unwrap();
-		assert_eq!(datasources.iter().map(|d| d["uid"].as_str().unwrap()).collect::<Vec<_>>(), ["sites", "review_archive"]);
+		assert_eq!(
+			datasources.iter().map(|d| d["uid"].as_str().unwrap()).collect::<Vec<_>>(),
+			["sites", "review_archive", "placement"]
+		);
 		for d in datasources {
 			let url = d["url"].as_str().unwrap();
 			assert_eq!(url, format!("{}/api/{}", url.split("/api/").next().unwrap(), d["uid"].as_str().unwrap()));

@@ -449,6 +449,7 @@ async fn setup() -> Setup {
 			review_archive: archive_base.parse().unwrap(),
 			playbook: sites_base.parse().unwrap(),
 			sites: sites_base.parse().unwrap(),
+			placement: None,
 			signer: SEED.parse().unwrap(),
 		}),
 		locale: Locale::Ru,

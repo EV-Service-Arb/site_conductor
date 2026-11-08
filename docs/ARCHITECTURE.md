@@ -4,7 +4,8 @@ The conductor is Service-Arb's host on `sa.evinvest.ltd`: who a person is (sessi
 concierge), what they hold across the services (the gmails and GMBs they manage, their tokens),
 who a machine is (the source keys), the shell the browser loads, and the forward to the services
 behind the origin — sites_panel (the sites business: leads, places, pricing, experiments,
-bookings, invoices), review_archive and playbook. Each service trusts only the assertion the
+bookings, invoices), review_archive, playbook and placement (gmaps_optimal_placement: where
+demand sits and how contested it is, drawn over the home map). Each service trusts only the assertion the
 conductor signs for a request; none of them sees a session, and none calls the conductor: it
 reads them. Live updates and alerts are its hubs, fed by what the services tell it; tokens are
 charged from what review_archive tells it.
@@ -14,7 +15,8 @@ a walk's charge are each about one. A gmail is a managing gmail, a scope of GBPs
 one, a GBP on one.
 
 ```text
-browser ─session──▶ conductor ─x-sa-assertion (User)──────────────▶ sites /api/v1, review_archive, playbook
+browser ─session──▶ conductor ─x-sa-assertion (User)──────────────▶ sites /api/v1, review_archive, playbook,
+                                                                     placement
 landings/bots ─HMAC▶ conductor ─x-sa-assertion (Source) + raw body ▶ sites /api/ingest/v1
 conductor ◀── pulls (Conductor) ── sites /api/conductor/{changes, notifications, sources/received,
                                                           internal-reads}
@@ -158,6 +160,8 @@ reserved paths (`web.rs`) are derived from it.
 /playbook_mcp/authorize          → playbook (same path)         session + User; no conductor CSRF
 /playbook_mcp/*, /.well-known/oauth-{authorization-server,protected-resource}/playbook_mcp
                                  → playbook (same path)         open: OAuth and bearer clients
+/api/placement/*                 → placement /*                 session + User; CSRF on writes
+/placement/mfe/*                 → placement /mfe/*             open: the map overlay's module
 ```
 
 - **The assertion** (`sa_auth`, header `x-sa-assertion`) is signed for one request: Ed25519
@@ -204,6 +208,12 @@ reserved paths (`web.rs`) are derived from it.
 - Without `PANEL_ASSERTION_KEY`, `PANEL_REVIEW_ARCHIVE_URL`, `PANEL_PLAYBOOK_URL` and
   `PANEL_SITES_URL` (all four, or none), nothing is forwarded, nothing ingested, the hubs hear
   nothing of sites, and review_archive is neither followed nor told.
+- **Placement** (`PANEL_PLACEMENT_URL`, optional, needs the four) is gmaps_optimal_placement's
+  `serve --behind-conductor`. The home map imports its `/placement/mfe/overlay.js` once per page
+  session and hands it the map: the heat, the pressure field and the competitors are its drawing,
+  the model's wasm shipped with the payload it reads. A GET there never spends; a POST (Pull
+  latest, `sa:placement:study:spend`) buys the Places searches it lacks. Unset, `/api/placement`
+  answers 503 and the map says placement is not connected.
 
 ## Grafana
 
@@ -591,7 +601,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   transaction. **So is a charge in the ledger**, and a page is taken only from where the cursor
   stands.
 - **A Google answer is paid for once.** Every Places request goes through sa_places' cache; a
-  place a search returned is not asked about again.
+  place a search returned is not asked about again. Placement's sweeps are its own, disjoint
+  requests under its own cache and keys.
 - **The ledger is append-only, and nothing a service stores an id of is deleted.**
   `token_ledger` refuses UPDATE and DELETE; gmails and GBPs only get `removed_at`, kick-backs
   only `claimed_at`, each once.
