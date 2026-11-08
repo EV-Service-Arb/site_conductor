@@ -28,7 +28,9 @@ landings ───────────────────────�
 A cargo workspace; dependencies point inwards only.
 
 ```text
-crates/core/             no I/O: brand ids, the HMAC of a signed request and its window, the
+crates/core/             no I/O: a GBP's states and moves, its country and language, and the
+                         snapshot the services are told (`gbp`; review_archive takes it too),
+                         brand ids, the HMAC of a signed request and its window, the
                          conductor's own alert messages, the buttons' signed data, retry and
                          pacing, tokens' renewal and a charge's split
 crates/panel/            the engine: `Panel` (sources and their authentication, sessions, access
@@ -39,8 +41,6 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          delivery, buttons; the Bot port), `live` (the in-process bus), `gmbs`,
                          `tokens` (the ledger, review_archive's charges, the snapshot), `import`
                          (review_archive's, once), `assistant` (the assistant's chats)
-crates/gbp/              no I/O: a GBP's states and moves, its country and language, and the
-                         snapshot the services are told; review_archive takes it too
 crates/alerts/           no I/O: the alert rules, and the notes a service publishes to the
                          conductor and their check; sites and review_archive take it too
 crates/auth/             the `sa` permissions (concierge_iam derives), the aliases `sa:operator` /
@@ -421,7 +421,7 @@ sum, renewed a day's worth when read (`TOKENS_DAILY` up to `TOKENS_CAP`; a first
 `TOKENS_START_CAP_MULTIPLE` caps). What spends them — today review_archive's walks — charges
 after the fact.
 
-**A GBP's life** (`sa_gbp::State::nexts`; the schema checks each move again):
+**A GBP's life** (`sa_core::gbp::State::nexts`; the schema checks each move again):
 
 ```text
              name (unique)        + gmail, place_id, country       walked
@@ -447,7 +447,7 @@ follow (10 s)   GET review_archive /api/conductor/charges?after=<cursor>&limit=5
                 `charge` row each (service, key `run:<id>`, label), what a failed walk owes back
                 as kick-backs, the cursor moved; an unknown sub fails the page, the cursor stays
 push (a change, a page, 60 s)
-                PUT review_archive /api/conductor/gmbs (Conductor), an `sa_gbp::Snapshot`: every GBP that ever had a place
+                PUT review_archive /api/conductor/gmbs (Conductor), an `sa_core::gbp::Snapshot`: every GBP that ever had a place
                 ({id, gmail_id, gmail, owner, place_id, state, country, name, address,
                 removed, enabled}), every user's balance renewed, and the cursor they were read at,
                 from one transaction; review_archive gives each live one its track
@@ -473,7 +473,7 @@ push (a change, a page, 60 s)
   it; a GBP added without a key, or imported, has none until `panel gmb locate` asks for the
   missing ones and lists those Google gives no point: a command, so the spend is explicit; run
   after a deploy that brings points, and after `local-stack --from-prod`.
-- **A GBP's country** (FR, US, CA, GB: `sa_gbp::Country`, the one country → review
+- **A GBP's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
   language table) follows the point's rule: Google's (its address), else set by hand
   (`PUT /gmbs/{id}/country`, `panel gmb country`); `locate` asks for the missing ones too and
   lists those Google gives none.

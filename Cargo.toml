@@ -15,7 +15,6 @@ sa_alerts = { path = "crates/alerts", version = "0.1.0" }
 sa_auth = { path = "crates/auth", version = "0.1.0" }
 sa_contracts = { path = "crates/contracts", version = "0.1.0" }
 sa_core = { path = "crates/core", version = "0.1.0" }
-sa_gbp = { path = "crates/gbp", version = "0.1.0" }
 sa_panel = { path = "crates/panel", version = "0.1.0" }
 sa_places = { path = "crates/places", version = "0.1.0" }
 sa_server = { path = "crates/server", version = "0.1.0" }

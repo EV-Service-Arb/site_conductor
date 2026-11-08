@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_gbp::{Country, OnGoogle, State};
+use sa_core::gbp::{Country, OnGoogle, State};
 use sa_places::{Ask, LatLng, Place};
 use uuid::Uuid;
 
@@ -91,7 +91,7 @@ fn phone(raw: &str) -> Result<String, Refused> {
 fn google_country(place: Option<&Place>) -> Result<Option<Country>, Refused> {
 	match place.and_then(|p| p.country.as_deref()) {
 		None => Ok(None),
-		Some(c) => c.parse().map(Some).map_err(|e: sa_gbp::Invalid| Refused::Invalid(format!("Google places it in a {e}"))),
+		Some(c) => c.parse().map(Some).map_err(|e: sa_core::Invalid| Refused::Invalid(format!("Google places it in a {e}"))),
 	}
 }
 

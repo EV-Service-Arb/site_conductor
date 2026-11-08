@@ -22,8 +22,10 @@ use hmac::{Hmac, KeyInit, Mac};
 use jiff::{SignedDuration, Timestamp};
 use sa_alerts::{Origin, Rule};
 use sa_auth::{PermissionSet, Principal, Service};
-use sa_core::notify::{Locale, Rendered};
-use sa_gbp::{Country, OnGoogle};
+use sa_core::{
+	gbp::{Country, OnGoogle},
+	notify::{Locale, Rendered},
+};
 use sa_panel::{
 	Panel, Refused,
 	alerts::{Access, Directory, DirectoryError, Hub, Identity},

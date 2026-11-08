@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_gbp::{Country, Managed, State};
+use sa_core::gbp::{Country, Managed, State};
 use sa_places::LatLng;
 use sqlx::SqliteConnection;
 use uuid::Uuid;

@@ -97,12 +97,6 @@ impl From<Invalid> for ApiError {
 	}
 }
 
-impl From<sa_gbp::Invalid> for ApiError {
-	fn from(e: sa_gbp::Invalid) -> Self {
-		Self::BadRequest(e.to_string())
-	}
-}
-
 /// A JSON body, its rejection turned into our error shape.
 pub(crate) fn body<T: DeserializeOwned>(b: Result<Json<T>, JsonRejection>) -> ApiResult<T> {
 	b.map(|Json(v)| v).map_err(|e| match e.status() {

@@ -2,7 +2,7 @@
 //! along `State::next`; a GBP with a place has its gmail and its country.
 
 use jiff::Timestamp;
-use sa_gbp::{Country, OnGoogle, State};
+use sa_core::gbp::{Country, OnGoogle, State};
 use sa_panel::{
 	Panel, Refused,
 	gmbs::{Edit, Existing},

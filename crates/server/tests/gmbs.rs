@@ -11,7 +11,7 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::get,
 };
-use sa_gbp::{Country, OnGoogle};
+use sa_core::gbp::{Country, OnGoogle};
 use sa_panel::{
 	Panel,
 	gmbs::{Existing, Located},

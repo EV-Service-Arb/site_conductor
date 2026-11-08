@@ -16,8 +16,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use eyre::WrapErr;
 use jiff::{Timestamp, civil::Date, tz::TimeZone};
-use sa_core::tokens::{Renewal, split};
-use sa_gbp::Snapshot;
+use sa_core::{
+	gbp::Snapshot,
+	tokens::{Renewal, split},
+};
 use serde::Deserialize;
 use sqlx::SqliteConnection;
 use uuid::Uuid;

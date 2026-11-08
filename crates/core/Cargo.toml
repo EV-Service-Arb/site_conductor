@@ -1,12 +1,18 @@
 [package]
 name = "sa_core"
-description = "The conductor without I/O: source signatures, brand ids, the Telegram rules and messages"
+description = "The conductor without I/O: a GBP's states, country and snapshot, source signatures, brand ids, the Telegram rules and messages"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
+
+[features]
+# `ts_rs::TS` on the gbp enums, for the conductor's front end.
+ts = ["dep:ts-rs"]
+# `utoipa::ToSchema` on the gbp wire types, for review_archive's OpenAPI document.
+utoipa = ["dep:utoipa"]
 
 [dependencies]
 hex.workspace = true
@@ -19,7 +25,10 @@ serde_json.workspace = true
 sha2.workspace = true
 subtle.workspace = true
 thiserror.workspace = true
+ts-rs = { workspace = true, optional = true }
 url.workspace = true
+utoipa = { workspace = true, optional = true, features = ["uuid"] }
+uuid = { workspace = true, features = ["serde"] }
 
 [lints]
 workspace = true

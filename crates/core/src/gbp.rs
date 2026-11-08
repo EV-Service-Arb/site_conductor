@@ -1,16 +1,13 @@
 //! A GBP as the conductor defines it, for every service that speaks of one: the states it moves
 //! through, its country (which its reviews' language follows), and the snapshot review_archive is
-//! pushed (`PUT /api/conductor/gmbs`).
+//! pushed (`PUT /api/conductor/gmbs`). The `ts` and `utoipa` features derive on these types only.
 
 use std::{collections::BTreeMap, fmt, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Why an input cannot be accepted; the message is what the caller is told.
-#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
-#[error("{0}")]
-pub struct Invalid(String);
+use crate::Invalid;
 
 /// ISO 3166-1 alpha-2, of the countries GBPs are in.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -51,7 +48,7 @@ impl FromStr for Country {
 			"US" => Ok(Self::US),
 			"CA" => Ok(Self::CA),
 			"GB" => Ok(Self::GB),
-			_ => Err(Invalid(format!("country {raw:?}: one of FR, US, CA, GB"))),
+			_ => Err(Invalid::new(format!("country {raw:?}: one of FR, US, CA, GB"))),
 		}
 	}
 }
@@ -94,7 +91,7 @@ impl State {
 	pub fn next(self, to: Self) -> Result<Self, Invalid> {
 		match self.nexts().contains(&to) {
 			true => Ok(to),
-			false => Err(Invalid(format!("a {self} GBP cannot become {to}"))),
+			false => Err(Invalid::new(format!("a {self} GBP cannot become {to}"))),
 		}
 	}
 
@@ -117,7 +114,7 @@ impl FromStr for State {
 			"verifying" => Ok(Self::Verifying),
 			"verified" => Ok(Self::Verified),
 			"suspended" => Ok(Self::Suspended),
-			_ => Err(Invalid(format!("state {raw:?}: one of draft, verifying, verified, suspended"))),
+			_ => Err(Invalid::new(format!("state {raw:?}: one of draft, verifying, verified, suspended"))),
 		}
 	}
 }
@@ -163,7 +160,7 @@ impl TryFrom<State> for OnGoogle {
 
 	fn try_from(s: State) -> Result<Self, Invalid> {
 		match s {
-			State::Draft => Err(Invalid("a GBP on Google is verifying, verified or suspended; a draft is created by its name".to_owned())),
+			State::Draft => Err(Invalid::new("a GBP on Google is verifying, verified or suspended; a draft is created by its name".to_owned())),
 			State::Verifying => Ok(Self::Verifying),
 			State::Verified => Ok(Self::Verified),
 			State::Suspended => Ok(Self::Suspended),

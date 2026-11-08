@@ -30,7 +30,7 @@ use axum::{
 	response::{IntoResponse, Response},
 };
 use jiff::Timestamp;
-use sa_gbp::{Country, State as GbpState};
+use sa_core::gbp::{Country, State as GbpState};
 use sa_panel::{
 	Panel,
 	gmbs::{Edit, Existing, Gmail, Gmb},

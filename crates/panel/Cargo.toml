@@ -22,8 +22,7 @@ hex.workspace = true
 jiff = { workspace = true, features = ["serde"] }
 sa_alerts.workspace = true
 sa_auth.workspace = true
-sa_core.workspace = true
-sa_gbp = { workspace = true, features = ["ts"] }
+sa_core = { workspace = true, features = ["ts"] }
 sa_places.workspace = true
 serde.workspace = true
 serde_json.workspace = true

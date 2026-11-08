@@ -6,7 +6,7 @@ use std::path::Path;
 use ev_lib::ts_gen::Ts;
 use sa_alerts::Rule;
 use sa_auth::{Catalog, SourceKind};
-use sa_gbp::OnGoogle;
+use sa_core::gbp::OnGoogle;
 use sa_panel::tokens::Kind;
 use sa_server::{
 	access::AccessRequestDto,
