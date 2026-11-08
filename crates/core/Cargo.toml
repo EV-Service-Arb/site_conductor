@@ -17,7 +17,7 @@ utoipa = ["dep:utoipa"]
 [dependencies]
 hex.workspace = true
 hmac.workspace = true
-jiff.workspace = true
+jiff = { workspace = true, features = ["serde"] }
 sa_alerts.workspace = true
 sa_auth.workspace = true
 serde.workspace = true

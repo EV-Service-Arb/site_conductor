@@ -26,9 +26,10 @@ use axum::{
 };
 use jiff::Timestamp;
 use sa_auth::{Principal, Service};
+use sa_core::tokens::ChargePage;
 use sa_panel::{
 	Panel,
-	tokens::{Change, ChargePage, Entry, Kickback, Owed},
+	tokens::{Change, Entry, Kickback, Owed},
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;

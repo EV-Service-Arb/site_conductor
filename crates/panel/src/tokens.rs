@@ -18,9 +18,8 @@ use eyre::WrapErr;
 use jiff::{Timestamp, civil::Date, tz::TimeZone};
 use sa_core::{
 	gbp::Snapshot,
-	tokens::{Renewal, split},
+	tokens::{ChargePage, Renewal, split},
 };
-use serde::Deserialize;
 use sqlx::SqliteConnection;
 use uuid::Uuid;
 
@@ -39,28 +38,6 @@ use crate::{
 
 /// How many days `usage` reads, today's included.
 pub const USAGE_DAYS: i64 = 30;
-
-/// One of review_archive's charges (`GET /api/conductor/charges`).
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Charge {
-	pub id: i64,
-	/// review_archive's, e.g. `run:42`.
-	pub key: String,
-	pub payers: Vec<Uuid>,
-	pub spent: i64,
-	/// Each payer is owed back what they paid.
-	pub kick_back: bool,
-	pub label: String,
-	pub at: Timestamp,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ChargePage {
-	pub charges: Vec<Charge>,
-	pub next: i64,
-}
 
 /// An admin's change to a balance.
 #[derive(Clone, Debug)]

@@ -32,7 +32,8 @@ crates/core/             no I/O: a GBP's states and moves, its country and langu
                          snapshot the services are told (`gbp`; review_archive takes it too),
                          brand ids, the HMAC of a signed request and its window, the
                          conductor's own alert messages, the buttons' signed data, retry and
-                         pacing, tokens' renewal and a charge's split
+                         pacing, tokens' renewal and a charge's split, and the charge feed's
+                         page (`tokens::ChargePage`; review_archive takes it too)
 crates/panel/            the engine: `Panel` (sources and their authentication, sessions, access
                          requests, the hubs' state), `seal` (XChaCha20-Poly1305 at rest), `store`
                          (SQLite, migrations/ applied on open, writes BEGIN IMMEDIATE), `alerts`
@@ -442,6 +443,7 @@ after the fact.
 
 ```text
 follow (10 s)   GET review_archive /api/conductor/charges?after=<cursor>&limit=500 (Conductor)
+                → an `sa_core::tokens::ChargePage`
                 → one write transaction, taken only if the cursor is still `after`: each charge's
                 payers (subs) renewed, its cost split over them within their balances, a
                 `charge` row each (service, key `run:<id>`, label), what a failed walk owes back

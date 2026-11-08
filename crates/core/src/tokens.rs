@@ -1,7 +1,10 @@
-//! A person's tokens: how a balance renews, and how a charge falls on its payers. Balances are a
-//! ledger's sum; this is the arithmetic, the ledger is the engine's.
+//! A person's tokens: how a balance renews, how a charge falls on its payers, and the charge feed
+//! review_archive serves (`GET /api/conductor/charges`). Balances are a ledger's sum; this is the
+//! arithmetic, the ledger is the engine's.
 
 use jiff::{SignedDuration, Timestamp};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// How balances renew.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -62,6 +65,39 @@ pub fn split<W: Clone>(cost: i64, payers: &[(W, i64)]) -> Vec<(W, i64)> {
 		})
 		.filter(|(_, paid)| *paid > 0)
 		.collect()
+}
+
+/// What a walk cost, for the conductor to charge.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Charge {
+	/// Ascending, never reused.
+	pub id: i64,
+	/// `run:<run id>`.
+	pub key: String,
+	/// Who pays, by `sub`; never empty.
+	pub payers: Vec<Uuid>,
+	/// Tokens; more than 0.
+	pub spent: i64,
+	/// The run failed or met a failure: what each paid is owed back.
+	pub kick_back: bool,
+	/// The place, as the ledger names it.
+	pub label: String,
+	/// When the run ended.
+	#[cfg_attr(feature = "utoipa", schema(value_type = String, format = DateTime))]
+	pub at: Timestamp,
+}
+
+/// A page of the charge feed.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(deny_unknown_fields)]
+pub struct ChargePage {
+	/// Ascending by id.
+	pub charges: Vec<Charge>,
+	/// The last id of the page; `after` for an empty one.
+	pub next: i64,
 }
 
 #[cfg(test)]
