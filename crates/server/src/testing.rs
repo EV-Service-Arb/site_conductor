@@ -96,6 +96,7 @@ pub fn services(base: &str) -> Services {
 		review_archive: base.parse().unwrap(),
 		playbook: base.parse().unwrap(),
 		sites: base.parse().unwrap(),
+		placement: Some(base.parse().unwrap()),
 		signer: SEED.parse().unwrap(),
 	})
 }

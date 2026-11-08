@@ -11,6 +11,8 @@
 //! /playbook_mcp/authorize          → playbook (same path)       session + assertion; its consent form
 //!                                                               POST carries playbook's own nonce
 //! /playbook_mcp/*, two .well-known → playbook (same path)       open: OAuth and bearer, no cookie
+//! /api/placement/*                 → placement /*               session + assertion; CSRF on writes
+//! /placement/mfe/*                 → placement /mfe/*           open: the map overlay's module
 //! ```
 //!
 //! [`Services`] is the one client and signing key every call to a service goes through: the
@@ -36,7 +38,7 @@ use crate::{
 };
 
 /// Longest prefixes first: the first match wins.
-const ROUTES: [Route; 9] = [
+const ROUTES: [Route; 11] = [
 	Route {
 		prefix: "/api/sites",
 		upstream: "/api/v1",
@@ -91,6 +93,18 @@ const ROUTES: [Route; 9] = [
 		service: Service::Playbook,
 		gate: Gate::Open,
 	},
+	Route {
+		prefix: "/api/placement",
+		upstream: "",
+		service: Service::Placement,
+		gate: Gate::Session(Writes::Csrf),
+	},
+	Route {
+		prefix: "/placement/mfe",
+		upstream: "/mfe",
+		service: Service::Placement,
+		gate: Gate::Open,
+	},
 ];
 
 /// The services that serve their Grafana dashboards at `GET /dashboards` (docs/ARCHITECTURE.md,
@@ -134,6 +148,8 @@ pub struct Upstreams {
 	pub review_archive: Uri,
 	pub playbook: Uri,
 	pub sites: Uri,
+	/// gmaps_optimal_placement: optional, apart from the other three.
+	pub placement: Option<Uri>,
 	pub signer: Signer,
 }
 
@@ -170,6 +186,7 @@ impl Services {
 			Service::ReviewArchive => &self.upstreams.review_archive,
 			Service::Playbook => &self.upstreams.playbook,
 			Service::Sites => &self.upstreams.sites,
+			Service::Placement => self.upstreams.placement.as_ref().expect("`pass` answers placement's routes itself without it"),
 		};
 		let uri: Uri = format!("{}{path_and_query}", base.to_string().trim_end_matches('/'))
 			.parse()
@@ -257,6 +274,9 @@ impl Forward {
 	}
 
 	async fn pass(&self, route: &Route, req: Request, principal: Option<Principal>) -> Response {
+		if route.service == Service::Placement && self.services.upstreams.placement.is_none() {
+			return json_error(StatusCode::SERVICE_UNAVAILABLE, "placement not connected");
+		}
 		let rest = &req.uri().path()[route.prefix.len()..];
 		// decoded as a service might, so no route reaches above its upstream prefix
 		let decoded = rest.to_ascii_lowercase().replace("%2e", ".").replace("%2f", "/").replace("%5c", "/").replace('\\', "/");
@@ -395,5 +415,8 @@ mod tests {
 		assert_eq!(route("/api/sites/leads"), Some(("/api/sites", Gate::Session(Writes::Csrf))));
 		assert_eq!(route("/sites/mfe/mfe-sites.js"), Some(("/sites/mfe", Gate::Open)));
 		assert_eq!(route("/sites/leads"), None, "the page is the front end's");
+		assert_eq!(route("/api/placement/payload/cleaning/Lyon"), Some(("/api/placement", Gate::Session(Writes::Csrf))));
+		assert_eq!(route("/placement/mfe/overlay.js"), Some(("/placement/mfe", Gate::Open)));
+		assert_eq!(route("/placement"), None, "no page of its own");
 	}
 }

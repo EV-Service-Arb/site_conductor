@@ -105,7 +105,15 @@ pub enum Mcp {
 	Use,
 }
 
-alias!(pub SA_OPERATOR = "sa:operator", [Work::Read, Leads::Edit, Pii::See, Analysis::Read]);
+/// gmaps_optimal_placement's studies: `Read` what is already paid for, `Spend` Places searches on more.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Permission)]
+#[permission("sa:placement:study")]
+pub enum Study {
+	Read,
+	Spend,
+}
+
+alias!(pub SA_OPERATOR = "sa:operator", [Work::Read, Leads::Edit, Pii::See, Analysis::Read, Study::Read]);
 // Held by every member of the `sa` scope, without a grant (concierge's `<namespace>:everyone`).
 alias!(pub SA_EVERYONE = "sa:everyone", [Mcp::Use]);
 alias!(
@@ -124,6 +132,8 @@ alias!(
 		Tokens::Grant,
 		Members::ActAs,
 		Mcp::Use,
+		Study::Read,
+		Study::Spend,
 	],
 	delegates [SA_OPERATOR]
 );
@@ -135,6 +145,7 @@ pub enum Service {
 	ReviewArchive,
 	Playbook,
 	Sites,
+	Placement,
 }
 
 impl Service {
@@ -144,6 +155,7 @@ impl Service {
 			Self::ReviewArchive => "sa:review_archive:",
 			Self::Playbook => "sa:playbook:",
 			Self::Sites => "sa:sites:",
+			Self::Placement => "sa:placement:",
 		}
 	}
 }

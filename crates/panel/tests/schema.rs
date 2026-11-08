@@ -313,7 +313,7 @@ async fn the_sites_tables_go_and_sent_buttons_name_their_calls() {
 #[tokio::test]
 async fn telegram_roles_become_permissions_both_ways() {
 	const PERMISSIONS: i64 = 20261006090000;
-	// `sa:admin` as the migration wrote it: the alias of that day, frozen (re-spelled under
+	// `sa:admin` and `sa:operator` as the migration wrote them: the aliases of that day, frozen (re-spelled under
 	// `sa:sites:` since). A permission added to the alias since (`sa:sites:work:invoices:create`)
 	// reaches a link when concierge is next asked.
 	const ADMIN_WHEN_WRITTEN: &[&str] = &[
@@ -330,6 +330,7 @@ async fn telegram_roles_become_permissions_both_ways() {
 		"sa:sites:work:pricing:edit",
 		"sa:sites:work:read",
 	];
+	const OPERATOR_WHEN_WRITTEN: &[&str] = &["sa:sites:analysis:read", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:read"];
 	let db = TestDb::create().await;
 	let pool = db.pool().await;
 	let migrator = sqlx::migrate!("./migrations");
@@ -361,7 +362,7 @@ async fn telegram_roles_become_permissions_both_ways() {
 	let alias = |a: &[&str]| a.iter().copied().collect::<PermissionSet>();
 	let links = "SELECT permissions FROM telegram_links WHERE user_id = $1";
 	let (operator, raw) = held(links, ann).await;
-	assert_eq!(operator, alias(SA_OPERATOR.members));
+	assert_eq!(operator, alias(OPERATOR_WHEN_WRITTEN));
 	assert_eq!(raw, serde_json::to_string(&operator).unwrap(), "written as the panel writes a set");
 	assert_eq!(held(links, bob).await.0, alias(ADMIN_WHEN_WRITTEN));
 	assert_eq!(held("SELECT permissions FROM telegram_link_tokens WHERE user_id = $1", bob).await.0, alias(ADMIN_WHEN_WRITTEN));
