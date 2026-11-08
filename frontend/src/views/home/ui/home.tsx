@@ -4,7 +4,7 @@ import { Skeleton, cn } from "@evinvest/uikit";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { type LatLng, type Listed, type MapConfig, type Tags, fetchMapConfig, issueOf, narrowed, peek, setOnMap, useGmails, useGmbTags, useOnMap, usePeeked, useSelection } from "@/entities/gmb";
+import { type LatLng, type Listed, type MapConfig, type State, type Tags, fetchMapConfig, issueOf, narrowed, peek, setOnMap, useGmails, useGmbTags, useOnMap, usePeeked, useSelection } from "@/entities/gmb";
 import { PlacingBar } from "@/features/place-gmb";
 import { PlacementOverlay } from "@/features/placement-overlay";
 import { takeReturnPage } from "@/shared/api";
@@ -185,10 +185,17 @@ function GmbMap({ config }: { config: MapConfig }) {
   );
 }
 
-// a teardrop standing on its point, apart from the competitors' dots the placement overlay draws
-const TEARDROP = `<svg viewBox="0 0 24 32" class="block h-7 w-5 drop-shadow-md" aria-hidden="true"><path d="M12 31s-10-11.6-10-19a10 10 0 0 1 20 0c0 7.4-10 19-10 19z" stroke-width="2"/><circle cx="12" cy="12" r="3.5"/></svg>`;
+// ours are white teardrops standing on their point, apart from the competitors' dots the placement overlay draws
+const TEARDROP = `<svg viewBox="0 0 28 34" class="block h-8 w-7 overflow-visible drop-shadow-md" aria-hidden="true"><path d="M14 33s-10-11.6-10-19a10 10 0 0 1 20 0c0 7.4-10 19-10 19z" stroke-width="1.5"/><circle data-core cx="14" cy="14" r="4"/><circle data-badge cx="22" cy="5" r="4" stroke-width="1.5"/></svg>`;
 
-/** A pin is red while its GMB needs the operator, faded while it is off, and hollow where its point was placed by hand. */
+const CORE: Record<State, string> = {
+  draft: "[&_[data-core]]:fill-positive",
+  verifying: "[&_[data-core]]:fill-accent-warn",
+  verified: "[&_[data-core]]:fill-positive",
+  suspended: "[&_[data-core]]:fill-white",
+};
+
+/** A pin's body is white (red while suspended), its core its state; a badge while it needs the operator; grey while off; dashed where its point was placed by hand. */
 function styleDots(
   made: Map<number, { dot: HTMLSpanElement; listed: Listed }>,
   { hovered, peeked, tags }: { hovered: number | null; peeked: number | null; tags: Tags },
@@ -198,13 +205,15 @@ function styleDots(
     const issue = issueOf(listed.gmb, tags);
     const tone = issue === "off" ? "ink-soft" : issue !== null ? "negative" : "positive";
     const hollow = listed.gmb.location?.placed === true;
+    const state = listed.gmb.state;
     dot.className = cn(
-      "block origin-bottom cursor-pointer transition-transform",
-      { negative: "text-accent-error", positive: "text-positive", "ink-soft": "text-ink-soft" }[tone],
-      hollow ? "[&_path]:fill-background [&_path]:stroke-current [&_circle]:fill-current" : "[&_path]:fill-current [&_path]:stroke-background [&_circle]:fill-background",
-      issue === "off" && !lit && "opacity-50",
+      "block origin-bottom cursor-pointer transition-transform [&_path]:stroke-background",
+      issue === "off" ? "[&_path]:fill-ink-soft [&_[data-core]]:fill-background" : [state === "suspended" ? "[&_path]:fill-accent-error" : "[&_path]:fill-white", CORE[state]],
+      hollow && "[&_path]:[stroke-dasharray:3_2] [&_path]:stroke-ink",
+      tone === "negative" ? "[&_[data-badge]]:fill-accent-error [&_[data-badge]]:stroke-background" : "[&_[data-badge]]:hidden",
+      issue === "off" && !lit && "opacity-60",
       lit && "scale-125",
-      id === peeked && "[&_path]:stroke-ink",
+      id === peeked && "[&_path]:stroke-ink [&_path]:[stroke-width:2.5]",
     );
     dot.style.zIndex = lit ? "2" : issue === "off" ? "0" : "1";
   }
