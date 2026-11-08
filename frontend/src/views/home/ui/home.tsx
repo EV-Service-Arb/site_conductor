@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { type LatLng, type Listed, type MapConfig, type Tags, fetchMapConfig, issueOf, narrowed, peek, setOnMap, useGmails, useGmbTags, useOnMap, usePeeked, useSelection } from "@/entities/gmb";
 import { PlacingBar } from "@/features/place-gmb";
+import { PlacementOverlay } from "@/features/placement-overlay";
 import { takeReturnPage } from "@/shared/api";
 import { useT } from "@/shared/i18n";
 import { setQuery, useQuery } from "@/shared/lib/query";
@@ -116,10 +117,11 @@ function GmbMap({ config }: { config: MapConfig }) {
     for (const l of locatedRef.current) {
       const dot = document.createElement("span");
       dot.title = l.gmb.name;
+      dot.innerHTML = TEARDROP;
       dot.addEventListener("mouseenter", () => setOnMap({ hovered: l.gmb.id }));
       dot.addEventListener("mouseleave", () => setOnMap({ hovered: null }));
       dot.addEventListener("click", () => peek(l.gmb.id));
-      made.set(l.gmb.id, { remove: pin(map.map, dot, l.gmb.location!).remove, dot, listed: l });
+      made.set(l.gmb.id, { remove: pin(map.map, dot, l.gmb.location!, { anchor: "tip" }).remove, dot, listed: l });
     }
     styleDots(made, styling.current);
     return () => {
@@ -150,7 +152,7 @@ function GmbMap({ config }: { config: MapConfig }) {
     dot.title = gmb.name;
     dot.className = "block size-5 rounded-full border-2 border-background bg-accent-error shadow-md ring-2 ring-ink";
     dot.style.zIndex = "3";
-    placingPin.current = pin(map.map, dot, at, move);
+    placingPin.current = pin(map.map, dot, at, { onDrag: move });
     move(at);
     return () => {
       click.remove();
@@ -171,6 +173,7 @@ function GmbMap({ config }: { config: MapConfig }) {
   return (
     <>
       <div ref={host} className="absolute inset-0" />
+      {map.status === "ok" && <PlacementOverlay map={map.map} />}
       {map.status === "error" && (
         <div className="absolute inset-x-6 top-6">
           <ErrorState failure={{ kind: "invalid", message: map.message }} />
@@ -181,6 +184,9 @@ function GmbMap({ config }: { config: MapConfig }) {
     </>
   );
 }
+
+// a teardrop standing on its point, apart from the competitors' dots the placement overlay draws
+const TEARDROP = `<svg viewBox="0 0 24 32" class="block h-7 w-5 drop-shadow-md" aria-hidden="true"><path d="M12 31s-10-11.6-10-19a10 10 0 0 1 20 0c0 7.4-10 19-10 19z" stroke-width="2"/><circle cx="12" cy="12" r="3.5"/></svg>`;
 
 /** A pin is red while its GMB needs the operator, faded while it is off, and hollow where its point was placed by hand. */
 function styleDots(
@@ -193,13 +199,12 @@ function styleDots(
     const tone = issue === "off" ? "ink-soft" : issue !== null ? "negative" : "positive";
     const hollow = listed.gmb.location?.placed === true;
     dot.className = cn(
-      "block size-3.5 rounded-full border-2 shadow-md transition-transform",
-      hollow ? "bg-background" : "border-background",
-      hollow && { negative: "border-accent-error", positive: "border-positive", "ink-soft": "border-ink-soft" }[tone],
-      !hollow && { negative: "bg-accent-error", positive: "bg-positive", "ink-soft": "bg-ink-soft" }[tone],
+      "block origin-bottom cursor-pointer transition-transform",
+      { negative: "text-accent-error", positive: "text-positive", "ink-soft": "text-ink-soft" }[tone],
+      hollow ? "[&_path]:fill-background [&_path]:stroke-current [&_circle]:fill-current" : "[&_path]:fill-current [&_path]:stroke-background [&_circle]:fill-background",
       issue === "off" && !lit && "opacity-50",
-      lit && "scale-150",
-      id === peeked && "ring-2 ring-ink",
+      lit && "scale-125",
+      id === peeked && "[&_path]:stroke-ink",
     );
     dot.style.zIndex = lit ? "2" : issue === "off" ? "0" : "1";
   }

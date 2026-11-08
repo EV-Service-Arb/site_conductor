@@ -8,16 +8,39 @@ import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { type RefObject, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 const PLACES_KEY = "sa:map-places";
-const PLACES_EVENT = "sa:map-places-chosen";
+const BASE_KEY = "sa:map-base";
+const CHOSEN_EVENT = "sa:map-view-chosen";
 const PLACES_HIDDEN: google.maps.MapTypeStyle[] = [
   { featureType: "poi", stylers: [{ visibility: "off" }] },
   { featureType: "transit", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
 ];
+// Google's own dark scheme is navy; the heat's warm ramp and the pressure's blue read on grey
+const DARK: google.maps.MapTypeStyle[] = [
+  { elementType: "geometry", stylers: [{ color: "#1d1d1d" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#1d1d1d" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#8c8c8c" }] },
+  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#3a3a3a" }] },
+  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#b4b4b4" }] },
+  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#222222" }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#262626" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#202420" }] },
+  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#2e2e2e" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#1a1a1a" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9a9a9a" }] },
+  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#3d3d3d" }] },
+  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2a2a2a" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f0f0f" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#505050" }] },
+];
+
+export type Base = "schematic" | "satellite";
 
 const placesShown = () => localStorage.getItem(PLACES_KEY) === "shown";
-const placesStyles = () => (placesShown() ? [] : PLACES_HIDDEN);
+const baseChosen = (): Base => (localStorage.getItem(BASE_KEY) === "satellite" ? "satellite" : "schematic");
+const mapTypeId = () => (baseChosen() === "satellite" ? "hybrid" : "roadmap");
 
-let made: { key: string; element: HTMLDivElement; map: Promise<google.maps.Map> } | null = null;
+let made: { key: string; scheme: "dark" | "light"; element: HTMLDivElement; map: Promise<google.maps.Map> } | null = null;
+const styles = (scheme: "dark" | "light") => [...(scheme === "dark" ? DARK : []), ...(placesShown() ? [] : PLACES_HIDDEN)];
 
 function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Promise<google.maps.Map> } {
   if (made !== null) {
@@ -34,7 +57,8 @@ function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Pr
       new Map(element, {
         renderingType: RenderingType.RASTER,
         colorScheme: scheme === "dark" ? ColorScheme.DARK : ColorScheme.LIGHT,
-        styles: placesStyles(),
+        styles: styles(scheme),
+        mapTypeId: mapTypeId(),
         // the world, until the page fits what it shows
         center: { lat: 0, lng: 0 },
         zoom: 2,
@@ -45,7 +69,7 @@ function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Pr
         clickableIcons: false,
       }),
   );
-  made = { key, element, map };
+  made = { key, scheme, element, map };
   return made;
 }
 
@@ -73,29 +97,51 @@ export function useTheMap(key: string): { host: RefObject<HTMLDivElement | null>
   return { host, map };
 }
 
-const subscribePlaces = (onChange: () => void) => {
-  for (const e of ["storage", PLACES_EVENT]) window.addEventListener(e, onChange);
+const subscribeChosen = (onChange: () => void) => {
+  for (const e of ["storage", CHOSEN_EVENT]) window.addEventListener(e, onChange);
   return () => {
-    for (const e of ["storage", PLACES_EVENT]) window.removeEventListener(e, onChange);
+    for (const e of ["storage", CHOSEN_EVENT]) window.removeEventListener(e, onChange);
   };
+};
+
+const chosen = () => {
+  window.dispatchEvent(new Event(CHOSEN_EVENT));
+  if (made === null) return;
+  const scheme = made.scheme;
+  void made.map.then((m) => m.setOptions({ styles: styles(scheme), mapTypeId: mapTypeId() }));
 };
 
 /** Whether the map shows Google's own places (shops, sights, stops); hidden unless chosen, kept in this browser. */
 export function usePlacesShown(): boolean {
-  return useSyncExternalStore(subscribePlaces, placesShown, () => false);
+  return useSyncExternalStore(subscribeChosen, placesShown, () => false);
 }
 
 export function showPlaces(shown: boolean): void {
   if (shown) localStorage.setItem(PLACES_KEY, "shown");
   else localStorage.removeItem(PLACES_KEY);
-  window.dispatchEvent(new Event(PLACES_EVENT));
-  void made?.map.then((m) => m.setOptions({ styles: placesStyles() }));
+  chosen();
 }
 
-/** `element` centred on a point of `map` until removed, its clicks the map's no more; dragged where `onDrag` is given. */
-export function pin(map: google.maps.Map, element: HTMLElement, at: google.maps.LatLngLiteral, onDrag?: (to: google.maps.LatLngLiteral) => void): { move: (to: google.maps.LatLngLiteral) => void; remove: () => void } {
+/** Google's roads or its imagery under everything drawn; schematic unless chosen, kept in this browser. */
+export function useBase(): Base {
+  return useSyncExternalStore(subscribeChosen, baseChosen, () => "schematic");
+}
+
+export function setBase(base: Base): void {
+  if (base === "satellite") localStorage.setItem(BASE_KEY, "satellite");
+  else localStorage.removeItem(BASE_KEY);
+  chosen();
+}
+
+/** `element` centred on a point of `map` (or standing on it by its bottom tip) until removed, its clicks the map's no more; dragged where `onDrag` is given. */
+export function pin(
+  map: google.maps.Map,
+  element: HTMLElement,
+  at: google.maps.LatLngLiteral,
+  { anchor = "centre", onDrag }: { anchor?: "centre" | "tip"; onDrag?: (to: google.maps.LatLngLiteral) => void } = {},
+): { move: (to: google.maps.LatLngLiteral) => void; remove: () => void } {
   element.style.position = "absolute";
-  element.style.transform = "translate(-50%, -50%)";
+  element.style.transform = anchor === "tip" ? "translate(-50%, -100%)" : "translate(-50%, -50%)";
   google.maps.OverlayView.preventMapHitsAndGesturesFrom(element);
   const overlay = new (class extends google.maps.OverlayView {
     override onAdd() {
