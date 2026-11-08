@@ -41,7 +41,7 @@ describe("a need held", () => {
     ["sa:sites:work:read", ["sa:sites:work:read"], true],
     ["sa:sites:work:read", [], false],
     ["sa:operator", ["sa:sites:work:read", "sa:sites:work:leads:edit", "sa:sites:work:pii:see"], false],
-    ["sa:operator", ["sa:sites:analysis:read", "sa:sites:work:read", "sa:sites:work:leads:edit", "sa:sites:work:pii:see"], true],
+    ["sa:operator", ["sa:sites:analysis:read", "sa:sites:work:read", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:placement:study:read"], true],
   ] as const)("%s by %j: %s", (need, permissions, want) => {
     expect(holds([...permissions], need)).toBe(want);
   });

@@ -3,12 +3,12 @@
 import { useSyncExternalStore } from "react";
 
 /** The query keys the conductor keeps its own state in: a reload or a shared link opens the page as it was left. */
-export type QueryKey = "gmbs" | "gmail" | "find" | "issue" | "assistant" | "gmb" | "at" | "chat";
+export type QueryKey = "gmbs" | "gmail" | "find" | "issue" | "assistant" | "gmb" | "at" | "chat" | "heat" | "trade" | "pressure" | "competitors";
 type Query = Readonly<Record<QueryKey, string | null>>;
 
 /** The outline's and the assistant's: they are beside every page, so they follow it from page to page. */
 const CARRIED: readonly QueryKey[] = ["gmbs", "gmail", "find", "issue", "assistant"];
-const KEYS: readonly QueryKey[] = [...CARRIED, "gmb", "at", "chat"];
+const KEYS: readonly QueryKey[] = [...CARRIED, "gmb", "at", "chat", "heat", "trade", "pressure", "competitors"];
 
 let state: Query | undefined;
 const listeners = new Set<() => void>();

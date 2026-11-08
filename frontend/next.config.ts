@@ -25,6 +25,7 @@ export default function config(phase: string): NextConfig {
           { source: "/auth/:path*", destination: `${backend}/auth/:path*` },
           { source: "/sites/mfe/:path*", destination: `${backend}/sites/mfe/:path*` },
           { source: "/review_archive/mfe/:path*", destination: `${backend}/review_archive/mfe/:path*` },
+          { source: "/placement/mfe/:path*", destination: `${backend}/placement/mfe/:path*` },
           { source: "/grafana/", destination: `${backend}/grafana/` }, // `:path*` empty drops the slash: /grafana, unrouted
           { source: "/grafana/:path*", destination: `${backend}/grafana/:path*` },
           // an element's views are its page, as `panel serve` answers them (web.rs, ELEMENT_PAGES)

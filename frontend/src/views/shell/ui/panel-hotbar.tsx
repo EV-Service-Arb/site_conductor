@@ -1,12 +1,13 @@
 "use client";
 
 import { Hotbar, type HotbarAction, StatusItem, type StatusTone, useBinding } from "@evinvest/uikit";
-import { MapPin } from "lucide-react";
+import { Layers, MapPin, Satellite } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { useT } from "@/shared/i18n";
 import type { LiveStatus } from "@/shared/lib/live";
-import { showPlaces, usePlacesShown } from "@/shared/map";
+import { MapPanel, MapPreview } from "@/features/placement-overlay";
+import { setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
 
 const LIVE_TONE: Record<LiveStatus, StatusTone> = { live: "positive", connecting: "neutral", reconnecting: "warn", offline: "error", paused: "muted", closed: "error" };
 
@@ -16,14 +17,23 @@ export function PanelHotbar({ live }: { live: LiveStatus }) {
   const pathname = usePathname();
   const places = usePlacesShown();
   const onMap = pathname === "/";
+  const satellite = useBase() === "satellite";
   const togglePlaces = () => showPlaces(!places);
+  const toggleBase = () => setBase(satellite ? "schematic" : "satellite");
   useBinding({ on: { key: "p" }, run: { id: "places", label: t("hotbar.places"), run: onMap ? togglePlaces : null } });
-  const actions: HotbarAction[] = onMap ? [{ id: "places", label: t("hotbar.places"), icon: MapPin, binding: "places", pressed: places, onSelect: togglePlaces }] : [];
+  useBinding({ on: { key: "b" }, run: { id: "base", label: t("hotbar.base"), run: onMap ? toggleBase : null } });
+  const actions: HotbarAction[] = onMap
+    ? [
+        { id: "map", label: t("placement.title"), icon: Layers, panel: <MapPanel />, preview: <MapPreview /> },
+        { id: "base", label: t("hotbar.base"), icon: Satellite, binding: "base", pressed: satellite, onSelect: toggleBase },
+        { id: "places", label: t("hotbar.places"), icon: MapPin, binding: "places", pressed: places, onSelect: togglePlaces },
+      ]
+    : [];
   return (
     <Hotbar
       actions={actions}
       status={<StatusItem tone={LIVE_TONE[live]}>{t(`live.${live}`)}</StatusItem>}
-      labels={{ region: t("hotbar"), customize: t("hotbar.customize"), title: t("hotbar.title"), description: t("hotbar.description"), reset: t("hotbar.reset"), done: t("hotbar.done") }}
+      labels={{ region: t("hotbar"), customize: t("hotbar.customize"), title: t("hotbar.title"), description: t("hotbar.description"), reset: t("hotbar.reset"), done: t("hotbar.done"), hide: t("hotbar.hide") }}
     />
   );
 }
