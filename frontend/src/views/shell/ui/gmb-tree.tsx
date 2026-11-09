@@ -189,7 +189,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
               className={cn(
                 "rounded-full border px-2 py-0.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 only === i ? "border-ink bg-ink text-background" : "border-border hover:bg-hover/50",
-                only !== i && (i === "off" ? "text-ink-soft" : "text-accent-error"),
+                only !== i && (i === "off" || i === "draft" ? "text-ink-soft" : "text-accent-error"),
               )}
             >
               {t(`gmbs.issue.${i}`)} <span className="tabular-nums">{counts.get(i)}</span>
@@ -392,7 +392,6 @@ function Scope({ data, selection, onFlip, onChanged }: { data: Gmails; selection
                     {g.gmail}
                   </button>
                   <span className={cn("flex items-center", ON_HOVER)}>
-                    <RoleSelect gmail={g} onChanged={onChanged} />
                     <AddGmbButton gmailId={g.id} onAdded={onChanged} />
                     <Remove title={t("gmbs.gmail.remove.title", { gmail: g.gmail })} body={t("gmbs.gmail.remove.body")} remove={() => removeGmail(g.id)} onRemoved={onChanged} />
                   </span>
@@ -401,6 +400,10 @@ function Scope({ data, selection, onFlip, onChanged }: { data: Gmails; selection
                 </div>
                 {unfolded && (
                   <ul className="ml-4 flex flex-col border-l border-border pl-1">
+                    <li className="flex items-center gap-2 px-2 py-1 text-xs text-ink-soft">
+                      <RoleSelect gmail={g} onChanged={onChanged} />
+                      {t("gmbs.gmail.role.hint")}
+                    </li>
                     {gmbs.length === 0 && <li className="px-2 py-1.5 text-xs text-ink-soft">{t("gmbs.gmail.empty")}</li>}
                     {gmbs.map((b) => {
                       const picked = chosen !== null && isSelected(b.id);
@@ -519,6 +522,7 @@ function GmbRow({
         ? site && { text: String(site.leads_7d), title: t("gmbs.leads7d.title"), tone: "text-ink-soft" }
         : archive?.rating != null && { text: `★ ${archive.rating.toFixed(1)}`, title: t("gmbs.rating.title"), tone: "text-ink-soft" };
   const shown = issue === "draft" ? null : issue;
+  const where = [gmb.address, showGmail ? gmail?.gmail : null].filter(Boolean).join(" · ");
   const label = (
     <>
       <span className="flex items-baseline gap-2">
@@ -530,10 +534,11 @@ function GmbRow({
         )}
       </span>
       <span className="block truncate text-xs text-ink-soft">
-        {gmb.state !== "verified" && <span className={cn("font-medium", gmb.state === "suspended" && "text-accent-error")}>{t(`gmbs.state.${gmb.state}`)} · </span>}
+        {gmb.state !== "verified" && <span className={cn("font-medium", gmb.state === "suspended" && "text-accent-error")}>{t(`gmbs.state.${gmb.state}`)}</span>}
+        {gmb.state !== "verified" && (shown || where) && " · "}
         {shown && <span className={cn("font-medium", shown === "off" ? "text-ink-soft" : "text-accent-error")}>{issueText(shown, gmb, tags, t)}</span>}
-        {shown && (gmb.address || (showGmail && gmail)) && " · "}
-        {[gmb.address, showGmail ? gmail?.gmail : null].filter(Boolean).join(" · ")}
+        {shown && where && " · "}
+        {where}
       </span>
     </>
   );

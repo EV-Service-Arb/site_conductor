@@ -231,7 +231,7 @@ function styleDots(
   for (const [id, { dot, listed }] of made) {
     const lit = id === hovered || id === peeked;
     const issue = issueOf(listed.gmb, tags);
-    const tone = issue === "off" ? "ink-soft" : issue !== null ? "negative" : "positive";
+    const tone = issue === "off" ? "ink-soft" : issue !== null && issue !== "draft" ? "negative" : "positive";
     const hollow = listed.gmb.location?.placed === true;
     const state = listed.gmb.state;
     dot.className = cn(
