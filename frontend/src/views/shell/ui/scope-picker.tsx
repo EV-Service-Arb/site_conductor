@@ -1,7 +1,7 @@
 "use client";
 
 import { Input, NativeSelect, NativeSelectOption, Popover, PopoverContent, PopoverTrigger, Switch, cn } from "@evinvest/uikit";
-import { Check, ChevronDown, ChevronRight, ListFilter, Maximize2, Plus } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ListFilter, Maximize2, Plug, Plus } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { type MouseEvent, useEffect, useState } from "react";
 
@@ -21,6 +21,7 @@ import {
   chooseGmailScope,
   covers,
   inCategories,
+  openAccount,
   openTrade as openTradeHere,
   removeGmail,
   setGmailRole,
@@ -160,6 +161,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
                     <Room gmail={g} n={gmbs.length} />
                   </button>
                   <span className={cn("flex items-center", ON_HOVER)}>
+                    <OpenAccount gmail={g} onOpened={() => setOpen(false)} />
                     <AddGmbButton gmailId={g.id} trade={null} onAdded={onChanged} />
                     <Remove title={t("gmbs.gmail.remove.title", { gmail: g.gmail })} body={t("gmbs.gmail.remove.body")} remove={() => removeGmail(g.id)} onRemoved={onChanged} />
                   </span>
@@ -350,6 +352,29 @@ function OpenTrade({ trade, country, className, onOpened }: { trade: Trade; coun
       className={cn("rounded bg-background p-0.5 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring", className)}
     >
       <Maximize2 aria-hidden className="size-3" />
+    </button>
+  );
+}
+
+/** A gmail's own window, its connections, over the map as a trade's is. */
+function OpenAccount({ gmail, onOpened }: { gmail: Gmail; onOpened: () => void }) {
+  const t = useT();
+  const router = useRouter();
+  const pathname = usePathname();
+  const label = t("account.open", { gmail: gmail.gmail });
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onOpened();
+        if (pathname === "/") openAccount(gmail.id);
+        else router.push(`/?account=${gmail.id}&tab=connections`);
+      }}
+      aria-label={label}
+      title={label}
+      className="rounded p-1 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Plug aria-hidden className="size-3.5" />
     </button>
   );
 }

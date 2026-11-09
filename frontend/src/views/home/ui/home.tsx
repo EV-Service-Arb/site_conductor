@@ -15,8 +15,11 @@ import {
   issueOf,
   narrowed,
   open,
+  openAccount,
   peek,
   setOnMap,
+  under,
+  useAccountWindow,
   useGmails,
   useGmbTags,
   useOnMap,
@@ -36,6 +39,7 @@ import { pin, useTheMap } from "@/shared/map";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorState } from "@/shared/ui/error-state";
 
+import { AccountWindow } from "./account-window";
 import { Peek } from "./peek";
 import { TradeWindow } from "./trade-window";
 import { LocationWindow } from "./window";
@@ -203,6 +207,13 @@ function GmbMap({ config }: { config: MapConfig }) {
   useEffect(() => {
     if (gone) setQuery({ trade: null, tab: null });
   }, [gone]);
+  const accountWindow = useAccountWindow();
+  const account = accountWindow !== null && gmails.status === "ok" ? gmails.data.gmails.find((g) => g.id === accountWindow.gmail) : undefined;
+  // a gmail removed, here or in another tab: its window closes
+  const accountGone = accountWindow !== null && gmails.status === "ok" && account === undefined;
+  useEffect(() => {
+    if (accountGone) openAccount(null);
+  }, [accountGone]);
   useEffect(() => {
     const at = peekedListed?.gmb.location;
     if (map.status === "ok" && at) map.map.panTo(at);
@@ -220,6 +231,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       {peekedListed && placed === undefined && !windowed && <Peek listed={peekedListed} onClose={() => peek(null)} />}
       {peekedListed && placed === undefined && windowed && <LocationWindow listed={peekedListed} tab={tab} />}
       {opened && tradeWindow && gmails.status === "ok" && placed === undefined && <TradeWindow trade={opened} tab={tradeWindow.tab} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
+      {account && accountWindow && gmails.status === "ok" && placed === undefined && <AccountWindow gmail={account} tab={accountWindow.tab} gbps={under(gmails.data, account.id).length} />}
       {map.status === "ok" && placed !== undefined && placedAt !== null && <PlacingBar gmb={placed} map={map.map} at={placedAt} onMove={(at) => setMoved({ gmb: placed.id, at })} />}
     </>
   );

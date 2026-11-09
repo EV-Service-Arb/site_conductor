@@ -69,19 +69,6 @@ impl std::fmt::Display for Spent {
 /// The rotation's keys and which of them sit out, and the own keys sitting out (by digest: an own
 /// key is held only for the request that brings it).
 pub struct Keys(Mutex<Held>);
-
-struct Held {
-	rotation: Vec<(Zeroizing<String>, Option<Spent>)>,
-	own: HashMap<[u8; 32], Spent>,
-}
-
-/// Where a key handed out by [`Keys::next`] is from.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Tier {
-	Own,
-	Rotation,
-}
-
 impl Keys {
 	/// The rotation, `keys` in the order they are used in.
 	pub fn new(keys: Vec<String>) -> Self {
@@ -149,6 +136,18 @@ impl Keys {
 	pub(crate) fn back(&self, key: &str) {
 		self.0.lock().expect("never poisoned: no panic while held").own.remove(&digest(key));
 	}
+}
+
+struct Held {
+	rotation: Vec<(Zeroizing<String>, Option<Spent>)>,
+	own: HashMap<[u8; 32], Spent>,
+}
+
+/// Where a key handed out by [`Keys::next`] is from.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Tier {
+	Own,
+	Rotation,
 }
 
 fn digest(key: &str) -> [u8; 32] {

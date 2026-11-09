@@ -227,6 +227,17 @@ pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<boo
 	tokio::join!(follow, push);
 }
 
+/// Every request kind priced, in tokens.
+#[derive(Deserialize, TS)]
+#[ts(rename = "SetPrices")]
+#[serde(deny_unknown_fields)]
+pub struct SetPricesDto {
+	#[ts(type = "number")]
+	pub details: i64,
+	#[ts(type = "number")]
+	pub search: i64,
+}
+
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Freshness::{Cached, Fresh};
 	use Method as M;
@@ -371,17 +382,6 @@ async fn change(State(panel): State<Panel>, Extension(caller): Extension<Caller>
 
 async fn prices(State(panel): State<Panel>) -> ApiResult<Json<PricesDto>> {
 	Ok(Json(panel.prices().await?.into()))
-}
-
-/// Every request kind priced, in tokens.
-#[derive(Deserialize, TS)]
-#[ts(rename = "SetPrices")]
-#[serde(deny_unknown_fields)]
-pub struct SetPricesDto {
-	#[ts(type = "number")]
-	pub details: i64,
-	#[ts(type = "number")]
-	pub search: i64,
 }
 
 async fn set_prices(State(panel): State<Panel>, Extension(caller): Extension<Caller>, b: Result<Json<SetPricesDto>, JsonRejection>) -> ApiResult<Json<PricesDto>> {

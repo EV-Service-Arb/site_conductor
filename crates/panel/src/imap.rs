@@ -63,6 +63,7 @@ async fn exchange(host: &str, username: &str, password: &str) -> eyre::Result<Re
 	}
 	io.write_all(format!("a LOGIN {} {}\r\n", quoted(username), quoted(password)).as_bytes()).await?;
 	io.flush().await?;
+	//LOOP: untagged lines until the tagged answer; `login`'s timeout bounds it
 	let answer = loop {
 		line.clear();
 		if io.read_line(&mut line).await? == 0 {

@@ -4,7 +4,7 @@ import { Badge, Button, cn } from "@evinvest/uikit";
 import { ChevronDown, ChevronUp, Globe, Hash, Mail, MapPin, Phone, Send, X } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { CategoryChip, type Listed, MUST_HAVES, TABS, type Tab, open, readiness, useGmbTags, useSelection } from "@/entities/gmb";
+import { CategoryChip, type Listed, MUST_HAVES, TABS, type Tab, open, openAccount, readiness, useGmbTags, useSelection } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { setQuery } from "@/shared/lib/query";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -34,7 +34,7 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
     point && { icon: <MapPin aria-hidden />, text: point },
     gmb.phone && { icon: <Phone aria-hidden />, text: gmb.phone },
     site && { icon: <Globe aria-hidden />, text: `${site.brand}/${site.location}` },
-    gmail && { icon: <Mail aria-hidden />, text: gmail.gmail },
+    gmail && { icon: <Mail aria-hidden />, text: gmail.gmail, open: () => openAccount(gmail.id) },
     gmb.place_id && { icon: <Hash aria-hidden />, text: gmb.place_id },
   ].filter((f) => !!f);
 
@@ -70,12 +70,19 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
           </Button>
         </div>
         <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-soft [&_svg]:size-3.5">
-          {facts.map((f) => (
-            <span key={f.text} className="flex items-center gap-1.5">
-              {f.icon}
-              {f.text}
-            </span>
-          ))}
+          {facts.map((f) =>
+            "open" in f ? (
+              <button key={f.text} type="button" onClick={f.open} title={t("account.open", { gmail: f.text })} className="flex items-center gap-1.5 rounded outline-none hover:text-ink hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+                {f.icon}
+                {f.text}
+              </button>
+            ) : (
+              <span key={f.text} className="flex items-center gap-1.5">
+                {f.icon}
+                {f.text}
+              </span>
+            ),
+          )}
         </p>
       </header>
       <nav role="tablist" aria-label={t("window.tabs")} className="flex gap-1 border-b border-border px-6 pt-3">

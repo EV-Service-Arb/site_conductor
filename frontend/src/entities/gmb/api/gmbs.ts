@@ -46,8 +46,9 @@ export async function removeGmail(id: number): Promise<void> {
   await http.send("DELETE", `/api/v1/gmails/${id}`, undefined, ignoreBody);
 }
 
-export async function resolvePlace(place: string): Promise<Candidate[]> {
-  return (await http.get("/api/v1/gmbs/resolve", candidatesParser, { place })).candidates;
+/** Asked with `gmail`'s Maps key first, if given, then the caller's others', then the shared keys their tokens pay for. */
+export async function resolvePlace(place: string, gmail: number | null): Promise<Candidate[]> {
+  return (await http.get("/api/v1/gmbs/resolve", candidatesParser, gmail === null ? { place } : { place, gmail: String(gmail) })).candidates;
 }
 
 /** A GBP on Google already; `name` and `country` fill what Google lacks. */

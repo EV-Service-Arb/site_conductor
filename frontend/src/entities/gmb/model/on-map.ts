@@ -52,11 +52,12 @@ export type Tab = "launch";
 /** The location window's tabs by state, in order; a GBP whose state has none opens as its card only. */
 export const TABS: Record<State, readonly Tab[]> = { draft: ["launch"], verifying: [], verified: [], suspended: [] };
 
-/** The tab the GBP's window is open on; `null`: no window, the card only, or the trade's window holds `?tab`. */
+/** The tab the GBP's window is open on; `null`: no window, the card only, or the trade's or a gmail's window holds `?tab`. */
 export function useTab(): Tab | null {
   const raw = useQuery("tab");
   const trade = useQuery("trade");
-  if (trade !== null) return null;
+  const account = useQuery("account");
+  if (trade !== null || account !== null) return null;
   if (raw !== null && !Object.values(TABS).some((tabs) => tabs.includes(raw as Tab))) throw new Error(`?tab=${raw}: no state has it`);
   return raw as Tab | null;
 }
@@ -64,7 +65,7 @@ export function useTab(): Tab | null {
 /** The GBP's window, on the open tab while its state has it, else on its state's first; its card alone where it has none. */
 export function open(gmb: Gmb): void {
   const tabs = TABS[gmb.state];
-  setQuery((now) => ({ gmb: String(gmb.id), trade: null, tab: now.trade === null && tabs.includes(now.tab as Tab) ? now.tab : (tabs[0] ?? null) }));
+  setQuery((now) => ({ gmb: String(gmb.id), trade: null, account: null, tab: now.trade === null && tabs.includes(now.tab as Tab) ? now.tab : (tabs[0] ?? null) }));
 }
 
 /** The trade whose window is open, on a country's tab; `null` tab: the trade has none set up yet, or none picked. One window at a time: it and a GBP's share `?tab`. */
@@ -79,5 +80,22 @@ export function useTradeWindow(): { trade: number; tab: Country | null } | null 
 }
 
 export function openTrade(trade: number | null, tab?: Country): void {
-  setQuery({ trade: trade === null ? null : String(trade), tab: tab ?? null, gmb: null });
+  setQuery({ trade: trade === null ? null : String(trade), tab: tab ?? null, gmb: null, account: null });
+}
+
+export type AccountTab = "connections";
+
+/** The gmail whose own window is open (`?account`, apart from the outline's `?gmail` scope), on its tab. */
+export function useAccountWindow(): { gmail: number; tab: AccountTab } | null {
+  const raw = useQuery("account");
+  const tab = useQuery("tab");
+  if (raw === null) return null;
+  const gmail = Number(raw);
+  if (!Number.isSafeInteger(gmail)) throw new Error(`?account=${raw}: not a gmail id`);
+  if (tab !== "connections") throw new Error(`?tab=${tab}: not a tab of gmail ${gmail}'s window`);
+  return { gmail, tab };
+}
+
+export function openAccount(gmail: number | null): void {
+  setQuery({ account: gmail === null ? null : String(gmail), tab: gmail === null ? null : "connections", gmb: null, trade: null });
 }

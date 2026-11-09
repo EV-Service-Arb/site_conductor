@@ -93,7 +93,7 @@ export function AddGmbButton({ gmailId, trade: scoped, onAdded }: { gmailId: num
 
   const find = () =>
     act(async () => {
-      const found = await resolvePlace(place.trim());
+      const found = await resolvePlace(place.trim(), gmail);
       setCandidates(found);
       setPicked(found.length === 1 ? found[0]!.place_id : null);
     });

@@ -30,12 +30,6 @@ pub struct MapsKey {
 	pub checked: Checked,
 }
 
-/// A secret as it sits in the database.
-pub(crate) struct Sealed {
-	pub blob: Vec<u8>,
-	pub data_key_fp: Vec<u8>,
-}
-
 /// Which connection of a gmail's.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, strum::Display, strum::EnumString)]
 #[strum(serialize_all = "snake_case")]
@@ -43,7 +37,6 @@ pub enum Connection {
 	Imap,
 	MapsKey,
 }
-
 impl Connection {
 	fn table(self) -> &'static str {
 		match self {
@@ -51,6 +44,12 @@ impl Connection {
 			Self::MapsKey => "gmail_maps_keys",
 		}
 	}
+}
+
+/// A secret as it sits in the database.
+pub(crate) struct Sealed {
+	pub blob: Vec<u8>,
+	pub data_key_fp: Vec<u8>,
 }
 
 pub(crate) async fn imap(conn: &mut SqliteConnection, gmail_id: i64) -> eyre::Result<Option<(Imap, Sealed)>> {

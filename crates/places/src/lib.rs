@@ -26,6 +26,18 @@ const SEARCH_AGE: Duration = Duration::from_secs(86_400);
 /// The place a key is tried on: Google's own office, the one its docs ask about.
 const PROBE_PLACE: &str = "ChIJj61dQgK6j4AR4GeTYWZsKWw";
 
+/// Pays for buys on the rotation.
+pub trait Purse: Send + Sync {
+	/// Room for one buy of `sku`, kept until paid or dropped; else [`Error::Unpaid`].
+	fn hold(&self, sku: Sku) -> Pending<'_, Box<dyn Hold>>;
+}
+
+/// A purse's room for one buy; dropped unpaid, it is given back.
+pub trait Hold: Send {
+	/// The buy went through.
+	fn paid(self: Box<Self>, bought: Bought) -> Pending<'static, ()>;
+}
+
 /// How Google bills a request, by what its field mask asks: both masks ask a display name, which
 /// makes them the Pro SKUs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, strum::Display, strum::EnumString, strum::IntoStaticStr, strum::VariantArray)]
@@ -49,18 +61,6 @@ impl Payer<'_> {
 	pub fn house() -> Self {
 		Self { own: Vec::new(), purse: None }
 	}
-}
-
-/// Pays for buys on the rotation.
-pub trait Purse: Send + Sync {
-	/// Room for one buy of `sku`, kept until paid or dropped; else [`Error::Unpaid`].
-	fn hold(&self, sku: Sku) -> Pending<'_, Box<dyn Hold>>;
-}
-
-/// A purse's room for one buy; dropped unpaid, it is given back.
-pub trait Hold: Send {
-	/// The buy went through.
-	fn paid(self: Box<Self>, bought: Bought) -> Pending<'static, ()>;
 }
 
 /// A buy on the rotation, as its payer is charged for it.

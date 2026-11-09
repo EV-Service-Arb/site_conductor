@@ -8,7 +8,7 @@
 //!                      before anything is sent — the buy, its charge in the ledger
 //! ```
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
@@ -30,6 +30,9 @@ use crate::{
 
 /// The ledger's name for what the shared Places keys charge.
 const PLACES: &str = "places";
+
+/// One lock per person whose buys reach the rotation; see [`Held`].
+pub(crate) type Purses = Arc<Mutex<std::collections::HashMap<Uuid, Arc<tokio::sync::Mutex<()>>>>>;
 
 /// A gmail's connections, as its owner sees them.
 #[derive(Clone, Debug)]
@@ -311,6 +314,3 @@ impl Hold for Held {
 		})
 	}
 }
-
-/// One lock per person whose buys reach the rotation; see [`Held`].
-pub(crate) type Purses = Arc<std::sync::Mutex<std::collections::HashMap<Uuid, Arc<tokio::sync::Mutex<()>>>>>;
