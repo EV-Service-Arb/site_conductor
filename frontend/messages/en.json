@@ -474,5 +474,6 @@
   "launch.behind": "Behind it",
   "launch.point": "Point",
   "launch.country.why": "its reviews' language follows it",
-  "launch.toVerifying": "Verifying"
+  "launch.toVerifying": "Verifying",
+  "gmbs.gmail.role.hint": "owners hold 3 GBPs, managers 6"
 }

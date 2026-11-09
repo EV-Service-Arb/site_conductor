@@ -305,21 +305,27 @@ PUT    /alerts/destinations/{id}/rules      {rules: {new_lead: false, …}} → 
 PUT    /alerts/destinations/{id}/gmail      {gmail_id} → 200 as GET; 404 not theirs
 POST   /alerts/destinations/{id}/test       204; 400 with what Telegram said
 DELETE /alerts/destinations/{id}            204, 404
-GET    /gmails                              {gmails: [{id, gmail, created_at}], gmbs: [{id, gmail_id,
-                                            place_id, name, address, state, next (the states
-                                            it may move to), country: {code, by_hand} | null, phone, created_at, enabled, location:
-                                            {lat, lng, placed} | null}]} the caller's, removed ones
-                                            left out; a draft's gmail_id and place_id may be null
+GET    /gmails                              {gmails: [{id, gmail, role, cap, created_at}], gmbs: [{id,
+                                            gmail_id, place_id, name, address, state, next (the
+                                            states it may move to), country: {code, by_hand} | null,
+                                            phone, category, areas, hidden_address, customers_visit,
+                                            film, profile, created_at, enabled, location: {lat, lng,
+                                            placed} | null}]} the caller's, removed ones left out; a
+                                            draft's gmail_id and place_id may be null; cap null
+                                            while the role is unknown
 POST   /gmails                              {gmail} → 201 the gmail; 409 held already
+PATCH  /gmails/{id}                         {role: owner|manager} → 200 the gmail
 DELETE /gmails/{id}                         204; its GBPs removed with it
 GET    /gmbs/resolve?place=                 {candidates: [{place_id, name, address}]} (sa_places)
 POST   /gmbs                                {name} → 201 a draft; 409 the name a live GBP's
 POST   /gmails/{id}/gmbs                    {place_id, state, name?, country?} → 201 a GBP on Google
                                             already (state not draft; name and country fill what
                                             Google lacks, else 400); 409 the name or place taken
-PATCH  /gmbs/{id}                           {name?, gmail_id?, phone?} → 200 the GBP: name a draft's
-                                            only (409), gmail_id another of the caller's (a
-                                            transfer), phone null clears it
+PATCH  /gmbs/{id}                           {name?, gmail_id?, phone?, category?, areas?,
+                                            hidden_address?, customers_visit?, film?, profile?} →
+                                            200 the GBP: name a draft's only (409), gmail_id another
+                                            of the caller's (a transfer), null clears the rest; 409
+                                            a name or a phone another live GBP's
 PUT    /gmbs/{id}/state                     {state, place?} → 200 the GBP; 400 a move the drawing
                                             below lacks; a draft goes to verifying with its place
 DELETE /gmbs/{id}                           204
@@ -444,8 +450,16 @@ after the fact.
                             track exists, not walked             └ re-verify ◀──────┘
 ```
 
-- A name, and a place, is one live GBP's. The name is a draft's to change; the place is set once,
-  onto Google (draft → verifying), with Google's address, point and country.
+- A name, a place and a phone (`sa_core::gbp::phone`'s spelling) are one live GBP's. The name is a
+  draft's to change; the place is set once, onto Google (draft → verifying), with Google's address,
+  point and country.
+- **A draft's must-haves** are what Google's form asks and what stands behind it: name, primary
+  category, service areas (≤ 20), phone, a site page (sites' link), the hidden address with whether
+  customers visit, the verification film, the managing gmail, the Multilogin profile. Film and
+  profile are references set by hand until verif_vid and Multilogin fill them. How many are ready
+  is advice the front end computes; the move onto Google never checks it.
+- **A gmail's role** on its GBPs, owner or manager, unknown until said, caps what it holds before
+  Google grows wary (`sa_core::gbp::GmailRole::cap`): room shown, never refused.
 - **A GBP with a place has a gmail and a country** (the schema's CHECK on live rows): the archive
   reads its language from it. One on Google already is added verifying, verified or suspended.
 - A transfer moves it to another gmail of its owner's. Removed is once, apart from the state; a

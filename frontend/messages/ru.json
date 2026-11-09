@@ -474,5 +474,6 @@
   "launch.behind": "За этим",
   "launch.point": "Точка",
   "launch.country.why": "язык отзывов следует за ней",
-  "launch.toVerifying": "На верификацию"
+  "launch.toVerifying": "На верификацию",
+  "gmbs.gmail.role.hint": "владелец держит 3 GBP, менеджер 6"
 }
