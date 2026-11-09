@@ -10,7 +10,8 @@
 //!   → sites, same path and query, Source over the empty body
 //! ```
 //!
-//! What the key may write, and every verdict, is sites': its answer goes back as it came. An
+//! What the key may write, and every verdict, is sites': its answer goes back as it came; an
+//! `answers` key writes nothing here. An
 //! unknown key and a bad signature read the same, so key ids cannot be probed for; only a
 //! timestamp outside the window is told apart, and it says nothing about keys.
 
@@ -23,7 +24,7 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::{get, post},
 };
-use sa_auth::{Principal, Service, Source};
+use sa_auth::{Principal, Service, Source, SourceKind};
 use sa_core::signature::{self, SignatureError};
 use sa_panel::{Grant, IngestError, SignedBatch};
 use serde_json::json;
@@ -38,7 +39,7 @@ pub const MAX_BODY: usize = 4 * 1024 * 1024;
 pub(crate) const EVENTS: &str = "/api/ingest/v1/events";
 
 const STALE_MESSAGE: &str = "timestamp outside the replay window";
-const REFUSED_MESSAGE: &str = "invalid key or signature";
+pub(crate) const REFUSED_MESSAGE: &str = "invalid key or signature";
 
 pub(crate) fn routes(forward: Forward, limits: &Limits) -> Router {
 	let layers = ServiceBuilder::new()
@@ -54,7 +55,7 @@ pub(crate) fn routes(forward: Forward, limits: &Limits) -> Router {
 		.with_state(forward)
 }
 
-fn error(status: StatusCode, msg: impl Into<String>) -> Response {
+pub(crate) fn error(status: StatusCode, msg: impl Into<String>) -> Response {
 	(status, Json(json!({ "error": msg.into() }))).into_response()
 }
 
@@ -63,21 +64,21 @@ fn header<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
 }
 
 /// The signature's three headers, when all are there.
-fn signed(headers: &HeaderMap) -> Option<(&str, &str, &str)> {
+pub(crate) fn signed(headers: &HeaderMap) -> Option<(&str, &str, &str)> {
 	Some((header(headers, "x-sa-key-id")?, header(headers, "x-sa-timestamp")?, header(headers, "x-sa-signature")?))
 }
 
-fn unsigned() -> Response {
+pub(crate) fn unsigned() -> Response {
 	error(StatusCode::UNAUTHORIZED, "x-sa-key-id, x-sa-timestamp and x-sa-signature are required")
 }
 
-/// What went wrong reading a body: too big, too slow, or cut off.
-fn body_error(e: axum::Error) -> Response {
+/// What went wrong reading a body: larger than `limit`, too slow, or cut off.
+pub(crate) fn body_error(e: axum::Error, limit: usize) -> Response {
 	let inner = e.into_inner();
 	let mut cause: Option<&(dyn std::error::Error + 'static)> = Some(inner.as_ref());
 	while let Some(c) = cause {
 		if c.is::<http_body_util::LengthLimitError>() {
-			return error(StatusCode::PAYLOAD_TOO_LARGE, format!("the body is larger than {MAX_BODY} bytes"));
+			return error(StatusCode::PAYLOAD_TOO_LARGE, format!("the body is larger than {limit} bytes"));
 		}
 		if c.is::<TimeoutError>() {
 			return error(StatusCode::REQUEST_TIMEOUT, "the body took too long to arrive");
@@ -87,7 +88,7 @@ fn body_error(e: axum::Error) -> Response {
 	error(StatusCode::BAD_REQUEST, "the body could not be read")
 }
 
-fn refused(e: IngestError) -> Response {
+pub(crate) fn refused(e: IngestError) -> Response {
 	match e {
 		IngestError::Unauthorized(why) => error(StatusCode::UNAUTHORIZED, if why == sa_panel::STALE { STALE_MESSAGE } else { REFUSED_MESSAGE }),
 		IngestError::Internal(e) => {
@@ -128,7 +129,7 @@ async fn events(State(f): State<Forward>, headers: HeaderMap, body: Body) -> Res
 	}
 	let body = match to_bytes(body, MAX_BODY).await {
 		Ok(body) => body,
-		Err(e) => return body_error(e),
+		Err(e) => return body_error(e, MAX_BODY),
 	};
 	let batch = SignedBatch {
 		key_id,
@@ -137,6 +138,7 @@ async fn events(State(f): State<Forward>, headers: HeaderMap, body: Body) -> Res
 		body: &body,
 	};
 	let grant = match f.panel().authenticate(batch, now).await {
+		Ok(g) if g.kind == SourceKind::Answers => return error(StatusCode::UNAUTHORIZED, REFUSED_MESSAGE),
 		Ok(g) => g,
 		Err(e) => return refused(e),
 	};
@@ -160,6 +162,7 @@ async fn lead_by_ref(State(f): State<Forward>, OriginalUri(uri): OriginalUri, he
 		body: signed.as_bytes(),
 	};
 	let grant = match f.panel().authenticate(request, jiff::Timestamp::now()).await {
+		Ok(g) if g.kind == SourceKind::Answers => return error(StatusCode::UNAUTHORIZED, REFUSED_MESSAGE),
 		Ok(g) => g,
 		Err(e) => return refused(e),
 	};

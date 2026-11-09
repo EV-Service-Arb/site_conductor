@@ -159,8 +159,8 @@ async fn add_source(State(panel): State<Panel>, Extension(caller): Extension<Cal
 	if !sa_core::ids::is_slug(&b.key_id) {
 		return Err(ApiError::BadRequest("key_id is a lowercase slug of 1–64 of [a-z0-9_-]".into()));
 	}
-	if brands.is_empty() {
-		return Err(ApiError::BadRequest("a source writes for at least one brand".into()));
+	if brands.is_empty() != (kind == SourceKind::Answers) {
+		return Err(ApiError::BadRequest("an answers key writes for no brand, and any other for at least one".into()));
 	}
 	let origin = b.origin.as_deref().map(SiteOrigin::parse).transpose()?;
 	if origin.is_some() != (kind == SourceKind::Site) {

@@ -58,10 +58,10 @@ async fn places() -> (Arc<Mutex<Vec<String>>>, String) {
 	(asked, base)
 }
 
-/// A panel on `db` asking `base` with a key (`None`: keyless), its cache in `cache`, GMBs open.
-async fn panel(db: &TestDb, base: Option<&str>, cache: &std::path::Path) -> Panel {
+/// A panel on `db` asking `base` with a key (`None`: keyless), its answers in `db`, GMBs open.
+async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
 	let keys = Keys::new(base.map(|_| vec!["k".to_owned()]).unwrap_or_default());
-	let google = Google::try_new(keys, cache.to_owned()).unwrap();
+	let google = Google::try_new(keys, std::sync::Arc::new(db.store().await)).unwrap();
 	let google = match base {
 		Some(b) => google.at(b),
 		None => google,
@@ -112,8 +112,8 @@ async fn call(b: &mut Browser, app: &Router, method: Method, uri: &str, body: Op
 #[tokio::test]
 async fn a_gmb_is_located_when_added_and_its_place_asked_once() {
 	let (asked, base) = places().await;
-	let (db, cache) = (TestDb::create().await, tempfile::tempdir().unwrap());
-	let p = panel(&db, Some(&base), cache.path()).await;
+	let db = TestDb::create().await;
+	let p = panel(&db, Some(&base)).await;
 	opened(&p).await;
 	let app = app(p, None);
 	let mut b = Browser::default();
@@ -142,8 +142,8 @@ async fn a_gmb_is_located_when_added_and_its_place_asked_once() {
 #[tokio::test]
 async fn locate_fills_only_the_missing_points_and_pays_for_each_once() {
 	let (asked, base) = places().await;
-	let (db, cache) = (TestDb::create().await, tempfile::tempdir().unwrap());
-	let keyless = panel(&db, None, cache.path()).await;
+	let db = TestDb::create().await;
+	let keyless = panel(&db, None).await;
 	opened(&keyless).await;
 	let owner = seen(&keyless, "dev@localhost").await;
 	let gmail = keyless.add_gmail(owner, "a@gmail.com", jiff::Timestamp::now()).await.unwrap().unwrap();
@@ -152,7 +152,7 @@ async fn locate_fills_only_the_missing_points_and_pays_for_each_once() {
 		assert_eq!(gmb.location, None, "no key, no point");
 	}
 
-	let keyed = panel(&db, Some(&base), cache.path()).await;
+	let keyed = panel(&db, Some(&base)).await;
 	assert_eq!(keyed.locate().await.unwrap(), located(2, &[], &[]));
 	let gbps = keyed.gmails(owner).await.unwrap().1;
 	assert!(
@@ -198,14 +198,14 @@ async fn seen(p: &Panel, email: &str) -> uuid::Uuid {
 #[tokio::test]
 async fn a_service_area_gmb_has_no_point_until_placed_on_the_map() {
 	let (asked, base) = places().await;
-	let (db, cache) = (TestDb::create().await, tempfile::tempdir().unwrap());
-	let keyless = panel(&db, None, cache.path()).await;
+	let db = TestDb::create().await;
+	let keyless = panel(&db, None).await;
 	opened(&keyless).await;
 	let owner = seen(&keyless, "dev@localhost").await;
 	let gmail = keyless.add_gmail(owner, "a@gmail.com", jiff::Timestamp::now()).await.unwrap().unwrap();
 	keyless.add_gmb(Some(owner), existing(gmail.id, FLORE), jiff::Timestamp::now()).await.unwrap().unwrap();
 
-	let keyed = panel(&db, Some(&base), cache.path()).await;
+	let keyed = panel(&db, Some(&base)).await;
 	let app = app(keyed.clone(), None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
@@ -235,8 +235,8 @@ async fn a_service_area_gmb_has_no_point_until_placed_on_the_map() {
 #[tokio::test]
 async fn a_point_is_placed_only_on_the_callers_gmb_without_googles_and_on_earth() {
 	let (_asked, base) = places().await;
-	let (db, cache) = (TestDb::create().await, tempfile::tempdir().unwrap());
-	let p = panel(&db, Some(&base), cache.path()).await;
+	let db = TestDb::create().await;
+	let p = panel(&db, Some(&base)).await;
 	opened(&p).await;
 	let other = seen(&p, "other@localhost").await;
 	let theirs = p.add_gmail(other, "other@gmail.com", jiff::Timestamp::now()).await.unwrap().unwrap();
@@ -267,13 +267,12 @@ async fn a_point_is_placed_only_on_the_callers_gmb_without_googles_and_on_earth(
 #[tokio::test]
 async fn the_map_is_told_only_when_configured() {
 	let db = TestDb::create().await;
-	let cache = tempfile::tempdir().unwrap();
 	let configured = MapDto { key: "browser-key".into() };
 	for (map, want) in [
 		(None, (StatusCode::NOT_FOUND, json!({ "error": "not found" }))),
 		(Some(configured), (StatusCode::OK, json!({ "key": "browser-key" }))),
 	] {
-		let app = app(panel(&db, None, cache.path()).await, map);
+		let app = app(panel(&db, None).await, map);
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		assert_eq!(call(&mut b, &app, Method::GET, "/api/v1/map", None).await, want);
@@ -283,8 +282,8 @@ async fn the_map_is_told_only_when_configured() {
 #[tokio::test]
 async fn a_draft_goes_onto_google_and_is_verified() {
 	let (_asked, base) = places().await;
-	let (db, cache) = (TestDb::create().await, tempfile::tempdir().unwrap());
-	let p = panel(&db, Some(&base), cache.path()).await;
+	let db = TestDb::create().await;
+	let p = panel(&db, Some(&base)).await;
 	opened(&p).await;
 	let app = app(p, None);
 	let mut b = Browser::default();
@@ -327,8 +326,8 @@ async fn a_draft_goes_onto_google_and_is_verified() {
 
 #[tokio::test]
 async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
-	let (db, cache) = (TestDb::create().await, tempfile::tempdir().unwrap());
-	let p = panel(&db, None, cache.path()).await;
+	let db = TestDb::create().await;
+	let p = panel(&db, None).await;
 	opened(&p).await;
 	let app = app(p, None);
 	let mut b = Browser::default();
@@ -366,8 +365,8 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 
 #[tokio::test]
 async fn a_gmails_cap_follows_its_role() {
-	let (db, cache) = (TestDb::create().await, tempfile::tempdir().unwrap());
-	let p = panel(&db, None, cache.path()).await;
+	let db = TestDb::create().await;
+	let p = panel(&db, None).await;
 	opened(&p).await;
 	let app = app(p, None);
 	let mut b = Browser::default();

@@ -1,5 +1,5 @@
 //! The conductor: the HTTP surface over the engine's [`sa_panel::Panel`] — the sign-in through
-//! concierge, its own API (people's GMBs and tokens among it), ingest and the forward to the
+//! concierge, its own API (people's GMBs and tokens among it), ingest, the answers store and the forward to the
 //! services behind it — and the hubs (live updates, alerts, review_archive's charges
 //! and snapshot). The binary (`panel`) adds the CLI and the process bootstrap.
 //!
@@ -7,6 +7,7 @@
 
 pub mod access;
 pub mod alerts;
+mod answers;
 pub mod api;
 pub mod assistant;
 pub mod concierge;
@@ -26,7 +27,7 @@ pub mod tokens;
 pub mod web;
 
 /// What the contract's `provides` names, as the router mounts it (`--print-provided-paths`).
-pub const PROVIDED_PATHS: [&str; 1] = [ingest::EVENTS];
+pub const PROVIDED_PATHS: [&str; 2] = [ingest::EVENTS, sa_core::answers::PREFIX];
 
 /// Reports an error to Sentry and logs it — as a warning: the tracing layer would send an
 /// error-level event to Sentry a second time.

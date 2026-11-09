@@ -74,7 +74,7 @@ pub async fn panel(db: &TestDb) -> Panel {
 
 /// A panel on `store`: tokens renewing 15 a day up to 500 from 500, places resolving ids only.
 pub fn panel_with(store: Store, key: DataKey) -> Panel {
-	let keyless = sa_places::Google::try_new(sa_places::Keys::new(vec![]), std::env::temp_dir().join("sa_panel_keyless")).expect("a Places client"); // never written: no answer is paid for
+	let keyless = sa_places::Google::try_new(sa_places::Keys::new(vec![]), std::sync::Arc::new(store.clone())).expect("a Places client");
 	panel_on(store, key, keyless)
 }
 

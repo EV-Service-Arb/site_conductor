@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use sa_auth::{Catalog, PermissionSet};
 use sa_core::{notify::Locale, tokens::Renewal};
-use sa_panel::seal::DataKey;
+use sa_panel::{seal::DataKey, store::Store};
 use sa_places::{Google, Keys};
 use sa_server::gmbs::MapDto;
 
@@ -129,11 +129,9 @@ impl Settings {
 		keys.map(str::trim).filter(|k| !k.is_empty()).map(str::to_owned).collect()
 	}
 
-	/// Places, its answers cached beside the database (on the volume).
-	pub fn google(&self) -> eyre::Result<Google> {
-		let db = self.db_path()?;
-		let dir = db.parent().ok_or_else(|| eyre::eyre!("PANEL_DB_PATH {} has no directory", db.display()))?;
-		Ok(Google::try_new(Keys::new(self.places_keys()), dir.join("google_cache"))?)
+	/// Places, its answers kept in the conductor's own store.
+	pub fn google(&self, store: &Store) -> eyre::Result<Google> {
+		Ok(Google::try_new(Keys::new(self.places_keys()), std::sync::Arc::new(store.clone()))?)
 	}
 
 	/// The browser's map.

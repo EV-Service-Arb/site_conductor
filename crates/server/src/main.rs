@@ -13,7 +13,10 @@ use ev_lib::error_monitoring;
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_auth::{Catalog, SourceKind};
-use sa_core::ids::{BrandId, SiteOrigin};
+use sa_core::{
+	answers::{Key, Scheme},
+	ids::{BrandId, SiteOrigin},
+};
 use sa_panel::{Panel, alerts::Hub, gmbs::Existing, seal::DataKey, store::Store, tokens::Change};
 use sa_server::{
 	alerts::{self, Telegram},
@@ -52,7 +55,7 @@ enum Cmd {
 		#[arg(long, env = "PANEL_BIND")]
 		bind: SocketAddr,
 	},
-	/// The sources that may write events, and their keys.
+	/// The sources that may write events or read and keep answers, and their keys.
 	#[command(subcommand)]
 	Source(SourceCmd),
 	/// A person's gmails.
@@ -77,12 +80,12 @@ enum SourceCmd {
 	Add {
 		/// Lowercase slug, e.g. aquafix-site.
 		key_id: String,
-		/// site | review_archive | gbp | posthog | sheet | telephony | bot (panel and booking are
-		/// written without a key)
+		/// site | review_archive | gbp | posthog | sheet | telephony | bot | answers (panel and
+		/// booking are written without a key)
 		#[arg(long)]
 		kind: String,
-		/// A brand it may write for; repeat for several.
-		#[arg(long = "brand", required = true)]
+		/// A brand it may write for; repeat for several. None for an answers key.
+		#[arg(long = "brand")]
 		brands: Vec<String>,
 		/// A site's origin, where its landing answers, e.g. `https://aquafix.top`: no path. Sites only.
 		#[arg(long)]
@@ -169,6 +172,9 @@ enum ImportCmd {
 	/// review_archive's people, gmails, GMBs and tokens, as its scripts/export_members.sql
 	/// prints them; opens tokens and GMBs. A fresh install imports an empty document.
 	ReviewArchive { file: std::path::PathBuf },
+	/// Paid answers a client kept as files, `<sha256 hex>.json` each, into the answers store under
+	/// `scheme` (places | gop), fetched when the file was written; a newer one kept already stays.
+	Answers { scheme: String, dir: std::path::PathBuf },
 }
 
 // Sentry must be initialised before the async runtime starts, hence no #[tokio::main].
@@ -235,7 +241,11 @@ fn init_tracing() -> eyre::Result<()> {
 }
 
 async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSignIn>) -> eyre::Result<()> {
-	let connect = || async { eyre::Ok(Panel::new(Store::open(settings.db_path()?).await?, settings.data_key()?, settings.renewal()?, settings.google()?)) };
+	let connect = || async {
+		let store = Store::open(settings.db_path()?).await?;
+		let google = settings.google(&store)?;
+		eyre::Ok(Panel::new(store, settings.data_key()?, settings.renewal()?, google))
+	};
 	match cli.cmd {
 		Cmd::Migrate => {
 			Store::open(settings.db_path()?).await?.pool().close().await;
@@ -323,6 +333,26 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 			let raw = std::fs::read(&file).wrap_err_with(|| format!("reading {}", file.display()))?;
 			let export = serde_json::from_slice(&raw).wrap_err_with(|| format!("{} is not review_archive's export", file.display()))?;
 			connect().await?.import_review_archive(export).await
+		}
+		Cmd::Import(ImportCmd::Answers { scheme, dir }) => {
+			let scheme: Scheme = scheme.parse()?;
+			let store = Store::open(settings.db_path()?).await?;
+			let (mut kept, mut skipped) = (0, 0);
+			for entry in std::fs::read_dir(&dir).wrap_err_with(|| format!("reading {}", dir.display()))? {
+				let path = entry?.path();
+				let Some(key) = path.file_name().and_then(|n| n.to_str()).and_then(|n| n.strip_suffix(".json")).map(str::parse::<Key>) else {
+					skipped += 1; // a `.rejected` or `.part` beside the answers: not an answer
+					continue;
+				};
+				let key = key.wrap_err_with(|| format!("{} is not named by a request's digest", path.display()))?;
+				let text = std::fs::read_to_string(&path).wrap_err_with(|| format!("reading {}", path.display()))?;
+				serde_json::from_str::<serde_json::Value>(&text).wrap_err_with(|| format!("{} is not JSON", path.display()))?;
+				let written = std::fs::metadata(&path)?.modified()?;
+				store.put_answer(scheme, key, &text, None, Timestamp::try_from(written)?).await?;
+				kept += 1;
+			}
+			println!("{kept} answers imported under {scheme}; {skipped} other files left");
+			Ok(())
 		}
 		Cmd::GenDataKey => {
 			println!("{}", DataKey::generate_hex()?);

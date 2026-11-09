@@ -1,16 +1,18 @@
 //! A Google place from what a person pastes. The id, or a Maps URL carrying it, needs nothing;
 //! a URL with only a name in it is looked up with the Places API (New). Every Places request
-//! goes through [`Google`]: its cache answers what was paid for once, its [`Keys`] rotate.
+//! goes through [`Google`]: the answers store answers what was paid for once, its [`Keys`] rotate.
 
-mod cache;
+mod answers;
 mod keys;
 pub mod parse;
 
-use std::{path::PathBuf, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use cache::{Cache, Request};
+use answers::Request;
+pub use answers::{Answers, Pending, Remote};
 pub use keys::{Keys, Spent};
 use parse::Parsed;
+use sa_core::answers::{Claim, Put};
 use serde::{Deserialize, Serialize};
 
 const SEARCH_MASK: &str = "places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents";
@@ -54,36 +56,37 @@ pub enum Error {
 	/// An answer, paid or cached, is not the shape asked for.
 	#[error("decoding a Places answer")]
 	Decode(#[from] serde_json::Error),
-	#[error("the Places cache, at {}", .0.display())]
-	Cache(PathBuf, #[source] std::io::Error),
+	/// The answers store failed, or did not answer.
+	#[error("the answers store: {0}")]
+	Store(String),
 }
 
-/// Whether a cached answer will do.
+/// Whether a kept answer will do.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Ask {
 	Cached,
-	/// Asked again, and the cache overwritten.
+	/// Asked again, and the kept answer replaced.
 	Afresh,
 }
 
-/// The Places API (New), through the cache and the keys.
+/// The Places API (New), through the answers store and the keys.
 #[derive(Debug)]
 pub struct Google {
 	http: reqwest::Client,
 	keys: Keys,
-	cache: Cache,
+	answers: Arc<dyn Answers>,
 	/// `…/v1/places`.
 	base: String,
 }
 
 impl Google {
 	/// With no keys, a place id still resolves, unnamed and unlocated.
-	pub fn try_new(keys: Keys, cache_dir: PathBuf) -> Result<Self, Error> {
+	pub fn try_new(keys: Keys, answers: Arc<dyn Answers>) -> Result<Self, Error> {
 		let http = reqwest::Client::builder().connect_timeout(Duration::from_secs(5)).timeout(Duration::from_secs(10)).build()?;
 		Ok(Self {
 			http,
 			keys,
-			cache: Cache(cache_dir),
+			answers,
 			base: "https://places.googleapis.com/v1/places".to_owned(),
 		})
 	}
@@ -165,7 +168,17 @@ impl Google {
 		for raw in serde_json::from_value::<Resp>(json)?.places {
 			let place = Place::from(serde_json::from_value::<Hit>(raw.clone())?);
 			if paid {
-				self.cache.write(&Request::details(&format!("{}/{}", self.base, place.place_id)), &raw.to_string()).await?;
+				let details = format!("{}/{}", self.base, place.place_id);
+				let req = Request::details(&details);
+				self.answers
+					.put(
+						req.key(),
+						Put {
+							answer: raw.clone(),
+							request: req.preimage(),
+						},
+					)
+					.await?;
 			}
 			if place.name.as_ref().is_some_and(|n| n.eq_ignore_ascii_case(query)) {
 				named.push(place);
@@ -177,19 +190,57 @@ impl Google {
 		Ok(named)
 	}
 
-	/// The answer to `req`, and whether it was paid for now: from the cache unless older than
-	/// `max_age`, else from the first key not sitting out.
+	/// The answer to `req`, and whether it was paid for now: from the store unless older than
+	/// `max_age`, else claimed there and bought with the first key not sitting out.
 	async fn ask(&self, req: &Request<'_>, max_age: Option<Duration>, ask: Ask) -> Result<(serde_json::Value, bool), Error> {
+		let key = req.key();
+		let now = jiff::Timestamp::now();
+		let fresh_since = match ask {
+			Ask::Cached => max_age.map(|age| now - jiff::SignedDuration::try_from(age).expect("an age of seconds")),
+			Ask::Afresh => Some(now),
+		};
 		if ask == Ask::Cached
-			&& let Some(hit) = self.cache.read(req, max_age).await?
+			&& let Some(kept) = self.answers.get(key).await?
+			&& fresh_since.is_none_or(|since| kept.fetched_at >= since)
 		{
-			return Ok((hit, false));
+			return Ok((kept.answer, false));
 		}
+		if self.keys.is_empty() {
+			return Err(Error::Invalid("asking Google Places needs an API key, and none is set".into()));
+		}
+		loop {
+			match self.answers.claim(key, fresh_since).await? {
+				Claim::Stored(kept) => return Ok((kept.answer, false)),
+				Claim::Held { .. } => tokio::time::sleep(Duration::from_millis(500)).await,
+				Claim::Granted { .. } => break,
+			}
+		}
+		let bought = self.buy(req).await;
+		if bought.is_err()
+			&& let Err(e) = self.answers.release(key).await
+		{
+			// the buy's error is the one to tell; the claim lapses with its lease anyway
+			tracing::warn!(error = %e, "releasing a claim after a failed buy");
+		}
+		let answer = bought?;
+		self.answers
+			.put(
+				key,
+				Put {
+					answer: answer.clone(),
+					request: req.preimage(),
+				},
+			)
+			.await?;
+		Ok((answer, true))
+	}
+
+	/// `req` asked of Google with the first key not sitting out.
+	async fn buy(&self, req: &Request<'_>) -> Result<serde_json::Value, Error> {
 		let mut tried = Vec::new();
 		loop {
-			let key = match self.keys.next(&tried) {
+			let api_key = match self.keys.next(&tried) {
 				Ok(k) => k,
-				Err(spent) if spent.is_empty() => return Err(Error::Invalid("asking Google Places needs an API key, and none is set".into())),
 				Err(spent) => return Err(Error::Exhausted(spent)),
 			};
 			let r = match req.method {
@@ -197,17 +248,21 @@ impl Google {
 				"GET" => self.http.get(req.url),
 				other => unreachable!("Places is asked by GET and POST only, not {other}"),
 			};
-			let resp = r.header("X-Goog-Api-Key", key.as_str()).header("X-Goog-FieldMask", req.mask).send().await?;
+			let resp = r.header("X-Goog-Api-Key", api_key.as_str()).header("X-Goog-FieldMask", req.mask).send().await?;
 			let status = resp.status();
 			tracing::info!(method = req.method, url = req.url, %status, "Places asked");
 			let text = resp.text().await?;
 			if status.is_success() {
-				return Ok((self.cache.write(req, &text).await?, true));
+				return serde_json::from_str(&text).map_err(|e| Error::Api {
+					asked: format!("{} {}", req.method, req.url),
+					status: 200,
+					body: format!("not JSON ({e}), paid for and not kept: {text}"),
+				});
 			}
 			match Spent::of(&text) {
 				Some(why) => {
-					self.keys.sit_out(&key, why);
-					tried.push(key);
+					self.keys.sit_out(&api_key, why);
+					tried.push(api_key);
 				}
 				None => {
 					return Err(Error::Api {

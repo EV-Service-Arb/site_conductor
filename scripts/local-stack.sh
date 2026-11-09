@@ -501,6 +501,15 @@ if [ "$run_panel" = 1 ]; then
 	# a landing with no checkout has no port, and no source either
 	[ -z "$AQUAFIX_PORT" ] || source_key aquafix-local aquafix "http://localhost:$AQUAFIX_PORT"
 	[ -z "$VIFNET_PORT" ] || source_key vifnet-local vifnet "http://localhost:$VIFNET_PORT"
+	# The key placement keeps what it pays for with, in this conductor's answers store; and what
+	# gmaps_optimal_placement's own work dir holds, pulled in (a newer answer kept stays).
+	if ! panel source list | awk '$1 == "local-answers" && $NF == "active" { found = 1 } END { exit !found }'; then
+		panel source add local-answers --kind answers | awk '$1 == "secret:" { print $2 }' >"$state/secrets/local-answers"
+		[ -s "$state/secrets/local-answers" ] || die "panel source add local-answers printed no secret"
+	fi
+	[ -s "$state/secrets/local-answers" ] || die "source local-answers exists but its secret is not in $state/secrets/local-answers — start over with --reset"
+	placement_answers_dir="${XDG_CACHE_HOME:-$HOME/.cache}/gmaps_optimal_placement/data/places_cache"
+	[ ! -d "$placement_answers_dir" ] || panel import answers gop "$placement_answers_dir"
 fi
 if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
 	say "seeding $state/sites_panel.db"
@@ -635,7 +644,9 @@ fi
 if [ "$run_placement" = 1 ]; then
 	# not watched, and not essential: the map goes on without it; its first build takes minutes
 	say "starting gmaps_optimal_placement on $placement_origin (the home map's overlay)"
-	(cd "$PLACEMENT_DIR" && PANEL_ASSERTION_KEYS="$assertion_public" prefixed placement bash -c \
+	(cd "$PLACEMENT_DIR" && PANEL_ASSERTION_KEYS="$assertion_public" \
+		SA_ANSWERS_URL="$origin/api/answers" SA_ANSWERS_KEY_ID=local-answers SA_ANSWERS_SECRET="$(cat "$state/secrets/local-answers")" \
+		prefixed placement bash -c \
 		"${DEV_COMMAND_gmaps_optimal_placement:-nix run .#conductor -- --port $PLACEMENT_PORT -t examples/trades -l examples/locations}") &
 	placement_pid=$!
 fi

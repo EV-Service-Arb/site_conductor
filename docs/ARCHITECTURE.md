@@ -6,8 +6,8 @@ who a machine is (the source keys), the shell the browser loads, and the forward
 behind the origin — sites_panel (the sites business: leads, places, pricing, experiments,
 bookings, invoices), review_archive, playbook and placement (gmaps_optimal_placement: where
 demand sits and how contested it is, drawn over the home map). Each service trusts only the assertion the
-conductor signs for a request; none of them sees a session, and none calls the conductor: it
-reads them. Live updates and alerts are its hubs, fed by what the services tell it; tokens are
+conductor signs for a request; none of them sees a session, and none calls the conductor but its
+answers store: it reads them. Live updates and alerts are its hubs, fed by what the services tell it; tokens are
 charged from what review_archive tells it.
 
 **The unit is the GBP** (Google Business Profile; a GMB in code): a site, its leads, its reviews,
@@ -25,12 +25,13 @@ conductor ◀── pulls (Conductor) ── review_archive /api/conductor/{char
 conductor ─── pushes (Conductor) ─▶ review_archive /api/conductor/gmbs   GMBs, balances, the cursor
 conductor ── GET <origin>/.well-known/sa-site, public :443 ──────▶ each site key's landing
 landings ──────────────────────── direct, in-cluster ────────────▶ sites /api/internal
+review_archive, placement, laptops ─HMAC (answers key)▶ conductor /api/answers: what Google was paid for
 ```
 
 A cargo workspace; dependencies point inwards only.
 
 ```text
-crates/core/             no I/O: a GBP's states and moves, its country and language, and the
+crates/core/             no I/O: the answers store's wire, a GBP's states and moves, its country and language, and the
                          snapshot the services are told (`gbp`; review_archive takes it too),
                          brand ids, the HMAC of a signed request and its window, the
                          conductor's own alert messages, the buttons' signed data, retry and
@@ -38,7 +39,8 @@ crates/core/             no I/O: a GBP's states and moves, its country and langu
                          page (`tokens::ChargePage`; review_archive takes it too)
 crates/panel/            the engine: `Panel` (sources and their authentication, sessions, access
                          requests, the hubs' state), `seal` (XChaCha20-Poly1305 at rest), `store`
-                         (SQLite, migrations/ applied on open, writes BEGIN IMMEDIATE), `alerts`
+                         (SQLite, migrations/ applied on open, writes BEGIN IMMEDIATE; the answers
+                         store among it), `alerts`
                          (the hub: access, destinations, rules, the feeds fanned out; the
                          Directory and Feeds ports), `telegram` (the method: links, chats, outbox,
                          delivery, buttons; the Bot port), `live` (the in-process bus), `gmbs`,
@@ -50,8 +52,8 @@ crates/auth/             the `sa` permissions (concierge_iam derives), the alias
                          `sa:admin`, and the assertion: a User, a Source or the Conductor, for one
                          request of one service
 crates/places/           Google Places: a place from what a person pastes (an id, a Maps URL, a
-                         search), its point; every request through one cache, the keys rotated;
-                         review_archive takes it too
+                         search), its point; every request through the answers store (in process,
+                         or `Remote` over /api/answers), the keys rotated; review_archive takes it too
 crates/ui/               Dioxus components the services' front ends share
 crates/contracts/        concierge's gRPC contract (tonic, from contracts/proto)
 crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
@@ -64,6 +66,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/connected.rs       GET /sources/sites: each site key's landing report beside sites' view
   src/access.rs          /api/v1/access/requests
   src/ingest.rs          the signed requests: authenticated here, forwarded to sites
+  src/answers.rs         /api/answers: the answers store, for an `answers` key
   src/forward.rs         the services behind the origin; `Services`, the one client and signing
                          key every call to them goes through
   src/grafana.rs         Grafana: its process, /grafana/, the viewers' tokens and the loopback
@@ -267,10 +270,36 @@ event. An unknown key and a bad signature answer the same 401, so key ids cannot
 only a timestamp outside the window is told apart.
 
 **Keys** (`/api/v1/sources`, `panel source add|list|set-origin|revoke`): one kind and a set of
-brands each, the secret shown once. Kinds `panel` and `booking` are written by sites itself: no
+brands each, the secret shown once; an `answers` key has no brands, reads and keeps answers (below)
+and ingests nothing. Kinds `panel` and `booking` are written by sites itself: no
 key is issued for them. A `site` key carries its landing's origin (`https://<domain>[:port]`,
 nothing after it; plain http on `localhost` / `127.0.0.1` for a landing on this machine): given
 when the key is issued, or once with `set-origin` for a key issued before origins.
+
+## Answers
+
+What is bought from Google — Places, and placement's DataForSEO and Keyword Planner — is kept
+here once per request, for whoever buys it: sa_places in this process, review_archive and
+placement in the cluster, a laptop's gmaps_optimal_placement over the public origin.
+
+```text
+GET    /api/answers/{scheme}/{key}         200 {answer, fetched_at} | 404
+POST   /api/answers/{scheme}/{key}/claim   {fresh_since?} → 200 {state: stored, answer, fetched_at}
+                                           | {state: granted, until} | {state: held, until}
+DELETE /api/answers/{scheme}/{key}/claim   204: the buy failed
+PUT    /api/answers/{scheme}/{key}         {answer, request} → 204; 400 unless key = SHA-256(request)
+```
+
+- **A key is its request's SHA-256**, under its client's scheme: `places` (sa_places: method,
+  URL, field mask, body) and `gop` (placement: URL, body). The store derives none.
+- **Buying is claim, buy, PUT.** A claim holds the key 30 s; whoever else asks waits on it and is
+  served what was bought. A failed buy gives the claim up; a holder that dies lets it lapse.
+- **The latest answer per key stays**; an older PUT changes nothing, and nothing expires:
+  `fresh_since` is a reader's age limit, or its re-ask.
+- **Signed as ingest is**, by a key of kind `answers`, the MAC over `<METHOD> <path>\n<body>`; any
+  other kind is refused as an unknown key is. Bounded as ingest, a body ≤ 8 MiB.
+- `panel import answers <scheme> <dir>` takes the files a client kept, `<key>.json` each, as of
+  when each was written.
 
 ## The conductor's API, `/api/v1`
 
@@ -614,9 +643,9 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **A note is in the outbox before the cursor passes it**: the page and the cursor move in one
   transaction. **So is a charge in the ledger**, and a page is taken only from where the cursor
   stands.
-- **A Google answer is paid for once.** Every Places request goes through sa_places' cache; a
-  place a search returned is not asked about again. Placement's sweeps are its own, disjoint
-  requests under its own cache and keys.
+- **A Google answer is paid for once.** Every billed answer, from any service or machine, is
+  looked up in the answers store before it is bought, claimed while it is bought and kept after;
+  a place a search returned is not asked about again. Placement's requests sit in their own scheme.
 - **The ledger is append-only, and nothing a service stores an id of is deleted.**
   `token_ledger` refuses UPDATE and DELETE; gmails and GBPs only get `removed_at`, kick-backs
   only `claimed_at`, each once.
@@ -650,7 +679,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   must not publish or must rate-limit, and the egress. `checks.contract-env` fails the flake
   when its required variables and the binary's `--print-required-vars` disagree.
 - **What it provides and consumes, by contract name.** `provides.ingest` is
-  `/api/ingest/v1/events`; `consumes` names the peers behind `PANEL_SITES_URL` (`sites_panel`),
+  `/api/ingest/v1/events`, `provides.answers` `/api/answers`; `consumes` names the peers behind `PANEL_SITES_URL` (`sites_panel`),
   `PANEL_REVIEW_ARCHIVE_URL` (`review_archive`) and `PANEL_PLAYBOOK_URL` (`playbook_web`), whose
   URLs and egress devops derives. `checks.provided-paths` fails the flake when `provides` and the
   binary's `--print-provided-paths` (the constants its router mounts) disagree.
@@ -669,7 +698,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   `places.googleapis.com:443` (a pasted URL without a place id, a GMB's name, address and point).
   The keys are used in their order, free ones first; one Google says is spent for a quota window
   sits out until the window resets, one whose billing is off until restart. Every answer is kept
-  in `google_cache/` beside `PANEL_DB_PATH`, on the volume. The browser loads Maps JS straight
+  in the answers store, in the database. The browser loads Maps JS straight
   from Google with `GOOGLE_MAPS_BROWSER_KEY` (referrer-restricted to the public origin); the
   server's keys never reach it.
 - **Telegram, outbound only.** With `TELEGRAM_BOT_TOKEN` the pods need egress to
@@ -677,7 +706,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **`/api/v1/live` through the public IngressRoute, as a WebSocket.** Nothing in front may buffer
   the response or strip `Upgrade` / `Connection` / `Origin`, and an idle timeout on the way must
   be longer than the 25 s ping.
-- **Rate-limit `/auth` and `/api/hooks` per client IP at Traefik**; the conductor bounds how many
-  run at once, not who starts them.
+- **Rate-limit `/auth`, `/api/hooks` and `/api/answers` per client IP at Traefik**; the conductor
+  bounds how many run at once, not who starts them. `/api/answers` is public: laptops buy through it.
 - **One pod, a volume, litestream.** One writer: one replica, rolled out with `Recreate`. No
   init container: `serve` migrates on start.

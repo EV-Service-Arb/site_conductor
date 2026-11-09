@@ -240,8 +240,9 @@
             # (docs/ARCHITECTURE.md, Deploy requirements)
             excludePathPrefixes = [ "/api/ingest" ];
             # per client IP at the edge; the conductor bounds concurrency, not who calls. /api/hooks:
-            # the booking providers' webhooks, forwarded to sites (public, signature-checked there)
-            rateLimitPathPrefixes = [ "/auth" "/api/hooks" ];
+            # the booking providers' webhooks, forwarded to sites (public, signature-checked there).
+            # /api/answers: the answers store, public for the machines outside the cluster
+            rateLimitPathPrefixes = [ "/auth" "/api/hooks" "/api/answers" ];
           };
           egress = {
             # concierge's gRPC, at the address it names
@@ -253,7 +254,11 @@
 
         # What the conductor serves to its peers, by endpoint: devops builds a consumer's URL from it.
         # `checks.provided-paths` holds it to the routes the binary mounts.
-        provides.ingest = "/api/ingest/v1/events";
+        provides = {
+          ingest = "/api/ingest/v1/events";
+          # the answers store (docs/ARCHITECTURE.md, Answers): review_archive's and placement's
+          answers = "/api/answers";
+        };
         # The services the forward reaches (docs/ARCHITECTURE.md, Forward), by contract name: devops
         # sets each variable to the peer's in-cluster origin and opens the egress to it.
         consumes = {

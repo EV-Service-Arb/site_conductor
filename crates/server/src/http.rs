@@ -25,7 +25,7 @@ use tower_http::timeout::TimeoutLayer;
 use crate::{
 	access,
 	alerts::{self, Telegram},
-	api, assistant, connected,
+	answers, api, assistant, connected,
 	forward::{Forward, Services},
 	gmbs,
 	grafana::Grafana,
@@ -87,7 +87,7 @@ pub fn api_routes() -> Vec<ApiRoute> {
 /// What a request may cost.
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
-	/// Ingest requests served at once; past it, `503` rather than a queue.
+	/// Ingest's and the answers store's requests served at once, each; past it, `503` rather than a queue.
 	pub max_concurrent: usize,
 	/// How long a body may take to arrive.
 	pub body_timeout: Duration,
@@ -136,7 +136,12 @@ pub fn app(sign_in: SignIn, forward: Option<Forward>, grafana: Option<&Grafana>,
 	// after the 101), and a burst of reconnecting tabs must not shed the API's requests.
 	let live = Router::new().route("/api/v1/live", get(live::upgrade)).with_state(Live::new(sign_in.clone(), limits.live));
 	let live = bounded(live, limits.live.upgrade_concurrent, limits.live.upgrade_timeout);
-	let app = Router::new().route("/health", get(|| async { "ok" })).merge(auth).merge(live).nest("/api/v1", api);
+	let app = Router::new()
+		.route("/health", get(|| async { "ok" }))
+		.merge(auth)
+		.merge(live)
+		.merge(answers::routes(sign_in.panel.clone(), &limits))
+		.nest("/api/v1", api);
 	let app = match forward {
 		Some(forward) => app.merge(ingest::routes(forward.clone(), &limits)).merge(forward.routes()),
 		None => app,

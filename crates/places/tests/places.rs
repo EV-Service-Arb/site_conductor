@@ -2,7 +2,7 @@
 //! answer is paid for once, a refusal never kept, a spent key passed over until its window ends.
 
 use std::{
-	collections::HashMap,
+	collections::{HashMap, HashSet},
 	sync::{Arc, Mutex},
 	time::{SystemTime, UNIX_EPOCH},
 };
@@ -14,8 +14,10 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::{get, post},
 };
+use jiff::Timestamp;
+use sa_core::answers::{Claim, Key, Put, Stored};
 use sa_places::{
-	Ask, Error, Google, Keys, LatLng, Spent,
+	Answers, Ask, Error, Google, Keys, LatLng, Pending, Remote, Spent,
 	parse::{Parsed, parse},
 };
 use serde_json::{Value, json};
@@ -114,8 +116,60 @@ async fn place_details(State(s): State<Stub>, headers: HeaderMap, Path(id): Path
 	}
 }
 
-/// The stub, and a `Google` on it with `keys` and a fresh cache.
-async fn google(keys: &[&str]) -> (Stub, Google, tempfile::TempDir, tokio::task::JoinHandle<()>) {
+/// The answers store as the conductor keeps it, in memory: the latest answer per key, a claim
+/// held until its holder puts or releases.
+#[derive(Debug, Default)]
+struct Memory(Mutex<(HashMap<Key, Stored>, HashSet<Key>)>);
+
+impl Answers for Memory {
+	fn get(&self, key: Key) -> Pending<'_, Option<Stored>> {
+		Box::pin(async move { Ok(self.0.lock().unwrap().0.get(&key).cloned()) })
+	}
+
+	fn claim(&self, key: Key, fresh_since: Option<Timestamp>) -> Pending<'_, Claim> {
+		Box::pin(async move {
+			let (kept, claims) = &mut *self.0.lock().unwrap();
+			let until = Timestamp::now();
+			Ok(match kept.get(&key) {
+				Some(k) if fresh_since.is_none_or(|since| k.fetched_at >= since) => Claim::Stored(k.clone()),
+				_ if !claims.insert(key) => Claim::Held { until },
+				_ => Claim::Granted { until },
+			})
+		})
+	}
+
+	fn put(&self, key: Key, put: Put) -> Pending<'_, ()> {
+		Box::pin(async move {
+			let (kept, claims) = &mut *self.0.lock().unwrap();
+			kept.insert(
+				key,
+				Stored {
+					answer: put.answer,
+					fetched_at: Timestamp::now(),
+				},
+			);
+			claims.remove(&key);
+			Ok(())
+		})
+	}
+
+	fn release(&self, key: Key) -> Pending<'_, ()> {
+		Box::pin(async move {
+			self.0.lock().unwrap().1.remove(&key);
+			Ok(())
+		})
+	}
+}
+
+/// The stub, and a `Google` on it with `keys` and an empty store.
+async fn google(keys: &[&str]) -> (Stub, Google, Arc<Memory>, tokio::task::JoinHandle<()>) {
+	let store = Arc::new(Memory::default());
+	let (s, google, server) = google_on(keys, store.clone()).await;
+	(s, google, store, server)
+}
+
+/// The stub, and a `Google` on it with `keys` and `answers`.
+async fn google_on(keys: &[&str], answers: Arc<dyn Answers>) -> (Stub, Google, tokio::task::JoinHandle<()>) {
 	let s = Stub::default();
 	let app = Router::new()
 		.route("/v1/places:searchText", post(search_text))
@@ -124,16 +178,13 @@ async fn google(keys: &[&str]) -> (Stub, Google, tempfile::TempDir, tokio::task:
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let base = format!("http://{}/v1/places", listener.local_addr().unwrap());
 	let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-	let cache = tempfile::tempdir().unwrap();
-	let google = Google::try_new(Keys::new(keys.iter().map(|k| k.to_string()).collect()), cache.path().join("google_cache"))
-		.unwrap()
-		.at(base);
-	(s, google, cache, server)
+	let google = Google::try_new(Keys::new(keys.iter().map(|k| k.to_string()).collect()), answers).unwrap().at(base);
+	(s, google, server)
 }
 
 #[tokio::test]
 async fn every_place_bearing_the_name_is_found_and_the_search_is_biased_to_the_map() {
-	let (s, google, _cache, server) = google(&["key-123"]).await;
+	let (s, google, _store, server) = google(&["key-123"]).await;
 	let got = google.candidates(SEARCH).await.unwrap();
 	server.abort();
 	let ids: Vec<&str> = got.iter().map(|(id, _)| id.as_str()).collect();
@@ -149,7 +200,7 @@ async fn every_place_bearing_the_name_is_found_and_the_search_is_biased_to_the_m
 
 #[tokio::test]
 async fn nothing_or_another_place_found_is_the_callers_mistake_and_a_refusal_is_not() {
-	let (_s, google, _cache, server) = google(&["k"]).await;
+	let (_s, google, _store, server) = google(&["k"]).await;
 	let nothing = google.resolve("https://www.google.com/maps/place/Nowhere").await.unwrap_err();
 	let refused = google.resolve("https://www.google.com/maps/place/Broken").await.unwrap_err();
 	let another = google.resolve("https://www.google.com/maps/place/Le+Procope+of+Hicksville").await.unwrap_err(); // #37: the first hit was a namesake
@@ -163,7 +214,7 @@ async fn nothing_or_another_place_found_is_the_callers_mistake_and_a_refusal_is_
 
 #[tokio::test]
 async fn a_place_added_by_its_id_is_named_and_located_and_an_unknown_id_refused() {
-	let (s, google, _cache, server) = google(&["key-123"]).await;
+	let (s, google, _store, server) = google(&["key-123"]).await;
 	let (_, got) = google.resolve(PROCOPE).await.unwrap();
 	let unknown = google.resolve("ChIJunknownunknownunk").await.unwrap_err();
 	let (moved, _) = google.resolve("ChIJmovedmovedmovedmo").await.unwrap();
@@ -179,7 +230,7 @@ async fn a_place_added_by_its_id_is_named_and_located_and_an_unknown_id_refused(
 
 #[tokio::test]
 async fn a_service_area_place_has_no_point() {
-	let (_s, google, _cache, server) = google(&["k"]).await;
+	let (_s, google, _store, server) = google(&["k"]).await;
 	let detailed = google.details(MOLD_ASSIST, Ask::Afresh).await.unwrap();
 	let (_, searched) = google.resolve("https://www.google.com/maps/place/Mold+Assist").await.unwrap();
 	server.abort();
@@ -189,7 +240,7 @@ async fn a_service_area_place_has_no_point() {
 
 #[tokio::test]
 async fn without_a_key_a_place_id_resolves_unnamed() {
-	let (s, google, _cache, server) = google(&[]).await;
+	let (s, google, _store, server) = google(&[]).await;
 	let got = google.candidates(PROCOPE).await.unwrap();
 	let search = google.resolve(SEARCH).await.unwrap_err();
 	server.abort();
@@ -200,7 +251,7 @@ async fn without_a_key_a_place_id_resolves_unnamed() {
 
 #[tokio::test]
 async fn an_answer_is_paid_for_once() {
-	let (s, google, _cache, server) = google(&["k"]).await;
+	let (s, google, _store, server) = google(&["k"]).await;
 	google.details(PROCOPE, Ask::Cached).await.unwrap();
 	google.details(PROCOPE, Ask::Cached).await.unwrap();
 	assert_eq!(s.asked(), 1, "the same details twice");
@@ -218,7 +269,7 @@ async fn an_answer_is_paid_for_once() {
 
 #[tokio::test]
 async fn a_refusal_is_never_kept() {
-	let (s, google, _cache, server) = google(&["k"]).await;
+	let (s, google, _store, server) = google(&["k"]).await;
 	for _ in 0..2 {
 		google.resolve("https://www.google.com/maps/place/Broken").await.unwrap_err();
 		google.details("ChIJunknownunknownunk", Ask::Cached).await.unwrap_err();
@@ -229,7 +280,7 @@ async fn a_refusal_is_never_kept() {
 
 #[tokio::test]
 async fn a_spent_key_sits_out_until_its_window_ends() {
-	let (s, google, _cache, server) = google(&["free", "billed"]).await;
+	let (s, google, _store, server) = google(&["free", "billed"]).await;
 	// the free key's day ends in 2 s
 	s.refuse.lock().unwrap().insert("free".into(), vec![(StatusCode::TOO_MANY_REQUESTS, refusal(now() - 86_400 + 2))]);
 	google.details(PROCOPE, Ask::Cached).await.unwrap();
@@ -248,6 +299,17 @@ async fn a_spent_key_sits_out_until_its_window_ends() {
 	server.abort();
 	let Error::Exhausted(why) = spent else { panic!("{spent:#}") };
 	assert!(matches!(why[..], [Spent::Billing, Spent::Quota { .. }]), "{why:?}");
+}
+
+#[tokio::test]
+async fn a_store_out_of_reach_buys_nothing() {
+	let closed = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap(); // dropped: nothing listens there
+	let unreachable = Remote::try_new(&format!("http://{closed}/api/answers"), "laptop", "secret".to_owned().into()).unwrap();
+	let (s, google, server) = google_on(&["k"], Arc::new(unreachable)).await;
+	let got = google.details(PROCOPE, Ask::Cached).await.unwrap_err();
+	server.abort();
+	assert!(matches!(got, Error::Store(_)), "{got:#}");
+	assert_eq!(s.asked(), 0);
 }
 
 /// Decoding must turn `%2B` into `+` once, and leave it so.

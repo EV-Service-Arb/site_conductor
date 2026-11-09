@@ -1,6 +1,7 @@
 //! The conductor without I/O: no database, network, clock or randomness. Time comes in as an
 //! argument.
 //!
+//! - [`answers`]: the answers store's wire, and what a request to it is signed over;
 //! - [`gbp`]: a GBP's states and moves, its country and language, and the snapshot the services
 //!   are told;
 //! - [`ids`]: what a source key may name (brands), how its key id looks, and a site key's origin;
@@ -9,6 +10,7 @@
 //!   how a delivery is retried;
 //! - [`tokens`]: how a balance renews and a charge falls on its payers.
 
+pub mod answers;
 pub mod gbp;
 pub mod ids;
 pub mod notify;

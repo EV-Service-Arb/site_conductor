@@ -138,11 +138,14 @@ impl Panel {
 		&self.live
 	}
 
-	/// Registers a source that may write events of `kind` for `brands`, with a fresh
-	/// secret; a site's with its `origin`. `None` when the key id is taken.
+	/// Registers a source that may write events of `kind` for `brands`, or read and keep answers,
+	/// with a fresh secret; a site's with its `origin`. `None` when the key id is taken.
 	pub async fn add_source(&self, key_id: &str, kind: SourceKind, brands: BTreeSet<BrandId>, origin: Option<SiteOrigin>) -> eyre::Result<Option<NewSource>> {
 		eyre::ensure!(sa_core::ids::is_slug(key_id), "a key id is a lowercase slug of 1–64 of [a-z0-9_-]");
-		eyre::ensure!(!brands.is_empty(), "a source writes for at least one brand");
+		eyre::ensure!(
+			brands.is_empty() == (kind == SourceKind::Answers),
+			"an answers key writes for no brand, and any other for at least one"
+		);
 		eyre::ensure!(kind.keyed(), "a key of kind {kind} is not issued: it is written without one");
 		eyre::ensure!(origin.is_some() == (kind == SourceKind::Site), "a site key has an origin, and no other kind has one");
 		let secret = Zeroizing::new(DataKey::generate_hex()?);
