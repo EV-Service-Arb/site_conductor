@@ -91,7 +91,7 @@ export function script(prompt: string, about: Listed[], all: Listed[], tags: Tag
       `Here is what I read about ${token(subject)} [1]:`,
       ...(lines.length > 0 ? lines : ["- nothing read about it yet"]),
       "",
-      issue === null ? "Nothing needs you there right now." : `What needs you first: **${issueText(issue, subject.gmb.id, tags, t).toLowerCase()}**.`,
+      issue === null ? "Nothing needs you there right now." : `What needs you first: **${issueText(issue, subject.gmb, tags, t).toLowerCase()}**.`,
     ].join("\n"),
     sources: [archiveSource],
     actions: [{ label: `Open Reviews · ${name}`, detail: "the archive's board", href: reviewsOf(subject), done: "" }],
@@ -131,11 +131,11 @@ function triage(asks: string, all: Listed[], tags: Tags, t: T): Script {
             : `None of your **${all.length}** locations has that [1].`
           : [
               `**${needing.length} of ${all.length}** locations need you [1]:`,
-              ...top.map(({ l, issue }) => `- ${token(l)} — ${issueText(issue!, l.gmb.id, tags, t).toLowerCase()}`),
+              ...top.map(({ l, issue }) => `- ${token(l)} — ${issueText(issue!, l.gmb, tags, t).toLowerCase()}`),
               ...(needing.length > top.length ? [`- and ${needing.length - top.length} more`] : []),
             ].join("\n"),
     sources: [{ label: "Your locations", href: "/" }],
-    actions: top[0] ? [{ label: `Start with ${top[0].l.gmb.name ?? top[0].l.gmb.place_id}`, detail: issueText(top[0].issue!, top[0].l.gmb.id, tags, t), href: reviewsOf(top[0].l), done: "" }] : [],
+    actions: top[0] ? [{ label: `Start with ${top[0].l.gmb.name ?? top[0].l.gmb.place_id}`, detail: issueText(top[0].issue!, top[0].l.gmb, tags, t), href: reviewsOf(top[0].l), done: "" }] : [],
   };
 }
 

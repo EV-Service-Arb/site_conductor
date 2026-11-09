@@ -13,6 +13,12 @@ const gmb = (id: number, name: string, address: string | null, located: boolean,
   next: ["suspended", "verifying"],
   country: { code: "FR", by_hand: false },
   phone: null,
+  category: null,
+  areas: [],
+  hidden_address: null,
+  customers_visit: null,
+  film: null,
+  profile: null,
   created_at: "2026-11-05T00:00:00Z",
   enabled,
   location: located ? { lat: 45.76, lng: 4.83, placed: false } : null,
@@ -20,8 +26,8 @@ const gmb = (id: number, name: string, address: string | null, located: boolean,
 
 const gmails: Gmails = {
   gmails: [
-    { id: 1, gmail: "eric@aquafix.top", created_at: "2026-11-05T00:00:00Z" },
-    { id: 2, gmail: "sameday.ny", created_at: "2026-11-05T00:00:00Z" },
+    { id: 1, gmail: "eric@aquafix.top", role: null, cap: null, created_at: "2026-11-05T00:00:00Z" },
+    { id: 2, gmail: "sameday.ny", role: null, cap: null, created_at: "2026-11-05T00:00:00Z" },
   ],
   gmbs: [
     gmb(10, "Aquafix · Vaise", "Lyon 9e", true),
