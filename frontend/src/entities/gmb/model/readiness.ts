@@ -1,3 +1,4 @@
+import { categoryOf } from "./category";
 import type { Gmb } from "./gmb";
 import type { Tags } from "./issues";
 
@@ -7,9 +8,10 @@ export type MustHave = (typeof MUST_HAVES)[number];
 
 /** Each must-have with whether it is ready, in [`MUST_HAVES`]' order. Advice: moving onto Google never checks it. */
 export function readiness(gmb: Gmb, tags: Tags): { must: MustHave; ready: boolean }[] {
+  const placed = tags.trades === null ? null : categoryOf(gmb, tags.trades);
   const ready: Record<MustHave, boolean> = {
     name: true,
-    category: gmb.category !== null,
+    category: placed?.status === "set_up" && placed.category.google_category !== null,
     areas: gmb.areas.length > 0,
     phone: gmb.phone !== null,
     site: tags.sites?.has(gmb.id) ?? false,

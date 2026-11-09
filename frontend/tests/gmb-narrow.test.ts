@@ -13,7 +13,7 @@ const gmb = (id: number, name: string, address: string | null, located: boolean,
   next: ["suspended", "verifying"],
   country: { code: "FR", by_hand: false },
   phone: null,
-  category: null,
+  trade_id: null,
   areas: [],
   hidden_address: null,
   customers_visit: null,
@@ -30,10 +30,10 @@ const gmails: Gmails = {
     { id: 2, gmail: "sameday.ny", role: null, cap: null, created_at: "2026-11-05T00:00:00Z" },
   ],
   gmbs: [
-    gmb(10, "Aquafix · Vaise", "Lyon 9e", true),
-    gmb(11, "Aquafix · Gerland", "Lyon 7e", false),
+    { ...gmb(10, "Aquafix · Vaise", "Lyon 9e", true), trade_id: 1 },
+    { ...gmb(11, "Aquafix · Gerland", "Lyon 7e", false), trade_id: 2 },
     gmb(12, "Aquafix · Croix-Rousse", "Lyon 4e", true, false),
-    gmb(20, "Same Day Plumbing", null, true),
+    { ...gmb(20, "Same Day Plumbing", null, true), trade_id: 1, country: { code: "US", by_hand: false } },
     { ...gmb(30, "Aquafix · Part-Dieu", null, false, true, null), place_id: null, state: "draft", country: null },
   ],
 };
@@ -52,7 +52,19 @@ describe("the outline's GMBs", () => {
       [null, "part-dieu", [30]],
       [new Set([1]), "same day", []],
     ] as const) {
-      expect(ids(narrowed(gmails, scope, filter)), `${scope && [...scope]} ${filter}`).toEqual(want);
+      expect(ids(narrowed(gmails, scope && { gmails: scope, categories: null }, filter)), `${scope && [...scope]} ${filter}`).toEqual(want);
+    }
+  });
+
+  it("under category patterns are those any pattern takes, and the gmails narrow them in turn; one with no trade is under none", () => {
+    for (const [categories, scope, want] of [
+      [[{ trade: 1, country: "FR" }], null, [10]],
+      [[{ trade: 1, country: "*" }], null, [10, 20]],
+      [[{ trade: "*", country: "FR" }], null, [10, 11]],
+      [[{ trade: 1, country: "FR" }, { trade: 2, country: "FR" }, { trade: 1, country: "US" }], null, [10, 11, 20]],
+      [[{ trade: 1, country: "*" }], new Set([2]), [20]],
+    ] as const) {
+      expect(ids(narrowed(gmails, { gmails: scope, categories }, "")), JSON.stringify(categories)).toEqual(want);
     }
   });
 

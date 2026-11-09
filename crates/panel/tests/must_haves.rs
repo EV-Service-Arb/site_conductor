@@ -50,11 +50,12 @@ fn areas(n: usize) -> Edit {
 async fn must_haves_are_stored_and_cleared() {
 	let db = TestDb::create().await;
 	let (p, owner) = opened(&db).await;
-	let draft = p.create_draft(owner, "Plombier Lyon 7", now()).await.unwrap().unwrap();
+	let draft = p.create_draft(owner, "Plombier Lyon 7", None, now()).await.unwrap().unwrap();
+	let trade = p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap();
 
 	let set = Edit {
 		phone: Some(Some(" +33 (4) 78-00.00.01 ".to_owned())),
-		category: Some(Some(" Plombier ".to_owned())),
+		trade: Some(Some(trade.id)),
 		areas: Some(Some(vec![" Lyon 7e ".to_owned(), "Villeurbanne".to_owned()])),
 		hidden_address: Some(Some("12 rue de Marseille, Lyon".to_owned())),
 		customers_visit: Some(Some(false)),
@@ -66,7 +67,7 @@ async fn must_haves_are_stored_and_cleared() {
 	let fields = |g: &Gmb| {
 		(
 			g.phone.clone(),
-			g.category.clone(),
+			g.trade_id,
 			g.areas.clone(),
 			g.hidden_address.clone(),
 			g.customers_visit,
@@ -76,7 +77,7 @@ async fn must_haves_are_stored_and_cleared() {
 	};
 	let want = (
 		Some("+33478000001".to_owned()),
-		Some("Plombier".to_owned()),
+		Some(trade.id),
 		vec!["Lyon 7e".to_owned(), "Villeurbanne".to_owned()],
 		Some("12 rue de Marseille, Lyon".to_owned()),
 		Some(false),
@@ -95,7 +96,7 @@ async fn must_haves_are_stored_and_cleared() {
 
 	let clear = Edit {
 		phone: Some(None),
-		category: Some(None),
+		trade: Some(None),
 		areas: Some(None),
 		hidden_address: Some(None),
 		customers_visit: Some(None),
@@ -110,7 +111,7 @@ async fn must_haves_are_stored_and_cleared() {
 async fn what_is_wrong_is_refused_not_fixed() {
 	let db = TestDb::create().await;
 	let (p, owner) = opened(&db).await;
-	let draft = p.create_draft(owner, "Draft", now()).await.unwrap().unwrap();
+	let draft = p.create_draft(owner, "Draft", None, now()).await.unwrap().unwrap();
 	let text = |raw: &str| Some(Some(raw.to_owned()));
 	let list = |raw: &[&str]| Some(Some(raw.iter().map(|a| a.to_string()).collect()));
 	for (why, edit) in [
@@ -153,7 +154,7 @@ async fn what_is_wrong_is_refused_not_fixed() {
 		(
 			"an empty text is a null",
 			Edit {
-				category: text("  "),
+				hidden_address: text("  "),
 				..Edit::default()
 			},
 		),
@@ -175,8 +176,8 @@ async fn what_is_wrong_is_refused_not_fixed() {
 async fn a_phone_is_one_live_gbps_however_spelled() {
 	let db = TestDb::create().await;
 	let (p, owner) = opened(&db).await;
-	let first = p.create_draft(owner, "First", now()).await.unwrap().unwrap();
-	let second = p.create_draft(owner, "Second", now()).await.unwrap().unwrap();
+	let first = p.create_draft(owner, "First", None, now()).await.unwrap().unwrap();
+	let second = p.create_draft(owner, "Second", None, now()).await.unwrap().unwrap();
 	let phone = |raw: &str| Edit {
 		phone: Some(Some(raw.to_owned())),
 		..Edit::default()
@@ -198,7 +199,7 @@ async fn the_migration_rewrites_phones_to_one_spelling() {
 	let spelled = ["+33 4 78 00 00 01", "(04) 78-00-00-02", "04.78.00.00.03", "0478000004"];
 	let mut drafts = Vec::new();
 	for (i, _) in spelled.iter().enumerate() {
-		drafts.push(p.create_draft(owner, &format!("Draft {i}"), now()).await.unwrap().unwrap().id);
+		drafts.push(p.create_draft(owner, &format!("Draft {i}"), None, now()).await.unwrap().unwrap().id);
 	}
 	let pool = db.pool().await;
 	let migrator = sqlx::migrate!("./migrations");

@@ -12,7 +12,7 @@ use sa_core::gbp::{Country, GmailRole, OnGoogle, State};
 use sa_places::{Ask, LatLng, Place};
 use uuid::Uuid;
 
-pub use crate::store::gmbs::{GbpCountry, Gmail, Gmb, Point};
+pub use crate::store::gmbs::{Category, GbpCountry, Gmail, Gmb, Point, Trade};
 use crate::{
 	Panel, Refused,
 	store::gmbs::{self as db, NewGmb, Unique},
@@ -42,6 +42,8 @@ pub struct Existing {
 	/// Used when Google gives none, as `country`.
 	pub name: Option<String>,
 	pub country: Option<Country>,
+	/// The owner's.
+	pub trade: Option<i64>,
 }
 
 /// What changes of a GBP; each absent is left, `Some(None)` clears it.
@@ -53,7 +55,8 @@ pub struct Edit {
 	pub gmail_id: Option<i64>,
 	/// One live GBP's.
 	pub phone: Option<Option<String>>,
-	pub category: Option<Option<String>>,
+	/// The owner's.
+	pub trade: Option<Option<i64>>,
 	/// 1 to 20, none twice.
 	pub areas: Option<Option<Vec<String>>>,
 	pub hidden_address: Option<Option<String>>,
@@ -79,7 +82,7 @@ impl Edit {
 			name: self.name.as_deref().map(name).transpose()?,
 			gmail_id: self.gmail_id,
 			phone: each(self.phone, |p| sa_core::gbp::phone(&p).map_err(|e| Refused::Invalid(e.to_string())))?,
-			category: each(self.category, text("category"))?,
+			trade: self.trade,
 			areas: each(self.areas, areas)?,
 			hidden_address: each(self.hidden_address, text("hidden address"))?,
 			customers_visit: self.customers_visit,
@@ -87,6 +90,14 @@ impl Edit {
 			profile: each(self.profile, text("profile"))?,
 		})
 	}
+}
+
+/// `trade`, if any, is `owner`'s.
+async fn trade_is(conn: &mut sqlx::SqliteConnection, owner: Uuid, trade: Option<i64>) -> eyre::Result<bool> {
+	Ok(match trade {
+		None => true,
+		Some(t) => db::trade_owner(conn, t).await? == Some(owner),
+	})
 }
 
 fn places_error(e: sa_places::Error) -> eyre::Result<Refused> {
@@ -200,8 +211,8 @@ impl Panel {
 		}
 	}
 
-	/// A GBP not on Google yet: its name, which no live GBP has.
-	pub async fn create_draft(&self, owner: Uuid, raw: &str, now: Timestamp) -> eyre::Result<Result<Gmb, Refused>> {
+	/// A GBP not on Google yet: its name, which no live GBP has, and the owner's `trade`.
+	pub async fn create_draft(&self, owner: Uuid, raw: &str, trade: Option<i64>, now: Timestamp) -> eyre::Result<Result<Gmb, Refused>> {
 		let name = match name(raw) {
 			Ok(n) => n,
 			Err(r) => return Ok(Err(r)),
@@ -209,6 +220,9 @@ impl Panel {
 		let mut tx = self.store.begin_write().await?;
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
+		}
+		if !trade_is(&mut tx, owner, trade).await? {
+			return Ok(Err(Refused::NotFound));
 		}
 		if let Some(why) = db::taken(
 			&mut tx,
@@ -232,6 +246,7 @@ impl Panel {
 			country: None,
 			country_by_hand: false,
 			at: None,
+			trade_id: trade,
 		};
 		let added = db::add_gmb(&mut tx, None, &new, now).await?;
 		tx.commit().await.wrap_err("committing a draft")?;
@@ -271,6 +286,9 @@ impl Panel {
 			Some(o) if owner.is_none_or(|owner| owner == o) => o,
 			_ => return Ok(Err(Refused::NotFound)),
 		};
+		if !trade_is(&mut tx, gmail_owner, e.trade).await? {
+			return Ok(Err(Refused::NotFound));
+		}
 		if let Some(why) = db::taken(
 			&mut tx,
 			Unique {
@@ -294,6 +312,7 @@ impl Panel {
 			country: Some(country),
 			country_by_hand: by_hand,
 			at: place.as_ref().and_then(|p| p.location),
+			trade_id: e.trade,
 		};
 		let added = db::add_gmb(&mut tx, None, &new, now).await?;
 		tx.commit().await.wrap_err("committing a GMB")?;
@@ -327,6 +346,9 @@ impl Panel {
 		}
 		if let Some(n) = &edit.name {
 			db::rename(&mut tx, id, n).await?;
+		}
+		if !trade_is(&mut tx, owner, edit.trade.flatten()).await? {
+			return Ok(Err(Refused::NotFound));
 		}
 		if let Some(gmail) = edit.gmail_id {
 			if db::gmail_owner(&mut tx, gmail).await? != Some(owner) {
@@ -504,4 +526,133 @@ impl Panel {
 		self.snapshot_due.notify_one();
 		Ok(Ok(()))
 	}
+
+	/// The owner's trades, each with the countries it is set up for.
+	pub async fn trades(&self, owner: Uuid) -> eyre::Result<Vec<Trade>> {
+		db::trades(&mut *self.store.pool().acquire().await.wrap_err("a connection for trades")?, owner).await
+	}
+
+	/// A trade of the owner's, set up nowhere yet: its name, no other of theirs whatever its case.
+	pub async fn add_trade(&self, owner: Uuid, raw: &str, now: Timestamp) -> eyre::Result<Result<Trade, Refused>> {
+		let Some(name) = trade_name(raw) else {
+			return Ok(Err(Refused::Invalid("a trade's name is not empty".to_owned())));
+		};
+		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		if db::trade_named(&mut tx, owner, &name, None).await?.is_some() {
+			return Ok(Err(Refused::Conflict(format!("{name} is one of your trades already"))));
+		}
+		let id = db::add_trade(&mut tx, owner, &name, now).await?;
+		let added = trade_of(&mut tx, owner, id).await?.expect("added in this transaction");
+		tx.commit().await.wrap_err("committing a trade")?;
+		Ok(Ok(added))
+	}
+
+	pub async fn rename_trade(&self, owner: Uuid, id: i64, raw: &str) -> eyre::Result<Result<Trade, Refused>> {
+		let Some(name) = trade_name(raw) else {
+			return Ok(Err(Refused::Invalid("a trade's name is not empty".to_owned())));
+		};
+		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		if db::trade_owner(&mut tx, id).await? != Some(owner) {
+			return Ok(Err(Refused::NotFound));
+		}
+		if db::trade_named(&mut tx, owner, &name, Some(id)).await?.is_some() {
+			return Ok(Err(Refused::Conflict(format!("{name} is one of your trades already"))));
+		}
+		db::rename_trade(&mut tx, id, &name).await?;
+		let renamed = trade_of(&mut tx, owner, id).await?.expect("read in this transaction");
+		tx.commit().await.wrap_err("committing a trade's name")?;
+		Ok(Ok(renamed))
+	}
+
+	/// The owner's trade `id` and its categories, while no live GBP holds it.
+	pub async fn delete_trade(&self, owner: Uuid, id: i64) -> eyre::Result<Result<(), Refused>> {
+		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		if db::trade_owner(&mut tx, id).await? != Some(owner) {
+			return Ok(Err(Refused::NotFound));
+		}
+		match db::trade_holders(&mut tx, id).await? {
+			0 => db::delete_trade(&mut tx, id).await?,
+			n => return Ok(Err(Refused::Conflict(format!("{n} GBPs hold trade {id}: give them another first")))),
+		}
+		tx.commit().await.wrap_err("committing a trade's deletion")?;
+		Ok(Ok(()))
+	}
+
+	/// The owner's trade `id` set up for `c.country` as `c` says, over what it was: the keywords in
+	/// [`sa_core::gbp::keywords`]' form, each text trimmed and not empty.
+	pub async fn set_up(&self, owner: Uuid, id: i64, c: Category) -> eyre::Result<Result<Trade, Refused>> {
+		let text = |what: &str, raw: Option<String>| match raw.as_deref().map(str::trim) {
+			Some("") => Err(Refused::Invalid(format!("a category's {what} is not empty: null clears it"))),
+			t => Ok(t.map(str::to_owned)),
+		};
+		let c = match (sa_core::gbp::keywords(&c.keywords), text("Google category", c.google_category), text("study", c.study)) {
+			(Ok(keywords), Ok(google_category), Ok(study)) => Category {
+				country: c.country,
+				keywords,
+				google_category,
+				study,
+			},
+			(Err(e), _, _) => return Ok(Err(Refused::Invalid(e.to_string()))),
+			(_, Err(r), _) | (_, _, Err(r)) => return Ok(Err(r)),
+		};
+		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		if db::trade_owner(&mut tx, id).await? != Some(owner) {
+			return Ok(Err(Refused::NotFound));
+		}
+		db::set_up(&mut tx, id, &c).await?;
+		let set = trade_of(&mut tx, owner, id).await?.expect("read in this transaction");
+		tx.commit().await.wrap_err("committing a category")?;
+		Ok(Ok(set))
+	}
+
+	/// The owner's trade `id` no longer set up in `country`: its GBPs there are not set up.
+	pub async fn remove_category(&self, owner: Uuid, id: i64, country: Country) -> eyre::Result<Result<(), Refused>> {
+		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		if db::trade_owner(&mut tx, id).await? != Some(owner) || !db::remove_category(&mut tx, id, country).await? {
+			return Ok(Err(Refused::NotFound));
+		}
+		tx.commit().await.wrap_err("committing a category's removal")?;
+		Ok(Ok(()))
+	}
+
+	/// Every one of `ids` given the owner's `trade` (`None`: none), or none of them: each must be
+	/// the owner's, not removed.
+	pub async fn set_trades(&self, owner: Uuid, ids: &[i64], trade: Option<i64>) -> eyre::Result<Result<(), Refused>> {
+		let ids: BTreeSet<i64> = ids.iter().copied().collect();
+		if ids.is_empty() {
+			return Ok(Err(Refused::Invalid("no GBP to give a trade".to_owned())));
+		}
+		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		if !trade_is(&mut tx, owner, trade).await? || !db::set_trades(&mut tx, owner, &ids, trade).await? {
+			return Ok(Err(Refused::NotFound));
+		}
+		tx.commit().await.wrap_err("committing GBPs' trade")?;
+		Ok(Ok(()))
+	}
+}
+
+fn trade_name(raw: &str) -> Option<String> {
+	Some(raw.trim()).filter(|n| !n.is_empty()).map(str::to_owned)
+}
+
+async fn trade_of(conn: &mut sqlx::SqliteConnection, owner: Uuid, id: i64) -> eyre::Result<Option<Trade>> {
+	Ok(db::trades(conn, owner).await?.into_iter().find(|t| t.id == id))
 }

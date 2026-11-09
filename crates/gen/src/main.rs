@@ -12,7 +12,7 @@ use sa_server::{
 	access::AccessRequestDto,
 	alerts::AlertsDto,
 	assistant::{AccessDto, ChatDto, ChatsDto, PeopleDto},
-	gmbs::{CandidatesDto, GmailsDto, MapDto},
+	gmbs::{CandidatesDto, GmailsDto, MapDto, TradesDto},
 	signin::Caller,
 	tokens::{BalanceChangeDto, BalanceDto, LedgerDto, TokenHoldersDto, TokensDto, UsageDto},
 };
@@ -39,7 +39,10 @@ fn main() {
 			},
 		],
 	);
-	Ts::write(&root.join("entities/gmb/model/generated.ts"), &[Ts::types::<(GmailsDto, CandidatesDto, MapDto, OnGoogle)>()]);
+	Ts::write(
+		&root.join("entities/gmb/model/generated.ts"),
+		&[Ts::types::<(GmailsDto, CandidatesDto, MapDto, TradesDto, OnGoogle)>()],
+	);
 	Ts::write(
 		&root.join("entities/tokens/model/generated.ts"),
 		&[

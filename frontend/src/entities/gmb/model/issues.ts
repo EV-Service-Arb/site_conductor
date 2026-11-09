@@ -1,16 +1,18 @@
 import type { T } from "@/shared/i18n";
 
-import type { ArchiveTag, Gmb, SiteTag } from "./gmb";
+import { categoryOf } from "./category";
+import type { ArchiveTag, Gmb, SiteTag, Trade } from "./gmb";
 import { MUST_HAVES, readiness } from "./readiness";
 
 /** What needs the operator on a GMB, most pressing first. */
-export const ISSUES = ["overdue", "suspended", "failing", "draft", "unlocated", "no_site", "off"] as const;
+export const ISSUES = ["overdue", "suspended", "failing", "draft", "unlocated", "no_site", "no_category", "off"] as const;
 export type Issue = (typeof ISSUES)[number];
 
-/** The services' tags by GMB id; `null`: the service did not answer, or the caller does not see it. */
+/** The services' tags by GMB id, and the caller's trades; `null`: not read, the service did not answer, or the caller does not see it. */
 export interface Tags {
   archive: ReadonlyMap<number, ArchiveTag> | null;
   sites: ReadonlyMap<number, SiteTag> | null;
+  trades: readonly Trade[] | null;
 }
 
 /** The GMB's most pressing issue; `null` when nothing needs the operator. An off GMB is out of every service, so being off is all it has. */
@@ -24,6 +26,7 @@ export function issueOf(gmb: Gmb, tags: Tags): Issue | null {
   if (gmb.state === "draft") return "draft";
   if (gmb.location === null) return "unlocated";
   if (tags.sites !== null && site === undefined) return "no_site";
+  if (tags.trades !== null && categoryOf(gmb, tags.trades).status !== "set_up") return "no_category";
   return null;
 }
 

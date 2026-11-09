@@ -163,6 +163,7 @@ impl Panel {
 				country: None,
 				country_by_hand: false,
 				at: None,
+				trade_id: None,
 			};
 			gmbs_db::add_gmb(&mut tx, Some(b.id), &new, b.created_at)
 				.await

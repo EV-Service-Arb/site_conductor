@@ -4,7 +4,7 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, butt
 import { X } from "lucide-react";
 import Link from "next/link";
 
-import { type Listed, TABS, issueOf, issueText, open, useGmbTags } from "@/entities/gmb";
+import { CategoryChip, type Listed, TABS, issueOf, issueText, open, useGmbTags } from "@/entities/gmb";
 import { ROUTES } from "@/shared/config/routes";
 import { useT } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -31,6 +31,9 @@ export function Peek({ listed: { gmb, gmail }, onClose }: { listed: Listed; onCl
             {name}
           </CardTitle>
           <CardDescription>{[gmb.address, gmail?.gmail].filter(Boolean).join(" · ")}</CardDescription>
+          <div className="pt-1">
+            <CategoryChip gmb={gmb} />
+          </div>
         </div>
         <Button variant="ghost" size={button("sm")} icon aria-label={t("home.peek.close")} title={t("home.peek.close")} onClick={onClose}>
           <X aria-hidden />

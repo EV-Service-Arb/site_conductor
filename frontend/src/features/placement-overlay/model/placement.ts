@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 
 import { ApiError, http, readCsrf } from "@/shared/api";
 import { type Infer, arrayOf, bool, nullable, num, object, oneOf, parse, str } from "@/shared/lib/parse";
+import { useScope, useTrades } from "@/entities/gmb";
 import { setQuery, useQuery } from "@/shared/lib/query";
 
 // gmaps_optimal_placement behind the forward (docs/ARCHITECTURE.md, Forward): its overlay module
@@ -147,27 +148,44 @@ export async function pull(): Promise<void> {
 
 export interface MapView {
   heat: string | null;
-  trade: string | null;
+  /** Placement's trade drawn: the one picked, else the study of the one category the outline is scoped to. */
+  study: string | null;
   /** On, at its radius in metres or at the trade's own. */
   pressure: { lambda?: number } | null;
   competitors: boolean;
 }
 
-/** The panel's state, in the URL of `/` as `?at` is. */
+/** The panel's state, in the URL of `/` as `?at` is; `?study=` empty: none picked, whatever the scope. */
 export function useMapView(): MapView {
   const heat = useQuery("heat");
-  const trade = useQuery("trade");
+  const study = useQuery("study");
   const pressure = useQuery("pressure");
   const competitors = useQuery("competitors");
+  const scoped = useScopedStudy();
   const lambda = pressure === null || pressure === "" ? undefined : Number(pressure);
   if (lambda !== undefined && !(Number.isFinite(lambda) && lambda > 0)) throw new Error(`?pressure=${pressure}: not a radius in metres`);
-  return { heat, trade, pressure: pressure === null ? null : lambda === undefined ? {} : { lambda }, competitors: competitors !== null };
+  return {
+    heat,
+    study: study === null ? scoped : study === "" ? null : study,
+    pressure: pressure === null ? null : lambda === undefined ? {} : { lambda },
+    competitors: competitors !== null,
+  };
+}
+
+/** The study of the category the outline is scoped to, when it is exactly one. */
+function useScopedStudy(): string | null {
+  const { categories } = useScope();
+  const trades = useTrades();
+  const one = categories?.length === 1 ? categories[0]! : null;
+  if (one === null || one.trade === "*" || one.country === "*" || trades.status !== "ok") return null;
+  const { trade, country } = one;
+  return trades.data.find((t) => t.id === trade)?.categories.find((c) => c.country === country)?.study ?? null;
 }
 
 export function setMapView(change: Partial<MapView>): void {
   setQuery({
     ...(change.heat !== undefined && { heat: change.heat }),
-    ...(change.trade !== undefined && { trade: change.trade }),
+    ...(change.study !== undefined && { study: change.study ?? "" }),
     ...(change.pressure !== undefined && { pressure: change.pressure === null ? null : change.pressure.lambda === undefined ? "" : String(Math.round(change.pressure.lambda)) }),
     ...(change.competitors !== undefined && { competitors: change.competitors ? "" : null }),
   });

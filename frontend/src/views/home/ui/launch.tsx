@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Input, NativeSelect, NativeSelectOption, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
-import { Check, X } from "lucide-react";
+import { Check, Copy, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import {
@@ -11,8 +11,13 @@ import {
   type Listed,
   MUST_HAVES,
   type MustHave,
+  type Placed,
+  TradeSelect,
+  categoryName,
+  categoryOf,
   editGmb,
   moveGmb,
+  openTrade,
   readiness,
   setCountry,
   under,
@@ -37,6 +42,7 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
   const gmails = useGmails();
   const { sites, tags } = useGmbTags();
   const rows = readiness(gmb, tags);
+  const placed = tags.trades === null ? null : categoryOf(gmb, tags.trades);
   const ready = rows.filter((r) => r.ready).length;
   const missing = rows.filter((r) => !r.ready);
   const [failed, setFailed] = useState<{ must: MustHave; text: string } | null>(null);
@@ -68,7 +74,16 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
 
   const parts: Record<MustHave, { value: ReactNode; editor: ReactNode; why: string }> = {
     name: { value: gmb.name, editor: text("name", gmb.name, (v) => ({ name: v ?? "" })), why: t("launch.why.name") },
-    category: { value: gmb.category, editor: text("category", gmb.category, (category) => ({ category })), why: t("launch.why.category") },
+    category: {
+      value: placed?.status === "set_up" && `${categoryName(placed.trade, placed.category.country)} · ${placed.category.google_category}`,
+      editor: (
+        <span className="flex flex-col gap-2">
+          <TradeSelect value={gmb.trade_id} label={t("launch.must.category")} onPick={(trade) => void save("category")({ trade })} />
+          {placed !== null && <CategoryFix placed={placed} gmb={gmb.id} onSet={gmails.reload} />}
+        </span>
+      ),
+      why: t("launch.why.category"),
+    },
     areas: { value: gmb.areas.join(" · "), editor: <AreasEditor areas={gmb.areas} onSave={(areas) => save("areas")({ areas })} />, why: t("launch.why.areas") },
     phone: { value: gmb.phone, editor: text("phone", gmb.phone, (phone) => ({ phone }), "tel"), why: t("launch.why.phone") },
     site: {
@@ -249,19 +264,67 @@ function AreasEditor({ areas, onSave }: { areas: string[]; onSave: (areas: strin
   );
 }
 
+/** What the category lacks and its one fix, or Google's label to type into its form. */
+function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: number; onSet: () => void }) {
+  const t = useT();
+  const button = useButtonSize();
+  if (placed.status === "no_trade") return null;
+  if (placed.status === "no_country")
+    return (
+      <span className="flex items-center gap-2 text-xs text-accent-warn">
+        {t("launch.category.noCountry", { trade: placed.trade.name })}
+        <CountrySelect gmb={gmb} value={null} onSet={onSet} />
+      </span>
+    );
+  const name = categoryName(placed.trade, placed.status === "set_up" ? placed.category.country : placed.country);
+  if (placed.status === "not_set_up" || placed.category.google_category === null)
+    return (
+      <span className="flex items-center gap-2 text-xs text-accent-warn">
+        {t(placed.status === "not_set_up" ? "launch.category.notSetUp" : "launch.category.noLabel", { category: name })}
+        <Button variant="outline" size={button("sm")} onClick={() => openTrade(placed.trade.id, placed.status === "set_up" ? placed.category.country : placed.country)}>
+          {t(placed.status === "not_set_up" ? "launch.category.setUp" : "launch.category.open", { category: name })}
+        </Button>
+      </span>
+    );
+  const label = placed.category.google_category;
+  return (
+    <span className="flex items-center gap-2 text-sm text-ink">
+      {name} · {t("launch.category.type")} <span className="font-medium">{label}</span>
+      <Button variant="ghost" size={button("sm")} icon aria-label={t("launch.category.copy")} title={t("launch.category.copy")} onClick={() => void navigator.clipboard.writeText(label)}>
+        <Copy aria-hidden />
+      </Button>
+    </span>
+  );
+}
+
+/** Set by hand while Google gives none; disabled once it does. */
+function CountrySelect({ gmb, value, disabled, onSet }: { gmb: number; value: Country | null; disabled?: boolean; onSet: () => void }) {
+  const t = useT();
+  const pick = async (c: Country) => {
+    try {
+      await setCountry(gmb, c);
+      onSet();
+    } catch (e) {
+      notifyFailure(e, t);
+    }
+  };
+  return (
+    <NativeSelect size="sm" wrapperClassName="w-32" disabled={disabled ?? false} aria-label={t("gmbs.gbp.country")} value={value ?? ""} onChange={(e) => e.target.value !== "" && void pick(e.target.value as Country)}>
+      {value === null && <NativeSelectOption value="">—</NativeSelectOption>}
+      {COUNTRIES.map((c) => (
+        <NativeSelectOption key={c} value={c}>
+          {c}
+        </NativeSelectOption>
+      ))}
+    </NativeSelect>
+  );
+}
+
 /** Outside the nine: its point on the map and its country, which its reviews' language follows. */
 function Behind({ listed: { gmb } }: { listed: Listed }) {
   const t = useT();
   const gmails = useGmails();
   const googles = gmb.country !== null && !gmb.country.by_hand;
-  const pick = async (c: Country) => {
-    try {
-      await setCountry(gmb.id, c);
-      gmails.reload();
-    } catch (e) {
-      notifyFailure(e, t);
-    }
-  };
   return (
     <section className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3 text-sm">
       <h3 className="font-medium text-ink">{t("launch.behind")}</h3>
@@ -272,14 +335,7 @@ function Behind({ listed: { gmb } }: { listed: Listed }) {
       </div>
       <div className="flex items-center gap-3">
         <span className="w-28 shrink-0 text-ink-soft">{t("gmbs.gbp.country")}</span>
-        <NativeSelect size="sm" wrapperClassName="w-32" disabled={googles} value={gmb.country?.code ?? ""} onChange={(e) => e.target.value !== "" && void pick(e.target.value as Country)}>
-          {gmb.country === null && <NativeSelectOption value="">—</NativeSelectOption>}
-          {COUNTRIES.map((c) => (
-            <NativeSelectOption key={c} value={c}>
-              {c}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+        <CountrySelect gmb={gmb.id} value={gmb.country?.code ?? null} disabled={googles} onSet={gmails.reload} />
         <span className="text-xs text-ink-soft">{t("launch.country.why")}</span>
       </div>
     </section>

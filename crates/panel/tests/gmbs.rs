@@ -56,6 +56,7 @@ async fn a_gmb_is_switched_by_its_owner_and_review_archive_is_told() {
 		state: sa_core::gbp::OnGoogle::Verified,
 		name: Some(name.to_owned()),
 		country: Some(Country::FR),
+		trade: None,
 	};
 	let one = p.add_gmb(Some(owner), existing("ChIJLU7jZClu5kcR4PcOOO6p3I0", "One"), now()).await.unwrap().unwrap();
 	let two = p.add_gmb(Some(owner), existing("ChIJD7fiBh9u5kcRYJSMaMOCCwQ", "Two"), now()).await.unwrap().unwrap();

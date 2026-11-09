@@ -51,6 +51,7 @@ fn existing(gmail_id: i64, place: &str, name: &str, country: Option<Country>) ->
 		state: OnGoogle::Verified,
 		name: Some(name.to_owned()),
 		country,
+		trade: None,
 	}
 }
 
@@ -70,7 +71,7 @@ async fn a_gbp_on_google_has_a_country() {
 		.unwrap();
 	assert_eq!((added.state, added.country.map(|c| c.code)), (State::Verified, Some(Country::FR)));
 
-	let draft = p.create_draft(owner, "Café de Flore", now()).await.unwrap().unwrap();
+	let draft = p.create_draft(owner, "Café de Flore", None, now()).await.unwrap().unwrap();
 	let no_gmail = p.advance(Some(owner), draft.id, State::Verifying, Some(FLORE)).await.unwrap();
 	assert!(matches!(no_gmail, Err(Refused::Invalid(_))), "{no_gmail:?}");
 	let edit = Edit {
@@ -94,8 +95,8 @@ async fn a_name_and_a_place_are_one_live_gbps() {
 	let mine = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
 	let theirs = p.add_gmail(other, "b@gmail.com", now()).await.unwrap().unwrap();
 
-	let first = p.create_draft(owner, "Le Procope", now()).await.unwrap().unwrap();
-	let named = p.create_draft(other, "Le Procope", now()).await.unwrap();
+	let first = p.create_draft(owner, "Le Procope", None, now()).await.unwrap().unwrap();
+	let named = p.create_draft(other, "Le Procope", None, now()).await.unwrap();
 	assert!(matches!(named, Err(Refused::Conflict(_))), "anyone's: {named:?}");
 	let renamed = p
 		.edit_gmb(
@@ -110,7 +111,7 @@ async fn a_name_and_a_place_are_one_live_gbps() {
 		.unwrap()
 		.unwrap();
 	assert_eq!(renamed.name, "Le Procope (Paris)");
-	p.create_draft(other, "Le Procope", now()).await.unwrap().unwrap();
+	p.create_draft(other, "Le Procope", None, now()).await.unwrap().unwrap();
 
 	p.add_gmb(Some(owner), existing(mine.id, PROCOPE, "Procope", Some(Country::FR)), now()).await.unwrap().unwrap();
 	let placed = p.add_gmb(Some(other), existing(theirs.id, PROCOPE, "Procope 2", Some(Country::FR)), now()).await.unwrap();
@@ -128,7 +129,7 @@ async fn a_state_moves_only_along_its_transitions_and_a_place_is_set_once() {
 	let p = opened(&db).await;
 	let owner = person(&p, "owner@localhost").await;
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
-	let draft = p.create_draft(owner, "Draft", now()).await.unwrap().unwrap();
+	let draft = p.create_draft(owner, "Draft", None, now()).await.unwrap().unwrap();
 	for to in [Draft, Verified, Suspended] {
 		let got = p.advance(Some(owner), draft.id, to, None).await.unwrap();
 		assert!(matches!(got, Err(Refused::Invalid(_))), "draft → {to}: {got:?}");
@@ -188,7 +189,7 @@ async fn the_snapshot_carries_placed_gbps_with_their_state_and_country() {
 	let owner = person(&p, "owner@localhost").await;
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
 	let other = p.add_gmail(owner, "b@gmail.com", now()).await.unwrap().unwrap();
-	p.create_draft(owner, "Draft", now()).await.unwrap().unwrap();
+	p.create_draft(owner, "Draft", None, now()).await.unwrap().unwrap();
 	let gbp = p.add_gmb(Some(owner), existing(gmail.id, PROCOPE, "Procope", Some(Country::US)), now()).await.unwrap().unwrap();
 	p.advance(Some(owner), gbp.id, State::Suspended, None).await.unwrap().unwrap();
 	p.edit_gmb(

@@ -1,47 +1,15 @@
 "use client";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-  Button,
-  InfoTip,
-  InfoTipContent,
-  InfoTipTrigger,
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-  NativeSelect,
-  NativeSelectOption,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  Skeleton,
-  Switch,
-  buttonVariants,
-  cn,
-} from "@evinvest/uikit";
-import { Check, ChevronDown, ChevronRight, CircleMinus, CirclePlus, Mail, Search, Trash2 } from "lucide-react";
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn } from "@evinvest/uikit";
+import { ChevronDown, CircleMinus, CirclePlus, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 
 import {
-  GMAIL_ROLES,
-  type Gmail,
-  type GmailRole,
-  type Gmails,
-  type Gmb,
   ISSUES,
   type Listed,
   MUST_HAVES,
-  type Selection,
   type SiteTag,
   type State,
   TABS,
@@ -53,24 +21,22 @@ import {
   issueText,
   open,
   readiness,
-  removeGmail,
   removeGmb,
   select,
   setFilter,
   setOnMap,
-  setGmailRole,
   setOnly,
+  setTrades,
   switchGmbs,
-  under,
-  useGmailScope,
   useGmails,
   useGmbTags,
   useOnMap,
   usePeeked,
+  useScope,
   useSelection,
+  useTrades,
 } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
-import { AddGmailButton } from "@/features/add-gmail";
 import { AddGmbButton } from "@/features/add-gmb";
 import { EditGbpButton } from "@/features/edit-gbp";
 import { LinkPlaceButton } from "@/features/link-gmb-place";
@@ -81,10 +47,9 @@ import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
 
-const ROW = "group flex min-w-0 items-center gap-1 rounded-md pr-1 text-sm hover:bg-hover/50";
-/** Shown on the row's hover or focus only, so the names keep the width. */
-const ON_HOVER = "hidden group-hover:flex group-focus-within:flex";
-const HEADING = "flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-medium tracking-wide text-ink-soft uppercase";
+import { HEADING, ON_HOVER, ROW, Remove } from "./outline-parts";
+import { ScopePicker } from "./scope-picker";
+
 const SUBHEADING = "flex items-center gap-1 px-2 pt-1.5 pb-0.5 text-xs text-ink-soft";
 const DRAGGED = "application/x-sa-gmb";
 /** The status dot by state: hollow while a draft. */
@@ -111,7 +76,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   const t = useT();
   const me = useMe();
   const gmails = useGmails();
-  const scope = useGmailScope();
+  const { gmails: scope, categories } = useScope();
   const { inView, hovered } = useOnMap();
   const peeked = usePeeked();
   const pathname = usePathname();
@@ -171,7 +136,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   return (
     // NOT SELECTED and the footer stay in reach under a long SELECTED, which scrolls alone
     <section aria-label={t("gmbs.title")} className="flex min-h-0 flex-1 flex-col gap-1">
-      <Scope data={gmails.data} selection={selection} onFlip={flip} onChanged={changed} />
+      <ScopePicker data={gmails.data} selection={selection} onFlip={flip} onChanged={changed} />
       <InputGroup className="mx-0.5 w-auto">
         <InputGroupAddon>
           <Search aria-hidden />
@@ -208,7 +173,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
             count={inSelection.length}
             empty={t("gmbs.selected.empty")}
             onMove={move}
-            action={null}
+            action={inSelection.length > 0 && <SetTrade gmbs={inSelection.map((l) => l.gmb.id)} onSet={changed} />}
           >
             {split ? (
               <>
@@ -248,7 +213,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
       )}
       {scoped.length <= 1 && (
         <div className="flex items-center gap-1 px-1 text-sm text-ink-soft">
-          <AddGmbButton gmailId={scoped[0]?.id ?? null} onAdded={changed} />
+          <AddGmbButton gmailId={scoped[0]?.id ?? null} trade={categories?.length === 1 && categories[0]!.trade !== "*" ? categories[0]!.trade : null} onAdded={changed} />
           {t("gmbs.gmb.add")}
         </div>
       )}
@@ -308,175 +273,43 @@ function Group({
   );
 }
 
-function HeadAction({ onClick, children }: { onClick: () => void; children: ReactNode }) {
-  return (
-    <button type="button" onClick={onClick} className="rounded px-1 text-xs font-normal tracking-normal normal-case outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
-      {children}
-    </button>
-  );
-}
-
-/** Which gmails' GMBs are selected, and which of each: a gmail toggles among the filters (or, after a move, all its GMBs), a location opened under it toggles alone. */
-function Scope({ data, selection, onFlip, onChanged }: { data: Gmails; selection: Selection; onFlip: (ids: number[], enabled: boolean) => Promise<void>; onChanged: () => void }) {
+/** The selected GBPs given one trade, or none: every one, or none of them. */
+function SetTrade({ gmbs, onSet }: { gmbs: number[]; onSet: () => void }) {
   const t = useT();
-  const [open, setOpen] = useState(false);
-  const [opened, setOpened] = useState<ReadonlySet<number>>(new Set());
-  const { scoped, chosen, edited, isSelected, move } = selection;
-  const { gmails } = data;
-  const total = data.gmbs.length;
-  const covered = (gmbs: Gmb[]) => gmbs.filter((b) => isSelected(b.id)).length;
-  const pick = (g: Gmail) => {
-    const gmbs = under(data, g.id);
-    if (edited) return move(gmbs.map((b) => b.id), covered(gmbs) < gmbs.length);
-    const next = new Set(scoped.map((s) => s.id));
-    if (next.has(g.id)) next.delete(g.id);
-    else next.add(g.id);
-    chooseGmailScope(next);
-  };
-  const unfold = (id: number) => {
-    const next = new Set(opened);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setOpened(next);
-  };
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className="mx-0.5 flex items-center gap-2 rounded-md border border-border px-2.5 py-2 text-sm text-ink outline-none hover:bg-hover/50 focus-visible:ring-2 focus-visible:ring-ring">
-        <Mail aria-hidden className="size-4 text-ink-soft" />
-        <span className="min-w-0 flex-1 truncate text-left">
-          {scoped.length === 0 ? t("gmbs.scope.all") : scoped.length === 1 ? scoped[0]!.gmail : t("gmbs.scope.many", { n: scoped.length })}
-        </span>
-        <span className="text-xs text-ink-soft tabular-nums">{selection.selected.length}</span>
-        <ChevronDown aria-hidden className="size-4 text-ink-soft" />
-      </PopoverTrigger>
-      <PopoverContent align="start" className="max-h-[70svh] w-80 overflow-y-auto p-1">
-        <div className={cn(HEADING, "pt-1")}>
-          {t("gmbs.title")}
-          <InfoTip>
-            <InfoTipTrigger label={t("gmbs.what")} />
-            <InfoTipContent className="font-normal tracking-normal normal-case">{t("gmbs.gmail.hint")}</InfoTipContent>
-          </InfoTip>
-          <span className="flex-1" />
-          <span className="tabular-nums">{t("gmbs.scope.counts", { gmails: gmails.length, gmbs: total })}</span>
-        </div>
-        <button type="button" onClick={() => select(null)} aria-pressed={chosen === null} className={cn(ROW, "w-full py-1.5 pl-2", chosen === null && "bg-hover font-medium ring-1 ring-accent-info ring-inset")}>
-          <span className="flex-1 text-left">{t("gmbs.scope.all")}</span>
-          <span className="text-xs text-ink-soft tabular-nums">{total}</span>
-        </button>
-        <ul className="flex flex-col">
-          {gmails.map((g) => {
-            const gmbs = under(data, g.id);
-            const on = gmbs.length > 0 && gmbs.every((b) => b.enabled);
-            const k = chosen === null ? 0 : covered(gmbs);
-            const full = k > 0 && k === gmbs.length;
-            const unfolded = opened.has(g.id);
-            return (
-              <li key={g.id}>
-                <div className={cn(ROW, full && "bg-hover ring-1 ring-accent-info ring-inset", k > 0 && !full && "bg-hover/40 ring-1 ring-accent-info/40 ring-inset")}>
-                  <button
-                    type="button"
-                    onClick={() => unfold(g.id)}
-                    aria-expanded={unfolded}
-                    aria-label={t(unfolded ? "gmbs.collapse" : "gmbs.expand", { gmail: g.gmail })}
-                    className="rounded p-1 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <ChevronRight aria-hidden className={cn("size-3.5 transition-transform", unfolded && "rotate-90")} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => pick(g)}
-                    aria-pressed={full ? true : k > 0 ? "mixed" : false}
-                    className={cn("min-w-0 flex-1 truncate py-1.5 text-left", on ? "text-ink" : "text-ink-soft", k > 0 && "font-medium")}
-                    title={g.gmail}
-                  >
-                    {g.gmail}
-                  </button>
-                  <span className={cn("flex items-center", ON_HOVER)}>
-                    <AddGmbButton gmailId={g.id} onAdded={onChanged} />
-                    <Remove title={t("gmbs.gmail.remove.title", { gmail: g.gmail })} body={t("gmbs.gmail.remove.body")} remove={() => removeGmail(g.id)} onRemoved={onChanged} />
-                  </span>
-                  {k > 0 && !full ? <span className="text-xs text-ink-soft tabular-nums">{`${k}/${gmbs.length}`}</span> : <Room gmail={g} n={gmbs.length} />}
-                  <Switch aria-label={t("gmbs.switch", { name: g.gmail })} checked={on} disabled={gmbs.length === 0} onCheckedChange={(v) => void onFlip(gmbs.map((b) => b.id), v)} />
-                </div>
-                {unfolded && (
-                  <ul className="ml-4 flex flex-col border-l border-border pl-1">
-                    <li className="flex items-center gap-2 px-2 py-1 text-xs text-ink-soft">
-                      <RoleSelect gmail={g} onChanged={onChanged} />
-                      {t("gmbs.gmail.role.hint")}
-                    </li>
-                    {gmbs.length === 0 && <li className="px-2 py-1.5 text-xs text-ink-soft">{t("gmbs.gmail.empty")}</li>}
-                    {gmbs.map((b) => {
-                      const picked = chosen !== null && isSelected(b.id);
-                      return (
-                        <li key={b.id}>
-                          <button
-                            type="button"
-                            onClick={() => move([b.id], !picked)}
-                            aria-pressed={picked}
-                            title={b.address ? `${b.name}\n${b.address}` : b.name}
-                            className={cn(
-                              "flex w-full items-center gap-1 rounded-md py-1 pr-1 pl-2 text-left text-sm outline-none hover:bg-hover/50 focus-visible:ring-2 focus-visible:ring-ring",
-                              picked && "bg-hover font-medium ring-1 ring-accent-info ring-inset",
-                              b.enabled ? "text-ink" : "text-ink-soft",
-                            )}
-                          >
-                            <span className="min-w-0 flex-1 truncate">{b.name}</span>
-                            {picked && <Check aria-hidden className="size-3.5 shrink-0" />}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-        <div className="border-t border-border pt-1">
-          <AddGmailButton onAdded={onChanged} />
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-/** The GBPs on a gmail against what its role holds: "owner · 2/3", "5/6"; the count alone while its role is unknown. */
-function Room({ gmail, n }: { gmail: Gmail; n: number }) {
-  const t = useT();
-  if (gmail.role === null) return <span className="text-xs text-ink-soft tabular-nums">{n}</span>;
-  if (gmail.cap === null) throw new Error(`gmail ${gmail.id} has a role and no cap`);
-  return (
-    <span className={cn("text-xs tabular-nums", n > gmail.cap ? "text-accent-error" : "text-ink-soft")} title={t("gmbs.gmail.room.title")}>
-      {t(`gmbs.gmail.room.${gmail.role}`, { n, cap: gmail.cap })}
-    </span>
-  );
-}
-
-function RoleSelect({ gmail, onChanged }: { gmail: Gmail; onChanged: () => void }) {
-  const t = useT();
-  const pick = async (role: GmailRole) => {
+  const trades = useTrades();
+  const give = async (trade: number | null) => {
     try {
-      await setGmailRole(gmail.id, role);
-      onChanged();
+      await setTrades(gmbs, trade);
+      onSet();
     } catch (e) {
       notifyFailure(e, t);
     }
   };
   return (
-    <NativeSelect
-      size="sm"
-      wrapperClassName="w-24"
-      aria-label={t("gmbs.gmail.role", { gmail: gmail.gmail })}
-      value={gmail.role ?? ""}
-      onChange={(e) => e.target.value !== "" && void pick(e.target.value as GmailRole)}
-    >
-      {gmail.role === null && <NativeSelectOption value="">{t("gmbs.gmail.role.pick")}</NativeSelectOption>}
-      {GMAIL_ROLES.map((r) => (
-        <NativeSelectOption key={r} value={r}>
-          {t(`gmbs.gmail.role.${r}`)}
-        </NativeSelectOption>
-      ))}
-    </NativeSelect>
+    <DropdownMenu>
+      <DropdownMenuTrigger className="flex items-center gap-0.5 rounded px-1 text-xs font-normal tracking-normal normal-case outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+        {t("trades.set", { n: gmbs.length })}
+        <ChevronDown aria-hidden className="size-3" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {trades.status === "ok" &&
+          trades.data.map((tr) => (
+            <DropdownMenuItem key={tr.id} onSelect={() => void give(tr.id)}>
+              {tr.name}
+            </DropdownMenuItem>
+          ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => void give(null)}>{t("trades.none")}</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function HeadAction({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} className="rounded px-1 text-xs font-normal tracking-normal normal-case outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+      {children}
+    </button>
   );
 }
 
@@ -585,39 +418,5 @@ function GmbRow({
       </span>
       <Switch aria-label={t("gmbs.switch", { name })} checked={gmb.enabled} onCheckedChange={(v) => void onFlip([gmb.id], v)} />
     </li>
-  );
-}
-
-function Remove({ title, body, remove, onRemoved }: { title: string; body: string; remove: () => Promise<void>; onRemoved: () => void }) {
-  const t = useT();
-  const button = useButtonSize();
-  const act = async () => {
-    try {
-      await remove();
-      onRemoved();
-    } catch (e) {
-      notifyFailure(e, t);
-    }
-  };
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" size={button("sm")} icon aria-label={title} title={title}>
-          <Trash2 aria-hidden />
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>{body}</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t("move.cancel")}</AlertDialogCancel>
-          <AlertDialogAction className={buttonVariants({ variant: "destructive", size: button() })} onClick={() => void act()}>
-            {t("gmbs.remove")}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   );
 }

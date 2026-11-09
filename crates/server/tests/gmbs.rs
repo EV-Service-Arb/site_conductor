@@ -171,6 +171,7 @@ fn existing(gmail_id: i64, place: &str) -> Existing {
 		state: OnGoogle::Verified,
 		name: Some(place.to_owned()),
 		country: Some(Country::FR),
+		trade: None,
 	}
 }
 
@@ -335,20 +336,22 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 	let (_, first) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Lyon 7" }))).await;
 	let (_, second) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Lyon 8" }))).await;
 	let first = format!("/api/v1/gmbs/{}", first["id"]);
+	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
 
-	let must_haves = json!({ "phone": "04 78 00 00 01", "category": "Plombier", "areas": ["Lyon 7e"], "hidden_address": "12 rue de Marseille",
+	let must_haves = json!({ "phone": "04 78 00 00 01", "trade": trade["id"], "areas": ["Lyon 7e"], "hidden_address": "12 rue de Marseille",
 		"customers_visit": false, "film": "verif_vid:42", "profile": "mlx:lyon-7" });
 	let (status, edited) = call(&mut b, &app, Method::PATCH, &first, Some(must_haves.clone())).await;
 	assert_eq!(status, StatusCode::OK, "{edited}");
 	for (field, want) in must_haves.as_object().unwrap() {
-		let want = if field == "phone" { &json!("0478000001") } else { want };
+		let (field, want) = match field.as_str() {
+			"phone" => ("phone", &json!("0478000001")),
+			"trade" => ("trade_id", want),
+			f => (f, want),
+		};
 		assert_eq!(&edited[field], want, "{field}");
 	}
 	let (_, cleared) = call(&mut b, &app, Method::PATCH, &first, Some(json!({ "areas": null, "customers_visit": null }))).await;
-	assert_eq!(
-		(&cleared["areas"], &cleared["customers_visit"], &cleared["category"]),
-		(&json!([]), &Value::Null, &json!("Plombier"))
-	);
+	assert_eq!((&cleared["areas"], &cleared["customers_visit"], &cleared["trade_id"]), (&json!([]), &Value::Null, &trade["id"]));
 	let (status, _) = call(
 		&mut b,
 		&app,
@@ -384,4 +387,105 @@ async fn a_gmails_cap_follows_its_role() {
 	assert_eq!(status, StatusCode::BAD_REQUEST);
 	let (status, _) = call(&mut b, &app, Method::PATCH, "/api/v1/gmails/999", Some(json!({ "role": "owner" }))).await;
 	assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+/// Signed in as dev@localhost, beside a trade and a GBP of other@localhost's.
+async fn beside_another(db: &TestDb) -> (Router, Browser, i64, i64) {
+	let p = panel(db, None).await;
+	opened(&p).await;
+	let other = seen(&p, "other@localhost").await;
+	let trade = p.add_trade(other, "Plumbing", jiff::Timestamp::now()).await.unwrap().unwrap();
+	let gbp = p.create_draft(other, "Theirs", None, jiff::Timestamp::now()).await.unwrap().unwrap();
+	let app = app(p, None);
+	let mut b = Browser::default();
+	b.sign_in(&app).await;
+	(app, b, trade.id, gbp.id)
+}
+
+#[tokio::test]
+async fn a_trade_is_its_owners() {
+	let db = TestDb::create().await;
+	let (app, mut b, theirs, _) = beside_another(&db).await;
+	let (_, mine) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Lyon 7" }))).await;
+	let (status, _) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
+	assert_eq!(status, StatusCode::CREATED, "a name is one owner's");
+	let set_up = json!({ "keywords": [], "google_category": null, "study": null });
+	for (method, uri, body) in [
+		(Method::PATCH, format!("/api/v1/gmbs/{}", mine["id"]), Some(json!({ "trade": theirs }))),
+		(Method::POST, "/api/v1/gmbs".to_owned(), Some(json!({ "name": "Lyon 8", "trade": theirs }))),
+		(Method::PATCH, format!("/api/v1/trades/{theirs}"), Some(json!({ "name": "Mine" }))),
+		(Method::PUT, format!("/api/v1/trades/{theirs}/FR"), Some(set_up)),
+		(Method::DELETE, format!("/api/v1/trades/{theirs}"), None),
+	] {
+		let (status, body) = call(&mut b, &app, method.clone(), &uri, body).await;
+		assert_eq!(status, StatusCode::NOT_FOUND, "{method} {uri}: {body}");
+	}
+	let (_, listed) = call(&mut b, &app, Method::GET, "/api/v1/trades", None).await;
+	assert_eq!(listed["trades"].as_array().unwrap().len(), 1, "{listed}");
+}
+
+#[tokio::test]
+async fn a_trade_a_live_gbp_holds_is_not_deleted() {
+	let db = TestDb::create().await;
+	let (app, mut b, _, _) = beside_another(&db).await;
+	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
+	let uri = format!("/api/v1/trades/{}", trade["id"]);
+	let set_up = json!({ "keywords": ["plombier"], "google_category": "Plombier", "study": "plumbing" });
+	let (status, _) = call(&mut b, &app, Method::PUT, &format!("{uri}/FR"), Some(set_up)).await;
+	assert_eq!(status, StatusCode::OK);
+	let (_, gbp) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Lyon 7", "trade": trade["id"] }))).await;
+	assert_eq!(gbp["trade_id"], trade["id"], "{gbp}");
+
+	let (status, body) = call(&mut b, &app, Method::DELETE, &uri, None).await;
+	assert_eq!(status, StatusCode::CONFLICT, "{body}");
+	let (status, _) = call(&mut b, &app, Method::DELETE, &format!("/api/v1/gmbs/{}", gbp["id"]), None).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	let (status, body) = call(&mut b, &app, Method::DELETE, &uri, None).await;
+	assert_eq!(status, StatusCode::NO_CONTENT, "a removed GBP gives it up: {body}");
+	let (_, listed) = call(&mut b, &app, Method::GET, "/api/v1/trades", None).await;
+	assert_eq!(listed, json!({ "trades": [] }));
+}
+
+#[tokio::test]
+async fn keywords_are_one_spelling_each_and_none_twice() {
+	let db = TestDb::create().await;
+	let (app, mut b, _, _) = beside_another(&db).await;
+	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
+	let (status, _) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": " PLUMBING " }))).await;
+	assert_eq!(status, StatusCode::CONFLICT, "a name whatever its case");
+	let uri = format!("/api/v1/trades/{}/FR", trade["id"]);
+	let keywords = |k: Value| Some(json!({ "keywords": k, "google_category": null, "study": null }));
+
+	let (status, body) = call(&mut b, &app, Method::PUT, &uri, keywords(json!(["Plombier", " plombier  "]))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+	let (status, body) = call(&mut b, &app, Method::PUT, &uri, keywords(json!(["  Fuite \t d'eau ", "Plombier"]))).await;
+	assert_eq!((status, &body["categories"][0]["keywords"]), (StatusCode::OK, &json!(["fuite d'eau", "plombier"])), "{body}");
+}
+
+async fn trade_ids(b: &mut Browser, app: &Router) -> Vec<Value> {
+	let (_, listed) = call(b, app, Method::GET, "/api/v1/gmails", None).await;
+	listed["gmbs"].as_array().unwrap().iter().map(|g| g["trade_id"].clone()).collect()
+}
+
+#[tokio::test]
+async fn gbps_are_given_a_trade_every_one_or_none() {
+	let db = TestDb::create().await;
+	let (app, mut b, _, theirs) = beside_another(&db).await;
+	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
+	let mut mine = Vec::new();
+	for name in ["Lyon 7", "Lyon 8"] {
+		let (_, gbp) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": name }))).await;
+		mine.push(gbp["id"].as_i64().unwrap());
+	}
+	let (status, _) = call(&mut b, &app, Method::PUT, "/api/v1/gmbs/trade", Some(json!({ "gmbs": [mine[0], theirs], "trade": trade["id"] }))).await;
+	assert_eq!(status, StatusCode::NOT_FOUND);
+	assert_eq!(trade_ids(&mut b, &app).await, [Value::Null, Value::Null], "none given it");
+
+	let (status, _) = call(&mut b, &app, Method::PUT, "/api/v1/gmbs/trade", Some(json!({ "gmbs": mine, "trade": trade["id"] }))).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	assert_eq!(trade_ids(&mut b, &app).await, [trade["id"].clone(), trade["id"].clone()]);
+
+	let (status, _) = call(&mut b, &app, Method::PUT, "/api/v1/gmbs/trade", Some(json!({ "gmbs": [mine[1]], "trade": null }))).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	assert_eq!(trade_ids(&mut b, &app).await, [trade["id"].clone(), Value::Null]);
 }

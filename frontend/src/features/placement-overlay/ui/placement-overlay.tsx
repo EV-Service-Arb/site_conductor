@@ -35,19 +35,19 @@ export function PlacementOverlay({ map }: { map: google.maps.Map }) {
   const inView = placement.status === "ok" ? placement.inView : "zoom";
   const shown = inView === "zoom" ? "" : inView.join("\n");
   useEffect(() => {
-    void live?.handle.show(view.trade, shown === "" ? [] : shown.split("\n"));
-  }, [live, view.trade, shown]);
+    void live?.handle.show(view.study, shown === "" ? [] : shown.split("\n"));
+  }, [live, view.study, shown]);
   // the overlay refuses a layer no shown study offers; `?heat` waits for the studies that offer it
   const heat = placement.status === "ok" && placement.layers.some((l) => l.id === view.heat) ? view.heat : null;
   useEffect(() => {
     live?.handle.heat(heat);
   }, [live, heat]);
   const lambda = view.pressure?.lambda;
-  const pressure = view.pressure !== null && view.trade !== null;
+  const pressure = view.pressure !== null && view.study !== null;
   useEffect(() => {
     live?.handle.pressure(pressure ? (lambda === undefined ? {} : { lambda }) : null);
   }, [live, pressure, lambda]);
-  const competitors = view.competitors && view.trade !== null;
+  const competitors = view.competitors && view.study !== null;
   useEffect(() => {
     live?.handle.competitors(competitors);
   }, [live, competitors]);

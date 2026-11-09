@@ -1,6 +1,7 @@
 //! A GBP as the conductor defines it, for every service that speaks of one: the states it moves
-//! through, its country (which its reviews' language follows), and the snapshot review_archive is
-//! pushed (`PUT /api/conductor/gmbs`). The `ts` and `utoipa` features derive on these types only.
+//! through, its country (which its reviews' and its category's keywords' language follows), and
+//! the snapshot review_archive is pushed (`PUT /api/conductor/gmbs`). The `ts` and `utoipa`
+//! features derive on these types only.
 
 use std::{collections::BTreeMap, fmt, str::FromStr};
 
@@ -72,6 +73,31 @@ pub fn phone(raw: &str) -> Result<String, Invalid> {
 	match !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) {
 		true => Ok(canonical),
 		false => Err(refused()),
+	}
+}
+
+/// A category's keywords as stored: each trimmed, its inner whitespace one space, lowercased, at
+/// most 80 chars; at most 50, none twice. A keyword names no city: the grid point is the location,
+/// and a city term is one location's own. No weights: a term weighs its search volume where it is
+/// read.
+pub fn keywords(raw: &[String]) -> Result<Vec<String>, Invalid> {
+	let mut out: Vec<String> = Vec::with_capacity(raw.len());
+	for typed in raw {
+		let k = typed.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+		if k.is_empty() {
+			return Err(Invalid::new("a keyword is not empty"));
+		}
+		if k.chars().count() > 80 {
+			return Err(Invalid::new(format!("{k:?} is over 80 characters")));
+		}
+		if out.contains(&k) {
+			return Err(Invalid::new(format!("{typed:?} is the keyword {k:?} twice")));
+		}
+		out.push(k);
+	}
+	match out.len() {
+		51.. => Err(Invalid::new(format!("{} keywords: a category takes 50", out.len()))),
+		_ => Ok(out),
 	}
 }
 

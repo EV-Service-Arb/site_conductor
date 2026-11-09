@@ -1,4 +1,5 @@
 import type { Gmail, Gmails, Gmb } from "./gmb";
+import { type Scope, inScope } from "./scope";
 
 export interface Listed {
   gmb: Gmb;
@@ -6,12 +7,12 @@ export interface Listed {
   gmail: Gmail | null;
 }
 
-/** The GBPs under `scope` (`null`: every gmail, and the drafts under none) whose name, address, place id or gmail holds `filter`. */
-export function narrowed(data: Gmails, scope: ReadonlySet<number> | null, filter: string): Listed[] {
+/** The GBPs in `scope` (`null`: every one, the drafts under no gmail too) whose name, address, place id or gmail holds `filter`. */
+export function narrowed(data: Gmails, scope: Scope | null, filter: string): Listed[] {
   const needle = filter.trim().toLowerCase();
   const gmails = new Map(data.gmails.map((g) => [g.id, g]));
   return data.gmbs
-    .filter((gmb) => scope === null || (gmb.gmail_id !== null && scope.has(gmb.gmail_id)))
+    .filter((gmb) => scope === null || inScope(gmb, scope))
     .map((gmb) => {
       const gmail = gmb.gmail_id === null ? null : gmails.get(gmb.gmail_id);
       if (gmail === undefined) throw new Error(`GBP ${gmb.id} is under gmail ${gmb.gmail_id}, which is not listed`);

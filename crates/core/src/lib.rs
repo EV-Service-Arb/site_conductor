@@ -2,8 +2,8 @@
 //! argument.
 //!
 //! - [`answers`]: the answers store's wire, and what a request to it is signed over;
-//! - [`gbp`]: a GBP's states and moves, its country and language, and the snapshot the services
-//!   are told;
+//! - [`gbp`]: a GBP's states and moves, its country and language, a category's keywords, and the
+//!   snapshot the services are told;
 //! - [`ids`]: what a source key may name (brands), how its key id looks, and a site key's origin;
 //! - [`signature`]: how a source signs a batch, and how the conductor checks it;
 //! - [`notify`]: the Telegram rules, the conductor's own messages, the buttons' signed data, and

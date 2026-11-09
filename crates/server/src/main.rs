@@ -293,6 +293,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				state: state.parse()?,
 				name,
 				country: country.as_deref().map(str::parse).transpose()?,
+				trade: None,
 			};
 			let added = connect().await?.add_gmb(None, existing, Timestamp::now()).await??;
 			println!("GBP {}: {} {}", added.id, added.place_id.expect("on Google"), added.name);

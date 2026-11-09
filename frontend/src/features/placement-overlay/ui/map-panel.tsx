@@ -4,6 +4,7 @@ import { Button, NativeSelect, NativeSelectOption, Slider, ToggleGroup, ToggleGr
 import { Car, ChevronRight, Crosshair, Eye, EyeOff, Flame, Grid3x3, MapPin, Store, Users, Wallet, Waves } from "lucide-react";
 import { type ComponentType, type ReactNode, useState } from "react";
 
+import { covers, useScope, useTrades } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { useT } from "@/shared/i18n";
 import { type Base, setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
@@ -25,6 +26,7 @@ export function MapPanel() {
   const [more, setMore] = useState(false);
 
   const ok = placement.status === "ok" ? placement : null;
+  const studies = useStudies(ok?.trades ?? []);
   const layers = ok?.layers ?? [];
   const trade = layers.filter((l) => l.trade);
   const location = layers.filter((l) => !l.trade);
@@ -47,17 +49,17 @@ export function MapPanel() {
               <span className="flex-1 text-ink-mid">{t("placement.trade")}</span>
               <NativeSelect
                 size="sm"
-                wrapperClassName="w-40"
-                value={view.trade ?? ""}
+                wrapperClassName="w-48"
+                value={studies.find((o) => o.study === view.study)?.key ?? ""}
                 onChange={(e) => {
-                  const trade = e.currentTarget.value === "" ? null : e.currentTarget.value;
-                  setMapView({ trade, ...(trade !== null && view.heat === null && { heat: "demand" }) });
+                  const study = studies.find((o) => o.key === e.currentTarget.value)?.study ?? null;
+                  setMapView({ study, ...(study !== null && view.heat === null && { heat: "demand" }) });
                 }}
               >
                 <NativeSelectOption value="">{t("placement.pickTrade")}</NativeSelectOption>
-                {ok.trades.map((tr) => (
-                  <NativeSelectOption key={tr} value={tr}>
-                    {tr}
+                {studies.map((o) => (
+                  <NativeSelectOption key={o.key} value={o.key}>
+                    {o.label}
                   </NativeSelectOption>
                 ))}
               </NativeSelect>
@@ -66,7 +68,7 @@ export function MapPanel() {
             {ok.inView !== "zoom" && ok.inView.length === 0 && <Note>{t("placement.noGrid")}</Note>}
             {ok.inView !== "zoom" && ok.inView.length > 0 && (
               <>
-                {view.trade === null && <Row icon={Flame} label={t("placement.demand")} hint={t("placement.pickTrade")} />}
+                {view.study === null && <Row icon={Flame} label={t("placement.demand")} hint={t("placement.pickTrade")} />}
                 {featured.map(heatRow)}
                 {rest.length > 0 && (
                   <button type="button" onClick={() => setMore(!more)} className="flex h-(--control-h-sm) items-center gap-2 rounded-control px-2 text-ink-soft hover:bg-hover hover:text-ink">
@@ -82,17 +84,17 @@ export function MapPanel() {
             <Row
               icon={Waves}
               label={t("placement.pressure")}
-              hint={view.trade === null ? t("placement.pickTrade") : undefined}
+              hint={view.study === null ? t("placement.pickTrade") : undefined}
               on={view.pressure !== null}
-              onToggle={view.trade === null ? undefined : () => setMapView({ pressure: view.pressure === null ? {} : null })}
+              onToggle={view.study === null ? undefined : () => setMapView({ pressure: view.pressure === null ? {} : null })}
             />
-            {view.trade !== null && view.pressure !== null && ok.lambda !== null && <Radius view={view} fallback={ok.lambda} />}
+            {view.study !== null && view.pressure !== null && ok.lambda !== null && <Radius view={view} fallback={ok.lambda} />}
             <Row
               icon={Store}
               label={t("placement.competitors")}
-              hint={view.trade === null ? t("placement.pickTrade") : undefined}
+              hint={view.study === null ? t("placement.pickTrade") : undefined}
               on={view.competitors}
-              onToggle={view.trade === null ? undefined : () => setMapView({ competitors: !view.competitors })}
+              onToggle={view.study === null ? undefined : () => setMapView({ competitors: !view.competitors })}
             />
             <Row icon={MapPin} label={t("hotbar.places")} on={places} onToggle={() => showPlaces(!places)} />
           </Section>
@@ -124,6 +126,22 @@ export function MapPanel() {
   );
 }
 
+/** Placement's trades as the picker lists them: by the categories that study them, those in the outline's scope first, then a trade no category links under its own name. */
+function useStudies(stems: readonly string[]): { key: string; label: string; study: string }[] {
+  const trades = useTrades();
+  const { categories: scope } = useScope();
+  const linked = (trades.status === "ok" ? trades.data : []).flatMap((tr) =>
+    tr.categories.flatMap((c) =>
+      c.study !== null && stems.includes(c.study) ? [{ key: `${tr.id}.${c.country}`, label: `${tr.name} · ${c.country}`, study: c.study, inScope: scope === null || scope.some((p) => covers(p, tr.id, c.country)) }] : [],
+    ),
+  );
+  return [
+    ...linked.filter((l) => l.inScope),
+    ...linked.filter((l) => !l.inScope),
+    ...stems.filter((s) => !linked.some((l) => l.study === s)).map((s) => ({ key: `study:${s}`, label: s, study: s })),
+  ];
+}
+
 /** One line on the hotbar item: what the map is drawing. */
 export function MapPreview() {
   const t = useT();
@@ -132,7 +150,7 @@ export function MapPreview() {
   if (placement.status !== "ok") return placement.status === "unconnected" ? t("placement.unconnected") : t("placement.title");
   const heat = placement.layers.find((l) => l.id === view.heat)?.name ?? t("placement.noHeat");
   const where = placement.inView === "zoom" ? t("placement.zoomIn") : placement.inView.length === 0 ? t("placement.noGrid") : placement.inView.join(", ");
-  return [heat, view.trade === null ? where : `${view.trade} × ${where}`, view.pressure !== null && view.trade !== null && t("placement.pressureOn")].filter(Boolean).join(" · ");
+  return [heat, view.study === null ? where : `${view.study} × ${where}`, view.pressure !== null && view.study !== null && t("placement.pressureOn")].filter(Boolean).join(" · ");
 }
 
 function Radius({ view, fallback }: { view: MapView; fallback: number }) {

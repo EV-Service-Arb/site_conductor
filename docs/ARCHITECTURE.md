@@ -72,7 +72,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/grafana.rs         Grafana: its process, /grafana/, the viewers' tokens and the loopback
                          listener they work on, the services' dashboards
   src/live.rs            GET /api/v1/live, and the follower of sites' change feed
-  src/gmbs.rs            /api/v1/gmails, /api/v1/gmbs
+  src/gmbs.rs            /api/v1/gmails, /api/v1/gmbs, /api/v1/trades
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
   src/assistant.rs       /api/v1/assistant; the turns' shape
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
@@ -117,7 +117,7 @@ POST /auth/logout    CSRF; every session of the user is closed
   concrete `sa` permissions the user holds (no alias, no wildcard; anything outside `sa` is a
   failed answer). Every `/api/v1` route sits under one section — Admin
   (`sa:admin:sources:manage`), Tokens (`sa:admin:tokens:grant`) — or none (`/me`,
-  `/access/requests*`, `/alerts*`, `/assistant*`, the caller's own gmails, GMBs and tokens). Each fresh
+  `/access/requests*`, `/alerts*`, `/assistant*`, the caller's own gmails, GMBs, trades and tokens). Each fresh
   `GetMe` upserts the user (`users`: id, email, name), whom tokens and gmails belong to.
   `http::api_routes` is the table the router is built from and the tests walk.
 - **The catalog.** `serve` publishes `Catalog::collect("sa", PANEL_BUILD_EPOCH)` — the whole `sa`
@@ -337,7 +337,7 @@ DELETE /alerts/destinations/{id}            204, 404
 GET    /gmails                              {gmails: [{id, gmail, role, cap, created_at}], gmbs: [{id,
                                             gmail_id, place_id, name, address, state, next (the
                                             states it may move to), country: {code, by_hand} | null,
-                                            phone, category, areas, hidden_address, customers_visit,
+                                            phone, trade_id, areas, hidden_address, customers_visit,
                                             film, profile, created_at, enabled, location: {lat, lng,
                                             placed} | null}]} the caller's, removed ones left out; a
                                             draft's gmail_id and place_id may be null; cap null
@@ -346,11 +346,11 @@ POST   /gmails                              {gmail} → 201 the gmail; 409 held 
 PATCH  /gmails/{id}                         {role: owner|manager} → 200 the gmail
 DELETE /gmails/{id}                         204; its GBPs removed with it
 GET    /gmbs/resolve?place=                 {candidates: [{place_id, name, address}]} (sa_places)
-POST   /gmbs                                {name} → 201 a draft; 409 the name a live GBP's
-POST   /gmails/{id}/gmbs                    {place_id, state, name?, country?} → 201 a GBP on Google
+POST   /gmbs                                {name, trade?} → 201 a draft; 409 the name a live GBP's
+POST   /gmails/{id}/gmbs                    {place_id, state, name?, country?, trade?} → 201 a GBP on Google
                                             already (state not draft; name and country fill what
                                             Google lacks, else 400); 409 the name or place taken
-PATCH  /gmbs/{id}                           {name?, gmail_id?, phone?, category?, areas?,
+PATCH  /gmbs/{id}                           {name?, gmail_id?, phone?, trade?, areas?,
                                             hidden_address?, customers_visit?, film?, profile?} →
                                             200 the GBP: name a draft's only (409), gmail_id another
                                             of the caller's (a transfer), null clears the rest; 409
@@ -360,10 +360,19 @@ PUT    /gmbs/{id}/state                     {state, place?} → 200 the GBP; 400
 DELETE /gmbs/{id}                           204
 PUT    /gmbs/enabled                        {gmbs: [id], enabled} → 204: every one switched, or none
                                             (404 one not the caller's)
+PUT    /gmbs/trade                          {gmbs: [id], trade: id | null} → 204: every one, or none
 PUT    /gmbs/{id}/location                  {lat, lng} → 204, placed by hand; 409 Google has its point
 PUT    /gmbs/{id}/country                   {country} → 204, set by hand; 409 Google has its country
 GET    /map                                 {key}: the browser's Maps JS key; 404 without
                                             GOOGLE_MAPS_BROWSER_KEY
+GET    /trades                              {trades: [{id, name, created_at, categories: [{country,
+                                            keywords, google_category, study}]}]}
+POST   /trades                              {name} → 201 the trade; 409 the caller's already, any case
+PATCH  /trades/{id}                         {name} → 200 the trade; 409
+DELETE /trades/{id}                         204, its categories with it; 409 while a live GBP holds it
+PUT    /trades/{id}/{country}               {keywords, google_category, study} → 200 the trade: set up
+                                            there, or edited; 400 a keyword twice once normalized
+DELETE /trades/{id}/{country}               204
 GET    /tokens                              {balance, daily, cap, kickbacks}: renewed, the
                                             kick-backs not claimed
 GET    /tokens/ledger?before=&limit=        {entries, next}: newest first, limit 1–200
@@ -397,7 +406,7 @@ An id in a path that is not the caller's is a 404.
 ids, so they are deleted, with their members and marks. Owner and members write (turns, a title,
 invites; a member leaves); `general: view` lets anyone holding a `sa` permission read one, 403 on
 any write; anyone else is answered 404. Turns are written whole from an index, on the version
-read; a body ≤ 4 MiB (images ride as data URLs), a chat's turns ≤ 16 MiB, else 413. Before the import (below) the gmail and GMB
+read; a body ≤ 4 MiB (images ride as data URLs), a chat's turns ≤ 16 MiB, else 413. Before the import (below) the gmail, GMB and trade
 writes and every tokens route answer 503.
 **Connected sites** (`GET /sources/sites`): for every active site key at once, its landing's own
 report and sites' view of it, all asked together (joined, nothing spawned):
@@ -482,13 +491,19 @@ after the fact.
 - A name, a place and a phone (`sa_core::gbp::phone`'s spelling) are one live GBP's. The name is a
   draft's to change; the place is set once, onto Google (draft → verifying), with Google's address,
   point and country.
-- **A draft's must-haves** are what Google's form asks and what stands behind it: name, primary
-  category, service areas (≤ 20), phone, a site page (sites' link), the hidden address with whether
+- **A draft's must-haves** are what Google's form asks and what stands behind it: name, category
+  (set up, with Google's label), service areas (≤ 20), phone, a site page (sites' link), the hidden address with whether
   customers visit, the verification film, the managing gmail, the Multilogin profile. Film and
   profile are references set by hand until verif_vid and Multilogin fill them. How many are ready
   is advice the front end computes; the move onto Google never checks it.
 - **A gmail's role** on its GBPs, owner or manager, unknown until said, caps what it holds before
   Google grows wary (`sa_core::gbp::GmailRole::cap`): room shown, never refused.
+- **A GBP's category** is its trade (its owner's: Plumbing) in its own country, derived, never
+  stored: Plumbing · FR. The trade set up for a country holds Google's label there, placement's
+  study of it, and its keywords (`sa_core::gbp::keywords`), the terms every GBP of the category is
+  compared on, in the country's language; any other term is one study's or one location's own and
+  stays out of comparisons. Not set up there is shown so, never filled from another country. A
+  trade is deleted only once no live GBP holds it; no service stores its id.
 - **A GBP with a place has a gmail and a country** (the schema's CHECK on live rows): the archive
   reads its language from it. One on Google already is added verifying, verified or suspended.
 - A transfer moves it to another gmail of its owner's. Removed is once, apart from the state; a

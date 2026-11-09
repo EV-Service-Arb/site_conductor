@@ -25,7 +25,7 @@ import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 
-import { COUNTRIES, type Candidate, type Country, ON_GOOGLE, type OnGoogle, addGmb, createDraft, editGmb, resolvePlace, setOnMap, useGmails } from "@/entities/gmb";
+import { COUNTRIES, type Candidate, type Country, ON_GOOGLE, type OnGoogle, TradeSelect, addGmb, createDraft, editGmb, resolvePlace, setOnMap, useGmails } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -33,11 +33,11 @@ import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 const GOOGLES = "google";
 
 /**
- * A GBP added: a new one, a draft by its name (under `gmailId` if given); or one on Google already, a place or Maps URL pasted,
+ * A GBP added, of a trade (`trade` first, the outline's scope's): a new one, a draft by its name (under `gmailId` if given); or one on Google already, a place or Maps URL pasted,
  * resolved to candidates, one picked with its state, under `gmailId` or a gmail picked. One Google has no point for is then placed
  * on the home map.
  */
-export function AddGmbButton({ gmailId, onAdded }: { gmailId: number | null; onAdded: () => void }) {
+export function AddGmbButton({ gmailId, trade: scoped, onAdded }: { gmailId: number | null; trade: number | null; onAdded: () => void }) {
   const t = useT();
   const button = useButtonSize();
   const size = useControlSize();
@@ -53,6 +53,7 @@ export function AddGmbButton({ gmailId, onAdded }: { gmailId: number | null; onA
   const [picked, setPicked] = useState<string | null>(null);
   const [state, setState] = useState<OnGoogle>("verified");
   const [country, setCountry] = useState<Country | null>(null);
+  const [trade, setTrade] = useState<number | null>(scoped);
   const [busy, setBusy] = useState(false);
 
   const reset = () => {
@@ -63,6 +64,7 @@ export function AddGmbButton({ gmailId, onAdded }: { gmailId: number | null; onA
     setPicked(null);
     setState("verified");
     setCountry(null);
+    setTrade(scoped);
   };
 
   const act = async (action: () => Promise<void>) => {
@@ -84,7 +86,7 @@ export function AddGmbButton({ gmailId, onAdded }: { gmailId: number | null; onA
 
   const draft = () =>
     act(async () => {
-      const made = await createDraft(name.trim());
+      const made = await createDraft(name.trim(), trade);
       if (gmailId !== null) await editGmb(made.id, { gmail_id: gmailId });
       done();
     });
@@ -98,7 +100,7 @@ export function AddGmbButton({ gmailId, onAdded }: { gmailId: number | null; onA
 
   const add = (under: number, placeId: string) =>
     act(async () => {
-      const added = await addGmb(under, { place_id: placeId, state, ...(country !== null && { country }) });
+      const added = await addGmb(under, { place_id: placeId, state, ...(country !== null && { country }), trade });
       done();
       if (added.location === null) {
         router.push("/");
@@ -140,6 +142,10 @@ export function AddGmbButton({ gmailId, onAdded }: { gmailId: number | null; onA
             {mode(false, t("gmbs.gbp.new"))}
             {mode(true, t("gmbs.gbp.existing"))}
           </div>
+          <Field className="flex flex-col gap-1">
+            <FieldLabel>{t("trades.trade")}</FieldLabel>
+            <TradeSelect value={trade} onPick={setTrade} none={t("trades.later")} label={t("trades.trade")} className="w-full" />
+          </Field>
           {!onGoogle ? (
             <form
               className="flex flex-col gap-3"

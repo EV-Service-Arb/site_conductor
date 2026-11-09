@@ -23,6 +23,8 @@ import {
   usePeeked,
   useSelection,
   useTab,
+  useTradeWindow,
+  useTrades,
 } from "@/entities/gmb";
 import { PlacingBar } from "@/features/place-gmb";
 import { PlacementOverlay } from "@/features/placement-overlay";
@@ -35,6 +37,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorState } from "@/shared/ui/error-state";
 
 import { Peek } from "./peek";
+import { TradeWindow } from "./trade-window";
 import { LocationWindow } from "./window";
 
 /** `/`: the caller's GMBs on a map, unless they come back from the sign-in dialog to the page they were on. */
@@ -192,6 +195,14 @@ function GmbMap({ config }: { config: MapConfig }) {
     if (tabs !== undefined && tab !== null && !tabs.includes(tab)) setQuery({ tab: tabs[0] ?? null });
   }, [tabs, tab]);
   const windowed = peekedListed !== undefined && tab !== null && tabs?.includes(tab) === true;
+  const tradeWindow = useTradeWindow();
+  const trades = useTrades();
+  const opened = tradeWindow !== null && trades.status === "ok" ? trades.data.find((tr) => tr.id === tradeWindow.trade) : undefined;
+  // a trade deleted, here or in another tab: its window closes
+  const gone = tradeWindow !== null && trades.status === "ok" && opened === undefined;
+  useEffect(() => {
+    if (gone) setQuery({ trade: null, tab: null });
+  }, [gone]);
   useEffect(() => {
     const at = peekedListed?.gmb.location;
     if (map.status === "ok" && at) map.map.panTo(at);
@@ -208,6 +219,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       )}
       {peekedListed && placed === undefined && !windowed && <Peek listed={peekedListed} onClose={() => peek(null)} />}
       {peekedListed && placed === undefined && windowed && <LocationWindow listed={peekedListed} tab={tab} />}
+      {opened && tradeWindow && gmails.status === "ok" && placed === undefined && <TradeWindow trade={opened} tab={tradeWindow.tab} gmbs={gmails.data.gmbs} />}
       {map.status === "ok" && placed !== undefined && placedAt !== null && <PlacingBar gmb={placed} map={map.map} at={placedAt} onMove={(at) => setMoved({ gmb: placed.id, at })} />}
     </>
   );

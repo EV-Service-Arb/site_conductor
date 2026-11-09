@@ -5,6 +5,23 @@
  */
 export type Candidates = { candidates: Array<Place>, };
 /**
+ * A trade set up for a country: Plumbing · FR.
+ */
+export type Category = { country: Country, 
+/**
+ * Lowercase, in the country's language, none naming a city: the terms every GBP of the
+ * category is compared on.
+ */
+keywords: Array<string>, 
+/**
+ * The label typed into Google's form.
+ */
+google_category: string | null, 
+/**
+ * Placement's trade that studies it.
+ */
+study: string | null, };
+/**
  * ISO 3166-1 alpha-2, of the countries GBPs are in.
  */
 export type Country = "FR" | "US" | "CA" | "GB";
@@ -60,7 +77,11 @@ country: GbpCountry | null,
 /**
  * `+` and digits; one live GBP's.
  */
-phone: string | null, category: string | null, 
+phone: string | null, 
+/**
+ * Its category is this trade in its country.
+ */
+trade_id: number | null, 
 /**
  * Service areas, at most 20.
  */
@@ -118,3 +139,19 @@ name: string | null, address: string | null, };
  * ```
  */
 export type State = "draft" | "verifying" | "verified" | "suspended";
+/**
+ * A trade of the caller's: Plumbing, set up in some countries.
+ */
+export type Trade = { id: number, name: string, 
+/**
+ * RFC 3339.
+ */
+created_at: string, 
+/**
+ * By country.
+ */
+categories: Array<Category>, };
+/**
+ * `GET /trades`.
+ */
+export type Trades = { trades: Array<Trade>, };

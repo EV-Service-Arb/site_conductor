@@ -21,14 +21,14 @@ import {
 import { Pencil } from "lucide-react";
 import { useId, useState } from "react";
 
-import { COUNTRIES, type Country, type Gmb, type State, editGmb, moveGmb, setCountry, useGmails } from "@/entities/gmb";
+import { COUNTRIES, type Country, type Gmb, type State, TradeSelect, editGmb, moveGmb, setCountry, useGmails } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 const NONE = "none";
 
-/** A GBP on Google's own fields (its gmail, phone, and its country while Google gives none), and the states it may move to; a draft's are its window's Launch tab. */
+/** A GBP on Google's own fields (its gmail, trade, phone, and its country while Google gives none), and the states it may move to; a draft's are its window's Launch tab. */
 export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => void }) {
   const t = useT();
   const button = useButtonSize();
@@ -38,6 +38,7 @@ export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => v
   const [open, setOpen] = useState(false);
   const [gmail, setGmail] = useState(gmb.gmail_id);
   const [phone, setPhone] = useState(gmb.phone ?? "");
+  const [trade, setTrade] = useState(gmb.trade_id);
   const [country, setCountryPicked] = useState<Country | null>(gmb.country?.code ?? null);
   const [busy, setBusy] = useState(false);
   const googles = gmb.country !== null && !gmb.country.by_hand;
@@ -46,6 +47,7 @@ export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => v
   const reset = () => {
     setGmail(gmb.gmail_id);
     setPhone(gmb.phone ?? "");
+    setTrade(gmb.trade_id);
     setCountryPicked(gmb.country?.code ?? null);
   };
 
@@ -67,6 +69,7 @@ export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => v
       const edit = {
         ...(gmail !== null && gmail !== gmb.gmail_id && { gmail_id: gmail }),
         ...(phone.trim() !== (gmb.phone ?? "") && { phone: phone.trim() === "" ? null : phone.trim() }),
+        ...(trade !== gmb.trade_id && { trade }),
       };
       if (Object.keys(edit).length > 0) await editGmb(gmb.id, edit);
       if (country !== null && country !== gmb.country?.code) await setCountry(gmb.id, country);
@@ -125,6 +128,10 @@ export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => v
                 </Select>
               </Field>
             )}
+            <Field className="flex flex-col gap-1">
+              <FieldLabel>{t("trades.trade")}</FieldLabel>
+              <TradeSelect value={trade} onPick={setTrade} none={t("trades.none")} label={t("trades.trade")} className="w-full" />
+            </Field>
             <div className="flex gap-2">
               <Field className="flex min-w-0 flex-1 flex-col gap-1">
                 <FieldLabel htmlFor={`${id}-phone`}>{t("gmbs.gbp.phone")}</FieldLabel>

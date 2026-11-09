@@ -10,11 +10,14 @@ import {
   type MapConfig,
   type SitesPlace,
   type State,
+  type Trade,
   candidatesParser,
   gmailsParser,
   gmbParser,
   mapConfigParser,
   sitesPlacesParser,
+  tradeParser,
+  tradesParser,
 } from "../model/gmb";
 
 export function fetchGmails(): Promise<Gmails> {
@@ -48,19 +51,20 @@ export async function resolvePlace(place: string): Promise<Candidate[]> {
 }
 
 /** A GBP on Google already; `name` and `country` fill what Google lacks. */
-export function addGmb(gmailId: number, add: { place_id: string; state: State; name?: string; country?: Country }): Promise<Gmb> {
+export function addGmb(gmailId: number, add: { place_id: string; state: State; name?: string; country?: Country; trade: number | null }): Promise<Gmb> {
   return http.send("POST", `/api/v1/gmails/${gmailId}/gmbs`, add, gmbParser);
 }
 
 /** A GBP not on Google yet; refused when a live one has the name. */
-export function createDraft(name: string): Promise<Gmb> {
-  return http.send("POST", "/api/v1/gmbs", { name }, gmbParser);
+export function createDraft(name: string, trade: number | null): Promise<Gmb> {
+  return http.send("POST", "/api/v1/gmbs", { name, trade }, gmbParser);
 }
 
 /** What a GBP's PATCH takes: `name` a draft's only, `null` clears a field. */
-export type GmbEdit = Partial<Pick<Gmb, "phone" | "category" | "hidden_address" | "customers_visit" | "film" | "profile">> & {
+export type GmbEdit = Partial<Pick<Gmb, "phone" | "hidden_address" | "customers_visit" | "film" | "profile">> & {
   name?: string;
   gmail_id?: number;
+  trade?: number | null;
   areas?: string[] | null;
 };
 
@@ -91,6 +95,38 @@ export async function removeGmb(id: number): Promise<void> {
 /** All of `ids` or none: one not the caller's refuses the lot. */
 export async function switchGmbs(ids: number[], enabled: boolean): Promise<void> {
   await http.send("PUT", "/api/v1/gmbs/enabled", { gmbs: ids, enabled }, ignoreBody);
+}
+
+/** All of `ids` or none: one not the caller's refuses the lot. `null` takes their trade away. */
+export async function setTrades(ids: number[], trade: number | null): Promise<void> {
+  await http.send("PUT", "/api/v1/gmbs/trade", { gmbs: ids, trade }, ignoreBody);
+}
+
+export async function fetchTrades(): Promise<Trade[]> {
+  return (await http.get("/api/v1/trades", tradesParser)).trades;
+}
+
+/** Refused when the caller has a trade of that name, whatever its case. */
+export function addTrade(name: string): Promise<Trade> {
+  return http.send("POST", "/api/v1/trades", { name }, tradeParser);
+}
+
+export function renameTrade(id: number, name: string): Promise<Trade> {
+  return http.send("PATCH", `/api/v1/trades/${id}`, { name }, tradeParser);
+}
+
+/** Refused while a live GBP holds it. */
+export async function deleteTrade(id: number): Promise<void> {
+  await http.send("DELETE", `/api/v1/trades/${id}`, undefined, ignoreBody);
+}
+
+/** Sets the trade up in `country`, or edits it there; refused for a keyword twice once lowercased. */
+export function setUpCategory(id: number, country: Country, c: { keywords: string[]; google_category: string | null; study: string | null }): Promise<Trade> {
+  return http.send("PUT", `/api/v1/trades/${id}/${country}`, c, tradeParser);
+}
+
+export async function removeCategory(id: number, country: Country): Promise<void> {
+  await http.send("DELETE", `/api/v1/trades/${id}/${country}`, undefined, ignoreBody);
 }
 
 export async function fetchSitesPlaces(): Promise<SitesPlace[]> {
