@@ -333,7 +333,7 @@
         };
 
         # `nix run .#dev`'s peers, from ../<name> unless their user's entry names a `path` or `command` (docs/LOCAL.md)
-        devPeers = [ "sites_panel" "review_archive" ];
+        devPeers = [ "sites_panel" "review_archive" "gmaps_optimal_placement" ];
         devUsers = {
           v.sites_panel.path = "../sites/panel";
         };

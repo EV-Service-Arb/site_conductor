@@ -13,6 +13,7 @@ The tens, in order from the start of the range:
 3. sites: sites/panel first, then the landings (aquafix, vifnet)
 4. playbook
 5. verif_tools
+6. gmaps_optimal_placement
 
 A new repository takes the next ten. Each sets the first of its own at the top of its flake.nix
 (`SA_PORTS`; a landing, its one port, `SA_PORT`), linking here, and derives the rest. Its dev shell

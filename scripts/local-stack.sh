@@ -138,9 +138,11 @@ if [ "$dev" = 1 ]; then
 	}
 	SITES_DIR="${SITES_DIR:-$(dev_dir "${DEV_PATH_sites_panel:-}" sites_panel)}"
 	REVIEW_ARCHIVE_DIR="${REVIEW_ARCHIVE_DIR:-$(dev_dir "${DEV_PATH_review_archive:-}" review_archive)}"
+	PLACEMENT_DIR="${PLACEMENT_DIR:-$(dev_dir "${DEV_PATH_gmaps_optimal_placement:-}" gmaps_optimal_placement)}"
 fi
 SITES_DIR="${SITES_DIR:-$service_arb/sites/panel}"
 REVIEW_ARCHIVE_DIR="${REVIEW_ARCHIVE_DIR:-$service_arb/review_archive}"
+PLACEMENT_DIR="${PLACEMENT_DIR:-$service_arb/gmaps_optimal_placement}"
 AQUAFIX_DIR="${AQUAFIX_DIR:-$service_arb/sites/aquafix}"
 VIFNET_DIR="${VIFNET_DIR:-$service_arb/sites/vifnet}"
 
@@ -180,6 +182,7 @@ else
 fi
 SITES_PORT="$(shell_port "$SITES_DIR" PANEL_BIND)"
 REVIEW_ARCHIVE_PORT="$(shell_port "$REVIEW_ARCHIVE_DIR" REVIEW_ARCHIVE_SERVER_BIND)"
+PLACEMENT_PORT="$(shell_port "$PLACEMENT_DIR" PLACEMENT_PORT)"
 AQUAFIX_PORT=""
 VIFNET_PORT=""
 if [ "$sites" = 1 ] || [ "$dev" = 0 ]; then
@@ -193,6 +196,9 @@ answers() { curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$1/health" 2>/
 run_panel=1
 run_sites=1
 run_review_archive=1
+run_placement=1
+# placement serves no /health: its overlay module is what the conductor needs of it
+placement_answers() { curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$PLACEMENT_PORT/mfe/overlay.js" 2>/dev/null; }
 # `take_over <port>`: a conductor or its next dev listening there stops, with the run that started it
 # (whatever else that run serves goes too, and is started here instead); anything else is let be.
 take_over() {
@@ -254,6 +260,13 @@ if [ "$dev" = 1 ]; then
 		say "review_archive already serves http://127.0.0.1:$REVIEW_ARCHIVE_PORT: using it"
 		run_review_archive=0
 	fi
+	if [ -z "$PLACEMENT_PORT" ]; then
+		warn "skipping gmaps_optimal_placement: no checkout at $PLACEMENT_DIR (flake.nix devUsers, or PLACEMENT_DIR, names another); the map says placement is not connected"
+		run_placement=0
+	elif placement_answers; then
+		say "gmaps_optimal_placement already serves http://127.0.0.1:$PLACEMENT_PORT: using it"
+		run_placement=0
+	fi
 	if [ "$run_panel$run_sites$run_review_archive" = 000 ]; then
 		if busy "$WEB_DEV_PORT"; then say "open http://localhost:$WEB_DEV_PORT"; else say "open http://127.0.0.1:$PANEL_PORT"; fi
 		exit 0
@@ -266,6 +279,7 @@ ports=()
 [ "$run_panel" = 1 ] && ports+=("$PANEL_PORT")
 [ "$run_sites" = 1 ] && ports+=("$SITES_PORT")
 [ "$run_review_archive" = 1 ] && ports+=("$REVIEW_ARCHIVE_PORT")
+[ "$run_placement" = 1 ] && ports+=("$PLACEMENT_PORT")
 [ "$sites" = 1 ] && ports+=("$AQUAFIX_PORT" "$VIFNET_PORT")
 [ "$watch" = 1 ] && [ "$run_panel" = 1 ] && ports+=("$WEB_DEV_PORT")
 for port in "${ports[@]}"; do
@@ -401,6 +415,7 @@ if [ "$watch" = 1 ] && { [ "$run_panel" = 1 ] || busy "$WEB_DEV_PORT"; }; then
 fi
 sites_origin="http://127.0.0.1:$SITES_PORT"
 review_archive_origin="http://127.0.0.1:$REVIEW_ARCHIVE_PORT"
+placement_origin="${PLACEMENT_PORT:+http://127.0.0.1:$PLACEMENT_PORT}"
 # A key for this machine alone: the 32 bytes 0..31, and its public half for sites_panel.
 assertion_key="local:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
 assertion_public="local:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="
@@ -419,6 +434,7 @@ panel() {
 		PANEL_ASSERTION_KEY="$assertion_key" \
 		PANEL_SITES_URL="$sites_origin" \
 		PANEL_REVIEW_ARCHIVE_URL="$review_archive_origin" \
+		PANEL_PLACEMENT_URL="$placement_origin" \
 		PANEL_GRAFANA_SERVER="$PANEL_GRAFANA_SERVER" \
 		PANEL_GRAFANA_DIR="$state/grafana" \
 		PANEL_PLAYBOOK_URL="http://127.0.0.1:9" \
@@ -554,7 +570,7 @@ wait_for() {
 # `watched <checkout> <watchexec's filters…> -- <command>`: <command> (bash, the functions above
 # included) in that checkout's dev shell, stopped and run again as the files watched change
 export -f panel sites_panel review_archive
-export state public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin \
+export state public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_origin \
 	PANEL_GRAFANA_SERVER PANEL_BIN SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR REVIEW_ARCHIVE_DATA_DIR REVIEW_ARCHIVE_PORT \
 	PANEL_PORT SITES_PORT
 watched() {
@@ -616,6 +632,14 @@ if [ "$run_review_archive" = 1 ]; then
 	fi
 fi
 
+if [ "$run_placement" = 1 ]; then
+	# not watched, and not essential: the map goes on without it; its first build takes minutes
+	say "starting gmaps_optimal_placement on $placement_origin (the home map's overlay)"
+	(cd "$PLACEMENT_DIR" && PANEL_ASSERTION_KEYS="$assertion_public" prefixed placement bash -c \
+		"${DEV_COMMAND_gmaps_optimal_placement:-nix run .#conductor -- --port $PLACEMENT_PORT -t examples/trades -l examples/locations}") &
+	placement_pid=$!
+fi
+
 if [ "$run_panel" = 1 ]; then
 	say "starting the conductor on $origin (dev sign-in: $role)"
 	serving panel "$root" "cargo b -q -p sa_server" "panel serve --bind 127.0.0.1:$PANEL_PORT" -i 'crates/gen/**' -e rs,toml,sql,lock &
@@ -636,6 +660,10 @@ if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
 	) &
 	web_pid=$!
 	wait_for web "$public_origin/" 300 "$web_pid" || die "next dev did not start"
+fi
+
+if [ "$run_placement" = 1 ]; then
+	wait_for placement "$placement_origin/mfe/overlay.js" 900 "$placement_pid" || warn "gmaps_optimal_placement did not come up; the map says placement is not connected"
 fi
 
 started=()
