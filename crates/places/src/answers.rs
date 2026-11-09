@@ -22,25 +22,6 @@ pub trait Answers: Send + Sync + std::fmt::Debug {
 	fn release(&self, key: Key) -> Pending<'_, ()>;
 }
 
-/// A request as the store tells it from another: the field mask changes the answer's shape.
-pub(crate) struct Request<'a> {
-	pub method: &'a str,
-	pub url: &'a str,
-	pub mask: &'a str,
-	pub body: &'a str,
-}
-
-impl Request<'_> {
-	/// What the key is the digest of, kept with the answer.
-	pub fn preimage(&self) -> String {
-		format!("{}\n{}\n{}\n{}", self.method, self.url, self.mask, self.body)
-	}
-
-	pub fn key(&self) -> Key {
-		Key(Sha256::digest(self.preimage()).into())
-	}
-}
-
 /// The conductor's store over HTTP, as an `answers` source key.
 pub struct Remote {
 	http: reqwest::Client,
@@ -49,7 +30,6 @@ pub struct Remote {
 	key_id: String,
 	secret: Zeroizing<String>,
 }
-
 impl Remote {
 	/// The store at `url`, `<origin>/api/answers`.
 	pub fn try_new(url: &str, key_id: impl Into<String>, secret: Zeroizing<String>) -> Result<Self, Error> {
@@ -86,6 +66,25 @@ impl Remote {
 
 	fn refused(&self, under: &str, status: reqwest::StatusCode, text: &str) -> Error {
 		Error::Store(format!("{}{under}: {status}: {text}", self.url))
+	}
+}
+
+/// A request as the store tells it from another: the field mask changes the answer's shape.
+pub(crate) struct Request<'a> {
+	pub method: &'a str,
+	pub url: &'a str,
+	pub mask: &'a str,
+	pub body: &'a str,
+}
+
+impl Request<'_> {
+	/// What the key is the digest of, kept with the answer.
+	pub fn preimage(&self) -> String {
+		format!("{}\n{}\n{}\n{}", self.method, self.url, self.mask, self.body)
+	}
+
+	pub fn key(&self) -> Key {
+		Key(Sha256::digest(self.preimage()).into())
 	}
 }
 

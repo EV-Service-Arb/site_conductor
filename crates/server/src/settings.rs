@@ -1,6 +1,9 @@
 //! The environment: secrets and the deployment profile. Where to listen is a flag.
 
-use std::path::{Path, PathBuf};
+use std::{
+	path::{Path, PathBuf},
+	sync::Arc,
+};
 
 use sa_auth::{Catalog, PermissionSet};
 use sa_core::{notify::Locale, tokens::Renewal};
@@ -131,7 +134,7 @@ impl Settings {
 
 	/// Places, its answers kept in the conductor's own store.
 	pub fn google(&self, store: &Store) -> eyre::Result<Google> {
-		Ok(Google::try_new(Keys::new(self.places_keys()), std::sync::Arc::new(store.clone()))?)
+		Ok(Google::try_new(Keys::new(self.places_keys()), Arc::new(store.clone()))?)
 	}
 
 	/// The browser's map.

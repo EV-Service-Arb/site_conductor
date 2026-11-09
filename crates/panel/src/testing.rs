@@ -5,7 +5,10 @@
 //! `cargo test` does, CI included. A file, not `:memory:`: an in-memory database is one per
 //! connection, and the tests open several pools on one database, as replicas would.
 
-use std::path::{Path, PathBuf};
+use std::{
+	path::{Path, PathBuf},
+	sync::Arc,
+};
 
 use jiff::Timestamp;
 use sa_core::signature;
@@ -74,7 +77,7 @@ pub async fn panel(db: &TestDb) -> Panel {
 
 /// A panel on `store`: tokens renewing 15 a day up to 500 from 500, places resolving ids only.
 pub fn panel_with(store: Store, key: DataKey) -> Panel {
-	let keyless = sa_places::Google::try_new(sa_places::Keys::new(vec![]), std::sync::Arc::new(store.clone())).expect("a Places client");
+	let keyless = sa_places::Google::try_new(sa_places::Keys::new(vec![]), Arc::new(store.clone())).expect("a Places client");
 	panel_on(store, key, keyless)
 }
 
