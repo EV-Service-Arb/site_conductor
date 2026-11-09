@@ -1,0 +1,22 @@
+import type { Gmb } from "./gmb";
+import type { Tags } from "./issues";
+
+/** What a draft needs before Google's form: the form's order, then what stands behind it. */
+export const MUST_HAVES = ["name", "category", "areas", "phone", "site", "hidden_address", "film", "gmail", "profile"] as const;
+export type MustHave = (typeof MUST_HAVES)[number];
+
+/** Each must-have with whether it is ready, in [`MUST_HAVES`]' order. Advice: moving onto Google never checks it. */
+export function readiness(gmb: Gmb, tags: Tags): { must: MustHave; ready: boolean }[] {
+  const ready: Record<MustHave, boolean> = {
+    name: true,
+    category: gmb.category !== null,
+    areas: gmb.areas.length > 0,
+    phone: gmb.phone !== null,
+    site: tags.sites?.has(gmb.id) ?? false,
+    hidden_address: gmb.hidden_address !== null && gmb.customers_visit !== null,
+    film: gmb.film !== null,
+    gmail: gmb.gmail_id !== null,
+    profile: gmb.profile !== null,
+  };
+  return MUST_HAVES.map((must) => ({ must, ready: ready[must] }));
+}

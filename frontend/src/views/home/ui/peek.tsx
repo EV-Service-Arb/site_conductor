@@ -4,7 +4,7 @@ import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, butt
 import { X } from "lucide-react";
 import Link from "next/link";
 
-import { type Listed, issueOf, issueText, useGmbTags } from "@/entities/gmb";
+import { type Listed, TABS, issueOf, issueText, open, useGmbTags } from "@/entities/gmb";
 import { ROUTES } from "@/shared/config/routes";
 import { useT } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -40,10 +40,15 @@ export function Peek({ listed: { gmb, gmail }, onClose }: { listed: Listed; onCl
         <div className="flex flex-col gap-0.5 text-sm">
           {numbers.length > 0 && <p className="text-ink tabular-nums">{numbers.join(" · ")}</p>}
           <p className={cn(issue === null || issue === "off" ? "text-ink-soft" : "font-medium text-accent-error")}>
-            {issue === null ? t("home.peek.fine") : issue === "off" ? t("home.peek.off") : issueText(issue, gmb.id, tags, t)}
+            {issue === null ? t("home.peek.fine") : issue === "off" ? t("home.peek.off") : issueText(issue, gmb, tags, t)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {TABS[gmb.state].length > 0 && (
+            <Button size={button("sm")} onClick={() => open(gmb)}>
+              {t("home.peek.open")}
+            </Button>
+          )}
           <Link href={`${ROUTES.reviewArchive}gmbs/${gmb.id}`} className={buttonVariants({ variant: "outline", size: button("sm") })}>
             {reviewsNote ? `${t("home.peek.reviews")} · ${reviewsNote}` : t("home.peek.reviews")}
           </Link>

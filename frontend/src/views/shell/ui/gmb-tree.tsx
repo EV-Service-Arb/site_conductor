@@ -17,6 +17,8 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
+  NativeSelect,
+  NativeSelectOption,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -31,26 +33,32 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 
 import {
+  GMAIL_ROLES,
   type Gmail,
+  type GmailRole,
   type Gmails,
   type Gmb,
   ISSUES,
   type Listed,
+  MUST_HAVES,
   type Selection,
   type SiteTag,
   type State,
+  TABS,
   type Tags,
   byView,
   chooseGmailScope,
   issueCounts,
   issueOf,
   issueText,
-  peek,
+  open,
+  readiness,
   removeGmail,
   removeGmb,
   select,
   setFilter,
   setOnMap,
+  setGmailRole,
   setOnly,
   switchGmbs,
   under,
@@ -161,7 +169,8 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   const split = onMap ? byView(inSelection, inView) : null;
 
   return (
-    <section aria-label={t("gmbs.title")} className="flex flex-col gap-1">
+    // NOT SELECTED and the footer stay in reach under a long SELECTED, which scrolls alone
+    <section aria-label={t("gmbs.title")} className="flex min-h-0 flex-1 flex-col gap-1">
       <Scope data={gmails.data} selection={selection} onFlip={flip} onChanged={changed} />
       <InputGroup className="mx-0.5 w-auto">
         <InputGroupAddon>
@@ -194,6 +203,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
         <>
           <Group
             into
+            className="min-h-0 flex-1 overflow-y-auto"
             heading={t("gmbs.selected")}
             count={inSelection.length}
             empty={t("gmbs.selected.empty")}
@@ -225,6 +235,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
           </Group>
           <Group
             into={false}
+            className="max-h-2/5 shrink-0 overflow-y-auto border-t border-border"
             heading={t("gmbs.unselected")}
             count={outOfSelection.length}
             empty={t("gmbs.unselected.empty")}
@@ -248,6 +259,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
 /** A side of the selection, which a row dragged onto it moves to. */
 function Group({
   into,
+  className,
   heading,
   count,
   empty,
@@ -256,6 +268,7 @@ function Group({
   children,
 }: {
   into: boolean;
+  className: string;
   heading: string;
   count: number;
   empty: string;
@@ -283,7 +296,7 @@ function Group({
         if (!Number.isSafeInteger(id)) throw new Error(`dropped a GMB without an id: ${e.dataTransfer.getData(DRAGGED)}`);
         onMove([id], into);
       }}
-      className={cn("rounded-md transition-colors", over && "bg-hover/40 ring-1 ring-ring")}
+      className={cn("rounded-md transition-colors", className, over && "bg-hover/40 ring-1 ring-ring")}
     >
       <h3 className={HEADING}>
         {heading} <span className="tabular-nums">{count}</span>
@@ -379,10 +392,11 @@ function Scope({ data, selection, onFlip, onChanged }: { data: Gmails; selection
                     {g.gmail}
                   </button>
                   <span className={cn("flex items-center", ON_HOVER)}>
+                    <RoleSelect gmail={g} onChanged={onChanged} />
                     <AddGmbButton gmailId={g.id} onAdded={onChanged} />
                     <Remove title={t("gmbs.gmail.remove.title", { gmail: g.gmail })} body={t("gmbs.gmail.remove.body")} remove={() => removeGmail(g.id)} onRemoved={onChanged} />
                   </span>
-                  <span className="text-xs text-ink-soft tabular-nums">{k > 0 && !full ? `${k}/${gmbs.length}` : gmbs.length}</span>
+                  {k > 0 && !full ? <span className="text-xs text-ink-soft tabular-nums">{`${k}/${gmbs.length}`}</span> : <Room gmail={g} n={gmbs.length} />}
                   <Switch aria-label={t("gmbs.switch", { name: g.gmail })} checked={on} disabled={gmbs.length === 0} onCheckedChange={(v) => void onFlip(gmbs.map((b) => b.id), v)} />
                 </div>
                 {unfolded && (
@@ -423,6 +437,46 @@ function Scope({ data, selection, onFlip, onChanged }: { data: Gmails; selection
   );
 }
 
+/** The GBPs on a gmail against what its role holds: "owner · 2/3", "5/6"; the count alone while its role is unknown. */
+function Room({ gmail, n }: { gmail: Gmail; n: number }) {
+  const t = useT();
+  if (gmail.role === null) return <span className="text-xs text-ink-soft tabular-nums">{n}</span>;
+  if (gmail.cap === null) throw new Error(`gmail ${gmail.id} has a role and no cap`);
+  return (
+    <span className={cn("text-xs tabular-nums", n > gmail.cap ? "text-accent-error" : "text-ink-soft")} title={t("gmbs.gmail.room.title")}>
+      {t(`gmbs.gmail.room.${gmail.role}`, { n, cap: gmail.cap })}
+    </span>
+  );
+}
+
+function RoleSelect({ gmail, onChanged }: { gmail: Gmail; onChanged: () => void }) {
+  const t = useT();
+  const pick = async (role: GmailRole) => {
+    try {
+      await setGmailRole(gmail.id, role);
+      onChanged();
+    } catch (e) {
+      notifyFailure(e, t);
+    }
+  };
+  return (
+    <NativeSelect
+      size="sm"
+      wrapperClassName="w-24"
+      aria-label={t("gmbs.gmail.role", { gmail: gmail.gmail })}
+      value={gmail.role ?? ""}
+      onChange={(e) => e.target.value !== "" && void pick(e.target.value as GmailRole)}
+    >
+      {gmail.role === null && <NativeSelectOption value="">{t("gmbs.gmail.role.pick")}</NativeSelectOption>}
+      {GMAIL_ROLES.map((r) => (
+        <NativeSelectOption key={r} value={r}>
+          {t(`gmbs.gmail.role.${r}`)}
+        </NativeSelectOption>
+      ))}
+    </NativeSelect>
+  );
+}
+
 function GmbRow({
   listed: { gmb, gmail },
   tags,
@@ -457,24 +511,28 @@ function GmbRow({
   const issue = issueOf(gmb, tags);
   const archive = tags.archive?.get(gmb.id);
   const site = tags.sites?.get(gmb.id);
+  const ready = gmb.state === "draft" ? readiness(gmb, tags).filter((r) => r.ready).length : null;
   const key =
-    tags.sites !== null
-      ? site && { text: String(site.leads_7d), title: t("gmbs.leads7d.title") }
-      : archive?.rating != null && { text: `★ ${archive.rating.toFixed(1)}`, title: t("gmbs.rating.title") };
+    ready !== null
+      ? { text: issueText("draft", gmb, tags, t), title: t("gmbs.readiness.title"), tone: ready === MUST_HAVES.length ? "text-positive" : "text-accent-warn" }
+      : tags.sites !== null
+        ? site && { text: String(site.leads_7d), title: t("gmbs.leads7d.title"), tone: "text-ink-soft" }
+        : archive?.rating != null && { text: `★ ${archive.rating.toFixed(1)}`, title: t("gmbs.rating.title"), tone: "text-ink-soft" };
+  const shown = issue === "draft" ? null : issue;
   const label = (
     <>
       <span className="flex items-baseline gap-2">
         <span className={cn("min-w-0 flex-1 truncate", gmb.enabled ? "text-ink" : "text-ink-soft")}>{name}</span>
         {key && (
-          <span className="shrink-0 text-xs text-ink-soft tabular-nums" title={key.title}>
+          <span className={cn("shrink-0 text-xs tabular-nums", key.tone)} title={key.title}>
             {key.text}
           </span>
         )}
       </span>
       <span className="block truncate text-xs text-ink-soft">
         {gmb.state !== "verified" && <span className={cn("font-medium", gmb.state === "suspended" && "text-accent-error")}>{t(`gmbs.state.${gmb.state}`)} · </span>}
-        {issue && <span className={cn("font-medium", issue === "off" ? "text-ink-soft" : "text-accent-error")}>{issueText(issue, gmb.id, tags, t)}</span>}
-        {issue && (gmb.address || (showGmail && gmail)) && " · "}
+        {shown && <span className={cn("font-medium", shown === "off" ? "text-ink-soft" : "text-accent-error")}>{issueText(shown, gmb, tags, t)}</span>}
+        {shown && (gmb.address || (showGmail && gmail)) && " · "}
         {[gmb.address, showGmail ? gmail?.gmail : null].filter(Boolean).join(" · ")}
       </span>
     </>
@@ -493,13 +551,13 @@ function GmbRow({
     >
       <span aria-hidden className={cn("ml-1 size-2 shrink-0 rounded-full", DOT[gmb.state], !gmb.enabled && "border-ink-soft bg-ink-soft", gmb.location === null && "opacity-40")} />
       {onMap ? (
-        <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => peek(gmb.id)}>
+        <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => open(gmb)}>
           {label}
         </button>
-      ) : gmb.state === "draft" ? (
-        <span className={body} title={name}>
+      ) : TABS[gmb.state][0] !== undefined ? (
+        <Link href={`/?gmb=${gmb.id}&tab=${TABS[gmb.state][0]}`} onClick={() => onNavigate?.()} className={body} title={name}>
           {label}
-        </span>
+        </Link>
       ) : (
         <Link
           href={`${ROUTES.reviewArchive}gmbs/${gmb.id}`}

@@ -4,7 +4,26 @@ import { Skeleton, cn } from "@evinvest/uikit";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { type LatLng, type Listed, type MapConfig, type State, type Tags, fetchMapConfig, issueOf, narrowed, peek, setOnMap, useGmails, useGmbTags, useOnMap, usePeeked, useSelection } from "@/entities/gmb";
+import {
+  type LatLng,
+  type Listed,
+  type MapConfig,
+  type State,
+  TABS,
+  type Tags,
+  fetchMapConfig,
+  issueOf,
+  narrowed,
+  open,
+  peek,
+  setOnMap,
+  useGmails,
+  useGmbTags,
+  useOnMap,
+  usePeeked,
+  useSelection,
+  useTab,
+} from "@/entities/gmb";
 import { PlacingBar } from "@/features/place-gmb";
 import { PlacementOverlay } from "@/features/placement-overlay";
 import { takeReturnPage } from "@/shared/api";
@@ -16,6 +35,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorState } from "@/shared/ui/error-state";
 
 import { Peek } from "./peek";
+import { LocationWindow } from "./window";
 
 /** `/`: the caller's GMBs on a map, unless they come back from the sign-in dialog to the page they were on. */
 export function Home() {
@@ -51,6 +71,7 @@ function GmbMap({ config }: { config: MapConfig }) {
   const selection = useSelection();
   const { hovered, placing } = useOnMap();
   const peeked = usePeeked();
+  const tab = useTab();
   // `?at` as the page opened: what it says after is where the map has since moved
   const [left] = useState(useQuery("at"));
   const { tags } = useGmbTags();
@@ -120,7 +141,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       dot.innerHTML = TEARDROP;
       dot.addEventListener("mouseenter", () => setOnMap({ hovered: l.gmb.id }));
       dot.addEventListener("mouseleave", () => setOnMap({ hovered: null }));
-      dot.addEventListener("click", () => peek(l.gmb.id));
+      dot.addEventListener("click", () => open(l.gmb));
       made.set(l.gmb.id, { remove: pin(map.map, dot, l.gmb.location!, { anchor: "tip" }).remove, dot, listed: l });
     }
     styleDots(made, styling.current);
@@ -165,6 +186,12 @@ function GmbMap({ config }: { config: MapConfig }) {
   }, [moved]);
 
   const peekedListed = gmails.status === "ok" ? narrowed(gmails.data, null, "").find((l) => l.gmb.id === peeked) : undefined;
+  const tabs = peekedListed && TABS[peekedListed.gmb.state];
+  // a GBP whose state moved since its window opened: its state's first tab, or its card alone
+  useEffect(() => {
+    if (tabs !== undefined && tab !== null && !tabs.includes(tab)) setQuery({ tab: tabs[0] ?? null });
+  }, [tabs, tab]);
+  const windowed = peekedListed !== undefined && tab !== null && tabs?.includes(tab) === true;
   useEffect(() => {
     const at = peekedListed?.gmb.location;
     if (map.status === "ok" && at) map.map.panTo(at);
@@ -179,7 +206,8 @@ function GmbMap({ config }: { config: MapConfig }) {
           <ErrorState failure={{ kind: "invalid", message: map.message }} />
         </div>
       )}
-      {peekedListed && placed === undefined && <Peek listed={peekedListed} onClose={() => peek(null)} />}
+      {peekedListed && placed === undefined && !windowed && <Peek listed={peekedListed} onClose={() => peek(null)} />}
+      {peekedListed && placed === undefined && windowed && <LocationWindow listed={peekedListed} tab={tab} />}
       {map.status === "ok" && placed !== undefined && placedAt !== null && <PlacingBar gmb={placed} map={map.map} at={placedAt} onMove={(at) => setMoved({ gmb: placed.id, at })} />}
     </>
   );

@@ -23,7 +23,7 @@ export function Outline({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const app = pathname.startsWith("/sites") ? "sites" : pathname.startsWith("/review_archive") ? "archive" : null;
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       {seesSites(me) && (
         // A click on one of its links has routed (CONTRACT §9).
         <section hidden={app !== "sites"} aria-label={t("nav.sites")} onClick={() => onNavigate?.()}>

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import type { ArchiveTag, Gmb, SiteTag } from "@/entities/gmb/model/gmb";
-import { type Issue, type Tags, issueCounts, issueOf } from "@/entities/gmb/model/issues";
+import { type Issue, type Tags, issueCounts, issueOf, issueText } from "@/entities/gmb/model/issues";
+import { readiness } from "@/entities/gmb/model/readiness";
+import { translator } from "@/shared/i18n/translate";
 
 const GMAIL = 1;
 const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
@@ -14,6 +16,12 @@ const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
   next: ["suspended", "verifying"],
   country: { code: "FR", by_hand: false },
   phone: null,
+  category: null,
+  areas: [],
+  hidden_address: null,
+  customers_visit: null,
+  film: null,
+  profile: null,
   created_at: "2026-11-06T00:00:00Z",
   enabled,
   location: located ? { lat: 45.76, lng: 4.83, placed: false } : null,
@@ -60,5 +68,45 @@ describe("a GMB's issue", () => {
         ["off", 1],
       ]),
     );
+  });
+});
+
+/** A draft with `fill` set: none of its must-haves but its name otherwise. */
+const draft = (id: number, fill: Partial<Gmb> = {}): Gmb => ({ ...gmb(id, { located: false }), place_id: null, gmail_id: null, state: "draft", next: ["verifying"], country: null, ...fill });
+const full: Partial<Gmb> = {
+  category: "Plombier",
+  areas: ["Lyon 8e"],
+  phone: "+33478000001",
+  hidden_address: "14 rue Laënnec, Lyon",
+  customers_visit: false,
+  film: "verif_vid:42",
+  gmail_id: GMAIL,
+  profile: "mlx:lyon-8",
+};
+
+describe("a draft's readiness", () => {
+  const ready = (g: Gmb, tags: Tags) =>
+    readiness(g, tags)
+      .filter((r) => r.ready)
+      .map((r) => r.must);
+
+  it("is its name alone until the rest is set, in Google's order", () => {
+    expect(ready(draft(1), { archive: null, sites: new Map() })).toEqual(["name"]);
+    expect(ready(draft(1, full), { archive: null, sites: new Map() })).toEqual(["name", "category", "areas", "phone", "hidden_address", "film", "gmail", "profile"]);
+  });
+
+  it("has its site only where sites links a place to it, and none while sites is unread", () => {
+    expect(ready(draft(1, full), { archive: null, sites: new Map([[1, site(0)]]) })).toHaveLength(9);
+    expect(ready(draft(1, full), { archive: null, sites: null })).not.toContain("site");
+  });
+
+  it("has its address only once whether customers visit is decided", () => {
+    expect(ready(draft(1, { ...full, customers_visit: null }), { archive: null, sites: null })).not.toContain("hidden_address");
+  });
+
+  it("is a draft's issue, after overdue leads and before a missing point, told as its count", () => {
+    const tags: Tags = { archive: null, sites: new Map([[2, site(1)]]) };
+    check([draft(1, full), draft(2), gmb(3, { located: false })], tags, { 1: "draft", 2: "overdue", 3: "unlocated" });
+    expect(issueText("draft", draft(1, full), tags, translator("en"))).toBe("8/9");
   });
 });

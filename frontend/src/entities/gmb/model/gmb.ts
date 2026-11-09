@@ -1,8 +1,8 @@
 import { type Infer, type Parser, arrayOf, bool, nullable, num, object, oneOf, str } from "@/shared/lib/parse";
 
-import type { Candidates, Country, Gmails, Gmb, MapConfig, OnGoogle, Place, State } from "./generated";
+import type { Candidates, Country, Gmail, GmailRole, Gmails, Gmb, MapConfig, OnGoogle, Place, State } from "./generated";
 
-export type { Country, Gmail, Gmails, Gmb, MapConfig, OnGoogle, Place as Candidate, State } from "./generated";
+export type { Country, Gmail, GmailRole, Gmails, Gmb, MapConfig, OnGoogle, Place as Candidate, State } from "./generated";
 
 export type LatLng = { lat: number; lng: number };
 
@@ -10,6 +10,7 @@ export type LatLng = { lat: number; lng: number };
 const STATES = Object.keys({ draft: true, verifying: true, verified: true, suspended: true } satisfies Record<State, true>) as State[];
 export const ON_GOOGLE = Object.keys({ verifying: true, verified: true, suspended: true } satisfies Record<OnGoogle, true>) as OnGoogle[];
 export const COUNTRIES = Object.keys({ FR: true, US: true, CA: true, GB: true } satisfies Record<Country, true>) as Country[];
+export const GMAIL_ROLES = Object.keys({ owner: true, manager: true } satisfies Record<GmailRole, true>) as GmailRole[];
 
 export const gmbParser: Parser<Gmb> = object({
   id: num,
@@ -21,6 +22,12 @@ export const gmbParser: Parser<Gmb> = object({
   next: arrayOf(oneOf(STATES)),
   country: nullable(object({ code: oneOf(COUNTRIES), by_hand: bool })),
   phone: nullable(str),
+  category: nullable(str),
+  areas: arrayOf(str),
+  hidden_address: nullable(str),
+  customers_visit: nullable(bool),
+  film: nullable(str),
+  profile: nullable(str),
   created_at: str,
   enabled: bool,
   location: nullable(object({ lat: num, lng: num, placed: bool })),
@@ -28,7 +35,8 @@ export const gmbParser: Parser<Gmb> = object({
 
 export const mapConfigParser: Parser<MapConfig> = object({ key: str });
 
-export const gmailsParser: Parser<Gmails> = object({ gmails: arrayOf(object({ id: num, gmail: str, created_at: str })), gmbs: arrayOf(gmbParser) });
+const gmailParser: Parser<Gmail> = object({ id: num, gmail: str, role: nullable(oneOf(GMAIL_ROLES)), cap: nullable(num), created_at: str });
+export const gmailsParser: Parser<Gmails> = object({ gmails: arrayOf(gmailParser), gmbs: arrayOf(gmbParser) });
 
 const candidateParser: Parser<Place> = object({ place_id: str, name: nullable(str), address: nullable(str) });
 export const candidatesParser: Parser<Candidates> = object({ candidates: arrayOf(candidateParser) });

@@ -3,6 +3,7 @@ import { ApiError, http, ignoreBody } from "@/shared/api";
 import {
   type Candidate,
   type Country,
+  type GmailRole,
   type Gmails,
   type Gmb,
   type LatLng,
@@ -34,6 +35,10 @@ export async function addGmail(gmail: string): Promise<void> {
   await http.send("POST", "/api/v1/gmails", { gmail }, ignoreBody);
 }
 
+export async function setGmailRole(id: number, role: GmailRole): Promise<void> {
+  await http.send("PATCH", `/api/v1/gmails/${id}`, { role }, ignoreBody);
+}
+
 export async function removeGmail(id: number): Promise<void> {
   await http.send("DELETE", `/api/v1/gmails/${id}`, undefined, ignoreBody);
 }
@@ -52,8 +57,15 @@ export function createDraft(name: string): Promise<Gmb> {
   return http.send("POST", "/api/v1/gmbs", { name }, gmbParser);
 }
 
-/** `name` a draft's only; `phone: null` clears it. */
-export function editGmb(id: number, edit: { name?: string; gmail_id?: number; phone?: string | null }): Promise<Gmb> {
+/** What a GBP's PATCH takes: `name` a draft's only, `null` clears a field. */
+export type GmbEdit = Partial<Pick<Gmb, "phone" | "category" | "hidden_address" | "customers_visit" | "film" | "profile">> & {
+  name?: string;
+  gmail_id?: number;
+  areas?: string[] | null;
+};
+
+/** Refused when another live GBP has the name or the phone. */
+export function editGmb(id: number, edit: GmbEdit): Promise<Gmb> {
   return http.send("PATCH", `/api/v1/gmbs/${id}`, edit, gmbParser);
 }
 

@@ -28,7 +28,7 @@ import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 const NONE = "none";
 
-/** A GBP's own fields (a draft's name, its gmail, phone, and its country while Google gives none), and the states it may move to: a draft onto Google with its place pasted. */
+/** A GBP on Google's own fields (its gmail, phone, and its country while Google gives none), and the states it may move to; a draft's are its window's Launch tab. */
 export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => void }) {
   const t = useT();
   const button = useButtonSize();
@@ -36,22 +36,17 @@ export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => v
   const id = useId();
   const gmails = useGmails();
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState(gmb.name);
   const [gmail, setGmail] = useState(gmb.gmail_id);
   const [phone, setPhone] = useState(gmb.phone ?? "");
   const [country, setCountryPicked] = useState<Country | null>(gmb.country?.code ?? null);
-  const [place, setPlace] = useState("");
   const [busy, setBusy] = useState(false);
-  const draft = gmb.state === "draft";
   const googles = gmb.country !== null && !gmb.country.by_hand;
   const title = t("gmbs.gbp.edit", { name: gmb.name });
 
   const reset = () => {
-    setName(gmb.name);
     setGmail(gmb.gmail_id);
     setPhone(gmb.phone ?? "");
     setCountryPicked(gmb.country?.code ?? null);
-    setPlace("");
   };
 
   const act = async (action: () => Promise<void>) => {
@@ -70,7 +65,6 @@ export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => v
   const save = () =>
     act(async () => {
       const edit = {
-        ...(draft && name.trim() !== gmb.name && { name: name.trim() }),
         ...(gmail !== null && gmail !== gmb.gmail_id && { gmail_id: gmail }),
         ...(phone.trim() !== (gmb.phone ?? "") && { phone: phone.trim() === "" ? null : phone.trim() }),
       };
@@ -78,8 +72,9 @@ export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => v
       if (country !== null && country !== gmb.country?.code) await setCountry(gmb.id, country);
     });
 
-  const move = (to: State) => act(() => moveGmb(gmb.id, to, draft ? place.trim() : undefined).then(() => undefined));
+  const move = (to: State) => act(() => moveGmb(gmb.id, to).then(() => undefined));
 
+  if (gmb.state === "draft") return null;
   return (
     <>
       <Button variant="ghost" size={button("sm")} icon aria-label={title}
@@ -113,11 +108,6 @@ export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => v
               void save();
             }}
           >
-            <Field className="flex flex-col gap-1">
-              <FieldLabel htmlFor={`${id}-name`}>{t("gmbs.gbp.name")}</FieldLabel>
-              <Input id={`${id}-name`} size={size} value={name} disabled={!draft} onChange={(e) => setName(e.target.value)} />
-              {!draft && <FieldDescription>{t("gmbs.gbp.edit.hint")}</FieldDescription>}
-            </Field>
             {gmails.status === "ok" && (
               <Field className="flex flex-col gap-1">
                 <FieldLabel htmlFor={`${id}-gmail`}>{t("gmbs.gbp.gmail")}</FieldLabel>
@@ -126,7 +116,6 @@ export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => v
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {gmb.gmail_id === null && <SelectItem value={NONE}>{t("gmbs.gbp.gmail.none")}</SelectItem>}
                     {gmails.data.gmails.map((g) => (
                       <SelectItem key={g.id} value={String(g.id)}>
                         {g.gmail}
@@ -166,17 +155,10 @@ export function EditGbpButton({ gmb, onChanged }: { gmb: Gmb; onChanged: () => v
             </DialogFooter>
           </form>
           <div className="flex flex-col gap-2 border-t border-border pt-3">
-            {draft && (
-              <Field className="flex flex-col gap-1">
-                <FieldLabel htmlFor={`${id}-place`}>{t("gmbs.gbp.toGoogle")}</FieldLabel>
-                <Input id={`${id}-place`} size={size} autoCapitalize="none" value={place} onChange={(e) => setPlace(e.target.value)} />
-                <FieldDescription>{t("gmbs.gbp.toGoogle.hint")}</FieldDescription>
-              </Field>
-            )}
             <div className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
               {t("gmbs.gbp.move")}
               {gmb.next.map((to) => (
-                <Button key={to} variant="outline" size={button("sm")} disabled={busy || (draft && !place.trim())} onClick={() => void move(to)}>
+                <Button key={to} variant="outline" size={button("sm")} disabled={busy} onClick={() => void move(to)}>
                   {t(`gmbs.state.${to}`)}
                 </Button>
               ))}

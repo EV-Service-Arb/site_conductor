@@ -3,12 +3,12 @@
 import { useSyncExternalStore } from "react";
 
 /** The query keys the conductor keeps its own state in: a reload or a shared link opens the page as it was left. */
-export type QueryKey = "gmbs" | "gmail" | "find" | "issue" | "assistant" | "gmb" | "at" | "chat" | "heat" | "trade" | "pressure" | "competitors" | "base";
+export type QueryKey = "gmbs" | "gmail" | "find" | "issue" | "assistant" | "gmb" | "tab" | "at" | "chat" | "heat" | "trade" | "pressure" | "competitors" | "base";
 type Query = Readonly<Record<QueryKey, string | null>>;
 
 /** The outline's and the assistant's: they are beside every page, so they follow it from page to page. */
 const CARRIED: readonly QueryKey[] = ["gmbs", "gmail", "find", "issue", "assistant"];
-const KEYS: readonly QueryKey[] = [...CARRIED, "gmb", "at", "chat", "heat", "trade", "pressure", "competitors", "base"];
+const KEYS: readonly QueryKey[] = [...CARRIED, "gmb", "tab", "at", "chat", "heat", "trade", "pressure", "competitors", "base"];
 
 let state: Query | undefined;
 const listeners = new Set<() => void>();
@@ -43,8 +43,10 @@ export function useQuery(key: QueryKey): string | null {
   return useSyncExternalStore(subscribe, () => (state ??= read())[key], () => null);
 }
 
-export function setQuery(change: Partial<Query>): void {
-  write({ ...(state ??= read()), ...change });
+/** `change` a function: of the query as it stands. */
+export function setQuery(change: Partial<Query> | ((now: Query) => Partial<Query>)): void {
+  const now = (state ??= read());
+  write({ ...now, ...(typeof change === "function" ? change(now) : change) });
 }
 
 /** After every move of the location: what it says, and the outline's keys it dropped kept. */

@@ -1,10 +1,11 @@
-export { addGmail, addGmb, createDraft, editGmb, fetchGmails, fetchMapConfig, fetchSitesPlaces, linkPlace, moveGmb, placeGmb, removeGmail, removeGmb, resolvePlace, setCountry, switchGmbs } from "./api/gmbs";
+export { type GmbEdit, addGmail, addGmb, createDraft, editGmb, fetchGmails, fetchMapConfig, fetchSitesPlaces, linkPlace, moveGmb, placeGmb, removeGmail, removeGmb, resolvePlace, setCountry, setGmailRole, switchGmbs } from "./api/gmbs";
 export { fetchArchive } from "./api/tags";
 export { GmailsProvider, useGmails, useGmbTags } from "./model/gmails-context";
-export { COUNTRIES, type Country, ON_GOOGLE, type OnGoogle, type State } from "./model/gmb";
-export type { ArchiveTag, Candidate, Gmail, Gmails, Gmb, LatLng, MapConfig, SiteTag, SitesPlace } from "./model/gmb";
+export { COUNTRIES, type Country, GMAIL_ROLES, ON_GOOGLE, type OnGoogle, type State } from "./model/gmb";
+export type { ArchiveTag, Candidate, Gmail, GmailRole, Gmails, Gmb, LatLng, MapConfig, SiteTag, SitesPlace } from "./model/gmb";
 export { ISSUES, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
 export { type Listed, byView, narrowed, under } from "./model/narrow";
-export { type OnMap, peek, setOnMap, useOnMap, usePeeked } from "./model/on-map";
+export { MUST_HAVES, type MustHave, readiness } from "./model/readiness";
+export { type OnMap, TABS, type Tab, open, peek, setOnMap, useOnMap, usePeeked, useTab } from "./model/on-map";
 export { chooseGmailScope, useGmailScope } from "./model/scope";
 export { PublishSelection, type Selection, select, setFilter, setOnly, useSelection } from "./model/selection";

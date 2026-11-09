@@ -76,11 +76,11 @@ function signedIn(req: IncomingMessage): boolean {
   return /(?:^|;\s*)sa_session=/.test(req.headers.cookie ?? "");
 }
 
-const gmails: { id: number; gmail: string; created_at: string }[] = [{ id: 1, gmail: "owner@gmail.com", created_at: minsAgo(60 * 24 * 30) }];
+const gmails: { id: number; gmail: string; role: "owner" | "manager" | null; cap: number | null; created_at: string }[] = [{ id: 1, gmail: "owner@gmail.com", role: "manager", cap: 6, created_at: minsAgo(60 * 24 * 30) }];
 const gmbs: Json[] = [
-  { id: 1, gmail_id: 1, place_id: "ChIJstubstubstub00001", name: "Plombier Paris 11 (stub)", address: "12 rue Oberkampf, Paris", state: "verified", next: ["suspended", "verifying"], country: { code: "FR", by_hand: false }, phone: null, created_at: minsAgo(60 * 24 * 30), enabled: true, location: { lat: 48.8649, lng: 2.3766, placed: false } },
-  { id: 2, gmail_id: 1, place_id: "ChIJstubstubstub00002", name: "Serrurier Lyon 3 (stub)", address: "4 cours Gambetta, Lyon", state: "suspended", next: ["verified", "verifying"], country: { code: "FR", by_hand: true }, phone: null, created_at: minsAgo(60 * 24 * 20), enabled: true, location: null },
-  { id: 3, gmail_id: null, place_id: null, name: "Électricien Lille (stub draft)", address: null, state: "draft", next: ["verifying"], country: null, phone: null, created_at: minsAgo(60 * 24), enabled: true, location: null },
+  { id: 1, gmail_id: 1, place_id: "ChIJstubstubstub00001", name: "Plombier Paris 11 (stub)", address: "12 rue Oberkampf, Paris", state: "verified", next: ["suspended", "verifying"], country: { code: "FR", by_hand: false }, phone: null, category: null, areas: [], hidden_address: null, customers_visit: null, film: null, profile: null, created_at: minsAgo(60 * 24 * 30), enabled: true, location: { lat: 48.8649, lng: 2.3766, placed: false } },
+  { id: 2, gmail_id: 1, place_id: "ChIJstubstubstub00002", name: "Serrurier Lyon 3 (stub)", address: "4 cours Gambetta, Lyon", state: "suspended", next: ["verified", "verifying"], country: { code: "FR", by_hand: true }, phone: null, category: null, areas: [], hidden_address: null, customers_visit: null, film: null, profile: null, created_at: minsAgo(60 * 24 * 20), enabled: true, location: null },
+  { id: 3, gmail_id: null, place_id: null, name: "Électricien Lille (stub draft)", address: null, state: "draft", next: ["verifying"], country: null, phone: null, category: null, areas: [], hidden_address: null, customers_visit: null, film: null, profile: null, created_at: minsAgo(60 * 24), enabled: true, location: null },
 ];
 const tokens = { balance: 75, daily: 15, cap: 500, kickbacks: [{ id: 1, at: minsAgo(90), amount: 12, service: "review_archive", key: "run:42", label: "Plombier Paris 11 (stub)", by: null, note: null }] };
 const ledger = Array.from({ length: 8 }, (_, i) => ({ id: 8 - i, at: minsAgo(60 * 24 * i), delta: i % 2 ? -12 : 15, kind: i % 2 ? "charge" : "accrual", service: i % 2 ? "review_archive" : null, key: i % 2 ? `run:${40 - i}` : null, label: i % 2 ? "Plombier Paris 11 (stub)" : null, by: null, note: null }));
@@ -120,7 +120,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   if (path === "/gmails" && req.method === "GET") return send(res, 200, { gmails, gmbs });
   if (path === "/gmails" && req.method === "POST") {
     const { gmail } = (await readJson(req)) as { gmail: string };
-    const made = { id: gmails.length + 1, gmail, created_at: iso(now()) };
+    const made = { id: gmails.length + 1, gmail, role: null, cap: null, created_at: iso(now()) };
     gmails.push(made);
     return send(res, 201, made);
   }
