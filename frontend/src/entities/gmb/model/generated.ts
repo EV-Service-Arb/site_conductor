@@ -18,9 +18,21 @@ by_hand: boolean, };
  */
 export type Gmail = { id: number, gmail: string, 
 /**
+ * `null` until the caller says.
+ */
+role: GmailRole | null, 
+/**
+ * The GBPs its role holds before Google grows wary; `null` with the role.
+ */
+cap: number | null, 
+/**
  * RFC 3339.
  */
 created_at: string, };
+/**
+ * What a gmail is on the GBPs it manages.
+ */
+export type GmailRole = "owner" | "manager";
 /**
  * `GET /gmails`.
  */
@@ -44,7 +56,31 @@ next: Array<State>,
 /**
  * `by_hand`: set by the caller, Google having none.
  */
-country: GbpCountry | null, phone: string | null, 
+country: GbpCountry | null, 
+/**
+ * `+` and digits; one live GBP's.
+ */
+phone: string | null, category: string | null, 
+/**
+ * Service areas, at most 20.
+ */
+areas: Array<string>, 
+/**
+ * Where its verification film is shot.
+ */
+hidden_address: string | null, 
+/**
+ * `false`: a service-area business, its address hidden; `null` undecided.
+ */
+customers_visit: boolean | null, 
+/**
+ * verif_vid's film, recorded by hand.
+ */
+film: string | null, 
+/**
+ * Its Multilogin profile and proxy, recorded by hand.
+ */
+profile: string | null, 
 /**
  * RFC 3339.
  */

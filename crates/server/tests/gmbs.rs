@@ -306,7 +306,7 @@ async fn a_draft_goes_onto_google_and_is_verified() {
 	let (status, body) = call(&mut b, &app, Method::PUT, &format!("{gbp}/state"), Some(to_google.clone())).await;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "no gmail yet: {body}");
 	let (status, edited) = call(&mut b, &app, Method::PATCH, &gbp, Some(json!({ "gmail_id": gmail["id"], "phone": " +33 1 45 48 55 26 " }))).await;
-	assert_eq!((status, &edited["gmail_id"], &edited["phone"]), (StatusCode::OK, &gmail["id"], &json!("+33 1 45 48 55 26")));
+	assert_eq!((status, &edited["gmail_id"], &edited["phone"]), (StatusCode::OK, &gmail["id"], &json!("+33145485526")));
 	let (_, cleared) = call(&mut b, &app, Method::PATCH, &gbp, Some(json!({ "phone": null }))).await;
 	assert_eq!(cleared["phone"], Value::Null);
 
@@ -323,4 +323,66 @@ async fn a_draft_goes_onto_google_and_is_verified() {
 	assert_eq!((status, &verified["state"]), (StatusCode::OK, &json!("verified")));
 	let (status, _) = call(&mut b, &app, Method::PUT, &format!("{gbp}/state"), Some(json!({ "state": "draft" }))).await;
 	assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
+	let (db, cache) = (TestDb::create().await, tempfile::tempdir().unwrap());
+	let p = panel(&db, None, cache.path()).await;
+	opened(&p).await;
+	let app = app(p, None);
+	let mut b = Browser::default();
+	b.sign_in(&app).await;
+	let (_, first) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Lyon 7" }))).await;
+	let (_, second) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Lyon 8" }))).await;
+	let first = format!("/api/v1/gmbs/{}", first["id"]);
+
+	let must_haves = json!({ "phone": "04 78 00 00 01", "category": "Plombier", "areas": ["Lyon 7e"], "hidden_address": "12 rue de Marseille",
+		"customers_visit": false, "film": "verif_vid:42", "profile": "mlx:lyon-7" });
+	let (status, edited) = call(&mut b, &app, Method::PATCH, &first, Some(must_haves.clone())).await;
+	assert_eq!(status, StatusCode::OK, "{edited}");
+	for (field, want) in must_haves.as_object().unwrap() {
+		let want = if field == "phone" { &json!("0478000001") } else { want };
+		assert_eq!(&edited[field], want, "{field}");
+	}
+	let (_, cleared) = call(&mut b, &app, Method::PATCH, &first, Some(json!({ "areas": null, "customers_visit": null }))).await;
+	assert_eq!(
+		(&cleared["areas"], &cleared["customers_visit"], &cleared["category"]),
+		(&json!([]), &Value::Null, &json!("Plombier"))
+	);
+	let (status, _) = call(
+		&mut b,
+		&app,
+		Method::PATCH,
+		&first,
+		Some(json!({ "areas": (0..21).map(|i| format!("Lyon {i}")).collect::<Vec<_>>() })),
+	)
+	.await;
+	assert_eq!(status, StatusCode::BAD_REQUEST);
+
+	let (status, body) = call(&mut b, &app, Method::PATCH, &format!("/api/v1/gmbs/{}", second["id"]), Some(json!({ "phone": "04.78.00.00.01" }))).await;
+	assert_eq!(status, StatusCode::CONFLICT, "{body}");
+}
+
+#[tokio::test]
+async fn a_gmails_cap_follows_its_role() {
+	let (db, cache) = (TestDb::create().await, tempfile::tempdir().unwrap());
+	let p = panel(&db, None, cache.path()).await;
+	opened(&p).await;
+	let app = app(p, None);
+	let mut b = Browser::default();
+	b.sign_in(&app).await;
+	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
+	assert_eq!((&gmail["role"], &gmail["cap"]), (&Value::Null, &Value::Null), "unknown until said");
+	let uri = format!("/api/v1/gmails/{}", gmail["id"]);
+	for (role, cap) in [("owner", 3), ("manager", 6)] {
+		let (status, set) = call(&mut b, &app, Method::PATCH, &uri, Some(json!({ "role": role }))).await;
+		assert_eq!((status, &set["role"], &set["cap"]), (StatusCode::OK, &json!(role), &json!(cap)));
+	}
+	let (_, listed) = call(&mut b, &app, Method::GET, "/api/v1/gmails", None).await;
+	assert_eq!(listed["gmails"][0]["cap"], json!(6), "{listed}");
+	let (status, _) = call(&mut b, &app, Method::PATCH, &uri, Some(json!({ "role": "admin" }))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST);
+	let (status, _) = call(&mut b, &app, Method::PATCH, "/api/v1/gmails/999", Some(json!({ "role": "owner" }))).await;
+	assert_eq!(status, StatusCode::NOT_FOUND);
 }
