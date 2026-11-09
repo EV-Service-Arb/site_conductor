@@ -7,8 +7,9 @@
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { type RefObject, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import { setQuery, useQuery } from "@/shared/lib/query";
+
 const PLACES_KEY = "sa:map-places";
-const BASE_KEY = "sa:map-base";
 const CHOSEN_EVENT = "sa:map-view-chosen";
 const PLACES_HIDDEN: google.maps.MapTypeStyle[] = [
   { featureType: "poi", stylers: [{ visibility: "off" }] },
@@ -36,8 +37,7 @@ const DARK: google.maps.MapTypeStyle[] = [
 export type Base = "schematic" | "satellite";
 
 const placesShown = () => localStorage.getItem(PLACES_KEY) === "shown";
-const baseChosen = (): Base => (localStorage.getItem(BASE_KEY) === "satellite" ? "satellite" : "schematic");
-const mapTypeId = () => (baseChosen() === "satellite" ? "hybrid" : "roadmap");
+const mapTypeId = (base: Base) => (base === "satellite" ? "hybrid" : "roadmap");
 
 let made: { key: string; scheme: "dark" | "light"; element: HTMLDivElement; map: Promise<google.maps.Map> } | null = null;
 const styles = (scheme: "dark" | "light") => [...(scheme === "dark" ? DARK : []), ...(placesShown() ? [] : PLACES_HIDDEN)];
@@ -58,7 +58,8 @@ function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Pr
         renderingType: RenderingType.RASTER,
         colorScheme: scheme === "dark" ? ColorScheme.DARK : ColorScheme.LIGHT,
         styles: styles(scheme),
-        mapTypeId: mapTypeId(),
+        // the default base; `useTheMap` moves it to what `?base` says
+        mapTypeId: mapTypeId("satellite"),
         // the world, until the page fits what it shows
         center: { lat: 0, lng: 0 },
         zoom: 2,
@@ -94,6 +95,10 @@ export function useTheMap(key: string): { host: RefObject<HTMLDivElement | null>
       element.remove();
     };
   }, [key]);
+  const base = useBase();
+  useEffect(() => {
+    if (map.status === "ok") map.map.setMapTypeId(mapTypeId(base));
+  }, [map, base]);
   return { host, map };
 }
 
@@ -108,7 +113,7 @@ const chosen = () => {
   window.dispatchEvent(new Event(CHOSEN_EVENT));
   if (made === null) return;
   const scheme = made.scheme;
-  void made.map.then((m) => m.setOptions({ styles: styles(scheme), mapTypeId: mapTypeId() }));
+  void made.map.then((m) => m.setOptions({ styles: styles(scheme) }));
 };
 
 /** Whether the map shows Google's own places (shops, sights, stops); hidden unless chosen, kept in this browser. */
@@ -122,15 +127,15 @@ export function showPlaces(shown: boolean): void {
   chosen();
 }
 
-/** Google's roads or its imagery under everything drawn; schematic unless chosen, kept in this browser. */
+/** Google's imagery or its roads under everything drawn: `?base=schematic`, satellite without it. */
 export function useBase(): Base {
-  return useSyncExternalStore(subscribeChosen, baseChosen, () => "schematic");
+  const base = useQuery("base");
+  if (base !== null && base !== "schematic") throw new Error(`?base=${base}: schematic, or no ?base for satellite`);
+  return base ?? "satellite";
 }
 
 export function setBase(base: Base): void {
-  if (base === "satellite") localStorage.setItem(BASE_KEY, "satellite");
-  else localStorage.removeItem(BASE_KEY);
-  chosen();
+  setQuery({ base: base === "satellite" ? null : "schematic" });
 }
 
 /** `element` centred on a point of `map` (or standing on it by its bottom tip) until removed, its clicks the map's no more; dragged where `onDrag` is given. */
