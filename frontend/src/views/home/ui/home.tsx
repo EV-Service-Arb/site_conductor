@@ -219,7 +219,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       )}
       {peekedListed && placed === undefined && !windowed && <Peek listed={peekedListed} onClose={() => peek(null)} />}
       {peekedListed && placed === undefined && windowed && <LocationWindow listed={peekedListed} tab={tab} />}
-      {opened && tradeWindow && gmails.status === "ok" && placed === undefined && <TradeWindow trade={opened} tab={tradeWindow.tab} gmbs={gmails.data.gmbs} />}
+      {opened && tradeWindow && gmails.status === "ok" && placed === undefined && <TradeWindow trade={opened} tab={tradeWindow.tab} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
       {map.status === "ok" && placed !== undefined && placedAt !== null && <PlacingBar gmb={placed} map={map.map} at={placedAt} onMove={(at) => setMoved({ gmb: placed.id, at })} />}
     </>
   );

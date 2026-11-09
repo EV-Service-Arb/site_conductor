@@ -5,14 +5,18 @@ import { useState } from "react";
 
 import { addTrade } from "../api/gmbs";
 import { useTrades } from "../model/gmails-context";
+import type { Country } from "../model/gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 const NEW = "new";
 
-/** The caller's trades, then "New trade…", which names one and picks it; `none` labels the choice of no trade, absent while one is held. */
-export function TradeSelect({ value, onPick, none, label, className }: { value: number | null; onPick: (trade: number | null) => void; none?: string; label: string; className?: string }) {
+/**
+ * The caller's trades, then "New trade…", which names one and picks it; `none` labels the choice of no trade, absent while one is held.
+ * With `country`, each trade says what it resolves to there: Google's label, or not set up.
+ */
+export function TradeSelect({ value, onPick, none, label, country, className }: { value: number | null; onPick: (trade: number | null) => void; none?: string; label: string; country?: Country | null; className?: string }) {
   const t = useT();
   const size = useControlSize();
   const button = useButtonSize();
@@ -63,11 +67,14 @@ export function TradeSelect({ value, onPick, none, label, className }: { value: 
     >
       {(value === null || none !== undefined) && <NativeSelectOption value="">{none ?? t("trades.pick")}</NativeSelectOption>}
       {trades.status === "ok" &&
-        trades.data.map((tr) => (
-          <NativeSelectOption key={tr.id} value={String(tr.id)}>
-            {tr.name}
-          </NativeSelectOption>
-        ))}
+        trades.data.map((tr) => {
+          const there = country == null ? undefined : (tr.categories.find((c) => c.country === country) ?? null);
+          return (
+            <NativeSelectOption key={tr.id} value={String(tr.id)}>
+              {there === undefined ? tr.name : there === null ? t("trades.option.notSetUp", { trade: tr.name, country: country! }) : `${tr.name} — ${there.google_category ?? "…"}`}
+            </NativeSelectOption>
+          );
+        })}
       <NativeSelectOption value={NEW}>{t("trades.new")}</NativeSelectOption>
     </NativeSelect>
   );

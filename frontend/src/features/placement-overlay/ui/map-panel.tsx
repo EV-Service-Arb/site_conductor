@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, NativeSelect, NativeSelectOption, Slider, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
+import { Button, NativeSelect, NativeSelectGroup, NativeSelectOption, Slider, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
 import { Car, ChevronRight, Crosshair, Eye, EyeOff, Flame, Grid3x3, MapPin, Store, Users, Wallet, Waves } from "lucide-react";
 import { type ComponentType, type ReactNode, useState } from "react";
 
@@ -46,7 +46,10 @@ export function MapPanel() {
         <>
           <Section title={t("placement.heat")}>
             <label className="flex h-(--control-h-sm) items-center gap-2 px-2">
-              <span className="flex-1 text-ink-mid">{t("placement.trade")}</span>
+              <span className="flex flex-1 items-center gap-1.5 text-ink-mid">
+                {t("placement.trade")}
+                {view.from !== null && <span className="rounded bg-hover px-1 text-caption text-ink-soft">{t(`placement.from.${view.from}`)}</span>}
+              </span>
               <NativeSelect
                 size="sm"
                 wrapperClassName="w-48"
@@ -57,11 +60,20 @@ export function MapPanel() {
                 }}
               >
                 <NativeSelectOption value="">{t("placement.pickTrade")}</NativeSelectOption>
-                {studies.map((o) => (
-                  <NativeSelectOption key={o.key} value={o.key}>
-                    {o.label}
-                  </NativeSelectOption>
-                ))}
+                {(["scope", "category", "stem"] as const).map((group) => {
+                  const options = studies.filter((o) => o.group === group);
+                  return (
+                    options.length > 0 && (
+                      <NativeSelectGroup key={group} label={t(`placement.studies.${group}`)}>
+                        {options.map((o) => (
+                          <NativeSelectOption key={o.key} value={o.key}>
+                            {o.label}
+                          </NativeSelectOption>
+                        ))}
+                      </NativeSelectGroup>
+                    )
+                  );
+                })}
               </NativeSelect>
             </label>
             {ok.inView === "zoom" && <Note>{t("placement.zoomIn")}</Note>}
@@ -127,19 +139,17 @@ export function MapPanel() {
 }
 
 /** Placement's trades as the picker lists them: by the categories that study them, those in the outline's scope first, then a trade no category links under its own name. */
-function useStudies(stems: readonly string[]): { key: string; label: string; study: string }[] {
+function useStudies(stems: readonly string[]): { key: string; label: string; study: string; group: "scope" | "category" | "stem" }[] {
   const trades = useTrades();
   const { categories: scope } = useScope();
   const linked = (trades.status === "ok" ? trades.data : []).flatMap((tr) =>
     tr.categories.flatMap((c) =>
-      c.study !== null && stems.includes(c.study) ? [{ key: `${tr.id}.${c.country}`, label: `${tr.name} · ${c.country}`, study: c.study, inScope: scope === null || scope.some((p) => covers(p, tr.id, c.country)) }] : [],
+      c.study !== null && stems.includes(c.study)
+        ? [{ key: `${tr.id}.${c.country}`, label: `${tr.name} · ${c.country}`, study: c.study, group: scope !== null && scope.some((p) => covers(p, tr.id, c.country)) ? ("scope" as const) : ("category" as const) }]
+        : [],
     ),
   );
-  return [
-    ...linked.filter((l) => l.inScope),
-    ...linked.filter((l) => !l.inScope),
-    ...stems.filter((s) => !linked.some((l) => l.study === s)).map((s) => ({ key: `study:${s}`, label: s, study: s })),
-  ];
+  return [...linked, ...stems.filter((s) => !linked.some((l) => l.study === s)).map((s) => ({ key: `study:${s}`, label: s, study: s, group: "stem" as const }))];
 }
 
 /** One line on the hotbar item: what the map is drawing. */

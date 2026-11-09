@@ -365,7 +365,7 @@ PUT    /gmbs/{id}/location                  {lat, lng} → 204, placed by hand; 
 PUT    /gmbs/{id}/country                   {country} → 204, set by hand; 409 Google has its country
 GET    /map                                 {key}: the browser's Maps JS key; 404 without
                                             GOOGLE_MAPS_BROWSER_KEY
-GET    /trades                              {trades: [{id, name, created_at, categories: [{country,
+GET    /trades                              {trades: [{id, name, created_at, categories: [{country, lang,
                                             keywords, google_category, study}]}]}
 POST   /trades                              {name} → 201 the trade; 409 the caller's already, any case
 PATCH  /trades/{id}                         {name} → 200 the trade; 409

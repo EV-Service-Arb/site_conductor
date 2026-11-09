@@ -1,12 +1,14 @@
 "use client";
 
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn } from "@evinvest/uikit";
-import { ChevronDown, CircleMinus, CirclePlus, Search } from "lucide-react";
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn } from "@evinvest/uikit";
+import { ChevronDown, CircleMinus, CirclePlus, Search, Tag as TagIcon, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 
 import {
+  COUNTRIES,
+  type Gmb,
   ISSUES,
   type Listed,
   MUST_HAVES,
@@ -154,7 +156,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
               className={cn(
                 "rounded-full border px-2 py-0.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 only === i ? "border-ink bg-ink text-background" : "border-border hover:bg-hover/50",
-                only !== i && (i === "off" || i === "draft" ? "text-ink-soft" : "text-accent-error"),
+                only !== i && (i === "off" || i === "draft" || i === "no_category" ? "text-ink-soft" : "text-accent-error"),
               )}
             >
               {t(`gmbs.issue.${i}`)} <span className="tabular-nums">{counts.get(i)}</span>
@@ -173,7 +175,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
             count={inSelection.length}
             empty={t("gmbs.selected.empty")}
             onMove={move}
-            action={inSelection.length > 0 && <SetTrade gmbs={inSelection.map((l) => l.gmb.id)} onSet={changed} />}
+            action={inSelection.length > 0 && <SetTrade gmbs={inSelection.map((l) => l.gmb)} onSet={changed} />}
           >
             {split ? (
               <>
@@ -273,33 +275,63 @@ function Group({
   );
 }
 
-/** The selected GBPs given one trade, or none: every one, or none of them. */
-function SetTrade({ gmbs, onSet }: { gmbs: number[]; onSet: () => void }) {
+/** The selected GBPs given one trade, or none: every one, or none of them. Each trade previews where they land, per country. */
+function SetTrade({ gmbs, onSet }: { gmbs: Gmb[]; onSet: () => void }) {
   const t = useT();
   const trades = useTrades();
   const give = async (trade: number | null) => {
     try {
-      await setTrades(gmbs, trade);
+      await setTrades(
+        gmbs.map((b) => b.id),
+        trade,
+      );
       onSet();
     } catch (e) {
       notifyFailure(e, t);
     }
   };
+  const byCountry = COUNTRIES.map((c) => [c, gmbs.filter((b) => b.country?.code === c).length] as const).filter(([, n]) => n > 0);
+  const nowhere = gmbs.filter((b) => b.country === null).length;
+  const untraded = gmbs.every((b) => b.trade_id === null);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex items-center gap-0.5 rounded px-1 text-xs font-normal tracking-normal normal-case outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
         {t("trades.set", { n: gmbs.length })}
         <ChevronDown aria-hidden className="size-3" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="w-96">
+        <DropdownMenuLabel className="flex text-xs tracking-wide text-ink-soft uppercase">
+          <span className="flex-1">{t("trades.set.title", { n: gmbs.length })}</span>
+          <span className="font-normal normal-case">{[...byCountry.map(([c, n]) => `${c} ${n}`), ...(nowhere > 0 ? [t("trades.set.nowhere", { n: nowhere })] : [])].join(" · ")}</span>
+        </DropdownMenuLabel>
         {trades.status === "ok" &&
           trades.data.map((tr) => (
-            <DropdownMenuItem key={tr.id} onSelect={() => void give(tr.id)}>
-              {tr.name}
+            <DropdownMenuItem key={tr.id} onClick={() => void give(tr.id)}>
+              <TagIcon aria-hidden />
+              <span className="flex min-w-0 flex-col">
+                {tr.name}
+                <span className="truncate text-xs text-ink-soft">
+                  {byCountry.map(([c, n], i) => {
+                    const setUp = tr.categories.some((k) => k.country === c);
+                    return (
+                      <span key={c} className={cn(!setUp && "text-accent-warn")}>
+                        {i > 0 && " · "}
+                        {setUp ? `${tr.name} · ${c} ${n}` : t("trades.set.notSetUp", { category: `${tr.name} · ${c}`, n })}
+                      </span>
+                    );
+                  })}
+                </span>
+              </span>
             </DropdownMenuItem>
           ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => void give(null)}>{t("trades.none")}</DropdownMenuItem>
+        <DropdownMenuItem disabled={untraded} onClick={() => void give(null)}>
+          <X aria-hidden />
+          <span className="flex flex-col">
+            {t("trades.none")}
+            {untraded && <span className="text-xs text-ink-soft">{t("trades.set.untraded", { n: gmbs.length })}</span>}
+          </span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -369,7 +401,7 @@ function GmbRow({
       <span className="block truncate text-xs text-ink-soft">
         {gmb.state !== "verified" && <span className={cn("font-medium", gmb.state === "suspended" && "text-accent-error")}>{t(`gmbs.state.${gmb.state}`)}</span>}
         {gmb.state !== "verified" && (shown || where) && " · "}
-        {shown && <span className={cn("font-medium", shown === "off" ? "text-ink-soft" : "text-accent-error")}>{issueText(shown, gmb, tags, t)}</span>}
+        {shown && <span className={cn("font-medium", shown === "off" || shown === "no_category" ? "text-ink-soft" : "text-accent-error")}>{issueText(shown, gmb, tags, t)}</span>}
         {shown && where && " · "}
         {where}
       </span>

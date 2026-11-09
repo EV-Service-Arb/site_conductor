@@ -122,6 +122,8 @@ pub struct TradeDto {
 #[ts(rename = "Category")]
 pub struct CategoryDto {
 	pub country: Country,
+	/// The country's language, its keywords' and Google's label's: `fr`.
+	pub lang: String,
 	/// Lowercase, in the country's language, none naming a city: the terms every GBP of the
 	/// category is compared on.
 	pub keywords: Vec<String>,
@@ -255,6 +257,7 @@ impl From<Trade> for TradeDto {
 				.into_iter()
 				.map(|c| CategoryDto {
 					country: c.country,
+					lang: c.country.lang().to_owned(),
 					keywords: c.keywords,
 					google_category: c.google_category,
 					study: c.study,

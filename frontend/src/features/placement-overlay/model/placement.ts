@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 
 import { ApiError, http, readCsrf } from "@/shared/api";
 import { type Infer, arrayOf, bool, nullable, num, object, oneOf, parse, str } from "@/shared/lib/parse";
-import { useScope, useTrades } from "@/entities/gmb";
+import { covers, useScope, useTrades } from "@/entities/gmb";
 import { setQuery, useQuery } from "@/shared/lib/query";
 
 // gmaps_optimal_placement behind the forward (docs/ARCHITECTURE.md, Forward): its overlay module
@@ -148,8 +148,10 @@ export async function pull(): Promise<void> {
 
 export interface MapView {
   heat: string | null;
-  /** Placement's trade drawn: the one picked, else the study of the one category the outline is scoped to. */
+  /** Placement's trade drawn: the one picked, else the study of the one category in the outline's scope that has one. */
   study: string | null;
+  /** Where `study` comes from. */
+  from: "pick" | "scope" | null;
   /** On, at its radius in metres or at the trade's own. */
   pressure: { lambda?: number } | null;
   competitors: boolean;
@@ -167,19 +169,19 @@ export function useMapView(): MapView {
   return {
     heat,
     study: study === null ? scoped : study === "" ? null : study,
+    from: study !== null && study !== "" ? "pick" : study === null && scoped !== null ? "scope" : null,
     pressure: pressure === null ? null : lambda === undefined ? {} : { lambda },
     competitors: competitors !== null,
   };
 }
 
-/** The study of the category the outline is scoped to, when it is exactly one. */
+/** The study of the one category in the outline's scope that has a study. */
 function useScopedStudy(): string | null {
-  const { categories } = useScope();
+  const { categories: scope } = useScope();
   const trades = useTrades();
-  const one = categories?.length === 1 ? categories[0]! : null;
-  if (one === null || one.trade === "*" || one.country === "*" || trades.status !== "ok") return null;
-  const { trade, country } = one;
-  return trades.data.find((t) => t.id === trade)?.categories.find((c) => c.country === country)?.study ?? null;
+  if (scope === null || trades.status !== "ok") return null;
+  const studied = new Set(trades.data.flatMap((tr) => tr.categories.filter((c) => c.study !== null && scope.some((p) => covers(p, tr.id, c.country))).map((c) => c.study)));
+  return studied.size === 1 ? [...studied][0]! : null;
 }
 
 export function setMapView(change: Partial<MapView>): void {

@@ -11,7 +11,9 @@ import {
   type Listed,
   MUST_HAVES,
   type MustHave,
+  type Gmb,
   type Placed,
+  CategoryChip,
   TradeSelect,
   categoryName,
   categoryOf,
@@ -28,7 +30,7 @@ import { may, useMe } from "@/entities/session";
 import { LinkPlaceButton } from "@/features/link-gmb-place";
 import { PlaceButton } from "@/features/place-gmb";
 import { ApiError } from "@/shared/api";
-import { useT } from "@/shared/i18n";
+import { useLocale, useT } from "@/shared/i18n";
 import { failureText } from "@/shared/ui/failure-text";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -72,17 +74,18 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
     return t(`gmbs.gmail.room.${g.role}`, { n, cap: g.cap });
   };
 
-  const parts: Record<MustHave, { value: ReactNode; editor: ReactNode; why: string }> = {
+  const parts: Record<MustHave, { value: ReactNode; editor: ReactNode; why: string | null }> = {
     name: { value: gmb.name, editor: text("name", gmb.name, (v) => ({ name: v ?? "" })), why: t("launch.why.name") },
     category: {
       value: placed?.status === "set_up" && `${categoryName(placed.trade, placed.category.country)} · ${placed.category.google_category}`,
       editor: (
         <span className="flex flex-col gap-2">
-          <TradeSelect value={gmb.trade_id} label={t("launch.must.category")} onPick={(trade) => void save("category")({ trade })} />
-          {placed !== null && <CategoryFix placed={placed} gmb={gmb.id} onSet={gmails.reload} />}
+          <TradeSelect value={gmb.trade_id} country={gmb.country?.code ?? null} className="w-80 max-w-full" label={t("launch.must.category")} onPick={(trade) => void save("category")({ trade })} />
+          {placed !== null && <CategoryFix placed={placed} gmb={gmb} onSet={gmails.reload} />}
         </span>
       ),
-      why: t("launch.why.category"),
+      // past a trade, the fix says what is missing
+      why: placed === null || placed.status === "no_trade" ? t("launch.why.category") : null,
     },
     areas: { value: gmb.areas.join(" · "), editor: <AreasEditor areas={gmb.areas} onSave={(areas) => save("areas")({ areas })} />, why: t("launch.why.areas") },
     phone: { value: gmb.phone, editor: text("phone", gmb.phone, (phone) => ({ phone }), "tel"), why: t("launch.why.phone") },
@@ -173,7 +176,7 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
 }
 
 /** A must-have: folded to its value while ready, its editor and why while not, or once unfolded. */
-function MustRow({ n, label, ready, value, editor, why, failed }: { n: number; label: string; ready: boolean; value: ReactNode; editor: ReactNode; why: string; failed: string | null }) {
+function MustRow({ n, label, ready, value, editor, why, failed }: { n: number; label: string; ready: boolean; value: ReactNode; editor: ReactNode; why: string | null; failed: string | null }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const folded = ready && !open && failed === null;
@@ -188,7 +191,7 @@ function MustRow({ n, label, ready, value, editor, why, failed }: { n: number; l
       ) : (
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           {editor}
-          {failed !== null ? <span className="text-xs text-accent-error">{failed}</span> : !ready && <span className="text-xs text-accent-warn">{why}</span>}
+          {failed !== null ? <span className="text-xs text-accent-error">{failed}</span> : !ready && why !== null && <span className="text-xs text-accent-warn">{why}</span>}
         </span>
       )}
       {ready && (open ? (
@@ -264,32 +267,54 @@ function AreasEditor({ areas, onSave }: { areas: string[]; onSave: (areas: strin
   );
 }
 
-/** What the category lacks and its one fix, or Google's label to type into its form. */
-function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: number; onSet: () => void }) {
+/** Where the trade resolves in the GBP's country, and what it lacks with its one fix, or Google's label to type into its form. */
+function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: () => void }) {
   const t = useT();
+  const locale = useLocale();
   const button = useButtonSize();
+  const region = (c: Country) => new Intl.DisplayNames([locale], { type: "region" }).of(c) ?? c;
   if (placed.status === "no_trade") return null;
   if (placed.status === "no_country")
     return (
-      <span className="flex items-center gap-2 text-xs text-accent-warn">
-        {t("launch.category.noCountry", { trade: placed.trade.name })}
-        <CountrySelect gmb={gmb} value={null} onSet={onSet} />
+      <span className="flex flex-col gap-1">
+        <span className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
+          {t("launch.category.noCountry")}
+          <CountrySelect gmb={gmb.id} value={null} onSet={onSet} />
+        </span>
+        <span className="text-xs text-accent-warn">{t("launch.category.noCountry.why")}</span>
       </span>
     );
-  const name = categoryName(placed.trade, placed.status === "set_up" ? placed.category.country : placed.country);
-  if (placed.status === "not_set_up" || placed.category.google_category === null)
-    return (
-      <span className="flex items-center gap-2 text-xs text-accent-warn">
-        {t(placed.status === "not_set_up" ? "launch.category.notSetUp" : "launch.category.noLabel", { category: name })}
-        <Button variant="outline" size={button("sm")} onClick={() => openTrade(placed.trade.id, placed.status === "set_up" ? placed.category.country : placed.country)}>
-          {t(placed.status === "not_set_up" ? "launch.category.setUp" : "launch.category.open", { category: name })}
-        </Button>
-      </span>
-    );
-  const label = placed.category.google_category;
+  const country = placed.status === "set_up" ? placed.category.country : placed.country;
+  const name = categoryName(placed.trade, country);
+  const lacking = placed.status === "not_set_up" ? "launch.category.notSetUp" : placed.category.google_category === null ? "launch.category.noLabel" : null;
   return (
-    <span className="flex items-center gap-2 text-sm text-ink">
-      {name} · {t("launch.category.type")} <span className="font-medium">{label}</span>
+    <span className="flex flex-col gap-1">
+      <span className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
+        {t("launch.category.in", { country: region(country) })}
+        <CategoryChip gmb={gmb} />
+        {lacking !== null && (
+          <Button variant={placed.status === "not_set_up" ? "primary" : "outline"} size={button("sm")} onClick={() => openTrade(placed.trade.id, country)}>
+            {t(placed.status === "not_set_up" ? "launch.category.setUp" : "launch.category.open", { category: name })}
+          </Button>
+        )}
+      </span>
+      {lacking !== null ? (
+        <span className="text-xs text-accent-warn">{t(lacking, { category: name })}</span>
+      ) : (
+        placed.status === "set_up" &&
+        placed.category.google_category !== null && <TypeIn label={placed.category.google_category} />
+      )}
+    </span>
+  );
+}
+
+function TypeIn({ label }: { label: string }) {
+  const t = useT();
+  const button = useButtonSize();
+  return (
+    <span className="flex items-center gap-2 text-xs text-ink-soft">
+      {t("launch.category.type")}
+      <span className="rounded bg-hover px-1.5 py-0.5 font-mono text-sm text-ink">{label}</span>
       <Button variant="ghost" size={button("sm")} icon aria-label={t("launch.category.copy")} title={t("launch.category.copy")} onClick={() => void navigator.clipboard.writeText(label)}>
         <Copy aria-hidden />
       </Button>

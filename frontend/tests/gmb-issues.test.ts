@@ -31,7 +31,7 @@ const site = (overdue: number): SiteTag => ({ brand: "aquafix", location: "lyon-
 const PLUMBING = 7;
 /** Plumbing, set up in FR with Google's label unless `label` is null. */
 const plumbing = (label: string | null = "Plombier"): Trade[] => [
-  { id: PLUMBING, name: "Plumbing", created_at: "2026-11-09T00:00:00Z", categories: [{ country: "FR", keywords: ["plombier"], google_category: label, study: null }] },
+  { id: PLUMBING, name: "Plumbing", created_at: "2026-11-09T00:00:00Z", categories: [{ country: "FR", lang: "fr", keywords: ["plombier"], google_category: label, study: null }] },
 ];
 
 /** Each GMB's issue under `tags`, by id. */

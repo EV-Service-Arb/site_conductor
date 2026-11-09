@@ -9,6 +9,10 @@ export type Candidates = { candidates: Array<Place>, };
  */
 export type Category = { country: Country, 
 /**
+ * The country's language, its keywords' and Google's label's: `fr`.
+ */
+lang: string, 
+/**
  * Lowercase, in the country's language, none naming a city: the terms every GBP of the
  * category is compared on.
  */
