@@ -1,6 +1,7 @@
 //! A Google place from what a person pastes. The id, or a Maps URL carrying it, needs nothing;
 //! a URL with only a name in it is looked up with the Places API (New). Every Places request
-//! goes through [`Google`]: the queries cache answers what was paid for once, its [`Keys`] rotate.
+//! goes through [`Google`]: the queries cache answers what was paid for once; else the [`Payer`]'s
+//! own keys are asked first, then the [`Keys`] rotation, which its [`Purse`] pays for.
 
 mod keys;
 pub mod parse;
@@ -8,18 +9,69 @@ mod queries_cache;
 
 use std::{sync::Arc, time::Duration};
 
+use keys::Tier;
 pub use keys::{Keys, Spent};
 use parse::Parsed;
 use queries_cache::Request;
 pub use queries_cache::{Pending, QueriesCache, Remote};
 use sa_core::queries_cache::{Claim, Put};
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroizing;
 
 const SEARCH_MASK: &str = "places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents";
 
 const DETAILS_MASK: &str = "id,displayName,formattedAddress,location,addressComponents";
 /// A GMB created on Google today is findable by name tomorrow.
 const SEARCH_AGE: Duration = Duration::from_secs(86_400);
+/// The place a key is tried on: Google's own office, the one its docs ask about.
+const PROBE_PLACE: &str = "ChIJj61dQgK6j4AR4GeTYWZsKWw";
+
+/// How Google bills a request, by what its field mask asks: both masks ask a display name, which
+/// makes them the Pro SKUs.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::Display, strum::EnumString, strum::IntoStaticStr, strum::VariantArray)]
+#[strum(serialize_all = "snake_case")]
+pub enum Sku {
+	/// Place Details Pro.
+	Details,
+	/// Text Search Pro.
+	Search,
+}
+
+/// Who a request is made for.
+pub struct Payer<'a> {
+	/// Keys of their own, in the order tried, before any of the rotation: free.
+	pub own: Vec<Zeroizing<String>>,
+	/// Pays for a buy on the rotation; `None`, the house does.
+	pub purse: Option<&'a dyn Purse>,
+}
+impl Payer<'_> {
+	/// No keys of anyone's: the rotation, the house paying.
+	pub fn house() -> Self {
+		Self { own: Vec::new(), purse: None }
+	}
+}
+
+/// Pays for buys on the rotation.
+pub trait Purse: Send + Sync {
+	/// Room for one buy of `sku`, kept until paid or dropped; else [`Error::Unpaid`].
+	fn hold(&self, sku: Sku) -> Pending<'_, Box<dyn Hold>>;
+}
+
+/// A purse's room for one buy; dropped unpaid, it is given back.
+pub trait Hold: Send {
+	/// The buy went through.
+	fn paid(self: Box<Self>, bought: Bought) -> Pending<'static, ()>;
+}
+
+/// A buy on the rotation, as its payer is charged for it.
+#[derive(Clone, Debug)]
+pub struct Bought {
+	/// The query's, as the queries cache keys it.
+	pub key: sa_core::queries_cache::Key,
+	pub sku: Sku,
+	/// What was asked, as a person reads it.
+	pub label: String,
+}
 /// A Google place, as Places answers for it.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Place {
@@ -47,6 +99,15 @@ pub enum Error {
 	/// The Places API refused a request.
 	#[error("Places API, {asked}: {status}: {body}")]
 	Api { asked: String, status: u16, body: String },
+	/// The Places API refused a key of the payer's own, for something else than a spent window.
+	#[error("Google refuses the Maps key …{tail}: {said}")]
+	OwnKey { tail: String, said: String },
+	/// The purse refused a buy on the rotation: why, as the payer reads it.
+	#[error("{0}")]
+	Unpaid(String),
+	/// The purse failed to answer.
+	#[error("the purse: {0}")]
+	Purse(String),
 	/// Every key is sitting out.
 	#[error("every Places key is spent: {}", .0.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "))]
 	Exhausted(Vec<Spent>),
@@ -98,14 +159,14 @@ impl Google {
 
 	/// The place id in `input`, and the place unless there is no key: one place only, an
 	/// ambiguous name is refused with what it may mean.
-	pub async fn resolve(&self, input: &str) -> Result<(String, Option<Place>), Error> {
+	pub async fn resolve(&self, input: &str, payer: &Payer<'_>) -> Result<(String, Option<Place>), Error> {
 		match parsed(input).await? {
-			Parsed::PlaceId(id) if self.keys.is_empty() => Ok((id, None)),
+			Parsed::PlaceId(id) if self.keyless(payer) => Ok((id, None)),
 			Parsed::PlaceId(id) | Parsed::Alias(id) => {
-				let place = self.details(&id, Ask::Cached).await?;
+				let place = self.details(&id, Ask::Cached, payer).await?;
 				Ok((place.place_id.clone(), Some(place)))
 			}
-			Parsed::Search { query, near } => match <[Place; 1]>::try_from(self.search(&query, near).await?) {
+			Parsed::Search { query, near } => match <[Place; 1]>::try_from(self.search(&query, near, payer).await?) {
 				Ok([one]) => Ok((one.place_id.clone(), Some(one))),
 				Err(many) => {
 					let each = many
@@ -123,20 +184,20 @@ impl Google {
 
 	/// Every place `input` may mean, each as [`Self::resolve`] gives one: the one its id names,
 	/// else each Places hit bearing the name in the URL.
-	pub async fn candidates(&self, input: &str) -> Result<Vec<(String, Option<Place>)>, Error> {
+	pub async fn candidates(&self, input: &str, payer: &Payer<'_>) -> Result<Vec<(String, Option<Place>)>, Error> {
 		let places = match parsed(input).await? {
-			Parsed::PlaceId(id) if self.keys.is_empty() => return Ok(vec![(id, None)]),
-			Parsed::PlaceId(id) | Parsed::Alias(id) => vec![self.details(&id, Ask::Cached).await?],
-			Parsed::Search { query, near } => self.search(&query, near).await?,
+			Parsed::PlaceId(id) if self.keyless(payer) => return Ok(vec![(id, None)]),
+			Parsed::PlaceId(id) | Parsed::Alias(id) => vec![self.details(&id, Ask::Cached, payer).await?],
+			Parsed::Search { query, near } => self.search(&query, near, payer).await?,
 		};
 		Ok(places.into_iter().map(|p| (p.place_id.clone(), Some(p))).collect())
 	}
 
 	/// The place with this id, under the id Google now gives it: a moved or merged place answers
 	/// with its newer one.
-	pub async fn details(&self, place_id: &str, ask: Ask) -> Result<Place, Error> {
+	pub async fn details(&self, place_id: &str, ask: Ask, payer: &Payer<'_>) -> Result<Place, Error> {
 		let url = format!("{}/{place_id}", self.base);
-		let (json, _) = match self.ask(&Request::details(&url), None, ask).await {
+		let (json, _) = match self.ask(&Request::details(&url, place_id), None, ask, payer).await {
 			Err(Error::Api { status: 400 | 404, .. }) => return Err(Error::Invalid(format!("Places knows no place {place_id:?}"))),
 			r => r?,
 		};
@@ -145,7 +206,7 @@ impl Google {
 
 	/// Text search: every hit bearing the name searched for, best first. Each place it pays for is
 	/// cached as that place's details.
-	async fn search(&self, query: &str, near: Option<(f64, f64)>) -> Result<Vec<Place>, Error> {
+	async fn search(&self, query: &str, near: Option<(f64, f64)>, payer: &Payer<'_>) -> Result<Vec<Place>, Error> {
 		#[derive(Deserialize)]
 		struct Resp {
 			#[serde(default)]
@@ -162,14 +223,16 @@ impl Google {
 			url: &url,
 			mask: SEARCH_MASK,
 			body: &body,
+			sku: Sku::Search,
+			subject: query,
 		};
-		let (json, paid) = self.ask(&req, Some(SEARCH_AGE), Ask::Cached).await?;
+		let (json, paid) = self.ask(&req, Some(SEARCH_AGE), Ask::Cached, payer).await?;
 		let mut named = Vec::new();
 		for raw in serde_json::from_value::<Resp>(json)?.places {
 			let place = Place::from(serde_json::from_value::<Hit>(raw.clone())?);
 			if paid {
 				let details = format!("{}/{}", self.base, place.place_id);
-				let req = Request::details(&details);
+				let req = Request::details(&details, &place.place_id);
 				self.cache
 					.put(
 						req.key(),
@@ -192,7 +255,7 @@ impl Google {
 
 	/// The answer to `req`, and whether it was paid for now: from the cache unless older than
 	/// `max_age`, else claimed there and bought with the first key not sitting out.
-	async fn ask(&self, req: &Request<'_>, max_age: Option<Duration>, ask: Ask) -> Result<(serde_json::Value, bool), Error> {
+	async fn ask(&self, req: &Request<'_>, max_age: Option<Duration>, ask: Ask, payer: &Payer<'_>) -> Result<(serde_json::Value, bool), Error> {
 		let key = req.key();
 		let now = jiff::Timestamp::now();
 		let fresh_since = match ask {
@@ -205,7 +268,7 @@ impl Google {
 		{
 			return Ok((kept.answer, false));
 		}
-		if self.keys.is_empty() {
+		if self.keyless(payer) {
 			return Err(Error::Invalid("asking Google Places needs an API key, and none is set".into()));
 		}
 		loop {
@@ -215,14 +278,14 @@ impl Google {
 				Claim::Granted { .. } => break,
 			}
 		}
-		let bought = self.buy(req).await;
+		let bought = self.buy(req, payer).await;
 		if bought.is_err()
 			&& let Err(e) = self.cache.release(key).await
 		{
 			// the buy's error is the one to tell; the claim lapses with its lease anyway
 			tracing::warn!(error = %e, "releasing a claim after a failed buy");
 		}
-		let answer = bought?;
+		let (answer, hold) = bought?;
 		self.cache
 			.put(
 				key,
@@ -232,17 +295,30 @@ impl Google {
 				},
 			)
 			.await?;
+		if let Some(hold) = hold {
+			let label = match req.sku {
+				Sku::Details => format!("Places details · {}", req.subject),
+				Sku::Search => format!("Places search · {:?}", req.subject),
+			};
+			hold.paid(Bought { key, sku: req.sku, label }).await?;
+		}
 		Ok((answer, true))
 	}
 
-	/// `req` asked of Google with the first key not sitting out.
-	async fn buy(&self, req: &Request<'_>) -> Result<serde_json::Value, Error> {
+	/// `req` asked of Google with the first key not sitting out: the payer's own, then the
+	/// rotation's, held in their purse before the first of those is asked; the hold, to be paid
+	/// once the answer is kept.
+	async fn buy(&self, req: &Request<'_>, payer: &Payer<'_>) -> Result<(serde_json::Value, Option<Box<dyn Hold>>), Error> {
 		let mut tried = Vec::new();
+		let mut hold: Option<Box<dyn Hold>> = None;
 		loop {
-			let api_key = match self.keys.next(&tried) {
-				Ok(k) => k,
-				Err(spent) => return Err(Error::Exhausted(spent)),
-			};
+			let (api_key, tier) = self.keys.next(&payer.own, &tried).map_err(Error::Exhausted)?;
+			if tier == Tier::Rotation
+				&& hold.is_none()
+				&& let Some(purse) = payer.purse
+			{
+				hold = Some(purse.hold(req.sku).await?);
+			}
 			let r = match req.method {
 				"POST" => self.http.post(req.url).header(reqwest::header::CONTENT_TYPE, "application/json").body(req.body.to_owned()),
 				"GET" => self.http.get(req.url),
@@ -250,21 +326,28 @@ impl Google {
 			};
 			let resp = r.header("X-Goog-Api-Key", api_key.as_str()).header("X-Goog-FieldMask", req.mask).send().await?;
 			let status = resp.status();
-			tracing::info!(method = req.method, url = req.url, %status, "Places asked");
+			tracing::info!(method = req.method, url = req.url, %status, ?tier, "Places asked");
 			let text = resp.text().await?;
 			if status.is_success() {
-				return serde_json::from_str(&text).map_err(|e| Error::Api {
+				let answer = serde_json::from_str(&text).map_err(|e| Error::Api {
 					asked: format!("{} {}", req.method, req.url),
 					status: 200,
 					body: format!("not JSON ({e}), paid for and not kept: {text}"),
-				});
+				})?;
+				return Ok((answer, hold));
 			}
-			match Spent::of(&text) {
-				Some(why) => {
+			match (Spent::of(&text), tier) {
+				(Some(why), _) => {
 					self.keys.sit_out(&api_key, why);
 					tried.push(api_key);
 				}
-				None => {
+				(None, Tier::Own) => {
+					return Err(Error::OwnKey {
+						tail: keys::tail(&api_key).to_owned(),
+						said: said(&text),
+					});
+				}
+				(None, Tier::Rotation) => {
 					return Err(Error::Api {
 						asked: format!("{} {}", req.method, req.url),
 						status: status.as_u16(),
@@ -274,15 +357,58 @@ impl Google {
 			}
 		}
 	}
+
+	/// Whether `key` answers for Places: a details request asking only the id, which Google does
+	/// not bill, so it is neither cached nor paid for. Answering, it is back in at once.
+	pub async fn probe(&self, key: &str) -> Result<(), Error> {
+		let resp = self
+			.http
+			.get(format!("{}/{PROBE_PLACE}", self.base))
+			.header("X-Goog-Api-Key", key)
+			.header("X-Goog-FieldMask", "id")
+			.send()
+			.await?;
+		let status = resp.status();
+		let text = resp.text().await?;
+		tracing::info!(key = %format!("…{}", keys::tail(key)), %status, "Places key probed");
+		if status.is_success() {
+			self.keys.back(key);
+			return Ok(());
+		}
+		Err(Error::OwnKey {
+			tail: keys::tail(key).to_owned(),
+			said: said(&text),
+		})
+	}
+
+	/// Why an own key sits out, if it does.
+	pub fn sat_out(&self, key: &str) -> Option<Spent> {
+		self.keys.out(key)
+	}
+
+	fn keyless(&self, payer: &Payer<'_>) -> bool {
+		payer.own.is_empty() && self.keys.is_empty()
+	}
+}
+
+/// Google's message in a refusal, else the refusal as it came.
+fn said(text: &str) -> String {
+	// not JSON, or no message in it: the body is all there is to tell
+	serde_json::from_str::<serde_json::Value>(text)
+		.ok()
+		.and_then(|v| v["error"]["message"].as_str().map(str::to_owned))
+		.unwrap_or_else(|| text.to_owned())
 }
 
 impl<'a> Request<'a> {
-	fn details(url: &'a str) -> Self {
+	fn details(url: &'a str, place_id: &'a str) -> Self {
 		Self {
 			method: "GET",
 			url,
 			mask: DETAILS_MASK,
 			body: "",
+			sku: Sku::Details,
+			subject: place_id,
 		}
 	}
 }

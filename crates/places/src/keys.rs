@@ -1,11 +1,14 @@
-//! The Places API keys, in rotation order: a key sits out while Google says it is spent, and the
-//! next one is asked. Free keys go first, so billed ones pay only for what the free ones could not.
+//! The Places API keys: a person's own first, in the order they were given, then the rotation's.
+//! A key sits out while Google says it is spent, and the next one is asked. The rotation's free
+//! keys go first, so billed ones pay only for what the free ones could not.
 
 use std::{
+	collections::HashMap,
 	sync::Mutex,
 	time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 /// Why a key is sitting out. Only a refusal says so: an API key cannot read its quota ahead.
@@ -63,50 +66,107 @@ impl std::fmt::Display for Spent {
 	}
 }
 
-/// The keys and which of them sit out.
-pub struct Keys(Mutex<Vec<(Zeroizing<String>, Option<Spent>)>>);
+/// The rotation's keys and which of them sit out, and the own keys sitting out (by digest: an own
+/// key is held only for the request that brings it).
+pub struct Keys(Mutex<Held>);
+
+struct Held {
+	rotation: Vec<(Zeroizing<String>, Option<Spent>)>,
+	own: HashMap<[u8; 32], Spent>,
+}
+
+/// Where a key handed out by [`Keys::next`] is from.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Tier {
+	Own,
+	Rotation,
+}
+
 impl Keys {
-	/// `keys` in the order they are used in.
+	/// The rotation, `keys` in the order they are used in.
 	pub fn new(keys: Vec<String>) -> Self {
 		for (i, k) in keys.iter().enumerate() {
 			assert!(!keys[..i].contains(k), "a Places key is listed twice");
 		}
-		Self(Mutex::new(keys.into_iter().map(|k| (Zeroizing::new(k), None)).collect()))
+		Self(Mutex::new(Held {
+			rotation: keys.into_iter().map(|k| (Zeroizing::new(k), None)).collect(),
+			own: HashMap::new(),
+		}))
 	}
 
 	pub(crate) fn is_empty(&self) -> bool {
-		self.0.lock().expect("never poisoned: no panic while held").is_empty()
+		self.0.lock().expect("never poisoned: no panic while held").rotation.is_empty()
 	}
 
-	/// The first key not sitting out and not `tried` (by this request: a window Google says is
-	/// over already must not loop it), else why each sits out.
-	pub(crate) fn next(&self, tried: &[Zeroizing<String>]) -> Result<Zeroizing<String>, Vec<Spent>> {
-		let mut keys = self.0.lock().expect("never poisoned: no panic while held");
+	/// The first of `own`, then of the rotation, not sitting out and not `tried` (by this request:
+	/// a window Google says is over already must not loop it), else why each sits out.
+	pub(crate) fn next(&self, own: &[Zeroizing<String>], tried: &[Zeroizing<String>]) -> Result<(Zeroizing<String>, Tier), Vec<Spent>> {
+		let mut held = self.0.lock().expect("never poisoned: no panic while held");
 		let now = SystemTime::now();
-		for (key, out) in keys.iter_mut().filter(|(k, _)| !tried.contains(k)) {
+		for key in own.iter().filter(|k| !tried.contains(k)) {
+			let digest = digest(key);
+			if held.own.get(&digest).is_some_and(|s| s.back_by(now)) {
+				held.own.remove(&digest);
+			}
+			if !held.own.contains_key(&digest) {
+				return Ok((key.clone(), Tier::Own));
+			}
+		}
+		for (key, out) in held.rotation.iter_mut().filter(|(k, _)| !tried.contains(k)) {
 			if out.as_ref().is_some_and(|s| s.back_by(now)) {
 				*out = None;
 			}
 			if out.is_none() {
-				return Ok(key.clone());
+				return Ok((key.clone(), Tier::Rotation));
 			}
 		}
-		Err(keys.iter().filter_map(|(_, out)| out.clone()).collect())
+		let own_out = own.iter().filter_map(|k| held.own.get(&digest(k)).cloned());
+		Err(own_out.chain(held.rotation.iter().filter_map(|(_, out)| out.clone())).collect())
 	}
 
 	pub(crate) fn sit_out(&self, key: &str, why: Spent) {
-		let mut keys = self.0.lock().expect("never poisoned: no panic while held");
-		let (_, out) = keys.iter_mut().find(|(k, _)| k.as_str() == key).expect("handed out by `next`");
-		let tail = &key[key.len().saturating_sub(4)..];
-		tracing::warn!(key = %format!("…{tail}"), "Places key spent: {why}");
-		*out = Some(why);
+		let mut held = self.0.lock().expect("never poisoned: no panic while held");
+		tracing::warn!(key = %format!("…{}", tail(key)), "Places key spent: {why}");
+		match held.rotation.iter_mut().find(|(k, _)| k.as_str() == key) {
+			Some((_, out)) => *out = Some(why),
+			None => {
+				held.own.insert(digest(key), why);
+			}
+		}
 	}
+
+	/// Why `key`, an own key, sits out; `None` once Google takes it again.
+	pub(crate) fn out(&self, key: &str) -> Option<Spent> {
+		let mut held = self.0.lock().expect("never poisoned: no panic while held");
+		let digest = digest(key);
+		if held.own.get(&digest).is_some_and(|s| s.back_by(SystemTime::now())) {
+			held.own.remove(&digest);
+		}
+		held.own.get(&digest).cloned()
+	}
+
+	/// `key`, an own key, answered: back in at once.
+	pub(crate) fn back(&self, key: &str) {
+		self.0.lock().expect("never poisoned: no panic while held").own.remove(&digest(key));
+	}
+}
+
+fn digest(key: &str) -> [u8; 32] {
+	Sha256::digest(key.as_bytes()).into()
+}
+
+/// A key's last four, what a person tells it by.
+pub(crate) fn tail(key: &str) -> &str {
+	&key[key.len().saturating_sub(4)..]
 }
 
 impl std::fmt::Debug for Keys {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let keys = self.0.lock().expect("never poisoned: no panic while held");
-		f.debug_list().entries(keys.iter().map(|(_, out)| out)).finish()
+		let held = self.0.lock().expect("never poisoned: no panic while held");
+		f.debug_struct("Keys")
+			.field("rotation", &held.rotation.iter().map(|(_, out)| out).collect::<Vec<_>>())
+			.field("own_out", &held.own.len())
+			.finish()
 	}
 }
 

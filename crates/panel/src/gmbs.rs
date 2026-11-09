@@ -103,6 +103,8 @@ async fn trade_is(conn: &mut sqlx::SqliteConnection, owner: Uuid, trade: Option<
 fn places_error(e: sa_places::Error) -> eyre::Result<Refused> {
 	match e {
 		sa_places::Error::Invalid(why) => Ok(Refused::Invalid(why)),
+		e @ sa_places::Error::OwnKey { .. } => Ok(Refused::Invalid(format!("{e}; replace it on its gmail's Connections"))),
+		sa_places::Error::Unpaid(why) => Ok(Refused::Conflict(why)),
 		e => Err(eyre::eyre!(e).wrap_err("asking the Places API")),
 	}
 }
@@ -203,9 +205,17 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
-	/// Every place `input` may mean (see [`sa_places::Google::candidates`]).
-	pub async fn place_candidates(&self, input: &str) -> eyre::Result<Result<Vec<(String, Option<Place>)>, Refused>> {
-		match self.google.candidates(input).await {
+	/// Every place `input` may mean (see [`sa_places::Google::candidates`]), asked for `owner`:
+	/// their `gmail`'s key first, if they name one of theirs.
+	pub async fn place_candidates(&self, owner: Uuid, gmail: Option<i64>, input: &str) -> eyre::Result<Result<Vec<(String, Option<Place>)>, Refused>> {
+		if let Some(g) = gmail
+			&& db::gmail_owner(&mut *self.store.pool().acquire().await.wrap_err("a connection for a gmail")?, g).await? != Some(owner)
+		{
+			return Ok(Err(Refused::NotFound));
+		}
+		let purse = self.purse(owner);
+		let payer = self.payer(owner, gmail, Some(&purse)).await?;
+		match self.google.candidates(input, &payer).await {
 			Ok(places) => Ok(Ok(places)),
 			Err(e) => Ok(Err(places_error(e)?)),
 		}
@@ -258,7 +268,13 @@ impl Panel {
 	/// its country by Places when there is a key, `e` filling what Google lacks. `owner` is whose
 	/// the gmail must be; `None`, the operator's CLI.
 	pub async fn add_gmb(&self, owner: Option<Uuid>, e: Existing, now: Timestamp) -> eyre::Result<Result<Gmb, Refused>> {
-		let (place_id, place) = match self.google.resolve(&e.place).await {
+		let gmail_owner = match db::gmail_owner(&mut *self.store.pool().acquire().await.wrap_err("a connection for a gmail")?, e.gmail_id).await? {
+			Some(o) if owner.is_none_or(|owner| owner == o) => o,
+			_ => return Ok(Err(Refused::NotFound)),
+		};
+		let purse = self.purse(gmail_owner);
+		let payer = self.payer(gmail_owner, Some(e.gmail_id), owner.map(|_| &purse as &dyn sa_places::Purse)).await?;
+		let (place_id, place) = match self.google.resolve(&e.place, &payer).await {
 			Ok(found) => found,
 			Err(err) => return Ok(Err(places_error(err)?)),
 		};
@@ -371,10 +387,21 @@ impl Panel {
 			return Ok(Err(Refused::NotFound));
 		};
 		let placed = match (read.state, place) {
-			(State::Draft, Some(input)) => match self.google.resolve(input).await {
-				Ok(found) => Some(found),
-				Err(e) => return Ok(Err(places_error(e)?)),
-			},
+			(State::Draft, Some(_)) if read.gmail_id.is_none() => {
+				return Ok(Err(Refused::Invalid(format!("GBP {id} goes onto Google under a gmail: give it its gmail first"))));
+			}
+			(State::Draft, Some(input)) => {
+				let gmail = read.gmail_id.expect("refused above without one");
+				let Some(gmail_owner) = db::gmail_owner(&mut *self.store.pool().acquire().await.wrap_err("a connection for a gmail")?, gmail).await? else {
+					return Ok(Err(Refused::NotFound)); // its gmail removed since it was read, and the GBP with it
+				};
+				let purse = self.purse(gmail_owner);
+				let payer = self.payer(gmail_owner, Some(gmail), owner.map(|_| &purse as &dyn sa_places::Purse)).await?;
+				match self.google.resolve(input, &payer).await {
+					Ok(found) => Some(found),
+					Err(e) => return Ok(Err(places_error(e)?)),
+				}
+			}
 			(State::Draft, None) if to == State::Verifying => return Ok(Err(Refused::Invalid("a draft goes onto Google with its place: paste it".to_owned()))),
 			(_, Some(_)) => return Ok(Err(Refused::Invalid(format!("GBP {id} is on Google already: only a draft takes a place")))),
 			(_, None) => None,
@@ -426,12 +453,14 @@ impl Panel {
 	}
 
 	/// Every GBP on Google without a point or a country of Google's, asked of Places (its cache
-	/// first: the field mask keys it, so an answer from before countries is asked again).
+	/// first: the field mask keys it, so an answer from before countries is asked again). Its
+	/// gmail's keys first; the house pays for the rotation: the operator asks, not the owner.
 	pub async fn locate(&self) -> eyre::Result<Located> {
 		let unlocated = db::unlocated(&mut *self.store.pool().acquire().await.wrap_err("a connection for the unlocated")?).await?;
 		let mut out = Located::default();
-		for (id, place_id, pointless) in unlocated {
-			let place = match self.google.details(&place_id, Ask::Cached).await {
+		for (id, place_id, pointless, owner, gmail) in unlocated {
+			let payer = self.payer(owner, Some(gmail), None).await?;
+			let place = match self.google.details(&place_id, Ask::Cached, &payer).await {
 				Ok(p) => p,
 				Err(sa_places::Error::Invalid(why)) => {
 					out.refused.push((place_id, why));

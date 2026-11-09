@@ -17,7 +17,7 @@ use axum::{
 use jiff::Timestamp;
 use sa_core::queries_cache::{Claim, Key, Put, Stored};
 use sa_places::{
-	Ask, Error, Google, Keys, LatLng, Pending, QueriesCache, Remote, Spent,
+	Ask, Error, Google, Keys, LatLng, Payer, Pending, QueriesCache, Remote, Spent,
 	parse::{Parsed, parse},
 };
 use serde_json::{Value, json};
@@ -185,7 +185,7 @@ async fn google_on(keys: &[&str], cache: Arc<dyn QueriesCache>) -> (Stub, Google
 #[tokio::test]
 async fn every_place_bearing_the_name_is_found_and_the_search_is_biased_to_the_map() {
 	let (s, google, _store, server) = google(&["key-123"]).await;
-	let got = google.candidates(SEARCH).await.unwrap();
+	let got = google.candidates(SEARCH, &Payer::house()).await.unwrap();
 	server.abort();
 	let ids: Vec<&str> = got.iter().map(|(id, _)| id.as_str()).collect();
 	assert_eq!(ids, [PROCOPE, "ChIJnamesakenamesakena"]);
@@ -201,10 +201,10 @@ async fn every_place_bearing_the_name_is_found_and_the_search_is_biased_to_the_m
 #[tokio::test]
 async fn nothing_or_another_place_found_is_the_callers_mistake_and_a_refusal_is_not() {
 	let (_s, google, _store, server) = google(&["k"]).await;
-	let nothing = google.resolve("https://www.google.com/maps/place/Nowhere").await.unwrap_err();
-	let refused = google.resolve("https://www.google.com/maps/place/Broken").await.unwrap_err();
-	let another = google.resolve("https://www.google.com/maps/place/Le+Procope+of+Hicksville").await.unwrap_err(); // #37: the first hit was a namesake
-	let ambiguous = google.resolve(SEARCH).await.unwrap_err();
+	let nothing = google.resolve("https://www.google.com/maps/place/Nowhere", &Payer::house()).await.unwrap_err();
+	let refused = google.resolve("https://www.google.com/maps/place/Broken", &Payer::house()).await.unwrap_err();
+	let another = google.resolve("https://www.google.com/maps/place/Le+Procope+of+Hicksville", &Payer::house()).await.unwrap_err(); // #37: the first hit was a namesake
+	let ambiguous = google.resolve(SEARCH, &Payer::house()).await.unwrap_err();
 	server.abort();
 	assert!(matches!(nothing, Error::Invalid(_)), "{nothing:#}");
 	assert!(matches!(another, Error::Invalid(_)), "{another:#}");
@@ -215,9 +215,9 @@ async fn nothing_or_another_place_found_is_the_callers_mistake_and_a_refusal_is_
 #[tokio::test]
 async fn a_place_added_by_its_id_is_named_and_located_and_an_unknown_id_refused() {
 	let (s, google, _store, server) = google(&["key-123"]).await;
-	let (_, got) = google.resolve(PROCOPE).await.unwrap();
-	let unknown = google.resolve("ChIJunknownunknownunk").await.unwrap_err();
-	let (moved, _) = google.resolve("ChIJmovedmovedmovedmo").await.unwrap();
+	let (_, got) = google.resolve(PROCOPE, &Payer::house()).await.unwrap();
+	let unknown = google.resolve("ChIJunknownunknownunk", &Payer::house()).await.unwrap_err();
+	let (moved, _) = google.resolve("ChIJmovedmovedmovedmo", &Payer::house()).await.unwrap();
 	server.abort();
 	assert_eq!(moved, PROCOPE, "a moved place comes back under the id Google gives it now");
 	let got = got.unwrap();
@@ -231,8 +231,8 @@ async fn a_place_added_by_its_id_is_named_and_located_and_an_unknown_id_refused(
 #[tokio::test]
 async fn a_service_area_place_has_no_point() {
 	let (_s, google, _store, server) = google(&["k"]).await;
-	let detailed = google.details(MOLD_ASSIST, Ask::Afresh).await.unwrap();
-	let (_, searched) = google.resolve("https://www.google.com/maps/place/Mold+Assist").await.unwrap();
+	let detailed = google.details(MOLD_ASSIST, Ask::Afresh, &Payer::house()).await.unwrap();
+	let (_, searched) = google.resolve("https://www.google.com/maps/place/Mold+Assist", &Payer::house()).await.unwrap();
 	server.abort();
 	assert_eq!((detailed.name.as_deref(), detailed.location, detailed.country), (Some("Mold Assist"), None, None));
 	assert_eq!(searched.unwrap().location, None);
@@ -241,8 +241,8 @@ async fn a_service_area_place_has_no_point() {
 #[tokio::test]
 async fn without_a_key_a_place_id_resolves_unnamed() {
 	let (s, google, _store, server) = google(&[]).await;
-	let got = google.candidates(PROCOPE).await.unwrap();
-	let search = google.resolve(SEARCH).await.unwrap_err();
+	let got = google.candidates(PROCOPE, &Payer::house()).await.unwrap();
+	let search = google.resolve(SEARCH, &Payer::house()).await.unwrap_err();
 	server.abort();
 	assert_eq!(got, [(PROCOPE.to_owned(), None)]);
 	assert!(matches!(search, Error::Invalid(_)), "{search:#}");
@@ -252,17 +252,17 @@ async fn without_a_key_a_place_id_resolves_unnamed() {
 #[tokio::test]
 async fn an_answer_is_paid_for_once() {
 	let (s, google, _store, server) = google(&["k"]).await;
-	google.details(PROCOPE, Ask::Cached).await.unwrap();
-	google.details(PROCOPE, Ask::Cached).await.unwrap();
+	google.details(PROCOPE, Ask::Cached, &Payer::house()).await.unwrap();
+	google.details(PROCOPE, Ask::Cached, &Payer::house()).await.unwrap();
 	assert_eq!(s.asked(), 1, "the same details twice");
 
-	google.candidates(SEARCH).await.unwrap();
-	let picked = google.details("ChIJnamesakenamesakena", Ask::Cached).await.unwrap();
-	google.candidates(SEARCH).await.unwrap();
+	google.candidates(SEARCH, &Payer::house()).await.unwrap();
+	let picked = google.details("ChIJnamesakenamesakena", Ask::Cached, &Payer::house()).await.unwrap();
+	google.candidates(SEARCH, &Payer::house()).await.unwrap();
 	assert_eq!(s.asked(), 2, "a search, then details of a place it returned, then the search again");
 	assert_eq!(picked.address.as_deref(), Some("1 Rue de Lyon, Marseille"));
 
-	google.details(PROCOPE, Ask::Afresh).await.unwrap();
+	google.details(PROCOPE, Ask::Afresh, &Payer::house()).await.unwrap();
 	server.abort();
 	assert_eq!(s.asked(), 3, "asked afresh");
 }
@@ -271,8 +271,8 @@ async fn an_answer_is_paid_for_once() {
 async fn a_refusal_is_never_kept() {
 	let (s, google, _store, server) = google(&["k"]).await;
 	for _ in 0..2 {
-		google.resolve("https://www.google.com/maps/place/Broken").await.unwrap_err();
-		google.details("ChIJunknownunknownunk", Ask::Cached).await.unwrap_err();
+		google.resolve("https://www.google.com/maps/place/Broken", &Payer::house()).await.unwrap_err();
+		google.details("ChIJunknownunknownunk", Ask::Cached, &Payer::house()).await.unwrap_err();
 	}
 	server.abort();
 	assert_eq!(s.asked(), 4);
@@ -283,19 +283,19 @@ async fn a_spent_key_sits_out_until_its_window_ends() {
 	let (s, google, _store, server) = google(&["free", "billed"]).await;
 	// the free key's day ends in 2 s
 	s.refuse.lock().unwrap().insert("free".into(), vec![(StatusCode::TOO_MANY_REQUESTS, refusal(now() - 86_400 + 2))]);
-	google.details(PROCOPE, Ask::Cached).await.unwrap();
-	google.details("ChIJotherotherotherot", Ask::Cached).await.unwrap();
+	google.details(PROCOPE, Ask::Cached, &Payer::house()).await.unwrap();
+	google.details("ChIJotherotherotherot", Ask::Cached, &Payer::house()).await.unwrap();
 	assert_eq!(s.keys(), ["free", "billed", "billed"], "refused, the next key is asked, and asked again while the first sits out");
 
 	tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-	google.details(PROCOPE, Ask::Afresh).await.unwrap();
+	google.details(PROCOPE, Ask::Afresh, &Payer::house()).await.unwrap();
 	assert_eq!(s.keys().last().unwrap(), "free", "back once its window ended");
 
 	s.refuse.lock().unwrap().extend([
 		("free".into(), vec![(StatusCode::FORBIDDEN, NO_BILLING.to_owned())]),
 		("billed".into(), vec![(StatusCode::TOO_MANY_REQUESTS, refusal(now()))]),
 	]);
-	let spent = google.details(PROCOPE, Ask::Afresh).await.unwrap_err();
+	let spent = google.details(PROCOPE, Ask::Afresh, &Payer::house()).await.unwrap_err();
 	server.abort();
 	let Error::Exhausted(why) = spent else { panic!("{spent:#}") };
 	assert!(matches!(why[..], [Spent::Billing, Spent::Quota { .. }]), "{why:?}");
@@ -306,7 +306,7 @@ async fn a_queries_cache_out_of_reach_buys_nothing() {
 	let closed = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap(); // dropped: nothing listens there
 	let unreachable = Remote::try_new(&format!("http://{closed}/api/queries_cache")).unwrap();
 	let (s, google, server) = google_on(&["k"], Arc::new(unreachable)).await;
-	let got = google.details(PROCOPE, Ask::Cached).await.unwrap_err();
+	let got = google.details(PROCOPE, Ask::Cached, &Payer::house()).await.unwrap_err();
 	server.abort();
 	assert!(matches!(got, Error::QueriesCache(_)), "{got:#}");
 	assert_eq!(s.asked(), 0);

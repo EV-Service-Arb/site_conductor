@@ -25,6 +25,12 @@ google_category: string | null,
  * Placement's trade that studies it.
  */
 study: string | null, };
+export type Checked = { at: string, 
+/**
+ * `null`: it went through.
+ */
+error: string | null, };
+export type Connections = { imap: Imap | null, maps_key: MapsKey | null, prices: Prices, };
 /**
  * ISO 3166-1 alpha-2, of the countries GBPs are in.
  */
@@ -119,10 +125,16 @@ enabled: boolean,
  * the map by hand.
  */
 location: { lat: number, lng: number, placed: boolean } | null, };
+export type Imap = { host: string, username: string, set_at: string, checked: Checked, };
 /**
  * `GET /map`: the browser's Maps JS key, referrer-restricted.
  */
 export type MapConfig = { key: string, };
+export type MapsKey = { last4: string, set_at: string, checked: Checked, 
+/**
+ * Why the key is passed over now, until Google takes it again.
+ */
+out: string | null, };
 /**
  * A [`State`] with a place on Google: every one but a draft.
  */
@@ -135,6 +147,10 @@ export type Place = { place_id: string,
  * Named and addressed only with the conductor's Places API key.
  */
 name: string | null, address: string | null, };
+/**
+ * Tokens a Places request on the shared keys costs; `null`, not sold yet.
+ */
+export type Prices = { details: number | null, search: number | null, };
 /**
  * ```text
  * Draft ─▶ Verifying ─▶ Verified ⇄ Suspended

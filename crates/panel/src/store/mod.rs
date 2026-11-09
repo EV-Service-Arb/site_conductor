@@ -11,6 +11,7 @@
 pub mod access;
 pub mod alerts;
 pub mod assistant;
+pub mod connections;
 pub mod gmbs;
 mod queries_cache;
 pub mod sessions;

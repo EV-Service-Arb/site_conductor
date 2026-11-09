@@ -1,5 +1,5 @@
 //! Encryption at rest for what the database must not hold in the clear: a source's HMAC secret,
-//! a session's tokens, a queued Telegram message.
+//! a session's tokens, a queued Telegram message, a gmail's IMAP password and Maps key.
 //!
 //! XChaCha20-Poly1305 with a random 24-byte nonce per seal, so there is no nonce
 //! bookkeeping to get wrong (the same construction as banking's signer `key_vault`). What a
@@ -114,6 +114,16 @@ impl std::fmt::Debug for DataKey {
 /// Associated data of a source's HMAC secret.
 pub fn source_secret_aad(key_id: &str) -> Vec<u8> {
 	[b"sa-panel/source-secret/v1/".as_slice(), key_id.as_bytes()].concat()
+}
+
+/// Associated data of a gmail's IMAP password.
+pub fn gmail_imap_aad(gmail_id: i64) -> Vec<u8> {
+	[b"sa-panel/gmail-imap/v1/".as_slice(), &gmail_id.to_be_bytes()].concat()
+}
+
+/// Associated data of a gmail's Maps key.
+pub fn gmail_maps_key_aad(gmail_id: i64) -> Vec<u8> {
+	[b"sa-panel/gmail-maps-key/v1/".as_slice(), &gmail_id.to_be_bytes()].concat()
 }
 
 /// Associated data of a queued Telegram message's text. A chat without a topic binds as it did

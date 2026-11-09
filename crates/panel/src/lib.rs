@@ -4,6 +4,7 @@
 //! [`Panel`] is the facade the server talks to; [`store`] is SQLite; [`seal`] encrypts what must
 //! not sit in the clear. [`session`] is signing in through concierge and the sessions that
 //! follow; [`access`] the access requests; [`gmbs`] people's gmails and the GMBs they manage;
+//! [`connections`] a gmail's inbox and Maps key, and who pays for a Places request;
 //! [`tokens`] their balances and review_archive's charges, and [`import`] both from there;
 //! [`alerts`] the hub: users' destinations and rules, the feeds fanned out to them; [`telegram`]
 //! the method that reaches them; [`live`] the bus that tells the server's sockets what changed;
@@ -12,7 +13,9 @@
 pub mod access;
 pub mod alerts;
 pub mod assistant;
+pub mod connections;
 pub mod gmbs;
+mod imap;
 pub mod import;
 pub mod live;
 pub mod seal;
@@ -107,6 +110,7 @@ pub struct Panel {
 	live: live::Bus,
 	renewal: Renewal,
 	google: Arc<sa_places::Google>,
+	purses: connections::Purses,
 	/// Told of every change review_archive's snapshot carries.
 	snapshot_due: Arc<tokio::sync::Notify>,
 }
@@ -119,6 +123,7 @@ impl Panel {
 			live: live::Bus::default(),
 			renewal,
 			google: Arc::new(google),
+			purses: Arc::default(),
 			snapshot_due: Arc::default(),
 		}
 	}

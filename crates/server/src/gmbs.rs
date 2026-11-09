@@ -6,7 +6,8 @@
 //! POST   /api/v1/gmails {gmail}       → 201 Gmail; 409 theirs already
 //! PATCH  /api/v1/gmails/{id} {role}   → 200 Gmail
 //! DELETE /api/v1/gmails/{id}          → 204 (removed; its GBPs with it)
-//! GET    /api/v1/gmbs/resolve?place=  Candidates
+//! GET    /api/v1/gmbs/resolve?place=&gmail=  Candidates; the caller's keys first, `gmail`'s
+//!                                     before their others', then the shared ones they pay for
 //! POST   /api/v1/gmbs {name, trade?}  → 201 Gmb, a draft; 409 the name taken
 //! POST   /api/v1/gmails/{id}/gmbs {place_id, state, name?, country?, trade?}  → 201 Gmb, on
 //!                                     Google already; 409 the name or the place taken
@@ -317,11 +318,13 @@ async fn remove_gmail(State(panel): State<Panel>, Extension(caller): Extension<C
 #[serde(deny_unknown_fields)]
 struct Resolve {
 	place: String,
+	/// The caller's gmail whose key is tried first.
+	gmail: Option<i64>,
 }
 
-async fn resolve(State(panel): State<Panel>, q: Result<Query<Resolve>, QueryRejection>) -> ApiResult<Json<CandidatesDto>> {
+async fn resolve(State(panel): State<Panel>, Extension(caller): Extension<Caller>, q: Result<Query<Resolve>, QueryRejection>) -> ApiResult<Json<CandidatesDto>> {
 	let Query(q) = q.map_err(|e| ApiError::BadRequest(e.body_text()))?;
-	let candidates = panel.place_candidates(&q.place).await??;
+	let candidates = panel.place_candidates(caller.user_id, q.gmail, &q.place).await??;
 	Ok(Json(CandidatesDto {
 		candidates: candidates
 			.into_iter()

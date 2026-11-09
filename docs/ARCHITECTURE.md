@@ -44,6 +44,7 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          (the hub: access, destinations, rules, the feeds fanned out; the
                          Directory and Feeds ports), `telegram` (the method: links, chats, outbox,
                          delivery, buttons; the Bot port), `live` (the in-process bus), `gmbs`,
+                         `connections` (a gmail's inbox and Maps key; who pays a Places request),
                          `tokens` (the ledger, review_archive's charges, the snapshot), `import`
                          (review_archive's, once), `assistant` (the assistant's chats)
 crates/alerts/           no I/O: the alert rules, and the notes a service publishes to the
@@ -53,7 +54,8 @@ crates/auth/             the `sa` permissions (concierge_iam derives), the alias
                          request of one service
 crates/places/           Google Places: a place from what a person pastes (an id, a Maps URL, a
                          search), its point; every request through the queries cache (in process,
-                         or `Remote` over /api/queries_cache), the keys rotated; review_archive takes it too
+                         or `Remote` over /api/queries_cache), then the payer's own keys, then the
+                         rotation its purse pays for; review_archive takes it too
 crates/ui/               Dioxus components the services' front ends share
 crates/contracts/        concierge's gRPC contract (tonic, from contracts/proto)
 crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
@@ -73,6 +75,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
                          listener they work on, the services' dashboards
   src/live.rs            GET /api/v1/live, and the follower of sites' change feed
   src/gmbs.rs            /api/v1/gmails, /api/v1/gmbs, /api/v1/trades
+  src/connections.rs     /api/v1/gmails/{id}/{connections,imap,maps_key}
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
   src/assistant.rs       /api/v1/assistant; the turns' shape
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
@@ -344,8 +347,19 @@ GET    /gmails                              {gmails: [{id, gmail, role, cap, cre
                                             while the role is unknown
 POST   /gmails                              {gmail} → 201 the gmail; 409 held already
 PATCH  /gmails/{id}                         {role: owner|manager} → 200 the gmail
-DELETE /gmails/{id}                         204; its GBPs removed with it
-GET    /gmbs/resolve?place=                 {candidates: [{place_id, name, address}]} (sa_places)
+DELETE /gmails/{id}                         204; its GBPs and connections removed with it
+GET    /gmails/{id}/connections             {imap: {host, username, set_at, checked: {at, error}} | null,
+                                            maps_key: {last4, set_at, checked, out} | null, prices:
+                                            {details, search}}: no secret, ever
+PUT    /gmails/{id}/imap                    {host, username, password} → 200 as GET, once it logs in
+                                            (IMAPS :993, a public address only); 400 refused, nothing
+                                            stored
+PUT    /gmails/{id}/maps_key                {key} → 200 as GET, once Google answers for it (an
+                                            unbilled id-only details); 400 refused, nothing stored
+POST   /gmails/{id}/{imap,maps_key}/test    200 as GET, the check recorded; 404 none set
+DELETE /gmails/{id}/{imap,maps_key}         204
+GET    /gmbs/resolve?place=&gmail=          {candidates: [{place_id, name, address}]} (sa_places;
+                                            `gmail`'s key first)
 POST   /gmbs                                {name, trade?} → 201 a draft; 409 the name a live GBP's
 POST   /gmails/{id}/gmbs                    {place_id, state, name?, country?, trade?} → 201 a GBP on Google
                                             already (state not draft; name and country fill what
@@ -381,6 +395,9 @@ POST   /tokens/claim                        → 200 as GET /tokens
 GET    /admin/tokens         Tokens         {users: [{user_id, email, name, balance}]}
 POST   /admin/tokens/{user}  Tokens, fresh  {set: n, note?} | {add: n, note?} | {grant: n, note}
                                             → 200 {balance}; a grant is owed until claimed
+GET    /admin/tokens/prices  Tokens         {details, search}: tokens a Places request on the
+                                            shared keys costs; null, not sold
+PUT    /admin/tokens/prices  Tokens, fresh  {details, search} (0 or more) → 200 as GET
 GET    /assistant/chats                     {chats}: owned and joined, the caller's marks, newest
                                             first
 POST   /assistant/chats                     {id, title, turns} → 201 the chat (version 1); 409 the
@@ -473,8 +490,15 @@ A person's gmails and the GBPs each manages are the conductor's; the services st
 GBP is on or off by its owner's switch (`gmbs_off`), which the services inherit for their own
 work: off, review_archive walks none of its tracks. Tokens are a ledger: a balance is its rows'
 sum, renewed a day's worth when read (`TOKENS_DAILY` up to `TOKENS_CAP`; a first balance
-`TOKENS_START_CAP_MULTIPLE` caps). What spends them — today review_archive's walks — charges
-after the fact.
+`TOKENS_START_CAP_MULTIPLE` caps). review_archive's walks charge after the fact; the conductor's
+Places requests charge at the buy.
+
+**Who pays a Places request** about a GBP or a gmail: its gmail's own Maps key, then its owner's
+other gmails' keys, free; then `GOOGLE_MAPS_KEYS` at the admin's price per request kind (Places'
+SKU: details, search), held under one lock per person from the balance read to the charge, so a
+request below the price, or unpriced, is refused before Google is asked. A cached answer costs
+nothing. The operator's commands (`gmb add`, `locate`) try the gmail's keys, then the house pays.
+review_archive's lookups and placement's sweeps are the house's for now.
 
 **A GBP's life** (`sa_core::gbp::State::nexts`; the schema checks each move again):
 
@@ -650,9 +674,13 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   listener, on GETs, for that query's life. The public listener never takes a token.
 - **A source is only ever revoked.** `sources` refuses DELETE and any UPDATE but of `revoked_at`
   and a site's `origin` set once from NULL (only a `site` has one); a key id is never reused.
-- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens and queued Telegram
-  texts are sealed (XChaCha20-Poly1305, what they belong to as associated data) under
-  `PANEL_DATA_KEY`, whose fingerprint is stored beside each.
+- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, queued Telegram
+  texts and a gmail's IMAP password and Maps key are sealed (XChaCha20-Poly1305, what they belong
+  to as associated data) under `PANEL_DATA_KEY`, whose fingerprint is stored beside each. A
+  person's are never read back out: the browser sees a key's last four.
+- **No buy on credit.** A Places request on the shared keys for a person is charged at its price,
+  and refused before it is sent when their balance is below it; their own keys and the queries
+  cache cost nothing.
 - **Alerts are the conductor's.** A service publishes notes and never reaches a person itself;
   who is told, where and how is decided here.
 - **A note is in the outbox before the cursor passes it**: the page and the cursor move in one
@@ -670,9 +698,10 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   command creates it if missing and applies the migrations it lacks first (`panel migrate` does
   only that). A migration newer than the build is let be. Tables are STRICT, foreign keys
   enforced, timestamps INTEGER microseconds since the epoch, UUIDs 16-byte blobs.
-- **Secrets come from the environment only** (`PANEL_DATA_KEY`, `SENTRY_DSN`,
+- **The conductor's secrets come from the environment only** (`PANEL_DATA_KEY`, `SENTRY_DSN`,
   `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOOGLE_MAPS_KEYS`), through
-  `ev_lib::settings`; with `APP_ENV=production` the database, the data key, the four sign-in
+  `ev_lib::settings`; a person's (a gmail's IMAP password, its Maps key) through the API, sealed at
+  once; with `APP_ENV=production` the database, the data key, the four sign-in
   variables, the forward's four and `TOKENS_START_CAP_MULTIPLE` are required at boot
   (`panel --print-required-vars` lists them).
 
@@ -711,9 +740,13 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   `<PANEL_PUBLIC_ORIGIN>/auth/callback` exactly and hold the hash of `RP_CLIENT_SECRET_SA`.
 - **Places, outbound.** With `GOOGLE_MAPS_KEYS` the pods need egress to
   `places.googleapis.com:443` (a pasted URL without a place id, a GMB's name, address and point).
-  The keys are used in their order, free ones first; one Google says is spent for a quota window
-  sits out until the window resets, one whose billing is off until restart. Every answer is kept
-  in the queries cache, in the database. The browser loads Maps JS straight
+  A person's own keys go first (Who pays, above), then these in their order, free ones first;
+  one Google says is spent for a quota window sits out until the window resets, one whose billing
+  is off until restart (a person's, until it answers a test). Every answer is kept in the queries
+  cache, in the database. Set the prices (`/admin/tokens`) after the first deploy: until then a
+  person without a key of their own is refused.
+- **IMAP, outbound.** A gmail's inbox is dialled on :993 at a public address when it is set or
+  tested: egress to public :993. The browser loads Maps JS straight
   from Google with `GOOGLE_MAPS_BROWSER_KEY` (referrer-restricted to the public origin); the
   server's keys never reach it.
 - **Telegram, outbound only.** With `TELEGRAM_BOT_TOKEN` the pods need egress to

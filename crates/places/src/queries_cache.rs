@@ -65,6 +65,10 @@ pub(crate) struct Request<'a> {
 	pub url: &'a str,
 	pub mask: &'a str,
 	pub body: &'a str,
+	/// How Google bills it; not part of the key, the mask decides it.
+	pub sku: crate::Sku,
+	/// What it asks about, as a person reads it: a place id, a search's text.
+	pub subject: &'a str,
 }
 
 impl Request<'_> {

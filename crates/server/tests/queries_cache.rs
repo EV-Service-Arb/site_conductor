@@ -11,7 +11,7 @@ use sa_panel::{
 	Panel,
 	testing::{TestDb, admin, panel},
 };
-use sa_places::{Ask, Google, Keys, QueriesCache, Remote};
+use sa_places::{Ask, Google, Keys, Payer, QueriesCache, Remote};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
@@ -48,11 +48,16 @@ async fn two_machines_asking_at_once_pay_once_and_a_third_reads_it_for_free() {
 	let (base, asked) = places().await;
 	let on = |keys: Vec<String>| Google::try_new(Keys::new(keys), Arc::new(Remote::try_new(&url).unwrap())).unwrap().at(&base);
 	let (a, b) = (on(vec!["k".into()]), on(vec!["k".into()]));
-	let (x, y) = tokio::join!(a.details(PROCOPE, Ask::Cached), b.details(PROCOPE, Ask::Cached));
+	let house = Payer::house();
+	let (x, y) = tokio::join!(a.details(PROCOPE, Ask::Cached, &house), b.details(PROCOPE, Ask::Cached, &house));
 	assert_eq!(x.unwrap(), y.unwrap());
 	assert_eq!(*asked.lock().unwrap(), 1, "the second waited on the first's claim");
 
-	assert_eq!(on(vec![]).details(PROCOPE, Ask::Cached).await.unwrap().name.as_deref(), Some("Le Procope"), "keyless, it reads");
+	assert_eq!(
+		on(vec![]).details(PROCOPE, Ask::Cached, &Payer::house()).await.unwrap().name.as_deref(),
+		Some("Le Procope"),
+		"keyless, it reads"
+	);
 	assert_eq!(*asked.lock().unwrap(), 1);
 }
 

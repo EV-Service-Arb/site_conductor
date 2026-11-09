@@ -157,6 +157,9 @@ pub async fn remove_gmail(conn: &mut SqliteConnection, owner: Uuid, id: i64, now
 		.execute(&mut *conn)
 		.await
 		.wrap_err("removing a gmail's GMBs")?;
+	for which in [super::connections::Connection::Imap, super::connections::Connection::MapsKey] {
+		super::connections::delete(conn, id, which).await?;
+	}
 	Ok(true)
 }
 
@@ -356,9 +359,9 @@ pub async fn place(conn: &mut SqliteConnection, owner: Uuid, gmb_id: i64, at: La
 
 /// The live GBPs on Google without a point or a country of Google's: each id, its place, and
 /// whether it has no point.
-pub async fn unlocated(conn: &mut SqliteConnection) -> eyre::Result<Vec<(i64, String, bool)>> {
+pub async fn unlocated(conn: &mut SqliteConnection) -> eyre::Result<Vec<(i64, String, bool, Uuid, i64)>> {
 	sqlx::query_as(
-		"SELECT id, place_id, lat IS NULL FROM gmbs \
+		"SELECT id, place_id, lat IS NULL, owner, gmail_id FROM gmbs \
 		 WHERE removed_at IS NULL AND place_id IS NOT NULL AND (lat IS NULL OR country IS NULL OR country_by IS NOT NULL) ORDER BY id",
 	)
 	.fetch_all(&mut *conn)

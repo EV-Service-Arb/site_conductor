@@ -35,6 +35,10 @@ at: string, delta: number, kind: LedgerKind, service: string | null, key: string
  * The admin's email.
  */
 by: string | null, note: string | null, };
+/**
+ * Every request kind priced, in tokens.
+ */
+export type SetPrices = { details: number, search: number, };
 export type TokenHolder = { user_id: string, email: string, name: string, balance: number, };
 /**
  * `GET /admin/tokens`.

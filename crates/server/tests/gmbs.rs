@@ -19,7 +19,7 @@ use sa_panel::{
 	seal::DataKey,
 	testing::{TestDb, operator, panel_on},
 };
-use sa_places::{Google, Keys};
+use sa_places::{Google, Keys, Sku};
 use sa_server::{
 	concierge::{Concierge, DevIdentity},
 	gmbs::MapDto,
@@ -58,7 +58,7 @@ async fn places() -> (Arc<Mutex<Vec<String>>>, String) {
 	(asked, base)
 }
 
-/// A panel on `db` asking `base` with a key (`None`: keyless), its answers in `db`, GMBs open.
+/// A panel on `db` asking `base` with a key (`None`: keyless), its answers in `db`, its requests free.
 async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
 	let keys = Keys::new(base.map(|_| vec!["k".to_owned()]).unwrap_or_default());
 	let google = Google::try_new(keys, Arc::new(db.store().await)).unwrap();
@@ -67,7 +67,13 @@ async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
 		None => google,
 	};
 	let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
-	panel_on(db.store().await, key, google)
+	let p = panel_on(db.store().await, key, google);
+	// what a point costs is tests/connections.rs's
+	p.set_prices(&[(Sku::Details, 0), (Sku::Search, 0)], "admin@localhost", jiff::Timestamp::now())
+		.await
+		.unwrap()
+		.unwrap();
+	p
 }
 
 async fn opened(p: &Panel) {

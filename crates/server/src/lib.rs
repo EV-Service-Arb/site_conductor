@@ -11,6 +11,7 @@ pub mod api;
 pub mod assistant;
 pub mod concierge;
 mod connected;
+pub mod connections;
 pub mod cookies;
 pub mod forward;
 pub mod gmbs;

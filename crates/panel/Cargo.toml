@@ -20,6 +20,7 @@ futures.workspace = true
 getrandom.workspace = true
 hex.workspace = true
 jiff = { workspace = true, features = ["serde"] }
+rustls-platform-verifier.workspace = true
 sa_alerts.workspace = true
 sa_auth.workspace = true
 sa_core = { workspace = true, features = ["ts"] }
@@ -33,6 +34,7 @@ subtle.workspace = true
 tg_types.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-rustls.workspace = true
 tracing.workspace = true
 ts-rs.workspace = true
 url.workspace = true

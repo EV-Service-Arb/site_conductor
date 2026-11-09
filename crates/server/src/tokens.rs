@@ -9,6 +9,8 @@
 //! POST /api/v1/tokens/claim            → Tokens
 //! GET  /api/v1/admin/tokens            TokenHolders
 //! POST /api/v1/admin/tokens/{user_id}  BalanceChange (fresh) → Balance
+//! GET  /api/v1/admin/tokens/prices     Prices: of a Places request on the shared keys
+//! PUT  /api/v1/admin/tokens/prices {details, search}  (fresh) → Prices
 //! ```
 //!
 //! Before the import from review_archive, every one of them answers 503, and `serve` waits.
@@ -31,6 +33,7 @@ use sa_panel::{
 	Panel,
 	tokens::{Change, Entry, Kickback, Owed},
 };
+use sa_places::Sku;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use ts_rs::TS;
@@ -38,6 +41,7 @@ use uuid::Uuid;
 
 use crate::{
 	api::{ApiError, ApiResult, body},
+	connections::PricesDto,
 	forward::Services,
 	http::{ApiRoute, Section},
 	signin::{Caller, Freshness},
@@ -235,6 +239,9 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/admin/tokens", admin, Cached, holders),
 		// Tokens must not be handed out on a permission revoked a moment ago.
 		ApiRoute::new(M::POST, "/admin/tokens/{user_id}", admin, Fresh, change),
+		ApiRoute::new(M::GET, "/admin/tokens/prices", admin, Cached, prices),
+		// A price is what every request on the shared keys charges.
+		ApiRoute::new(M::PUT, "/admin/tokens/prices", admin, Fresh, set_prices),
 	]
 }
 
@@ -360,6 +367,27 @@ async fn change(State(panel): State<Panel>, Extension(caller): Extension<Caller>
 	let user: Uuid = raw.parse().map_err(|_| ApiError::NotFound)?;
 	let balance = panel.change_balance(user, body(b)?.into(), &caller.email, Timestamp::now()).await??;
 	Ok(Json(BalanceDto { balance }))
+}
+
+async fn prices(State(panel): State<Panel>) -> ApiResult<Json<PricesDto>> {
+	Ok(Json(panel.prices().await?.into()))
+}
+
+/// Every request kind priced, in tokens.
+#[derive(Deserialize, TS)]
+#[ts(rename = "SetPrices")]
+#[serde(deny_unknown_fields)]
+pub struct SetPricesDto {
+	#[ts(type = "number")]
+	pub details: i64,
+	#[ts(type = "number")]
+	pub search: i64,
+}
+
+async fn set_prices(State(panel): State<Panel>, Extension(caller): Extension<Caller>, b: Result<Json<SetPricesDto>, JsonRejection>) -> ApiResult<Json<PricesDto>> {
+	let b = body(b)?;
+	panel.set_prices(&[(Sku::Details, b.details), (Sku::Search, b.search)], &caller.email, Timestamp::now()).await??;
+	Ok(Json(panel.prices().await?.into()))
 }
 
 // ── review_archive, in `serve` ──────────────────────────────────────────────────────────

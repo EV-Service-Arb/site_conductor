@@ -25,7 +25,7 @@ use tower_http::timeout::TimeoutLayer;
 use crate::{
 	access,
 	alerts::{self, Telegram},
-	api, assistant, connected,
+	api, assistant, connected, connections,
 	forward::{Forward, Services},
 	gmbs,
 	grafana::Grafana,
@@ -79,10 +79,18 @@ impl ApiRoute {
 
 /// Every `/api/v1` route on `ApiState`.
 pub fn api_routes() -> Vec<ApiRoute> {
-	[api::routes(), access::routes(), alerts::routes(), gmbs::routes(), tokens::routes(), assistant::routes()]
-		.into_iter()
-		.flatten()
-		.collect()
+	[
+		api::routes(),
+		access::routes(),
+		alerts::routes(),
+		gmbs::routes(),
+		connections::routes(),
+		tokens::routes(),
+		assistant::routes(),
+	]
+	.into_iter()
+	.flatten()
+	.collect()
 }
 
 /// What a request may cost.

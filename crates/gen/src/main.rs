@@ -12,9 +12,10 @@ use sa_server::{
 	access::AccessRequestDto,
 	alerts::AlertsDto,
 	assistant::{AccessDto, ChatDto, ChatsDto, PeopleDto},
+	connections::ConnectionsDto,
 	gmbs::{CandidatesDto, GmailsDto, MapDto, TradesDto},
 	signin::Caller,
-	tokens::{BalanceChangeDto, BalanceDto, LedgerDto, TokenHoldersDto, TokensDto, UsageDto},
+	tokens::{BalanceChangeDto, BalanceDto, LedgerDto, SetPricesDto, TokenHoldersDto, TokensDto, UsageDto},
 };
 
 fn main() {
@@ -41,12 +42,12 @@ fn main() {
 	);
 	Ts::write(
 		&root.join("entities/gmb/model/generated.ts"),
-		&[Ts::types::<(GmailsDto, CandidatesDto, MapDto, TradesDto, OnGoogle)>()],
+		&[Ts::types::<(GmailsDto, CandidatesDto, MapDto, TradesDto, OnGoogle, ConnectionsDto)>()],
 	);
 	Ts::write(
 		&root.join("entities/tokens/model/generated.ts"),
 		&[
-			Ts::types::<(TokensDto, LedgerDto, UsageDto, TokenHoldersDto, BalanceChangeDto, BalanceDto)>(),
+			Ts::types::<(TokensDto, LedgerDto, UsageDto, TokenHoldersDto, BalanceChangeDto, BalanceDto, SetPricesDto)>(),
 			Ts::Union {
 				name: "LEDGER_KINDS",
 				ty: "LedgerKind",
