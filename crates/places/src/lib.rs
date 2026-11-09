@@ -1,18 +1,18 @@
 //! A Google place from what a person pastes. The id, or a Maps URL carrying it, needs nothing;
 //! a URL with only a name in it is looked up with the Places API (New). Every Places request
-//! goes through [`Google`]: the answers store answers what was paid for once, its [`Keys`] rotate.
+//! goes through [`Google`]: the queries cache answers what was paid for once, its [`Keys`] rotate.
 
-mod answers;
 mod keys;
 pub mod parse;
+mod queries_cache;
 
 use std::{sync::Arc, time::Duration};
 
-use answers::Request;
-pub use answers::{Answers, Pending, Remote};
 pub use keys::{Keys, Spent};
 use parse::Parsed;
-use sa_core::answers::{Claim, Put};
+use queries_cache::Request;
+pub use queries_cache::{Pending, QueriesCache, Remote};
+use sa_core::queries_cache::{Claim, Put};
 use serde::{Deserialize, Serialize};
 
 const SEARCH_MASK: &str = "places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents";
@@ -56,9 +56,9 @@ pub enum Error {
 	/// An answer, paid or cached, is not the shape asked for.
 	#[error("decoding a Places answer")]
 	Decode(#[from] serde_json::Error),
-	/// The answers store failed, or did not answer.
-	#[error("the answers store: {0}")]
-	Store(String),
+	/// The queries cache failed, or did not answer.
+	#[error("the queries cache: {0}")]
+	QueriesCache(String),
 }
 
 /// Whether a kept answer will do.
@@ -69,24 +69,24 @@ pub enum Ask {
 	Afresh,
 }
 
-/// The Places API (New), through the answers store and the keys.
+/// The Places API (New), through the queries cache and the keys.
 #[derive(Debug)]
 pub struct Google {
 	http: reqwest::Client,
 	keys: Keys,
-	answers: Arc<dyn Answers>,
+	cache: Arc<dyn QueriesCache>,
 	/// `…/v1/places`.
 	base: String,
 }
 
 impl Google {
 	/// With no keys, a place id still resolves, unnamed and unlocated.
-	pub fn try_new(keys: Keys, answers: Arc<dyn Answers>) -> Result<Self, Error> {
+	pub fn try_new(keys: Keys, cache: Arc<dyn QueriesCache>) -> Result<Self, Error> {
 		let http = reqwest::Client::builder().connect_timeout(Duration::from_secs(5)).timeout(Duration::from_secs(10)).build()?;
 		Ok(Self {
 			http,
 			keys,
-			answers,
+			cache,
 			base: "https://places.googleapis.com/v1/places".to_owned(),
 		})
 	}
@@ -170,7 +170,7 @@ impl Google {
 			if paid {
 				let details = format!("{}/{}", self.base, place.place_id);
 				let req = Request::details(&details);
-				self.answers
+				self.cache
 					.put(
 						req.key(),
 						Put {
@@ -190,7 +190,7 @@ impl Google {
 		Ok(named)
 	}
 
-	/// The answer to `req`, and whether it was paid for now: from the store unless older than
+	/// The answer to `req`, and whether it was paid for now: from the cache unless older than
 	/// `max_age`, else claimed there and bought with the first key not sitting out.
 	async fn ask(&self, req: &Request<'_>, max_age: Option<Duration>, ask: Ask) -> Result<(serde_json::Value, bool), Error> {
 		let key = req.key();
@@ -200,7 +200,7 @@ impl Google {
 			Ask::Afresh => Some(now),
 		};
 		if ask == Ask::Cached
-			&& let Some(kept) = self.answers.get(key).await?
+			&& let Some(kept) = self.cache.get(key).await?
 			&& fresh_since.is_none_or(|since| kept.fetched_at >= since)
 		{
 			return Ok((kept.answer, false));
@@ -209,7 +209,7 @@ impl Google {
 			return Err(Error::Invalid("asking Google Places needs an API key, and none is set".into()));
 		}
 		loop {
-			match self.answers.claim(key, fresh_since).await? {
+			match self.cache.claim(key, fresh_since).await? {
 				Claim::Stored(kept) => return Ok((kept.answer, false)),
 				Claim::Held { .. } => tokio::time::sleep(Duration::from_millis(500)).await,
 				Claim::Granted { .. } => break,
@@ -217,13 +217,13 @@ impl Google {
 		}
 		let bought = self.buy(req).await;
 		if bought.is_err()
-			&& let Err(e) = self.answers.release(key).await
+			&& let Err(e) = self.cache.release(key).await
 		{
 			// the buy's error is the one to tell; the claim lapses with its lease anyway
 			tracing::warn!(error = %e, "releasing a claim after a failed buy");
 		}
 		let answer = bought?;
-		self.answers
+		self.cache
 			.put(
 				key,
 				Put {

@@ -1,14 +1,13 @@
-//! The answers store's wire: paid answers kept by the conductor under `/api/answers`, so nothing
-//! billed is bought twice wherever it runs (docs/ARCHITECTURE.md, Answers).
+//! The queries cache's wire: what was paid for a query, kept by the conductor under
+//! `/api/queries_cache` for everyone, so nobody pays for the same query twice wherever it runs
+//! (docs/ARCHITECTURE.md, Queries cache).
 //!
 //! ```text
-//! GET  /api/answers/{scheme}/{key}         → 200 Stored | 404
-//! POST /api/answers/{scheme}/{key}/claim   ClaimBody → 200 Claim
-//! DELETE /api/answers/{scheme}/{key}/claim → 204
-//! PUT  /api/answers/{scheme}/{key}         Put → 204
+//! GET    /api/queries_cache/{scheme}/{key}         → 200 Stored | 404
+//! POST   /api/queries_cache/{scheme}/{key}/claim   ClaimBody → 200 Claim
+//! DELETE /api/queries_cache/{scheme}/{key}/claim   → 204
+//! PUT    /api/queries_cache/{scheme}/{key}         Put → 204
 //! ```
-//!
-//! Signed as ingest is ([`crate::signature`]), the MAC over [`signed`].
 
 use std::{fmt, str::FromStr};
 
@@ -17,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Invalid;
 
-pub const PREFIX: &str = "/api/answers";
+pub const PREFIX: &str = "/api/queries_cache";
 
 /// How long a claim holds a key while its holder buys.
 pub const LEASE: jiff::SignedDuration = jiff::SignedDuration::from_secs(30);
@@ -46,7 +45,10 @@ impl FromStr for Scheme {
 	type Err = Invalid;
 
 	fn from_str(s: &str) -> Result<Self, Invalid> {
-		Self::ALL.into_iter().find(|k| k.as_str() == s).ok_or_else(|| Invalid::new(format!("no answers scheme {s:?}")))
+		Self::ALL
+			.into_iter()
+			.find(|k| k.as_str() == s)
+			.ok_or_else(|| Invalid::new(format!("no queries cache scheme {s:?}")))
 	}
 }
 
@@ -64,8 +66,8 @@ impl FromStr for Key {
 	type Err = Invalid;
 
 	fn from_str(s: &str) -> Result<Self, Invalid> {
-		let bytes = hex::decode(s).map_err(|_| Invalid::new("an answer's key is 64 hex characters"))?;
-		Ok(Self(bytes.try_into().map_err(|_| Invalid::new("an answer's key is 64 hex characters"))?))
+		let bytes = hex::decode(s).map_err(|_| Invalid::new("a query's key is 64 hex characters"))?;
+		Ok(Self(bytes.try_into().map_err(|_| Invalid::new("a query's key is 64 hex characters"))?))
 	}
 }
 
@@ -108,13 +110,7 @@ pub struct Put {
 	pub request: String,
 }
 
-/// An answer's path under the store's URL (`<origin>/api/answers`, what a client is given).
+/// A query's path under the cache's URL (`<origin>/api/queries_cache`, what a client is given).
 pub fn under(scheme: Scheme, key: Key) -> String {
 	format!("/{scheme}/{key}")
-}
-
-/// What a request to the store is signed over: its method and its whole path (the store's URL's
-/// included) bind the body to one key.
-pub fn signed(method: &str, path: &str, body: &[u8]) -> Vec<u8> {
-	[format!("{method} {path}\n").as_bytes(), body].concat()
 }

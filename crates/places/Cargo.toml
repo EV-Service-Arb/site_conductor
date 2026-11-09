@@ -1,6 +1,6 @@
 [package]
 name = "sa_places"
-description = "A Google place from what a person pastes: its id, a Maps URL, or a Places API (New) search; every Places answer paid for once through the conductor's answers store, the keys rotated"
+description = "A Google place from what a person pastes: its id, a Maps URL, or a Places API (New) search; every Places answer paid for once through the conductor's queries cache, the keys rotated"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

@@ -11,7 +11,7 @@ import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 import { brandsFrom } from "../model/brands";
 
-/** A new signing key: its id, the one kind it writes as, the brands it may write for (an answers key: none), and a site's origin. */
+/** A new signing key: its id, the one kind it writes as, the brands it may write for, and a site's origin. */
 export function AddSourceForm({ onAdded }: { onAdded: (added: AddedSource) => void }) {
   const t = useT();
   const button = useButtonSize();
@@ -22,8 +22,7 @@ export function AddSourceForm({ onAdded }: { onAdded: (added: AddedSource) => vo
   const [origin, setOrigin] = useState("");
   const [busy, setBusy] = useState(false);
   const size = useControlSize();
-  const answers = kind === "answers";
-  const brands = answers ? [] : brandsFrom(brandsText);
+  const brands = brandsFrom(brandsText);
   const site = kind === "site";
   const ready = isSlug(keyId) && brands !== null && (!site || isOrigin(origin));
 
@@ -69,13 +68,11 @@ export function AddSourceForm({ onAdded }: { onAdded: (added: AddedSource) => vo
           </SelectContent>
         </Select>
       </Field>
-      {!answers && (
-        <Field className="flex flex-col gap-1">
-          <FieldLabel htmlFor={`${id}-brands`}>{t("sources.brands")}</FieldLabel>
-          <Input id={`${id}-brands`} size={size} autoCapitalize="none" value={brandsText} onChange={(e) => setBrandsText(e.target.value)} />
-          <FieldDescription>{t("sources.brands.hint")}</FieldDescription>
-        </Field>
-      )}
+      <Field className="flex flex-col gap-1">
+        <FieldLabel htmlFor={`${id}-brands`}>{t("sources.brands")}</FieldLabel>
+        <Input id={`${id}-brands`} size={size} autoCapitalize="none" value={brandsText} onChange={(e) => setBrandsText(e.target.value)} />
+        <FieldDescription>{t("sources.brands.hint")}</FieldDescription>
+      </Field>
       {site && (
         <Field className="flex flex-col gap-1">
           <FieldLabel htmlFor={`${id}-origin`}>{t("sources.origin")}</FieldLabel>

@@ -212,9 +212,9 @@ order `~/.config/gmaps_optimal_placement.nix` lists them, and the map loads with
 | `GOOGLE_MAPS_BROWSER_KEY` | `$GOOGLE_MAPS_KEY` |
 
 Without `GOOGLE_MAPS_KEY` in the shell, a GMB is added by its place id alone and `/` has no map.
-Answers are kept in the conductor's answers store, `.local/panel.db`: `--reset` pays for them again.
-Every start pulls `gmaps_optimal_placement`'s own work dir into it, and placement buys through it with
-the stack's `local-answers` key (`.local/secrets/local-answers`).
+Answers are kept in the conductor's queries cache, `.local/panel.db`: `--reset` pays for them again.
+Every start pulls `gmaps_optimal_placement`'s own work dir into it, and placement and review_archive
+are pointed at it.
 
 ## The end-to-end check
 

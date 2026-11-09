@@ -15,9 +15,9 @@ use axum::{
 	routing::{get, post},
 };
 use jiff::Timestamp;
-use sa_core::answers::{Claim, Key, Put, Stored};
+use sa_core::queries_cache::{Claim, Key, Put, Stored};
 use sa_places::{
-	Answers, Ask, Error, Google, Keys, LatLng, Pending, Remote, Spent,
+	Ask, Error, Google, Keys, LatLng, Pending, QueriesCache, Remote, Spent,
 	parse::{Parsed, parse},
 };
 use serde_json::{Value, json};
@@ -116,12 +116,12 @@ async fn place_details(State(s): State<Stub>, headers: HeaderMap, Path(id): Path
 	}
 }
 
-/// The answers store as the conductor keeps it, in memory: the latest answer per key, a claim
+/// The queries cache as the conductor keeps it, in memory: the latest answer per key, a claim
 /// held until its holder puts or releases.
 #[derive(Debug, Default)]
 struct Memory(Mutex<(HashMap<Key, Stored>, HashSet<Key>)>);
 
-impl Answers for Memory {
+impl QueriesCache for Memory {
 	fn get(&self, key: Key) -> Pending<'_, Option<Stored>> {
 		Box::pin(async move { Ok(self.0.lock().unwrap().0.get(&key).cloned()) })
 	}
@@ -168,8 +168,8 @@ async fn google(keys: &[&str]) -> (Stub, Google, Arc<Memory>, tokio::task::JoinH
 	(s, google, store, server)
 }
 
-/// The stub, and a `Google` on it with `keys` and `answers`.
-async fn google_on(keys: &[&str], answers: Arc<dyn Answers>) -> (Stub, Google, tokio::task::JoinHandle<()>) {
+/// The stub, and a `Google` on it with `keys` and `cache`.
+async fn google_on(keys: &[&str], cache: Arc<dyn QueriesCache>) -> (Stub, Google, tokio::task::JoinHandle<()>) {
 	let s = Stub::default();
 	let app = Router::new()
 		.route("/v1/places:searchText", post(search_text))
@@ -178,7 +178,7 @@ async fn google_on(keys: &[&str], answers: Arc<dyn Answers>) -> (Stub, Google, t
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let base = format!("http://{}/v1/places", listener.local_addr().unwrap());
 	let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-	let google = Google::try_new(Keys::new(keys.iter().map(|k| k.to_string()).collect()), answers).unwrap().at(base);
+	let google = Google::try_new(Keys::new(keys.iter().map(|k| k.to_string()).collect()), cache).unwrap().at(base);
 	(s, google, server)
 }
 
@@ -302,13 +302,13 @@ async fn a_spent_key_sits_out_until_its_window_ends() {
 }
 
 #[tokio::test]
-async fn a_store_out_of_reach_buys_nothing() {
+async fn a_queries_cache_out_of_reach_buys_nothing() {
 	let closed = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap(); // dropped: nothing listens there
-	let unreachable = Remote::try_new(&format!("http://{closed}/api/answers"), "laptop", "secret".to_owned().into()).unwrap();
+	let unreachable = Remote::try_new(&format!("http://{closed}/api/queries_cache")).unwrap();
 	let (s, google, server) = google_on(&["k"], Arc::new(unreachable)).await;
 	let got = google.details(PROCOPE, Ask::Cached).await.unwrap_err();
 	server.abort();
-	assert!(matches!(got, Error::Store(_)), "{got:#}");
+	assert!(matches!(got, Error::QueriesCache(_)), "{got:#}");
 	assert_eq!(s.asked(), 0);
 }
 

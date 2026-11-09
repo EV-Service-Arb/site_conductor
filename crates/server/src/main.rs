@@ -14,8 +14,8 @@ use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_auth::{Catalog, SourceKind};
 use sa_core::{
-	answers::{Key, Scheme},
 	ids::{BrandId, SiteOrigin},
+	queries_cache::{Key, Scheme},
 };
 use sa_panel::{Panel, alerts::Hub, gmbs::Existing, seal::DataKey, store::Store, tokens::Change};
 use sa_server::{
@@ -55,7 +55,7 @@ enum Cmd {
 		#[arg(long, env = "PANEL_BIND")]
 		bind: SocketAddr,
 	},
-	/// The sources that may write events or read and keep answers, and their keys.
+	/// The sources that may write events, and their keys.
 	#[command(subcommand)]
 	Source(SourceCmd),
 	/// A person's gmails.
@@ -80,12 +80,12 @@ enum SourceCmd {
 	Add {
 		/// Lowercase slug, e.g. aquafix-site.
 		key_id: String,
-		/// site | review_archive | gbp | posthog | sheet | telephony | bot | answers (panel and
-		/// booking are written without a key)
+		/// site | review_archive | gbp | posthog | sheet | telephony | bot (panel and booking are
+		/// written without a key)
 		#[arg(long)]
 		kind: String,
-		/// A brand it may write for; repeat for several. None for an answers key.
-		#[arg(long = "brand")]
+		/// A brand it may write for; repeat for several.
+		#[arg(long = "brand", required = true)]
 		brands: Vec<String>,
 		/// A site's origin, where its landing answers, e.g. `https://aquafix.top`: no path. Sites only.
 		#[arg(long)]
@@ -172,9 +172,9 @@ enum ImportCmd {
 	/// review_archive's people, gmails, GMBs and tokens, as its scripts/export_members.sql
 	/// prints them; opens tokens and GMBs. A fresh install imports an empty document.
 	ReviewArchive { file: std::path::PathBuf },
-	/// Paid answers a client kept as files, `<sha256 hex>.json` each, into the answers store under
+	/// Paid answers a client kept as files, `<sha256 hex>.json` each, into the queries cache under
 	/// `scheme` (places | gop), fetched when the file was written; a newer one kept already stays.
-	Answers { scheme: String, dir: std::path::PathBuf },
+	QueriesCache { scheme: String, dir: std::path::PathBuf },
 }
 
 // Sentry must be initialised before the async runtime starts, hence no #[tokio::main].
@@ -335,7 +335,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 			let export = serde_json::from_slice(&raw).wrap_err_with(|| format!("{} is not review_archive's export", file.display()))?;
 			connect().await?.import_review_archive(export).await
 		}
-		Cmd::Import(ImportCmd::Answers { scheme, dir }) => {
+		Cmd::Import(ImportCmd::QueriesCache { scheme, dir }) => {
 			let scheme: Scheme = scheme.parse()?;
 			let store = Store::open(settings.db_path()?).await?;
 			let (mut kept, mut skipped) = (0, 0);
@@ -349,10 +349,10 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				let text = std::fs::read_to_string(&path).wrap_err_with(|| format!("reading {}", path.display()))?;
 				serde_json::from_str::<serde_json::Value>(&text).wrap_err_with(|| format!("{} is not JSON", path.display()))?;
 				let written = std::fs::metadata(&path)?.modified()?;
-				store.put_answer(scheme, key, &text, None, Timestamp::try_from(written)?).await?;
+				store.keep_query(scheme, key, &text, None, Timestamp::try_from(written)?).await?;
 				kept += 1;
 			}
-			println!("{kept} answers imported under {scheme}; {skipped} other files left");
+			println!("{kept} answers cached under {scheme}; {skipped} other files left");
 			Ok(())
 		}
 		Cmd::GenDataKey => {

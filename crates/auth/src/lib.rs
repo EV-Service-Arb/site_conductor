@@ -230,13 +230,10 @@ pub enum SourceKind {
 	/// A messenger bot or auto-responder (a brand's Telegram bot, a WhatsApp responder):
 	/// it starts a lead from a conversation and says when a customer wrote.
 	Bot,
-	/// A service or machine reading and keeping paid answers in the conductor's store: no
-	/// brands, never an event's source.
-	Answers,
 }
 
 impl SourceKind {
-	pub const ALL: [Self; 10] = [
+	pub const ALL: [Self; 9] = [
 		Self::Site,
 		Self::ReviewArchive,
 		Self::Gbp,
@@ -246,7 +243,6 @@ impl SourceKind {
 		Self::Telephony,
 		Self::Booking,
 		Self::Bot,
-		Self::Answers,
 	];
 
 	pub fn as_str(self) -> &'static str {
@@ -260,7 +256,6 @@ impl SourceKind {
 			Self::Telephony => "telephony",
 			Self::Booking => "booking",
 			Self::Bot => "bot",
-			Self::Answers => "answers",
 		}
 	}
 
@@ -277,7 +272,7 @@ impl SourceKind {
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("source.kind {0:?} is not one of site, review_archive, gbp, posthog, panel, sheet, telephony, booking, bot, answers")]
+#[error("source.kind {0:?} is not one of site, review_archive, gbp, posthog, panel, sheet, telephony, booking, bot")]
 pub struct UnknownKind(String);
 
 impl FromStr for SourceKind {

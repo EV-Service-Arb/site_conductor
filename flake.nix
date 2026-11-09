@@ -241,8 +241,8 @@
             excludePathPrefixes = [ "/api/ingest" ];
             # per client IP at the edge; the conductor bounds concurrency, not who calls. /api/hooks:
             # the booking providers' webhooks, forwarded to sites (public, signature-checked there).
-            # /api/answers: the answers store, public for the machines outside the cluster
-            rateLimitPathPrefixes = [ "/auth" "/api/hooks" "/api/answers" ];
+            # /api/queries_cache: open to everyone, so this is its only guard
+            rateLimitPathPrefixes = [ "/auth" "/api/hooks" "/api/queries_cache" ];
           };
           egress = {
             # concierge's gRPC, at the address it names
@@ -256,8 +256,8 @@
         # `checks.provided-paths` holds it to the routes the binary mounts.
         provides = {
           ingest = "/api/ingest/v1/events";
-          # the answers store (docs/ARCHITECTURE.md, Answers): review_archive's and placement's
-          answers = "/api/answers";
+          # the queries cache (docs/ARCHITECTURE.md, Queries cache): review_archive's and placement's
+          queries_cache = "/api/queries_cache";
         };
         # The services the forward reaches (docs/ARCHITECTURE.md, Forward), by contract name: devops
         # sets each variable to the peer's in-cluster origin and opens the egress to it.

@@ -132,7 +132,7 @@ impl Settings {
 		keys.map(str::trim).filter(|k| !k.is_empty()).map(str::to_owned).collect()
 	}
 
-	/// Places, its answers kept in the conductor's own store.
+	/// Places, its answers kept in the conductor's own queries cache.
 	pub fn google(&self, store: &Store) -> eyre::Result<Google> {
 		Ok(Google::try_new(Keys::new(self.places_keys()), Arc::new(store.clone()))?)
 	}

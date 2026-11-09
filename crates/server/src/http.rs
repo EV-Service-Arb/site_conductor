@@ -25,12 +25,13 @@ use tower_http::timeout::TimeoutLayer;
 use crate::{
 	access,
 	alerts::{self, Telegram},
-	answers, api, assistant, connected,
+	api, assistant, connected,
 	forward::{Forward, Services},
 	gmbs,
 	grafana::Grafana,
 	ingest,
 	live::{self, Live, LiveLimits},
+	queries_cache,
 	signin::{self, Freshness, Gate, SignIn},
 	tokens,
 };
@@ -87,7 +88,7 @@ pub fn api_routes() -> Vec<ApiRoute> {
 /// What a request may cost.
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
-	/// Ingest's and the answers store's requests served at once, each; past it, `503` rather than a queue.
+	/// Ingest's and the queries cache's requests served at once, each; past it, `503` rather than a queue.
 	pub max_concurrent: usize,
 	/// How long a body may take to arrive.
 	pub body_timeout: Duration,
@@ -140,7 +141,7 @@ pub fn app(sign_in: SignIn, forward: Option<Forward>, grafana: Option<&Grafana>,
 		.route("/health", get(|| async { "ok" }))
 		.merge(auth)
 		.merge(live)
-		.merge(answers::routes(sign_in.panel.clone(), &limits))
+		.merge(queries_cache::routes(sign_in.panel.clone(), &limits))
 		.nest("/api/v1", api);
 	let app = match forward {
 		Some(forward) => app.merge(ingest::routes(forward.clone(), &limits)).merge(forward.routes()),
