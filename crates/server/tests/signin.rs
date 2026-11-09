@@ -864,6 +864,7 @@ async fn no_permission_opens_no_section() {
 			"/gmails",
 			"/gmails",
 			"/gmails/{id}",
+			"/gmails/{id}",
 			"/gmbs/resolve",
 			"/gmbs",
 			"/gmails/{id}/gmbs",

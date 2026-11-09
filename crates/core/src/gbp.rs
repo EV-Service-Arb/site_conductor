@@ -59,6 +59,60 @@ impl fmt::Display for Country {
 	}
 }
 
+/// A phone as a GBP holds it, one live GBP's: an optional `+`, then digits, from what a person
+/// types (digits, spaces, `+-().`).
+pub fn phone(raw: &str) -> Result<String, Invalid> {
+	let typed = raw.trim();
+	let refused = || Invalid::new(format!("{raw:?} is not a phone number"));
+	if typed.is_empty() || !typed.chars().all(|c| c.is_ascii_digit() || "+-(). ".contains(c)) {
+		return Err(refused());
+	}
+	let canonical: String = typed.chars().filter(|c| c.is_ascii_digit() || *c == '+').collect();
+	let digits = canonical.strip_prefix('+').unwrap_or(&canonical);
+	match !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) {
+		true => Ok(canonical),
+		false => Err(refused()),
+	}
+}
+
+/// What a gmail is on the GBPs it manages.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(rename_all = "lowercase")]
+pub enum GmailRole {
+	Owner,
+	Manager,
+}
+
+impl GmailRole {
+	/// The GBPs it holds before Google grows wary: room shown, never refused.
+	pub fn cap(self) -> u32 {
+		match self {
+			Self::Owner => 3,
+			Self::Manager => 6,
+		}
+	}
+
+	pub fn as_str(self) -> &'static str {
+		match self {
+			Self::Owner => "owner",
+			Self::Manager => "manager",
+		}
+	}
+}
+
+impl FromStr for GmailRole {
+	type Err = Invalid;
+
+	fn from_str(raw: &str) -> Result<Self, Invalid> {
+		match raw {
+			"owner" => Ok(Self::Owner),
+			"manager" => Ok(Self::Manager),
+			_ => Err(Invalid::new(format!("role {raw:?}: owner or manager"))),
+		}
+	}
+}
+
 /// ```text
 /// Draft ─▶ Verifying ─▶ Verified ⇄ Suspended
 ///             ▲ └──────────┘          │

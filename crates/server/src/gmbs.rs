@@ -4,12 +4,15 @@
 //! ```text
 //! GET    /api/v1/gmails               Gmails: theirs, and their GBPs; the removed left out
 //! POST   /api/v1/gmails {gmail}       → 201 Gmail; 409 theirs already
+//! PATCH  /api/v1/gmails/{id} {role}   → 200 Gmail
 //! DELETE /api/v1/gmails/{id}          → 204 (removed; its GBPs with it)
 //! GET    /api/v1/gmbs/resolve?place=  Candidates
 //! POST   /api/v1/gmbs {name}          → 201 Gmb, a draft; 409 the name taken
 //! POST   /api/v1/gmails/{id}/gmbs {place_id, state, name?, country?}  → 201 Gmb, on Google
 //!                                     already; 409 the name or the place taken
-//! PATCH  /api/v1/gmbs/{id} {name?, gmail_id?, phone?}  → 200 Gmb; 409 a name not a draft's
+//! PATCH  /api/v1/gmbs/{id} {name?, gmail_id?, phone?, category?, areas?, hidden_address?,
+//!        customers_visit?, film?, profile?}  → 200 Gmb; null clears; 409 a name not a draft's,
+//!                                     a name or a phone another live GBP's
 //! PUT    /api/v1/gmbs/{id}/state {state, place?}  → 200 Gmb; 400 a move State::next refuses
 //! DELETE /api/v1/gmbs/{id}            → 204
 //! PUT    /api/v1/gmbs/enabled {gmbs, enabled}  → 204; 404 one is not theirs, and none switched
@@ -30,7 +33,7 @@ use axum::{
 	response::{IntoResponse, Response},
 };
 use jiff::Timestamp;
-use sa_core::gbp::{Country, State as GbpState};
+use sa_core::gbp::{Country, GmailRole, State as GbpState};
 use sa_panel::{
 	Panel,
 	gmbs::{Edit, Existing, Gmail, Gmb},
@@ -69,7 +72,19 @@ pub struct GmbDto {
 	pub next: Vec<GbpState>,
 	/// `by_hand`: set by the caller, Google having none.
 	pub country: Option<sa_panel::gmbs::GbpCountry>,
+	/// `+` and digits; one live GBP's.
 	pub phone: Option<String>,
+	pub category: Option<String>,
+	/// Service areas, at most 20.
+	pub areas: Vec<String>,
+	/// Where its verification film is shot.
+	pub hidden_address: Option<String>,
+	/// `false`: a service-area business, its address hidden; `null` undecided.
+	pub customers_visit: Option<bool>,
+	/// verif_vid's film, recorded by hand.
+	pub film: Option<String>,
+	/// Its Multilogin profile and proxy, recorded by hand.
+	pub profile: Option<String>,
 	/// RFC 3339.
 	pub created_at: String,
 	/// The caller's switch; review_archive inherits it.
@@ -87,6 +102,11 @@ pub struct GmailDto {
 	#[ts(type = "number")]
 	pub id: i64,
 	pub gmail: String,
+	/// `null` until the caller says.
+	pub role: Option<GmailRole>,
+	/// The GBPs its role holds before Google grows wary; `null` with the role.
+	#[ts(type = "number | null")]
+	pub cap: Option<u32>,
 	/// RFC 3339.
 	pub created_at: String,
 }
@@ -122,6 +142,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 	vec![
 		ApiRoute::new(M::GET, "/gmails", None, Cached, gmails),
 		ApiRoute::new(M::POST, "/gmails", None, Cached, add_gmail),
+		ApiRoute::new(M::PATCH, "/gmails/{id}", None, Cached, set_role),
 		ApiRoute::new(M::DELETE, "/gmails/{id}", None, Cached, remove_gmail),
 		ApiRoute::new(M::GET, "/gmbs/resolve", None, Cached, resolve),
 		ApiRoute::new(M::POST, "/gmbs", None, Cached, create_draft),
@@ -148,6 +169,12 @@ impl From<Gmb> for GmbDto {
 			next: b.state.nexts().to_vec(),
 			country: b.country,
 			phone: b.phone,
+			category: b.category,
+			areas: b.areas,
+			hidden_address: b.hidden_address,
+			customers_visit: b.customers_visit,
+			film: b.film,
+			profile: b.profile,
 			created_at: b.created_at.to_string(),
 			enabled: b.enabled,
 			location: b.location,
@@ -160,6 +187,8 @@ impl From<Gmail> for GmailDto {
 		Self {
 			id: g.id,
 			gmail: g.gmail,
+			role: g.role,
+			cap: g.role.map(GmailRole::cap),
 			created_at: g.created_at.to_string(),
 		}
 	}
@@ -188,6 +217,20 @@ async fn add_gmail(State(panel): State<Panel>, Extension(caller): Extension<Call
 	let added = panel.add_gmail(caller.user_id, &body(b)?.gmail, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = added.id, "gmail added");
 	Ok((StatusCode::CREATED, Json(GmailDto::from(added))).into_response())
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SetRole {
+	role: GmailRole,
+}
+
+async fn set_role(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<SetRole>, JsonRejection>) -> ApiResult<Json<GmailDto>> {
+	let gmail = id(&raw)?;
+	let role = body(b)?.role;
+	let set = panel.set_gmail_role(caller.user_id, gmail, role).await??;
+	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, role = role.as_str(), "gmail's role set");
+	Ok(Json(GmailDto::from(set)))
 }
 
 async fn remove_gmail(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<StatusCode> {
@@ -262,8 +305,8 @@ async fn add_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller
 }
 
 /// A present `null` is `Some(None)`; an absent field `None`, by `#[serde(default)]`.
-fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<String>>, D::Error> {
-	Option::<String>::deserialize(d).map(Some)
+fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> {
+	Option::<T>::deserialize(d).map(Some)
 }
 
 #[derive(Deserialize)]
@@ -273,12 +316,45 @@ struct EditBody {
 	gmail_id: Option<i64>,
 	#[serde(default, deserialize_with = "present")]
 	phone: Option<Option<String>>,
+	#[serde(default, deserialize_with = "present")]
+	category: Option<Option<String>>,
+	#[serde(default, deserialize_with = "present")]
+	areas: Option<Option<Vec<String>>>,
+	#[serde(default, deserialize_with = "present")]
+	hidden_address: Option<Option<String>>,
+	#[serde(default, deserialize_with = "present")]
+	customers_visit: Option<Option<bool>>,
+	#[serde(default, deserialize_with = "present")]
+	film: Option<Option<String>>,
+	#[serde(default, deserialize_with = "present")]
+	profile: Option<Option<String>>,
 }
 
 async fn edit(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<EditBody>, JsonRejection>) -> ApiResult<Json<GmbDto>> {
 	let gmb = id(&raw)?;
-	let EditBody { name, gmail_id, phone } = body(b)?;
-	let edited = panel.edit_gmb(caller.user_id, gmb, Edit { name, gmail_id, phone }).await??;
+	let EditBody {
+		name,
+		gmail_id,
+		phone,
+		category,
+		areas,
+		hidden_address,
+		customers_visit,
+		film,
+		profile,
+	} = body(b)?;
+	let edit = Edit {
+		name,
+		gmail_id,
+		phone,
+		category,
+		areas,
+		hidden_address,
+		customers_visit,
+		film,
+		profile,
+	};
+	let edited = panel.edit_gmb(caller.user_id, gmb, edit).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, "GBP edited");
 	Ok(Json(GmbDto::from(edited)))
 }

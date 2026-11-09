@@ -8,14 +8,14 @@ use std::collections::BTreeSet;
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::gbp::{Country, OnGoogle, State};
+use sa_core::gbp::{Country, GmailRole, OnGoogle, State};
 use sa_places::{Ask, LatLng, Place};
 use uuid::Uuid;
 
 pub use crate::store::gmbs::{GbpCountry, Gmail, Gmb, Point};
 use crate::{
 	Panel, Refused,
-	store::gmbs::{self as db, NewGmb},
+	store::gmbs::{self as db, NewGmb, Unique},
 	tokens::is_open,
 };
 
@@ -44,15 +44,49 @@ pub struct Existing {
 	pub country: Option<Country>,
 }
 
-/// What changes of a GBP; each absent is left.
+/// What changes of a GBP; each absent is left, `Some(None)` clears it.
 #[derive(Clone, Debug, Default)]
 pub struct Edit {
 	/// A draft's only: on Google, its name is Google's.
 	pub name: Option<String>,
 	/// Another gmail of its owner's.
 	pub gmail_id: Option<i64>,
-	/// `Some(None)` clears it.
+	/// One live GBP's.
 	pub phone: Option<Option<String>>,
+	pub category: Option<Option<String>>,
+	/// 1 to 20, none twice.
+	pub areas: Option<Option<Vec<String>>>,
+	pub hidden_address: Option<Option<String>>,
+	pub customers_visit: Option<Option<bool>>,
+	pub film: Option<Option<String>>,
+	pub profile: Option<Option<String>>,
+}
+
+impl Edit {
+	/// `self` as stored, or why not: each text trimmed and not empty, the phone in
+	/// [`sa_core::gbp::phone`]'s form.
+	fn checked(self) -> Result<Self, Refused> {
+		fn each<T>(field: Option<Option<T>>, check: impl FnOnce(T) -> Result<T, Refused>) -> Result<Option<Option<T>>, Refused> {
+			field.map(|v| v.map(check).transpose()).transpose()
+		}
+		let text = |what: &'static str| {
+			move |raw: String| match raw.trim() {
+				"" => Err(Refused::Invalid(format!("a GBP's {what} is not empty: null clears it"))),
+				t => Ok(t.to_owned()),
+			}
+		};
+		Ok(Self {
+			name: self.name.as_deref().map(name).transpose()?,
+			gmail_id: self.gmail_id,
+			phone: each(self.phone, |p| sa_core::gbp::phone(&p).map_err(|e| Refused::Invalid(e.to_string())))?,
+			category: each(self.category, text("category"))?,
+			areas: each(self.areas, areas)?,
+			hidden_address: each(self.hidden_address, text("hidden address"))?,
+			customers_visit: self.customers_visit,
+			film: each(self.film, text("film"))?,
+			profile: each(self.profile, text("profile"))?,
+		})
+	}
 }
 
 fn places_error(e: sa_places::Error) -> eyre::Result<Refused> {
@@ -79,11 +113,23 @@ fn name(raw: &str) -> Result<String, Refused> {
 	}
 }
 
-fn phone(raw: &str) -> Result<String, Refused> {
-	let phone = raw.trim();
-	match !phone.is_empty() && phone.chars().all(|c| c.is_ascii_digit() || "+-(). ".contains(c)) {
-		true => Ok(phone.to_owned()),
-		false => Err(Refused::Invalid(format!("{raw:?} is not a phone number"))),
+fn areas(raw: Vec<String>) -> Result<Vec<String>, Refused> {
+	let mut seen = BTreeSet::new();
+	let mut out = Vec::with_capacity(raw.len());
+	for area in raw {
+		let area = area.trim();
+		if area.is_empty() {
+			return Err(Refused::Invalid("a service area is not empty".to_owned()));
+		}
+		if !seen.insert(area.to_owned()) {
+			return Err(Refused::Invalid(format!("{area:?} is a service area twice")));
+		}
+		out.push(area.to_owned());
+	}
+	match out.len() {
+		0 => Err(Refused::Invalid("a GBP's service areas are not empty: null clears them".to_owned())),
+		21.. => Err(Refused::Invalid(format!("{} service areas: Google takes 20", out.len()))),
+		_ => Ok(out),
 	}
 }
 
@@ -119,6 +165,20 @@ impl Panel {
 		Ok(Ok(added))
 	}
 
+	/// The owner's gmail `id` in `role`.
+	pub async fn set_gmail_role(&self, owner: Uuid, id: i64, role: GmailRole) -> eyre::Result<Result<Gmail, Refused>> {
+		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		if !db::set_role(&mut tx, owner, id, role).await? {
+			return Ok(Err(Refused::NotFound));
+		}
+		let set = db::gmails(&mut tx, owner).await?.into_iter().find(|g| g.id == id).expect("set in this transaction");
+		tx.commit().await.wrap_err("committing a gmail's role")?;
+		Ok(Ok(set))
+	}
+
 	pub async fn remove_gmail(&self, owner: Uuid, id: i64, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
 		let mut tx = self.store.begin_write().await?;
 		if !is_open(&mut tx).await? {
@@ -150,7 +210,16 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
-		if let Some(why) = db::taken(&mut tx, Some(&name), None, None).await? {
+		if let Some(why) = db::taken(
+			&mut tx,
+			Unique {
+				name: Some(&name),
+				..Unique::default()
+			},
+			None,
+		)
+		.await?
+		{
 			return Ok(Err(Refused::Conflict(why)));
 		}
 		let new = NewGmb {
@@ -202,7 +271,17 @@ impl Panel {
 			Some(o) if owner.is_none_or(|owner| owner == o) => o,
 			_ => return Ok(Err(Refused::NotFound)),
 		};
-		if let Some(why) = db::taken(&mut tx, Some(&name), Some(&place_id), None).await? {
+		if let Some(why) = db::taken(
+			&mut tx,
+			Unique {
+				name: Some(&name),
+				place_id: Some(&place_id),
+				..Unique::default()
+			},
+			None,
+		)
+		.await?
+		{
 			return Ok(Err(Refused::Conflict(why)));
 		}
 		let new = NewGmb {
@@ -224,12 +303,8 @@ impl Panel {
 
 	/// The owner's GBP `id` with `edit` taken whole, or none of it.
 	pub async fn edit_gmb(&self, owner: Uuid, id: i64, edit: Edit) -> eyre::Result<Result<Gmb, Refused>> {
-		let renamed = match edit.name.as_deref().map(name).transpose() {
-			Ok(n) => n,
-			Err(r) => return Ok(Err(r)),
-		};
-		let phone = match edit.phone.map(|p| p.as_deref().map(phone).transpose()).transpose() {
-			Ok(p) => p,
+		let edit = match edit.checked() {
+			Ok(e) => e,
 			Err(r) => return Ok(Err(r)),
 		};
 		let mut tx = self.store.begin_write().await?;
@@ -239,13 +314,18 @@ impl Panel {
 		let Some(gbp) = db::gmb_of(&mut tx, Some(owner), id).await? else {
 			return Ok(Err(Refused::NotFound));
 		};
-		if let Some(n) = &renamed {
-			if gbp.state != State::Draft {
-				return Ok(Err(Refused::Conflict(format!("GBP {id} is on Google: its name is Google's"))));
-			}
-			if let Some(why) = db::taken(&mut tx, Some(n), None, Some(id)).await? {
-				return Ok(Err(Refused::Conflict(why)));
-			}
+		if edit.name.is_some() && gbp.state != State::Draft {
+			return Ok(Err(Refused::Conflict(format!("GBP {id} is on Google: its name is Google's"))));
+		}
+		let unique = Unique {
+			name: edit.name.as_deref(),
+			phone: edit.phone.as_ref().and_then(Option::as_deref),
+			..Unique::default()
+		};
+		if let Some(why) = db::taken(&mut tx, unique, Some(id)).await? {
+			return Ok(Err(Refused::Conflict(why)));
+		}
+		if let Some(n) = &edit.name {
 			db::rename(&mut tx, id, n).await?;
 		}
 		if let Some(gmail) = edit.gmail_id {
@@ -254,9 +334,7 @@ impl Panel {
 			}
 			db::move_to(&mut tx, id, gmail).await?;
 		}
-		if let Some(p) = &phone {
-			db::set_phone(&mut tx, id, p.as_deref()).await?;
-		}
+		db::set_fields(&mut tx, id, &edit).await?;
 		let edited = db::gmb_of(&mut tx, Some(owner), id).await?.expect("read in this transaction");
 		tx.commit().await.wrap_err("committing a GMB's edit")?;
 		self.snapshot_due.notify_one();
@@ -302,7 +380,16 @@ impl Panel {
 				if google.is_none() && gbp.country.is_none() {
 					return Ok(Err(Refused::Invalid(format!("Google gives {place_id} no country: set GBP {id}'s first"))));
 				}
-				if let Some(why) = db::taken(&mut tx, None, Some(&place_id), Some(id)).await? {
+				if let Some(why) = db::taken(
+					&mut tx,
+					Unique {
+						place_id: Some(&place_id),
+						..Unique::default()
+					},
+					Some(id),
+				)
+				.await?
+				{
 					return Ok(Err(Refused::Conflict(why)));
 				}
 				let place = place.as_ref();

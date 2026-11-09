@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::gbp::{Country, Managed, State};
+use sa_core::gbp::{Country, GmailRole, Managed, State};
 use sa_places::LatLng;
 use sqlx::SqliteConnection;
 use uuid::Uuid;
@@ -13,15 +13,17 @@ use uuid::Uuid;
 use super::{from_db, to_db};
 
 const GMB: &str = "SELECT b.id, b.gmail_id, b.place_id, b.name, b.address, b.state, b.country, b.country_by IS NOT NULL AS country_by_hand, b.phone, \
-	b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, NOT EXISTS (SELECT 1 FROM gmbs_off o WHERE o.gmb_id = b.id) AS enabled FROM gmbs b";
+	b.category, b.areas, b.hidden_address, b.customers_visit, b.film, b.profile, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, NOT EXISTS (SELECT 1 FROM gmbs_off o WHERE o.gmb_id = b.id) AS enabled FROM gmbs b";
 
-type GmailRow = (i64, Uuid, String, i64);
+type GmailRow = (i64, Uuid, String, Option<String>, i64);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Gmail {
 	pub id: i64,
 	pub owner: Uuid,
 	pub gmail: String,
+	/// `None` until its owner says.
+	pub role: Option<GmailRole>,
 	pub created_at: Timestamp,
 }
 
@@ -37,6 +39,18 @@ pub struct Gmb {
 	pub state: State,
 	pub country: Option<GbpCountry>,
 	pub phone: Option<String>,
+	/// Google's primary category, as the operator names it.
+	pub category: Option<String>,
+	/// Its service areas, none to 20.
+	pub areas: Vec<String>,
+	/// Where the verification film is shot.
+	pub hidden_address: Option<String>,
+	/// `false`: a service-area business, its address hidden.
+	pub customers_visit: Option<bool>,
+	/// verif_vid's film, recorded by hand.
+	pub film: Option<String>,
+	/// The Multilogin profile and its proxy, recorded by hand.
+	pub profile: Option<String>,
 	pub created_at: Timestamp,
 	/// Its owner's switch.
 	pub enabled: bool,
@@ -77,7 +91,7 @@ pub struct NewGmb<'a> {
 
 /// The owner's gmails not removed, by address.
 pub async fn gmails(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<Gmail>> {
-	let rows: Vec<GmailRow> = sqlx::query_as("SELECT id, owner, gmail, created_at FROM gmails WHERE owner = $1 AND removed_at IS NULL ORDER BY gmail")
+	let rows: Vec<GmailRow> = sqlx::query_as("SELECT id, owner, gmail, role, created_at FROM gmails WHERE owner = $1 AND removed_at IS NULL ORDER BY gmail")
 		.bind(owner)
 		.fetch_all(&mut *conn)
 		.await
@@ -110,7 +124,7 @@ pub async fn gmb_of(conn: &mut SqliteConnection, owner: Option<Uuid>, id: i64) -
 pub async fn add_gmail(conn: &mut SqliteConnection, id: Option<i64>, owner: Uuid, address: &str, now: Timestamp) -> eyre::Result<Option<Gmail>> {
 	let row: Option<GmailRow> = sqlx::query_as(
 		"INSERT INTO gmails (id, owner, gmail, created_at) VALUES ($1, $2, $3, $4) \
-		 ON CONFLICT DO NOTHING RETURNING id, owner, gmail, created_at",
+		 ON CONFLICT DO NOTHING RETURNING id, owner, gmail, role, created_at",
 	)
 	.bind(id)
 	.bind(owner)
@@ -144,6 +158,18 @@ pub async fn remove_gmail(conn: &mut SqliteConnection, owner: Uuid, id: i64, now
 	Ok(true)
 }
 
+/// The owner's gmail `id` in `role`. `false`: no such gmail of theirs, or it is removed.
+pub async fn set_role(conn: &mut SqliteConnection, owner: Uuid, id: i64, role: GmailRole) -> eyre::Result<bool> {
+	let done = sqlx::query("UPDATE gmails SET role = $3 WHERE id = $1 AND owner = $2 AND removed_at IS NULL")
+		.bind(id)
+		.bind(owner)
+		.bind(role.as_str())
+		.execute(&mut *conn)
+		.await
+		.wrap_err("setting a gmail's role")?;
+	Ok(done.rows_affected() == 1)
+}
+
 /// The owner of a gmail not removed.
 pub async fn gmail_owner(conn: &mut SqliteConnection, id: i64) -> eyre::Result<Option<Uuid>> {
 	sqlx::query_scalar("SELECT owner FROM gmails WHERE id = $1 AND removed_at IS NULL")
@@ -153,22 +179,34 @@ pub async fn gmail_owner(conn: &mut SqliteConnection, id: i64) -> eyre::Result<O
 		.wrap_err("loading a gmail")
 }
 
-/// Why `name` or `place_id` cannot be GBP `except`'s: another live GBP has it.
-pub async fn taken(conn: &mut SqliteConnection, name: Option<&str>, place_id: Option<&str>, except: Option<i64>) -> eyre::Result<Option<String>> {
-	let (by_name, by_place): (Option<i64>, Option<i64>) = sqlx::query_as(
-		"SELECT (SELECT id FROM gmbs WHERE name = $1 AND removed_at IS NULL AND id IS NOT $3), \
-		 (SELECT id FROM gmbs WHERE place_id = $2 AND removed_at IS NULL AND id IS NOT $3)",
+/// What a GBP holds that is one live GBP's; each absent is not looked for.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Unique<'a> {
+	pub name: Option<&'a str>,
+	pub place_id: Option<&'a str>,
+	/// In [`sa_core::gbp::phone`]'s form.
+	pub phone: Option<&'a str>,
+}
+
+/// Why `u` cannot be GBP `except`'s: another live GBP has some of it.
+pub async fn taken(conn: &mut SqliteConnection, u: Unique<'_>, except: Option<i64>) -> eyre::Result<Option<String>> {
+	let (by_name, by_place, by_phone): (Option<i64>, Option<i64>, Option<i64>) = sqlx::query_as(
+		"SELECT (SELECT id FROM gmbs WHERE name = $1 AND removed_at IS NULL AND id IS NOT $4), \
+		 (SELECT id FROM gmbs WHERE place_id = $2 AND removed_at IS NULL AND id IS NOT $4), \
+		 (SELECT id FROM gmbs WHERE phone = $3 AND removed_at IS NULL AND id IS NOT $4)",
 	)
-	.bind(name)
-	.bind(place_id)
+	.bind(u.name)
+	.bind(u.place_id)
+	.bind(u.phone)
 	.bind(except)
 	.fetch_one(&mut *conn)
 	.await
-	.wrap_err("looking for a GMB's name and place")?;
-	Ok(match (by_name, by_place) {
-		(Some(id), _) => Some(format!("GBP {id} is named {:?} already", name.expect("matched by it"))),
-		(None, Some(id)) => Some(format!("GBP {id} is on {} already", place_id.expect("matched by it"))),
-		(None, None) => None,
+	.wrap_err("looking for a GMB's name, place and phone")?;
+	Ok(match (by_name, by_place, by_phone) {
+		(Some(id), _, _) => Some(format!("GBP {id} is named {:?} already", u.name.expect("matched by it"))),
+		(None, Some(id), _) => Some(format!("GBP {id} is on {} already", u.place_id.expect("matched by it"))),
+		(None, None, Some(id)) => Some(format!("GBP {id} has {} already", u.phone.expect("matched by it"))),
+		(None, None, None) => None,
 	})
 }
 
@@ -218,13 +256,34 @@ pub async fn move_to(conn: &mut SqliteConnection, id: i64, gmail_id: i64) -> eyr
 	Ok(())
 }
 
-pub async fn set_phone(conn: &mut SqliteConnection, id: i64, phone: Option<&str>) -> eyre::Result<()> {
-	sqlx::query("UPDATE gmbs SET phone = $2 WHERE id = $1")
-		.bind(id)
-		.bind(phone)
-		.execute(&mut *conn)
-		.await
-		.wrap_err("setting a GMB's phone")?;
+/// `e`'s fields but the name and the gmail, which move by their own rules; the phone free
+/// ([`taken`]).
+pub async fn set_fields(conn: &mut SqliteConnection, id: i64, e: &crate::gmbs::Edit) -> eyre::Result<()> {
+	let areas = e.areas.as_ref().map(|a| a.as_ref().map(|a| serde_json::to_string(a).expect("strings serialize")));
+	sqlx::query(
+		"UPDATE gmbs SET phone = CASE WHEN $2 THEN $3 ELSE phone END, category = CASE WHEN $4 THEN $5 ELSE category END, \
+		 areas = CASE WHEN $6 THEN $7 ELSE areas END, hidden_address = CASE WHEN $8 THEN $9 ELSE hidden_address END, \
+		 customers_visit = CASE WHEN $10 THEN $11 ELSE customers_visit END, film = CASE WHEN $12 THEN $13 ELSE film END, \
+		 profile = CASE WHEN $14 THEN $15 ELSE profile END WHERE id = $1",
+	)
+	.bind(id)
+	.bind(e.phone.is_some())
+	.bind(e.phone.clone().flatten())
+	.bind(e.category.is_some())
+	.bind(e.category.clone().flatten())
+	.bind(areas.is_some())
+	.bind(areas.flatten())
+	.bind(e.hidden_address.is_some())
+	.bind(e.hidden_address.clone().flatten())
+	.bind(e.customers_visit.is_some())
+	.bind(e.customers_visit.flatten())
+	.bind(e.film.is_some())
+	.bind(e.film.clone().flatten())
+	.bind(e.profile.is_some())
+	.bind(e.profile.clone().flatten())
+	.execute(&mut *conn)
+	.await
+	.wrap_err("editing a GMB")?;
 	Ok(())
 }
 
@@ -415,6 +474,12 @@ struct GmbRow {
 	country: Option<String>,
 	country_by_hand: bool,
 	phone: Option<String>,
+	category: Option<String>,
+	areas: Option<String>,
+	hidden_address: Option<String>,
+	customers_visit: Option<bool>,
+	film: Option<String>,
+	profile: Option<String>,
 	lat: Option<f64>,
 	lng: Option<f64>,
 	placed: bool,
@@ -422,11 +487,12 @@ struct GmbRow {
 	enabled: bool,
 }
 
-fn gmail((id, owner, gmail, created_at): GmailRow) -> eyre::Result<Gmail> {
+fn gmail((id, owner, gmail, role, created_at): GmailRow) -> eyre::Result<Gmail> {
 	Ok(Gmail {
 		id,
 		owner,
 		gmail,
+		role: role.as_deref().map(str::parse).transpose()?,
 		created_at: from_db(created_at)?,
 	})
 }
@@ -449,6 +515,18 @@ fn gmb(r: GmbRow) -> eyre::Result<Gmb> {
 		state: r.state.parse()?,
 		country: r.country.as_deref().map(str::parse).transpose()?.map(|code| GbpCountry { code, by_hand: r.country_by_hand }),
 		phone: r.phone,
+		category: r.category,
+		areas: r
+			.areas
+			.as_deref()
+			.map(serde_json::from_str)
+			.transpose()
+			.wrap_err_with(|| format!("GMB {}'s areas", r.id))?
+			.unwrap_or_default(),
+		hidden_address: r.hidden_address,
+		customers_visit: r.customers_visit,
+		film: r.film,
+		profile: r.profile,
 		created_at: from_db(r.created_at)?,
 		enabled: r.enabled,
 		location,
