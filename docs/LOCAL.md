@@ -17,11 +17,12 @@ Grafana, and the conductor's GMBs and tokens reach review_archive. No concierge,
     site_conductor/  this repository (its worktrees work too: the others are found beside the main checkout)
     sites/panel/     sites_panel
     review_archive/  review_archive (skipped, with a message, when missing)
+    gmaps_optimal_placement/  placement, the home map's overlay (likewise; its first build takes minutes)
     sites/aquafix/   Service-Arb/aquafix, up to date — the Next.js (kitstart) site
     sites/vifnet/    Service-Arb/vifnet, likewise
   ```
 
-  Elsewhere: `SITES_DIR=… REVIEW_ARCHIVE_DIR=… AQUAFIX_DIR=… VIFNET_DIR=… nix run .#local-stack`. A landing checkout
+  Elsewhere: `SITES_DIR=… REVIEW_ARCHIVE_DIR=… PLACEMENT_DIR=… AQUAFIX_DIR=… VIFNET_DIR=… nix run .#local-stack`. A landing checkout
   without `package.json` (the old Rust sites) is skipped with a message: `git pull` it.
 - Each part's port free: the one its own dev shell sets (docs/port_range.md).
 

@@ -32,7 +32,7 @@ export type Legend = Infer<typeof legendParser>;
 export type Notice = Infer<typeof noticeParser> & { text: string };
 
 interface Handle extends EventTarget {
-  show(trade: string | null, locations: string[]): void;
+  show(trade: string | null, locations: string[]): Promise<void>;
   heat(layer: string | null): void;
   pressure(opts: { lambda?: number } | null): void;
   competitors(on: boolean): void;
