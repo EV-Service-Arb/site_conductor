@@ -39,18 +39,15 @@ const CHECK_WITHIN: Duration = Duration::from_secs(15);
 const GPS_ACCURACY_M: u32 = 10;
 const PLATFORM: &str = "Linux armv81";
 
-static ZONES: LazyLock<tzf_rs::DefaultFinder> = LazyLock::new(tzf_rs::DefaultFinder::new);
-
 /// What a browser needs beyond the database: the provider, and the exit's lookup.
 pub struct Browsers {
 	gologin: GoLogin,
 	exits: Exits,
 }
-
 impl Browsers {
-	pub fn new(gologin_token: Zeroizing<String>) -> eyre::Result<Self> {
+	pub fn try_new(gologin_token: Zeroizing<String>) -> eyre::Result<Self> {
 		Ok(Self {
-			gologin: GoLogin::new("https://api.gologin.com", gologin_token)?,
+			gologin: GoLogin::try_new("https://api.gologin.com", gologin_token)?,
 			exits: Exits {
 				lookup: "http://ip-api.com/json/".to_owned(),
 				public_only: true,
@@ -62,7 +59,7 @@ impl Browsers {
 	#[cfg(feature = "testing")]
 	pub fn stubbed(gologin: &str, ip_api: &str) -> Self {
 		Self {
-			gologin: GoLogin::new(gologin, Zeroizing::new("stub".to_owned())).expect("a client"),
+			gologin: GoLogin::try_new(gologin, Zeroizing::new("stub".to_owned())).expect("a client"),
 			exits: Exits {
 				lookup: ip_api.to_owned(),
 				public_only: false,
@@ -77,6 +74,8 @@ pub struct NewBrowser {
 	pub device: Device,
 	pub proxy: Zeroizing<String>,
 }
+
+static ZONES: LazyLock<tzf_rs::DefaultFinder> = LazyLock::new(tzf_rs::DefaultFinder::new);
 
 impl Panel {
 	/// The gmail's browser, stored once its proxy goes through, out in its GBPs' country, and is
@@ -216,9 +215,9 @@ impl Panel {
 					))));
 				}
 				let zone = ZONES.get_tz_name(point.at.lng, point.at.lat).to_owned();
-				Place::new(zone, &browser.exit.country, Some((point.at.lat, point.at.lng)))
+				Place::try_new(zone, &browser.exit.country, Some((point.at.lat, point.at.lng)))
 			}
-			None => Place::new(browser.exit.zone.clone(), &browser.exit.country, None),
+			None => Place::try_new(browser.exit.zone.clone(), &browser.exit.country, None),
 		};
 		let place = match place {
 			Ok(p) => p,
@@ -323,7 +322,7 @@ struct Place {
 }
 
 impl Place {
-	fn new(zone: String, country: &str, fix: Option<(f64, f64)>) -> Result<Self, String> {
+	fn try_new(zone: String, country: &str, fix: Option<(f64, f64)>) -> Result<Self, String> {
 		if zone.is_empty() || zone.starts_with("Etc/") {
 			return Err(format!("no land zone there ('{zone}'), and a phone is always in one"));
 		}
@@ -498,7 +497,7 @@ struct GoLogin {
 }
 
 impl GoLogin {
-	fn new(base: &str, token: Zeroizing<String>) -> eyre::Result<Self> {
+	fn try_new(base: &str, token: Zeroizing<String>) -> eyre::Result<Self> {
 		let mut auth = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", *token)).wrap_err("GOLOGIN_TOKEN is not a header value")?;
 		auth.set_sensitive(true);
 		let headers = reqwest::header::HeaderMap::from_iter([(reqwest::header::AUTHORIZATION, auth)]);

@@ -32,24 +32,6 @@ pub enum Device {
 	#[strum(serialize = "redmi_note_14")]
 	RedmiNote14,
 }
-
-/// What a page reads off a [`Device`].
-pub struct Hardware {
-	/// Build.MODEL; only UA-CH says it, and Orbita sends none.
-	pub model: &'static str,
-	pub gpu_vendor: &'static str,
-	pub gpu_renderer: &'static str,
-	/// CSS px.
-	pub screen: (u32, u32),
-	pub dpr: f64,
-	pub cores: u32,
-	/// GB, as `navigator.deviceMemory` caps it.
-	pub memory: u32,
-	pub touch: u32,
-	/// UA-CH `platformVersion`.
-	pub android: &'static str,
-}
-
 impl Device {
 	pub fn hardware(self) -> Hardware {
 		match self {
@@ -94,6 +76,23 @@ impl Device {
 	pub fn user_agent() -> String {
 		format!("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{CHROME}.0.0.0 Mobile Safari/537.36")
 	}
+}
+
+/// What a page reads off a [`Device`].
+pub struct Hardware {
+	/// Build.MODEL; only UA-CH says it, and Orbita sends none.
+	pub model: &'static str,
+	pub gpu_vendor: &'static str,
+	pub gpu_renderer: &'static str,
+	/// CSS px.
+	pub screen: (u32, u32),
+	pub dpr: f64,
+	pub cores: u32,
+	/// GB, as `navigator.deviceMemory` caps it.
+	pub memory: u32,
+	pub touch: u32,
+	/// UA-CH `platformVersion`.
+	pub android: &'static str,
 }
 
 /// A launch of a gmail's browser.

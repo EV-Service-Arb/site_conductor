@@ -28,30 +28,6 @@ pub(crate) struct Slot {
 	ended: watch::Receiver<bool>,
 	clients: Arc<watch::Sender<usize>>,
 }
-
-enum State {
-	Starting(Vec<oneshot::Sender<Result<(), String>>>),
-	Up { devtools: String },
-}
-
-/// What `serve` runs: the launch, and the slot's other ends.
-pub(crate) struct Start {
-	gmail: i64,
-	launch: Launch,
-	stop: Arc<Notify>,
-	ended: watch::Sender<bool>,
-	clients: watch::Receiver<usize>,
-}
-
-/// A devtools client of a browser's, counted while it lives.
-pub(crate) struct Client(Arc<watch::Sender<usize>>);
-
-impl Drop for Client {
-	fn drop(&mut self) {
-		self.0.send_modify(|n| *n -= 1);
-	}
-}
-
 impl Slot {
 	pub(crate) fn starting(gmail: i64, launch: Launch) -> (Self, Start) {
 		let stop = Arc::new(Notify::new());
@@ -95,6 +71,29 @@ impl Slot {
 	pub(crate) fn stop(&self) -> watch::Receiver<bool> {
 		self.stop.notify_one();
 		self.ended.clone()
+	}
+}
+
+enum State {
+	Starting(Vec<oneshot::Sender<Result<(), String>>>),
+	Up { devtools: String },
+}
+
+/// What `serve` runs: the launch, and the slot's other ends.
+pub(crate) struct Start {
+	gmail: i64,
+	launch: Launch,
+	stop: Arc<Notify>,
+	ended: watch::Sender<bool>,
+	clients: watch::Receiver<usize>,
+}
+
+/// A devtools client of a browser's, counted while it lives.
+pub(crate) struct Client(Arc<watch::Sender<usize>>);
+
+impl Drop for Client {
+	fn drop(&mut self) {
+		self.0.send_modify(|n| *n -= 1);
 	}
 }
 

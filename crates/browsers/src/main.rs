@@ -13,7 +13,10 @@ use std::{
 
 use axum::{
 	Json, Router,
-	extract::{Path, Request, State, WebSocketUpgrade, ws},
+	extract::{
+		Path, Request, State, WebSocketUpgrade,
+		ws::{self, rejection::WebSocketUpgradeRejection},
+	},
 	http::StatusCode,
 	middleware::{self, Next},
 	response::{IntoResponse, Response},
@@ -53,18 +56,6 @@ enum Cmd {
 	},
 }
 
-#[derive(Clone)]
-struct Runner(Arc<Inner>);
-
-struct Inner {
-	dir: PathBuf,
-	max: usize,
-	orbita: PathBuf,
-	keys: Keys,
-	profiles: Mutex<HashMap<i64, profile::Slot>>,
-	starts: mpsc::Sender<profile::Start>,
-}
-
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
 	color_eyre::install()?;
@@ -99,6 +90,28 @@ async fn main() -> eyre::Result<()> {
 	stop.send(true).expect("the receiver is ours");
 	while running.next().await.is_some() {}
 	served.wrap_err("HTTP server")
+}
+
+#[derive(Clone)]
+struct Runner(Arc<Inner>);
+impl Runner {
+	/// Returns once `gmail`'s browser has stopped, or at once when none runs.
+	async fn stopped(&self, gmail: i64) {
+		let ended = self.0.profiles.lock().expect("never held across a panic").get(&gmail).map(profile::Slot::stop);
+		if let Some(mut ended) = ended {
+			// a dropped sender is the profile's future gone: stopped too
+			let _ended = ended.wait_for(|e| *e).await;
+		}
+	}
+}
+
+struct Inner {
+	dir: PathBuf,
+	max: usize,
+	orbita: PathBuf,
+	keys: Keys,
+	profiles: Mutex<HashMap<i64, profile::Slot>>,
+	starts: mpsc::Sender<profile::Start>,
 }
 
 fn routes(runner: Runner) -> Router {
@@ -181,10 +194,14 @@ async fn remove(State(runner): State<Runner>, Path(gmail): Path<i64>) -> Respons
 }
 
 /// The browser's devtools socket, as is, while it runs; its client counted for the idle stop.
-async fn cdp(State(runner): State<Runner>, Path(gmail): Path<i64>, upgrade: WebSocketUpgrade) -> Response {
+async fn cdp(State(runner): State<Runner>, Path(gmail): Path<i64>, upgrade: Result<WebSocketUpgrade, WebSocketUpgradeRejection>) -> Response {
 	let found = runner.0.profiles.lock().expect("never held across a panic").get(&gmail).and_then(profile::Slot::client);
 	let Some((devtools, client)) = found else {
 		return (StatusCode::NOT_FOUND, "not running").into_response();
+	};
+	let upgrade = match upgrade {
+		Ok(u) => u,
+		Err(rejection) => return rejection.into_response(),
 	};
 	let (browser, _) = match tokio_tungstenite::connect_async(devtools.as_str()).await {
 		Ok(c) => c,
@@ -219,17 +236,6 @@ async fn pass(conductor: ws::WebSocket, browser: tokio_tungstenite::WebSocketStr
 	// either side gone: the other is told by its socket closing
 	let _closed = to_conductor.send(ws::Message::Close(None)).await;
 	let _closed = to_browser.close().await;
-}
-
-impl Runner {
-	/// Returns once `gmail`'s browser has stopped, or at once when none runs.
-	async fn stopped(&self, gmail: i64) {
-		let ended = self.0.profiles.lock().expect("never held across a panic").get(&gmail).map(profile::Slot::stop);
-		if let Some(mut ended) = ended {
-			// a dropped sender is the profile's future gone: stopped too
-			let _ended = ended.wait_for(|e| *e).await;
-		}
-	}
 }
 
 async fn shutdown_signal() {

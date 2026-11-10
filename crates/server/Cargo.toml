@@ -66,6 +66,7 @@ sa_panel = { workspace = true, features = ["testing"] }
 sa_server = { workspace = true, features = ["testing"] }
 sqlx.workspace = true
 tempfile.workspace = true
+tokio-tungstenite.workspace = true
 tower = { workspace = true, features = ["util"] }
 
 [lints]

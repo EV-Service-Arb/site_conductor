@@ -3948,6 +3948,7 @@ dependencies = [
  "eyre",
  "futures",
  "jiff",
+ "reqwest",
  "rustix",
  "sa_auth",
  "serde",

@@ -127,10 +127,14 @@ struct World {
 
 impl World {
 	async fn new() -> Self {
+		Self::with_runner(runner(Arc::default())).await
+	}
+
+	async fn with_runner(runner: Router) -> Self {
 		let stub = GoLogin::default();
 		let gologin_base = serve(gologin(stub.clone())).await;
 		let proxy = serve(Router::new().route("/json/", get(ip_api))).await;
-		let (runner_base, runner_log) = upstream(runner(Arc::default())).await;
+		let (runner_base, runner_log) = upstream(runner).await;
 
 		let db = TestDb::create().await;
 		let panel = panel(&db).await;
@@ -152,7 +156,7 @@ impl World {
 			concierge_origin: ORIGIN.to_owned(),
 		};
 		let browsers = Browsers::stubbed(&gologin_base, "http://ip-api.test/json/");
-		let connected = Connected::new(browsers, &runner_base, SEED.parse().unwrap()).unwrap();
+		let connected = Connected::try_new(browsers, &runner_base, SEED.parse().unwrap()).unwrap();
 		let app = http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, None, Some(connected));
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
@@ -341,4 +345,108 @@ async fn the_viewer_is_refused_to_another_origin_and_to_another_persons_gmail() 
 	assert_eq!(status, StatusCode::NOT_FOUND, "another person's gmail is not there");
 	let (status, _) = other.send(&w.app, Method::POST, &format!("{viewer}/stop"), &[], true).await;
 	assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+/// Chrome's devtools as far as the viewer drives them: one page, attached, cast; what it is told.
+async fn devtools(socket: axum::extract::ws::WebSocket, told: Arc<Mutex<Vec<Value>>>) {
+	use axum::extract::ws::Message;
+	use futures::{SinkExt, StreamExt};
+	let (mut tx, mut rx) = socket.split();
+	while let Some(Ok(Message::Text(t))) = rx.next().await {
+		let m: Value = serde_json::from_str(&t).unwrap();
+		told.lock().unwrap().push(m.clone());
+		let answer = |result: Value| Message::Text(json!({ "id": m["id"], "result": result }).to_string().into());
+		let out: Vec<Message> = match m["method"].as_str().unwrap() {
+			"Target.setDiscoverTargets" => vec![
+				answer(json!({})),
+				Message::Text(
+					json!({ "method": "Target.targetCreated", "params": { "targetInfo": { "targetId": "T1", "type": "page", "title": "Google", "url": "https://business.google.com/" } } })
+						.to_string()
+						.into(),
+				),
+			],
+			"Target.attachToTarget" => vec![answer(json!({ "sessionId": "S1" }))],
+			"Page.startScreencast" => vec![
+				answer(json!({})),
+				Message::Text(
+					json!({ "sessionId": "S1", "method": "Page.screencastFrame", "params": { "data": "/9j/frame", "sessionId": 7, "metadata": { "deviceWidth": 412, "deviceHeight": 915 } } })
+						.to_string()
+						.into(),
+				),
+			],
+			_ => vec![answer(json!({}))],
+		};
+		for o in out {
+			tx.send(o).await.unwrap();
+		}
+	}
+}
+
+/// The viewer's next frame, or how it closed.
+async fn next<S: futures::Stream<Item = Result<tokio_tungstenite::tungstenite::Message, tokio_tungstenite::tungstenite::Error>> + Unpin>(ws: &mut S) -> Value {
+	use futures::StreamExt;
+	use tokio_tungstenite::tungstenite::Message;
+	match ws.next().await.unwrap().unwrap() {
+		Message::Text(t) => serde_json::from_str::<Value>(&t).unwrap(),
+		Message::Close(c) => json!({ "closed": u16::from(c.unwrap().code) }),
+		m => panic!("{m:?}"),
+	}
+}
+
+#[tokio::test]
+async fn the_viewer_sees_the_page_and_touches_it_as_a_phone_one_viewer_at_a_time() {
+	use futures::{SinkExt, StreamExt};
+	use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
+
+	let told: Arc<Mutex<Vec<Value>>> = Arc::default();
+	let cdp_told = told.clone();
+	let runner = runner(Arc::new(Mutex::new(vec![1]))).route(
+		"/profiles/{gmail}/cdp",
+		get(move |ws: axum::extract::WebSocketUpgrade| {
+			let told = cdp_told.clone();
+			async move { ws.on_upgrade(move |s| devtools(s, told)) }
+		}),
+	);
+	let mut w = World::with_runner(runner).await;
+	let a = w.gmail("a@gmail.com").await;
+	let (status, set) = w.set(a, "pixel_7", &w.proxy("fr")).await;
+	assert_eq!(status, StatusCode::OK, "{set}");
+	let conductor = serve(w.app.clone()).await;
+	let open = || {
+		let mut req = format!("{}/api/v1/gmails/{a}/browser", conductor.replace("http", "ws")).into_client_request().unwrap();
+		req.headers_mut().insert("origin", ORIGIN.parse().unwrap());
+		req.headers_mut().insert("cookie", w.b.cookie().parse().unwrap());
+		tokio_tungstenite::connect_async(req)
+	};
+	let (mut first, _) = open().await.unwrap();
+	let mut seen = Vec::new();
+	while !seen.iter().any(|m: &Value| m["type"] == "frame") {
+		seen.push(next(&mut first).await);
+	}
+	let frame = seen.last().unwrap();
+	assert_eq!((&frame["data"], &frame["width"], &frame["height"]), (&json!("/9j/frame"), &json!(412.0), &json!(915.0)));
+	assert!(seen.iter().any(|m| m["type"] == "tabs" && m["active"] == "T1"), "{seen:?}");
+
+	first
+		.send(Message::text(json!({ "type": "touch", "phase": "start", "x": 100.0, "y": 200.0 }).to_string()))
+		.await
+		.unwrap();
+	first.send(Message::text(json!({ "type": "text", "text": "Plombier Lyon 7" }).to_string())).await.unwrap();
+	tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+	let methods: Vec<Value> = told.lock().unwrap().iter().map(|m| json!([m["method"], m["sessionId"]])).collect();
+	for want in [
+		json!(["Page.screencastFrameAck", "S1"]),
+		json!(["Input.dispatchTouchEvent", "S1"]),
+		json!(["Input.insertText", "S1"]),
+	] {
+		assert!(methods.contains(&want), "{want} in {methods:?}");
+	}
+	assert!(!methods.iter().any(|m| m[0] == "Runtime.enable"), "what pages detect devtools by: {methods:?}");
+
+	let (_second, _) = open().await.unwrap();
+	let mut last = next(&mut first).await;
+	while last.get("closed").is_none() {
+		last = next(&mut first).await;
+	}
+	assert_eq!(last["closed"], sa_server::browser::CLOSE_REPLACED, "one viewer per gmail");
 }

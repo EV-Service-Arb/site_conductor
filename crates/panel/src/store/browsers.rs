@@ -7,6 +7,9 @@ use sqlx::SqliteConnection;
 use super::{connections::Sealed, from_db, to_db};
 pub use crate::store::connections::Checked;
 
+const COLUMNS: &str = "provider, device, endpoint, provider_profile, noise_canvas, noise_webgl, noise_rects, noise_audio, \
+	exit_ip, exit_country, exit_city, exit_zone, exit_mobile, set_at, checked_at, check_error, proxy_sealed, data_key_fp";
+
 /// Who runs a gmail's browser.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, strum::Display, strum::EnumString, strum::IntoStaticStr, strum::VariantArray)]
 #[strum(serialize_all = "snake_case")]
@@ -54,9 +57,6 @@ pub(crate) struct Proxy {
 	pub tag: [u8; 32],
 	pub endpoint: String,
 }
-
-const COLUMNS: &str = "provider, device, endpoint, provider_profile, noise_canvas, noise_webgl, noise_rects, noise_audio, \
-	exit_ip, exit_country, exit_city, exit_zone, exit_mobile, set_at, checked_at, check_error, proxy_sealed, data_key_fp";
 
 #[derive(sqlx::FromRow)]
 struct Row {

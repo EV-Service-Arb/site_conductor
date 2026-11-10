@@ -79,6 +79,40 @@ pub struct ConnectionsDto {
 	pub prices: PricesDto,
 	pub browser: Option<crate::browser::BrowserDto>,
 }
+impl ConnectionsDto {
+	fn of(c: Connections, running: bool) -> Self {
+		Self {
+			imap: c.imap.map(|i: Imap| ImapDto {
+				host: i.host,
+				username: i.username,
+				set_at: i.set_at.to_string(),
+				checked: i.checked.into(),
+			}),
+			maps_key: c.maps_key.map(|(k, out): (MapsKey, _)| MapsKeyDto {
+				last4: k.last4,
+				set_at: k.set_at.to_string(),
+				checked: k.checked.into(),
+				out,
+			}),
+			prices: c.prices.into(),
+			browser: c.browser.map(|b| BrowserDto {
+				provider: b.provider.to_string(),
+				device: b.device,
+				endpoint: b.endpoint,
+				exit: ExitDto {
+					ip: b.exit.ip,
+					country: b.exit.country,
+					city: b.exit.city,
+					zone: b.exit.zone,
+					mobile: b.exit.mobile,
+				},
+				set_at: b.set_at.to_string(),
+				checked: b.checked.into(),
+				running,
+			}),
+		}
+	}
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -191,41 +225,6 @@ impl From<Vec<(Sku, Option<i64>)>> for PricesDto {
 		Self {
 			details: of(Sku::Details),
 			search: of(Sku::Search),
-		}
-	}
-}
-
-impl ConnectionsDto {
-	fn of(c: Connections, running: bool) -> Self {
-		Self {
-			imap: c.imap.map(|i: Imap| ImapDto {
-				host: i.host,
-				username: i.username,
-				set_at: i.set_at.to_string(),
-				checked: i.checked.into(),
-			}),
-			maps_key: c.maps_key.map(|(k, out): (MapsKey, _)| MapsKeyDto {
-				last4: k.last4,
-				set_at: k.set_at.to_string(),
-				checked: k.checked.into(),
-				out,
-			}),
-			prices: c.prices.into(),
-			browser: c.browser.map(|b| BrowserDto {
-				provider: b.provider.to_string(),
-				device: b.device,
-				endpoint: b.endpoint,
-				exit: ExitDto {
-					ip: b.exit.ip,
-					country: b.exit.country,
-					city: b.exit.city,
-					zone: b.exit.zone,
-					mobile: b.exit.mobile,
-				},
-				set_at: b.set_at.to_string(),
-				checked: b.checked.into(),
-				running,
-			}),
 		}
 	}
 }

@@ -251,8 +251,8 @@ impl Settings {
 			.parse()
 			.map_err(|e| eyre::eyre!("PANEL_ASSERTION_KEY: {e}"))?;
 		let url = bare_http_origin("PANEL_BROWSERS_URL", &url)?.to_string();
-		let browsers = sa_panel::browsers::Browsers::new(zeroize::Zeroizing::new(token))?;
-		Ok(Some(sa_server::browser::Connected::new(browsers, &url, signer)?))
+		let browsers = sa_panel::browsers::Browsers::try_new(zeroize::Zeroizing::new(token))?;
+		Ok(Some(sa_server::browser::Connected::try_new(browsers, &url, signer)?))
 	}
 
 	/// `None` when neither variable is set; one without the other is a mistake, named.

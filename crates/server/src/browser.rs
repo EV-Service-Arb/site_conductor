@@ -67,6 +67,20 @@ pub const CLOSE_NOT_RUNNING: u16 = 4404;
 /// The browser stopped, or its devtools went.
 pub const CLOSE_STOPPED: u16 = 4410;
 
+/// A launch waits on the browser's devtools (60 s at the runner) and the provider's calls.
+const LAUNCH_WITHIN: Duration = Duration::from_secs(90);
+
+const NOT_CONNECTED: &str = "browsers not connected";
+
+/// How often the viewer's session is asked again.
+const RECHECK: Duration = Duration::from_secs(60);
+
+/// How long one frame may take to go out before the viewer is dropped.
+const SEND_WITHIN: Duration = Duration::from_secs(10);
+type Devtools = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+type Held = (u64, oneshot::Sender<()>);
+
 /// Where a gmail's proxy comes out, at its last check.
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(rename = "Exit")]
@@ -221,7 +235,7 @@ pub struct Connected {
 }
 
 impl Connected {
-	pub fn new(browsers: Browsers, runner: &str, signer: Signer) -> eyre::Result<Self> {
+	pub fn try_new(browsers: Browsers, runner: &str, signer: Signer) -> eyre::Result<Self> {
 		Ok(Self {
 			browsers: Arc::new(browsers),
 			runner: Runner {
@@ -304,11 +318,6 @@ impl Runner {
 	}
 }
 
-type Devtools = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
-
-/// A launch waits on the browser's devtools (60 s at the runner) and the provider's calls.
-const LAUNCH_WITHIN: Duration = Duration::from_secs(90);
-
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Freshness::Cached;
 	use Method as M;
@@ -324,8 +333,6 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 fn connected(state: &ApiState) -> ApiResult<&Connected> {
 	state.browsers.as_ref().ok_or_else(|| ApiError::Unavailable(NOT_CONNECTED.to_owned()))
 }
-
-const NOT_CONNECTED: &str = "browsers not connected";
 
 fn id(raw: &str) -> ApiResult<i64> {
 	raw.parse().map_err(|_| ApiError::NotFound)
@@ -397,15 +404,6 @@ struct Viewers {
 	held: Arc<Mutex<HashMap<i64, Held>>>,
 	next: Arc<AtomicU64>,
 }
-
-type Held = (u64, oneshot::Sender<()>);
-
-struct Viewing {
-	viewers: Viewers,
-	gmail: i64,
-	turn: u64,
-}
-
 impl Viewers {
 	/// The gmail's viewer from now: told to close when another takes over.
 	fn take(&self, gmail: i64) -> (Viewing, oneshot::Receiver<()>) {
@@ -417,6 +415,12 @@ impl Viewers {
 		}
 		(Viewing { viewers: self.clone(), gmail, turn }, rx)
 	}
+}
+
+struct Viewing {
+	viewers: Viewers,
+	gmail: i64,
+	turn: u64,
 }
 
 impl Drop for Viewing {
@@ -802,11 +806,6 @@ impl View {
 		}
 	}
 }
-
-/// How often the viewer's session is asked again.
-const RECHECK: Duration = Duration::from_secs(60);
-/// How long one frame may take to go out before the viewer is dropped.
-const SEND_WITHIN: Duration = Duration::from_secs(10);
 
 struct KeyEvents {
 	down: Value,

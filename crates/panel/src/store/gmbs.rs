@@ -15,10 +15,10 @@ use super::{from_db, to_db};
 const GMB: &str = "SELECT b.id, b.gmail_id, b.place_id, b.name, b.address, b.state, b.country, b.country_by IS NOT NULL AS country_by_hand, b.phone, \
 	b.trade_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, NOT EXISTS (SELECT 1 FROM gmbs_off o WHERE o.gmb_id = b.id) AS enabled FROM gmbs b";
 
-type GmailRow = (i64, Uuid, String, Option<String>, i64, bool);
-
 /// Whether the gmail's browser's last check went through.
 const BROWSER: &str = "EXISTS (SELECT 1 FROM gmail_browsers w WHERE w.gmail_id = gmails.id AND w.check_error IS NULL)";
+
+type GmailRow = (i64, Uuid, String, Option<String>, i64, bool);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Gmail {
