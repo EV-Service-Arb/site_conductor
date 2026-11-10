@@ -526,6 +526,19 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
+	/// The point the owner placed on GBP `id` taken back.
+	pub async fn unplace_gmb(&self, owner: Uuid, id: i64) -> eyre::Result<Result<(), Refused>> {
+		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		if let Err(r) = db::unplace(&mut tx, owner, id).await? {
+			return Ok(Err(r));
+		}
+		tx.commit().await.wrap_err("committing a point taken back")?;
+		Ok(Ok(()))
+	}
+
 	/// Every one of `ids` on or off, or none: each must be the owner's, not removed.
 	pub async fn switch_gmbs(&self, owner: Uuid, ids: &[i64], on: bool) -> eyre::Result<Result<(), Refused>> {
 		let ids: BTreeSet<i64> = ids.iter().copied().collect();

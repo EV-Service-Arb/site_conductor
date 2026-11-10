@@ -46,7 +46,7 @@ export default defineConfig({
       url: `http://127.0.0.1:${WEB}/`,
       reuseExistingServer: false,
       timeout: 120_000,
-      env: { PANEL_DEV_BACKEND: `http://127.0.0.1:${STUB}` },
+      env: { PANEL_DEV_BACKEND: `http://127.0.0.1:${STUB}`, PANEL_DEV_DIST: ".next/e2e" },
     },
   ],
 });

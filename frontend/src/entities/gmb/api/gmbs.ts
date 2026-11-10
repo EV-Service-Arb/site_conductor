@@ -1,4 +1,7 @@
+import type { UndoEntry } from "@evinvest/uikit";
+
 import { ApiError, http, ignoreBody } from "@/shared/api";
+import type { T } from "@/shared/i18n";
 
 import {
   type Candidate,
@@ -84,23 +87,79 @@ export async function setCountry(id: number, country: Country): Promise<void> {
   await http.send("PUT", `/api/v1/gmbs/${id}/country`, { country }, ignoreBody);
 }
 
+/** What a write sets on each GBP, and how it writes a value. */
+interface Field<V> {
+  of: (gmb: Gmb) => V;
+  write: (ids: number[], value: V) => Promise<void>;
+}
+
+const LOCATION: Field<Gmb["location"]> = {
+  of: (b) => b.location,
+  write: async (ids, at) => {
+    for (const id of ids) {
+      if (at === null) await http.send("DELETE", `/api/v1/gmbs/${id}/location`, undefined, ignoreBody);
+      else await http.send("PUT", `/api/v1/gmbs/${id}/location`, { lat: at.lat, lng: at.lng }, ignoreBody);
+    }
+  },
+};
+const ENABLED: Field<boolean> = {
+  of: (b) => b.enabled,
+  write: async (gmbs, enabled) => {
+    await http.send("PUT", "/api/v1/gmbs/enabled", { gmbs, enabled }, ignoreBody);
+  },
+};
+const TRADE: Field<number | null> = {
+  of: (b) => b.trade_id,
+  write: async (gmbs, trade) => {
+    await http.send("PUT", "/api/v1/gmbs/trade", { gmbs, trade }, ignoreBody);
+  },
+};
+
+/**
+ * `gmbs`, as the client held them, given `to`. The entry writes either side back only while every
+ * one still holds the other, as the conductor answers at the press (another operator, another tab).
+ */
+async function set<V>(field: Field<V>, gmbs: Gmb[], to: V, label: string, t: T): Promise<UndoEntry> {
+  const ids = gmbs.map((b) => b.id);
+  await field.write(ids, to);
+  const was = new Map(gmbs.map((b) => [b.id, JSON.stringify(field.of(b))]));
+  const after = JSON.stringify(to);
+  const holds = async (value: (id: number) => string) => {
+    const now = new Map((await fetchGmails()).gmbs.map((b) => [b.id, JSON.stringify(field.of(b))]));
+    if (!ids.every((id) => now.get(id) === value(id))) throw new Error(t("undo.changed", { label }));
+  };
+  return {
+    label,
+    undo: async () => {
+      await holds(() => after);
+      const back = new Map<string, number[]>();
+      for (const [id, v] of was) back.set(v, [...(back.get(v) ?? []), id]);
+      for (const [v, group] of back) await field.write(group, JSON.parse(v) as V);
+    },
+    redo: async () => {
+      await holds((id) => was.get(id)!);
+      await field.write(ids, to);
+    },
+  };
+}
+
 /** Refused when Google has the place's point: only one it has none of is placed by hand. */
-export async function placeGmb(id: number, at: LatLng): Promise<void> {
-  await http.send("PUT", `/api/v1/gmbs/${id}/location`, { lat: at.lat, lng: at.lng }, ignoreBody);
+export function placeGmb(gmb: Gmb, at: LatLng, t: T): Promise<UndoEntry> {
+  return set(LOCATION, [gmb], { lat: at.lat, lng: at.lng, placed: true }, t("undo.placed", { name: gmb.name ?? gmb.place_id ?? String(gmb.id) }), t);
 }
 
 export async function removeGmb(id: number): Promise<void> {
   await http.send("DELETE", `/api/v1/gmbs/${id}`, undefined, ignoreBody);
 }
 
-/** All of `ids` or none: one not the caller's refuses the lot. */
-export async function switchGmbs(ids: number[], enabled: boolean): Promise<void> {
-  await http.send("PUT", "/api/v1/gmbs/enabled", { gmbs: ids, enabled }, ignoreBody);
+/** All of `gmbs` or none: one not the caller's refuses the lot. */
+export function switchGmbs(gmbs: Gmb[], enabled: boolean, t: T): Promise<UndoEntry> {
+  return set(ENABLED, gmbs, enabled, t(enabled ? "undo.on" : "undo.off", { n: gmbs.length }), t);
 }
 
-/** All of `ids` or none: one not the caller's refuses the lot. `null` takes their trade away. */
-export async function setTrades(ids: number[], trade: number | null): Promise<void> {
-  await http.send("PUT", "/api/v1/gmbs/trade", { gmbs: ids, trade }, ignoreBody);
+/** All of `gmbs` or none: one not the caller's refuses the lot. `null` takes their trade away. */
+export function setTrades(gmbs: Gmb[], trade: number | null, t: T): Promise<UndoEntry> {
+  return set(TRADE, gmbs, trade, t("undo.trade", { n: gmbs.length }), t);
 }
 
 export async function fetchTrades(): Promise<Trade[]> {

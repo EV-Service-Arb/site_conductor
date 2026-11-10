@@ -218,6 +218,12 @@ reserved paths (`web.rs`) are derived from it.
   (Next's own handler ignores it). An element is created once per tag, attributes and language
   and re-inserted after: a Dioxus one (ev_lib's `mfe`) cannot be torn down, so it keeps running
   while its page is not shown, and holds its last route while the location is not under its base.
+- **One keymap and one undo history per page, the shell's.** An element listens for no key: it
+  hands its bindings over with `ev:keymap`, and they sit under the leader in the scope
+  `elementKeys` (`frontend/panel.config.ts`) assigns its tag (`mfe-sites-nav`: `V`, its views),
+  bound while it is connected. A change it can take back goes to the page's history with
+  `ev:undo`, as the conductor's own GMB writes do (a point placed, a switch, a trade); an entry
+  writes back only while the state is still what it left, else the history is dropped.
 - **The platform's elements are not forwarded.** The account chip, the sign-in element and the
   wallet load straight from `https://evinvest.ltd`. `/cabinet` stays reserved: a JSON 404, never
   the front end's page.
@@ -450,6 +456,7 @@ PUT    /gmbs/enabled                        {gmbs: [id], enabled} → 204: every
                                             (404 one not the caller's)
 PUT    /gmbs/trade                          {gmbs: [id], trade: id | null} → 204: every one, or none
 PUT    /gmbs/{id}/location                  {lat, lng} → 204, placed by hand; 409 Google has its point
+DELETE /gmbs/{id}/location                  → 204, the point placed by hand taken back; 409 none is
 PUT    /gmbs/{id}/country                   {country} → 204, set by hand; 409 Google has its country
 GET    /map                                 {key}: the browser's Maps JS key; 404 without
                                             GOOGLE_MAPS_BROWSER_KEY

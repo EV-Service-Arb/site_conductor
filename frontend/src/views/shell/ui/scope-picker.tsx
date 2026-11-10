@@ -48,7 +48,7 @@ const META = "font-normal tracking-normal normal-case";
  * trades by country (a cell a category, a row header the trade everywhere, a column header the country across trades), then the
  * managing gmails. A gmail toggles among the filters (or, after a move, all its GBPs), a GBP opened under it toggles alone.
  */
-export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmails; selection: Selection; onFlip: (ids: number[], enabled: boolean) => Promise<void>; onChanged: () => void }) {
+export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmails; selection: Selection; onFlip: (gmbs: Gmb[], enabled: boolean) => Promise<void>; onChanged: () => void }) {
   const t = useT();
   const trades = useTrades();
   const scope = useScope();
@@ -168,7 +168,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
                   <span className="text-xs text-ink-soft tabular-nums" title={t("scope.gmail.count")}>
                     {edited && k > 0 && !full ? `${k}/${gmbs.length}` : inScope}
                   </span>
-                  <Switch aria-label={t("gmbs.switch", { name: g.gmail })} checked={on} disabled={gmbs.length === 0} onCheckedChange={(v) => void onFlip(gmbs.map((b) => b.id), v)} />
+                  <Switch aria-label={t("gmbs.switch", { name: g.gmail })} checked={on} disabled={gmbs.length === 0} onCheckedChange={(v) => void onFlip(gmbs, v)} />
                 </div>
                 {unfolded && (
                   <ul className="ml-4 flex flex-col border-l border-border pl-1">

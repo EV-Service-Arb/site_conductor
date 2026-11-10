@@ -325,18 +325,28 @@
         # The front end's own screens into Figma (frontend/tests/e2e), by `@evinvest/figma-render`'s bin;
         # the loop is the `figma-render` skill.
         figmaFile = "G9JfrDvGd0BKUdOKYg61Nn"; # "panel — renders"
+        overStub = lib.concatStrings
+          (lib.mapAttrsToList (k: v: "export ${k}=${lib.escapeShellArg v}\n") (localEnv // {
+            PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
+            PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
+          })) + ''
+          cd "$(git rev-parse --show-toplevel)/frontend"
+          [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci >&2 # stdout is `frames`' JSON
+          ln -sfn ${pkgs.playwright-test}/lib/node_modules tests/e2e/node_modules
+        '';
         figma = pkgs.writeShellApplication {
           name = "figma";
           runtimeInputs = with pkgs; [ coreutils git nodejs_22 playwright-test ];
-          text = lib.concatStrings
-            (lib.mapAttrsToList (k: v: "export ${k}=${lib.escapeShellArg v}\n") (localEnv // {
-              PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
-              PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
-            })) + ''
-            cd "$(git rev-parse --show-toplevel)/frontend"
-            [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci >&2 # stdout is `frames`' JSON
-            ln -sfn ${pkgs.playwright-test}/lib/node_modules tests/e2e/node_modules
+          text = overStub + ''
             exec node_modules/.bin/evinvest-figma-render "$@" -c tests/e2e${lib.optionalString (figmaFile != null) " --file ${figmaFile}"}
+          '';
+        };
+        # The front end's behaviour over the same stub: every spec in frontend/tests/e2e but the renders.
+        e2e = pkgs.writeShellApplication {
+          name = "e2e";
+          runtimeInputs = with pkgs; [ coreutils git nodejs_22 playwright-test ];
+          text = overStub + ''
+            exec playwright test -c tests/e2e --grep-invert @figma "$@"
           '';
         };
 
@@ -382,6 +392,7 @@
           publish = v_flakes.utils.publish pkgs;
           gen = { type = "app"; program = lib.getExe gen; meta.description = "the front end's mirror of the Rust types (pre-commit runs it too)"; };
           dev = { type = "app"; program = lib.getExe dev; meta.description = "the conductor and its peers under watch: a conductor already serving is replaced, a peer used (docs/LOCAL.md)"; };
+          e2e = { type = "app"; program = lib.getExe e2e; meta.description = "the front end's behaviour over the stub (frontend/tests/e2e, the renders aside); args go to `playwright test`"; };
           figma = { type = "app"; program = lib.getExe figma; meta.description = "the front end's screens into Figma over the stub, gridded on a new page of figmaFile; `-- frames` lists them"; };
           local-stack = { type = "app"; program = lib.getExe localStack; meta.description = "the conductor, its Grafana, sites_panel, review_archive and both landings, wired together on this machine (docs/LOCAL.md)"; };
         };

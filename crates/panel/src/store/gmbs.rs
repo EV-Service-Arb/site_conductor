@@ -359,6 +359,23 @@ pub async fn place(conn: &mut SqliteConnection, owner: Uuid, gmb_id: i64, at: La
 	Ok(Ok(()))
 }
 
+/// The point the owner placed on GBP `gmb_id` taken back. `Err(NotFound)`: not their GBP, or
+/// removed; `Err(Conflict)`: it has no point placed by hand.
+pub async fn unplace(conn: &mut SqliteConnection, owner: Uuid, gmb_id: i64) -> eyre::Result<Result<(), crate::Refused>> {
+	let Some(gbp) = gmb_of(conn, Some(owner), gmb_id).await? else {
+		return Ok(Err(crate::Refused::NotFound));
+	};
+	if !gbp.location.is_some_and(|p| p.placed) {
+		return Ok(Err(crate::Refused::Conflict(format!("GBP {gmb_id} has no point placed by hand"))));
+	}
+	sqlx::query("UPDATE gmbs SET lat = NULL, lng = NULL, placed_by = NULL WHERE id = $1")
+		.bind(gmb_id)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("taking a placed point back")?;
+	Ok(Ok(()))
+}
+
 /// The live GBPs on Google without a point or a country of Google's: each id, its place, and
 /// whether it has no point.
 pub async fn unlocated(conn: &mut SqliteConnection) -> eyre::Result<Vec<(i64, String, bool, Uuid, i64)>> {

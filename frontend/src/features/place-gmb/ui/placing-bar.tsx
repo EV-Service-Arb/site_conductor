@@ -4,7 +4,7 @@ import { Button } from "@evinvest/uikit";
 import { importLibrary } from "@googlemaps/js-api-loader";
 import { useEffect, useRef, useState } from "react";
 
-import { type Gmb, type LatLng, peek, placeGmb, setOnMap, useGmails } from "@/entities/gmb";
+import { type Gmb, type LatLng, peek, placeGmb, setOnMap, useGmails, useUndoable } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -14,6 +14,7 @@ export function PlacingBar({ gmb, map, at, onMove }: { gmb: Gmb; map: google.map
   const t = useT();
   const button = useButtonSize();
   const gmails = useGmails();
+  const undoable = useUndoable();
   const search = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   // the search box is built once per map; it reads these as they are now
@@ -54,7 +55,7 @@ export function PlacingBar({ gmb, map, at, onMove }: { gmb: Gmb; map: google.map
   const set = async () => {
     setBusy(true);
     try {
-      await placeGmb(gmb.id, at);
+      undoable(await placeGmb(gmb, at, t));
       gmails.reload();
       setOnMap({ placing: null });
       peek(gmb.id);

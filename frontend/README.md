@@ -88,18 +88,25 @@ elements do the same for theirs. The elements also tell the host: `sa:title-coun
 
 Everything sits behind one leader, `Alt+S` (`⌥S` on macOS), through `@evinvest/uikit`'s
 `KeymapProvider` in the shell; a feature contributes its keys with `useBinding` while it is
-mounted. The page claims nothing else, and a key typed into a field never acts.
+mounted, an element with `ev:keymap` under the scope `elementKeys` (`panel.config.ts`) gives it.
+The leader opens from a field too, and the scope's next key is kept from it; besides it the page
+claims only the undo keys, which leave a field its own text undo.
 
 ```text
 Alt+S ─┬─ A   assistant: show / hide          (not on its full-screen page)
        ├─ N   assistant: new chat
        ├─ L   assistant: copy the chat's link (once a chat has started)
        ├─ P   map: Google's places on / off   (only on /; the hotbar shows it)
+       ├─ B   map: the base layer             (only on /)
+       ├─ S   sidebar: fold / unfold
        ├─ G ──┬─ H  home      S  sites       R  review archive
        │      ├─ C  sources   T  tokens      U  usage
        │      └─ W  wallet    E  alerts      Y  account
        │      (each only when the caller may open it)
+       ├─ V   sites: its views, as mfe-sites-nav binds them (L leads, P places, …)
        └─ ?   keybinds: every key bound right now
+Ctrl+Z           undo    the page's one history: a GMB's point, its switch, its trade
+Ctrl+Shift+Z     redo    (⌘Z, ⇧⌘Z on macOS; Ctrl+Y too)
 Esc closes the hint and the help.
 ```
 

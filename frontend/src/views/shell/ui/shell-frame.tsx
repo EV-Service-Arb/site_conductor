@@ -1,6 +1,6 @@
 "use client";
 
-import { KeymapProvider } from "@evinvest/uikit";
+import { KeymapProvider, UndoProvider } from "@evinvest/uikit";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
@@ -22,7 +22,7 @@ import { Outline } from "./outline";
 import { PanelHotbar } from "./panel-hotbar";
 import { PanelTopBar } from "./panel-top-bar";
 
-/** Option on macOS too: the keymap reads the key's Latin label when Option composes `ß`, and a field keeps typing it. */
+/** Option on macOS too: the keymap reads the key's Latin label when Option composes `ß`, so in a field too it opens the leader rather than typing `ß`. */
 const LEADER = { key: "s", alt: true };
 
 /** CONTRACT §9: an element's API answered 401. */
@@ -41,22 +41,25 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
     window.addEventListener(UNAUTHENTICATED_EVENT, goToSignIn);
     return () => window.removeEventListener(UNAUTHENTICATED_EVENT, goToSignIn);
   }, []);
+  const elements = Object.fromEntries(Object.entries(PANEL.elementKeys).map(([tag, k]) => [tag, { on: { key: k.key }, label: t(k.label) }]));
   return (
-    <KeymapProvider leader={LEADER} labels={{ title: t("keys.help") }}>
-      <GmailsProvider seesSites={seesSites(me)}>
-        <PublishSelection />
-        <NavKeys />
-        <div className="flex h-svh flex-col">
-          <PanelTopBar />
-          <div className="relative flex min-h-0 flex-1">
-            {/* `hidden`, not unmounted, on a phone: the outline keeps `mfe-sites-nav` mounted */}
-            <Outline folded={folded} className="hidden shrink-0 md:flex" />
-            <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
-            {PANEL.assistant && !`${pathname}/`.startsWith(ROUTES.assistant) && <Assistant />}
+    <KeymapProvider leader={LEADER} elements={elements} labels={{ title: t("keys.help") }}>
+      <UndoProvider labels={{ undo: t("undo.undo"), redo: t("undo.redo") }}>
+        <GmailsProvider seesSites={seesSites(me)}>
+          <PublishSelection />
+          <NavKeys />
+          <div className="flex h-svh flex-col">
+            <PanelTopBar />
+            <div className="relative flex min-h-0 flex-1">
+              {/* `hidden`, not unmounted, on a phone: the outline keeps `mfe-sites-nav` mounted */}
+              <Outline folded={folded} className="hidden shrink-0 md:flex" />
+              <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
+              {PANEL.assistant && !`${pathname}/`.startsWith(ROUTES.assistant) && <Assistant />}
+            </div>
+            <PanelHotbar live={live} />
           </div>
-          <PanelHotbar live={live} />
-        </div>
-      </GmailsProvider>
+        </GmailsProvider>
+      </UndoProvider>
     </KeymapProvider>
   );
 }

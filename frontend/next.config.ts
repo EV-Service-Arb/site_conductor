@@ -15,6 +15,8 @@ export default function config(phase: string): NextConfig {
     const backend = process.env.PANEL_DEV_BACKEND;
     if (!backend) throw new Error("PANEL_DEV_BACKEND: the origin `next dev` proxies to, `panel serve`'s or `npm run dev:stub`'s");
     return {
+      // Next refuses a second `next dev` on one dist dir: the e2e harness runs beside a dev stack's.
+      ...(process.env.PANEL_DEV_DIST !== undefined && { distDir: process.env.PANEL_DEV_DIST }),
       // Next writes AGENTS.md and CLAUDE.md into the project on `next dev` otherwise.
       agentRules: false,
       // A trailing-slash redirect would run before the rewrite and bounce /api/v1/me.

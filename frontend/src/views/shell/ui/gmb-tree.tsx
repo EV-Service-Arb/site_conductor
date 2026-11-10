@@ -37,6 +37,7 @@ import {
   useScope,
   useSelection,
   useTrades,
+  useUndoable,
 } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { AddGmbButton } from "@/features/add-gmb";
@@ -84,6 +85,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   const { sites, tags } = useGmbTags();
   const linked = may(me, "sa:sites:work:places:edit") ? tags.sites : null;
   const selection = useSelection();
+  const undoable = useUndoable();
 
   // a scoped gmail removed, here or in another tab: out of the scope
   const known = gmails.status === "ok" ? gmails.data.gmails : null;
@@ -91,9 +93,9 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
     if (known !== null && scope !== null && [...scope].some((id) => !known.some((g) => g.id === id))) chooseGmailScope([...scope].filter((id) => known.some((g) => g.id === id)));
   }, [known, scope]);
 
-  const flip = async (ids: number[], enabled: boolean) => {
+  const flip = async (gmbs: Gmb[], enabled: boolean) => {
     try {
-      await switchGmbs(ids, enabled);
+      undoable(await switchGmbs(gmbs, enabled, t));
     } catch (e) {
       notifyFailure(e, t);
     }
@@ -278,12 +280,10 @@ function Group({
 function SetTrade({ gmbs, onSet }: { gmbs: Gmb[]; onSet: () => void }) {
   const t = useT();
   const trades = useTrades();
+  const undoable = useUndoable();
   const give = async (trade: number | null) => {
     try {
-      await setTrades(
-        gmbs.map((b) => b.id),
-        trade,
-      );
+      undoable(await setTrades(gmbs, trade, t));
       onSet();
     } catch (e) {
       notifyFailure(e, t);
@@ -367,7 +367,7 @@ function GmbRow({
   selected: boolean;
   linked: ReadonlyMap<number, SiteTag> | null;
   onMove: (gmbs: readonly number[], into: boolean) => void;
-  onFlip: (ids: number[], enabled: boolean) => Promise<void>;
+  onFlip: (gmbs: Gmb[], enabled: boolean) => Promise<void>;
   onChanged: () => void;
   onNavigate?: () => void;
 }) {
@@ -473,7 +473,7 @@ function GmbRow({
           {label}
         </Link>
       )}
-      <Switch aria-label={t("gmbs.switch", { name })} checked={gmb.enabled} onCheckedChange={(v) => void onFlip([gmb.id], v)} />
+      <Switch aria-label={t("gmbs.switch", { name })} checked={gmb.enabled} onCheckedChange={(v) => void onFlip([gmb], v)} />
     </li>
   );
 }

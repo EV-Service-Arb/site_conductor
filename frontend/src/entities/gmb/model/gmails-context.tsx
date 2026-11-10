@@ -1,5 +1,6 @@
 "use client";
 
+import { type UndoEntry, useUndo } from "@evinvest/uikit";
 import { type ReactNode, createContext, useContext } from "react";
 
 import { type Resource, useResource } from "@/shared/lib/use-resource";
@@ -38,6 +39,13 @@ function useGmbs(): Gmbs {
 
 export function useGmails(): Read<Gmails> {
   return useGmbs().gmails;
+}
+
+/** Pushes a GMB write's entry to the page's history: the gmails are re-read after its undo and its redo, as after the write. */
+export function useUndoable(): (entry: UndoEntry) => void {
+  const push = useUndo();
+  const { reload } = useGmails();
+  return (e) => push({ label: e.label, undo: () => e.undo().finally(reload), redo: () => e.redo().finally(reload) });
 }
 
 export function useTrades(): Read<Trade[]> {

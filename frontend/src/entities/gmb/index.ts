@@ -26,7 +26,7 @@ export {
 export { type Connection, browsersUnconnected, disconnect, fetchConnections, fetchPrices, removeFilm, setBrowser, setImap, setMapsKey, setPrices, startBrowser, stopBrowser, testConnection, uploadFilm } from "./api/connections";
 export { fetchArchive } from "./api/tags";
 export { type Placed, categoryName, categoryOf } from "./model/category";
-export { GmailsProvider, useGmails, useGmbTags, useTrades } from "./model/gmails-context";
+export { GmailsProvider, useGmails, useGmbTags, useTrades, useUndoable } from "./model/gmails-context";
 export { COUNTRIES, type Country, GMAIL_ROLES, ON_GOOGLE, type OnGoogle, type State } from "./model/gmb";
 export { DEVICES, type Device, PROVIDERS, type Provider } from "./model/generated";
 export type { Browser, BrowserIn, BrowserOut, Checked, Connections, Imap, MapsKey, Prices } from "./model/generated";

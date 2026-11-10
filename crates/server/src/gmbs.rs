@@ -25,6 +25,7 @@
 //! PUT    /api/v1/trades/{id}/{country} {keywords, google_category, study}  → 200 Trade
 //! DELETE /api/v1/trades/{id}/{country}  → 204
 //! PUT    /api/v1/gmbs/{id}/location {lat, lng}  → 204; 409 Google has its point
+//! DELETE /api/v1/gmbs/{id}/location   → 204; 409 no point placed by hand
 //! PUT    /api/v1/gmbs/{id}/country {country}   → 204; 409 Google has its country
 //! GET    /api/v1/map                  Map: what the browser loads Maps JS with; 404 without it
 //! ```
@@ -199,6 +200,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::PUT, "/gmbs/enabled", None, Cached, switch),
 		ApiRoute::new(M::PUT, "/gmbs/trade", None, Cached, set_trades),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/location", None, Cached, place),
+		ApiRoute::new(M::DELETE, "/gmbs/{id}/location", None, Cached, unplace),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/country", None, Cached, set_country),
 		ApiRoute::new(M::GET, "/map", None, Cached, map),
 		ApiRoute::new(M::GET, "/trades", None, Cached, trades),
@@ -483,6 +485,13 @@ async fn place(State(panel): State<Panel>, Extension(caller): Extension<Caller>,
 	let at = body(b)?;
 	panel.place_gmb(caller.user_id, gmb, at).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, ?at, "GMB placed");
+	Ok(StatusCode::NO_CONTENT)
+}
+
+async fn unplace(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<StatusCode> {
+	let gmb = id(&raw)?;
+	panel.unplace_gmb(caller.user_id, gmb).await??;
+	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, "GMB's placed point taken back");
 	Ok(StatusCode::NO_CONTENT)
 }
 

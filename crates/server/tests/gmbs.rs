@@ -235,12 +235,18 @@ async fn a_service_area_gmb_has_no_point_until_placed_on_the_map() {
 		let (_, listed) = call(&mut b, &app, Method::GET, "/api/v1/gmails", None).await;
 		assert_eq!(point(&listed), json!({ "lat": lat, "lng": lng, "placed": true }), "placed, then moved");
 	}
+	let (status, _) = call(&mut b, &app, Method::DELETE, &location, None).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	let (_, listed) = call(&mut b, &app, Method::GET, "/api/v1/gmails", None).await;
+	assert_eq!(point(&listed), Value::Null, "a point placed by hand is taken back");
+	let (status, _) = call(&mut b, &app, Method::PUT, &location, Some(json!({ "lat": 43.6, "lng": -79.65 }))).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
 	assert_eq!(keyed.locate().await.unwrap(), located(0, &[], &[ASSIST]), "placed, still without a country");
 	assert_eq!(*asked.lock().unwrap(), [ASSIST, FLORE], "a place is not paid for again");
 }
 
 #[tokio::test]
-async fn a_point_is_placed_only_on_the_callers_gmb_without_googles_and_on_earth() {
+async fn a_point_is_placed_and_taken_back_only_on_the_callers_gmb_without_googles_and_on_earth() {
 	let (_asked, base) = places().await;
 	let db = TestDb::create().await;
 	let p = panel(&db, Some(&base)).await;
@@ -268,6 +274,10 @@ async fn a_point_is_placed_only_on_the_callers_gmb_without_googles_and_on_earth(
 	] {
 		let (status, body) = call(&mut b, &app, Method::PUT, &format!("/api/v1/gmbs/{gmb}/location"), Some(at.clone())).await;
 		assert_eq!(status, want, "GMB {gmb} at {at}: {body}");
+	}
+	for (gmb, want) in [(mine[0], StatusCode::CONFLICT), (theirs.id, StatusCode::NOT_FOUND), (mine[1], StatusCode::CONFLICT)] {
+		let (status, body) = call(&mut b, &app, Method::DELETE, &format!("/api/v1/gmbs/{gmb}/location"), None).await;
+		assert_eq!(status, want, "GMB {gmb} taken off the map: {body}");
 	}
 }
 
