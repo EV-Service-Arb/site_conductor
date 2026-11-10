@@ -13,7 +13,7 @@ readme.workspace = true
 ev_lib = { workspace = true, features = ["ts_gen"] }
 sa_alerts.workspace = true
 sa_auth = { workspace = true, features = ["ts"] }
-sa_browsers.workspace = true
+sa_browsers = { workspace = true, features = ["ts"] }
 sa_core = { workspace = true, features = ["ts"] }
 sa_panel.workspace = true
 sa_server.workspace = true

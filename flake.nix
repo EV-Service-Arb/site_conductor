@@ -207,6 +207,7 @@
 
         # sa_browsers' browser: Chrome 151 is what the measured devices' UA says (crates/browsers)
         orbita = import ./nix/orbita.nix { inherit pkgs; } "151";
+        multilogin = import ./nix/multilogin.nix { inherit pkgs; };
 
         # What the deploy must provide, beyond what `container.implement` records. Plain
         # data on the contract, read by the devops generator; `checks.contract-env` holds
@@ -384,7 +385,7 @@
         packages = {
           default = bin;
           inherit bin frontend;
-        } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (containerStd.packages // { grafana-server = grafanaServer; inherit orbita; });
+        } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (containerStd.packages // { grafana-server = grafanaServer; inherit orbita; mlx = multilogin.mlx; adb-keyboard = multilogin.adbKeyboard; });
 
         containers = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux containers;
 

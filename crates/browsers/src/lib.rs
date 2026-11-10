@@ -7,12 +7,15 @@
 //! POST   /profiles/{gmail}/stop    → 204
 //! DELETE /profiles/{gmail}         → 204: stopped, its session's directory gone
 //! GET    /profiles                 Profiles: what runs
-//! GET    /profiles/{gmail}/cdp     WebSocket: the browser's own devtools socket, passed through
+//! GET    /profiles/{gmail}/cdp     WebSocket: a browser's own devtools socket, passed through
+//! GET    /profiles/{gmail}/view    WebSocket: a cloud phone's viewer ([`view`])
 //! PUT    /profiles/{gmail}/film    an mp4 → 204: the camera of its next launch; 400 ffmpeg refused it,
 //!                                  409 while it runs
 //! DELETE /profiles/{gmail}/film    → 204
 //! ```
 //! Every request carries the conductor's assertion (`sa_auth`, audience `browsers`).
+
+pub mod view;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -107,7 +110,8 @@ pub struct Launch {
 	pub browser: Browser,
 }
 
-/// The browser, by provider: each answers devtools, the one seam the conductor drives.
+/// The browser, by provider: a browser answers devtools, which the conductor drives; a cloud phone
+/// the viewer's socket, which the runner speaks itself.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "provider", rename_all = "snake_case")]
 pub enum Browser {
@@ -125,6 +129,27 @@ pub enum Browser {
 		/// CSS px.
 		screen: (u32, u32),
 	},
+	/// Multilogin's Mimic, through the launcher of the Multilogin app the runner keeps; its
+	/// fingerprint, proxy and place are the profile's, set by the conductor.
+	MultiloginBrowser {
+		/// The run's automation token (3 h).
+		token: String,
+		folder: String,
+		profile: String,
+	},
+	/// A Multilogin cloud phone: billed per running minute, from `phone/start` until it reads
+	/// stopped.
+	MultiloginPhone {
+		/// The run's automation token (3 h): it stops the phone too, so it outlives the billing cap.
+		token: String,
+		phone: String,
+		/// Latitude, longitude: the GBP's point; `None`, the gmail alone and no fix.
+		geo: Option<(f64, f64)>,
+		/// IANA.
+		zone: String,
+		/// ISO 3166-1 alpha-2: the phone's exit, read from inside it, is here or the run stops.
+		country: String,
+	},
 }
 
 /// `GET /profiles`.
@@ -139,6 +164,8 @@ pub struct Profiles {
 pub struct Running {
 	pub gmail: i64,
 	pub run: String,
+	/// A cloud phone's own view, at Multilogin, once it started.
+	pub stream: Option<String>,
 }
 
 /// The UI locale Orbita shows for `locale` (BCP 47), by Chrome's own fallback: the locale, else

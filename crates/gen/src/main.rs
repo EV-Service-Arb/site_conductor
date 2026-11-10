@@ -6,13 +6,14 @@ use std::path::Path;
 use ev_lib::ts_gen::Ts;
 use sa_alerts::Rule;
 use sa_auth::{Catalog, SourceKind};
+use sa_browsers::view::{In as ViewerIn, Out as ViewerOut};
 use sa_core::gbp::OnGoogle;
 use sa_panel::{store::browsers::Provider, tokens::Kind};
 use sa_server::{
 	access::AccessRequestDto,
 	alerts::AlertsDto,
 	assistant::{AccessDto, ChatDto, ChatsDto, PeopleDto},
-	browser::{SetBrowser, StartBrowser, ViewerIn, ViewerOut},
+	browser::{SetBrowser, StartBrowser},
 	connections::ConnectionsDto,
 	gmbs::{CandidatesDto, GmailsDto, MapDto, TradesDto},
 	signin::Caller,

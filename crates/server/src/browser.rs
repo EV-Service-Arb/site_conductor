@@ -40,7 +40,10 @@ use eyre::WrapErr;
 use futures::{SinkExt, StreamExt};
 use jiff::Timestamp;
 use sa_auth::{Assertion, Principal, Service, Signer};
-use sa_browsers::{Launch, Profiles};
+use sa_browsers::{
+	Launch, Profiles,
+	view::{In as ViewerIn, Out as ViewerOut, Tab as TabDto, TouchPhase, web_url},
+};
 use sa_panel::{
 	browsers::{Browsers, NewBrowser, Provider, Run},
 	live::{Ended, Signal},
@@ -127,100 +130,6 @@ pub struct BrowserDto {
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct RunningDto {
 	pub gmb: Option<i64>,
-}
-
-/// A frame of the viewer's socket, from the conductor.
-#[derive(Clone, Debug, Serialize, TS)]
-#[serde(tag = "type", rename_all = "snake_case")]
-#[ts(rename = "BrowserOut")]
-pub enum ViewerOut {
-	/// The active tab's page: a JPEG, base64, of `width` × `height` CSS px.
-	Frame {
-		data: String,
-		width: f64,
-		height: f64,
-	},
-	Tabs {
-		tabs: Vec<TabDto>,
-		active: Option<String>,
-	},
-	/// A page's `alert`, `confirm`, `prompt` or `beforeunload`, waiting on an answer.
-	Dialog {
-		kind: String,
-		message: String,
-		default: Option<String>,
-	},
-	DialogClosed,
-	/// What the browser refused of the viewer's.
-	Error {
-		message: String,
-	},
-}
-
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Tab")]
-pub struct TabDto {
-	pub id: String,
-	pub title: String,
-	pub url: String,
-}
-
-/// A frame of the viewer's socket, to the conductor; at most 4 KiB. Points are CSS px of the
-/// page the last frame showed.
-#[derive(Clone, Debug, Deserialize, TS)]
-#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
-#[ts(rename = "BrowserIn")]
-pub enum ViewerIn {
-	/// A finger: the browser is a phone.
-	Touch {
-		phase: TouchPhase,
-		x: f64,
-		y: f64,
-	},
-	/// A wheel's turn, swiped.
-	Wheel {
-		x: f64,
-		y: f64,
-		dx: f64,
-		dy: f64,
-	},
-	/// A key that types nothing: Enter, Backspace, arrows, Tab, Escape, Delete, Home, End; `ctrl`
-	/// with `a`, select all.
-	Key {
-		key: String,
-		ctrl: bool,
-	},
-	/// Text, as a phone's keyboard commits it, into the focused field.
-	Text {
-		text: String,
-	},
-	Navigate {
-		url: String,
-	},
-	/// -1 back, 1 forward.
-	History {
-		delta: i32,
-	},
-	Activate {
-		id: String,
-	},
-	NewTab,
-	CloseTab {
-		id: String,
-	},
-	/// The open dialog answered; `text` a prompt's.
-	Dialog {
-		accept: bool,
-		text: Option<String>,
-	},
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum TouchPhase {
-	Start,
-	Move,
-	End,
 }
 
 #[derive(Deserialize, TS)]
@@ -933,11 +842,4 @@ fn key_of(key: &str, ctrl: bool) -> Option<KeyEvents> {
 		down,
 		up: json!({ "type": "keyUp", "key": key, "code": code, "windowsVirtualKeyCode": vk }),
 	})
-}
-
-/// A typed address as a phone's address bar takes it: http(s) only, `https://` when it names none.
-fn web_url(typed: &str) -> Option<String> {
-	let typed = typed.trim();
-	let url = url::Url::parse(typed).or_else(|_| url::Url::parse(&format!("https://{typed}"))).ok()?;
-	matches!(url.scheme(), "http" | "https").then(|| url.to_string())
 }

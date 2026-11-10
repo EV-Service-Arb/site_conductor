@@ -12,13 +12,19 @@ readme.workspace = true
 name = "sa_browsers"
 path = "src/main.rs"
 
+[features]
+# `ts_rs::TS` on the viewer's frames, for the conductor's front end.
+ts = ["dep:ts-rs"]
+
 [dependencies]
 axum = { workspace = true, features = ["ws"] }
+base64.workspace = true
 clap.workspace = true
 color-eyre.workspace = true
 eyre.workspace = true
 futures.workspace = true
 jiff.workspace = true
+reqwest.workspace = true
 rustix.workspace = true
 sa_auth.workspace = true
 serde.workspace = true
@@ -28,9 +34,10 @@ tokio.workspace = true
 tokio-tungstenite.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+ts-rs = { workspace = true, optional = true }
+url.workspace = true
 
 [dev-dependencies]
-reqwest.workspace = true
 tempfile.workspace = true
 
 [lints]

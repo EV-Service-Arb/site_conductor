@@ -21,12 +21,11 @@ running: { gmb: number | null } | null,
  */
 film: boolean, };
 /**
- * A frame of the viewer's socket, to the conductor; at most 4 KiB. Points are CSS px of the
- * page the last frame showed.
+ * A frame from the viewer; at most 4 KiB. Points are in the last frame's space.
  */
 export type BrowserIn = { "type": "touch", phase: TouchPhase, x: number, y: number, } | { "type": "wheel", x: number, y: number, dx: number, dy: number, } | { "type": "key", key: string, ctrl: boolean, } | { "type": "text", text: string, } | { "type": "navigate", url: string, } | { "type": "history", delta: number, } | { "type": "activate", id: string, } | { "type": "new_tab" } | { "type": "close_tab", id: string, } | { "type": "dialog", accept: boolean, text: string | null, };
 /**
- * A frame of the viewer's socket, from the conductor.
+ * A frame to the viewer.
  */
 export type BrowserOut = { "type": "frame", data: string, width: number, height: number, } | { "type": "tabs", tabs: Array<Tab>, active: string | null, } | { "type": "dialog", kind: string, message: string, default: string | null, } | { "type": "dialog_closed" } | { "type": "error", message: string, };
 /**
