@@ -62,7 +62,7 @@ export function createDraft(name: string, trade: number | null): Promise<Gmb> {
 }
 
 /** What a GBP's PATCH takes: `name` a draft's only, `null` clears a field. */
-export type GmbEdit = Partial<Pick<Gmb, "phone" | "hidden_address" | "customers_visit" | "film" | "profile">> & {
+export type GmbEdit = Partial<Pick<Gmb, "phone" | "hidden_address" | "customers_visit" | "film">> & {
   name?: string;
   gmail_id?: number;
   trade?: number | null;

@@ -86,7 +86,7 @@ fn quoted(s: &str) -> String {
 	format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-fn public(ip: IpAddr) -> bool {
+pub(crate) fn public(ip: IpAddr) -> bool {
 	match ip {
 		IpAddr::V4(v4) => {
 			let [a, b, ..] = v4.octets();

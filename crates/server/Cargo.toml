@@ -31,10 +31,11 @@ getrandom.workspace = true
 http-body-util.workspace = true
 hyper-util.workspace = true
 jiff = { workspace = true, features = ["serde"] }
-reqwest = { workspace = true, features = ["multipart"] }
+reqwest = { workspace = true, features = ["multipart", "stream"] }
 rustix.workspace = true
 sa_alerts.workspace = true
 sa_auth = { workspace = true, features = ["catalog"] }
+sa_browsers.workspace = true
 sa_contracts.workspace = true
 sa_core = { workspace = true, features = ["ts"] }
 sa_panel.workspace = true
@@ -45,6 +46,7 @@ sha2.workspace = true
 subtle.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-tungstenite.workspace = true
 tonic.workspace = true
 tower = { workspace = true, features = ["limit", "load-shed"] }
 tower-http = { workspace = true, features = ["fs", "timeout"] }
@@ -57,12 +59,14 @@ zeroize.workspace = true
 
 [dev-dependencies]
 axum = { workspace = true, features = ["multipart"] }
+base64.workspace = true
 hex.workspace = true
 hmac.workspace = true
 sa_panel = { workspace = true, features = ["testing"] }
 sa_server = { workspace = true, features = ["testing"] }
 sqlx.workspace = true
 tempfile.workspace = true
+tokio-tungstenite.workspace = true
 tower = { workspace = true, features = ["util"] }
 
 [lints]

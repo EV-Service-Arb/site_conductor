@@ -19,6 +19,7 @@ import {
   categoryOf,
   editGmb,
   moveGmb,
+  openAccount,
   openTrade,
   readiness,
   setCountry,
@@ -43,10 +44,11 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
   const me = useMe();
   const gmails = useGmails();
   const { sites, tags } = useGmbTags();
-  const rows = readiness(gmb, tags);
+  const rows = readiness({ gmb, gmail }, tags);
   const placed = tags.trades === null ? null : categoryOf(gmb, tags.trades);
   const ready = rows.filter((r) => r.ready).length;
   const missing = rows.filter((r) => !r.ready);
+  const button = useButtonSize();
   const [failed, setFailed] = useState<{ must: MustHave; text: string } | null>(null);
 
   const save = (must: MustHave) => async (edit: GmbEdit) => {
@@ -137,7 +139,19 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
       ),
       why: t("launch.why.gmail"),
     },
-    profile: { value: gmb.profile, editor: text("profile", gmb.profile, (profile) => ({ profile })), why: t("launch.why.profile") },
+    profile: {
+      value: gmail?.browser && t("launch.profile.of", { gmail: gmail.gmail }),
+      editor: gmail ? (
+        <span>
+          <Button variant="outline" size={button("sm")} onClick={() => openAccount({ gmail: gmail.id, tab: "connections" })}>
+            {t("launch.profile.open", { gmail: gmail.gmail })}
+          </Button>
+        </span>
+      ) : (
+        <span className="text-sm text-ink-soft">{t("launch.profile.noGmail")}</span>
+      ),
+      why: t("launch.why.profile"),
+    },
   };
 
   return (

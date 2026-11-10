@@ -22,7 +22,8 @@ const GmbsContext = createContext<Gmbs | null>(null);
 
 /** One read each of the caller's gmails, their trades and the services' tags on their GMBs, for the outline and the page beside it: a change made in one is seen by the other. */
 export function GmailsProvider({ seesSites, children }: { seesSites: boolean; children: ReactNode }) {
-  const gmails = useResource("gmbs", fetchGmails, "gmbs", { focus: true });
+  // a gmail's `browser` follows its browser's changes
+  const gmails = useResource("gmbs", fetchGmails, "gmbs", { focus: true, live: "browsers" });
   const trades = useResource("trades", fetchTrades, "trades", { focus: true });
   const archive = useResource("gmbs.archive", fetchArchive, "gmbs.archive", { focus: true });
   const sites = useResource(`gmbs.sites.${seesSites}`, () => (seesSites ? fetchSiteTags() : Promise.resolve(null)), "gmbs.sites", { focus: true });

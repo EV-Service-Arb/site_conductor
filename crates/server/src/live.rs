@@ -281,7 +281,7 @@ fn refuse(status: StatusCode, msg: &str) -> Response {
 /// Whether the handshake comes from the panel's own pages. Browsers send `Origin` on every
 /// WebSocket handshake and scripts cannot forge it; its absence is something other than our
 /// front end, and is refused as well.
-fn same_origin(headers: &HeaderMap, ours: &str) -> bool {
+pub(crate) fn same_origin(headers: &HeaderMap, ours: &str) -> bool {
 	headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()).is_some_and(|origin| origin.eq_ignore_ascii_case(ours))
 }
 

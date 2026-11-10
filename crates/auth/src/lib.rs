@@ -146,6 +146,8 @@ pub enum Service {
 	Playbook,
 	Sites,
 	Placement,
+	/// sa_browsers' runner: told by the conductor alone, nobody's permissions.
+	Browsers,
 }
 
 impl Service {
@@ -156,6 +158,7 @@ impl Service {
 			Self::Playbook => "sa:playbook:",
 			Self::Sites => "sa:sites:",
 			Self::Placement => "sa:placement:",
+			Self::Browsers => "sa:browsers:",
 		}
 	}
 }

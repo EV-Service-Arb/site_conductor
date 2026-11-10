@@ -367,7 +367,7 @@ function OpenAccount({ gmail, onOpened }: { gmail: Gmail; onOpened: () => void }
       type="button"
       onClick={() => {
         onOpened();
-        if (pathname === "/") openAccount(gmail.id);
+        if (pathname === "/") openAccount({ gmail: gmail.id, tab: "connections" });
         else router.push(`/?account=${gmail.id}&tab=connections`);
       }}
       aria-label={label}

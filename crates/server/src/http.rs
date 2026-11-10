@@ -9,12 +9,12 @@ use std::{sync::Arc, time::Duration};
 use axum::{
 	Json, Router,
 	error_handling::HandleErrorLayer,
-	extract::FromRef,
+	extract::{DefaultBodyLimit, FromRef},
 	handler::Handler,
 	http::{HeaderValue, Method, StatusCode, header},
 	middleware,
 	response::{IntoResponse, Response},
-	routing::{MethodFilter, MethodRouter, get, on, post},
+	routing::{MethodFilter, MethodRouter, get, on, post, put},
 };
 use sa_auth::{PermissionSet, Sources, Tokens};
 use sa_panel::Panel;
@@ -25,7 +25,7 @@ use tower_http::timeout::TimeoutLayer;
 use crate::{
 	access,
 	alerts::{self, Telegram},
-	api, assistant, connected, connections,
+	api, assistant, browser, connected, connections,
 	forward::{Forward, Services},
 	gmbs,
 	grafana::Grafana,
@@ -85,6 +85,7 @@ pub fn api_routes() -> Vec<ApiRoute> {
 		alerts::routes(),
 		gmbs::routes(),
 		connections::routes(),
+		browser::routes(),
 		tokens::routes(),
 		assistant::routes(),
 	]
@@ -116,7 +117,15 @@ pub struct Limits {
 
 /// Everything the conductor answers but the front end's files; ingest and the forward only with
 /// `forward`, `/grafana/` only with `grafana`.
-pub fn app(sign_in: SignIn, forward: Option<Forward>, grafana: Option<&Grafana>, limits: Limits, telegram: Option<Telegram>, map: Option<gmbs::MapDto>) -> Router {
+pub fn app(
+	sign_in: SignIn,
+	forward: Option<Forward>,
+	grafana: Option<&Grafana>,
+	limits: Limits,
+	telegram: Option<Telegram>,
+	map: Option<gmbs::MapDto>,
+	browsers: Option<browser::Connected>,
+) -> Router {
 	let auth = Router::new()
 		.route("/auth/login", get(signin::login))
 		.route("/auth/callback", get(signin::callback))
@@ -139,16 +148,28 @@ pub fn app(sign_in: SignIn, forward: Option<Forward>, grafana: Option<&Grafana>,
 		probe: connected::probe_client(),
 		telegram,
 		map,
+		browsers: browsers.clone(),
 	};
+	// A launch waits on GoLogin and on the browser's devtools, a film's upload on its bytes: longer
+	// than an API request may.
+	let slow = Router::new()
+		.route(browser::FILM, put(browser::set_film).layer(DefaultBodyLimit::max(browser::FILM_MAX)))
+		.route(browser::START, post(browser::start))
+		.route_layer(gate(Freshness::Cached, None))
+		.with_state(state.clone());
+	let slow = bounded(slow, 8, Duration::from_secs(600));
 	let api = bounded(routes.with_state(state), limits.api_concurrent, limits.api_timeout);
 	// Its own budget: the bound and the timeout cover the handshake only (the socket lives on
 	// after the 101), and a burst of reconnecting tabs must not shed the API's requests.
 	let live = Router::new().route("/api/v1/live", get(live::upgrade)).with_state(Live::new(sign_in.clone(), limits.live));
 	let live = bounded(live, limits.live.upgrade_concurrent, limits.live.upgrade_timeout);
+	let viewer = bounded(browser::viewer_routes(sign_in.clone(), browsers), limits.live.upgrade_concurrent, limits.live.upgrade_timeout);
 	let app = Router::new()
 		.route("/health", get(|| async { "ok" }))
 		.merge(auth)
 		.merge(live)
+		.merge(viewer)
+		.merge(slow)
 		.merge(queries_cache::routes(sign_in.panel.clone(), &limits))
 		.nest("/api/v1", api);
 	let app = match forward {
@@ -174,6 +195,8 @@ pub(crate) struct ApiState {
 	pub(crate) telegram: Option<Telegram>,
 	/// With `GOOGLE_MAPS_BROWSER_KEY`.
 	pub(crate) map: Option<gmbs::MapDto>,
+	/// With GOLOGIN_TOKEN and PANEL_BROWSERS_URL.
+	pub(crate) browsers: Option<browser::Connected>,
 }
 
 impl FromRef<ApiState> for Panel {

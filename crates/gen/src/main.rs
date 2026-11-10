@@ -7,11 +7,12 @@ use ev_lib::ts_gen::Ts;
 use sa_alerts::Rule;
 use sa_auth::{Catalog, SourceKind};
 use sa_core::gbp::OnGoogle;
-use sa_panel::tokens::Kind;
+use sa_panel::{store::browsers::Provider, tokens::Kind};
 use sa_server::{
 	access::AccessRequestDto,
 	alerts::AlertsDto,
 	assistant::{AccessDto, ChatDto, ChatsDto, PeopleDto},
+	browser::{SetBrowser, StartBrowser, ViewerIn, ViewerOut},
 	connections::ConnectionsDto,
 	gmbs::{CandidatesDto, GmailsDto, MapDto, TradesDto},
 	signin::Caller,
@@ -42,7 +43,30 @@ fn main() {
 	);
 	Ts::write(
 		&root.join("entities/gmb/model/generated.ts"),
-		&[Ts::types::<(GmailsDto, CandidatesDto, MapDto, TradesDto, OnGoogle, ConnectionsDto)>()],
+		&[
+			Ts::types::<(
+				GmailsDto,
+				CandidatesDto,
+				MapDto,
+				TradesDto,
+				OnGoogle,
+				ConnectionsDto,
+				SetBrowser,
+				StartBrowser,
+				ViewerIn,
+				ViewerOut,
+			)>(),
+			Ts::Union {
+				name: "DEVICES",
+				ty: "Device",
+				items: <sa_browsers::Device as strum::VariantArray>::VARIANTS.iter().map(|d| <&str>::from(*d)).collect(),
+			},
+			Ts::Union {
+				name: "PROVIDERS",
+				ty: "Provider",
+				items: <Provider as strum::VariantArray>::VARIANTS.iter().map(|p| <&str>::from(*p)).collect(),
+			},
+		],
 	);
 	Ts::write(
 		&root.join("entities/tokens/model/generated.ts"),

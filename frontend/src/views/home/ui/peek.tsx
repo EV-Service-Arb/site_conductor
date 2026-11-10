@@ -10,10 +10,11 @@ import { useT } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
 
 /** A GMB's card over the map: its numbers, what needs the operator, and where its services show it. */
-export function Peek({ listed: { gmb, gmail }, onClose }: { listed: Listed; onClose: () => void }) {
+export function Peek({ listed, onClose }: { listed: Listed; onClose: () => void }) {
   const t = useT();
   const button = useButtonSize();
   const { tags } = useGmbTags();
+  const { gmb, gmail } = listed;
   const archive = tags.archive?.get(gmb.id);
   const site = tags.sites?.get(gmb.id);
   const issue = issueOf(gmb, tags);
@@ -43,7 +44,7 @@ export function Peek({ listed: { gmb, gmail }, onClose }: { listed: Listed; onCl
         <div className="flex flex-col gap-0.5 text-sm">
           {numbers.length > 0 && <p className="text-ink tabular-nums">{numbers.join(" · ")}</p>}
           <p className={cn(issue === null || issue === "off" || issue === "draft" || issue === "no_category" ? "text-ink-soft" : "font-medium text-accent-error")}>
-            {issue === null ? t("home.peek.fine") : issue === "off" ? t("home.peek.off") : issueText(issue, gmb, tags, t)}
+            {issue === null ? t("home.peek.fine") : issue === "off" ? t("home.peek.off") : issueText(issue, listed, tags, t)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

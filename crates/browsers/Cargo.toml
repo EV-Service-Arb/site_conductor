@@ -1,0 +1,37 @@
+[package]
+name = "sa_browsers"
+description = "A managing gmail's antidetect browser: the devices it poses as, what the conductor launches it with, and the runner (`sa_browsers serve`) that runs it headless"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[[bin]]
+name = "sa_browsers"
+path = "src/main.rs"
+
+[dependencies]
+axum = { workspace = true, features = ["ws"] }
+clap.workspace = true
+color-eyre.workspace = true
+eyre.workspace = true
+futures.workspace = true
+jiff.workspace = true
+rustix.workspace = true
+sa_auth.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+strum.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+reqwest.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

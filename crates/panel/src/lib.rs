@@ -4,7 +4,8 @@
 //! [`Panel`] is the facade the server talks to; [`store`] is SQLite; [`seal`] encrypts what must
 //! not sit in the clear. [`session`] is signing in through concierge and the sessions that
 //! follow; [`access`] the access requests; [`gmbs`] people's gmails and the GMBs they manage;
-//! [`connections`] a gmail's inbox and Maps key, and who pays for a Places request;
+//! [`connections`] a gmail's inbox and Maps key, and who pays for a Places request; [`browsers`]
+//! a gmail's antidetect browser;
 //! [`tokens`] their balances and review_archive's charges, and [`import`] both from there;
 //! [`alerts`] the hub: users' destinations and rules, the feeds fanned out to them; [`telegram`]
 //! the method that reaches them; [`live`] the bus that tells the server's sockets what changed;
@@ -13,6 +14,7 @@
 pub mod access;
 pub mod alerts;
 pub mod assistant;
+pub mod browsers;
 pub mod connections;
 pub mod gmbs;
 mod imap;
@@ -84,6 +86,9 @@ pub enum Refused {
 	Conflict(String),
 	#[error("{0}")]
 	TooLarge(String),
+	/// Something it relies on refused or did not answer: the message says what.
+	#[error("{0}")]
+	Unavailable(String),
 	/// Before the import from review_archive (see [`import`]).
 	#[error("tokens and GMBs open after the import from review_archive")]
 	Closed,

@@ -216,6 +216,12 @@ Answers are kept in the conductor's queries cache, `.local/panel.db`: `--reset` 
 Every start pulls `gmaps_optimal_placement`'s own work dir into it, and placement and review_archive
 are pointed at it.
 
+## Browsers
+
+With `GOLOGIN_TOKEN` in the shell (a workspace on a paid plan: Orbita refuses to start without
+one), the stack runs sa_browsers on `BROWSERS_BIND` beside the conductor, Orbita from `.#orbita`,
+the sessions in `.local/browsers/`. Without it, a gmail's browser says browsers are not connected.
+
 ## The end-to-end check
 
 With the stack up:

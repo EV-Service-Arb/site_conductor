@@ -13,6 +13,7 @@ readme = "README.md"
 [workspace.dependencies]
 sa_alerts = { path = "crates/alerts", version = "0.1.0" }
 sa_auth = { path = "crates/auth", version = "0.1.0" }
+sa_browsers = { path = "crates/browsers", version = "0.1.0" }
 sa_contracts = { path = "crates/contracts", version = "0.1.0" }
 sa_core = { path = "crates/core", version = "0.1.0" }
 sa_panel = { path = "crates/panel", version = "0.1.0" }
@@ -35,7 +36,9 @@ hex = "0.4"
 hmac = "0.13"
 http-body-util = "0.1"
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
+icu_locale = "2"
 jiff = "0.2"
+percent-encoding = "2"
 prost = "0.14"
 protox = "0.9"
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
@@ -52,6 +55,7 @@ tg_types = "0.1"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tokio-rustls = "0.26"
+tokio-tungstenite = "0.29"
 tonic = { version = "0.14", features = ["tls-aws-lc"] }
 tonic-prost = "0.14"
 tonic-prost-build = "0.14"
@@ -60,6 +64,7 @@ tower-http = "0.6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ts-rs = { version = "12", features = ["no-serde-warnings", "uuid-impl"] }
+tzf-rs = { version = "2", default-features = false, features = ["bundled"] }
 url = "2"
 utoipa = "5"
 uuid = "1"

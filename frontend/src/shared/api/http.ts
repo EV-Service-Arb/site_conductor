@@ -15,7 +15,8 @@ export type ApiFailure =
   | { kind: "no_access" }
   | { kind: "csrf" }
   | { kind: "forbidden"; message: string }
-  | { kind: "unavailable" }
+  /** `message`: the backend's, where a route says what is down. */
+  | { kind: "unavailable"; message: string }
   | { kind: "not_found" }
   /** `body` is the whole answer: some 409s carry the record as it now is (`current`). */
   | { kind: "conflict"; message: string; body: unknown }
@@ -99,7 +100,7 @@ async function failureOf(res: Response): Promise<ApiFailure> {
       if (fields) return { kind: "invalid_fields", fields };
       return path === null ? { kind: "failed", status: 422, message } : { kind: "invalid_path", path, message };
     case 503:
-      return { kind: "unavailable" };
+      return { kind: "unavailable", message };
     default:
       return { kind: "failed", status: res.status, message };
   }
@@ -119,6 +120,8 @@ export interface Http {
     headers?: Readonly<Record<string, string>>,
     init?: SendInit,
   ): Promise<T>;
+  /** A raw body PUT, its progress told as a fraction sent; the CSRF header as every write. */
+  upload(path: string, body: Blob, contentType: string, onProgress: (sent: number) => void): Promise<void>;
 }
 
 export function createHttp(deps: HttpDeps): Http {
@@ -151,6 +154,28 @@ export function createHttp(deps: HttpDeps): Http {
       }
       return call(path, init, parser);
     },
+    // XHR: fetch tells nothing of an upload's progress
+    upload: (path, body, contentType, onProgress) =>
+      new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", path);
+        xhr.setRequestHeader("content-type", contentType);
+        xhr.setRequestHeader("accept", "application/json");
+        const csrf = readCsrf(deps.cookie());
+        if (csrf) xhr.setRequestHeader(CSRF_HEADER, csrf);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) onProgress(e.loaded / e.total);
+        };
+        xhr.onerror = () => reject(new ApiError({ kind: "network" }));
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) return resolve();
+          void failureOf(new Response(xhr.responseText, { status: xhr.status })).then((failure) => {
+            if (failure.kind === "unauthenticated") deps.onUnauthenticated();
+            reject(new ApiError(failure));
+          });
+        };
+        xhr.send(body);
+      }),
   };
 }
 

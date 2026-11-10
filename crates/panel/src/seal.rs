@@ -1,5 +1,5 @@
 //! Encryption at rest for what the database must not hold in the clear: a source's HMAC secret,
-//! a session's tokens, a queued Telegram message, a gmail's IMAP password and Maps key.
+//! a session's tokens, a queued Telegram message, a gmail's IMAP password, Maps key and proxy.
 //!
 //! XChaCha20-Poly1305 with a random 24-byte nonce per seal, so there is no nonce
 //! bookkeeping to get wrong (the same construction as banking's signer `key_vault`). What a
@@ -68,6 +68,16 @@ impl DataKey {
 		self.derive(b"sa-panel/tg-callback-key/v1")
 	}
 
+	/// What tells a proxy apart without its credentials sitting anywhere in the clear: two
+	/// gmails' proxies compare by it.
+	pub fn proxy_tag(&self, normalized: &str) -> [u8; 32] {
+		use hmac::{KeyInit, Mac};
+		let key = self.derive(b"sa-panel/proxy-tag-key/v1");
+		let mut mac = <hmac::Hmac<Sha256> as KeyInit>::new_from_slice(key.as_slice()).expect("HMAC accepts any key length");
+		mac.update(normalized.as_bytes());
+		mac.finalize().into_bytes().into()
+	}
+
 	/// A key for one purpose, named by `label`, that says nothing of this one or the others.
 	fn derive(&self, label: &[u8]) -> Zeroizing<[u8; 32]> {
 		let mut derived = Zeroizing::new([0u8; 32]);
@@ -124,6 +134,11 @@ pub fn gmail_imap_aad(gmail_id: i64) -> Vec<u8> {
 /// Associated data of a gmail's Maps key.
 pub fn gmail_maps_key_aad(gmail_id: i64) -> Vec<u8> {
 	[b"sa-panel/gmail-maps-key/v1/".as_slice(), &gmail_id.to_be_bytes()].concat()
+}
+
+/// Associated data of a gmail's browser's proxy.
+pub fn gmail_browser_aad(gmail_id: i64) -> Vec<u8> {
+	[b"sa-panel/gmail-browser/v1/".as_slice(), &gmail_id.to_be_bytes()].concat()
 }
 
 /// Associated data of a queued Telegram message's text. A chat without a topic binds as it did

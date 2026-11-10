@@ -60,21 +60,10 @@ async fn must_haves_are_stored_and_cleared() {
 		hidden_address: Some(Some("12 rue de Marseille, Lyon".to_owned())),
 		customers_visit: Some(Some(false)),
 		film: Some(Some("verif_vid:42".to_owned())),
-		profile: Some(Some("mlx:lyon-7".to_owned())),
 		..Edit::default()
 	};
 	let edited = p.edit_gmb(owner, draft.id, set).await.unwrap().unwrap();
-	let fields = |g: &Gmb| {
-		(
-			g.phone.clone(),
-			g.trade_id,
-			g.areas.clone(),
-			g.hidden_address.clone(),
-			g.customers_visit,
-			g.film.clone(),
-			g.profile.clone(),
-		)
-	};
+	let fields = |g: &Gmb| (g.phone.clone(), g.trade_id, g.areas.clone(), g.hidden_address.clone(), g.customers_visit, g.film.clone());
 	let want = (
 		Some("+33478000001".to_owned()),
 		Some(trade.id),
@@ -82,7 +71,6 @@ async fn must_haves_are_stored_and_cleared() {
 		Some("12 rue de Marseille, Lyon".to_owned()),
 		Some(false),
 		Some("verif_vid:42".to_owned()),
-		Some("mlx:lyon-7".to_owned()),
 	);
 	assert_eq!(fields(&edited), want);
 	let listed = p.gmails(owner).await.unwrap().1;
@@ -101,10 +89,9 @@ async fn must_haves_are_stored_and_cleared() {
 		hidden_address: Some(None),
 		customers_visit: Some(None),
 		film: Some(None),
-		profile: Some(None),
 		..Edit::default()
 	};
-	assert_eq!(fields(&p.edit_gmb(owner, draft.id, clear).await.unwrap().unwrap()), (None, None, vec![], None, None, None, None));
+	assert_eq!(fields(&p.edit_gmb(owner, draft.id, clear).await.unwrap().unwrap()), (None, None, vec![], None, None, None));
 }
 
 #[tokio::test]
