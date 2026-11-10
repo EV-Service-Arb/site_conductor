@@ -1,1 +1,1 @@
-export { LinkPlaceButton } from "./ui/link-place-button";
+export { LinkPlace, LinkPlaceButton } from "./ui/link-place-button";

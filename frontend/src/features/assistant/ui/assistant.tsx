@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, NavDot, cn } from "@evinvest/uikit";
+import { Button, NavDot, cn, useSequences } from "@evinvest/uikit";
 import { Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -68,6 +68,7 @@ export function AssistantToggle() {
   const shown = useQuery("assistant");
   const running = s.running !== null && (s.running.answer.state === "working" || s.running.answer.state === "writing");
   const button = useRef<HTMLButtonElement>(null);
+  const keys = useSequences().get("assistant");
   // Folded from inside the assistant, focus lands here; not on a page loaded folded.
   const was = useRef(shown);
   useEffect(() => {
@@ -86,7 +87,7 @@ export function AssistantToggle() {
       onClick={() => show(shown !== null ? null : s.mode)}
       aria-pressed={shown !== null}
       aria-label={t("keys.assistant")}
-      title={t("keys.assistant")}
+      title={keys === undefined ? t("keys.assistant") : `${t("keys.assistant")} · ${keys}`}
     >
       <Sparkles aria-hidden className={cn(running && "animate-pulse")} />
       {running && <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary [animation-duration:1.4s]" />}

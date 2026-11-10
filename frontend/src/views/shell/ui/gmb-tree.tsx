@@ -1,7 +1,7 @@
 "use client";
 
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn } from "@evinvest/uikit";
-import { ChevronDown, CircleMinus, CirclePlus, Search, Tag as TagIcon, X } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn } from "@evinvest/uikit";
+import { ChevronDown, CircleMinus, CirclePlus, Link2, Pencil, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
@@ -40,21 +40,20 @@ import {
 } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { AddGmbButton } from "@/features/add-gmb";
-import { EditGbpButton } from "@/features/edit-gbp";
-import { LinkPlaceButton } from "@/features/link-gmb-place";
+import { EditGbp } from "@/features/edit-gbp";
+import { LinkPlace } from "@/features/link-gmb-place";
 import { PlaceButton } from "@/features/place-gmb";
 import { ROUTES } from "@/shared/config/routes";
 import { useT } from "@/shared/i18n";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
-import { useButtonSize } from "@/shared/ui/touch";
 
-import { HEADING, ON_HOVER, ROW, Remove } from "./outline-parts";
+import { HEADING, ROW, RemoveDialog } from "./outline-parts";
 import { ScopePicker } from "./scope-picker";
 
 const SUBHEADING = "flex items-center gap-1 px-2 pt-1.5 pb-0.5 text-xs text-ink-soft";
 const DRAGGED = "application/x-sa-gmb";
-/** The status dot by state: hollow while a draft. */
+/** The status dots by state: hollow while a draft. */
 const DOT: Record<State, string> = {
   draft: "border border-positive",
   verifying: "bg-accent-warn",
@@ -373,10 +372,10 @@ function GmbRow({
   onNavigate?: () => void;
 }) {
   const t = useT();
-  const button = useButtonSize();
   const hovered = useOnMap((s) => s.hovered === gmb.id);
+  const [dialog, setDialog] = useState<"edit" | "link" | "remove" | null>(null);
   const name = gmb.name;
-  const move = t(selected ? "gmbs.deselect" : "gmbs.select", { name });
+  const move = t(selected ? "gmbs.deselect" : "gmbs.select");
   const issue = issueOf(gmb, tags);
   const archive = tags.archive?.get(gmb.id);
   const site = tags.sites?.get(gmb.id);
@@ -420,7 +419,41 @@ function GmbRow({
       onMouseEnter={() => setOnMap({ hovered: gmb.id })}
       onMouseLeave={() => setOnMap({ hovered: null })}
     >
-      <span aria-hidden className={cn("ml-1 size-2 shrink-0 rounded-full", DOT[gmb.state], !gmb.enabled && "border-ink-soft bg-ink-soft", gmb.location === null && "opacity-40")} />
+      {/* the ⋮'s dots are the state's, so the menu takes no width of its own */}
+      <DropdownMenu>
+        <DropdownMenuTrigger aria-label={t("gmbs.actions", { name })} title={t(`gmbs.state.${gmb.state}`)} className="flex w-4 shrink-0 flex-col items-center justify-center gap-0.5 self-stretch rounded-sm outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-hover">
+          {[0, 1, 2].map((i) => (
+            <span key={i} aria-hidden className={cn("size-1.5 rounded-full", DOT[gmb.state], !gmb.enabled && "border-ink-soft bg-ink-soft", gmb.location === null && "opacity-40")} />
+          ))}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-48">
+          <DropdownMenuItem onClick={() => onMove([gmb.id], !selected)}>
+            {selected ? <CircleMinus aria-hidden /> : <CirclePlus aria-hidden />}
+            {move}
+          </DropdownMenuItem>
+          {gmb.state !== "draft" && (
+            <DropdownMenuItem onClick={() => setDialog("edit")}>
+              <Pencil aria-hidden />
+              {t("gmbs.edit")}
+            </DropdownMenuItem>
+          )}
+          <PlaceButton gmb={gmb} item {...(onNavigate && { onNavigate })} />
+          {linked && (
+            <DropdownMenuItem onClick={() => setDialog("link")}>
+              <Link2 aria-hidden />
+              {linked.has(gmb.id) ? t("gmbs.tag.site", { place: `${linked.get(gmb.id)!.brand}/${linked.get(gmb.id)!.location}` }) : t("gmbs.tag.site.link")}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={() => setDialog("remove")}>
+            <Trash2 aria-hidden />
+            {t("gmbs.remove")}…
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {dialog === "edit" && <EditGbp gmb={gmb} onClose={() => setDialog(null)} onChanged={onChanged} />}
+      {dialog === "link" && linked && <LinkPlace gmbId={gmb.id} linked={linked} onClose={() => setDialog(null)} onDone={onChanged} />}
+      {dialog === "remove" && <RemoveDialog title={t("gmbs.gmb.remove.title", { name })} body={t("gmbs.gmb.remove.body")} remove={() => removeGmb(gmb.id)} onRemoved={onChanged} onClose={() => setDialog(null)} />}
       {onMap ? (
         <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => open(gmb)}>
           {label}
@@ -440,15 +473,6 @@ function GmbRow({
           {label}
         </Link>
       )}
-      <span className={cn("flex items-center", ON_HOVER)}>
-        <Button variant="ghost" size={button("sm")} icon aria-label={move} title={move} onClick={() => onMove([gmb.id], !selected)}>
-          {selected ? <CircleMinus aria-hidden /> : <CirclePlus aria-hidden />}
-        </Button>
-        <EditGbpButton gmb={gmb} onChanged={onChanged} />
-        <PlaceButton gmb={gmb} {...(onNavigate && { onNavigate })} />
-        {linked && <LinkPlaceButton gmbId={gmb.id} linked={linked} onDone={onChanged} />}
-        <Remove title={t("gmbs.gmb.remove.title", { name })} body={t("gmbs.gmb.remove.body")} remove={() => removeGmb(gmb.id)} onRemoved={onChanged} />
-      </span>
       <Switch aria-label={t("gmbs.switch", { name })} checked={gmb.enabled} onCheckedChange={(v) => void onFlip([gmb.id], v)} />
     </li>
   );

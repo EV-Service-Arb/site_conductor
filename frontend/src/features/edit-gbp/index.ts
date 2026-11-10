@@ -1,1 +1,1 @@
-export { EditGbpButton } from "./ui/edit-gbp-button";
+export { EditGbp } from "./ui/edit-gbp";

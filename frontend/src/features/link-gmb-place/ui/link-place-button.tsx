@@ -16,33 +16,38 @@ export function LinkPlaceButton({ gmbId, linked, onDone }: { gmbId: number; link
   const button = useButtonSize();
   const [open, setOpen] = useState(false);
   const own = linked.get(gmbId);
-
-  const act = async (write: () => Promise<void>) => {
-    try {
-      await write();
-      setOpen(false);
-      onDone();
-    } catch (e) {
-      notifyFailure(e, t);
-    }
-  };
-
   const label = own ? t("gmbs.tag.site", { place: `${own.brand}/${own.location}` }) : t("gmbs.tag.site.link");
   return (
     <>
       <Button variant="ghost" size={button("sm")} icon aria-label={label} title={label} className={own ? "text-ink" : "text-ink-soft"} onClick={() => setOpen(true)}>
         <Link2 aria-hidden />
       </Button>
-      {open && (
-        <Picker
-          gmbId={gmbId}
-          linked={linked}
-          onClose={() => setOpen(false)}
-          onPick={(brand, location) => void act(() => linkPlace(brand, location, gmbId))}
-          {...(own && { onUnlink: () => void act(() => linkPlace(own.brand, own.location, null)) })}
-        />
-      )}
+      {open && <LinkPlace gmbId={gmbId} linked={linked} onClose={() => setOpen(false)} onDone={onDone} />}
     </>
+  );
+}
+
+/** The picker, open while mounted. */
+export function LinkPlace({ gmbId, linked, onClose, onDone }: { gmbId: number; linked: ReadonlyMap<number, SiteTag>; onClose: () => void; onDone: () => void }) {
+  const t = useT();
+  const own = linked.get(gmbId);
+  const act = async (write: () => Promise<void>) => {
+    try {
+      await write();
+      onClose();
+      onDone();
+    } catch (e) {
+      notifyFailure(e, t);
+    }
+  };
+  return (
+    <Picker
+      gmbId={gmbId}
+      linked={linked}
+      onClose={onClose}
+      onPick={(brand, location) => void act(() => linkPlace(brand, location, gmbId))}
+      {...(own && { onUnlink: () => void act(() => linkPlace(own.brand, own.location, null)) })}
+    />
   );
 }
 
