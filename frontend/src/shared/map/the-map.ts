@@ -15,32 +15,14 @@ const PLACES_HIDDEN: google.maps.MapTypeStyle[] = [
   { featureType: "poi", stylers: [{ visibility: "off" }] },
   { featureType: "transit", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
 ];
-// Google's own dark scheme is navy; the heat's warm ramp and the pressure's blue read on grey
-const DARK: google.maps.MapTypeStyle[] = [
-  { elementType: "geometry", stylers: [{ color: "#1d1d1d" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#1d1d1d" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#8c8c8c" }] },
-  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#3a3a3a" }] },
-  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#b4b4b4" }] },
-  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#222222" }] },
-  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#262626" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#202420" }] },
-  { featureType: "road", elementType: "geometry.fill", stylers: [{ color: "#2e2e2e" }] },
-  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#1a1a1a" }] },
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9a9a9a" }] },
-  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#3d3d3d" }] },
-  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2a2a2a" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f0f0f" }] },
-  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#505050" }] },
-];
 
 export type Base = "schematic" | "satellite";
 
 const placesShown = () => localStorage.getItem(PLACES_KEY) === "shown";
 const mapTypeId = (base: Base) => (base === "satellite" ? "hybrid" : "roadmap");
 
-let made: { key: string; scheme: "dark" | "light"; element: HTMLDivElement; map: Promise<google.maps.Map> } | null = null;
-const styles = (scheme: "dark" | "light") => [...(scheme === "dark" ? DARK : []), ...(placesShown() ? [] : PLACES_HIDDEN)];
+let made: { key: string; element: HTMLDivElement; map: Promise<google.maps.Map> } | null = null;
+const styles = () => (placesShown() ? [] : PLACES_HIDDEN);
 
 function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Promise<google.maps.Map> } {
   if (made !== null) {
@@ -57,7 +39,7 @@ function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Pr
       new Map(element, {
         renderingType: RenderingType.RASTER,
         colorScheme: scheme === "dark" ? ColorScheme.DARK : ColorScheme.LIGHT,
-        styles: styles(scheme),
+        styles: styles(),
         // the default base; `useTheMap` moves it to what `?base` says
         mapTypeId: mapTypeId("satellite"),
         // the world, until the page fits what it shows
@@ -70,7 +52,7 @@ function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Pr
         clickableIcons: false,
       }),
   );
-  made = { key, scheme, element, map };
+  made = { key, element, map };
   return made;
 }
 
@@ -111,9 +93,7 @@ const subscribeChosen = (onChange: () => void) => {
 
 const chosen = () => {
   window.dispatchEvent(new Event(CHOSEN_EVENT));
-  if (made === null) return;
-  const scheme = made.scheme;
-  void made.map.then((m) => m.setOptions({ styles: styles(scheme) }));
+  void made?.map.then((m) => m.setOptions({ styles: styles() }));
 };
 
 /** Whether the map shows Google's own places (shops, sights, stops); hidden unless chosen, kept in this browser. */
