@@ -134,7 +134,9 @@ impl Phone {
 			drop(stdin); // its end of file
 			fed
 		};
-		let (fed, jpeg) = tokio::join!(feed, ffmpeg.wait_with_output());
+		let (fed, jpeg) = tokio::time::timeout(COMMAND_WITHIN, async { tokio::join!(feed, ffmpeg.wait_with_output()) })
+			.await
+			.map_err(|_| eyre::eyre!("ffmpeg took over {}s on a frame", COMMAND_WITHIN.as_secs()))?;
 		let jpeg = jpeg.wrap_err("ffmpeg, for a frame")?;
 		fed.wrap_err("feeding ffmpeg a frame")?;
 		eyre::ensure!(jpeg.status.success(), "ffmpeg refused a frame: {}", String::from_utf8_lossy(&jpeg.stderr).trim());

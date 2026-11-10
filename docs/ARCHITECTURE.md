@@ -263,8 +263,8 @@ conductor ── POST /profiles/{gmail}/launch {Launch}, Conductor ──▶ sa_
   Ten minutes without a viewer stop a browser; a phone, three, and thirty after its start whoever
   watches.
 - **The runner owns a phone's life**, so a dead conductor leaves none billing: it is recorded on the
-  runner's disk before `phone/start`, stopped on every way its run ends (a failed step, stop, removal,
-  idle, the cap, SIGTERM), the stop retried until `statuses` reads it stopped, and a recorded one
+  runner's disk before `phone/start`, stopped on every way its run ends (a failed step, a step past
+  the time it should take, stop, removal, idle, the cap, SIGTERM), the stop retried until `statuses` reads it stopped, and a recorded one
   stopped before the runner serves again. The launch brings a 3-hour token, past the 180 billed
   minutes Multilogin caps a session at: the runner holds no long-lived one.
 - **The relay** never sends `Runtime.enable` (what pages detect devtools by): `Target.*`, `Page.*`

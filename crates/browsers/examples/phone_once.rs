@@ -4,10 +4,9 @@
 //! ```text
 //! MULTILOGIN_TOKEN=… cargo r -p sa_browsers --example phone_once -- <phone id> <out dir> <phone-tools dir> <chromium> | tee <out dir>/log
 //! ```
-//! The phone is stopped [`WATCHDOG`] after `phone/start` whatever is still being measured, and on
-//! every way this ends but SIGKILL; the stop is read back. Minutes are read before and after. Each
-//! finding is printed and its file written as soon as it is had: a step that fails is reported and
-//! the next runs, so a cut run keeps all it got. The stream URL is looked at beside the adb steps.
+//! Every step has the time it is expected to take and what it is expected to show; past the one or
+//! without the other the run is aborted there and the phone stopped (read back), [`WATCHDOG`] the
+//! backstop over all of it. Each finding is printed and its file written as soon as it is had.
 
 use std::{
 	path::{Path, PathBuf},
@@ -22,6 +21,10 @@ const API: &str = "https://api.multilogin.com";
 const WATCHDOG: Duration = Duration::from_secs(4 * 60);
 const BUSYBOX: &str = "/data/local/tmp/busybox";
 const ADB_KEYBOARD: &str = "com.android.adbkeyboard/.AdbIME";
+/// A shell command on the phone: ~350 ms each (M1).
+const COMMAND: Duration = Duration::from_secs(10);
+/// Headless Chromium on the stream page: told to stop loading at 12 s.
+const LOOK: Duration = Duration::from_secs(25);
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -34,7 +37,7 @@ async fn main() -> eyre::Result<()> {
 	let (out, tools) = (PathBuf::from(out), PathBuf::from(tools));
 	std::fs::create_dir_all(&out)?;
 	let api = Api {
-		http: reqwest::Client::builder().timeout(Duration::from_secs(30)).build()?,
+		http: reqwest::Client::builder().timeout(Duration::from_secs(20)).build()?,
 		token: std::env::var("MULTILOGIN_TOKEN").map_err(|_| eyre!("MULTILOGIN_TOKEN"))?,
 	};
 	println!("minutes before: {}", api.call("GET", "/mobile_profiles/limit", None).await?);
@@ -43,11 +46,12 @@ async fn main() -> eyre::Result<()> {
 	let started = Instant::now();
 	let measured = tokio::select! {
 		m = measure(&api, &phone, &out, &tools, &chromium, started) => m,
-		() = tokio::time::sleep(WATCHDOG) => Err(eyre!("the watchdog's {} s: stopped mid-measure", WATCHDOG.as_secs())),
+		() = tokio::time::sleep(WATCHDOG) => Err(eyre!("the watchdog's {} s", WATCHDOG.as_secs())),
 		r = tokio::signal::ctrl_c() => Err(eyre!("interrupted ({r:?})")),
 	};
-	if let Err(e) = &measured {
-		println!("measuring ended: {e:#}");
+	match &measured {
+		Ok(()) => println!("[{:>3}s] every step done", started.elapsed().as_secs()),
+		Err(e) => println!("[{:>3}s] ABORTED: {e:#}", started.elapsed().as_secs()),
 	}
 	let stopped = stop(&api, &phone).await;
 	println!("ran {} s from phone/start to the stop read back", started.elapsed().as_secs());
@@ -55,118 +59,132 @@ async fn main() -> eyre::Result<()> {
 	stopped.map_err(|e| eyre!("THE PHONE MAY STILL RUN: stop it in the Multilogin app: {e:#}"))
 }
 
-async fn measure(api: &Api, phone: &str, out: &Path, tools: &Path, chromium: &str, at: Instant) -> eyre::Result<()> {
-	let start = api.call("POST", "/mobile_profiles/phone/start", Some(json!({ "ids": [phone] }))).await?;
-	std::fs::write(out.join("start.json"), serde_json::to_vec_pretty(&start)?)?;
-	println!("[{:>3}s] phone/start answered: {start}", at.elapsed().as_secs());
-	let statuses = loop {
-		let v = api.call("POST", "/mobile_profiles/phone/statuses", Some(json!({ "ids": [phone] }))).await?;
-		match v["success_details"][0]["status"].as_u64() {
-			Some(0) => break v,
-			Some(3) => bail!("{phone} is expired"),
-			_ => tokio::time::sleep(Duration::from_secs(2)).await,
-		}
-	};
-	println!("[{:>3}s] started; statuses: {statuses}", at.elapsed().as_secs());
-	let stream = async {
-		match first_url(&start) {
-			Some(url) => look_at_stream(&url, out, chromium).await,
-			None => println!("phone/start named no url"),
-		}
-	};
-	let (_, driven) = tokio::join!(stream, drive(api, phone, out, tools, at));
-	driven
+/// `fut` within `expected`, else the run aborts: a billed phone never waits past what a step should
+/// take.
+async fn within<T>(what: &str, expected: Duration, fut: impl Future<Output = eyre::Result<T>>) -> eyre::Result<T> {
+	let t = Instant::now();
+	let done = tokio::time::timeout(expected, fut)
+		.await
+		.map_err(|_| eyre!("{what}: nothing within the {} s expected", expected.as_secs()))?;
+	let v = done.map_err(|e| e.wrap_err(what.to_owned()))?;
+	println!("-- {what}: {} ms", t.elapsed().as_millis());
+	Ok(v)
 }
 
-/// The stream URL: its answer's headers (whether a frame may embed it), and what headless Chromium
-/// shows of it alone and inside an iframe.
-async fn look_at_stream(url: &str, out: &Path, chromium: &str) {
-	std::fs::write(out.join("stream_url.txt"), url).expect("the out dir is ours");
-	println!("stream url: {url}");
-	match reqwest::get(url).await {
-		Ok(r) => {
-			let headers: Vec<String> = r.headers().iter().map(|(k, v)| format!("{k}: {}", v.to_str().unwrap_or("?"))).collect();
-			println!("stream GET {}: {}", r.status(), headers.join(" | "));
-			let body = r.text().await.unwrap_or_default();
-			std::fs::write(out.join("stream_body.html"), &body).expect("the out dir is ours");
+/// `probe` every 2 s until it answers, within `expected`.
+async fn until<T, F: Future<Output = eyre::Result<Option<T>>>>(what: &str, expected: Duration, mut probe: impl FnMut() -> F) -> eyre::Result<T> {
+	within(what, expected, async {
+		//LOOP: bounded by `within`
+		loop {
+			if let Some(t) = probe().await? {
+				return Ok(t);
+			}
+			tokio::time::sleep(Duration::from_secs(2)).await;
 		}
-		Err(e) => println!("stream GET failed: {e}"),
-	}
+	})
+	.await
+}
+
+async fn measure(api: &Api, phone: &str, out: &Path, tools: &Path, chromium: &str, at: Instant) -> eyre::Result<()> {
+	let start = within(
+		"phone/start",
+		Duration::from_secs(20),
+		api.call("POST", "/mobile_profiles/phone/start", Some(json!({ "ids": [phone] }))),
+	)
+	.await?;
+	std::fs::write(out.join("start.json"), serde_json::to_vec_pretty(&start)?)?;
+	println!("[{:>3}s] phone/start answered: {start}", at.elapsed().as_secs());
+	// 44 s at M1
+	let statuses = until("started", Duration::from_secs(90), || async {
+		let v = api.call("POST", "/mobile_profiles/phone/statuses", Some(json!({ "ids": [phone] }))).await?;
+		match v["success_details"][0]["status"].as_u64() {
+			Some(0) => Ok(Some(v)),
+			Some(3) => bail!("{phone} is expired"),
+			_ => Ok(None),
+		}
+	})
+	.await?;
+	println!("[{:>3}s] started; statuses: {statuses}", at.elapsed().as_secs());
+	let url = first_url(&start).ok_or_else(|| eyre!("phone/start named no url"))?;
+	tokio::try_join!(look_at_stream(&url, out, chromium), drive(api, phone, out, tools, at)).map(drop)
+}
+
+/// The stream URL: its headers (whether a frame may embed it), and what headless Chromium shows of
+/// it alone and inside an iframe, and its DOM, each cut at 12 s of loading.
+async fn look_at_stream(url: &str, out: &Path, chromium: &str) -> eyre::Result<()> {
+	std::fs::write(out.join("stream_url.txt"), url)?;
+	let r = within("stream GET", Duration::from_secs(15), async { Ok(reqwest::get(url).await?) }).await?;
+	let headers: Vec<String> = r.headers().iter().map(|(k, v)| format!("{k}: {}", v.to_str().unwrap_or("?"))).collect();
+	println!("stream GET {}: {}", r.status(), headers.join(" | "));
+	std::fs::write(out.join("stream_body.html"), r.text().await?)?;
 	std::fs::write(
 		out.join("iframe.html"),
 		format!("<iframe src=\"{url}\" style=\"width:100%;height:95vh;border:0\" allow=\"camera;microphone;clipboard-read;clipboard-write\"></iframe>"),
-	)
-	.expect("the out dir is ours");
+	)?;
 	let iframe = format!("file://{}", out.join("iframe.html").display());
-	let chrome = |args: Vec<String>| {
+	let chrome = |what: &'static str, args: Vec<String>| {
 		let mut c = Command::new(chromium);
 		c.env_remove("WAYLAND_DISPLAY")
 			.env_remove("DISPLAY")
 			.args([
 				"--headless=new",
-				"--virtual-time-budget=20000",
+				"--timeout=12000",
 				"--window-size=1280,900",
 				"--use-fake-ui-for-media-stream",
 				"--use-fake-device-for-media-stream",
 			])
 			.args(args)
 			.kill_on_drop(true);
-		c
+		within(what, LOOK, async move {
+			let o = c.output().await?;
+			ensure!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr).lines().last().unwrap_or_default());
+			Ok(o.stdout)
+		})
 	};
-	let shot = |name: &str, page: &str| chrome(vec![format!("--screenshot={}", out.join(format!("{name}.png")).display()), page.to_owned()]);
-	let dom = chrome(vec!["--dump-dom".to_owned(), url.to_owned()]).output();
-	// a live stream page never goes idle: each look is cut at 40 s (M1's first run waited out its watchdog on them)
-	let bounded = |f| tokio::time::timeout(Duration::from_secs(40), f);
-	let (a, b, d) = tokio::join!(bounded(shot("stream", url).output()), bounded(shot("iframe", &iframe).output()), bounded(dom));
-	let (a, b, d) = (
-		a.map_err(|_| "cut at 40 s"),
-		b.map_err(|_| "cut at 40 s"),
-		d.unwrap_or_else(|_| Err(std::io::Error::other("cut at 40 s"))),
-	);
-	println!("stream screenshot: {:?}; iframe screenshot: {:?}", a.map(|o| o.map(|o| o.status)), b.map(|o| o.map(|o| o.status)));
-	match d {
-		Ok(o) => {
-			std::fs::write(out.join("stream_dom.html"), &o.stdout).expect("the out dir is ours");
-			let dom = String::from_utf8_lossy(&o.stdout).to_lowercase();
-			let seen: Vec<&str> = ["camera", "library", "microphone", "upload", "webrtc", "video", "canvas", "sign in", "login"]
-				.into_iter()
-				.filter(|w| dom.contains(w))
-				.collect();
-			println!("stream dom: {} bytes, mentions {seen:?}", o.stdout.len());
-		}
-		Err(e) => println!("stream dom failed: {e}"),
-	}
+	let shot = |name: &str| format!("--screenshot={}", out.join(format!("{name}.png")).display());
+	let (_, _, dom) = tokio::try_join!(
+		chrome("stream screenshot", vec![shot("stream"), url.to_owned()]),
+		chrome("iframe screenshot", vec![shot("iframe"), iframe]),
+		chrome("stream dom", vec!["--dump-dom".to_owned(), url.to_owned()]),
+	)?;
+	std::fs::write(out.join("stream_dom.html"), &dom)?;
+	let text = String::from_utf8_lossy(&dom).to_lowercase();
+	let seen: Vec<&str> = ["camera", "library", "microphone", "upload", "video", "canvas", "sign in", "login", "error"]
+		.into_iter()
+		.filter(|w| text.contains(w))
+		.collect();
+	println!("stream dom: {} bytes, mentions {seen:?}", dom.len());
+	Ok(())
 }
 
-/// The phone over adb: each step's finding printed, a failed one reported and passed.
+/// The phone over adb, each step expected to answer in time and as it should.
 async fn drive(api: &Api, phone: &str, out: &Path, tools: &Path, at: Instant) -> eyre::Result<()> {
 	println!(
-		"adb/info before adb/set: {:?}",
-		api.call("POST", "/mobile_profiles/phone/adb/info", Some(json!({ "ids": [phone] }))).await
+		"adb/info before adb/set: {}",
+		api.call("POST", "/mobile_profiles/phone/adb/info", Some(json!({ "ids": [phone] }))).await?
 	);
 	api.call("POST", "/mobile_profiles/phone/adb/set", Some(json!({ "ids": [phone], "enabled": true }))).await?;
-	let t = Instant::now();
 	// adb left on by the run before reads active at once with a password adb/set replaces (M1)
-	let p = loop {
+	let p = until("adb active and glogin taking its password", Duration::from_secs(60), || async {
 		let v = api.call("POST", "/mobile_profiles/phone/adb/info", Some(json!({ "ids": [phone] }))).await?;
 		let i = &v["items"][0];
-		if i["status"] == "active" {
-			let p = Phone {
-				adb: tools.join("adb"),
-				serial: format!("{}:{}", i["ip"].as_str().unwrap_or_default(), i["port"].as_str().unwrap_or_default()),
-				pwd: i["pwd"].as_str().ok_or_else(|| eyre!("adb/info without pwd: {i}"))?.to_owned(),
-			};
-			p.adb(&["connect", &p.serial]).await?;
-			let login = p.sh("glogin", Some(&p.pwd)).await?;
-			println!("[{:>3}s] glogin {} ms after adb/set: {login}", at.elapsed().as_secs(), t.elapsed().as_millis());
-			if login.contains("success") || login.contains("already") {
-				break p;
-			}
+		if i["status"] != "active" {
+			return Ok(None);
 		}
-		tokio::time::sleep(Duration::from_secs(2)).await;
-	};
+		let p = Phone {
+			adb: tools.join("adb"),
+			serial: format!("{}:{}", i["ip"].as_str().unwrap_or_default(), i["port"].as_str().unwrap_or_default()),
+			pwd: i["pwd"].as_str().ok_or_else(|| eyre!("adb/info without pwd: {i}"))?.to_owned(),
+		};
+		p.adb(&["connect", &p.serial]).await?;
+		let login = p.adb(&["-s", &p.serial, "shell", &format!("glogin '{}'", p.pwd)]).await?;
+		println!("glogin: {login}");
+		Ok((login.contains("success") || login.contains("already")).then_some(p))
+	})
+	.await?;
+	println!("[{:>3}s] adb logged in at {}", at.elapsed().as_secs(), p.serial);
 
-	let steps: &[(&str, &str)] = &[
+	for (name, line) in [
 		("id", "id"),
 		(
 			"ident",
@@ -179,104 +197,104 @@ async fn drive(api: &Api, phone: &str, out: &Path, tools: &Path, at: Instant) ->
 			"for k in 'global auto_time_zone' 'global wifi_on' 'global mobile_data' 'secure location_mode' 'secure show_ime_with_hard_keyboard'; do echo \"$k=$(settings get $k)\"; done",
 		),
 		("packages", "pm list packages | grep -iE 'chrome|gms|vending|adbkeyboard|geelark|multilogin|magisk'"),
-		("resolver", "ls -l /etc/resolv.conf; cat /etc/resolv.conf; getprop net.dns1"),
-		("accounts", "dumpsys account | grep -E 'Account \\{' | head -5"),
-	];
-	for (name, line) in steps {
-		p.step(name, line).await;
+		("resolver", "ls -l /etc/resolv.conf 2>&1; cat /etc/resolv.conf 2>&1; getprop net.dns1"),
+	] {
+		p.step(name, line, |_| true).await?;
 	}
 	for i in 0..3 {
-		let t = Instant::now();
-		match p.exec_out(&["screencap", "-p"]).await {
-			Ok(png) => {
-				println!("screencap {i}: {} bytes in {} ms", png.len(), t.elapsed().as_millis());
-				if i == 0 {
-					std::fs::write(out.join("screen.png"), png)?;
-				}
-			}
-			Err(e) => println!("screencap {i} failed: {e:#}"),
+		let png = within(&format!("screencap {i}"), COMMAND, p.exec_out(&["screencap", "-p"])).await?;
+		ensure!(png.starts_with(b"\x89PNG"), "screencap {i} is no PNG: {}", String::from_utf8_lossy(&png[..png.len().min(200)]));
+		println!("screencap {i}: {} bytes", png.len());
+		if i == 0 {
+			std::fs::write(out.join("screen.png"), png)?;
 		}
 	}
-	let t = Instant::now();
-	p.step("tap", "input tap 540 1200").await;
-	println!("tap round trip {} ms", t.elapsed().as_millis());
+	p.step("tap", "input tap 540 1200", |_| true).await?;
 
-	for (name, line) in [
-		(
-			"mock appops",
-			"appops set com.android.shell android:mock_location allow && appops get com.android.shell android:mock_location",
-		),
-		(
-			"mock providers",
-			"for p in gps network fused; do cmd location providers add-test-provider $p; cmd location providers set-test-provider-enabled $p true; cmd location providers set-test-provider-location $p --location 45.764,4.8357; done; echo done",
-		),
-		("location read back", "dumpsys location | grep -iE 'last location|mock' | head -8"),
-		("zone", "settings put global auto_time_zone 0; cmd alarm set-timezone Europe/Paris; getprop persist.sys.timezone"),
-	] {
-		p.step(name, line).await;
-	}
+	p.step(
+		"mock appops",
+		"appops set com.android.shell android:mock_location allow && appops get com.android.shell android:mock_location",
+		|s| s.contains("allow"),
+	)
+	.await?;
+	p.step(
+		"mock providers",
+		"for p in gps network fused; do cmd location providers add-test-provider $p && cmd location providers set-test-provider-enabled $p true && cmd location providers set-test-provider-location $p --location 45.764,4.8357 || exit 1; done; echo done",
+		|s| s.ends_with("done"),
+	)
+	.await?;
+	p.step("location read back", "dumpsys location | grep -iE 'last location|mock' | head -8", |s| s.contains("45.76"))
+		.await?;
+	p.step(
+		"zone",
+		"settings put global auto_time_zone 0; cmd alarm set-timezone Europe/Paris; getprop persist.sys.timezone",
+		|s| s.ends_with("Europe/Paris"),
+	)
+	.await?;
 
-	match p.adb(&["-s", &p.serial, "push", tools.join("busybox").to_str().expect("UTF-8"), BUSYBOX]).await {
-		Ok(_) =>
-			p.step(
-				"exit from inside",
-				&format!("chmod 755 {BUSYBOX}; {BUSYBOX} wget -qO- 'http://ip-api.com/json/?fields=countryCode,city,isp,mobile,proxy,hosting,query,timezone'"),
-			)
-			.await,
-		Err(e) => println!("busybox push failed: {e:#}"),
-	}
+	within(
+		"busybox push",
+		COMMAND,
+		p.adb(&["-s", &p.serial, "push", tools.join("busybox").to_str().expect("UTF-8"), BUSYBOX]),
+	)
+	.await?;
+	p.step(
+		"exit from inside",
+		&format!("chmod 755 {BUSYBOX}; {BUSYBOX} wget -qO- 'http://ip-api.com/json/?fields=countryCode,city,isp,mobile,proxy,hosting,query,timezone'"),
+		|s| s.contains("\"countryCode\":\"FR\""),
+	)
+	.await?;
 
-	let t = Instant::now();
-	match p.adb(&["-s", &p.serial, "install", "-r", tools.join("ADBKeyboard.apk").to_str().expect("UTF-8")]).await {
-		Ok(said) => println!("ADBKeyBoard installed in {} ms: {said}", t.elapsed().as_millis()),
-		Err(e) => println!("ADBKeyBoard install failed: {e:#}"),
-	}
+	let said = within(
+		"ADBKeyBoard install",
+		Duration::from_secs(30),
+		p.adb(&["-s", &p.serial, "install", "-r", tools.join("ADBKeyboard.apk").to_str().expect("UTF-8")]),
+	)
+	.await?;
+	ensure!(said.contains("Success"), "ADBKeyBoard install: {said}");
 	p.step(
 		"ime set",
 		&format!("ime enable {ADB_KEYBOARD}; ime set {ADB_KEYBOARD}; settings put secure show_ime_with_hard_keyboard 1; settings get secure default_input_method"),
+		|s| s.ends_with(ADB_KEYBOARD),
 	)
-	.await;
+	.await?;
 	p.step(
 		"chrome",
 		"am start -a android.intent.action.VIEW -d 'https://www.google.com/search?q=plombier' com.android.chrome",
+		|s| s.contains("Starting"),
 	)
-	.await;
+	.await?;
 	tokio::time::sleep(Duration::from_secs(6)).await;
-	save(&p, out, "chrome").await;
-	p.step("ui dump", "uiautomator dump /sdcard/ui.xml >/dev/null && cat /sdcard/ui.xml").await;
-	// the first text field on screen, if any: tapped, then typed into through ADBKeyBoard
-	let ui = p.sh("cat /sdcard/ui.xml", None).await.unwrap_or_default();
+	save(&p, out, "chrome").await?;
+	let ui = p
+		.step("ui dump", "uiautomator dump /sdcard/ui.xml >/dev/null && cat /sdcard/ui.xml", |s| s.contains("<hierarchy"))
+		.await?;
 	std::fs::write(out.join("ui.xml"), &ui)?;
-	match edit_text_center(&ui) {
-		Some((x, y)) => {
-			p.step("tap the field", &format!("input tap {x} {y}")).await;
-			tokio::time::sleep(Duration::from_secs(2)).await;
-			let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, "Électricien à Besançon");
-			p.step("type", &format!("am broadcast -a ADB_INPUT_B64 --es msg {b64}")).await;
-			tokio::time::sleep(Duration::from_secs(2)).await;
-			save(&p, out, "typed").await;
-		}
-		None => println!("no text field on screen to type into"),
-	}
-	println!("statuses: {:?}", api.call("POST", "/mobile_profiles/phone/statuses", Some(json!({ "ids": [phone] }))).await);
-	println!("[{:>3}s] every step done", at.elapsed().as_secs());
+	let (x, y) = edit_text_center(&ui).ok_or_else(|| eyre!("no text field on Chrome's screen to type into: see chrome.png, ui.xml"))?;
+	p.step("tap the field", &format!("input tap {x} {y}"), |_| true).await?;
+	tokio::time::sleep(Duration::from_secs(2)).await;
+	let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, "Électricien à Besançon");
+	p.step("type", &format!("am broadcast -a ADB_INPUT_B64 --es msg {b64}"), |s| s.contains("Broadcast completed"))
+		.await?;
+	tokio::time::sleep(Duration::from_secs(2)).await;
+	save(&p, out, "typed").await?;
+	println!(
+		"statuses at the end: {}",
+		api.call("POST", "/mobile_profiles/phone/statuses", Some(json!({ "ids": [phone] }))).await?
+	);
 	Ok(())
 }
 
-async fn save(p: &Phone, out: &Path, name: &str) {
-	match p.exec_out(&["screencap", "-p"]).await {
-		Ok(png) => {
-			std::fs::write(out.join(format!("{name}.png")), png).expect("the out dir is ours");
-			println!("saved {name}.png");
-		}
-		Err(e) => println!("screencap {name} failed: {e:#}"),
-	}
+async fn save(p: &Phone, out: &Path, name: &str) -> eyre::Result<()> {
+	let png = within(&format!("screencap {name}"), COMMAND, p.exec_out(&["screencap", "-p"])).await?;
+	ensure!(png.starts_with(b"\x89PNG"), "screencap {name} is no PNG");
+	std::fs::write(out.join(format!("{name}.png")), png)?;
+	Ok(())
 }
 
 /// The centre of the first EditText's bounds in a uiautomator dump.
 fn edit_text_center(ui: &str) -> Option<(i64, i64)> {
-	let at = ui.find("android.widget.EditText")?;
-	let rest = &ui[at..];
+	let rest = &ui[ui.find("android.widget.EditText")?..];
 	let b = rest.find("bounds=\"[")? + 9;
 	let nums: Vec<i64> = rest[b..rest[b..].find('"')? + b].split(['[', ']', ',']).filter_map(|n| n.parse().ok()).collect();
 	match nums[..] {
@@ -293,34 +311,27 @@ struct Phone {
 
 impl Phone {
 	async fn adb(&self, args: &[&str]) -> eyre::Result<String> {
-		let o = tokio::time::timeout(Duration::from_secs(40), Command::new(&self.adb).args(args).kill_on_drop(true).output()).await??;
+		let o = Command::new(&self.adb).args(args).kill_on_drop(true).output().await?;
 		let said = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
 		ensure!(o.status.success(), "adb {}: {said}", args.join(" ").chars().take(80).collect::<String>());
 		Ok(said.trim().to_owned())
 	}
 
-	/// `line` in the phone's shell, glogin'd on the same connection first; `arg` its one argument.
-	async fn sh(&self, line: &str, arg: Option<&str>) -> eyre::Result<String> {
-		let line = match arg {
-			Some(a) => format!("{line} '{a}'"),
-			None => format!("glogin '{}' >/dev/null 2>&1; {line}", self.pwd),
-		};
-		self.adb(&["-s", &self.serial, "shell", &line]).await
-	}
-
-	async fn step(&self, name: &str, line: &str) {
-		let t = Instant::now();
-		match self.sh(line, None).await {
-			Ok(said) => println!("== {name} ({} ms):\n{}", t.elapsed().as_millis(), said.chars().take(4000).collect::<String>()),
-			Err(e) => println!("== {name} FAILED ({} ms): {e:#}", t.elapsed().as_millis()),
-		}
+	/// `line` in the phone's shell, logged in on the same connection first; within [`COMMAND`], its
+	/// answer what `expect` takes, else the run aborts.
+	async fn step(&self, name: &str, line: &str, expect: impl Fn(&str) -> bool) -> eyre::Result<String> {
+		let said = within(name, COMMAND, self.adb(&["-s", &self.serial, "shell", &format!("glogin '{}' >/dev/null 2>&1; {line}", self.pwd)])).await?;
+		println!("{}", said.chars().take(4000).collect::<String>());
+		ensure!(!said.contains("run glogin to login first"), "{name}: not logged in");
+		ensure!(expect(&said), "{name}: not what was expected");
+		Ok(said)
 	}
 
 	async fn exec_out(&self, args: &[&str]) -> eyre::Result<Vec<u8>> {
 		let mut a = vec!["-s", &self.serial, "exec-out"];
 		a.extend_from_slice(args);
-		let o = tokio::time::timeout(Duration::from_secs(40), Command::new(&self.adb).args(&a).kill_on_drop(true).output()).await??;
-		ensure!(o.status.success() && !o.stdout.is_empty(), "exec-out: {}", String::from_utf8_lossy(&o.stderr));
+		let o = Command::new(&self.adb).args(&a).kill_on_drop(true).output().await?;
+		ensure!(o.status.success(), "exec-out: {}", String::from_utf8_lossy(&o.stderr));
 		Ok(o.stdout)
 	}
 }
