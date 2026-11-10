@@ -832,6 +832,8 @@ impl View {
 		let p = &v["params"];
 		let from_active = v["sessionId"].as_str().is_some_and(|s| self.active.as_ref().is_some_and(|(_, a)| a == s));
 		match method {
+			// Mimic docks its own devtools in the window: not a tab, and closing it stops the page's frames
+			"Target.targetCreated" | "Target.targetInfoChanged" if p["targetInfo"]["url"].as_str().is_some_and(|u| u.starts_with("devtools://")) => Ok(()),
 			"Target.targetCreated" | "Target.targetInfoChanged" if p["targetInfo"]["type"] == "page" => {
 				let info = &p["targetInfo"];
 				let tab = TabDto {
