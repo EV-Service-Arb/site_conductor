@@ -5,7 +5,8 @@ concierge), what they hold across the services (the gmails and GMBs they manage,
 who a machine is (the source keys), the shell the browser loads, and the forward to the services
 behind the origin — sites_panel (the sites business: leads, places, pricing, experiments,
 bookings, invoices), review_archive, playbook and placement (gmaps_optimal_placement: where
-demand sits and how contested it is, drawn over the home map). Each service trusts only the assertion the
+demand sits and how contested it is, drawn over the home map) — and each managing gmail's antidetect
+browser, run by sa_browsers and driven through the conductor. Each service trusts only the assertion the
 conductor signs for a request; none of them sees a session, and none calls the conductor but its
 queries cache: it reads them. Live updates and alerts are its hubs, fed by what the services tell it; tokens are
 charged from what review_archive tells it.
@@ -26,6 +27,7 @@ conductor ─── pushes (Conductor) ─▶ review_archive /api/conductor/gmbs
 conductor ── GET <origin>/.well-known/sa-site, public :443 ──────▶ each site key's landing
 landings ──────────────────────── direct, in-cluster ────────────▶ sites /api/internal
 review_archive, placement, laptops ─────── open, rate-limited ─▶ conductor /api/queries_cache: what was paid for
+conductor ─── (Conductor) launch, stop, devtools ─────────────────▶ sa_browsers /profiles/{gmail}/…
 ```
 
 A cargo workspace; dependencies point inwards only.
@@ -45,6 +47,7 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          Directory and Feeds ports), `telegram` (the method: links, chats, outbox,
                          delivery, buttons; the Bot port), `live` (the in-process bus), `gmbs`,
                          `connections` (a gmail's inbox and Maps key; who pays a Places request),
+                         `browsers` (a gmail's browser: its proxy checked and sealed, GoLogin, a launch),
                          `tokens` (the ledger, review_archive's charges, the snapshot), `import`
                          (review_archive's, once), `assistant` (the assistant's chats)
 crates/alerts/           no I/O: the alert rules, and the notes a service publishes to the
@@ -52,6 +55,9 @@ crates/alerts/           no I/O: the alert rules, and the notes a service publis
 crates/auth/             the `sa` permissions (concierge_iam derives), the aliases `sa:operator` /
                          `sa:admin`, and the assertion: a User, a Source or the Conductor, for one
                          request of one service
+crates/browsers/         sa_browsers: the devices a browser poses as and a launch's wire (lib); the runner
+                         (`sa_browsers serve`): Orbita headless, a session directory per gmail, its
+                         devtools passed to the conductor alone, a film made the camera
 crates/places/           Google Places: a place from what a person pastes (an id, a Maps URL, a
                          search), its point; every request through the queries cache (in process,
                          or `Remote` over /api/queries_cache), then the payer's own keys, then the
@@ -76,6 +82,8 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/live.rs            GET /api/v1/live, and the follower of sites' change feed
   src/gmbs.rs            /api/v1/gmails, /api/v1/gmbs, /api/v1/trades
   src/connections.rs     /api/v1/gmails/{id}/{connections,imap,maps_key}
+  src/browser.rs         /api/v1/gmails/{id}/browser{,/test,/start,/stop,/film}; the runner; the viewer's
+                         socket, the relay between it and the browser's devtools
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
   src/assistant.rs       /api/v1/assistant; the turns' shape
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
@@ -221,6 +229,42 @@ reserved paths (`web.rs`) are derived from it.
   latest, `sa:placement:study:spend`) buys the Places searches it lacks. Unset, `/api/placement`
   answers 503 and the map says placement is not connected.
 
+## Browsers
+
+Each managing gmail has one antidetect browser: one fingerprint, one session, one proxy, whichever
+of its GBPs it acts for. sa_browsers runs it apart from the conductor (a browser browsing the web
+never shares a process tree with the conductor's secrets); the operator drives it from the
+conductor's window, which is its only devtools client.
+
+```text
+browser ──WS /api/v1/gmails/{id}/browser (Origin, session, owner)──▶ conductor (relay: the only CDP client)
+   ▲  {frame jpeg b64, tabs, dialog}           ▼ {touch, wheel, key, text, navigate, tab}           │
+   └────────────────────────────────────────────────────────────────────────────────────────────────┘
+                                                                                     CDP over WS │
+conductor ── GOLOGIN_TOKEN: the profile, its 3-minute token ──▶ api.gologin.com                  ▼
+conductor ── POST /profiles/{gmail}/launch {Launch}, Conductor ──▶ sa_browsers: Orbita headless,
+                                                                  user-data-dir per gmail,
+                                                                  GET /profiles/{gmail}/cdp → devtools
+```
+
+- **Set up once, its proxy replaceable.** Provider and device (a measured phone, `sa_browsers::Device`)
+  are a fingerprint: another is a new browser. A proxy is kept only once one request through it
+  (ip-api) comes out in the country of every GBP of the gmail that has one, at a public address;
+  sealed, and compared with the others by a keyed tag. The GoLogin profile is made at the first
+  start, its noise drawn by GoLogin then and kept.
+- **A start is for a GBP or the gmail.** At a GBP: its point is the position, its zone and its
+  country's locale the browser's; for the gmail alone the position is blocked and the exit's zone
+  stands. A start for another while one runs is refused. Ten minutes without a viewer stop it.
+- **The relay** never sends `Runtime.enable` (what pages detect devtools by): `Target.*`, `Page.*`
+  (the screencast, navigation, dialogs) and `Input.*`, a finger's touches for the pointer. One viewer
+  per gmail; a new one closes the old (4409).
+- **A film as the camera** (`PUT …/browser/film`): the runner cuts it (first frame still, the film,
+  the last held, its sound over a faint noise) for Chrome's file capture, and its next launch plays it,
+  `facing.js` before every page's scripts. The file route's label and per-`getUserMedia` restart are
+  known tells (emulate_phone_cam). Cloud phones are not devtools: outside this seam.
+- Without `GOLOGIN_TOKEN` and `PANEL_BROWSERS_URL` (both, or neither; they need
+  `PANEL_ASSERTION_KEY`) every browser route answers 503 "browsers not connected".
+
 ## Grafana
 
 One Grafana for every service, at `/grafana/` on this origin: an element steers its frame through
@@ -337,20 +381,23 @@ PUT    /alerts/destinations/{id}/rules      {rules: {new_lead: false, …}} → 
 PUT    /alerts/destinations/{id}/gmail      {gmail_id} → 200 as GET; 404 not theirs
 POST   /alerts/destinations/{id}/test       204; 400 with what Telegram said
 DELETE /alerts/destinations/{id}            204, 404
-GET    /gmails                              {gmails: [{id, gmail, role, cap, created_at}], gmbs: [{id,
+GET    /gmails                              {gmails: [{id, gmail, role, cap, created_at, browser}], gmbs: [{id,
                                             gmail_id, place_id, name, address, state, next (the
                                             states it may move to), country: {code, by_hand} | null,
                                             phone, trade_id, areas, hidden_address, customers_visit,
-                                            film, profile, created_at, enabled, location: {lat, lng,
+                                            film, created_at, enabled, location: {lat, lng,
                                             placed} | null}]} the caller's, removed ones left out; a
                                             draft's gmail_id and place_id may be null; cap null
                                             while the role is unknown
 POST   /gmails                              {gmail} → 201 the gmail; 409 held already
 PATCH  /gmails/{id}                         {role: owner|manager} → 200 the gmail
-DELETE /gmails/{id}                         204; its GBPs and connections removed with it
+DELETE /gmails/{id}                         204; its GBPs and connections removed with it; 409 while
+                                            it has a browser
 GET    /gmails/{id}/connections             {imap: {host, username, set_at, checked: {at, error}} | null,
                                             maps_key: {last4, set_at, checked, out} | null, prices:
-                                            {details, search}}: no secret, ever
+                                            {details, search}, browser: {provider, device, endpoint,
+                                            exit, set_at, checked, running: {gmb} | null, film} | null}:
+                                            no secret, ever
 PUT    /gmails/{id}/imap                    {host, username, password} → 200 as GET, once it logs in
                                             (IMAPS :993, a public address only); 400 refused, nothing
                                             stored
@@ -358,6 +405,15 @@ PUT    /gmails/{id}/maps_key                {key} → 200 as GET, once Google an
                                             unbilled id-only details); 400 refused, nothing stored
 POST   /gmails/{id}/{imap,maps_key}/test    200 as GET, the check recorded; 404 none set
 DELETE /gmails/{id}/{imap,maps_key}         204
+PUT    /gmails/{id}/browser                 {provider, device, proxy} → 200 as connections, once the proxy
+                                            comes out in the GBPs' country (Browsers); 400 refused,
+                                            nothing stored; 409 another provider or device
+POST   /gmails/{id}/browser/test            200 as connections, the exit checked again
+DELETE /gmails/{id}/browser                 204: stopped, its GoLogin profile and session gone
+POST   /gmails/{id}/browser/{start,stop}    {gmb?} → 204 once up; 409 it runs for another
+PUT    /gmails/{id}/browser/film            an mp4 ≤ 512 MiB → 204; outside the bounds above (10 min)
+DELETE /gmails/{id}/browser/film            204
+GET    /gmails/{id}/browser                 the viewer's WebSocket: outside the gate, as /live
 GET    /gmbs/resolve?place=&gmail=          {candidates: [{place_id, name, address}]} (sa_places;
                                             `gmail`'s key first)
 POST   /gmbs                                {name, trade?} → 201 a draft; 409 the name a live GBP's
@@ -365,7 +421,7 @@ POST   /gmails/{id}/gmbs                    {place_id, state, name?, country?, t
                                             already (state not draft; name and country fill what
                                             Google lacks, else 400); 409 the name or place taken
 PATCH  /gmbs/{id}                           {name?, gmail_id?, phone?, trade?, areas?,
-                                            hidden_address?, customers_visit?, film?, profile?} →
+                                            hidden_address?, customers_visit?, film?} →
                                             200 the GBP: name a draft's only (409), gmail_id another
                                             of the caller's (a transfer), null clears the rest; 409
                                             a name or a phone another live GBP's
@@ -469,7 +525,8 @@ closes              4401 the session ended   1001 the server is stopping
   again.
 - **The conductor's own topics:** `sources` (a key minted or revoked; holders of
   `sa:admin:sources:manage`), `alerts` (the user's destinations added, removed, found dead
-  or revived; their rules; that user only) and `assistant` (`id` a chat: any change, to its owner
+  or revived; their rules; that user only), `browsers` (`id` a gmail: its browser set, checked,
+  started, stopped, its film; its owner) and `assistant` (`id` a chat: any change, to its owner
   and members, those it removed too; a pin or archive to whose it is; viewers are not told).
 - **The shell relays.** The front end holds the one socket and re-dispatches on `window`, as
   `CustomEvent`s: `sa:live` (each server message as is, and a `{type:"resync"}` after the shell
@@ -517,8 +574,8 @@ review_archive's lookups and placement's sweeps are the house's for now.
   point and country.
 - **A draft's must-haves** are what Google's form asks and what stands behind it: name, category
   (set up, with Google's label), service areas (≤ 20), phone, a site page (sites' link), the hidden address with whether
-  customers visit, the verification film, the managing gmail, the Multilogin profile. Film and
-  profile are references set by hand until verif_vid and Multilogin fill them. How many are ready
+  customers visit, the verification film, the managing gmail, its browser (Browsers: set up, its last check
+  through). The film is a reference set by hand until verif_vid fills it. How many are ready
   is advice the front end computes; the move onto Google never checks it.
 - **A gmail's role** on its GBPs, owner or manager, unknown until said, caps what it holds before
   Google grows wary (`sa_core::gbp::GmailRole::cap`): room shown, never refused.
@@ -675,7 +732,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **A source is only ever revoked.** `sources` refuses DELETE and any UPDATE but of `revoked_at`
   and a site's `origin` set once from NULL (only a `site` has one); a key id is never reused.
 - **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, queued Telegram
-  texts and a gmail's IMAP password and Maps key are sealed (XChaCha20-Poly1305, what they belong
+  texts and a gmail's IMAP password, Maps key and proxy are sealed (XChaCha20-Poly1305, what they belong
   to as associated data) under `PANEL_DATA_KEY`, whose fingerprint is stored beside each. A
   person's are never read back out: the browser sees a key's last four.
 - **No buy on credit.** A Places request on the shared keys for a person is charged at its price,
@@ -689,6 +746,9 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **A Google answer is paid for once.** Every billed answer, from any service or machine, is
   looked up in the queries cache before it is bought, claimed while it is bought and kept after;
   a place a search returned is not asked about again. Placement's requests sit in their own scheme.
+- **A gmail's browser is driven only through the conductor's relay**, its devtools no one else's;
+  the runner holds none of the conductor's secrets: a launch brings its profile token and proxy.
+- **No two gmails share a proxy**: an exit two accounts share is a link Google can draw.
 - **The ledger is append-only, and nothing a service stores an id of is deleted.**
   `token_ledger` refuses UPDATE and DELETE; gmails and GBPs only get `removed_at`, kick-backs
   only `claimed_at`, each once.
@@ -699,8 +759,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   only that). A migration newer than the build is let be. Tables are STRICT, foreign keys
   enforced, timestamps INTEGER microseconds since the epoch, UUIDs 16-byte blobs.
 - **The conductor's secrets come from the environment only** (`PANEL_DATA_KEY`, `SENTRY_DSN`,
-  `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOOGLE_MAPS_KEYS`), through
-  `ev_lib::settings`; a person's (a gmail's IMAP password, its Maps key) through the API, sealed at
+  `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOOGLE_MAPS_KEYS`, `GOLOGIN_TOKEN`), through
+  `ev_lib::settings`; a person's (a gmail's IMAP password, its Maps key, its proxy) through the API, sealed at
   once; with `APP_ENV=production` the database, the data key, the four sign-in
   variables, the forward's four and `TOKENS_START_CAP_MULTIPLE` are required at boot
   (`panel --print-required-vars` lists them).
@@ -749,6 +809,11 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   tested: egress to public :993. The browser loads Maps JS straight
   from Google with `GOOGLE_MAPS_BROWSER_KEY` (referrer-restricted to the public origin); the
   server's keys never reach it.
+- **Browsers.** sa_browsers is its own pod (`PANEL_BROWSERS_URL`, in-cluster only): `BROWSERS_DIR` on
+  a volume of its own (the gmails' sessions: signed-in Google lives there), `BROWSERS_MAX`, the
+  conductor's public keys (`PANEL_ASSERTION_KEYS`), Orbita (`.#orbita`) and ffmpeg; egress to
+  `api.gologin.com:443` and through the gmails' proxies, any public address. The conductor too
+  dials those proxies (a set-up's check, to `ip-api.com:80` through them) and `api.gologin.com:443`.
 - **Telegram, outbound only.** With `TELEGRAM_BOT_TOKEN` the pods need egress to
   `api.telegram.org:443`; no webhook is set on the bot (`getUpdates` refuses to run while one is).
 - **`/api/v1/live` through the public IngressRoute, as a WebSocket.** Nothing in front may buffer
