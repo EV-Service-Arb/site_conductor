@@ -76,7 +76,8 @@ let fitted = false;
 function GmbMap({ config }: { config: MapConfig }) {
   const gmails = useGmails();
   const selection = useSelection();
-  const { hovered, placing } = useOnMap();
+  const hovered = useOnMap((s) => s.hovered);
+  const placing = useOnMap((s) => s.placing);
   const peeked = usePeeked();
   const tab = useTab();
   // `?at` as the page opened: what it says after is where the map has since moved

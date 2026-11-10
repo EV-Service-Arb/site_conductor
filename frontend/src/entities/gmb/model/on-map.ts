@@ -25,8 +25,9 @@ const subscribe = (onChange: () => void) => {
   return () => listeners.delete(onChange);
 };
 
-export function useOnMap(): OnMap {
-  return useSyncExternalStore(subscribe, () => state, () => NONE);
+/** `part` of it: a hover re-renders only what reads the hover. */
+export function useOnMap<T>(part: (s: OnMap) => T): T {
+  return useSyncExternalStore(subscribe, () => part(state), () => part(NONE));
 }
 
 export function setOnMap(change: Partial<OnMap>): void {

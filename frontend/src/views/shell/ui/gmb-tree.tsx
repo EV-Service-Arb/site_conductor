@@ -79,7 +79,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   const me = useMe();
   const gmails = useGmails();
   const { gmails: scope, categories } = useScope();
-  const { inView, hovered } = useOnMap();
+  const inView = useOnMap((s) => s.inView);
   const peeked = usePeeked();
   const pathname = usePathname();
   const { sites, tags } = useGmbTags();
@@ -121,7 +121,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
       tags={tags}
       showGmail={scoped.length !== 1}
       onMap={onMap}
-      lit={l.gmb.id === hovered || l.gmb.id === peeked}
+      peeked={l.gmb.id === peeked}
       current={l.gmb.id === pointedAt(pathname)}
       selected={isSelected(l.gmb.id)}
       linked={linked}
@@ -350,7 +350,7 @@ function GmbRow({
   tags,
   showGmail,
   onMap,
-  lit,
+  peeked,
   current,
   selected,
   linked,
@@ -363,7 +363,7 @@ function GmbRow({
   tags: Tags;
   showGmail: boolean;
   onMap: boolean;
-  lit: boolean;
+  peeked: boolean;
   current: boolean;
   selected: boolean;
   linked: ReadonlyMap<number, SiteTag> | null;
@@ -374,6 +374,7 @@ function GmbRow({
 }) {
   const t = useT();
   const button = useButtonSize();
+  const hovered = useOnMap((s) => s.hovered === gmb.id);
   const name = gmb.name;
   const move = t(selected ? "gmbs.deselect" : "gmbs.select", { name });
   const issue = issueOf(gmb, tags);
@@ -410,7 +411,7 @@ function GmbRow({
   const body = "min-w-0 flex-1 py-1.5 pl-2 text-left";
   return (
     <li
-      className={cn(ROW, (current || lit) && "bg-hover/50")}
+      className={cn(ROW, (current || peeked || hovered) && "bg-hover/50")}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData(DRAGGED, String(gmb.id));
