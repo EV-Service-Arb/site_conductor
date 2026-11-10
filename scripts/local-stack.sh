@@ -593,7 +593,7 @@ browsers() {
 		"$root/target/debug/sa_browsers" "$@"
 }
 export -f panel sites_panel review_archive browsers
-export state public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_origin \
+export state public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_origin browsers_origin \
 	PANEL_GRAFANA_SERVER PANEL_BIN SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR REVIEW_ARCHIVE_DATA_DIR REVIEW_ARCHIVE_PORT \
 	PANEL_PORT SITES_PORT BROWSERS_PORT root
 watched() {
