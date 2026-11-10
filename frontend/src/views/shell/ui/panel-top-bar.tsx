@@ -23,7 +23,6 @@ import {
   cn,
   navigationMenuTriggerStyle,
 } from "@evinvest/uikit";
-import { CONCIERGE_ORIGIN } from "@evinvest/concierge";
 import { ArrowUpRight, Bell, Check, ChevronDown, Globe, Menu, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -134,15 +133,7 @@ export function PanelTopBar() {
   );
 }
 
-const SITES = [
-  { name: "EV Investment", href: CONCIERGE_ORIGIN },
-  { name: "EV Estate", href: "https://estate.evinvest.ltd" },
-];
-const ELSEWHERE = [
-  { name: "GitHub", href: "https://github.com/EV-Service-Arb" },
-];
-
-/** Service-Arb and its sibling sites, then where the team is elsewhere. */
+/** Service-Arb, then the configured links. */
 function AppSwitcher() {
   const t = useT();
   return (
@@ -158,24 +149,19 @@ function AppSwitcher() {
             {t("app.name")}
           </Link>
         </DropdownMenuItem>
-        {SITES.map((s) => (
-          <DropdownMenuItem key={s.href} asChild>
-            <a href={s.href}>
-              <span aria-hidden className="size-4" />
-              {s.name}
-            </a>
-          </DropdownMenuItem>
-        ))}
         <DropdownMenuSeparator />
-        {ELSEWHERE.map((s) => (
-          <DropdownMenuItem key={s.href} asChild>
-            <a href={s.href} target="_blank" rel="noreferrer">
-              <span aria-hidden className="size-4" />
-              {s.name}
-              <ArrowUpRight aria-hidden className="ml-auto size-4 text-ink-soft" />
-            </a>
-          </DropdownMenuItem>
-        ))}
+        {PANEL.links.map(
+          (l) =>
+            l.href !== null && (
+              <DropdownMenuItem key={l.name} asChild>
+                <a href={l.href} {...(l.newTab && { target: "_blank", rel: "noreferrer" })}>
+                  <span aria-hidden className="size-4" />
+                  {l.name}
+                  {l.newTab && <ArrowUpRight aria-hidden className="ml-auto size-4 text-ink-soft" />}
+                </a>
+              </DropdownMenuItem>
+            ),
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
