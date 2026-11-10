@@ -150,18 +150,15 @@ function AppSwitcher() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        {PANEL.links.map(
-          (l) =>
-            l.href !== null && (
-              <DropdownMenuItem key={l.name} asChild>
-                <a href={l.href} {...(l.newTab && { target: "_blank", rel: "noreferrer" })}>
-                  <span aria-hidden className="size-4" />
-                  {l.name}
-                  {l.newTab && <ArrowUpRight aria-hidden className="ml-auto size-4 text-ink-soft" />}
-                </a>
-              </DropdownMenuItem>
-            ),
-        )}
+        {PANEL.links.map((l) => (
+          <DropdownMenuItem key={l.name} asChild>
+            <a href={l.href} {...(l.newTab && { target: "_blank", rel: "noreferrer" })}>
+              <span aria-hidden className="size-4" />
+              {l.name}
+              {l.newTab && <ArrowUpRight aria-hidden className="ml-auto size-4 text-ink-soft" />}
+            </a>
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );

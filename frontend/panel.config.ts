@@ -11,8 +11,8 @@ type PanelConfig = {
   theme: "dark" | "oldschool";
   /** The assistant beside every signed-in page, toggled from the top bar; a preview whose answers are canned. */
   assistant: boolean;
-  /** The app switcher's entries under Service-Arb, in order; one without `href` is left out. */
-  links: { name: string; href: string | null; newTab: boolean }[];
+  /** The app switcher's entries under Service-Arb, in order. */
+  links: { name: string; href: string; newTab: boolean }[];
 };
 
 export const PANEL: PanelConfig = {
@@ -22,7 +22,7 @@ export const PANEL: PanelConfig = {
   theme: "dark",
   assistant: true,
   links: [
-    { name: "Discord", href: null, newTab: true },
+    { name: "Discord", href: "https://discord.gg/nGU6Fk4SAK", newTab: true },
     { name: "GitHub", href: "https://github.com/EV-Service-Arb", newTab: true },
     { name: "EV Investment", href: "https://evinvest.ltd", newTab: false },
     { name: "EV Estate", href: "https://estate.evinvest.ltd", newTab: false },
