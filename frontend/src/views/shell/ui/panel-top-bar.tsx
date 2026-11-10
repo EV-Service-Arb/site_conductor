@@ -7,30 +7,29 @@ import {
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
   NavDot,
+  type NavGroup,
+  type NavIcon,
+  NavMenu,
+  NavMenuList,
   NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuItem,
-  NavigationMenuLink,
   NavigationMenuList,
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  ShellNav,
   TopBar,
   cn,
   navigationMenuTriggerStyle,
   useBinding,
   useSequences,
 } from "@evinvest/uikit";
-import { ArrowUpRight, Bell, Check, ChevronDown, Globe, MapPin, Menu, PanelLeftClose, PanelLeftOpen, Wallet } from "lucide-react";
+import { ArrowUpRight, Bell, Globe, MapPin, Menu, PanelLeftClose, PanelLeftOpen, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type CSSProperties, type PointerEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { unreached, useAlerts } from "@/entities/alerts";
 import { DevSignInBadge, ownScreens, useMe } from "@/entities/session";
@@ -61,6 +60,7 @@ export function PanelTopBar() {
   const router = useRouter();
   const pathname = usePathname();
   const apps = useApps();
+  const switcher = useSwitcherGroups();
   const folded = useSidebarFolded();
   const [open, setOpen] = useState(false);
 
@@ -95,11 +95,7 @@ export function PanelTopBar() {
                 <SheetTitle>{t("app.name")}</SheetTitle>
                 <DevSignInBadge />
               </SheetHeader>
-              {apps.map((a) => (
-                <Link key={a.href} href={a.href} onClick={() => setOpen(false)} aria-current={a.here ? "page" : undefined} className={cn(navigationMenuTriggerStyle(), "w-full justify-start px-2", a.here && "bg-hover/50")}>
-                  {a.label}
-                </Link>
-              ))}
+              <NavMenuList groups={switcher} pathname={pathname} linkComponent={Link} onNavigate={() => setOpen(false)} className="w-auto" />
               <div className="border-t border-border pt-2">
                 <Outline folded={false} onNavigate={() => setOpen(false)} className="h-auto w-auto border-r-0 bg-transparent p-0" />
               </div>
@@ -132,41 +128,13 @@ export function PanelTopBar() {
   );
 }
 
-/** Long enough to cross the gap between the item and its menu. */
-const CLOSE_DELAY_MS = 150;
-
-/** An app's link, its outline section hung below it while the mouse is over either; none while the outline shows that section whole. */
+/** The open app has none while the outline shows its views whole: the menu would only repeat them. */
 function AppItem({ app, menu }: { app: App; menu: boolean }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
-  const closing = useRef<number>(undefined);
-  useEffect(() => () => window.clearTimeout(closing.current), []);
-  const hover = (next: boolean) => (e: PointerEvent) => {
-    if (!menu || e.pointerType === "touch") return; // a tap is the link's
-    window.clearTimeout(closing.current);
-    if (next) setOpen(true);
-    else closing.current = window.setTimeout(() => setOpen(false), CLOSE_DELAY_MS);
-  };
   return (
-    <NavigationMenuItem open={open} onOpenChange={setOpen} onPointerEnter={hover(true)} onPointerLeave={hover(false)}>
-      <NavigationMenuLink asChild className={cn(navigationMenuTriggerStyle(), "group flex-row items-center gap-1", app.here && "bg-hover/50")}>
-        <Link href={app.href} aria-current={app.here ? "page" : undefined} {...(menu && { "aria-expanded": open, "data-state": open ? "open" : "closed" })}>
-          {app.label}
-          {menu && <ChevronDown aria-hidden className="size-3.5 text-ink-soft transition-transform group-data-[state=open]:rotate-180" />}
-        </Link>
-      </NavigationMenuLink>
-      {/* any click in it has routed, as in the outline */}
-      {menu && <NavigationMenuContent className="p-0" onClick={() => setOpen(false)}>
-        <ShellNav
-          groups={[app.section]}
-          pathname={pathname}
-          linkComponent={Link}
-          labels={{ primary: app.label }}
-          style={{ "--shell-rail-w": "18rem" } as CSSProperties}
-          className="max-h-[70svh] gap-0 border-r-0 bg-transparent p-2"
-        />
-      </NavigationMenuContent>}
-    </NavigationMenuItem>
+    <NavMenu label={app.label} href={app.href} current={app.here} linkComponent={Link}>
+      {menu ? "content" in app.section ? app.section.content : <NavMenuList groups={[app.section]} pathname={pathname} linkComponent={Link} /> : undefined}
+    </NavMenu>
   );
 }
 
@@ -194,36 +162,55 @@ function SidebarToggle() {
   );
 }
 
-/** Service-Arb, then the configured links. */
+/** Each link with its mark, painted in the row's ink like the lucide icons beside it. */
+const LINKS = PANEL.links.map((l) => ({
+  ...l,
+  icon: function LinkIcon({ className }: { className?: string }) {
+    return <span aria-hidden className={cn("bg-current mask-contain mask-center mask-no-repeat", className)} style={{ maskImage: `url(${l.icon})` }} />;
+  } satisfies NavIcon,
+}));
+
+/** Service-Arb's home and apps, then the configured links: the switcher's menu, and the phone's Sheet. */
+function useSwitcherGroups(): NavGroup[] {
+  const t = useT();
+  const apps = useApps();
+  return [
+    {
+      id: "apps",
+      label: t("app.name"),
+      items: [
+        { id: "home", href: "/", label: t("nav.home"), icon: MapPin, description: t("nav.home.description"), match: "exact" },
+        ...apps.map((a) => ({ id: a.href, href: a.href, label: a.label, icon: a.icon, description: a.description })),
+      ],
+    },
+    {
+      id: "elsewhere",
+      label: t("apps.elsewhere"),
+      items: LINKS.map((l) => ({
+        id: l.name,
+        href: l.href,
+        label: l.name,
+        icon: l.icon,
+        description: t(l.description),
+        external: true,
+        ...(l.newTab && { target: "_blank" as const, trailing: <ArrowUpRight aria-hidden className="size-4 shrink-0 text-ink-soft" /> }),
+      })),
+    },
+  ];
+}
+
 function AppSwitcher() {
   const t = useT();
+  const pathname = usePathname();
+  const groups = useSwitcherGroups();
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger className={cn(navigationMenuTriggerStyle(), "shrink-0 gap-1 px-2")} aria-label={t("apps.switch")}>
-        <span className="text-base font-semibold whitespace-nowrap text-ink">{t("app.name")}</span>
-        <ChevronDown aria-hidden className="size-4 text-ink-soft transition-transform group-data-[state=open]:rotate-180" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={4} className="w-56">
-        <DropdownMenuItem asChild>
-          <Link href="/" aria-current="true">
-            <MapPin aria-hidden className="size-4" />
-            {t("app.name")}
-            <Check aria-hidden className="ml-auto size-4 text-ink-soft" />
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {PANEL.links.map((l) => (
-          <DropdownMenuItem key={l.name} asChild>
-            <a href={l.href} {...(l.newTab && { target: "_blank", rel: "noreferrer" })}>
-              {/* a mask, so a brand's mark paints in the menu's ink like the lucide icons beside it */}
-              <span aria-hidden className="size-4 shrink-0 bg-current mask-contain mask-center mask-no-repeat" style={{ maskImage: `url(${l.icon})` }} />
-              {l.name}
-              {l.newTab && <ArrowUpRight aria-hidden className="ml-auto size-4 text-ink-soft" />}
-            </a>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <NavigationMenu viewport={false} aria-label={t("apps.switch")}>
+      <NavigationMenuList>
+        <NavMenu label={<span className="text-base font-semibold whitespace-nowrap text-ink">{t("app.name")}</span>} href="/" current={pathname === "/"} linkComponent={Link} className="shrink-0 px-2">
+          <NavMenuList groups={groups} pathname={pathname} linkComponent={Link} />
+        </NavMenu>
+      </NavigationMenuList>
+    </NavigationMenu>
   );
 }
 

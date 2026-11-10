@@ -683,5 +683,15 @@
   "prices.unset": "без цены",
   "prices.save": "Сохранить",
   "prices.saved": "Цены сохранены",
-  "prices.unpriced": "Без цены: запросы на общих ключах отклоняются для всех, у кого нет своего ключа."
+  "prices.unpriced": "Без цены: запросы на общих ключах отклоняются для всех, у кого нет своего ключа.",
+  "nav.home.description": "Все GBP на одной карте",
+  "nav.sites.description": "Лиды, точки, цены, счета",
+  "nav.reviewArchive.description": "Отзывы каждого места и их состояние",
+  "reviewArchive.places.description": "Отзывы каждого места, сначала новые",
+  "reviewArchive.settings.description": "Как архив собирает и хранит отзывы",
+  "apps.elsewhere": "Другие сервисы",
+  "links.discord": "Вопросы другим операторам",
+  "links.github": "Код этой панели",
+  "links.evInvestment": "Инвестиции с EV",
+  "links.evEstate": "Недвижимость с EV"
 }

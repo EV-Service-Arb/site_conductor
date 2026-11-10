@@ -683,5 +683,15 @@
   "prices.unset": "not priced",
   "prices.save": "Save",
   "prices.saved": "Prices saved",
-  "prices.unpriced": "Not priced: requests on the shared keys are refused for everyone without a key of their own."
+  "prices.unpriced": "Not priced: requests on the shared keys are refused for everyone without a key of their own.",
+  "nav.home.description": "Every GBP on one map",
+  "nav.sites.description": "Leads, locations, pricing, invoices",
+  "nav.reviewArchive.description": "Every place's reviews and their state",
+  "reviewArchive.places.description": "Each place's reviews, newest first",
+  "reviewArchive.settings.description": "How the archive scans and keeps reviews",
+  "apps.elsewhere": "Elsewhere",
+  "links.discord": "Ask the other operators",
+  "links.github": "The code behind this panel",
+  "links.evInvestment": "Investing with EV",
+  "links.evEstate": "Property with EV"
 }

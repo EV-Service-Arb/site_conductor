@@ -1,7 +1,7 @@
 "use client";
 
-import type { NavSection } from "@evinvest/uikit";
-import { Globe, MapPin, Settings } from "lucide-react";
+import type { NavIcon, NavSection } from "@evinvest/uikit";
+import { Archive, Globe, MapPin, Settings } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { seesSites, useMe } from "@/entities/session";
@@ -12,6 +12,8 @@ import { useT } from "@/shared/i18n";
 export interface App {
   href: string;
   label: string;
+  icon: NavIcon;
+  description: string;
   here: boolean;
   /** Its own views: the outline's section while it is open, its top-bar item's menu on hover. */
   section: NavSection;
@@ -28,6 +30,8 @@ export function useApps(onNavigate?: () => void): App[] {
           {
             href: ROUTES.sites,
             label: t("nav.sites"),
+            icon: Globe,
+            description: t("nav.sites.description"),
             here: pathname.startsWith("/sites"),
             section: {
               id: "sites",
@@ -46,12 +50,14 @@ export function useApps(onNavigate?: () => void): App[] {
     {
       href: ROUTES.reviewArchive,
       label: t("nav.reviewArchive"),
+      icon: Archive,
+      description: t("nav.reviewArchive.description"),
       here: pathname.startsWith("/review_archive"),
       section: {
         id: "archive",
         items: [
-          { id: "places", href: ROUTES.reviewArchive, label: t("reviewArchive.places"), icon: MapPin },
-          { id: "settings", href: ROUTES.reviewArchiveSettings, label: t("reviewArchive.settings"), icon: Settings },
+          { id: "places", href: ROUTES.reviewArchive, label: t("reviewArchive.places"), icon: MapPin, description: t("reviewArchive.places.description") },
+          { id: "settings", href: ROUTES.reviewArchiveSettings, label: t("reviewArchive.settings"), icon: Settings, description: t("reviewArchive.settings.description") },
         ],
       },
     },
