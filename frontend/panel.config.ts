@@ -11,8 +11,8 @@ type PanelConfig = {
   theme: "dark" | "oldschool";
   /** The assistant beside every signed-in page, toggled from the top bar; a preview whose answers are canned. */
   assistant: boolean;
-  /** The app switcher's entries under Service-Arb, in order. */
-  links: { name: string; href: string; newTab: boolean }[];
+  /** The app switcher's entries under Service-Arb, in order; `icon` a monochrome mark under `public/`. */
+  links: { name: string; href: string; icon: string; newTab: boolean }[];
 };
 
 export const PANEL: PanelConfig = {
@@ -22,9 +22,9 @@ export const PANEL: PanelConfig = {
   theme: "dark",
   assistant: true,
   links: [
-    { name: "Discord", href: "https://discord.gg/nGU6Fk4SAK", newTab: true },
-    { name: "GitHub", href: "https://github.com/EV-Service-Arb", newTab: true },
-    { name: "EV Investment", href: "https://evinvest.ltd", newTab: false },
-    { name: "EV Estate", href: "https://estate.evinvest.ltd", newTab: false },
+    { name: "Discord", href: "https://discord.gg/nGU6Fk4SAK", icon: "/links/discord.svg", newTab: true },
+    { name: "GitHub", href: "https://github.com/EV-Service-Arb", icon: "/links/github.svg", newTab: true },
+    { name: "EV Investment", href: "https://evinvest.ltd", icon: "/links/ev.svg", newTab: false },
+    { name: "EV Estate", href: "https://estate.evinvest.ltd", icon: "/links/ev.svg", newTab: false },
   ],
 };

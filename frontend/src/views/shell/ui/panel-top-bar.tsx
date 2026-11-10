@@ -23,7 +23,7 @@ import {
   cn,
   navigationMenuTriggerStyle,
 } from "@evinvest/uikit";
-import { ArrowUpRight, Bell, Check, ChevronDown, Globe, Menu, Wallet } from "lucide-react";
+import { ArrowUpRight, Bell, Check, ChevronDown, Globe, MapPin, Menu, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -138,22 +138,24 @@ function AppSwitcher() {
   const t = useT();
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex shrink-0 items-center gap-1 rounded-md px-1 outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={t("apps.switch")}>
+      <DropdownMenuTrigger className={cn(navigationMenuTriggerStyle(), "shrink-0 gap-1 px-2")} aria-label={t("apps.switch")}>
         <span className="text-base font-semibold whitespace-nowrap text-ink">{t("app.name")}</span>
-        <ChevronDown aria-hidden className="size-4 text-ink-soft" />
+        <ChevronDown aria-hidden className="size-4 text-ink-soft transition-transform group-data-[state=open]:rotate-180" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56">
+      <DropdownMenuContent align="start" sideOffset={4} className="w-56">
         <DropdownMenuItem asChild>
           <Link href="/" aria-current="true">
-            <Check aria-hidden className="size-4" />
+            <MapPin aria-hidden className="size-4" />
             {t("app.name")}
+            <Check aria-hidden className="ml-auto size-4 text-ink-soft" />
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {PANEL.links.map((l) => (
           <DropdownMenuItem key={l.name} asChild>
             <a href={l.href} {...(l.newTab && { target: "_blank", rel: "noreferrer" })}>
-              <span aria-hidden className="size-4" />
+              {/* a mask, so a brand's mark paints in the menu's ink like the lucide icons beside it */}
+              <span aria-hidden className="size-4 shrink-0 bg-current mask-contain mask-center mask-no-repeat" style={{ maskImage: `url(${l.icon})` }} />
               {l.name}
               {l.newTab && <ArrowUpRight aria-hidden className="ml-auto size-4 text-ink-soft" />}
             </a>
