@@ -291,7 +291,7 @@ impl Panel {
 		});
 		tracing::info!(gmail_id = id, gmb_id = ?gmb.as_ref().map(|g| g.id), zone = place.zone, locale = place.locale, %now, "browser launch prepared");
 		Ok(Ok(Launch {
-			run: gmb.map_or_else(|| "the gmail alone".to_owned(), |g| g.name),
+			run: Run(gmb.map(|g| g.id)).to_string(),
 			browser: sa_browsers::Browser::Orbita {
 				preferences,
 				config,
@@ -311,6 +311,34 @@ async fn in_countries(conn: &mut sqlx::SqliteConnection, gmail_id: i64, exit: &E
 		true => Ok(()),
 		false => Err(format!("the proxy comes out in {}, and the gmail's GBPs are in {}", exit.country, elsewhere.join(", "))),
 	})
+}
+
+/// What a run is for, as the runner keys it: a GBP's point, or the gmail alone.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Run(pub Option<i64>);
+
+impl std::fmt::Display for Run {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self.0 {
+			Some(gmb) => write!(f, "gmb:{gmb}"),
+			None => f.write_str("gmail"),
+		}
+	}
+}
+
+impl std::str::FromStr for Run {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, String> {
+		match s {
+			"gmail" => Ok(Self(None)),
+			_ => s
+				.strip_prefix("gmb:")
+				.and_then(|g| g.parse().ok())
+				.map(|g| Self(Some(g)))
+				.ok_or_else(|| format!("{s:?} is no run of the conductor's")),
+		}
+	}
 }
 
 /// Where the browser says it is.

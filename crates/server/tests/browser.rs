@@ -105,7 +105,7 @@ fn runner(running: Arc<Mutex<Vec<i64>>>) -> Router {
 		.route("/profiles/{gmail}/film", put(|| async { StatusCode::NO_CONTENT }).delete(|| async { StatusCode::NO_CONTENT }))
 		.route(
 			"/profiles",
-			get(move || async move { Json(json!({ "running": listed.lock().unwrap().iter().map(|g| json!({ "gmail": g, "run": "x" })).collect::<Vec<_>>(), "films": [] })) }),
+			get(move || async move { Json(json!({ "running": listed.lock().unwrap().iter().map(|g| json!({ "gmail": g, "run": "gmb:1" })).collect::<Vec<_>>(), "films": [] })) }),
 		)
 }
 
@@ -303,7 +303,7 @@ async fn a_start_is_at_the_gbps_point_its_profile_made_once_and_told_to_the_runn
 	assert_eq!(orbita["proxy"], format!("http://{}", w.proxy), "the credentials ride in the preferences only");
 
 	let (_, connections) = w.call(Method::GET, &format!("/api/v1/gmails/{a}/connections"), None).await;
-	assert_eq!(connections["browser"]["running"], true, "{connections}");
+	assert_eq!(connections["browser"]["running"], json!({ "gmb": gbp }), "{connections}");
 	let (status, _) = w.call(Method::POST, &format!("/api/v1/gmails/{a}/browser/start"), Some(json!({ "gmb": null }))).await;
 	assert_eq!(status, StatusCode::NO_CONTENT);
 	assert_eq!(w.gologin.asked(), ["put", "token"], "the profile is not made again");

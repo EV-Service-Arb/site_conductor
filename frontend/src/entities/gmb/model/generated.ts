@@ -11,7 +11,11 @@ endpoint: string, exit: Exit, set_at: string,
 /**
  * `error` null: through the proxy, out in the country of every GBP of the gmail.
  */
-checked: Checked, running: boolean, 
+checked: Checked, 
+/**
+ * What it runs for now: `gmb` null, the gmail alone; null, it does not run.
+ */
+running: { gmb: number | null } | null, 
 /**
  * Its next launch plays the film uploaded as its back camera.
  */

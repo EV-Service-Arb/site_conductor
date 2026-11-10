@@ -2,7 +2,7 @@
 //! once its devtools answer, one run per gmail, bounded, stopped with what it brought scrubbed,
 //! and nobody but the conductor heard.
 
-use std::{process::Stdio, time::Duration};
+use std::{path::Path, process::Stdio, time::Duration};
 
 use sa_auth::{Assertion, Principal, Service, Signer};
 use serde_json::{Value, json};
@@ -128,7 +128,7 @@ fn ffmpeg() -> String {
 }
 
 /// A second of film: a test pattern, with or without its sound.
-fn film(dir: &std::path::Path, sound: bool) -> Vec<u8> {
+fn film(dir: &Path, sound: bool) -> Vec<u8> {
 	let out = dir.join(if sound { "with.mp4" } else { "without.mp4" });
 	let mut args = vec!["-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30:duration=1"];
 	if sound {

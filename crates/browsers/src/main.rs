@@ -31,6 +31,9 @@ use sa_browsers::{Launch, Profiles, Running};
 use tokio::sync::{mpsc, watch};
 use tokio_tungstenite::tungstenite;
 
+/// A film's upload at most.
+const FILM_MAX: usize = 512 << 20;
+
 #[derive(Parser)]
 struct Cli {
 	#[command(subcommand)]
@@ -185,9 +188,6 @@ async fn list(State(runner): State<Runner>) -> Response {
 	}
 	Json(Profiles { running, films }).into_response()
 }
-
-/// A film's upload at most.
-const FILM_MAX: usize = 512 << 20;
 
 /// The film the next launch plays; not while it runs.
 async fn set_film(State(runner): State<Runner>, Path(gmail): Path<i64>, mp4: axum::body::Bytes) -> Response {

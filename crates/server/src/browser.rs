@@ -42,7 +42,7 @@ use jiff::Timestamp;
 use sa_auth::{Assertion, Principal, Service, Signer};
 use sa_browsers::{Launch, Profiles};
 use sa_panel::{
-	browsers::{Browsers, NewBrowser, Provider},
+	browsers::{Browsers, NewBrowser, Provider, Run},
 	live::{Ended, Signal},
 	session::SessionKey,
 };
@@ -80,6 +80,12 @@ const RECHECK: Duration = Duration::from_secs(60);
 
 /// How long one frame may take to go out before the viewer is dropped.
 const SEND_WITHIN: Duration = Duration::from_secs(10);
+/// The film's upload: under the gate, outside the API's bounds — a film takes longer than a
+/// request may.
+pub(crate) const FILM: &str = "/api/v1/gmails/{id}/browser/film";
+
+/// A film at most.
+pub(crate) const FILM_MAX: usize = 512 << 20;
 type Devtools = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 type Held = (u64, oneshot::Sender<()>);
@@ -111,9 +117,16 @@ pub struct BrowserDto {
 	pub set_at: String,
 	/// `error` null: through the proxy, out in the country of every GBP of the gmail.
 	pub checked: CheckedDto,
-	pub running: bool,
+	/// What it runs for now: `gmb` null, the gmail alone; null, it does not run.
+	#[ts(type = "{ gmb: number | null } | null")]
+	pub running: Option<RunningDto>,
 	/// Its next launch plays the film uploaded as its back camera.
 	pub film: bool,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct RunningDto {
+	pub gmb: Option<i64>,
 }
 
 /// A frame of the viewer's socket, from the conductor.
@@ -252,14 +265,20 @@ impl Connected {
 		})
 	}
 
-	/// Whether the gmail's browser runs now, and whether its next launch plays a film.
-	pub(crate) async fn state(&self, gmail: i64) -> ApiResult<(bool, bool)> {
+	/// What the gmail's browser runs for now, and whether its next launch plays a film.
+	pub(crate) async fn state(&self, gmail: i64) -> ApiResult<(Option<RunningDto>, bool)> {
 		let (status, body) = self.runner.call(Method::GET, "/profiles", None).await?;
 		if status != StatusCode::OK {
 			return Err(ApiError::Unavailable(format!("the browsers' runner answered {status}: {body}")));
 		}
 		let profiles: Profiles = serde_json::from_str(&body).map_err(|e| eyre::eyre!("the runner's profiles: {e}"))?;
-		Ok((profiles.running.iter().any(|r| r.gmail == gmail), profiles.films.contains(&gmail)))
+		let running = match profiles.running.iter().find(|r| r.gmail == gmail) {
+			Some(r) => Some(RunningDto {
+				gmb: r.run.parse::<Run>().map_err(|e| eyre::eyre!("the runner's run: {e}"))?.0,
+			}),
+			None => None,
+		};
+		Ok((running, profiles.films.contains(&gmail)))
 	}
 }
 
@@ -336,6 +355,17 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 	]
 }
 
+/// The owner's screens read the gmail's browser again: set, checked, started, stopped, its film.
+fn changed(state: &ApiState, owner: uuid::Uuid, gmail: i64) {
+	state.panel.bus().changed(sa_panel::live::Change {
+		topic: "browsers".into(),
+		brand: None,
+		id: Some(gmail.to_string()),
+		at: Timestamp::now(),
+		audience: sa_panel::live::Audience::User(owner),
+	});
+}
+
 fn connected(state: &ApiState) -> ApiResult<&Connected> {
 	state.browsers.as_ref().ok_or_else(|| ApiError::Unavailable(NOT_CONNECTED.to_owned()))
 }
@@ -356,12 +386,14 @@ async fn set(State(state): State<ApiState>, Extension(caller): Extension<Caller>
 	};
 	state.panel.set_browser(&c.browsers, caller.user_id, gmail, new, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail's browser set");
+	changed(&state, caller.user_id, gmail);
 	connections::answer(&state, caller.user_id, gmail).await.map(Json)
 }
 
 async fn test(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<Json<ConnectionsDto>> {
 	let gmail = id(&raw)?;
 	state.panel.check_browser(&connected(&state)?.browsers, caller.user_id, gmail, Timestamp::now()).await??;
+	changed(&state, caller.user_id, gmail);
 	connections::answer(&state, caller.user_id, gmail).await.map(Json)
 }
 
@@ -372,6 +404,7 @@ async fn remove(State(state): State<ApiState>, Extension(caller): Extension<Call
 	c.runner.expect_done(Method::DELETE, &format!("/profiles/{gmail}"), None).await?;
 	state.panel.delete_browser(&c.browsers, caller.user_id, gmail).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail's browser removed");
+	changed(&state, caller.user_id, gmail);
 	Ok(StatusCode::NO_CONTENT)
 }
 
@@ -379,7 +412,14 @@ async fn start(State(state): State<ApiState>, Extension(caller): Extension<Calle
 	let gmail = id(&raw)?;
 	let c = connected(&state)?;
 	let launch = state.panel.launch(&c.browsers, caller.user_id, gmail, body(b)?.gmb, Timestamp::now()).await??;
-	c.runner.expect_done(Method::POST, &format!("/profiles/{gmail}/launch"), Some(&launch)).await?;
+	c.runner
+		.expect_done(Method::POST, &format!("/profiles/{gmail}/launch"), Some(&launch))
+		.await
+		.map_err(|e| match e {
+			ApiError::Conflict(_) => ApiError::Conflict("it runs for another GBP, or for the gmail alone: stop it first".to_owned()),
+			e => e,
+		})?;
+	changed(&state, caller.user_id, gmail);
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, run = launch.run, "gmail's browser up");
 	Ok(StatusCode::NO_CONTENT)
 }
@@ -389,6 +429,7 @@ async fn stop(State(state): State<ApiState>, Extension(caller): Extension<Caller
 	let c = connected(&state)?;
 	state.panel.browser_of(caller.user_id, gmail).await??;
 	c.runner.expect_done(Method::POST, &format!("/profiles/{gmail}/stop"), None).await?;
+	changed(&state, caller.user_id, gmail);
 	Ok(StatusCode::NO_CONTENT)
 }
 
@@ -397,14 +438,9 @@ async fn remove_film(State(state): State<ApiState>, Extension(caller): Extension
 	let c = connected(&state)?;
 	state.panel.browser_of(caller.user_id, gmail).await??;
 	c.runner.expect_done(Method::DELETE, &format!("/profiles/{gmail}/film"), None).await?;
+	changed(&state, caller.user_id, gmail);
 	Ok(StatusCode::NO_CONTENT)
 }
-
-/// The film's upload: under the gate, outside the API's bounds — a film takes longer than a
-/// request may.
-pub(crate) const FILM: &str = "/api/v1/gmails/{id}/browser/film";
-/// A film at most.
-pub(crate) const FILM_MAX: usize = 512 << 20;
 
 /// `PUT` an mp4, streamed to the runner: the camera of the gmail's next launch, its sound the mic.
 pub(crate) async fn set_film(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, film: axum::body::Body) -> ApiResult<StatusCode> {
@@ -427,6 +463,7 @@ pub(crate) async fn set_film(State(state): State<ApiState>, Extension(caller): E
 	match status {
 		StatusCode::NO_CONTENT => {
 			tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail's film set");
+			changed(&state, caller.user_id, gmail);
 			Ok(StatusCode::NO_CONTENT)
 		}
 		StatusCode::BAD_REQUEST => Err(ApiError::BadRequest(text)),

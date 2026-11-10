@@ -80,7 +80,7 @@ pub struct ConnectionsDto {
 	pub browser: Option<crate::browser::BrowserDto>,
 }
 impl ConnectionsDto {
-	fn of(c: Connections, running: bool, film: bool) -> Self {
+	fn of(c: Connections, running: Option<crate::browser::RunningDto>, film: bool) -> Self {
 		Self {
 			imap: c.imap.map(|i: Imap| ImapDto {
 				host: i.host,
@@ -168,7 +168,7 @@ pub(crate) async fn answer(state: &ApiState, owner: uuid::Uuid, gmail: i64) -> A
 	let c = state.panel.connections(owner, gmail).await??;
 	let (running, film) = match (&c.browser, &state.browsers) {
 		(Some(_), Some(b)) => b.state(gmail).await?,
-		_ => (false, false),
+		_ => (None, false),
 	};
 	Ok(ConnectionsDto::of(c, running, film))
 }
