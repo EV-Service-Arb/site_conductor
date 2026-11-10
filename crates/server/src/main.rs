@@ -506,7 +506,7 @@ async fn serve(
 		tracing::warn!("GOOGLE_MAPS_BROWSER_KEY unset: no map, /api/v1/map is a 404");
 	}
 	if browsers.is_none() {
-		tracing::warn!("GOLOGIN_TOKEN and PANEL_BROWSERS_URL unset: no browsers, their routes answer 503");
+		tracing::warn!("PANEL_BROWSERS_URL unset: no browsers, their routes answer 503");
 	}
 	let app = http::app(sign_in, forward, grafana.as_ref().map(|(g, _)| g), http::Limits::default(), bot.clone(), map, browsers);
 	let app = match files {

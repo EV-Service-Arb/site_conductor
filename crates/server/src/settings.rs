@@ -89,10 +89,14 @@ ev_lib::settings! {
 		google_maps_keys: Option<String>,
 		/// The key the browser loads Maps JS with: referrer-restricted, public by nature. Unset: no map.
 		google_maps_browser_key: Option<String>,
-		/// GoLogin's API token (app.gologin.com → Settings → API; a paid plan): the gmails' browsers'
-		/// profiles. With PANEL_BROWSERS_URL, or neither: no browsers.
+		/// GoLogin's API token (app.gologin.com → Settings → API; a paid plan): its browsers'
+		/// profiles. It or MULTILOGIN_TOKEN with PANEL_BROWSERS_URL; none of the three: no browsers.
 		#[secret]
 		gologin_token: Option<String>,
+		/// Multilogin's automation token (a Pro plan): its cloud phones and browsers, and each run's
+		/// own 3-hour token minted from it.
+		#[secret]
+		multilogin_token: Option<String>,
 		/// sa_browsers' runner, from inside the cluster, e.g. `http://browsers:59130`. Needs
 		/// PANEL_ASSERTION_KEY: it trusts the conductor's assertion alone.
 		panel_browsers_url: Option<String>,
@@ -236,22 +240,23 @@ impl Settings {
 		}))
 	}
 
-	/// The gmails' browsers: `None` when neither variable is set; one without the other is a
-	/// mistake, named.
+	/// The gmails' browsers: `None` when none of the variables is set; a token without the runner,
+	/// or the runner without a token, is a mistake, named. A provider without its token answers 503.
 	pub fn browsers(&self) -> eyre::Result<Option<sa_server::browser::Connected>> {
 		let set = |v: &Option<String>| v.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned);
-		let (token, url) = match (set(&self.gologin_token), set(&self.panel_browsers_url)) {
-			(None, None) => return Ok(None),
-			(Some(t), Some(u)) => (t, u),
-			(Some(_), None) => eyre::bail!("GOLOGIN_TOKEN needs PANEL_BROWSERS_URL too"),
-			(None, Some(_)) => eyre::bail!("PANEL_BROWSERS_URL needs GOLOGIN_TOKEN too"),
+		let (gologin, multilogin) = (set(&self.gologin_token), set(&self.multilogin_token));
+		let url = match (gologin.is_some() || multilogin.is_some(), set(&self.panel_browsers_url)) {
+			(false, None) => return Ok(None),
+			(true, Some(u)) => u,
+			(true, None) => eyre::bail!("GOLOGIN_TOKEN and MULTILOGIN_TOKEN need PANEL_BROWSERS_URL too"),
+			(false, Some(_)) => eyre::bail!("PANEL_BROWSERS_URL needs GOLOGIN_TOKEN or MULTILOGIN_TOKEN too"),
 		};
 		let signer = set(&self.panel_assertion_key)
 			.ok_or_else(|| eyre::eyre!("PANEL_BROWSERS_URL needs PANEL_ASSERTION_KEY: the runner trusts the conductor's assertion alone"))?
 			.parse()
 			.map_err(|e| eyre::eyre!("PANEL_ASSERTION_KEY: {e}"))?;
 		let url = bare_http_origin("PANEL_BROWSERS_URL", &url)?.to_string();
-		let browsers = sa_panel::browsers::Browsers::try_new(zeroize::Zeroizing::new(token))?;
+		let browsers = sa_panel::browsers::Browsers::try_new(gologin.map(zeroize::Zeroizing::new), multilogin.map(zeroize::Zeroizing::new))?;
 		Ok(Some(sa_server::browser::Connected::try_new(browsers, &url, signer)?))
 	}
 
@@ -455,6 +460,7 @@ mod tests {
 				"GOOGLE_MAPS_KEYS",
 				"GOOGLE_MAPS_BROWSER_KEY",
 				"GOLOGIN_TOKEN",
+				"MULTILOGIN_TOKEN",
 				"PANEL_BROWSERS_URL",
 				"PANEL_GRAFANA_SERVER",
 				"PANEL_GRAFANA_DIR",

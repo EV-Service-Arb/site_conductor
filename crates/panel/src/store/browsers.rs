@@ -7,14 +7,35 @@ use sqlx::SqliteConnection;
 use super::{connections::Sealed, from_db, to_db};
 pub use crate::store::connections::Checked;
 
-const COLUMNS: &str = "provider, device, endpoint, provider_profile, noise_canvas, noise_webgl, noise_rects, noise_audio, \
+const COLUMNS: &str = "provider, device, endpoint, provider_profile, noise_canvas, noise_webgl, noise_rects, noise_audio, film_material, \
 	exit_ip, exit_country, exit_city, exit_zone, exit_mobile, set_at, checked_at, check_error, proxy_sealed, data_key_fp";
 
 /// Who runs a gmail's browser.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, strum::Display, strum::EnumString, strum::IntoStaticStr, strum::VariantArray)]
 #[strum(serialize_all = "snake_case")]
 pub enum Provider {
+	/// A cloud phone: real Android.
+	Multilogin,
+	/// Mimic posing as Android.
+	MultiloginBrowser,
 	Gologin,
+}
+
+/// What a browser poses as: a measured device, or a cloud phone's own model.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Poses {
+	Device(sa_browsers::Device),
+	Phone(String),
+}
+
+/// As stored: a device's name, a phone's model.
+impl std::fmt::Display for Poses {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Device(d) => f.write_str(d.into()),
+			Self::Phone(model) => f.write_str(model),
+		}
+	}
 }
 
 /// Where the proxy comes out, as ip-api saw it at the last check through it.
@@ -30,7 +51,7 @@ pub struct Exit {
 	pub mobile: bool,
 }
 
-/// The provider's profile, made at the first start, and the noise it drew then.
+/// The noise GoLogin drew at its profile's creation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Noise {
 	pub canvas: f64,
@@ -42,10 +63,15 @@ pub struct Noise {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Browser {
 	pub provider: Provider,
-	pub device: sa_browsers::Device,
+	pub device: Poses,
 	/// host:port.
 	pub endpoint: String,
-	pub profile: Option<(String, Noise)>,
+	/// The provider's: GoLogin's made at the first start, Multilogin's at the set-up.
+	pub profile: Option<String>,
+	/// GoLogin's, beside its profile.
+	pub noise: Option<Noise>,
+	/// A phone's film, in Multilogin's Library.
+	pub film_material: Option<String>,
 	pub exit: Exit,
 	pub set_at: Timestamp,
 	pub checked: Checked,
@@ -68,6 +94,7 @@ struct Row {
 	noise_webgl: Option<f64>,
 	noise_rects: Option<f64>,
 	noise_audio: Option<f64>,
+	film_material: Option<String>,
 	exit_ip: String,
 	exit_country: String,
 	exit_city: String,
@@ -89,16 +116,23 @@ pub(crate) async fn browser(conn: &mut SqliteConnection, gmail_id: i64) -> eyre:
 	let Some(r) = row else {
 		return Ok(None);
 	};
-	let profile = match (r.provider_profile, r.noise_canvas, r.noise_webgl, r.noise_rects, r.noise_audio) {
-		(Some(id), Some(canvas), Some(webgl), Some(rects), Some(audio)) => Some((id, Noise { canvas, webgl, rects, audio })),
-		(None, None, None, None, None) => None,
-		half => eyre::bail!("gmail {gmail_id}'s browser profile is half there: {half:?}"),
+	let noise = match (r.noise_canvas, r.noise_webgl, r.noise_rects, r.noise_audio) {
+		(Some(canvas), Some(webgl), Some(rects), Some(audio)) => Some(Noise { canvas, webgl, rects, audio }),
+		(None, None, None, None) => None,
+		half => eyre::bail!("gmail {gmail_id}'s browser noise is half there: {half:?}"),
+	};
+	let provider: Provider = r.provider.parse()?;
+	let device = match provider {
+		Provider::Multilogin => Poses::Phone(r.device),
+		Provider::MultiloginBrowser | Provider::Gologin => Poses::Device(r.device.parse()?),
 	};
 	let browser = Browser {
-		provider: r.provider.parse()?,
-		device: r.device.parse()?,
+		provider,
+		device,
 		endpoint: r.endpoint,
-		profile,
+		profile: r.provider_profile,
+		noise,
+		film_material: r.film_material,
 		exit: Exit {
 			ip: r.exit_ip,
 			country: r.exit_country,
@@ -139,18 +173,25 @@ pub(crate) async fn tag_holder(conn: &mut SqliteConnection, tag: &[u8; 32]) -> e
 		.wrap_err("looking a proxy up")
 }
 
-/// Checked when set: a refused one is never stored. Provider and device stay once set.
-pub(crate) async fn set(conn: &mut SqliteConnection, gmail_id: i64, provider: Provider, device: sa_browsers::Device, proxy: &Proxy, exit: &Exit, now: Timestamp) -> eyre::Result<()> {
+/// What a browser is set up as: its provider, what it poses as, and Multilogin's profile.
+pub(crate) struct Fingerprint<'a> {
+	pub provider: Provider,
+	pub device: &'a Poses,
+	pub profile: Option<&'a str>,
+}
+
+/// Checked when set: a refused one is never stored. Provider, device and profile stay once set.
+pub(crate) async fn set(conn: &mut SqliteConnection, gmail_id: i64, f: Fingerprint<'_>, proxy: &Proxy, exit: &Exit, now: Timestamp) -> eyre::Result<()> {
 	sqlx::query(
 		"INSERT INTO gmail_browsers (gmail_id, provider, device, proxy_sealed, data_key_fp, proxy_tag, endpoint, exit_ip, exit_country, exit_city, \
-		 exit_zone, exit_mobile, set_at, checked_at, check_error) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, NULL) \
+		 exit_zone, exit_mobile, set_at, checked_at, check_error, provider_profile) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, NULL, $14) \
 		 ON CONFLICT (gmail_id) DO UPDATE SET proxy_sealed = excluded.proxy_sealed, data_key_fp = excluded.data_key_fp, proxy_tag = excluded.proxy_tag, \
 		 endpoint = excluded.endpoint, exit_ip = excluded.exit_ip, exit_country = excluded.exit_country, exit_city = excluded.exit_city, \
 		 exit_zone = excluded.exit_zone, exit_mobile = excluded.exit_mobile, set_at = excluded.set_at, checked_at = excluded.checked_at, check_error = NULL",
 	)
 	.bind(gmail_id)
-	.bind(<&str>::from(provider))
-	.bind(<&str>::from(device))
+	.bind(<&str>::from(f.provider))
+	.bind(f.device.to_string())
 	.bind(&proxy.sealed.blob)
 	.bind(&proxy.sealed.data_key_fp)
 	.bind(proxy.tag.as_slice())
@@ -161,6 +202,7 @@ pub(crate) async fn set(conn: &mut SqliteConnection, gmail_id: i64, provider: Pr
 	.bind(&exit.zone)
 	.bind(exit.mobile)
 	.bind(to_db(now))
+	.bind(f.profile)
 	.execute(&mut *conn)
 	.await
 	.wrap_err("setting a gmail's browser")?;
@@ -189,7 +231,18 @@ pub(crate) async fn checked(conn: &mut SqliteConnection, gmail_id: i64, at: Time
 	Ok(())
 }
 
-/// The provider's profile, made at the first start.
+/// A phone's film in Multilogin's Library, or none.
+pub(crate) async fn set_film(conn: &mut SqliteConnection, gmail_id: i64, material: Option<&str>) -> eyre::Result<()> {
+	sqlx::query("UPDATE gmail_browsers SET film_material = $2 WHERE gmail_id = $1")
+		.bind(gmail_id)
+		.bind(material)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("recording a phone's film")?;
+	Ok(())
+}
+
+/// GoLogin's profile, made at the first start.
 pub(crate) async fn set_profile(conn: &mut SqliteConnection, gmail_id: i64, id: &str, n: &Noise) -> eyre::Result<()> {
 	sqlx::query("UPDATE gmail_browsers SET provider_profile = $2, noise_canvas = $3, noise_webgl = $4, noise_rects = $5, noise_audio = $6 WHERE gmail_id = $1")
 		.bind(gmail_id)

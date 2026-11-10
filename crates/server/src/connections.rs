@@ -19,6 +19,7 @@ use axum::{
 use jiff::Timestamp;
 use sa_panel::{
 	Panel,
+	browsers::Provider,
 	connections::{Checked, Connection, Connections, Imap, MapsKey, NewImap},
 };
 use sa_places::Sku;
@@ -97,7 +98,7 @@ impl ConnectionsDto {
 			prices: c.prices.into(),
 			browser: c.browser.map(|b| BrowserDto {
 				provider: b.provider.to_string(),
-				device: b.device,
+				device: b.device.to_string(),
 				endpoint: b.endpoint,
 				exit: ExitDto {
 					ip: b.exit.ip,
@@ -167,7 +168,17 @@ async fn connections(State(state): State<ApiState>, Extension(caller): Extension
 pub(crate) async fn answer(state: &ApiState, owner: uuid::Uuid, gmail: i64) -> ApiResult<ConnectionsDto> {
 	let c = state.panel.connections(owner, gmail).await??;
 	let (running, film) = match (&c.browser, &state.browsers) {
-		(Some(_), Some(b)) => b.state(gmail).await?,
+		(Some(browser), Some(b)) => {
+			let (running, on_runner) = b.state(gmail).await?;
+			(
+				running,
+				if browser.provider == Provider::Multilogin {
+					browser.film_material.is_some()
+				} else {
+					on_runner
+				},
+			)
+		}
 		_ => (None, false),
 	};
 	Ok(ConnectionsDto::of(c, running, film))

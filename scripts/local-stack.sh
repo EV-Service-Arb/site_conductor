@@ -419,9 +419,9 @@ fi
 sites_origin="http://127.0.0.1:$SITES_PORT"
 review_archive_origin="http://127.0.0.1:$REVIEW_ARCHIVE_PORT"
 placement_origin="${PLACEMENT_PORT:+http://127.0.0.1:$PLACEMENT_PORT}"
-# The gmails' browsers only with the caller's GOLOGIN_TOKEN: Orbita refuses to start without a plan's.
+# The gmails' browsers only with the caller's GOLOGIN_TOKEN or MULTILOGIN_TOKEN: neither runs without a plan's.
 browsers_origin=""
-[ -z "${GOLOGIN_TOKEN:-}" ] || [ "$run_panel" = 0 ] || browsers_origin="http://127.0.0.1:$BROWSERS_PORT"
+[ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ] || [ "$run_panel" = 0 ] || browsers_origin="http://127.0.0.1:$BROWSERS_PORT"
 # A key for this machine alone: the 32 bytes 0..31, and its public half for sites_panel.
 assertion_key="local:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
 assertion_public="local:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="
@@ -442,7 +442,8 @@ panel() {
 		PANEL_REVIEW_ARCHIVE_URL="$review_archive_origin" \
 		PANEL_PLACEMENT_URL="$placement_origin" \
 		PANEL_BROWSERS_URL="$browsers_origin" \
-		GOLOGIN_TOKEN="${browsers_origin:+$GOLOGIN_TOKEN}" \
+		GOLOGIN_TOKEN="${browsers_origin:+${GOLOGIN_TOKEN:-}}" \
+		MULTILOGIN_TOKEN="${browsers_origin:+${MULTILOGIN_TOKEN:-}}" \
 		PANEL_GRAFANA_SERVER="$PANEL_GRAFANA_SERVER" \
 		PANEL_GRAFANA_DIR="$state/grafana" \
 		PANEL_PLAYBOOK_URL="http://127.0.0.1:9" \
@@ -582,13 +583,20 @@ wait_for() {
 
 # `watched <checkout> <watchexec's filters…> -- <command>`: <command> (bash, the functions above
 # included) in that checkout's dev shell, stopped and run again as the files watched change
-# sa_browsers' runner: Orbita headless, a session per gmail under the state dir
+# sa_browsers' runner: Orbita headless, the Multilogin app on its own Xvfb, a session per gmail
+# under the state dir; the phones it starts, Multilogin's
 browsers() {
 	BROWSERS_BIND="127.0.0.1:$BROWSERS_PORT" \
 		BROWSERS_DIR="$state/browsers" \
 		BROWSERS_MAX=4 \
 		BROWSERS_ORBITA="$BROWSERS_ORBITA" \
 		BROWSERS_FFMPEG="$BROWSERS_FFMPEG" \
+		BROWSERS_MLX="$BROWSERS_MLX" \
+		BROWSERS_MLX_LAUNCHER=https://launcher.mlx.yt:45001 \
+		BROWSERS_MULTILOGIN_API=https://api.multilogin.com \
+		BROWSERS_ADB="$BROWSERS_ADB" \
+		BROWSERS_BUSYBOX="$BROWSERS_BUSYBOX" \
+		BROWSERS_ADB_KEYBOARD="$BROWSERS_ADB_KEYBOARD" \
 		PANEL_ASSERTION_KEYS="$assertion_public" \
 		"$root/target/debug/sa_browsers" "$@"
 }
@@ -666,16 +674,19 @@ if [ "$run_placement" = 1 ]; then
 fi
 
 if [ -n "$browsers_origin" ]; then
-	say "starting the browsers' runner on $browsers_origin (Orbita: nix build .#orbita)"
+	say "starting the browsers' runner on $browsers_origin (Orbita, the Multilogin app, a phone's tools: nix build .#orbita .#mlx .#phone-tools)"
 	BROWSERS_ORBITA="$(nix build --no-link --print-out-paths "$root#orbita")/bin/orbita"
 	BROWSERS_FFMPEG="$(nix build --no-link --print-out-paths nixpkgs#ffmpeg-headless.bin)/bin/ffmpeg"
-	export BROWSERS_ORBITA BROWSERS_FFMPEG
+	BROWSERS_MLX="$(nix build --no-link --print-out-paths "$root#mlx")/bin/mlx-headless"
+	phone_tools="$(nix build --no-link --print-out-paths "$root#phone-tools")"
+	BROWSERS_ADB="$phone_tools/adb" BROWSERS_BUSYBOX="$phone_tools/busybox" BROWSERS_ADB_KEYBOARD="$phone_tools/ADBKeyboard.apk"
+	export BROWSERS_ORBITA BROWSERS_FFMPEG BROWSERS_MLX BROWSERS_ADB BROWSERS_BUSYBOX BROWSERS_ADB_KEYBOARD
 	busy "$BROWSERS_PORT" && die "port $BROWSERS_PORT is taken: the browsers' runner's"
 	in_shell "$root" cargo b -q -p sa_browsers
 	serving browsers "$root" "cargo b -q -p sa_browsers" "browsers serve" -e rs,toml,lock &
 	essential+=("$!")
 else
-	say "GOLOGIN_TOKEN unset: no browsers' runner; the gmails' browsers say they are not connected"
+	say "GOLOGIN_TOKEN and MULTILOGIN_TOKEN unset: no browsers' runner; the gmails' browsers say they are not connected"
 fi
 
 if [ "$run_panel" = 1 ]; then

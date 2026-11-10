@@ -225,6 +225,7 @@
             "TELEGRAM_BOT_TOKEN"
             "GOOGLE_MAPS_KEYS"
             "GOLOGIN_TOKEN"
+            "MULTILOGIN_TOKEN"
           ];
           # TELEGRAM_BOT_TOKEN needs the forward (it sends sites' notes).
           optionalEnv = [
@@ -240,8 +241,10 @@
             "GOOGLE_MAPS_KEYS"
             # the browser's Maps JS key (referrer-restricted); without it the home page has no map
             "GOOGLE_MAPS_BROWSER_KEY"
-            # both or neither: the gmails' browsers (sa_browsers' runner, below); unset, their routes answer 503
+            # the gmails' browsers: the runner (sa_browsers, below) with a provider's token or both; unset,
+            # their routes answer 503, and a provider without its token too
             "GOLOGIN_TOKEN"
+            "MULTILOGIN_TOKEN"
             "PANEL_BROWSERS_URL"
           ];
           ingress = {
@@ -256,8 +259,9 @@
           egress = {
             # concierge's gRPC, at the address it names
             grpcEnv = [ "CONCIERGE_GRPC_ADDR" ];
-            # the Bot API; the Places API (GOOGLE_MAPS_KEYS); GoLogin's API (GOLOGIN_TOKEN)
-            hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "api.gologin.com:443" ];
+            # the Bot API; the Places API (GOOGLE_MAPS_KEYS); GoLogin's (GOLOGIN_TOKEN) and Multilogin's
+            # (MULTILOGIN_TOKEN) APIs
+            hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" ];
           };
         };
 
@@ -385,7 +389,7 @@
         packages = {
           default = bin;
           inherit bin frontend;
-        } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (containerStd.packages // { grafana-server = grafanaServer; inherit orbita; mlx = multilogin.mlx; adb-keyboard = multilogin.adbKeyboard; });
+        } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (containerStd.packages // { grafana-server = grafanaServer; inherit orbita; mlx = multilogin.mlx; phone-tools = multilogin.phoneTools; });
 
         containers = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux containers;
 

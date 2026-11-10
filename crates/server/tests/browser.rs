@@ -83,6 +83,41 @@ fn gologin(stub: GoLogin) -> Router {
 		.with_state(stub)
 }
 
+/// Multilogin's API: what it was asked, in order, with the bodies.
+#[derive(Clone, Default)]
+struct Multilogin(Arc<Mutex<Vec<(String, Value)>>>);
+
+impl Multilogin {
+	fn asked(&self) -> Vec<(String, Value)> {
+		std::mem::take(&mut *self.0.lock().unwrap())
+	}
+
+	fn paths(&self) -> Vec<String> {
+		self.asked().into_iter().map(|(p, _)| p).collect()
+	}
+}
+
+fn multilogin(stub: Multilogin) -> Router {
+	let ok = |data: Value| Json(json!({ "data": data, "status": { "error_code": "", "http_code": 200, "message": "" } }));
+	let answer = move |path: &str, body: &Value| match path {
+		"/workspace/automation_token" => json!({ "token": "three-hour-token" }),
+		"/workspace/folders" => json!({ "folders": [{ "folder_id": "f-default", "name": "Default folder" }] }),
+		"/workspace/folder_create" => json!({ "id": "f-sc" }),
+		"/mobile_profiles/phone/brand/list" => json!([{ "surface_brand_name": "Xiaomi", "surface_model_name": "14" }, { "surface_brand_name": "Google", "surface_model_name": "Pixel 7" }]),
+		"/mobile_profiles/phone/create" => json!({ "fail_amount": 0, "details": [{ "id": "ph-1" }] }),
+		"/profile/create" => json!({ "ids": ["mimic-1"] }),
+		"/mobile_profiles/files/upload" => json!({ "material_id": format!("film-{}", body["n"]) }),
+		_ => json!({ "fail_amount": 0 }),
+	};
+	let handler = move |State(s): State<Multilogin>, uri: axum::http::Uri, body: axum::body::Bytes| async move {
+		let path = uri.path().to_owned();
+		let body: Value = serde_json::from_slice(&body).unwrap_or_else(|_| json!({ "n": s.0.lock().unwrap().iter().filter(|(p, _)| p.ends_with("upload")).count() }));
+		s.0.lock().unwrap().push((path.clone(), body.clone()));
+		ok(answer(&path, &body))
+	};
+	Router::new().fallback(handler).with_state(stub)
+}
+
 /// sa_browsers' runner: what is running, as launched and stopped.
 fn runner(running: Arc<Mutex<Vec<i64>>>) -> Router {
 	let (launched, stopped, listed) = (running.clone(), running.clone(), running);
@@ -120,6 +155,7 @@ struct World {
 	app: Router,
 	b: Browser,
 	gologin: GoLogin,
+	multilogin: Multilogin,
 	runner: Log,
 	/// What ip-api's stub answers through, as a proxy: any user, any password.
 	proxy: String,
@@ -134,6 +170,8 @@ impl World {
 	async fn with_runner(runner: Router) -> Self {
 		let stub = GoLogin::default();
 		let gologin_base = serve(gologin(stub.clone())).await;
+		let ml = Multilogin::default();
+		let multilogin_base = serve(multilogin(ml.clone())).await;
 		let proxy = serve(Router::new().route("/json/", get(ip_api))).await;
 		let (runner_base, runner_log) = upstream(runner).await;
 
@@ -156,7 +194,7 @@ impl World {
 			panel_origin: ORIGIN.to_owned(),
 			concierge_origin: ORIGIN.to_owned(),
 		};
-		let browsers = Browsers::stubbed(&gologin_base, "http://ip-api.test/json/");
+		let browsers = Browsers::stubbed(&gologin_base, &multilogin_base, "http://ip-api.test/json/");
 		let connected = Connected::try_new(browsers, &runner_base, SEED.parse().unwrap()).unwrap();
 		let app = http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, None, Some(connected));
 		let mut b = Browser::default();
@@ -165,6 +203,7 @@ impl World {
 			app,
 			b,
 			gologin: stub,
+			multilogin: ml,
 			runner: runner_log,
 			proxy: proxy.strip_prefix("http://").unwrap().to_owned(),
 			db,
@@ -213,12 +252,42 @@ impl World {
 	}
 
 	async fn set(&mut self, gmail: i64, device: &str, proxy: &str) -> (StatusCode, Value) {
+		self.set_as(gmail, "gologin", Some(device), proxy).await
+	}
+
+	async fn set_as(&mut self, gmail: i64, provider: &str, device: Option<&str>, proxy: &str) -> (StatusCode, Value) {
 		self.call(
 			Method::PUT,
 			&format!("/api/v1/gmails/{gmail}/browser"),
-			Some(json!({ "provider": "gologin", "device": device, "proxy": proxy })),
+			Some(json!({ "provider": provider, "device": device, "proxy": proxy })),
 		)
 		.await
+	}
+
+	/// The runner's launches, as it was told them.
+	fn launches(&self) -> Vec<Value> {
+		self.runner
+			.lock()
+			.unwrap()
+			.iter()
+			.filter(|s| s.path_and_query.ends_with("/launch"))
+			.map(|s| serde_json::from_slice(&s.body).unwrap())
+			.collect()
+	}
+
+	async fn film(&mut self, gmail: i64, mp4: Vec<u8>) -> StatusCode {
+		let (status, _, _) = self
+			.b
+			.send_body(
+				&self.app,
+				Method::PUT,
+				&format!("/api/v1/gmails/{gmail}/browser/film"),
+				&[("content-type", "video/mp4")],
+				true,
+				Body::from(mp4),
+			)
+			.await;
+		status
 	}
 
 	async fn listed(&mut self, gmail: i64) -> Value {
@@ -303,7 +372,7 @@ async fn a_start_is_at_the_gbps_point_its_profile_made_once_and_told_to_the_runn
 	assert_eq!(orbita["proxy"], format!("http://{}", w.proxy), "the credentials ride in the preferences only");
 
 	let (_, connections) = w.call(Method::GET, &format!("/api/v1/gmails/{a}/connections"), None).await;
-	assert_eq!(connections["browser"]["running"], json!({ "gmb": gbp }), "{connections}");
+	assert_eq!(connections["browser"]["running"], json!({ "gmb": gbp, "stream": null }), "{connections}");
 	let (status, _) = w.call(Method::POST, &format!("/api/v1/gmails/{a}/browser/start"), Some(json!({ "gmb": null }))).await;
 	assert_eq!(status, StatusCode::NO_CONTENT);
 	assert_eq!(w.gologin.asked(), ["put", "token"], "the profile is not made again");
@@ -466,4 +535,140 @@ async fn the_viewer_sees_the_page_and_touches_it_as_a_phone_one_viewer_at_a_time
 		last = next(&mut first).await;
 	}
 	assert_eq!(last["closed"], sa_server::browser::CLOSE_REPLACED, "one viewer per gmail");
+}
+
+#[tokio::test]
+async fn a_cloud_phone_is_made_at_its_set_up_its_model_drawn_its_proxy_replaced_and_deleted_with_its_film() {
+	let mut w = World::new().await;
+	let a = w.gmail("a@gmail.com").await;
+	let gbp = w.gbp(a, "Plombier Lyon 7", "FR").await;
+	let (status, refused) = w.set_as(a, "multilogin", Some("pixel_7"), &w.proxy("fr")).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "a phone's model is drawn, never named: {refused}");
+	let (status, set) = w.set_as(a, "multilogin", None, &w.proxy("fr")).await;
+	assert_eq!(status, StatusCode::OK, "{set}");
+	assert_eq!(set["browser"]["device"], "Google Pixel 7", "Google or Samsung only: {set}");
+	let asked = w.multilogin.asked();
+	let create = &asked.iter().find(|(p, _)| p == "/mobile_profiles/phone/create").unwrap().1;
+	assert_eq!(create["data"][0]["proxy_information"], w.proxy("fr"), "{create}");
+	assert_eq!((&create["mobile_type"], &create["data"][0]["profile_name"]), (&json!("Android 14"), &json!("a@gmail.com")));
+
+	let (status, replaced) = w.set_as(a, "multilogin", None, &w.proxy("fr-2")).await;
+	assert_eq!(status, StatusCode::OK, "{replaced}");
+	assert_eq!(replaced["browser"]["device"], "Google Pixel 7", "the model stays");
+	let asked = w.multilogin.asked();
+	assert_eq!(asked.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(), ["/mobile_profiles/phone/update"]);
+	assert_eq!((&asked[0].1["id"], &asked[0].1["proxy_config"]["username"]), (&json!("ph-1"), &json!("fr-2")));
+
+	let (status, body) = w.call(Method::POST, &format!("/api/v1/gmails/{a}/browser/start"), Some(json!({ "gmb": gbp }))).await;
+	assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+	assert_eq!(w.multilogin.paths(), ["/workspace/automation_token"], "a run's own token, nothing else");
+	assert_eq!(
+		w.launches()[0]["browser"],
+		json!({ "provider": "multilogin_phone", "token": "three-hour-token", "phone": "ph-1", "geo": [45.75, 4.85], "zone": "Europe/Paris", "country": "FR" })
+	);
+
+	assert_eq!(w.film(a, vec![7u8; 1 << 20]).await, StatusCode::NO_CONTENT);
+	assert_eq!(w.film(a, vec![8u8; 1 << 20]).await, StatusCode::NO_CONTENT);
+	let asked = w.multilogin.asked();
+	assert_eq!(
+		asked.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(),
+		["/mobile_profiles/files/upload", "/mobile_profiles/files/upload", "/mobile_profiles/files/delete"],
+		"the one before leaves the Library"
+	);
+	assert_eq!(asked[2].1["ids"], json!(["film-0"]));
+	assert!(
+		w.runner.lock().unwrap().iter().all(|s| !s.path_and_query.ends_with("/film")),
+		"a phone's film is not the runner's"
+	);
+	let (_, connections) = w.call(Method::GET, &format!("/api/v1/gmails/{a}/connections"), None).await;
+	assert_eq!(connections["browser"]["film"], true, "{connections}");
+
+	let (status, _) = w.call(Method::DELETE, &format!("/api/v1/gmails/{a}/browser"), None).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	let asked = w.multilogin.asked();
+	assert_eq!(
+		asked.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(),
+		["/mobile_profiles/files/delete", "/mobile_profiles/phone/delete"]
+	);
+	assert_eq!((&asked[0].1["ids"], &asked[1].1["ids"]), (&json!(["film-1"]), &json!(["ph-1"])));
+}
+
+#[tokio::test]
+async fn multilogins_browser_is_made_in_the_conductors_folder_and_told_the_place_at_each_start() {
+	let mut w = World::new().await;
+	let a = w.gmail("a@gmail.com").await;
+	let gbp = w.gbp(a, "Plombier Lyon 7", "FR").await;
+	let (status, set) = w.set_as(a, "multilogin_browser", Some("pixel_7"), &w.proxy("fr")).await;
+	assert_eq!(status, StatusCode::OK, "{set}");
+	let asked = w.multilogin.asked();
+	assert_eq!(
+		asked.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(),
+		["/workspace/folders", "/workspace/folder_create", "/profile/create"]
+	);
+	let made = &asked[2].1;
+	assert_eq!(
+		(&made["folder_id"], &made["os_type"], &made["browser_type"]),
+		(&json!("f-sc"), &json!("android"), &json!("mimic"))
+	);
+	assert_eq!(made["parameters"]["fingerprint"]["graphic"]["renderer"], "Mali-G710", "the device's GPU");
+	assert_eq!(made["parameters"]["flags"]["navigator_masking"], "mask", "a custom navigator breaks UA-CH");
+
+	let (status, body) = w.call(Method::POST, &format!("/api/v1/gmails/{a}/browser/start"), Some(json!({ "gmb": gbp }))).await;
+	assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+	let asked = w.multilogin.asked();
+	assert_eq!(
+		asked.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(),
+		["/profile/update", "/workspace/automation_token"],
+		"the folder known"
+	);
+	let fp = &asked[0].1["parameters"]["fingerprint"];
+	assert_eq!((&fp["geolocation"]["latitude"], &fp["timezone"]["zone"]), (&json!(45.75), &json!("Europe/Paris")), "{fp}");
+	assert_eq!(asked[0].1["profile_id"], "mimic-1");
+	assert_eq!(
+		w.launches()[0]["browser"],
+		json!({ "provider": "multilogin_browser", "token": "three-hour-token", "folder": "f-sc", "profile": "mimic-1" })
+	);
+	assert_eq!(w.film(a, vec![7u8; 16]).await, StatusCode::CONFLICT, "Mimic plays no film");
+}
+
+#[tokio::test]
+async fn a_phones_viewer_is_the_runners_its_frames_checked_and_passed_both_ways() {
+	use futures::{SinkExt, StreamExt};
+	use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
+
+	let heard: Arc<Mutex<Vec<String>>> = Arc::default();
+	let view_heard = heard.clone();
+	let runner = runner(Arc::new(Mutex::new(vec![1]))).route(
+		"/profiles/{gmail}/view",
+		get(move |ws: axum::extract::WebSocketUpgrade| {
+			let heard = view_heard.clone();
+			async move {
+				ws.on_upgrade(move |mut s| async move {
+					use axum::extract::ws::Message as M;
+					s.send(M::Text(json!({ "type": "frame", "data": "/9j/phone", "width": 1080.0, "height": 2400.0 }).to_string().into()))
+						.await
+						.unwrap();
+					while let Some(Ok(M::Text(t))) = s.recv().await {
+						heard.lock().unwrap().push(t.to_string());
+					}
+				})
+			}
+		}),
+	);
+	let mut w = World::with_runner(runner).await;
+	let a = w.gmail("a@gmail.com").await;
+	let (status, set) = w.set_as(a, "multilogin", None, &w.proxy("fr")).await;
+	assert_eq!(status, StatusCode::OK, "{set}");
+	let conductor = serve(w.app.clone()).await;
+	let mut req = format!("{}/api/v1/gmails/{a}/browser", conductor.replace("http", "ws")).into_client_request().unwrap();
+	req.headers_mut().insert("origin", ORIGIN.parse().unwrap());
+	req.headers_mut().insert("cookie", w.b.cookie().parse().unwrap());
+	let (mut viewer, _) = tokio_tungstenite::connect_async(req).await.unwrap();
+	assert_eq!(next(&mut viewer).await, json!({ "type": "frame", "data": "/9j/phone", "width": 1080.0, "height": 2400.0 }));
+	let touch = json!({ "type": "touch", "phase": "start", "x": 540.0, "y": 1200.0 });
+	viewer.send(Message::text(touch.to_string())).await.unwrap();
+	viewer.send(Message::text(json!({ "type": "shell", "line": "reboot" }).to_string())).await.unwrap();
+	assert_eq!(next(&mut viewer).await, json!({ "closed": 1007 }), "not a frame of the viewer's");
+	let heard: Vec<Value> = heard.lock().unwrap().iter().map(|t| serde_json::from_str(t).unwrap()).collect();
+	assert_eq!(heard, [touch], "only the viewer's frames reach the runner");
 }

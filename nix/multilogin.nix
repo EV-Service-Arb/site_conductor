@@ -54,13 +54,15 @@ in
       exec xvfb-run -a -s "-screen 0 1280x800x24" ${app}/bin/mlxapp "$@"
     '';
   };
-  inherit app;
-  adb = "${pkgs.android-tools}/bin/adb";
-  # the exit read from inside the phone: its own wget, the phone has none
-  busybox = "${pkgs.pkgsCross.aarch64-multiplatform.pkgsStatic.busybox}/bin/busybox";
-  # text past ASCII (`input text` types none): ADB_INPUT_B64 broadcasts
-  adbKeyboard = pkgs.fetchurl {
-    url = "https://raw.githubusercontent.com/senzhk/ADBKeyBoard/d7b27288bc8c1c8348a79ea6896bd7352c30a9fc/ADBKeyboard.apk";
-    hash = "sha256-5pit6lYzE1oGewOPmgz0G6pN4JiIcTqBWT+yuWgs3Fk=";
+  # what the runner drives a cloud phone with: BROWSERS_ADB, BROWSERS_BUSYBOX, BROWSERS_ADB_KEYBOARD
+  phoneTools = pkgs.linkFarm "phone-tools" {
+    adb = "${pkgs.android-tools}/bin/adb";
+    # the exit read from inside the phone: its own wget, the phone has none
+    busybox = "${pkgs.pkgsCross.aarch64-multiplatform.pkgsStatic.busybox}/bin/busybox";
+    # text past ASCII (`input text` types none): ADB_INPUT_B64 broadcasts
+    "ADBKeyboard.apk" = pkgs.fetchurl {
+      url = "https://raw.githubusercontent.com/senzhk/ADBKeyBoard/d7b27288bc8c1c8348a79ea6896bd7352c30a9fc/ADBKeyboard.apk";
+      hash = "sha256-5pit6lYzE1oGewOPmgz0G6pN4JiIcTqBWT+yuWgs3Fk=";
+    };
   };
 }

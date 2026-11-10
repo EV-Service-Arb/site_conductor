@@ -23,7 +23,7 @@ hmac.workspace = true
 icu_locale.workspace = true
 jiff = { workspace = true, features = ["serde"] }
 percent-encoding.workspace = true
-reqwest = { workspace = true, features = ["socks"] }
+reqwest = { workspace = true, features = ["multipart", "socks"] }
 rustls-platform-verifier.workspace = true
 sa_alerts.workspace = true
 sa_auth.workspace = true

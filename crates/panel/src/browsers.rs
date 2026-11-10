@@ -1,15 +1,14 @@
 //! A gmail's antidetect browser: one fingerprint and one session per gmail, at any of its GBPs.
 //! Its proxy is checked before it is kept (one request through it to ip-api: the exit, which
 //! must be in the country of every GBP of the gmail), sealed, and no other gmail's: proxies
-//! compare by a keyed tag, never in the clear. The provider's profile is made at the first start,
-//! its noise drawn by the provider then and kept; what a start hands sa_browsers is a
-//! [`Launch`].
+//! compare by a keyed tag, never in the clear. What a start hands sa_browsers is a [`Launch`].
 //!
 //! ```text
 //! set:   proxy ── public address ── ip-api through it ── exit in every GBP's country ── sealed + tag
-//! start: GoLogin profile (made once, its noise kept) ── PUT the fingerprint ── 3-minute token
-//!        ── Launch { Orbita prefs: device, zone and locale of the GBP's point (else the exit's),
-//!           the position that point or blocked }
+//!        Multilogin's phone (its model drawn) or Mimic profile made now, its proxy replaced after
+//! start: GoLogin: profile (made once, its noise kept) ── PUT the fingerprint ── 3-minute token
+//!        Multilogin: Mimic's profile told the place; a 3-hour run token
+//!        ── Launch at the GBP's point (zone and locale its), else the exit's zone, no position
 //! ```
 
 use std::{sync::LazyLock, time::Duration};
@@ -23,12 +22,12 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
-pub use crate::store::browsers::{Browser, Exit, Provider};
+pub use crate::store::browsers::{Browser, Exit, Poses, Provider};
 use crate::{
 	Panel, Refused, imap,
 	seal::gmail_browser_aad,
 	store::{
-		browsers::{self as db, Noise, Proxy},
+		browsers::{self as db, Fingerprint, Noise, Proxy},
 		gmbs as gmbs_db,
 	},
 	tokens::is_open,
@@ -38,16 +37,24 @@ const CHECK_WITHIN: Duration = Duration::from_secs(15);
 /// An integer: Orbita reads it as one, and a JSON double there crashes its renderer.
 const GPS_ACCURACY_M: u32 = 10;
 const PLATFORM: &str = "Linux armv81";
+/// 14 or 16 pass Play Integrity without a keybox of one's own (Multilogin's docs).
+const ANDROID: u32 = 14;
+/// Where the gmails' Mimic profiles sit in Multilogin.
+const FOLDER: &str = "site_conductor";
+/// A phone's film in Multilogin's Library, at most.
+pub const LIBRARY_MAX: usize = 100 << 20;
 
-/// What a browser needs beyond the database: the provider, and the exit's lookup.
+/// What a browser needs beyond the database: the providers connected, and the exit's lookup.
 pub struct Browsers {
-	gologin: GoLogin,
+	gologin: Option<GoLogin>,
+	multilogin: Option<Multilogin>,
 	exits: Exits,
 }
 impl Browsers {
-	pub fn try_new(gologin_token: Zeroizing<String>) -> eyre::Result<Self> {
+	pub fn try_new(gologin_token: Option<Zeroizing<String>>, multilogin_token: Option<Zeroizing<String>>) -> eyre::Result<Self> {
 		Ok(Self {
-			gologin: GoLogin::try_new("https://api.gologin.com", gologin_token)?,
+			gologin: gologin_token.map(|t| GoLogin::try_new("https://api.gologin.com", t)).transpose()?,
+			multilogin: multilogin_token.map(|t| Multilogin::try_new("https://api.multilogin.com", t)).transpose()?,
 			exits: Exits {
 				lookup: "http://ip-api.com/json/".to_owned(),
 				public_only: true,
@@ -55,23 +62,43 @@ impl Browsers {
 		})
 	}
 
-	/// GoLogin's API and ip-api at stubs', a proxy on loopback let through.
+	/// The providers' APIs and ip-api at stubs', a proxy on loopback let through.
 	#[cfg(feature = "testing")]
-	pub fn stubbed(gologin: &str, ip_api: &str) -> Self {
+	pub fn stubbed(gologin: &str, multilogin: &str, ip_api: &str) -> Self {
 		Self {
-			gologin: GoLogin::try_new(gologin, Zeroizing::new("stub".to_owned())).expect("a client"),
+			gologin: Some(GoLogin::try_new(gologin, Zeroizing::new("stub".to_owned())).expect("a client")),
+			multilogin: Some(Multilogin::try_new(multilogin, Zeroizing::new("stub".to_owned())).expect("a client")),
 			exits: Exits {
 				lookup: ip_api.to_owned(),
 				public_only: false,
 			},
 		}
 	}
+
+	/// Once [`Self::of`] said its provider is connected.
+	fn gl(&self) -> &GoLogin {
+		self.gologin.as_ref().expect("its provider checked connected")
+	}
+
+	fn ml(&self) -> &Multilogin {
+		self.multilogin.as_ref().expect("its provider checked connected")
+	}
+
+	/// The provider's token was given.
+	fn of(&self, provider: Provider) -> Result<(), Refused> {
+		let connected = match provider {
+			Provider::Gologin => self.gologin.is_some(),
+			Provider::Multilogin | Provider::MultiloginBrowser => self.multilogin.is_some(),
+		};
+		connected.then_some(()).ok_or_else(|| Refused::Unavailable(format!("{provider} not connected")))
+	}
 }
 
 /// A browser as its owner sets it up.
 pub struct NewBrowser {
 	pub provider: Provider,
-	pub device: Device,
+	/// A browser's; a cloud phone's model is drawn.
+	pub device: Option<Device>,
 	pub proxy: Zeroizing<String>,
 }
 
@@ -81,37 +108,84 @@ pub struct Run(pub Option<i64>);
 
 static ZONES: LazyLock<tzf_rs::DefaultFinder> = LazyLock::new(tzf_rs::DefaultFinder::new);
 
+/// `?` for a provider's refusal: what it said, as the owner is told it.
+macro_rules! said {
+	($e:expr) => {
+		match $e {
+			Ok(v) => v,
+			Err(why) => return Ok(Err(Refused::Unavailable(why))),
+		}
+	};
+}
+
 impl Panel {
 	/// The gmail's browser, stored once its proxy goes through, out in its GBPs' country, and is
 	/// no other gmail's; a refusal stores nothing. Provider and device are set once: the proxy
-	/// alone is replaced.
+	/// alone is replaced. Multilogin's profile is made here, its proxy replaced after.
 	pub async fn set_browser(&self, b: &Browsers, owner: Uuid, id: i64, new: NewBrowser, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+		if let Err(r) = b.of(new.provider) {
+			return Ok(Err(r));
+		}
+		match (new.provider, new.device) {
+			(Provider::Multilogin, Some(_)) => return Ok(Err(Refused::Invalid("a cloud phone's model is drawn from Multilogin's: send no device".to_owned()))),
+			(Provider::Gologin | Provider::MultiloginBrowser, None) => return Ok(Err(Refused::Invalid(format!("a {} browser poses as a device: name one", new.provider)))),
+			_ => {}
+		}
 		let proxy = match ProxyUrl::parse(&new.proxy) {
 			Ok(p) => p,
 			Err(why) => return Ok(Err(Refused::Invalid(why))),
 		};
 		let tag = self.key.proxy_tag(&proxy.normalized());
-		if let Err(r) = self.gmail_of(owner, id).await? {
-			return Ok(Err(r));
-		}
-		{
+		let (gmail, set) = {
 			let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a gmail's browser")?;
-			if let Some((set, _)) = db::browser(&mut conn, id).await?
-				&& (set.provider, set.device) != (new.provider, new.device)
+			if !is_open(&mut conn).await? {
+				return Ok(Err(Refused::Closed));
+			}
+			let Some(gmail) = gmbs_db::gmails(&mut conn, owner).await?.into_iter().find(|g| g.id == id) else {
+				return Ok(Err(Refused::NotFound));
+			};
+			let set = db::browser(&mut conn, id).await?.map(|(b, _)| b);
+			if let Some(set) = &set
+				&& (set.provider != new.provider || new.device.is_some_and(|d| set.device != Poses::Device(d)))
 			{
 				return Ok(Err(Refused::Conflict(format!(
-					"this gmail's browser is {} as a {}: a fingerprint is set once; remove it to start another",
-					set.provider,
-					<&str>::from(set.device)
+					"this gmail's browser is {} as {}: a fingerprint is set once; remove it to start another",
+					set.provider, set.device
 				))));
 			}
 			if db::tag_holder(&mut conn, &tag).await?.is_some_and(|holder| holder != id) {
 				return Ok(Err(Refused::Invalid("another gmail leaves through this proxy: one proxy is one gmail's".to_owned())));
 			}
-		}
+			(gmail, set)
+		};
 		let exit = match b.exits.check(&proxy).await? {
 			Ok(e) => e,
 			Err(why) => return Ok(Err(Refused::Invalid(why))),
+		};
+		let place = match Place::try_new(exit.zone.clone(), &exit.country, None) {
+			Ok(p) => p,
+			Err(why) => return Ok(Err(Refused::Invalid(why))),
+		};
+		let (device, profile) = match (&set, new.provider, new.device) {
+			(Some(set), _, _) => {
+				match (set.provider, &set.profile, &set.device) {
+					(Provider::Multilogin, Some(phone), _) => said!(b.ml().phone_proxy(phone, &proxy).await?),
+					(Provider::MultiloginBrowser, Some(profile), Poses::Device(d)) => said!(b.ml().profile_update(profile, &mimic(&gmail.gmail, *d, &place, &proxy)).await?),
+					(Provider::Gologin, ..) => {}
+					(p, profile, device) => eyre::bail!("gmail {id}'s {p} browser is stored as {device} with profile {profile:?}"),
+				}
+				(set.device.clone(), set.profile.clone())
+			}
+			(None, Provider::Multilogin, None) => {
+				let (phone, model) = said!(b.ml().phone(&gmail.gmail, &proxy).await?);
+				(Poses::Phone(model), Some(phone))
+			}
+			(None, Provider::MultiloginBrowser, Some(d)) => {
+				let made = said!(b.ml().profile_create(&mimic(&gmail.gmail, d, &place, &proxy)).await?);
+				(Poses::Device(d), Some(made))
+			}
+			(None, Provider::Gologin, Some(d)) => (Poses::Device(d), None),
+			_ => unreachable!("device checked against the provider above"),
 		};
 		let mut tx = self.store.begin_write().await?;
 		if let Err(why) = in_countries(&mut tx, id, &exit).await? {
@@ -129,7 +203,12 @@ impl Panel {
 			tag,
 			endpoint: proxy.endpoint(),
 		};
-		db::set(&mut tx, id, new.provider, new.device, &stored, &exit, now).await?;
+		let f = Fingerprint {
+			provider: new.provider,
+			device: &device,
+			profile: profile.as_deref(),
+		};
+		db::set(&mut tx, id, f, &stored, &exit, now).await?;
 		tx.commit().await.wrap_err("committing a gmail's browser")?;
 		Ok(Ok(()))
 	}
@@ -165,16 +244,25 @@ impl Panel {
 		Ok(db::browser(&mut conn, id).await?.map(|(b, _)| b).ok_or(Refused::NotFound))
 	}
 
-	/// The provider's profile and the row: once its runner let it go.
+	/// The provider's profile (a phone's film with it) and the row: once its runner let it go.
 	pub async fn delete_browser(&self, b: &Browsers, owner: Uuid, id: i64) -> eyre::Result<Result<(), Refused>> {
 		let browser = match self.browser_of(owner, id).await? {
 			Ok(b) => b,
 			Err(r) => return Ok(Err(r)),
 		};
-		if let Some((profile, _)) = &browser.profile
-			&& let Err(why) = b.gologin.delete(profile).await?
-		{
-			return Ok(Err(Refused::Unavailable(why)));
+		if let Err(r) = b.of(browser.provider) {
+			return Ok(Err(r));
+		}
+		match (browser.provider, &browser.profile) {
+			(_, None) => {}
+			(Provider::Gologin, Some(p)) => said!(b.gl().delete(p).await?),
+			(Provider::Multilogin, Some(p)) => {
+				if let Some(m) = &browser.film_material {
+					said!(b.ml().forget_film(m).await?);
+				}
+				said!(b.ml().phone_delete(p).await?);
+			}
+			(Provider::MultiloginBrowser, Some(p)) => said!(b.ml().profile_delete(p).await?),
 		}
 		let mut tx = self.store.begin_write().await?;
 		db::delete(&mut tx, id).await?;
@@ -182,8 +270,52 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
+	/// A cloud phone's film, into Multilogin's Library: the operator picks it in its Camera panel.
+	/// The one before leaves the Library once this one is in.
+	pub async fn set_phone_film(&self, b: &Browsers, owner: Uuid, id: i64, mp4: Vec<u8>) -> eyre::Result<Result<(), Refused>> {
+		let browser = match self.phone_of(owner, id).await? {
+			Ok(b) => b,
+			Err(r) => return Ok(Err(r)),
+		};
+		if let Err(r) = b.of(Provider::Multilogin) {
+			return Ok(Err(r));
+		}
+		let ml = b.ml();
+		let material = said!(ml.upload_film(mp4).await?);
+		let mut tx = self.store.begin_write().await?;
+		db::set_film(&mut tx, id, Some(&material)).await?;
+		tx.commit().await.wrap_err("committing a phone's film")?;
+		if let Some(before) = &browser.film_material {
+			said!(ml.forget_film(before).await?);
+		}
+		Ok(Ok(()))
+	}
+
+	pub async fn remove_phone_film(&self, b: &Browsers, owner: Uuid, id: i64) -> eyre::Result<Result<(), Refused>> {
+		let browser = match self.phone_of(owner, id).await? {
+			Ok(b) => b,
+			Err(r) => return Ok(Err(r)),
+		};
+		let Some(material) = &browser.film_material else { return Ok(Ok(())) };
+		if let Err(r) = b.of(Provider::Multilogin) {
+			return Ok(Err(r));
+		}
+		said!(b.ml().forget_film(material).await?);
+		let mut tx = self.store.begin_write().await?;
+		db::set_film(&mut tx, id, None).await?;
+		tx.commit().await.wrap_err("committing a phone's film gone")?;
+		Ok(Ok(()))
+	}
+
+	async fn phone_of(&self, owner: Uuid, id: i64) -> eyre::Result<Result<Browser, Refused>> {
+		Ok(self.browser_of(owner, id).await?.and_then(|b| match b.provider {
+			Provider::Multilogin => Ok(b),
+			p => Err(Refused::Conflict(format!("a {p} browser plays its film from the runner"))),
+		}))
+	}
+
 	/// What sa_browsers starts the gmail's browser with: at `gmb`'s point, else with the position
-	/// blocked; the provider's profile made the first time.
+	/// blocked; GoLogin's profile made the first time.
 	pub async fn launch(&self, b: &Browsers, owner: Uuid, id: i64, gmb: Option<i64>, now: Timestamp) -> eyre::Result<Result<Launch, Refused>> {
 		let (gmail, browser, sealed, gmb) = {
 			let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a launch")?;
@@ -205,6 +337,9 @@ impl Panel {
 			};
 			(gmail, browser, sealed, gmb)
 		};
+		if let Err(r) = b.of(browser.provider) {
+			return Ok(Err(r));
+		}
 		if let Some(why) = &browser.checked.error {
 			return Ok(Err(Refused::Conflict(format!("its proxy's last check failed ({why}): test it again"))));
 		}
@@ -232,84 +367,110 @@ impl Panel {
 			Err(why) => return Ok(Err(Refused::Conflict(why))),
 		};
 		let proxy = ProxyUrl::parse(&self.unseal(&gmail_browser_aad(id), &sealed)?).map_err(|why| eyre::eyre!("a stored proxy no longer parses: {why}"))?;
-		let hw = browser.device.hardware();
-		let profile = match browser.profile {
-			Some(p) => p,
-			None => {
-				let made = match b.gologin.create(&fingerprint(&gmail.gmail, browser.device, &place, &proxy, None)).await? {
-					Ok(id) => id,
-					Err(why) => return Ok(Err(Refused::Unavailable(why))),
+		let run = Run(gmb.as_ref().map(|g| g.id)).to_string();
+		tracing::info!(gmail_id = id, gmb_id = ?gmb.as_ref().map(|g| g.id), provider = %browser.provider, zone = place.zone, locale = place.locale, %now, "browser launch prepared");
+		let browser_of = match (browser.provider, browser.device, browser.profile) {
+			(Provider::Gologin, Poses::Device(device), profile) => {
+				let made = match (profile, browser.noise) {
+					(Some(p), Some(n)) => (p, n),
+					(None, None) => match self.gologin_profile(b, id, &gmail.gmail, device, &place, &proxy).await? {
+						Ok(made) => made,
+						Err(r) => return Ok(Err(r)),
+					},
+					half => eyre::bail!("gmail {id}'s GoLogin profile is half there: {half:?}"),
 				};
-				let noise = match b.gologin.noise(&made).await? {
-					Ok(n) => n,
-					Err(why) => return Ok(Err(Refused::Unavailable(why))),
-				};
-				let mut tx = self.store.begin_write().await?;
-				db::set_profile(&mut tx, id, &made, &noise).await?;
-				tx.commit().await.wrap_err("committing a browser's provider profile")?;
-				tracing::info!(gmail_id = id, profile = made, "GoLogin profile made");
-				(made, noise)
+				said!(orbita(b.gl(), &gmail.gmail, device, &place, &proxy, made).await?)
 			}
-		};
-		let (profile, noise) = profile;
-		if let Err(why) = b.gologin.put(&profile, &fingerprint(&gmail.gmail, browser.device, &place, &proxy, Some(&noise))).await? {
-			return Ok(Err(Refused::Unavailable(why)));
-		}
-		let mut prefs = json!({
-			"profile_id": profile,
-			"name": gmail.gmail,
-			"userAgent": Device::user_agent(),
-			"platform_version": hw.android,
-			"navigator": { "platform": PLATFORM, "max_touch_points": hw.touch },
-			"screenWidth": hw.screen.0,
-			"screenHeight": hw.screen.1,
-			"mobile": { "enable": true, "width": hw.screen.0, "height": hw.screen.1, "device_scale_factor": hw.dpr },
-			"hardwareConcurrency": hw.cores,
-			"deviceMemory": hw.memory * 1024,
-			"webGl": { "vendor": hw.gpu_vendor, "renderer": hw.gpu_renderer, "mode": true },
-			"canvas": { "mode": "noise" },
-			"storage": { "enable": true },
-			"languages": place.languages().join(","),
-			"langHeader": place.accept_language(),
-			"timezone": { "id": place.zone },
-			"geoLocation": match place.fix {
-				Some((latitude, longitude)) => json!({ "mode": "prompt", "latitude": latitude, "longitude": longitude, "accuracy": GPS_ACCURACY_M }),
-				None => json!({ "mode": "block" }),
-			},
-			"proxy": { "mode": proxy.scheme, "username": proxy.username, "password": *proxy.password },
-		});
-		let preferences = json!({
-			"gologin": prefs.clone(),
-			// a proxy's UDP would go around it from the runner's own address
-			"webrtc": { "ip_handling_policy": "disable_non_proxied_udp" },
-		});
-		let token = match b.gologin.token(&profile).await? {
-			Ok(t) => t,
-			Err(why) => return Ok(Err(Refused::Unavailable(why))),
-		};
-		prefs["api_domain"] = b.gologin.base.clone().into();
-		prefs["profile_token"] = token.as_str().into();
-		let languages = place.languages().join(",");
-		let Some(app_locale) = sa_browsers::ui_locale(&place.locale) else {
-			return Ok(Err(Refused::Conflict(format!("Orbita has no UI locale for {}", place.locale))));
-		};
-		let config = json!({
-			"intl": { "accept_languages": languages, "selected_languages": languages, "app_locale": app_locale, "forced_languages": [place.locale] },
-			"gologin": prefs,
-		});
-		tracing::info!(gmail_id = id, gmb_id = ?gmb.as_ref().map(|g| g.id), zone = place.zone, locale = place.locale, %now, "browser launch prepared");
-		Ok(Ok(Launch {
-			run: Run(gmb.map(|g| g.id)).to_string(),
-			browser: sa_browsers::Browser::Orbita {
-				preferences,
-				config,
-				proxy: format!("{}://{}:{}", proxy.scheme, proxy.host, proxy.port),
+			(Provider::MultiloginBrowser, Poses::Device(device), Some(profile)) => {
+				let ml = b.ml();
+				said!(ml.profile_update(&profile, &mimic(&gmail.gmail, device, &place, &proxy)).await?);
+				sa_browsers::Browser::MultiloginBrowser {
+					token: said!(ml.run_token().await?).to_string(),
+					folder: said!(ml.folder().await?),
+					profile,
+				}
+			}
+			(Provider::Multilogin, Poses::Phone(_), Some(phone)) => sa_browsers::Browser::MultiloginPhone {
+				token: said!(b.ml().run_token().await?).to_string(),
+				phone,
+				geo: place.fix,
 				zone: place.zone,
-				locale: place.locale,
-				screen: hw.screen,
+				country: browser.exit.country,
 			},
-		}))
+			(p, device, profile) => eyre::bail!("gmail {id}'s {p} browser is stored as {device} with profile {profile:?}"),
+		};
+		Ok(Ok(Launch { run, browser: browser_of }))
 	}
+
+	/// GoLogin's profile, made and its noise read back and kept.
+	async fn gologin_profile(&self, b: &Browsers, id: i64, name: &str, device: Device, place: &Place, proxy: &ProxyUrl) -> eyre::Result<Result<(String, Noise), Refused>> {
+		let gl = b.gl();
+		let made = said!(gl.create(&fingerprint(name, device, place, proxy, None)).await?);
+		let noise = said!(gl.noise(&made).await?);
+		let mut tx = self.store.begin_write().await?;
+		db::set_profile(&mut tx, id, &made, &noise).await?;
+		tx.commit().await.wrap_err("committing a browser's provider profile")?;
+		tracing::info!(gmail_id = id, profile = made, "GoLogin profile made");
+		Ok(Ok((made, noise)))
+	}
+}
+
+/// Orbita's launch: GoLogin's profile told the fingerprint, its 3-minute token, the preferences.
+async fn orbita(gl: &GoLogin, name: &str, device: Device, place: &Place, proxy: &ProxyUrl, (profile, noise): (String, Noise)) -> eyre::Result<Result<sa_browsers::Browser, String>> {
+	let hw = device.hardware();
+	if let Err(why) = gl.put(&profile, &fingerprint(name, device, place, proxy, Some(&noise))).await? {
+		return Ok(Err(why));
+	}
+	let mut prefs = json!({
+		"profile_id": profile,
+		"name": name,
+		"userAgent": Device::user_agent(),
+		"platform_version": hw.android,
+		"navigator": { "platform": PLATFORM, "max_touch_points": hw.touch },
+		"screenWidth": hw.screen.0,
+		"screenHeight": hw.screen.1,
+		"mobile": { "enable": true, "width": hw.screen.0, "height": hw.screen.1, "device_scale_factor": hw.dpr },
+		"hardwareConcurrency": hw.cores,
+		"deviceMemory": hw.memory * 1024,
+		"webGl": { "vendor": hw.gpu_vendor, "renderer": hw.gpu_renderer, "mode": true },
+		"canvas": { "mode": "noise" },
+		"storage": { "enable": true },
+		"languages": place.languages().join(","),
+		"langHeader": place.accept_language(),
+		"timezone": { "id": place.zone },
+		"geoLocation": match place.fix {
+			Some((latitude, longitude)) => json!({ "mode": "prompt", "latitude": latitude, "longitude": longitude, "accuracy": GPS_ACCURACY_M }),
+			None => json!({ "mode": "block" }),
+		},
+		"proxy": { "mode": proxy.scheme, "username": proxy.username, "password": *proxy.password },
+	});
+	let preferences = json!({
+		"gologin": prefs.clone(),
+		// a proxy's UDP would go around it from the runner's own address
+		"webrtc": { "ip_handling_policy": "disable_non_proxied_udp" },
+	});
+	let token = match gl.token(&profile).await? {
+		Ok(t) => t,
+		Err(why) => return Ok(Err(why)),
+	};
+	prefs["api_domain"] = gl.base.clone().into();
+	prefs["profile_token"] = token.as_str().into();
+	let languages = place.languages().join(",");
+	let Some(app_locale) = sa_browsers::ui_locale(&place.locale) else {
+		return Ok(Err(format!("Orbita has no UI locale for {}", place.locale)));
+	};
+	let config = json!({
+		"intl": { "accept_languages": languages, "selected_languages": languages, "app_locale": app_locale, "forced_languages": [place.locale] },
+		"gologin": prefs,
+	});
+	Ok(Ok(sa_browsers::Browser::Orbita {
+		preferences,
+		config,
+		proxy: format!("{}://{}:{}", proxy.scheme, proxy.host, proxy.port),
+		zone: place.zone.clone(),
+		locale: place.locale.clone(),
+		screen: hw.screen,
+	}))
 }
 
 /// `exit` in the country of every GBP of the gmail that has one.
@@ -599,5 +760,217 @@ impl GoLogin {
 
 	async fn delete(&self, id: &str) -> eyre::Result<Result<(), String>> {
 		Ok(self.call(reqwest::Method::DELETE, &format!("/browser/{id}"), None).await?.map(drop))
+	}
+}
+
+/// Mimic's profile as Multilogin takes it: Mimic draws its navigator (a custom one breaks UA-CH:
+/// tmp/ongoing_dev_log/2026-11-10-multilogin.md), the device its GPU and screen, the place its
+/// zone, languages and position.
+fn mimic(name: &str, device: Device, place: &Place, proxy: &ProxyUrl) -> Value {
+	let hw = device.hardware();
+	let mut fingerprint = json!({
+		"screen": { "width": hw.screen.0, "height": hw.screen.1, "pixel_ratio": hw.dpr },
+		"graphic": { "vendor": hw.gpu_vendor, "renderer": hw.gpu_renderer },
+		"localization": { "languages": place.locale, "locale": place.locale, "accept_languages": place.accept_language() },
+		"timezone": { "zone": place.zone },
+	});
+	let (geo_masking, geo_popup) = match place.fix {
+		Some((latitude, longitude)) => {
+			fingerprint["geolocation"] = json!({ "latitude": latitude, "longitude": longitude, "accuracy": GPS_ACCURACY_M, "altitude": 0 });
+			("custom", "prompt")
+		}
+		None => ("mask", "block"),
+	};
+	json!({
+		"name": name,
+		"browser_type": "mimic",
+		"os_type": "android",
+		"parameters": {
+			"flags": {
+				"audio_masking": "mask", "fonts_masking": "mask", "media_devices_masking": "mask", "navigator_masking": "mask",
+				"ports_masking": "mask", "webrtc_masking": "mask", "canvas_noise": "mask", "graphics_noise": "mask",
+				"graphics_masking": "custom", "screen_masking": "custom", "localization_masking": "custom", "timezone_masking": "custom",
+				"geolocation_masking": geo_masking, "geolocation_popup": geo_popup, "proxy_masking": "custom", "startup_behavior": "recover",
+			},
+			"fingerprint": fingerprint,
+			"storage": { "is_local": true, "save_service_worker": true },
+			"proxy": { "type": proxy.scheme, "host": proxy.host, "port": proxy.port, "username": proxy.username, "password": *proxy.password },
+		},
+	})
+}
+
+/// Multilogin's API (MULTILOGIN_TOKEN, an automation token): the phones and Mimic profiles, the
+/// Library, and a run's own 3-hour token, which is all the runner gets.
+struct Multilogin {
+	base: String,
+	http: reqwest::Client,
+	folder: tokio::sync::OnceCell<String>,
+}
+
+impl Multilogin {
+	fn try_new(base: &str, token: Zeroizing<String>) -> eyre::Result<Self> {
+		let mut auth = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", *token)).wrap_err("MULTILOGIN_TOKEN is not a header value")?;
+		auth.set_sensitive(true);
+		let headers = reqwest::header::HeaderMap::from_iter([(reqwest::header::AUTHORIZATION, auth)]);
+		Ok(Self {
+			base: base.to_owned(),
+			http: reqwest::Client::builder()
+				.default_headers(headers)
+				.timeout(Duration::from_secs(60))
+				.build()
+				.wrap_err("Multilogin's client")?,
+			folder: tokio::sync::OnceCell::new(),
+		})
+	}
+
+	/// `data` of a call that succeeded whole, or what Multilogin said, for the operator; `Err` is
+	/// ours. A batch answers 200 with its failures in `fail_amount`.
+	async fn call(&self, req: reqwest::RequestBuilder, what: &str) -> eyre::Result<Result<Value, String>> {
+		let res = match req.send().await {
+			Ok(r) => r,
+			Err(e) => return Ok(Err(format!("Multilogin did not answer {what}: {e}"))),
+		};
+		let status = res.status();
+		let text = res.text().await.wrap_err_with(|| format!("reading Multilogin's answer to {what}"))?;
+		let refused = || Err(format!("Multilogin refused {what}: {status} {}", text.chars().take(300).collect::<String>()));
+		let Ok(v) = serde_json::from_str::<Value>(&text) else { return Ok(refused()) };
+		if !status.is_success() || v["status"]["http_code"].as_u64().is_none_or(|c| c >= 400) || v["data"]["fail_amount"].as_u64().is_some_and(|n| n > 0) {
+			return Ok(refused());
+		}
+		Ok(Ok(v["data"].clone()))
+	}
+
+	async fn json(&self, method: reqwest::Method, path: &str, body: Value) -> eyre::Result<Result<Value, String>> {
+		self.call(self.http.request(method.clone(), format!("{}{path}", self.base)).json(&body), &format!("{method} {path}"))
+			.await
+	}
+
+	/// Three hours: past a phone's 180 billed minutes, so it can always stop what it started.
+	async fn run_token(&self) -> eyre::Result<Result<Zeroizing<String>, String>> {
+		let got = self
+			.call(self.http.get(format!("{}/workspace/automation_token?expiration_period=3h", self.base)), "a run token")
+			.await?;
+		Ok(got.and_then(|v| v["token"].as_str().map(|t| Zeroizing::new(t.to_owned())).ok_or_else(|| format!("Multilogin gave no token: {v}"))))
+	}
+
+	/// The gmails' folder, made the first time.
+	async fn folder(&self) -> eyre::Result<Result<String, String>> {
+		if let Some(f) = self.folder.get() {
+			return Ok(Ok(f.clone()));
+		}
+		let listed = match self.call(self.http.get(format!("{}/workspace/folders", self.base)), "the folders").await? {
+			Ok(v) => v,
+			Err(why) => return Ok(Err(why)),
+		};
+		let found = listed["folders"]
+			.as_array()
+			.into_iter()
+			.flatten()
+			.find(|f| f["name"] == FOLDER)
+			.and_then(|f| f["folder_id"].as_str())
+			.map(str::to_owned);
+		let id = match found {
+			Some(id) => id,
+			None => match self
+				.json(reqwest::Method::POST, "/workspace/folder_create", json!({ "name": FOLDER, "comment": "the conductor's gmails" }))
+				.await?
+			{
+				Ok(v) => match v["id"].as_str() {
+					Some(id) => id.to_owned(),
+					None => return Ok(Err(format!("Multilogin made a folder and named none: {v}"))),
+				},
+				Err(why) => return Ok(Err(why)),
+			},
+		};
+		Ok(Ok(self.folder.get_or_init(|| async { id }).await.clone()))
+	}
+
+	/// A phone on Android [`ANDROID`] leaving through `proxy`, its model drawn once from the Google
+	/// and Samsung ones Multilogin has (a China-only model in a European locale is a tell): its id
+	/// and model.
+	async fn phone(&self, name: &str, proxy: &ProxyUrl) -> eyre::Result<Result<(String, String), String>> {
+		let models = match self
+			.json(reqwest::Method::POST, "/mobile_profiles/phone/brand/list", json!({ "android_version": ANDROID }))
+			.await?
+		{
+			Ok(v) => v,
+			Err(why) => return Ok(Err(why)),
+		};
+		let pool: Vec<(&str, &str)> = models
+			.as_array()
+			.into_iter()
+			.flatten()
+			.filter_map(|m| Some((m["surface_brand_name"].as_str()?, m["surface_model_name"].as_str()?)))
+			.filter(|(brand, _)| ["Google", "Samsung"].contains(brand))
+			.collect();
+		if pool.is_empty() {
+			return Ok(Err(format!("Multilogin has no Google or Samsung model on Android {ANDROID}")));
+		}
+		let (brand, model) = pool[usize::try_from(getrandom::u32().wrap_err("drawing a phone's model")?).expect("a u32 fits") % pool.len()];
+		let made = self
+			.json(
+				reqwest::Method::POST,
+				"/mobile_profiles/phone/create",
+				json!({ "mobile_type": format!("Android {ANDROID}"), "data": [{ "profile_name": name, "proxy_information": proxy.normalized(), "surface_brand_name": brand, "surface_model_name": model }] }),
+			)
+			.await?;
+		Ok(made.and_then(|v| {
+			let id = v["details"][0]["id"].as_str().ok_or_else(|| format!("Multilogin made a phone and named none: {v}"))?;
+			Ok((id.to_owned(), format!("{brand} {model}")))
+		}))
+	}
+
+	async fn phone_proxy(&self, id: &str, proxy: &ProxyUrl) -> eyre::Result<Result<(), String>> {
+		// type_id and protocol: 1 SOCKS5, 2 HTTP
+		let kind = if proxy.scheme == "socks5" { 1 } else { 2 };
+		let config = json!({ "use_proxy_cfg": false, "type_id": kind, "protocol": kind, "server": proxy.host, "port": proxy.port, "username": proxy.username, "password": *proxy.password });
+		Ok(self
+			.json(reqwest::Method::PUT, "/mobile_profiles/phone/update", json!({ "id": id, "proxy_config": config }))
+			.await?
+			.map(drop))
+	}
+
+	async fn phone_delete(&self, id: &str) -> eyre::Result<Result<(), String>> {
+		Ok(self.json(reqwest::Method::DELETE, "/mobile_profiles/phone/delete", json!({ "ids": [id] })).await?.map(drop))
+	}
+
+	async fn profile_create(&self, profile: &Value) -> eyre::Result<Result<String, String>> {
+		let folder = match self.folder().await? {
+			Ok(f) => f,
+			Err(why) => return Ok(Err(why)),
+		};
+		let mut body = profile.clone();
+		body["folder_id"] = folder.into();
+		Ok(self
+			.json(reqwest::Method::POST, "/profile/create", body)
+			.await?
+			.and_then(|v| v["ids"][0].as_str().map(str::to_owned).ok_or_else(|| format!("Multilogin made a profile and named none: {v}"))))
+	}
+
+	async fn profile_update(&self, id: &str, profile: &Value) -> eyre::Result<Result<(), String>> {
+		let mut body = profile.clone();
+		body["profile_id"] = id.into();
+		Ok(self.json(reqwest::Method::POST, "/profile/update", body).await?.map(drop))
+	}
+
+	async fn profile_delete(&self, id: &str) -> eyre::Result<Result<(), String>> {
+		Ok(self.json(reqwest::Method::POST, "/profile/remove", json!({ "ids": [id], "permanently": true })).await?.map(drop))
+	}
+
+	async fn upload_film(&self, mp4: Vec<u8>) -> eyre::Result<Result<String, String>> {
+		let part = reqwest::multipart::Part::bytes(mp4).file_name("film.mp4").mime_str("video/mp4").expect("a valid mime");
+		let req = self
+			.http
+			.post(format!("{}/mobile_profiles/files/upload", self.base))
+			.timeout(Duration::from_secs(600))
+			.multipart(reqwest::multipart::Form::new().part("file", part));
+		Ok(self
+			.call(req, "a film's upload")
+			.await?
+			.and_then(|v| v["material_id"].as_str().map(str::to_owned).ok_or_else(|| format!("Multilogin kept a film and named none: {v}"))))
+	}
+
+	async fn forget_film(&self, material: &str) -> eyre::Result<Result<(), String>> {
+		Ok(self.json(reqwest::Method::POST, "/mobile_profiles/files/delete", json!({ "ids": [material] })).await?.map(drop))
 	}
 }
