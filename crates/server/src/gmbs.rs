@@ -147,11 +147,8 @@ pub struct GmailDto {
 	#[ts(type = "number")]
 	pub id: i64,
 	pub gmail: String,
-	/// `null` until the caller says.
+	/// Optional, the caller's say: nothing here judges it.
 	pub role: Option<GmailRole>,
-	/// The GBPs its role holds before Google grows wary; `null` with the role.
-	#[ts(type = "number | null")]
-	pub cap: Option<u32>,
 	/// RFC 3339.
 	pub created_at: String,
 	/// Its browser set up, its last check through: the GBPs' `profile` must-have.
@@ -242,7 +239,6 @@ impl From<Gmail> for GmailDto {
 			id: g.id,
 			gmail: g.gmail,
 			role: g.role,
-			cap: g.role.map(GmailRole::cap),
 			created_at: g.created_at.to_string(),
 			browser: g.browser,
 		}
@@ -298,14 +294,15 @@ async fn add_gmail(State(panel): State<Panel>, Extension(caller): Extension<Call
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SetRole {
-	role: GmailRole,
+	#[serde(deserialize_with = "Option::deserialize")] // required: `null` clears, a missing field is refused
+	role: Option<GmailRole>,
 }
 
 async fn set_role(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<SetRole>, JsonRejection>) -> ApiResult<Json<GmailDto>> {
 	let gmail = id(&raw)?;
 	let role = body(b)?.role;
 	let set = panel.set_gmail_role(caller.user_id, gmail, role).await??;
-	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, role = role.as_str(), "gmail's role set");
+	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, role = role.map(GmailRole::as_str), "gmail's role set");
 	Ok(Json(GmailDto::from(set)))
 }
 

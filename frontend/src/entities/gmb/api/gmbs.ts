@@ -41,7 +41,7 @@ export async function addGmail(gmail: string): Promise<void> {
   await http.send("POST", "/api/v1/gmails", { gmail }, ignoreBody);
 }
 
-export async function setGmailRole(id: number, role: GmailRole): Promise<void> {
+export async function setGmailRole(id: number, role: GmailRole | null): Promise<void> {
   await http.send("PATCH", `/api/v1/gmails/${id}`, { role }, ignoreBody);
 }
 

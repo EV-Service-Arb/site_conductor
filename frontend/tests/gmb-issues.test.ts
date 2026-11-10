@@ -98,7 +98,7 @@ const full: Partial<Gmb> = {
 /** The draft as listed: under a gmail whose browser is `browser`, when it has one. */
 const listed = (g: Gmb, browser = true): { gmb: Gmb; gmail: Gmail | null } => ({
   gmb: g,
-  gmail: g.gmail_id === null ? null : { id: g.gmail_id, gmail: "ops@example.test", role: "manager", cap: 6, created_at: "2026-11-06T00:00:00Z", browser },
+  gmail: g.gmail_id === null ? null : { id: g.gmail_id, gmail: "ops@example.test", role: "manager", created_at: "2026-11-06T00:00:00Z", browser },
 });
 
 describe("a draft's readiness", () => {

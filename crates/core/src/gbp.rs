@@ -111,14 +111,6 @@ pub enum GmailRole {
 }
 
 impl GmailRole {
-	/// The GBPs it holds before Google grows wary: room shown, never refused.
-	pub fn cap(self) -> u32 {
-		match self {
-			Self::Owner => 3,
-			Self::Manager => 6,
-		}
-	}
-
 	pub fn as_str(self) -> &'static str {
 		match self {
 			Self::Owner => "owner",

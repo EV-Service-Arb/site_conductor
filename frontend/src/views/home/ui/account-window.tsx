@@ -27,7 +27,7 @@ export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Account
             <span className="truncate">{gmail.gmail}</span>
           </h2>
           <p className="text-sm text-ink-soft tabular-nums">
-            {[gmail.role && t(`gmbs.gmail.role.${gmail.role}`), gmail.cap === null ? t("account.gbps", { n: gbps }) : `${gbps}/${gmail.cap}`].filter(Boolean).join(" · ")}
+            {[gmail.role && t(`gmbs.gmail.role.${gmail.role}`), t("account.gbps", { n: gbps })].filter(Boolean).join(" · ")}
           </p>
         </div>
         <Button variant="ghost" size={button("sm")} icon aria-label={t("window.close")} title={t("window.close")} onClick={() => openAccount(null)}>

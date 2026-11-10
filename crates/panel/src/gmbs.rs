@@ -176,8 +176,8 @@ impl Panel {
 		Ok(Ok(added))
 	}
 
-	/// The owner's gmail `id` in `role`.
-	pub async fn set_gmail_role(&self, owner: Uuid, id: i64, role: GmailRole) -> eyre::Result<Result<Gmail, Refused>> {
+	/// The owner's gmail `id` in `role`, or in none said.
+	pub async fn set_gmail_role(&self, owner: Uuid, id: i64, role: Option<GmailRole>) -> eyre::Result<Result<Gmail, Refused>> {
 		let mut tx = self.store.begin_write().await?;
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));

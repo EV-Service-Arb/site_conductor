@@ -70,10 +70,7 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
   const room = (id: number) => {
     const g = gmailList.find((g) => g.id === id);
     if (g === undefined || gmails.status !== "ok") return null;
-    const n = under(gmails.data, id).length;
-    if (g.role === null) return t("gmbs.gmail.role.unknown", { n });
-    if (g.cap === null) throw new Error(`gmail ${id} has a role and no cap`);
-    return t(`gmbs.gmail.room.${g.role}`, { n, cap: g.cap });
+    return [g.role && t(`gmbs.gmail.role.${g.role}`), t("account.gbps", { n: under(gmails.data, id).length })].filter(Boolean).join(" · ");
   };
 
   const parts: Record<MustHave, { value: ReactNode; editor: ReactNode; why: string | null }> = {

@@ -168,12 +168,12 @@ pub async fn remove_gmail(conn: &mut SqliteConnection, owner: Uuid, id: i64, now
 	Ok(true)
 }
 
-/// The owner's gmail `id` in `role`. `false`: no such gmail of theirs, or it is removed.
-pub async fn set_role(conn: &mut SqliteConnection, owner: Uuid, id: i64, role: GmailRole) -> eyre::Result<bool> {
+/// The owner's gmail `id` in `role`, or in none said. `false`: no such gmail of theirs, or it is removed.
+pub async fn set_role(conn: &mut SqliteConnection, owner: Uuid, id: i64, role: Option<GmailRole>) -> eyre::Result<bool> {
 	let done = sqlx::query("UPDATE gmails SET role = $3 WHERE id = $1 AND owner = $2 AND removed_at IS NULL")
 		.bind(id)
 		.bind(owner)
-		.bind(role.as_str())
+		.bind(role.map(GmailRole::as_str))
 		.execute(&mut *conn)
 		.await
 		.wrap_err("setting a gmail's role")?;

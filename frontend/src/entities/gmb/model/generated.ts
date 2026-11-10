@@ -91,13 +91,9 @@ by_hand: boolean, };
  */
 export type Gmail = { id: number, gmail: string, 
 /**
- * `null` until the caller says.
+ * Optional, the caller's say: nothing here judges it.
  */
 role: GmailRole | null, 
-/**
- * The GBPs its role holds before Google grows wary; `null` with the role.
- */
-cap: number | null, 
 /**
  * RFC 3339.
  */

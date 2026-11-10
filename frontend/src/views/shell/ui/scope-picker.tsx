@@ -124,7 +124,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
           type="button"
           onClick={() => chooseGmailScope(null)}
           aria-pressed={scoped.length === 0}
-          className={cn(ROW, "w-full py-1.5 pl-2", scoped.length === 0 && "bg-hover font-medium")}
+          className={cn(ROW, "w-full py-1.5 pl-2", scoped.length === 0 && PICKED)}
         >
           <span className="flex-1 text-left">{t("scope.gmails.all")}</span>
           <span className="text-xs text-ink-soft tabular-nums">{data.gmbs.filter(byCategory).length}</span>
@@ -241,7 +241,7 @@ function Matrix({ all, gmbs, trades, picked, onOpened }: { all: readonly Gmb[]; 
               type="button"
               onClick={() => chooseCategoryScope(null)}
               aria-pressed={picked === null}
-              className={cn(box, "flex w-full items-center px-2 text-ink-soft", picked === null && "bg-hover text-ink")}
+              className={cn(box, "flex w-full items-center px-2 text-ink-soft", picked === null && PICKED)}
             >
               <span className="flex-1 text-left">{t("scope.matrix.all")}</span>
               <span>{gmbs.filter((b) => b.trade_id !== null).length}</span>
@@ -406,21 +406,14 @@ function NewTrade({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-/** The GBPs on a gmail against what its role holds: "owner · 2/3", "manager · 5/6"; "2 GBP · role unknown" until said. */
 function Room({ gmail, n }: { gmail: Gmail; n: number }) {
   const t = useT();
-  if (gmail.role === null) return <span className="block truncate text-xs text-ink-soft tabular-nums">{t("gmbs.gmail.role.unknown", { n })}</span>;
-  if (gmail.cap === null) throw new Error(`gmail ${gmail.id} has a role and no cap`);
-  return (
-    <span className={cn("block truncate text-xs tabular-nums", n > gmail.cap ? "text-accent-error" : "text-ink-soft")} title={t("gmbs.gmail.room.title")}>
-      {t(`gmbs.gmail.room.${gmail.role}`, { n, cap: gmail.cap })}
-    </span>
-  );
+  return <span className="block truncate text-xs text-ink-soft tabular-nums">{[gmail.role && t(`gmbs.gmail.role.${gmail.role}`), t("account.gbps", { n })].filter(Boolean).join(" · ")}</span>;
 }
 
 function RoleSelect({ gmail, onChanged }: { gmail: Gmail; onChanged: () => void }) {
   const t = useT();
-  const pick = async (role: GmailRole) => {
+  const pick = async (role: GmailRole | null) => {
     try {
       await setGmailRole(gmail.id, role);
       onChanged();
@@ -431,12 +424,12 @@ function RoleSelect({ gmail, onChanged }: { gmail: Gmail; onChanged: () => void 
   return (
     <NativeSelect
       size="sm"
-      wrapperClassName="w-24"
+      wrapperClassName="w-28 shrink-0"
       aria-label={t("gmbs.gmail.role", { gmail: gmail.gmail })}
       value={gmail.role ?? ""}
-      onChange={(e) => e.target.value !== "" && void pick(e.target.value as GmailRole)}
+      onChange={(e) => void pick(e.target.value === "" ? null : (e.target.value as GmailRole))}
     >
-      {gmail.role === null && <NativeSelectOption value="">{t("gmbs.gmail.role.pick")}</NativeSelectOption>}
+      <NativeSelectOption value="">{t("gmbs.gmail.role.pick")}</NativeSelectOption>
       {GMAIL_ROLES.map((r) => (
         <NativeSelectOption key={r} value={r}>
           {t(`gmbs.gmail.role.${r}`)}

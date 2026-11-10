@@ -383,7 +383,7 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 }
 
 #[tokio::test]
-async fn a_gmails_cap_follows_its_role() {
+async fn a_gmails_role_is_optional() {
 	let db = TestDb::create().await;
 	let p = panel(&db, None).await;
 	opened(&p).await;
@@ -391,16 +391,18 @@ async fn a_gmails_cap_follows_its_role() {
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
-	assert_eq!((&gmail["role"], &gmail["cap"]), (&Value::Null, &Value::Null), "unknown until said");
+	assert_eq!(gmail["role"], Value::Null, "unknown until said");
 	let uri = format!("/api/v1/gmails/{}", gmail["id"]);
-	for (role, cap) in [("owner", 3), ("manager", 6)] {
+	for role in [json!("owner"), json!("manager"), Value::Null] {
 		let (status, set) = call(&mut b, &app, Method::PATCH, &uri, Some(json!({ "role": role }))).await;
-		assert_eq!((status, &set["role"], &set["cap"]), (StatusCode::OK, &json!(role), &json!(cap)));
+		assert_eq!((status, &set["role"]), (StatusCode::OK, &role));
 	}
 	let (_, listed) = call(&mut b, &app, Method::GET, "/api/v1/gmails", None).await;
-	assert_eq!(listed["gmails"][0]["cap"], json!(6), "{listed}");
-	let (status, _) = call(&mut b, &app, Method::PATCH, &uri, Some(json!({ "role": "admin" }))).await;
-	assert_eq!(status, StatusCode::BAD_REQUEST);
+	assert_eq!(listed["gmails"][0]["role"], Value::Null, "{listed}");
+	for bad in [json!({ "role": "admin" }), json!({})] {
+		let (status, _) = call(&mut b, &app, Method::PATCH, &uri, Some(bad)).await;
+		assert_eq!(status, StatusCode::BAD_REQUEST);
+	}
 	let (status, _) = call(&mut b, &app, Method::PATCH, "/api/v1/gmails/999", Some(json!({ "role": "owner" }))).await;
 	assert_eq!(status, StatusCode::NOT_FOUND);
 }

@@ -34,7 +34,7 @@ export const gmbParser: Parser<Gmb> = object({
 
 export const mapConfigParser: Parser<MapConfig> = object({ key: str });
 
-const gmailParser: Parser<Gmail> = object({ id: num, gmail: str, role: nullable(oneOf(GMAIL_ROLES)), cap: nullable(num), created_at: str, browser: bool });
+const gmailParser: Parser<Gmail> = object({ id: num, gmail: str, role: nullable(oneOf(GMAIL_ROLES)), created_at: str, browser: bool });
 export const gmailsParser: Parser<Gmails> = object({ gmails: arrayOf(gmailParser), gmbs: arrayOf(gmbParser) });
 
 const categoryParser: Parser<Category> = object({ country: oneOf(COUNTRIES), lang: str, keywords: arrayOf(str), google_category: nullable(str), study: nullable(str) });
