@@ -12,9 +12,10 @@ import {
   Button,
   buttonVariants,
 } from "@evinvest/uikit";
-import { Trash2 } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { useState } from "react";
 
+import { select } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -64,5 +65,14 @@ export function RemoveDialog({ title, body, remove, onRemoved, onClose }: { titl
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+export function ResetSelection() {
+  const t = useT();
+  return (
+    <button type="button" onClick={() => select(null)} aria-label={t("gmbs.reset")} title={t("gmbs.reset")} className="rounded p-0.5 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+      <X aria-hidden className="size-3.5" />
+    </button>
   );
 }

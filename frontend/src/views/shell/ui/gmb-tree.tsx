@@ -49,7 +49,7 @@ import { useT } from "@/shared/i18n";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 
-import { HEADING, ROW, RemoveDialog } from "./outline-parts";
+import { HEADING, ROW, RemoveDialog, ResetSelection } from "./outline-parts";
 import { ScopePicker } from "./scope-picker";
 
 const SUBHEADING = "flex items-center gap-1 px-2 pt-1.5 pb-0.5 text-xs text-ink-soft";
@@ -176,7 +176,12 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
             count={inSelection.length}
             empty={t("gmbs.selected.empty")}
             onMove={move}
-            action={inSelection.length > 0 && <SetTrade gmbs={inSelection.map((l) => l.gmb)} onSet={changed} />}
+            action={
+              <>
+                {inSelection.length > 0 && <SetTrade gmbs={inSelection.map((l) => l.gmb)} onSet={changed} />}
+                {chosen !== null && <ResetSelection />}
+              </>
+            }
           >
             {split ? (
               <>

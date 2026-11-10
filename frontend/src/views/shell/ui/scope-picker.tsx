@@ -31,7 +31,7 @@ import { AddGmbButton } from "@/features/add-gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 
-import { HEADING, ON_HOVER, ROW, Remove } from "./outline-parts";
+import { HEADING, ON_HOVER, ROW, Remove, ResetSelection } from "./outline-parts";
 
 const same = (a: Pattern, b: Pattern) => a.trade === b.trade && a.country === b.country;
 /** Shift, Ctrl or Cmd: a click adds to what is picked rather than replacing it. */
@@ -90,12 +90,15 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className="mx-0.5 flex items-center gap-2 rounded-md border border-border px-2.5 py-2 text-sm text-ink outline-none hover:bg-hover/50 focus-visible:ring-2 focus-visible:ring-ring">
-        <ListFilter aria-hidden className="size-4 text-ink-soft" />
-        <span className="min-w-0 flex-1 truncate text-left">{summary}</span>
-        <span className="text-xs text-ink-soft tabular-nums">{selection.selected.length}</span>
-        <ChevronDown aria-hidden className="size-4 text-ink-soft" />
-      </PopoverTrigger>
+      <div className="mx-0.5 flex items-center rounded-md border border-border pr-1 hover:bg-hover/50">
+        <PopoverTrigger className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-2 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <ListFilter aria-hidden className="size-4 text-ink-soft" />
+          <span className="min-w-0 flex-1 truncate text-left">{summary}</span>
+          <span className="text-xs text-ink-soft tabular-nums">{selection.selected.length}</span>
+          <ChevronDown aria-hidden className="size-4 text-ink-soft" />
+        </PopoverTrigger>
+        {chosen !== null && <ResetSelection />}
+      </div>
       <PopoverContent align="start" className="max-h-[80svh] w-96 overflow-y-auto p-1.5">
         <div className={HEADING}>
           {t("scope.categories")}
