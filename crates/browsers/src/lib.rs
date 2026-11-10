@@ -8,6 +8,9 @@
 //! DELETE /profiles/{gmail}         → 204: stopped, its session's directory gone
 //! GET    /profiles                 Profiles: what runs
 //! GET    /profiles/{gmail}/cdp     WebSocket: the browser's own devtools socket, passed through
+//! PUT    /profiles/{gmail}/film    an mp4 → 204: the camera of its next launch; 400 ffmpeg refused it,
+//!                                  409 while it runs
+//! DELETE /profiles/{gmail}/film    → 204
 //! ```
 //! Every request carries the conductor's assertion (`sa_auth`, audience `browsers`).
 
@@ -128,6 +131,8 @@ pub enum Browser {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Profiles {
 	pub running: Vec<Running>,
+	/// The gmails whose next launch plays a film as the camera.
+	pub films: Vec<i64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

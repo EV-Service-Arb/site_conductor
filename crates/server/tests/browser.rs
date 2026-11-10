@@ -102,9 +102,10 @@ fn runner(running: Arc<Mutex<Vec<i64>>>) -> Router {
 			}),
 		)
 		.route("/profiles/{gmail}", axum::routing::delete(|| async { StatusCode::NO_CONTENT }))
+		.route("/profiles/{gmail}/film", put(|| async { StatusCode::NO_CONTENT }).delete(|| async { StatusCode::NO_CONTENT }))
 		.route(
 			"/profiles",
-			get(move || async move { Json(json!({ "running": listed.lock().unwrap().iter().map(|g| json!({ "gmail": g, "run": "x" })).collect::<Vec<_>>() })) }),
+			get(move || async move { Json(json!({ "running": listed.lock().unwrap().iter().map(|g| json!({ "gmail": g, "run": "x" })).collect::<Vec<_>>(), "films": [] })) }),
 		)
 }
 
@@ -318,6 +319,22 @@ async fn a_start_is_at_the_gbps_point_its_profile_made_once_and_told_to_the_runn
 
 	let (status, _) = w.call(Method::POST, &format!("/api/v1/gmails/{a}/browser/stop"), None).await;
 	assert_eq!(status, StatusCode::NO_CONTENT);
+	let mp4 = vec![7u8; 3 << 20];
+	let (status, _, _) =
+		w.b.send_body(
+			&w.app,
+			Method::PUT,
+			&format!("/api/v1/gmails/{a}/browser/film"),
+			&[("content-type", "video/mp4")],
+			true,
+			Body::from(mp4.clone()),
+		)
+		.await;
+	assert_eq!(status, StatusCode::NO_CONTENT, "a film past the API's own body limit");
+	let film = w.runner.lock().unwrap().iter().find(|s| s.path_and_query.ends_with("/film")).unwrap().clone();
+	assert_eq!((film.body.len(), film.assertion(Service::Browsers, None).principal), (mp4.len(), Principal::Conductor));
+	let (status, _, _) = w.b.send_body(&w.app, Method::PUT, &format!("/api/v1/gmails/{a}/browser/film"), &[], false, Body::from("x")).await;
+	assert_eq!(status, StatusCode::FORBIDDEN, "the gate's CSRF stands on the film too");
 	let (status, _) = w.call(Method::DELETE, &format!("/api/v1/gmails/{a}/browser"), None).await;
 	assert_eq!(status, StatusCode::NO_CONTENT);
 	assert_eq!(w.gologin.asked(), ["delete"], "the provider's profile goes with it");

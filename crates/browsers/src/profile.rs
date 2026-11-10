@@ -13,7 +13,7 @@ use sa_browsers::{Browser, Launch};
 use serde_json::Value;
 use tokio::sync::{Notify, oneshot, watch};
 
-use crate::Runner;
+use crate::{Runner, film};
 
 /// How long after its last devtools client leaves (or its launch, if none came) a browser runs on.
 const IDLE: Duration = Duration::from_secs(10 * 60);
@@ -153,6 +153,7 @@ async fn life(runner: &Runner, gmail: i64, dir: &Path, browser: Browser, stop: &
 		Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(eyre::Report::new(e).wrap_err("removing a stale DevToolsActivePort")),
 		_ => {}
 	}
+	let with_film = film::present(dir);
 	let log = std::fs::File::create(dir.join("orbita.log")).wrap_err("creating orbita.log")?;
 	let mut child = tokio::process::Command::new(&runner.0.orbita)
 		.current_dir(dir) // its crash reporter writes into its cwd
@@ -169,6 +170,7 @@ async fn life(runner: &Runner, gmail: i64, dir: &Path, browser: Browser, stop: &
 			// what GoLogin's own launcher passes for android profiles
 			"--font-masking-mode=1".into(),
 		])
+		.args(if with_film { film::args().to_vec() } else { vec![] })
 		.stdin(std::process::Stdio::null())
 		.stdout(log.try_clone()?)
 		.stderr(log)
@@ -187,14 +189,14 @@ async fn life(runner: &Runner, gmail: i64, dir: &Path, browser: Browser, stop: &
 			tokio::time::sleep(Duration::from_millis(200)).await;
 		}
 	};
-	let devtools = tokio::select! {
+	let devtools: String = tokio::select! {
 		d = tokio::time::timeout(UP_WITHIN, up) => d.map_err(|_| eyre::eyre!("no devtools within {}s; see {}/orbita.log", UP_WITHIN.as_secs(), dir.display()))?,
 		status = child.wait() => eyre::bail!("it exited ({}) before it was up; see {}/orbita.log", status?, dir.display()),
 	};
 	{
 		let mut profiles = runner.0.profiles.lock().expect("never held across a panic");
 		let slot = profiles.get_mut(&gmail).expect("a slot leaves only at its future's end");
-		let State::Starting(waiters) = std::mem::replace(&mut slot.state, State::Up { devtools }) else {
+		let State::Starting(waiters) = std::mem::replace(&mut slot.state, State::Up { devtools: devtools.clone() }) else {
 			unreachable!("only this future moves it up");
 		};
 		for w in waiters {
@@ -216,7 +218,21 @@ async fn life(runner: &Runner, gmail: i64, dir: &Path, browser: Browser, stop: &
 			}
 		}
 	};
+	let facing = async {
+		match with_film {
+			true => film::facing(&devtools).await,
+			false => std::future::pending().await,
+		}
+	};
 	tokio::select! {
+		r = facing => {
+			// a paused page would never run without it
+			if let Err(e) = r {
+				group.signal(rustix::process::Signal::TERM);
+				let _stopped = tokio::time::timeout(STOP_WITHIN, child.wait()).await;
+				return Err(e.wrap_err("facing.js's devtools broke off: stopped"));
+			}
+		}
 		status = child.wait() => {
 			tracing::info!(gmail, status = %status?, "browser exited");
 			return Ok(());

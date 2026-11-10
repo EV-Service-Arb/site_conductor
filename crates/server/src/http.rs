@@ -9,12 +9,12 @@ use std::{sync::Arc, time::Duration};
 use axum::{
 	Json, Router,
 	error_handling::HandleErrorLayer,
-	extract::FromRef,
+	extract::{DefaultBodyLimit, FromRef},
 	handler::Handler,
 	http::{HeaderValue, Method, StatusCode, header},
 	middleware,
 	response::{IntoResponse, Response},
-	routing::{MethodFilter, MethodRouter, get, on, post},
+	routing::{MethodFilter, MethodRouter, get, on, post, put},
 };
 use sa_auth::{PermissionSet, Sources, Tokens};
 use sa_panel::Panel;
@@ -150,6 +150,12 @@ pub fn app(
 		map,
 		browsers: browsers.clone(),
 	};
+	let film = Router::new()
+		.route(browser::FILM, put(browser::set_film))
+		.route_layer(gate(Freshness::Cached, None))
+		.with_state(state.clone())
+		.layer(DefaultBodyLimit::max(browser::FILM_MAX));
+	let film = bounded(film, 4, Duration::from_secs(600));
 	let api = bounded(routes.with_state(state), limits.api_concurrent, limits.api_timeout);
 	// Its own budget: the bound and the timeout cover the handshake only (the socket lives on
 	// after the 101), and a burst of reconnecting tabs must not shed the API's requests.
@@ -161,6 +167,7 @@ pub fn app(
 		.merge(auth)
 		.merge(live)
 		.merge(viewer)
+		.merge(film)
 		.merge(queries_cache::routes(sign_in.panel.clone(), &limits))
 		.nest("/api/v1", api);
 	let app = match forward {

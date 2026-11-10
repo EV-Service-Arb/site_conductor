@@ -80,7 +80,7 @@ pub struct ConnectionsDto {
 	pub browser: Option<crate::browser::BrowserDto>,
 }
 impl ConnectionsDto {
-	fn of(c: Connections, running: bool) -> Self {
+	fn of(c: Connections, running: bool, film: bool) -> Self {
 		Self {
 			imap: c.imap.map(|i: Imap| ImapDto {
 				host: i.host,
@@ -109,6 +109,7 @@ impl ConnectionsDto {
 				set_at: b.set_at.to_string(),
 				checked: b.checked.into(),
 				running,
+				film,
 			}),
 		}
 	}
@@ -165,11 +166,11 @@ async fn connections(State(state): State<ApiState>, Extension(caller): Extension
 /// The gmail's connections, its browser's running asked of the runner.
 pub(crate) async fn answer(state: &ApiState, owner: uuid::Uuid, gmail: i64) -> ApiResult<ConnectionsDto> {
 	let c = state.panel.connections(owner, gmail).await??;
-	let running = match (&c.browser, &state.browsers) {
-		(Some(_), Some(b)) => b.running(gmail).await?,
-		_ => false,
+	let (running, film) = match (&c.browser, &state.browsers) {
+		(Some(_), Some(b)) => b.state(gmail).await?,
+		_ => (false, false),
 	};
-	Ok(ConnectionsDto::of(c, running))
+	Ok(ConnectionsDto::of(c, running, film))
 }
 
 async fn set_imap(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<SetImap>, JsonRejection>) -> ApiResult<Json<ConnectionsDto>> {

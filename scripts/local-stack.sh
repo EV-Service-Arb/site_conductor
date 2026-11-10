@@ -588,6 +588,7 @@ browsers() {
 		BROWSERS_DIR="$state/browsers" \
 		BROWSERS_MAX=4 \
 		BROWSERS_ORBITA="$BROWSERS_ORBITA" \
+		BROWSERS_FFMPEG="$BROWSERS_FFMPEG" \
 		PANEL_ASSERTION_KEYS="$assertion_public" \
 		"$root/target/debug/sa_browsers" "$@"
 }
@@ -667,7 +668,8 @@ fi
 if [ -n "$browsers_origin" ]; then
 	say "starting the browsers' runner on $browsers_origin (Orbita: nix build .#orbita)"
 	BROWSERS_ORBITA="$(nix build --no-link --print-out-paths "$root#orbita")/bin/orbita"
-	export BROWSERS_ORBITA
+	BROWSERS_FFMPEG="$(nix build --no-link --print-out-paths nixpkgs#ffmpeg-headless.bin)/bin/ffmpeg"
+	export BROWSERS_ORBITA BROWSERS_FFMPEG
 	busy "$BROWSERS_PORT" && die "port $BROWSERS_PORT is taken: the browsers' runner's"
 	in_shell "$root" cargo b -q -p sa_browsers
 	serving browsers "$root" "cargo b -q -p sa_browsers" "browsers serve" -e rs,toml,lock &

@@ -896,6 +896,7 @@ async fn no_permission_opens_no_section() {
 			"/gmails/{id}/browser",
 			"/gmails/{id}/browser/start",
 			"/gmails/{id}/browser/stop",
+			"/gmails/{id}/browser/film",
 			"/tokens",
 			"/tokens/ledger",
 			"/tokens/usage",

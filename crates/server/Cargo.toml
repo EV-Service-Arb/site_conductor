@@ -31,7 +31,7 @@ getrandom.workspace = true
 http-body-util.workspace = true
 hyper-util.workspace = true
 jiff = { workspace = true, features = ["serde"] }
-reqwest = { workspace = true, features = ["multipart"] }
+reqwest = { workspace = true, features = ["multipart", "stream"] }
 rustix.workspace = true
 sa_alerts.workspace = true
 sa_auth = { workspace = true, features = ["catalog"] }

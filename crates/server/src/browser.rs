@@ -8,6 +8,9 @@
 //! DELETE /api/v1/gmails/{id}/browser        → 204: stopped, the provider's profile and the session gone
 //! POST   /api/v1/gmails/{id}/browser/start {gmb?}  → 204 once up: at that GBP's point, else nowhere
 //! POST   /api/v1/gmails/{id}/browser/stop   → 204
+//! PUT    /api/v1/gmails/{id}/browser/film   an mp4 (≤ 512 MiB) → 204: its next launch's back camera,
+//!                                           the sound its mic; 400 no sound, 409 while it runs
+//! DELETE /api/v1/gmails/{id}/browser/film   → 204
 //! GET    /api/v1/gmails/{id}/browser        WebSocket, the viewer: outside the /api/v1 gate, as
 //!                                           /live; one per gmail, a new one closes the old (4409)
 //! ```
@@ -109,6 +112,8 @@ pub struct BrowserDto {
 	/// `error` null: through the proxy, out in the country of every GBP of the gmail.
 	pub checked: CheckedDto,
 	pub running: bool,
+	/// Its next launch plays the film uploaded as its back camera.
+	pub film: bool,
 }
 
 /// A frame of the viewer's socket, from the conductor.
@@ -247,14 +252,14 @@ impl Connected {
 		})
 	}
 
-	/// Whether the gmail's browser runs now.
-	pub(crate) async fn running(&self, gmail: i64) -> ApiResult<bool> {
+	/// Whether the gmail's browser runs now, and whether its next launch plays a film.
+	pub(crate) async fn state(&self, gmail: i64) -> ApiResult<(bool, bool)> {
 		let (status, body) = self.runner.call(Method::GET, "/profiles", None).await?;
 		if status != StatusCode::OK {
 			return Err(ApiError::Unavailable(format!("the browsers' runner answered {status}: {body}")));
 		}
 		let profiles: Profiles = serde_json::from_str(&body).map_err(|e| eyre::eyre!("the runner's profiles: {e}"))?;
-		Ok(profiles.running.iter().any(|r| r.gmail == gmail))
+		Ok((profiles.running.iter().any(|r| r.gmail == gmail), profiles.films.contains(&gmail)))
 	}
 }
 
@@ -327,6 +332,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::DELETE, "/gmails/{id}/browser", None, Cached, remove),
 		ApiRoute::new(M::POST, "/gmails/{id}/browser/start", None, Cached, start),
 		ApiRoute::new(M::POST, "/gmails/{id}/browser/stop", None, Cached, stop),
+		ApiRoute::new(M::DELETE, "/gmails/{id}/browser/film", None, Cached, remove_film),
 	]
 }
 
@@ -384,6 +390,50 @@ async fn stop(State(state): State<ApiState>, Extension(caller): Extension<Caller
 	state.panel.browser_of(caller.user_id, gmail).await??;
 	c.runner.expect_done(Method::POST, &format!("/profiles/{gmail}/stop"), None).await?;
 	Ok(StatusCode::NO_CONTENT)
+}
+
+async fn remove_film(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<StatusCode> {
+	let gmail = id(&raw)?;
+	let c = connected(&state)?;
+	state.panel.browser_of(caller.user_id, gmail).await??;
+	c.runner.expect_done(Method::DELETE, &format!("/profiles/{gmail}/film"), None).await?;
+	Ok(StatusCode::NO_CONTENT)
+}
+
+/// The film's upload: under the gate, outside the API's bounds — a film takes longer than a
+/// request may.
+pub(crate) const FILM: &str = "/api/v1/gmails/{id}/browser/film";
+/// A film at most.
+pub(crate) const FILM_MAX: usize = 512 << 20;
+
+/// `PUT` an mp4, streamed to the runner: the camera of the gmail's next launch, its sound the mic.
+pub(crate) async fn set_film(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, film: axum::body::Body) -> ApiResult<StatusCode> {
+	let gmail = id(&raw)?;
+	let c = connected(&state)?;
+	state.panel.browser_of(caller.user_id, gmail).await??;
+	let path = format!("/profiles/{gmail}/film");
+	let sent = c
+		.runner
+		.http
+		.put(format!("{}{path}", c.runner.base))
+		.header(sa_auth::HEADER, c.runner.assertion(&Method::PUT, &path))
+		.timeout(Duration::from_secs(600))
+		.body(reqwest::Body::wrap_stream(film.into_data_stream()))
+		.send()
+		.await
+		.map_err(|e| ApiError::Unavailable(format!("the browsers' runner did not take the film: {e}")))?;
+	let status = sent.status();
+	let text = sent.text().await.map_err(|e| ApiError::Unavailable(format!("the browsers' runner's answer broke off: {e}")))?;
+	match status {
+		StatusCode::NO_CONTENT => {
+			tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail's film set");
+			Ok(StatusCode::NO_CONTENT)
+		}
+		StatusCode::BAD_REQUEST => Err(ApiError::BadRequest(text)),
+		StatusCode::CONFLICT => Err(ApiError::Conflict(text)),
+		StatusCode::PAYLOAD_TOO_LARGE => Err(ApiError::TooLarge(format!("a film is {} MiB at most", FILM_MAX >> 20))),
+		s => Err(eyre::eyre!("the browsers' runner answered a film with {s}: {text}").into()),
+	}
 }
 
 /// The viewer's route: outside the /api/v1 gate, as /live is.
