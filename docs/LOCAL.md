@@ -218,9 +218,12 @@ are pointed at it.
 
 ## Browsers
 
-With `GOLOGIN_TOKEN` in the shell (a workspace on a paid plan: Orbita refuses to start without
-one), the stack runs sa_browsers on `BROWSERS_BIND` beside the conductor, Orbita from `.#orbita`,
-the sessions in `.local/browsers/`. Without it, a gmail's browser says browsers are not connected.
+With `MULTILOGIN_TOKEN` or `GOLOGIN_TOKEN` in the shell (a paid plan's: neither runs without
+one), the stack runs sa_browsers on `BROWSERS_BIND` beside the conductor: Orbita from `.#orbita`,
+the Multilogin app on its own Xvfb from `.#mlx` (its `~/mlx` is the user's: a desktop app already
+running holds the launcher's port), a phone's tools from `.#phone-tools`, the sessions in
+`.local/browsers/`. Without either, a gmail's browser says browsers are not connected. A cloud phone
+started here bills Multilogin's minutes: Multilogin's browser (Mimic) costs none.
 
 ## The end-to-end check
 
