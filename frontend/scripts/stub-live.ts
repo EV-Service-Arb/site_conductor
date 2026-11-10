@@ -18,7 +18,7 @@ const open = new Set<Duplex>();
 const liveEnabled = MODE !== "off";
 
 /** One unfragmented, unmasked frame: `0x1` text, `0x8` close, `0xA` pong. */
-function frame(opcode: number, payload: Buffer): Buffer {
+export function frame(opcode: number, payload: Buffer): Buffer {
   const len = payload.length;
   const head = len < 126 ? Buffer.from([0x80 | opcode, len]) : len < 65_536 ? Buffer.from([0x80 | opcode, 126, len >> 8, len & 0xff]) : Buffer.alloc(10);
   if (len >= 65_536) {
@@ -29,17 +29,27 @@ function frame(opcode: number, payload: Buffer): Buffer {
   return Buffer.concat([head, payload]);
 }
 
-const text = (body: unknown) => frame(0x1, Buffer.from(JSON.stringify(body)));
-const closing = (code: number) => frame(0x8, Buffer.from([code >> 8, code & 0xff]));
+export const text = (body: unknown) => frame(0x1, Buffer.from(JSON.stringify(body)));
+export const closing = (code: number) => frame(0x8, Buffer.from([code >> 8, code & 0xff]));
 
-export function liveUpgrade(req: IncomingMessage, socket: Duplex, session: { signedIn: boolean; userId: string }): void {
+/** Answers the upgrade with 101; `false`: not a WebSocket request, refused. */
+export function handshake(req: IncomingMessage, socket: Duplex): boolean {
   const key = req.headers["sec-websocket-key"];
-  if (!liveEnabled || typeof key !== "string") {
-    socket.end(`HTTP/1.1 ${liveEnabled ? "400 Bad Request" : "404 Not Found"}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n`);
-    return;
+  if (typeof key !== "string") {
+    socket.end("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    return false;
   }
   const accept = createHash("sha1").update(key + GUID).digest("base64");
   socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
+  return true;
+}
+
+export function liveUpgrade(req: IncomingMessage, socket: Duplex, session: { signedIn: boolean; userId: string }): void {
+  if (!liveEnabled) {
+    socket.end("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    return;
+  }
+  if (!handshake(req, socket)) return;
   const refuse = !session.signedIn ? 4401 : MODE === "4401" || MODE === "4403" ? Number(MODE) : null;
   if (refuse !== null) {
     socket.end(closing(refuse));

@@ -120,6 +120,10 @@ impl Panel {
 		if gmbs_db::gmail_owner(&mut tx, id).await? != Some(owner) {
 			return Ok(Err(Refused::NotFound));
 		}
+		// again under the write lock: another gmail may have taken it while the check ran
+		if db::tag_holder(&mut tx, &tag).await?.is_some_and(|holder| holder != id) {
+			return Ok(Err(Refused::Invalid("another gmail leaves through this proxy: one proxy is one gmail's".to_owned())));
+		}
 		let stored = Proxy {
 			sealed: self.seal(&gmail_browser_aad(id), &new.proxy)?,
 			tag,

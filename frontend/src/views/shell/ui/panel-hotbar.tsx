@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 
 import { useT } from "@/shared/i18n";
 import type { LiveStatus } from "@/shared/lib/live";
+import { RunningBrowsers } from "@/features/browser-session";
 import { MapPanel, MapPreview } from "@/features/placement-overlay";
 import { setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
 
@@ -32,7 +33,12 @@ export function PanelHotbar({ live }: { live: LiveStatus }) {
   return (
     <Hotbar
       actions={actions}
-      status={<StatusItem tone={LIVE_TONE[live]}>{t(`live.${live}`)}</StatusItem>}
+      status={
+        <>
+          <RunningBrowsers />
+          <StatusItem tone={LIVE_TONE[live]}>{t(`live.${live}`)}</StatusItem>
+        </>
+      }
       labels={{ region: t("hotbar"), customize: t("hotbar.customize"), title: t("hotbar.title"), description: t("hotbar.description"), reset: t("hotbar.reset"), done: t("hotbar.done"), hide: t("hotbar.hide") }}
     />
   );

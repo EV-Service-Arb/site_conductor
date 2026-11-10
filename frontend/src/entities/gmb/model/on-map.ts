@@ -47,10 +47,10 @@ export function peek(gmb: number | null): void {
   setQuery({ gmb: gmb === null ? null : String(gmb) });
 }
 
-export type Tab = "launch";
+export type Tab = "launch" | "browser";
 
 /** The location window's tabs by state, in order; a GBP whose state has none opens as its card only. */
-export const TABS: Record<State, readonly Tab[]> = { draft: ["launch"], verifying: [], verified: [], suspended: [] };
+export const TABS: Record<State, readonly Tab[]> = { draft: ["launch", "browser"], verifying: ["browser"], verified: [], suspended: [] };
 
 /** The tab the GBP's window is open on; `null`: no window, the card only, or the trade's or a gmail's window holds `?tab`. */
 export function useTab(): Tab | null {
@@ -83,7 +83,8 @@ export function openTrade(trade: number | null, tab?: Country): void {
   setQuery({ trade: trade === null ? null : String(trade), tab: tab ?? null, gmb: null, account: null });
 }
 
-export type AccountTab = "connections";
+export const ACCOUNT_TABS = ["connections", "browser"] as const;
+export type AccountTab = (typeof ACCOUNT_TABS)[number];
 
 /** The gmail whose own window is open (`?account`, apart from the outline's `?gmail` scope), on its tab. */
 export function useAccountWindow(): { gmail: number; tab: AccountTab } | null {
@@ -92,10 +93,10 @@ export function useAccountWindow(): { gmail: number; tab: AccountTab } | null {
   if (raw === null) return null;
   const gmail = Number(raw);
   if (!Number.isSafeInteger(gmail)) throw new Error(`?account=${raw}: not a gmail id`);
-  if (tab !== "connections") throw new Error(`?tab=${tab}: not a tab of gmail ${gmail}'s window`);
-  return { gmail, tab };
+  if (!ACCOUNT_TABS.includes(tab as AccountTab)) throw new Error(`?tab=${tab}: not a tab of gmail ${gmail}'s window`);
+  return { gmail, tab: tab as AccountTab };
 }
 
-export function openAccount(gmail: number | null): void {
-  setQuery({ account: gmail === null ? null : String(gmail), tab: gmail === null ? null : "connections", gmb: null, trade: null });
+export function openAccount(at: { gmail: number; tab: AccountTab } | null): void {
+  setQuery({ account: at === null ? null : String(at.gmail), tab: at?.tab ?? null, gmb: null, trade: null });
 }

@@ -379,10 +379,10 @@ function GmbRow({
   const issue = issueOf(gmb, tags);
   const archive = tags.archive?.get(gmb.id);
   const site = tags.sites?.get(gmb.id);
-  const ready = gmb.state === "draft" ? readiness(gmb, tags).filter((r) => r.ready).length : null;
+  const ready = gmb.state === "draft" ? readiness({ gmb, gmail }, tags).filter((r) => r.ready).length : null;
   const key =
     ready !== null
-      ? { text: issueText("draft", gmb, tags, t), title: t("gmbs.readiness.title"), tone: ready === MUST_HAVES.length ? "text-positive" : "text-accent-warn" }
+      ? { text: issueText("draft", { gmb, gmail }, tags, t), title: t("gmbs.readiness.title"), tone: ready === MUST_HAVES.length ? "text-positive" : "text-accent-warn" }
       : tags.sites !== null
         ? site && { text: String(site.leads_7d), title: t("gmbs.leads7d.title"), tone: "text-ink-soft" }
         : archive?.rating != null && { text: `★ ${archive.rating.toFixed(1)}`, title: t("gmbs.rating.title"), tone: "text-ink-soft" };
@@ -401,7 +401,7 @@ function GmbRow({
       <span className="block truncate text-xs text-ink-soft">
         {gmb.state !== "verified" && <span className={cn("font-medium", gmb.state === "suspended" && "text-accent-error")}>{t(`gmbs.state.${gmb.state}`)}</span>}
         {gmb.state !== "verified" && (shown || where) && " · "}
-        {shown && <span className={cn("font-medium", shown === "off" || shown === "no_category" ? "text-ink-soft" : "text-accent-error")}>{issueText(shown, gmb, tags, t)}</span>}
+        {shown && <span className={cn("font-medium", shown === "off" || shown === "no_category" ? "text-ink-soft" : "text-accent-error")}>{issueText(shown, { gmb, gmail }, tags, t)}</span>}
         {shown && where && " · "}
         {where}
       </span>

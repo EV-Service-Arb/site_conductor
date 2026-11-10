@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge, Button, cn } from "@evinvest/uikit";
-import { ChevronDown, ChevronUp, Globe, Hash, Mail, MapPin, Phone, Send, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Globe, Hash, Mail, MapPin, Phone, Send, Smartphone, X } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { CategoryChip, type Listed, MUST_HAVES, TABS, type Tab, open, openAccount, readiness, useGmbTags, useSelection } from "@/entities/gmb";
@@ -9,9 +9,10 @@ import { useT } from "@/shared/i18n";
 import { setQuery } from "@/shared/lib/query";
 import { useButtonSize } from "@/shared/ui/touch";
 
+import { BrowserTab } from "./browser-tab";
 import { Launch } from "./launch";
 
-const ICON: Record<Tab, ReactNode> = { launch: <Send aria-hidden className="size-4" /> };
+const ICON: Record<Tab, ReactNode> = { launch: <Send aria-hidden className="size-4" />, browser: <Smartphone aria-hidden className="size-4" /> };
 
 /** A GBP's window over the map, beside the outline: its header, and the tabs its state has. */
 export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
@@ -28,13 +29,13 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
     const next = order[(at + by + order.length) % order.length];
     if (next !== undefined) open(next.gmb);
   };
-  const ready = gmb.state === "draft" ? readiness(gmb, tags).filter((r) => r.ready).length : null;
+  const ready = gmb.state === "draft" ? readiness(listed, tags).filter((r) => r.ready).length : null;
   const point = gmb.address ?? (gmb.location && t("window.planned", { at: `${gmb.location.lat.toFixed(3)}, ${gmb.location.lng.toFixed(3)}` }));
   const facts = [
     point && { icon: <MapPin aria-hidden />, text: point },
     gmb.phone && { icon: <Phone aria-hidden />, text: gmb.phone },
     site && { icon: <Globe aria-hidden />, text: `${site.brand}/${site.location}` },
-    gmail && { icon: <Mail aria-hidden />, text: gmail.gmail, open: () => openAccount(gmail.id) },
+    gmail && { icon: <Mail aria-hidden />, text: gmail.gmail, open: () => openAccount({ gmail: gmail.id, tab: "connections" }) },
     gmb.place_id && { icon: <Hash aria-hidden />, text: gmb.place_id },
   ].filter((f) => !!f);
 
@@ -92,10 +93,13 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
             type="button"
             role="tab"
             aria-selected={k === tab}
+            // a GBP's browser is its gmail's
+            disabled={k === "browser" && gmail === null}
+            title={k === "browser" && gmail === null ? t("window.browser.needsGmail") : undefined}
             onClick={() => setQuery({ tab: k })}
             className={cn(
               "-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              k === tab ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink",
+              k === tab ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink disabled:opacity-50 disabled:hover:text-ink-soft",
             )}
           >
             {ICON[k]}
@@ -105,6 +109,7 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
       </nav>
       <div role="tabpanel" className="p-6">
         {tab === "launch" && <Launch listed={listed} />}
+        {tab === "browser" && <BrowserTab listed={listed} />}
       </div>
     </section>
   );

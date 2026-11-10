@@ -2,6 +2,7 @@ import type { T } from "@/shared/i18n";
 
 import { categoryOf } from "./category";
 import type { ArchiveTag, Gmb, SiteTag, Trade } from "./gmb";
+import type { Listed } from "./narrow";
 import { MUST_HAVES, readiness } from "./readiness";
 
 /** What needs the operator on a GMB, most pressing first. */
@@ -41,9 +42,10 @@ export function issueCounts(gmbs: readonly Gmb[], tags: Tags): Map<Issue, number
 }
 
 /** The issue as a row and a card name it: with its count where it has one. `issue` is `issueOf` the GMB under these tags. */
-export function issueText(issue: Issue, gmb: Gmb, tags: Tags, t: T): string {
+export function issueText(issue: Issue, listed: Listed, tags: Tags, t: T): string {
+  const { gmb } = listed;
   if (issue === "overdue") return t("gmbs.tag.overdue", { n: tags.sites!.get(gmb.id)!.overdue });
   if (issue === "suspended") return t("gmbs.tag.suspended", { n: tags.archive!.get(gmb.id)!.suspended });
-  if (issue === "draft") return `${readiness(gmb, tags).filter((r) => r.ready).length}/${MUST_HAVES.length}`;
+  if (issue === "draft") return `${readiness(listed, tags).filter((r) => r.ready).length}/${MUST_HAVES.length}`;
   return t(`gmbs.issue.${issue}`);
 }

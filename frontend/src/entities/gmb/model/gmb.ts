@@ -27,7 +27,6 @@ export const gmbParser: Parser<Gmb> = object({
   hidden_address: nullable(str),
   customers_visit: nullable(bool),
   film: nullable(str),
-  profile: nullable(str),
   created_at: str,
   enabled: bool,
   location: nullable(object({ lat: num, lng: num, placed: bool })),
@@ -35,7 +34,7 @@ export const gmbParser: Parser<Gmb> = object({
 
 export const mapConfigParser: Parser<MapConfig> = object({ key: str });
 
-const gmailParser: Parser<Gmail> = object({ id: num, gmail: str, role: nullable(oneOf(GMAIL_ROLES)), cap: nullable(num), created_at: str });
+const gmailParser: Parser<Gmail> = object({ id: num, gmail: str, role: nullable(oneOf(GMAIL_ROLES)), cap: nullable(num), created_at: str, browser: bool });
 export const gmailsParser: Parser<Gmails> = object({ gmails: arrayOf(gmailParser), gmbs: arrayOf(gmbParser) });
 
 const categoryParser: Parser<Category> = object({ country: oneOf(COUNTRIES), lang: str, keywords: arrayOf(str), google_category: nullable(str), study: nullable(str) });

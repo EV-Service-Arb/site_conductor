@@ -1,7 +1,7 @@
 /**
  * A stand-in for the conductor's backend, for `next dev` without Rust or concierge: `/api/v1`
- * (who you are, sources, access requests, gmails, tokens, alerts — read only), `/auth/*`, review_archive's and sites' GMB tags, and
- * the live socket. Same shapes, same gate (401 without a session, CSRF on writes). The sites'
+ * (who you are, sources, access requests, gmails, tokens, alerts — read only), `/auth/*`, review_archive's and sites' GMB tags,
+ * the live socket, and a gmail's connections with its browser (`stub-browser.ts`). Same shapes, same gate (401 without a session, CSRF on writes). The sites'
  * API and bundle are sites_panel's: run it for `/sites`.
  *
  *   npm run dev:stub                  # on STUB_PORT (the dev shell's), signed in as an operator
@@ -9,6 +9,7 @@
  *   STUB_ME=403 npm run dev:stub      # the gate refusing: 401 | 403 | 503
  *   STUB_LIVE=off npm run dev:stub     # no /api/v1/live socket (4401 | 4403: close at once)
  *   STUB_LIVE_EVERY=5 npm run dev:stub # live activity every 5 s rather than every 20–40 s
+ *   STUB_MAP_KEY=<key> npm run dev:stub # a Maps JS key: the home map, and the windows over it
  *
  * Live: every write above is announced on the socket, and the sites are busy too — a `leads`
  * change every 20–40 s, relayed to the elements as it would be from sites_panel's feed.
@@ -21,7 +22,8 @@ import type { Duplex } from "node:stream";
 
 import { type Alerts, RULES } from "../src/entities/alerts/model/generated.ts";
 import { ALIASES } from "../src/entities/session/model/generated.ts";
-import { changed, every, liveUpgrade } from "./stub-live.ts";
+import { browserOf, browserRoute, browserUpgrade } from "./stub-browser.ts";
+import { changed, closing, every, handshake, liveUpgrade } from "./stub-live.ts";
 
 if (!process.env.STUB_PORT) throw new Error("STUB_PORT: the port to serve on; the dev shell sets it");
 const PORT = Number(process.env.STUB_PORT);
@@ -78,10 +80,13 @@ function signedIn(req: IncomingMessage): boolean {
 
 const gmails: { id: number; gmail: string; role: "owner" | "manager" | null; cap: number | null; created_at: string }[] = [{ id: 1, gmail: "owner@gmail.com", role: "manager", cap: 6, created_at: minsAgo(60 * 24 * 30) }];
 const gmbs: Json[] = [
-  { id: 1, gmail_id: 1, place_id: "ChIJstubstubstub00001", name: "Plombier Paris 11 (stub)", address: "12 rue Oberkampf, Paris", state: "verified", next: ["suspended", "verifying"], country: { code: "FR", by_hand: false }, phone: null, category: null, areas: [], hidden_address: null, customers_visit: null, film: null, profile: null, created_at: minsAgo(60 * 24 * 30), enabled: true, location: { lat: 48.8649, lng: 2.3766, placed: false } },
-  { id: 2, gmail_id: 1, place_id: "ChIJstubstubstub00002", name: "Serrurier Lyon 3 (stub)", address: "4 cours Gambetta, Lyon", state: "suspended", next: ["verified", "verifying"], country: { code: "FR", by_hand: true }, phone: null, category: null, areas: [], hidden_address: null, customers_visit: null, film: null, profile: null, created_at: minsAgo(60 * 24 * 20), enabled: true, location: null },
-  { id: 3, gmail_id: null, place_id: null, name: "Électricien Lille (stub draft)", address: null, state: "draft", next: ["verifying"], country: null, phone: null, category: null, areas: [], hidden_address: null, customers_visit: null, film: null, profile: null, created_at: minsAgo(60 * 24), enabled: true, location: null },
+  { id: 1, gmail_id: 1, place_id: "ChIJstubstubstub00001", name: "Plombier Paris 11 (stub)", address: "12 rue Oberkampf, Paris", state: "verified", next: ["suspended", "verifying"], country: { code: "FR", by_hand: false }, phone: null, trade_id: null, areas: [], hidden_address: null, customers_visit: null, film: null, created_at: minsAgo(60 * 24 * 30), enabled: true, location: { lat: 48.8649, lng: 2.3766, placed: false } },
+  { id: 2, gmail_id: 1, place_id: "ChIJstubstubstub00002", name: "Serrurier Lyon 3 (stub)", address: "4 cours Gambetta, Lyon", state: "suspended", next: ["verified", "verifying"], country: { code: "FR", by_hand: true }, phone: null, trade_id: null, areas: [], hidden_address: null, customers_visit: null, film: null, created_at: minsAgo(60 * 24 * 20), enabled: true, location: null },
+  { id: 3, gmail_id: null, place_id: null, name: "Électricien Lille (stub draft)", address: null, state: "draft", next: ["verifying"], country: null, phone: null, trade_id: null, areas: [], hidden_address: null, customers_visit: null, film: null, created_at: minsAgo(60 * 24), enabled: true, location: null },
+  { id: 4, gmail_id: 1, place_id: null, name: "Plombier Lyon 8 (stub draft)", address: null, state: "draft", next: ["verifying"], country: { code: "FR", by_hand: true }, phone: "+33 4 28 29 41 07", trade_id: 1, areas: ["Lyon 8e", "Vénissieux", "Bron"], hidden_address: "14 rue Laënnec, 69008 Lyon", customers_visit: false, film: null, created_at: minsAgo(60 * 5), enabled: true, location: { lat: 45.7347, lng: 4.8691, placed: true } },
 ];
+const trades = [{ id: 1, name: "Plumbing", created_at: minsAgo(60 * 24 * 7), categories: [{ country: "FR", lang: "fr", keywords: ["plombier"], google_category: "Plombier", study: null }] }];
+const connections = (gmail: number) => ({ imap: null, maps_key: null, prices: { details: null, search: null }, browser: browserOf(gmail).browser });
 const tokens = { balance: 75, daily: 15, cap: 500, kickbacks: [{ id: 1, at: minsAgo(90), amount: 12, service: "review_archive", key: "run:42", label: "Plombier Paris 11 (stub)", by: null, note: null }] };
 const ledger = Array.from({ length: 8 }, (_, i) => ({ id: 8 - i, at: minsAgo(60 * 24 * i), delta: i % 2 ? -12 : 15, kind: i % 2 ? "charge" : "accrual", service: i % 2 ? "review_archive" : null, key: i % 2 ? `run:${40 - i}` : null, label: i % 2 ? "Plombier Paris 11 (stub)" : null, by: null, note: null }));
 const usageDays = Array.from({ length: 30 }, (_, i) => ({ day: iso(new Date(now().getTime() - (29 - i) * 86_400_000)).slice(0, 10), charges: i % 3, tokens: (i % 3) * 12 }));
@@ -117,15 +122,19 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
     };
     return send(res, 200, alerts);
   }
-  if (path === "/gmails" && req.method === "GET") return send(res, 200, { gmails, gmbs });
+  if (path === "/gmails" && req.method === "GET") return send(res, 200, { gmails: gmails.map((g) => ({ ...g, browser: browserOf(g.id).ready })), gmbs });
+  if (path === "/trades" && req.method === "GET") return send(res, 200, { trades });
+  const connected = path.match(/^\/gmails\/(\d+)\/connections$/);
+  if (connected && req.method === "GET") return send(res, 200, connections(Number(connected[1])));
+  if (await browserRoute(req, res, path, () => readJson(req), send, connections)) return;
   if (path === "/gmails" && req.method === "POST") {
     const { gmail } = (await readJson(req)) as { gmail: string };
     const made = { id: gmails.length + 1, gmail, role: null, cap: null, created_at: iso(now()) };
     gmails.push(made);
     return send(res, 201, made);
   }
-  // no browser key: the home page shows the outline without a map
-  if (path === "/map") return send(res, 404, { error: "not found" });
+  // no browser key unless given: the home page shows the outline without a map, and no window over it
+  if (path === "/map") return process.env.STUB_MAP_KEY ? send(res, 200, { key: process.env.STUB_MAP_KEY }) : send(res, 404, { error: "not found" });
   if (path === "/gmbs/resolve") return send(res, 200, { candidates: [{ place_id: "ChIJstubstubstub00009", name: "Électricien Lille (stub)", address: "8 rue Faidherbe, Lille" }] });
   const placing = path.match(/^\/gmbs\/(\d+)\/location$/);
   if (placing && req.method === "PUT") {
@@ -196,6 +205,12 @@ const server = createServer((req, res) => {
 });
 server.on("upgrade", (req: IncomingMessage, socket: Duplex) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+  const viewer = url.pathname.match(/^\/api\/v1\/gmails\/(\d+)\/browser$/);
+  if (viewer) {
+    if (signedIn(req)) return browserUpgrade(req, socket, Number(viewer[1]));
+    if (handshake(req, socket)) socket.end(closing(4401));
+    return;
+  }
   if (url.pathname !== "/api/v1/live") return socket.destroy();
   liveUpgrade(req, socket, { signedIn: signedIn(req) && ME_FAILURE !== "401", userId: USER_ID });
 });
