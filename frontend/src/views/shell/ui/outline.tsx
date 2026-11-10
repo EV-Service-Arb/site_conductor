@@ -8,6 +8,8 @@ import type { CSSProperties } from "react";
 
 import { useT } from "@/shared/i18n";
 
+import { toggleSidebar } from "../model/sidebar";
+
 import { useApps } from "./apps";
 import { GmbTree } from "./gmb-tree";
 
@@ -29,7 +31,7 @@ export function Outline({ folded, onNavigate, className }: { folded: boolean; on
       groups={sections}
       pathname={pathname}
       linkComponent={Link}
-      folded={folded}
+      unfold={folded ? toggleSidebar : undefined}
       labels={{ primary: t("nav.outline") }}
       {...(onNavigate && { onNavigate: () => onNavigate() })}
       style={WIDTH}
