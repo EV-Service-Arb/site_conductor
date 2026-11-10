@@ -61,7 +61,6 @@ export function PanelTopBar() {
   const pathname = usePathname();
   const apps = useApps();
   const switcher = useSwitcherGroups();
-  const folded = useSidebarFolded();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -108,7 +107,7 @@ export function PanelTopBar() {
           <NavigationMenu viewport={false} className="ml-4 hidden md:flex" aria-label={t("nav.primary")}>
             <NavigationMenuList>
               {apps.map((a) => (
-                <AppItem key={a.href} app={a} menu={!(a.here && !folded)} />
+                <AppItem key={a.href} app={a} menu={!a.here} />
               ))}
             </NavigationMenuList>
           </NavigationMenu>
@@ -128,7 +127,7 @@ export function PanelTopBar() {
   );
 }
 
-/** The open app has none while the outline shows its views whole: the menu would only repeat them. */
+/** The open app has none: the outline shows its views, whole or in its icons' flyouts, so the menu would only repeat them. */
 function AppItem({ app, menu }: { app: App; menu: boolean }) {
   const pathname = usePathname();
   return (

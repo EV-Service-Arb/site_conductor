@@ -37,6 +37,7 @@ export function useApps(onNavigate?: () => void): App[] {
               id: "sites",
               label: t("nav.sites"),
               icon: Globe,
+              menu: true,
               // A click on one of its links has routed (CONTRACT §9).
               content: (
                 <div onClick={() => onNavigate?.()}>
