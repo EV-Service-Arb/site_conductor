@@ -100,19 +100,29 @@ async fn started(runner: &Runner, gmail: i64, run: &Run, ends: &mut Ends<'_>) ->
 		json!({ "ids": [run.phone], "enabled": true }),
 	)
 	.await?;
-	let info = until(&format!("adb on {}", run.phone), ADB_WITHIN, || async {
+	// adb on from the run before reads active at once with a password adb/set replaces (M1): one
+	// that glogin refuses is read again
+	let phone = until(&format!("adb on {}", run.phone), ADB_WITHIN, || async {
 		let v = api
 			.call(&run.token, reqwest::Method::POST, "/mobile_profiles/phone/adb/info", json!({ "ids": [run.phone] }))
 			.await?;
 		let i = &v["items"][0];
-		let s = |k: &str| i[k].as_str().map(str::to_owned);
-		Ok((i["status"] == "active").then(|| (s("ip"), s("port"), s("pwd"))))
+		if i["status"] != "active" {
+			return Ok(None);
+		}
+		let (Some(ip), Some(port), Some(pwd)) = (i["ip"].as_str(), i["port"].as_str(), i["pwd"].as_str()) else {
+			eyre::bail!("adb/info is active for {} without its ip, port or pwd", run.phone);
+		};
+		match adb::Phone::connect(runner.0.adb.clone(), runner.0.ffmpeg.clone(), format!("{ip}:{port}"), pwd.to_owned()).await {
+			Ok(p) => Ok(Some(p)),
+			Err(e) if format!("{e:#}").contains("password error") => {
+				tracing::info!(phone = run.phone, "glogin refused adb/info's password: asked again");
+				Ok(None)
+			}
+			Err(e) => Err(e),
+		}
 	})
 	.await?;
-	let (Some(ip), Some(port), Some(pwd)) = info else {
-		eyre::bail!("adb/info is active for {} without its ip, port or pwd", run.phone);
-	};
-	let phone = adb::Phone::connect(runner.0.adb.clone(), runner.0.ffmpeg.clone(), format!("{ip}:{port}"), pwd).await?;
 	placed(runner, &phone, run).await?;
 	up(runner, gmail, Up::Phone { adb: Arc::new(phone), stream });
 	tokio::select! {

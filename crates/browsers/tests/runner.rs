@@ -267,7 +267,8 @@ fn stand_in_adb(dir: &Path) -> PathBuf {
 case "$*" in
   connect*) echo "connected to $2" ;;
   *exec-out*screencap*) cat {d}/screen.png ;;
-  *glogin*) echo "glogin success" ;;
+  *glogin*"'new'"*) echo "glogin success" ;;
+  *glogin*) echo "glogin failed:password error" ;;
   *"'wm' 'size'"*) echo "Physical size: 1080x2400" ;;
   *persist.sys.timezone*) echo Europe/Paris ;;
   *wget*) echo "{{\"countryCode\":\"$(cat {d}/country 2>/dev/null || echo FR)\",\"query\":\"92.184.1.1\",\"mobile\":true}}" ;;
@@ -322,8 +323,11 @@ impl Multilogin {
 				"/mobile_profiles/phone/adb/{op}",
 				post(
 					move |State((calls, _)): State<(Arc<Mutex<Calls>>, PathBuf)>, axum::extract::Path(op): axum::extract::Path<String>, Json(body): Json<Value>| async move {
-						calls.lock().unwrap().calls.push((format!("adb/{op}"), body));
-						ok(json!({ "fail_amount": 0, "items": [{ "status": "active", "ip": "127.0.0.1", "port": "5555", "pwd": "pw" }] }))
+						// as adb left on by the run before: active at once, its first password already replaced
+						let mut c = calls.lock().unwrap();
+						c.calls.push((format!("adb/{op}"), body));
+						let pwd = if c.calls.iter().filter(|(o, _)| o == "adb/info").count() == 1 { "old" } else { "new" };
+						ok(json!({ "fail_amount": 0, "items": [{ "status": "active", "ip": "127.0.0.1", "port": "5555", "pwd": pwd }] }))
 					},
 				),
 			)
