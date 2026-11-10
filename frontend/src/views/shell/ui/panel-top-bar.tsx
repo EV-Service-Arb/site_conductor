@@ -22,8 +22,10 @@ import {
   TopBar,
   cn,
   navigationMenuTriggerStyle,
+  useBinding,
+  useSequences,
 } from "@evinvest/uikit";
-import { ArrowUpRight, Bell, Check, ChevronDown, Globe, MapPin, Menu, Wallet } from "lucide-react";
+import { ArrowUpRight, Bell, Check, ChevronDown, Globe, MapPin, Menu, PanelLeftClose, PanelLeftOpen, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -41,10 +43,11 @@ import { safeLocalPath } from "@/shared/api";
 import { ROUTES } from "@/shared/config/routes";
 import { LOCALES, type Locale, chooseLocale, useLocale, useT } from "@/shared/i18n";
 
+import { toggleSidebar, useSidebar } from "../model/sidebar";
 import { Outline } from "./outline";
 
 /**
- * `[Service-Arb⌄] [Sites] [Review Archive] … [tokens] [wallet] [assistant] [bell] [language] [chip] [≡ Sources, Usage]`; on a phone
+ * `[sidebar] [Service-Arb⌄] [Sites] [Review Archive] … [tokens] [wallet] [assistant] [bell] [language] [chip] [≡ Sources, Usage]`; on a phone
  * the screens go into a Sheet, with the outline. The end slot is right-anchored, so the tokens appearing or changing width
  * grow leftwards and never move the icons.
  */
@@ -102,6 +105,7 @@ export function PanelTopBar() {
               <OwnScreens className="flex-col items-stretch border-t border-border pt-2" onNavigate={() => setOpen(false)} />
             </SheetContent>
           </Sheet>
+          <SidebarToggle />
           <AppSwitcher />
           <DevSignInBadge className="hidden sm:inline-flex" />
           <NavigationMenu viewport={false} className="ml-4 hidden md:flex" aria-label={t("nav.primary")}>
@@ -130,6 +134,30 @@ export function PanelTopBar() {
         </div>
       }
     />
+  );
+}
+
+/** The outline beside the page, shown or hidden; a phone has it in the Sheet instead. */
+function SidebarToggle() {
+  const t = useT();
+  const shown = useSidebar();
+  const keys = useSequences().get("sidebar");
+  useBinding({ on: { key: "s" }, run: { id: "sidebar", label: t("keys.sidebar"), run: toggleSidebar } });
+  const Icon = shown ? PanelLeftClose : PanelLeftOpen;
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      icon
+      className="hidden md:inline-flex"
+      onClick={toggleSidebar}
+      aria-pressed={shown}
+      aria-label={t("keys.sidebar")}
+      title={keys === undefined ? t("keys.sidebar") : `${t("keys.sidebar")} · ${keys}`}
+    >
+      <Icon aria-hidden />
+    </Button>
   );
 }
 
