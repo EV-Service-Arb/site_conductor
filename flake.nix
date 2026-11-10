@@ -39,6 +39,7 @@
           STUB_PORT = local 2; # its `npm run dev:stub`
           FIGMA_STUB_PORT = local 3; # `nix run .#figma`'s stub and `next dev`, never a running stack's
           FIGMA_WEB_PORT = local 4;
+          BROWSERS_BIND = "127.0.0.1:${local 5}"; # sa_browsers' runner
         };
 
         # `nix run .#gen`: the front end's mirror of the Rust (crates/gen), committed.
