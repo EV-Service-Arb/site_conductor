@@ -105,7 +105,7 @@ pub fn services(base: &str) -> Services {
 /// service at `base`.
 pub fn app_with(panel: Panel, permissions: PermissionSet, email: &str, base: &str, limits: http::Limits) -> Router {
 	let (sign_in, forward) = conductor(panel, permissions, email, base);
-	http::app(sign_in, Some(forward), None, limits, None, None)
+	http::app(sign_in, Some(forward), None, limits, None, None, None)
 }
 
 /// What a viewer's browser and Grafana reach: the conductor of [`app_with`] with Grafana on `dir`,
@@ -113,7 +113,7 @@ pub fn app_with(panel: Panel, permissions: PermissionSet, email: &str, base: &st
 pub fn app_with_grafana(panel: Panel, permissions: PermissionSet, email: &str, base: &str, dir: &Path) -> (Router, Router, Grafana) {
 	let (sign_in, forward) = conductor(panel, permissions, email, base);
 	let grafana = Grafana::new(forward.clone(), dir.to_owned());
-	let app = http::app(sign_in, Some(forward), Some(&grafana), http::Limits::default(), None, None);
+	let app = http::app(sign_in, Some(forward), Some(&grafana), http::Limits::default(), None, None, None);
 	(app, grafana.loopback(), grafana)
 }
 

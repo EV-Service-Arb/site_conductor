@@ -89,6 +89,13 @@ ev_lib::settings! {
 		google_maps_keys: Option<String>,
 		/// The key the browser loads Maps JS with: referrer-restricted, public by nature. Unset: no map.
 		google_maps_browser_key: Option<String>,
+		/// GoLogin's API token (app.gologin.com → Settings → API; a paid plan): the gmails' browsers'
+		/// profiles. With PANEL_BROWSERS_URL, or neither: no browsers.
+		#[secret]
+		gologin_token: Option<String>,
+		/// sa_browsers' runner, from inside the cluster, e.g. `http://browsers:59130`. Needs
+		/// PANEL_ASSERTION_KEY: it trusts the conductor's assertion alone.
+		panel_browsers_url: Option<String>,
 		/// Grafana's server (the image's `grafanaServer` wrapper): `serve` runs it, at `/grafana/`.
 		/// With PANEL_GRAFANA_DIR, or neither; needs the forward and a public origin.
 		panel_grafana_server: Option<String>,
@@ -227,6 +234,25 @@ impl Settings {
 				.parse()
 				.map_err(|e| eyre::eyre!("PANEL_ASSERTION_KEY: {e}"))?,
 		}))
+	}
+
+	/// The gmails' browsers: `None` when neither variable is set; one without the other is a
+	/// mistake, named.
+	pub fn browsers(&self) -> eyre::Result<Option<sa_server::browser::Connected>> {
+		let set = |v: &Option<String>| v.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned);
+		let (token, url) = match (set(&self.gologin_token), set(&self.panel_browsers_url)) {
+			(None, None) => return Ok(None),
+			(Some(t), Some(u)) => (t, u),
+			(Some(_), None) => eyre::bail!("GOLOGIN_TOKEN needs PANEL_BROWSERS_URL too"),
+			(None, Some(_)) => eyre::bail!("PANEL_BROWSERS_URL needs GOLOGIN_TOKEN too"),
+		};
+		let signer = set(&self.panel_assertion_key)
+			.ok_or_else(|| eyre::eyre!("PANEL_BROWSERS_URL needs PANEL_ASSERTION_KEY: the runner trusts the conductor's assertion alone"))?
+			.parse()
+			.map_err(|e| eyre::eyre!("PANEL_ASSERTION_KEY: {e}"))?;
+		let url = bare_http_origin("PANEL_BROWSERS_URL", &url)?.to_string();
+		let browsers = sa_panel::browsers::Browsers::new(zeroize::Zeroizing::new(token))?;
+		Ok(Some(sa_server::browser::Connected::new(browsers, &url, signer)?))
 	}
 
 	/// `None` when neither variable is set; one without the other is a mistake, named.
@@ -428,6 +454,8 @@ mod tests {
 				"TOKENS_START_CAP_MULTIPLE",
 				"GOOGLE_MAPS_KEYS",
 				"GOOGLE_MAPS_BROWSER_KEY",
+				"GOLOGIN_TOKEN",
+				"PANEL_BROWSERS_URL",
 				"PANEL_GRAFANA_SERVER",
 				"PANEL_GRAFANA_DIR",
 				"PANEL_WEB_DIR",

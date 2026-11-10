@@ -97,7 +97,7 @@ fn app(panel: Panel, map: Option<MapDto>) -> Router {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: ORIGIN.to_owned(),
 	};
-	http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, map)
+	http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, map, None)
 }
 
 async fn call(b: &mut Browser, app: &Router, method: Method, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
@@ -345,7 +345,7 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
 
 	let must_haves = json!({ "phone": "04 78 00 00 01", "trade": trade["id"], "areas": ["Lyon 7e"], "hidden_address": "12 rue de Marseille",
-		"customers_visit": false, "film": "verif_vid:42", "profile": "mlx:lyon-7" });
+		"customers_visit": false, "film": "verif_vid:42" });
 	let (status, edited) = call(&mut b, &app, Method::PATCH, &first, Some(must_haves.clone())).await;
 	assert_eq!(status, StatusCode::OK, "{edited}");
 	for (field, want) in must_haves.as_object().unwrap() {

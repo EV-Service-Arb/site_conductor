@@ -19,10 +19,15 @@ eyre.workspace = true
 futures.workspace = true
 getrandom.workspace = true
 hex.workspace = true
+hmac.workspace = true
+icu_locale.workspace = true
 jiff = { workspace = true, features = ["serde"] }
+percent-encoding.workspace = true
+reqwest = { workspace = true, features = ["socks"] }
 rustls-platform-verifier.workspace = true
 sa_alerts.workspace = true
 sa_auth.workspace = true
+sa_browsers.workspace = true
 sa_core = { workspace = true, features = ["ts"] }
 sa_places.workspace = true
 serde.workspace = true
@@ -37,6 +42,7 @@ tokio.workspace = true
 tokio-rustls.workspace = true
 tracing.workspace = true
 ts-rs.workspace = true
+tzf-rs.workspace = true
 url.workspace = true
 uuid = { workspace = true, features = ["serde", "v7"] }
 zeroize.workspace = true

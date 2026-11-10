@@ -21,6 +21,7 @@ use crate::{
 	Panel, Refused, imap,
 	seal::{gmail_imap_aad, gmail_maps_key_aad},
 	store::{
+		browsers as browsers_db,
 		connections::{self as db, Sealed},
 		gmbs as gmbs_db,
 		tokens::{self as ledger, Charged, Entry, Kind},
@@ -42,6 +43,7 @@ pub struct Connections {
 	pub maps_key: Option<(MapsKey, Option<String>)>,
 	/// What a request on the shared keys costs, per [`Sku`]; `None`, not sold.
 	pub prices: Vec<(Sku, Option<i64>)>,
+	pub browser: Option<crate::browsers::Browser>,
 }
 
 /// An inbox's credentials, as typed.
@@ -73,7 +75,8 @@ impl Panel {
 		for sku in <Sku as strum::VariantArray>::VARIANTS {
 			prices.push((*sku, db::price(&mut conn, *sku).await?));
 		}
-		Ok(Ok(Connections { imap, maps_key, prices }))
+		let browser = browsers_db::browser(&mut conn, id).await?.map(|(b, _)| b);
+		Ok(Ok(Connections { imap, maps_key, prices, browser }))
 	}
 
 	/// The gmail's inbox, stored once it logs in; a refusal stores nothing.
@@ -211,7 +214,7 @@ impl Panel {
 		Tokens { panel: self.clone(), user }
 	}
 
-	async fn gmail_of(&self, owner: Uuid, id: i64) -> eyre::Result<Result<(), Refused>> {
+	pub(crate) async fn gmail_of(&self, owner: Uuid, id: i64) -> eyre::Result<Result<(), Refused>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a gmail")?;
 		if !is_open(&mut conn).await? {
 			return Ok(Err(Refused::Closed));
@@ -222,14 +225,14 @@ impl Panel {
 		})
 	}
 
-	fn seal(&self, aad: &[u8], secret: &str) -> eyre::Result<Sealed> {
+	pub(crate) fn seal(&self, aad: &[u8], secret: &str) -> eyre::Result<Sealed> {
 		Ok(Sealed {
 			blob: self.key.seal(aad, secret.as_bytes())?,
 			data_key_fp: self.key.fingerprint().to_vec(),
 		})
 	}
 
-	fn unseal(&self, aad: &[u8], sealed: &Sealed) -> eyre::Result<Zeroizing<String>> {
+	pub(crate) fn unseal(&self, aad: &[u8], sealed: &Sealed) -> eyre::Result<Zeroizing<String>> {
 		eyre::ensure!(sealed.data_key_fp == self.key.fingerprint(), "a gmail's secret was sealed under another PANEL_DATA_KEY");
 		let open = self.key.open(aad, &sealed.blob)?;
 		Ok(Zeroizing::new(String::from_utf8(open.to_vec()).wrap_err("a gmail's secret is not UTF-8")?))

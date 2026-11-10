@@ -62,7 +62,6 @@ pub struct Edit {
 	pub hidden_address: Option<Option<String>>,
 	pub customers_visit: Option<Option<bool>>,
 	pub film: Option<Option<String>>,
-	pub profile: Option<Option<String>>,
 }
 
 impl Edit {
@@ -87,7 +86,6 @@ impl Edit {
 			hidden_address: each(self.hidden_address, text("hidden address"))?,
 			customers_visit: self.customers_visit,
 			film: each(self.film, text("film"))?,
-			profile: each(self.profile, text("profile"))?,
 		})
 	}
 }
@@ -196,6 +194,9 @@ impl Panel {
 		let mut tx = self.store.begin_write().await?;
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
+		}
+		if db::gmail_owner(&mut tx, id).await? == Some(owner) && crate::store::browsers::browser(&mut tx, id).await?.is_some() {
+			return Ok(Err(Refused::Conflict("remove its browser first: its provider's profile and its session go with it".to_owned())));
 		}
 		if !db::remove_gmail(&mut tx, owner, id, now).await? {
 			return Ok(Err(Refused::NotFound));

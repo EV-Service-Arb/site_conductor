@@ -204,6 +204,9 @@
         # (Recreate), never two at once on the volume.
         dbPath = "/data/panel.db";
 
+        # sa_browsers' browser: Chrome 151 is what the measured devices' UA says (crates/browsers)
+        orbita = import ./nix/orbita.nix { inherit pkgs; } "151";
+
         # What the deploy must provide, beyond what `container.implement` records. Plain
         # data on the contract, read by the devops generator; `checks.contract-env` holds
         # `requiredEnv` to the binary's own `--print-required-vars`.
@@ -219,6 +222,7 @@
             "PANEL_ASSERTION_KEY"
             "TELEGRAM_BOT_TOKEN"
             "GOOGLE_MAPS_KEYS"
+            "GOLOGIN_TOKEN"
           ];
           # TELEGRAM_BOT_TOKEN needs the forward (it sends sites' notes).
           optionalEnv = [
@@ -234,6 +238,9 @@
             "GOOGLE_MAPS_KEYS"
             # the browser's Maps JS key (referrer-restricted); without it the home page has no map
             "GOOGLE_MAPS_BROWSER_KEY"
+            # both or neither: the gmails' browsers (sa_browsers' runner, below); unset, their routes answer 503
+            "GOLOGIN_TOKEN"
+            "PANEL_BROWSERS_URL"
           ];
           ingress = {
             # in-cluster only, by service DNS: the landings' and bots' ingest
@@ -247,8 +254,8 @@
           egress = {
             # concierge's gRPC, at the address it names
             grpcEnv = [ "CONCIERGE_GRPC_ADDR" ];
-            # the Bot API; the Places API (GOOGLE_MAPS_KEYS)
-            hosts = [ "api.telegram.org:443" "places.googleapis.com:443" ];
+            # the Bot API; the Places API (GOOGLE_MAPS_KEYS); GoLogin's API (GOLOGIN_TOKEN)
+            hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "api.gologin.com:443" ];
           };
         };
 
@@ -376,7 +383,7 @@
         packages = {
           default = bin;
           inherit bin frontend;
-        } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (containerStd.packages // { grafana-server = grafanaServer; });
+        } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (containerStd.packages // { grafana-server = grafanaServer; inherit orbita; });
 
         containers = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux containers;
 

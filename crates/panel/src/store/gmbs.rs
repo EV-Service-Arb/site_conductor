@@ -13,9 +13,12 @@ use uuid::Uuid;
 use super::{from_db, to_db};
 
 const GMB: &str = "SELECT b.id, b.gmail_id, b.place_id, b.name, b.address, b.state, b.country, b.country_by IS NOT NULL AS country_by_hand, b.phone, \
-	b.trade_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.profile, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, NOT EXISTS (SELECT 1 FROM gmbs_off o WHERE o.gmb_id = b.id) AS enabled FROM gmbs b";
+	b.trade_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, NOT EXISTS (SELECT 1 FROM gmbs_off o WHERE o.gmb_id = b.id) AS enabled FROM gmbs b";
 
-type GmailRow = (i64, Uuid, String, Option<String>, i64);
+type GmailRow = (i64, Uuid, String, Option<String>, i64, bool);
+
+/// Whether the gmail's browser's last check went through.
+const BROWSER: &str = "EXISTS (SELECT 1 FROM gmail_browsers w WHERE w.gmail_id = gmails.id AND w.check_error IS NULL)";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Gmail {
@@ -25,6 +28,8 @@ pub struct Gmail {
 	/// `None` until its owner says.
 	pub role: Option<GmailRole>,
 	pub created_at: Timestamp,
+	/// Its browser set up, its last check through.
+	pub browser: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -49,8 +54,6 @@ pub struct Gmb {
 	pub customers_visit: Option<bool>,
 	/// verif_vid's film, recorded by hand.
 	pub film: Option<String>,
-	/// The Multilogin profile and its proxy, recorded by hand.
-	pub profile: Option<String>,
 	pub created_at: Timestamp,
 	/// Its owner's switch.
 	pub enabled: bool,
@@ -93,11 +96,13 @@ pub struct NewGmb<'a> {
 
 /// The owner's gmails not removed, by address.
 pub async fn gmails(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<Gmail>> {
-	let rows: Vec<GmailRow> = sqlx::query_as("SELECT id, owner, gmail, role, created_at FROM gmails WHERE owner = $1 AND removed_at IS NULL ORDER BY gmail")
-		.bind(owner)
-		.fetch_all(&mut *conn)
-		.await
-		.wrap_err("listing gmails")?;
+	let rows: Vec<GmailRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+		"SELECT id, owner, gmail, role, created_at, {BROWSER} FROM gmails WHERE owner = $1 AND removed_at IS NULL ORDER BY gmail"
+	)))
+	.bind(owner)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing gmails")?;
 	rows.into_iter().map(gmail).collect()
 }
 
@@ -126,7 +131,7 @@ pub async fn gmb_of(conn: &mut SqliteConnection, owner: Option<Uuid>, id: i64) -
 pub async fn add_gmail(conn: &mut SqliteConnection, id: Option<i64>, owner: Uuid, address: &str, now: Timestamp) -> eyre::Result<Option<Gmail>> {
 	let row: Option<GmailRow> = sqlx::query_as(
 		"INSERT INTO gmails (id, owner, gmail, created_at) VALUES ($1, $2, $3, $4) \
-		 ON CONFLICT DO NOTHING RETURNING id, owner, gmail, role, created_at",
+		 ON CONFLICT DO NOTHING RETURNING id, owner, gmail, role, created_at, FALSE",
 	)
 	.bind(id)
 	.bind(owner)
@@ -269,8 +274,7 @@ pub async fn set_fields(conn: &mut SqliteConnection, id: i64, e: &crate::gmbs::E
 	sqlx::query(
 		"UPDATE gmbs SET phone = CASE WHEN $2 THEN $3 ELSE phone END, trade_id = CASE WHEN $4 THEN $5 ELSE trade_id END, \
 		 areas = CASE WHEN $6 THEN $7 ELSE areas END, hidden_address = CASE WHEN $8 THEN $9 ELSE hidden_address END, \
-		 customers_visit = CASE WHEN $10 THEN $11 ELSE customers_visit END, film = CASE WHEN $12 THEN $13 ELSE film END, \
-		 profile = CASE WHEN $14 THEN $15 ELSE profile END WHERE id = $1",
+		 customers_visit = CASE WHEN $10 THEN $11 ELSE customers_visit END, film = CASE WHEN $12 THEN $13 ELSE film END WHERE id = $1",
 	)
 	.bind(id)
 	.bind(e.phone.is_some())
@@ -285,8 +289,6 @@ pub async fn set_fields(conn: &mut SqliteConnection, id: i64, e: &crate::gmbs::E
 	.bind(e.customers_visit.flatten())
 	.bind(e.film.is_some())
 	.bind(e.film.clone().flatten())
-	.bind(e.profile.is_some())
-	.bind(e.profile.clone().flatten())
 	.execute(&mut *conn)
 	.await
 	.wrap_err("editing a GMB")?;
@@ -652,7 +654,6 @@ struct GmbRow {
 	hidden_address: Option<String>,
 	customers_visit: Option<bool>,
 	film: Option<String>,
-	profile: Option<String>,
 	lat: Option<f64>,
 	lng: Option<f64>,
 	placed: bool,
@@ -660,13 +661,14 @@ struct GmbRow {
 	enabled: bool,
 }
 
-fn gmail((id, owner, gmail, role, created_at): GmailRow) -> eyre::Result<Gmail> {
+fn gmail((id, owner, gmail, role, created_at, browser): GmailRow) -> eyre::Result<Gmail> {
 	Ok(Gmail {
 		id,
 		owner,
 		gmail,
 		role: role.as_deref().map(str::parse).transpose()?,
 		created_at: from_db(created_at)?,
+		browser,
 	})
 }
 
@@ -699,7 +701,6 @@ fn gmb(r: GmbRow) -> eyre::Result<Gmb> {
 		hidden_address: r.hidden_address,
 		customers_visit: r.customers_visit,
 		film: r.film,
-		profile: r.profile,
 		created_at: from_db(r.created_at)?,
 		enabled: r.enabled,
 		location,

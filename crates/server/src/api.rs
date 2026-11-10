@@ -86,6 +86,7 @@ impl From<Refused> for ApiError {
 			Refused::Forbidden => Self::Forbidden,
 			Refused::Conflict(m) => Self::Conflict(m),
 			Refused::TooLarge(m) => Self::TooLarge(m),
+			Refused::Unavailable(m) => Self::Unavailable(m),
 			Refused::Closed => Self::Unavailable(r.to_string()),
 		}
 	}

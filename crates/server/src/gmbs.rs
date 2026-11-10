@@ -12,7 +12,7 @@
 //! POST   /api/v1/gmails/{id}/gmbs {place_id, state, name?, country?, trade?}  → 201 Gmb, on
 //!                                     Google already; 409 the name or the place taken
 //! PATCH  /api/v1/gmbs/{id} {name?, gmail_id?, phone?, trade?, areas?, hidden_address?,
-//!        customers_visit?, film?, profile?}  → 200 Gmb; null clears; 409 a name not a draft's,
+//!        customers_visit?, film?}  → 200 Gmb; null clears; 409 a name not a draft's,
 //!                                     a name or a phone another live GBP's
 //! PUT    /api/v1/gmbs/{id}/state {state, place?}  → 200 Gmb; 400 a move State::next refuses
 //! DELETE /api/v1/gmbs/{id}            → 204
@@ -93,8 +93,6 @@ pub struct GmbDto {
 	pub customers_visit: Option<bool>,
 	/// verif_vid's film, recorded by hand.
 	pub film: Option<String>,
-	/// Its Multilogin profile and proxy, recorded by hand.
-	pub profile: Option<String>,
 	/// RFC 3339.
 	pub created_at: String,
 	/// The caller's switch; review_archive inherits it.
@@ -155,6 +153,8 @@ pub struct GmailDto {
 	pub cap: Option<u32>,
 	/// RFC 3339.
 	pub created_at: String,
+	/// Its browser set up, its last check through: the GBPs' `profile` must-have.
+	pub browser: bool,
 }
 
 /// `GET /gmails`.
@@ -227,7 +227,6 @@ impl From<Gmb> for GmbDto {
 			hidden_address: b.hidden_address,
 			customers_visit: b.customers_visit,
 			film: b.film,
-			profile: b.profile,
 			created_at: b.created_at.to_string(),
 			enabled: b.enabled,
 			location: b.location,
@@ -243,6 +242,7 @@ impl From<Gmail> for GmailDto {
 			role: g.role,
 			cap: g.role.map(GmailRole::cap),
 			created_at: g.created_at.to_string(),
+			browser: g.browser,
 		}
 	}
 }
@@ -412,8 +412,6 @@ struct EditBody {
 	customers_visit: Option<Option<bool>>,
 	#[serde(default, deserialize_with = "present")]
 	film: Option<Option<String>>,
-	#[serde(default, deserialize_with = "present")]
-	profile: Option<Option<String>>,
 }
 
 async fn edit(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<EditBody>, JsonRejection>) -> ApiResult<Json<GmbDto>> {
@@ -427,7 +425,6 @@ async fn edit(State(panel): State<Panel>, Extension(caller): Extension<Caller>, 
 		hidden_address,
 		customers_visit,
 		film,
-		profile,
 	} = body(b)?;
 	let edit = Edit {
 		name,
@@ -438,7 +435,6 @@ async fn edit(State(panel): State<Panel>, Extension(caller): Extension<Caller>, 
 		hidden_address,
 		customers_visit,
 		film,
-		profile,
 	};
 	let edited = panel.edit_gmb(caller.user_id, gmb, edit).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, "GBP edited");

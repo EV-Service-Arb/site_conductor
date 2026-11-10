@@ -270,7 +270,18 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				grafana.is_none() || forward.is_some(),
 				"PANEL_GRAFANA_SERVER needs the forward (PANEL_ASSERTION_KEY and the services' URLs): Grafana reads the services through it"
 			);
-			serve(connect().await?, identity, forward, telegram, grafana, settings.web()?, settings.map(), bind).await
+			serve(
+				connect().await?,
+				identity,
+				forward,
+				telegram,
+				grafana,
+				settings.web()?,
+				settings.map(),
+				settings.browsers()?,
+				bind,
+			)
+			.await
 		}
 		Cmd::Source(cmd) => source(&connect().await?, cmd).await,
 		Cmd::Gmail(GmailCmd::Add { email, gmail }) => {
@@ -407,6 +418,7 @@ async fn serve(
 	grafana: Option<settings::GrafanaSettings>,
 	files: Option<Files>,
 	map: Option<MapDto>,
+	browsers: Option<sa_server::browser::Connected>,
 	bind: SocketAddr,
 ) -> eyre::Result<()> {
 	let (concierge, config) = match identity {
@@ -493,7 +505,10 @@ async fn serve(
 	if map.is_none() {
 		tracing::warn!("GOOGLE_MAPS_BROWSER_KEY unset: no map, /api/v1/map is a 404");
 	}
-	let app = http::app(sign_in, forward, grafana.as_ref().map(|(g, _)| g), http::Limits::default(), bot.clone(), map);
+	if browsers.is_none() {
+		tracing::warn!("GOLOGIN_TOKEN and PANEL_BROWSERS_URL unset: no browsers, their routes answer 503");
+	}
+	let app = http::app(sign_in, forward, grafana.as_ref().map(|(g, _)| g), http::Limits::default(), bot.clone(), map, browsers);
 	let app = match files {
 		Some(files) => web::serve(app, files),
 		None => {
