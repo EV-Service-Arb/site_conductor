@@ -1,7 +1,7 @@
 import { ApiError, http, ignoreBody } from "@/shared/api";
 import { type Parser, bool, nullable, num, object, oneOf, str } from "@/shared/lib/parse";
 
-import { type Browser, type Checked, type Connections, DEVICES, type Imap, type MapsKey, type Prices, PROVIDERS, type SetBrowser } from "../model/generated";
+import { type Browser, type Checked, type Connections, type Imap, type MapsKey, type Prices, PROVIDERS, type SetBrowser } from "../model/generated";
 
 const checkedParser: Parser<Checked> = object({ at: str, error: nullable(str) });
 const imapParser: Parser<Imap> = object({ host: str, username: str, set_at: str, checked: checkedParser });
@@ -9,12 +9,12 @@ const mapsKeyParser: Parser<MapsKey> = object({ last4: str, set_at: str, checked
 export const pricesParser: Parser<Prices> = object({ details: nullable(num), search: nullable(num) });
 const browserParser: Parser<Browser> = object({
   provider: oneOf(PROVIDERS),
-  device: oneOf(DEVICES),
+  device: str,
   endpoint: str,
   exit: object({ ip: str, country: str, city: str, zone: str, mobile: bool }),
   set_at: str,
   checked: checkedParser,
-  running: nullable(object({ gmb: nullable(num) })),
+  running: nullable(object({ gmb: nullable(num), stream: nullable(str) })),
   film: bool,
 });
 const connectionsParser: Parser<Connections> = object({ imap: nullable(imapParser), maps_key: nullable(mapsKeyParser), prices: pricesParser, browser: nullable(browserParser) });

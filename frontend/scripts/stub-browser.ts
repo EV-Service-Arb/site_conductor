@@ -2,8 +2,10 @@
  * A gmail's antidetect browser for the dev stub: `/api/v1/gmails/{id}/browser*` and the viewer's
  * socket. The page is a made-up phone screen whose colour moves on each tap; tabs, navigation and
  * dialogs answer as the backend's would (navigate to a URL holding `prompt` and the page asks).
- * A film under 1 KiB is refused as ffmpeg would a silent one. Every change is told on the live
- * socket as `browsers`.
+ * A film under 1 KiB is refused as ffmpeg would a silent one. A Multilogin cloud phone draws its
+ * model, has no tabs, its frames in screen px, its film in "the Library" whether it runs or not,
+ * and a stream link; Multilogin's browser takes no film. Every change is told on the live socket
+ * as `browsers`.
  *
  *   STUB_BROWSERS=off   every browser route answers 503 "browsers not connected"
  */
@@ -16,6 +18,7 @@ import { changed, closing, frame, handshake, text } from "./stub-live.ts";
 
 const CONNECTED = process.env.STUB_BROWSERS !== "off";
 const CSS = { width: 412, height: 915 };
+const PHONE = { width: 1080, height: 2400 };
 const PX = 2; // the stub draws at half the CSS size: a phone's page is never sharper than it needs to be here
 
 type Json = Record<string, unknown>;
@@ -33,7 +36,8 @@ const running = new Map<number, Running>();
 export function browserOf(gmail: number): { browser: Browser | null; ready: boolean } {
   const b = browsers.get(gmail) ?? null;
   const on = running.get(gmail);
-  return { browser: b && { ...b, running: on ? { gmb: on.gmb } : null }, ready: b !== null && b.checked.error === null };
+  const stream = b?.provider === "multilogin" ? `https://cloud-phone.multilogin.example/${gmail}` : null;
+  return { browser: b && { ...b, running: on ? { gmb: on.gmb, stream } : null }, ready: b !== null && b.checked.error === null };
 }
 
 /** `/gmails/{id}/browser*`; `false`: not one of them. */
@@ -50,16 +54,18 @@ export async function browserRoute(req: IncomingMessage, res: ServerResponse, pa
   if (!CONNECTED) return answer(503, { error: "browsers not connected" });
   const now = new Date().toISOString();
   if (action === null && req.method === "PUT") {
-    const { provider, device, proxy } = (await body()) as { provider: string; device: string; proxy: string };
-    if (!(PROVIDERS as readonly string[]).includes(provider) || !(DEVICES as readonly string[]).includes(device)) return answer(400, { error: "unknown provider or device" });
+    const { provider, device, proxy } = (await body()) as { provider: string; device: string | null; proxy: string };
+    const phone = provider === "multilogin";
+    if (!(PROVIDERS as readonly string[]).includes(provider)) return answer(400, { error: "unknown provider" });
+    if (phone ? device !== null : !(DEVICES as readonly string[]).includes(device ?? "")) return answer(400, { error: phone ? "a cloud phone's model is drawn: send no device" : "unknown device" });
     const set = browsers.get(gmail);
-    if (set && (set.provider !== provider || set.device !== device)) return answer(409, { error: "the provider and device are set once: remove the browser first" });
+    if (set && (set.provider !== provider || (!phone && set.device !== device))) return answer(409, { error: "the provider and device are set once: remove the browser first" });
     const url = /^(socks5|http):\/\/[^@\s]+@([^:/\s]+):(\d+)$/.exec(proxy);
     if (!url) return answer(400, { error: "the proxy is socks5:// or http://, user:pass@host:port" });
     if (url[2]!.includes("us")) return answer(400, { error: "the proxy exits in US, outside FR where this gmail's GBPs are" });
     browsers.set(gmail, {
       provider: provider as Browser["provider"],
-      device: device as Browser["device"],
+      device: set?.device ?? (phone ? "Google Pixel 7" : device!),
       endpoint: `${url[2]}:${url[3]}`,
       exit: { ip: "92.184.1.2", country: "FR", city: "Lyon", zone: "Europe/Paris", mobile: true },
       set_at: set?.set_at ?? now,
@@ -85,7 +91,8 @@ export async function browserRoute(req: IncomingMessage, res: ServerResponse, pa
     const on = running.get(gmail);
     if (on && on.gmb !== gmb) return answer(409, { error: "it runs for another GBP, or for the gmail alone: stop it first" });
     const home: Tab = { id: "t1", title: "Google Business Profile", url: "https://business.google.com/create" };
-    if (!on) running.set(gmail, { gmb, tabs: [home], active: home.id, hue: 210, viewer: null });
+    const phone = set.provider === "multilogin";
+    if (!on) running.set(gmail, { gmb, tabs: phone ? [] : [home], active: phone ? "" : home.id, hue: 210, viewer: null });
     return answer(204);
   }
   if (action === "stop" && req.method === "POST") {
@@ -94,8 +101,14 @@ export async function browserRoute(req: IncomingMessage, res: ServerResponse, pa
   }
   if (action === "film" && req.method === "PUT") {
     if (req.headers["content-type"] !== "video/mp4") return answer(400, { error: "a film is video/mp4" });
+    if (set.provider === "multilogin_browser") return answer(409, { error: "Multilogin's browser plays no film: its camera is the host's" });
     let size = 0;
     for await (const c of req) size += (c as Buffer).length;
+    if (set.provider === "multilogin") {
+      if (size > 100 * 1024 * 1024) return answer(413, { error: "a phone's film is 100 MiB at most" });
+      set.film = true;
+      return answer(204);
+    }
     if (running.has(gmail)) return answer(409, { error: "stop it first: the next launch plays the film" });
     if (size < 1024) return answer(400, { error: "the film has no sound: a phone's mic is never silent" });
     set.film = true;
@@ -123,7 +136,8 @@ export function browserUpgrade(req: IncomingMessage, socket: Duplex, gmail: numb
   on.viewer = socket;
   const out = (o: BrowserOut) => socket.write(text(o));
   const tabs = () => out({ type: "tabs", tabs: on.tabs, active: on.active });
-  const draw = () => out({ type: "frame", data: png(on.hue).toString("base64"), width: CSS.width, height: CSS.height });
+  const space = browsers.get(gmail)?.provider === "multilogin" ? PHONE : CSS;
+  const draw = () => out({ type: "frame", data: png(on.hue).toString("base64"), width: space.width, height: space.height });
   tabs();
   draw();
   const ticker = setInterval(draw, 1000);

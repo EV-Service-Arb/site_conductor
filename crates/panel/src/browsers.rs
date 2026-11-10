@@ -33,6 +33,8 @@ use crate::{
 	tokens::is_open,
 };
 
+/// A phone's film in Multilogin's Library, at most.
+pub const LIBRARY_MAX: usize = 100 << 20;
 const CHECK_WITHIN: Duration = Duration::from_secs(15);
 /// An integer: Orbita reads it as one, and a JSON double there crashes its renderer.
 const GPS_ACCURACY_M: u32 = 10;
@@ -41,8 +43,6 @@ const PLATFORM: &str = "Linux armv81";
 const ANDROID: u32 = 14;
 /// Where the gmails' Mimic profiles sit in Multilogin.
 const FOLDER: &str = "site_conductor";
-/// A phone's film in Multilogin's Library, at most.
-pub const LIBRARY_MAX: usize = 100 << 20;
 
 /// What a browser needs beyond the database: the providers connected, and the exit's lookup.
 pub struct Browsers {

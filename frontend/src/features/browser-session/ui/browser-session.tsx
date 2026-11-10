@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Input, Settled, Skeleton, StatusDot, cn, toast } from "@evinvest/uikit";
+import { Button, Input, Settled, Skeleton, StatusDot, buttonVariants, cn, toast } from "@evinvest/uikit";
 import { ArrowLeft, ArrowRight, Hand, Plus, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
@@ -181,13 +181,18 @@ function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: nu
           <span className="min-w-0 flex-1 truncate font-mono text-ink-soft">
             {[activeTab?.url, browser.exit.country, browser.exit.city, browser.exit.mobile ? t("browser.mobile") : t("browser.fixed"), browser.exit.ip].filter(Boolean).join(" · ")}
           </span>
+          {browser.running?.stream && (
+            <a href={browser.running.stream} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "ghost", size: button("sm") })}>
+              {t("browser.stream")}
+            </a>
+          )}
           {phase === "open" || phase === "connecting" || phase === "taken" || phase === "elsewhere" ? (
             <Button variant="outline" size={button("sm")} onClick={() => void stop()}>
               {t("browser.stop")}
             </Button>
           ) : null}
         </div>
-        {phase === "open" && <Chrome page={page} send={send} />}
+        {phase === "open" && <Chrome page={page} phone={browser.provider === "multilogin"} send={send} />}
         <div className="relative flex h-[calc(100svh-27rem)] min-h-96 items-center justify-center bg-black/40">
           {phase === "open" && page.frame !== null ? (
             <Screen frame={page.frame} send={send} onPaste={(text) => textFrames(text).forEach(send)} />
@@ -267,14 +272,14 @@ function Idle({ phase, browser, failure, onStart, onConnect }: { phase: Phase; b
   );
 }
 
-/** The browser's own tabs and address bar, drawn here: the frames show the page alone. */
-function Chrome({ page, send }: { page: Page; send: (frame: BrowserIn) => void }) {
+/** The browser's own tabs and address bar, drawn here: the frames show the page alone. A phone's has neither tabs nor forward: Android's own UI is in its frames. */
+function Chrome({ page, phone, send }: { page: Page; phone: boolean; send: (frame: BrowserIn) => void }) {
   const t = useT();
   const button = useButtonSize();
   const active = page.tabs.find((tab) => tab.id === page.active) ?? null;
   return (
     <div className="flex flex-col border-b border-border">
-      <div role="tablist" aria-label={t("browser.tabs")} className="flex items-center gap-1 overflow-x-auto px-2 pt-1.5">
+      {!phone && <div role="tablist" aria-label={t("browser.tabs")} className="flex items-center gap-1 overflow-x-auto px-2 pt-1.5">
         {page.tabs.map((tab) => (
           <span key={tab.id} className={cn("flex max-w-48 items-center gap-1 rounded-t-md border border-b-0 px-2 py-1 text-xs", tab.id === page.active ? "border-border bg-background text-ink" : "border-transparent text-ink-soft hover:text-ink")}>
             <button type="button" role="tab" aria-selected={tab.id === page.active} title={tab.url} className="min-w-0 truncate outline-none focus-visible:underline" onClick={() => send({ type: "activate", id: tab.id })}>
@@ -288,14 +293,16 @@ function Chrome({ page, send }: { page: Page; send: (frame: BrowserIn) => void }
         <Button variant="ghost" size={button("sm")} icon aria-label={t("browser.newTab")} title={t("browser.newTab")} onClick={() => send({ type: "new_tab" })}>
           <Plus aria-hidden />
         </Button>
-      </div>
+      </div>}
       <div className="flex items-center gap-1 px-2 py-1.5">
         <Button variant="ghost" size={button("sm")} icon aria-label={t("browser.back")} title={t("browser.back")} onClick={() => send({ type: "history", delta: -1 })}>
           <ArrowLeft aria-hidden />
         </Button>
-        <Button variant="ghost" size={button("sm")} icon aria-label={t("browser.forward")} title={t("browser.forward")} onClick={() => send({ type: "history", delta: 1 })}>
-          <ArrowRight aria-hidden />
-        </Button>
+        {!phone && (
+          <Button variant="ghost" size={button("sm")} icon aria-label={t("browser.forward")} title={t("browser.forward")} onClick={() => send({ type: "history", delta: 1 })}>
+            <ArrowRight aria-hidden />
+          </Button>
+        )}
         {/* a page that moves on its own resets what was being typed */}
         <UrlBar key={active?.url ?? ""} url={active?.url ?? ""} onGo={(url) => send({ type: "navigate", url })} />
       </div>
