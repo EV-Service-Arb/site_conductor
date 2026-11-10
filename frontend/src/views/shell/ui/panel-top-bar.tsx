@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
   NavDot,
   NavigationMenu,
+  NavigationMenuContent,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,
@@ -19,6 +20,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
+  ShellNav,
   TopBar,
   cn,
   navigationMenuTriggerStyle,
@@ -28,10 +30,10 @@ import {
 import { ArrowUpRight, Bell, Check, ChevronDown, Globe, MapPin, Menu, PanelLeftClose, PanelLeftOpen, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { type CSSProperties, type PointerEvent, useEffect, useRef, useState } from "react";
 
 import { unreached, useAlerts } from "@/entities/alerts";
-import { DevSignInBadge, ownScreens, seesSites, useMe } from "@/entities/session";
+import { DevSignInBadge, ownScreens, useMe } from "@/entities/session";
 import { useTokens } from "@/entities/tokens";
 import { AccountChip } from "@/features/account-chip";
 import { AssistantToggle } from "@/features/assistant";
@@ -44,6 +46,7 @@ import { ROUTES } from "@/shared/config/routes";
 import { LOCALES, type Locale, chooseLocale, useLocale, useT } from "@/shared/i18n";
 
 import { toggleSidebar, useSidebarFolded } from "../model/sidebar";
+import { type App, useApps } from "./apps";
 import { Outline } from "./outline";
 
 /**
@@ -57,10 +60,8 @@ export function PanelTopBar() {
   const signOut = useSignOut();
   const router = useRouter();
   const pathname = usePathname();
-  const apps = [
-    ...(seesSites(me) ? [{ href: ROUTES.sites, label: t("nav.sites"), here: pathname.startsWith("/sites") }] : []),
-    { href: ROUTES.reviewArchive, label: t("nav.reviewArchive"), here: pathname.startsWith("/review_archive") },
-  ];
+  const apps = useApps();
+  const folded = useSidebarFolded();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -111,13 +112,7 @@ export function PanelTopBar() {
           <NavigationMenu viewport={false} className="ml-4 hidden md:flex" aria-label={t("nav.primary")}>
             <NavigationMenuList>
               {apps.map((a) => (
-                <NavigationMenuItem key={a.href}>
-                  <NavigationMenuLink asChild className={cn(navigationMenuTriggerStyle(), a.here && "bg-hover/50")}>
-                    <Link href={a.href} aria-current={a.here ? "page" : undefined}>
-                      {a.label}
-                    </Link>
-                  </NavigationMenuLink>
-                </NavigationMenuItem>
+                <AppItem key={a.href} app={a} menu={!(a.here && !folded)} />
               ))}
             </NavigationMenuList>
           </NavigationMenu>
@@ -134,6 +129,44 @@ export function PanelTopBar() {
         </div>
       }
     />
+  );
+}
+
+/** Long enough to cross the gap between the item and its menu. */
+const CLOSE_DELAY_MS = 150;
+
+/** An app's link, its outline section hung below it while the mouse is over either; none while the outline shows that section whole. */
+function AppItem({ app, menu }: { app: App; menu: boolean }) {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  const closing = useRef<number>(undefined);
+  useEffect(() => () => window.clearTimeout(closing.current), []);
+  const hover = (next: boolean) => (e: PointerEvent) => {
+    if (!menu || e.pointerType === "touch") return; // a tap is the link's
+    window.clearTimeout(closing.current);
+    if (next) setOpen(true);
+    else closing.current = window.setTimeout(() => setOpen(false), CLOSE_DELAY_MS);
+  };
+  return (
+    <NavigationMenuItem open={open} onOpenChange={setOpen} onPointerEnter={hover(true)} onPointerLeave={hover(false)}>
+      <NavigationMenuLink asChild className={cn(navigationMenuTriggerStyle(), "group flex-row items-center gap-1", app.here && "bg-hover/50")}>
+        <Link href={app.href} aria-current={app.here ? "page" : undefined} {...(menu && { "aria-expanded": open, "data-state": open ? "open" : "closed" })}>
+          {app.label}
+          {menu && <ChevronDown aria-hidden className="size-3.5 text-ink-soft transition-transform group-data-[state=open]:rotate-180" />}
+        </Link>
+      </NavigationMenuLink>
+      {/* any click in it has routed, as in the outline */}
+      {menu && <NavigationMenuContent className="p-0" onClick={() => setOpen(false)}>
+        <ShellNav
+          groups={[app.section]}
+          pathname={pathname}
+          linkComponent={Link}
+          labels={{ primary: app.label }}
+          style={{ "--shell-rail-w": "18rem" } as CSSProperties}
+          className="max-h-[70svh] gap-0 border-r-0 bg-transparent p-2"
+        />
+      </NavigationMenuContent>}
+    </NavigationMenuItem>
   );
 }
 

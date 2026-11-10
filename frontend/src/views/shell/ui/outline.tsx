@@ -1,16 +1,14 @@
 "use client";
 
 import { type NavSection, ShellNav, cn } from "@evinvest/uikit";
-import { Globe, MapPin, Settings, Store } from "lucide-react";
+import { Store } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { CSSProperties } from "react";
 
-import { seesSites, useMe } from "@/entities/session";
-import { SitesElement } from "@/features/sites-element";
-import { ROUTES } from "@/shared/config/routes";
 import { useT } from "@/shared/i18n";
 
+import { useApps } from "./apps";
 import { GmbTree } from "./gmb-tree";
 
 const WIDTH = { "--shell-rail-w": "18rem" } as CSSProperties;
@@ -21,37 +19,9 @@ const WIDTH = { "--shell-rail-w": "18rem" } as CSSProperties;
  */
 export function Outline({ folded, onNavigate, className }: { folded: boolean; onNavigate?: () => void; className?: string }) {
   const t = useT();
-  const me = useMe();
   const pathname = usePathname();
-  const app = pathname.startsWith("/sites") ? "sites" : pathname.startsWith("/review_archive") ? "archive" : null;
   const sections: NavSection[] = [
-    ...(seesSites(me)
-      ? [
-          {
-            id: "sites",
-            label: t("nav.sites"),
-            icon: Globe,
-            hidden: app !== "sites",
-            // A click on one of its links has routed (CONTRACT §9).
-            content: (
-              <div onClick={() => onNavigate?.()}>
-                <SitesElement tag="mfe-sites-nav" />
-              </div>
-            ),
-          },
-        ]
-      : []),
-    ...(app === "archive"
-      ? [
-          {
-            id: "archive",
-            items: [
-              { id: "places", href: ROUTES.reviewArchive, label: t("reviewArchive.places"), icon: MapPin },
-              { id: "settings", href: ROUTES.reviewArchiveSettings, label: t("reviewArchive.settings"), icon: Settings },
-            ],
-          },
-        ]
-      : []),
+    ...useApps(onNavigate).flatMap((a) => (a.here ? [a.section] : "content" in a.section ? [{ ...a.section, hidden: true }] : [])),
     { id: "gbps", label: t("nav.gbps"), icon: Store, content: <GmbTree {...(onNavigate && { onNavigate })} /> },
   ];
   return (

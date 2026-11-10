@@ -11,6 +11,8 @@ import { useRemoteBundle } from "./use-remote-bundle";
 // An element is created once per configuration and re-inserted after: a remote that cannot be torn down
 // (a Dioxus one, ev_lib's `mfe`) reuses its running app on a re-insert, and mounting it anew would stack a second.
 const created = new Map<string, HTMLElement>();
+/** Every mounted host of a configuration, in mount order: the element sits in the newest, and goes back to the one before when it leaves. */
+const hosts = new Map<string, HTMLElement[]>();
 
 export interface RemoteElementProps {
   tag: string;
@@ -44,8 +46,16 @@ export function RemoteElement({ tag, scriptUrl, attributes, className, fallback 
       for (const [name, value] of Object.entries(attributesRef.current)) element.setAttribute(name, value);
       created.set(key, element);
     }
+    const stack = hosts.get(key) ?? [];
+    hosts.set(key, [...stack, host]);
     host.appendChild(element);
-    return () => element.remove();
+    return () => {
+      const rest = hosts.get(key)!.filter((h) => h !== host);
+      hosts.set(key, rest);
+      const previous = rest.at(-1);
+      if (previous === undefined) element.remove();
+      else previous.appendChild(element);
+    };
   }, [ready, tag]);
 
   return (
