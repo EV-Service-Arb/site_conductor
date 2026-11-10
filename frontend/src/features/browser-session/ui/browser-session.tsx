@@ -375,7 +375,7 @@ function Screen({ frame, send, onPaste }: { frame: NonNullable<Page["frame"]>; s
           send({ type: "key", key: e.key, ctrl: false });
           return;
         }
-        // Alt alone is the shell's leader; AltGr (Ctrl+Alt) composes characters
+        // an Alt chord is no text (the shell's leader never gets here); AltGr (Ctrl+Alt) composes characters
         if (Array.from(e.key).length !== 1 || (e.altKey && !e.ctrlKey)) return;
         e.preventDefault();
         send({ type: "text", text: e.key });
