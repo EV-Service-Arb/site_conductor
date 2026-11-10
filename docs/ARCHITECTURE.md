@@ -6,7 +6,7 @@ who a machine is (the source keys), the shell the browser loads, and the forward
 behind the origin — sites_panel (the sites business: leads, places, pricing, experiments,
 bookings, invoices), review_archive, playbook and placement (gmaps_optimal_placement: where
 demand sits and how contested it is, drawn over the home map) — and each managing gmail's antidetect
-browser, run by sa_browsers and driven through the conductor. Each service trusts only the assertion the
+browser or cloud phone, run by sa_browsers and driven through the conductor. Each service trusts only the assertion the
 conductor signs for a request; none of them sees a session, and none calls the conductor but its
 queries cache: it reads them. Live updates and alerts are its hubs, fed by what the services tell it; tokens are
 charged from what review_archive tells it.
@@ -47,7 +47,8 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          Directory and Feeds ports), `telegram` (the method: links, chats, outbox,
                          delivery, buttons; the Bot port), `live` (the in-process bus), `gmbs`,
                          `connections` (a gmail's inbox and Maps key; who pays a Places request),
-                         `browsers` (a gmail's browser: its proxy checked and sealed, GoLogin, a launch),
+                         `browsers` (a gmail's browser: its proxy checked and sealed, Multilogin and
+                         GoLogin, a launch),
                          `tokens` (the ledger, review_archive's charges, the snapshot), `import`
                          (review_archive's, once), `assistant` (the assistant's chats)
 crates/alerts/           no I/O: the alert rules, and the notes a service publishes to the
@@ -55,9 +56,10 @@ crates/alerts/           no I/O: the alert rules, and the notes a service publis
 crates/auth/             the `sa` permissions (concierge_iam derives), the aliases `sa:operator` /
                          `sa:admin`, and the assertion: a User, a Source or the Conductor, for one
                          request of one service
-crates/browsers/         sa_browsers: the devices a browser poses as and a launch's wire (lib); the runner
-                         (`sa_browsers serve`): Orbita headless, a session directory per gmail, its
-                         devtools passed to the conductor alone, a film made the camera
+crates/browsers/         sa_browsers: the devices a browser poses as, a launch's wire and the viewer's
+                         frames (lib); the runner (`sa_browsers serve`): Orbita headless, Mimic through
+                         the Multilogin app's launcher, a browser's devtools passed to the conductor
+                         alone, a film made the camera; a cloud phone's life and its viewer over adb
 crates/places/           Google Places: a place from what a person pastes (an id, a Maps URL, a
                          search), its point; every request through the queries cache (in process,
                          or `Remote` over /api/queries_cache), then the payer's own keys, then the
@@ -83,7 +85,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/gmbs.rs            /api/v1/gmails, /api/v1/gmbs, /api/v1/trades
   src/connections.rs     /api/v1/gmails/{id}/{connections,imap,maps_key}
   src/browser.rs         /api/v1/gmails/{id}/browser{,/test,/start,/stop,/film}; the runner; the viewer's
-                         socket, the relay between it and the browser's devtools
+                         socket, the relay between it and a browser's devtools, a phone's passed through
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
   src/assistant.rs       /api/v1/assistant; the turns' shape
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
@@ -232,38 +234,51 @@ reserved paths (`web.rs`) are derived from it.
 ## Browsers
 
 Each managing gmail has one antidetect browser: one fingerprint, one session, one proxy, whichever
-of its GBPs it acts for. sa_browsers runs it apart from the conductor (a browser browsing the web
-never shares a process tree with the conductor's secrets); the operator drives it from the
-conductor's window, which is its only devtools client.
+of its GBPs it acts for. The product is Multilogin's **cloud phone** (real ARM Android: Google's device
+checks see a phone); Multilogin's browser (Mimic posing as Android) and GoLogin's (Orbita) are
+browsers. sa_browsers runs them apart from the conductor (a browser browsing the web never shares a
+process tree with the conductor's secrets); the operator drives them from the conductor's window.
 
 ```text
-browser ──WS /api/v1/gmails/{id}/browser (Origin, session, owner)──▶ conductor (relay: the only CDP client)
-   ▲  {frame jpeg b64, tabs, dialog}           ▼ {touch, wheel, key, text, navigate, tab}           │
-   └────────────────────────────────────────────────────────────────────────────────────────────────┘
-                                                                                     CDP over WS │
-conductor ── GOLOGIN_TOKEN: the profile, its 3-minute token ──▶ api.gologin.com                  ▼
-conductor ── POST /profiles/{gmail}/launch {Launch}, Conductor ──▶ sa_browsers: Orbita headless,
-                                                                  user-data-dir per gmail,
-                                                                  GET /profiles/{gmail}/cdp → devtools
+browser ──WS /api/v1/gmails/{id}/browser (Origin, session, owner)──▶ conductor
+   ▲  {frame b64, tabs, dialog}       ▼ {touch, wheel, key, text, navigate, tab}  │ a browser: the relay, the only CDP client
+   └──────────────────────────────────────────────────────────────────────────────┤ a phone: each frame checked, passed through
+conductor ── MULTILOGIN_TOKEN: phones, Mimic profiles, the Library, a run's 3 h token ──▶ api.multilogin.com
+conductor ── GOLOGIN_TOKEN: the profile, its 3-minute token ──▶ api.gologin.com
+conductor ── POST /profiles/{gmail}/launch {Launch}, Conductor ──▶ sa_browsers
+   sa_browsers: Orbita headless | the Multilogin app on Xvfb, its launcher → Mimic  ── /cdp → devtools
+                a phone: phone/start ▸ adb + glogin ▸ geo, zone, exit from inside ▸ /view ▸ stop
 ```
 
-- **Set up once, its proxy replaceable.** Provider and device (a measured phone, `sa_browsers::Device`)
-  are a fingerprint: another is a new browser. A proxy is kept only once one request through it
-  (ip-api) comes out in the country of every GBP of the gmail that has one, at a public address;
-  sealed, and compared with the others by a keyed tag. The GoLogin profile is made at the first
-  start, its noise drawn by GoLogin then and kept.
+- **Set up once, its proxy replaceable.** Provider and device are a fingerprint: another is a new
+  browser. A phone's model is drawn from Multilogin's Google and Samsung ones; a browser poses as a
+  measured phone (`sa_browsers::Device`). A proxy is kept only once one request through it (ip-api)
+  comes out in the country of every GBP of the gmail that has one, at a public address; sealed, and
+  compared with the others by a keyed tag. Multilogin's phone or profile is made at the set-up, its
+  proxy replaced after; GoLogin's at the first start, its noise drawn by GoLogin then and kept.
 - **A start is for a GBP or the gmail.** At a GBP: its point is the position, its zone and its
   country's locale the browser's; for the gmail alone the position is blocked and the exit's zone
-  stands. A start for another while one runs is refused. Ten minutes without a viewer stop it.
+  stands. A phone is placed from inside (mock location on every provider, the zone read back) and its
+  exit read from inside must be in the GBP's country. A start for another while one runs is refused.
+  Ten minutes without a viewer stop a browser; a phone, three, and thirty after its start whoever
+  watches.
+- **The runner owns a phone's life**, so a dead conductor leaves none billing: it is recorded on the
+  runner's disk before `phone/start`, stopped on every way its run ends (a failed step, stop, removal,
+  idle, the cap, SIGTERM), the stop retried until `statuses` reads it stopped, and a recorded one
+  stopped before the runner serves again. The launch brings a 3-hour token, past the 180 billed
+  minutes Multilogin caps a session at: the runner holds no long-lived one.
 - **The relay** never sends `Runtime.enable` (what pages detect devtools by): `Target.*`, `Page.*`
-  (the screencast, navigation, dialogs) and `Input.*`, a finger's touches for the pointer. One viewer
-  per gmail; a new one closes the old (4409).
-- **A film as the camera** (`PUT …/browser/film`): the runner cuts it (first frame still, the film,
-  the last held, its sound over a faint noise) for Chrome's file capture, and its next launch plays it,
-  `facing.js` before every page's scripts. The file route's label and per-`getUserMedia` restart are
-  known tells (emulate_phone_cam). Cloud phones are not devtools: outside this seam.
-- Without `GOLOGIN_TOKEN` and `PANEL_BROWSERS_URL` (both, or neither; they need
-  `PANEL_ASSERTION_KEY`) every browser route answers 503 "browsers not connected".
+  (the screencast, navigation, dialogs) and `Input.*`, a finger's touches for the pointer. A phone is
+  not devtools: the runner speaks the viewer's frames itself (screencap, `input`, ADBKeyBoard's
+  broadcast for text). One viewer per gmail; a new one closes the old (4409).
+- **A film as the camera** (`PUT …/browser/film`): for Orbita the runner cuts it (first frame still,
+  the film, the last held, its sound over a faint noise) for Chrome's file capture, and its next
+  launch plays it, `facing.js` before every page's scripts; the file route's label and
+  per-`getUserMedia` restart are known tells (emulate_phone_cam). A phone's goes to Multilogin's
+  Library, picked in the Multilogin app's Camera panel: no API binds it. Mimic takes none.
+- Without `PANEL_BROWSERS_URL` (and `GOLOGIN_TOKEN` or `MULTILOGIN_TOKEN`, or both; they need
+  `PANEL_ASSERTION_KEY`) every browser route answers 503 "browsers not connected"; a provider without
+  its token, "<provider> not connected".
 
 ## Grafana
 
@@ -405,13 +420,15 @@ PUT    /gmails/{id}/maps_key                {key} → 200 as GET, once Google an
                                             unbilled id-only details); 400 refused, nothing stored
 POST   /gmails/{id}/{imap,maps_key}/test    200 as GET, the check recorded; 404 none set
 DELETE /gmails/{id}/{imap,maps_key}         204
-PUT    /gmails/{id}/browser                 {provider, device, proxy} → 200 as connections, once the proxy
+PUT    /gmails/{id}/browser                 {provider, device?, proxy} → 200 as connections, once the proxy
                                             comes out in the GBPs' country (Browsers); 400 refused,
-                                            nothing stored; 409 another provider or device
+                                            nothing stored; 409 another provider or device; a phone
+                                            names no device
 POST   /gmails/{id}/browser/test            200 as connections, the exit checked again
-DELETE /gmails/{id}/browser                 204: stopped, its GoLogin profile and session gone
+DELETE /gmails/{id}/browser                 204: stopped, the provider's profile (a phone's film) and session gone
 POST   /gmails/{id}/browser/{start,stop}    {gmb?} → 204 once up; 409 it runs for another
-PUT    /gmails/{id}/browser/film            an mp4 ≤ 512 MiB → 204
+PUT    /gmails/{id}/browser/film            an mp4 ≤ 512 MiB → 204; a phone's ≤ 100 MiB, to the Library;
+                                            Mimic's 409
                                             (start and film: 8 at once, 10 min each, not the bounds above)
 DELETE /gmails/{id}/browser/film            204
 GET    /gmails/{id}/browser                 the viewer's WebSocket: outside the gate, as /live
@@ -747,8 +764,11 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **A Google answer is paid for once.** Every billed answer, from any service or machine, is
   looked up in the queries cache before it is bought, claimed while it is bought and kept after;
   a place a search returned is not asked about again. Placement's requests sit in their own scheme.
-- **A gmail's browser is driven only through the conductor's relay**, its devtools no one else's;
-  the runner holds none of the conductor's secrets: a launch brings its profile token and proxy.
+- **A gmail's browser is driven only through the conductor**, its devtools no one else's, a phone's
+  viewer only through it; the runner holds none of the conductor's secrets: a launch brings a token
+  for that run alone (GoLogin's 3 minutes, Multilogin's 3 hours) and the proxy.
+- **A cloud phone bills while it runs**: nothing a test runs starts one, and one that started stops
+  on every way its run ends (docs/spec/browsers.md).
 - **No two gmails share a proxy**: an exit two accounts share is a link Google can draw.
 - **The ledger is append-only, and nothing a service stores an id of is deleted.**
   `token_ledger` refuses UPDATE and DELETE; gmails and GBPs only get `removed_at`, kick-backs
@@ -760,7 +780,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   only that). A migration newer than the build is let be. Tables are STRICT, foreign keys
   enforced, timestamps INTEGER microseconds since the epoch, UUIDs 16-byte blobs.
 - **The conductor's secrets come from the environment only** (`PANEL_DATA_KEY`, `SENTRY_DSN`,
-  `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOOGLE_MAPS_KEYS`, `GOLOGIN_TOKEN`), through
+  `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOOGLE_MAPS_KEYS`, `GOLOGIN_TOKEN`,
+  `MULTILOGIN_TOKEN`), through
   `ev_lib::settings`; a person's (a gmail's IMAP password, its Maps key, its proxy) through the API, sealed at
   once; with `APP_ENV=production` the database, the data key, the four sign-in
   variables, the forward's four and `TOKENS_START_CAP_MULTIPLE` are required at boot
@@ -811,10 +832,17 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   from Google with `GOOGLE_MAPS_BROWSER_KEY` (referrer-restricted to the public origin); the
   server's keys never reach it.
 - **Browsers.** sa_browsers is its own pod (`PANEL_BROWSERS_URL`, in-cluster only): `BROWSERS_DIR` on
-  a volume of its own (the gmails' sessions: signed-in Google lives there), `BROWSERS_MAX`, the
-  conductor's public keys (`PANEL_ASSERTION_KEYS`), Orbita (`.#orbita`) and ffmpeg; egress to
-  `api.gologin.com:443` and through the gmails' proxies, any public address. The conductor too
-  dials those proxies (a set-up's check, to `ip-api.com:80` through them) and `api.gologin.com:443`.
+  a volume of its own (the gmails' sessions: signed-in Google lives there; `phones.json`, the phones it
+  may have started) and `HOME` on it too (the Multilogin app's `~/mlx`, Mimic's profiles),
+  `BROWSERS_MAX`, the conductor's public keys (`PANEL_ASSERTION_KEYS`), Orbita (`.#orbita`), ffmpeg,
+  the Multilogin app under Xvfb (`.#mlx`, `BROWSERS_MLX`; its launcher `launcher.mlx.yt:45001`, a
+  public name for 127.0.0.1), `BROWSERS_MULTILOGIN_API`, and a phone's tools (`.#phone-tools`: adb,
+  an aarch64 busybox, ADBKeyBoard). Its TERMination grace covers stopping every phone (≥ 2 min).
+  Egress to `api.gologin.com:443`, `api.multilogin.com:443` and the app's own Multilogin hosts, the
+  phones' adb at whatever `ip:port` Multilogin hands out, and through the gmails' proxies: any public
+  address. The conductor too dials those proxies (a set-up's check, to `ip-api.com:80` through them),
+  `api.gologin.com:443` and `api.multilogin.com:443`. Multilogin's account auto-stop (Account
+  settings) at 40 min is the backstop by hand.
 - **Telegram, outbound only.** With `TELEGRAM_BOT_TOKEN` the pods need egress to
   `api.telegram.org:443`; no webhook is set on the bot (`getUpdates` refuses to run while one is).
 - **`/api/v1/live` through the public IngressRoute, as a WebSocket.** Nothing in front may buffer

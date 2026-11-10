@@ -1,9 +1,9 @@
-//! One gmail's browser, from its launch to its stop: a future of `serve`'s, its process group
-//! killed however the future ends.
+//! One gmail's browser, from its launch to its stop: a future of `serve`'s. Orbita's life is here,
+//! its process group killed however the future ends; Mimic's in `mimic`, a cloud phone's in `phone`.
 //!
 //! ```text
-//! Starting ── devtools answer ──▶ Up ── its window's process exits | stop | idle | the runner stops ──▶ gone
-//!     └── exits, or no devtools within 60 s ─────────────────────────────────────────────────────────▶ gone
+//! Starting ── devtools (a phone: adb) answer ──▶ Up ── it ends | stop | idle | the runner stops ──▶ gone
+//!     └── it ends, or is not up in time ───────────────────────────────────────────────────────────▶ gone
 //! ```
 
 use std::{path::Path, sync::Arc, time::Duration};
@@ -13,10 +13,10 @@ use sa_browsers::{Browser, Launch};
 use serde_json::Value;
 use tokio::sync::{Notify, oneshot, watch};
 
-use crate::{Runner, film};
+use crate::{Runner, film, mimic, phone};
 
-/// How long after its last devtools client leaves (or its launch, if none came) a browser runs on.
-const IDLE: Duration = Duration::from_secs(10 * 60);
+/// How long after its last client leaves (or its launch, if none came) a browser runs on.
+pub(crate) const IDLE: Duration = Duration::from_secs(10 * 60);
 const UP_WITHIN: Duration = Duration::from_secs(60);
 const STOP_WITHIN: Duration = Duration::from_secs(15);
 
@@ -60,11 +60,19 @@ impl Slot {
 		rx
 	}
 
-	/// Its devtools socket, once up.
-	pub(crate) fn client(&self) -> Option<(String, Client)> {
-		let State::Up { devtools } = &self.state else { return None };
+	/// What it is driven through, once up.
+	pub(crate) fn client(&self) -> Option<(Up, Client)> {
+		let State::Up(up) = &self.state else { return None };
 		self.clients.send_modify(|n| *n += 1);
-		Some((devtools.clone(), Client(self.clients.clone())))
+		Some((up.clone(), Client(self.clients.clone())))
+	}
+
+	/// A cloud phone's own view at Multilogin.
+	pub(crate) fn stream(&self) -> Option<String> {
+		match &self.state {
+			State::Up(Up::Phone { stream, .. }) => stream.clone(),
+			_ => None,
+		}
 	}
 
 	/// Told to stop; the receiver turns `true` once it is gone.
@@ -76,7 +84,14 @@ impl Slot {
 
 enum State {
 	Starting(Vec<oneshot::Sender<Result<(), String>>>),
-	Up { devtools: String },
+	Up(Up),
+}
+
+/// What a running browser is driven through.
+#[derive(Clone)]
+pub(crate) enum Up {
+	Devtools(String),
+	Phone { adb: Arc<crate::adb::Phone>, stream: Option<String> },
 }
 
 /// What `serve` runs: the launch, and the slot's other ends.
@@ -107,7 +122,38 @@ pub(crate) async fn run(runner: Runner, start: Start, mut stopping: watch::Recei
 		mut clients,
 	} = start;
 	let dir = runner.0.dir.join(gmail.to_string());
-	let lived = life(&runner, gmail, &dir, launch.browser, &stop, &mut clients, &mut stopping).await;
+	let mut ends = Ends {
+		stop: &stop,
+		clients: &mut clients,
+		stopping: &mut stopping,
+	};
+	let lived = match launch.browser {
+		Browser::Orbita {
+			preferences,
+			config,
+			proxy,
+			zone,
+			locale,
+			screen,
+		} =>
+			orbita(
+				&runner,
+				gmail,
+				&dir,
+				Orbita {
+					preferences,
+					config,
+					proxy,
+					zone,
+					locale,
+					screen,
+				},
+				&mut ends,
+			)
+			.await,
+		Browser::MultiloginBrowser { token, folder, profile } => mimic::life(&runner, gmail, &token, &folder, &profile, &mut ends).await,
+		Browser::MultiloginPhone { token, phone, geo, zone, country } => phone::life(&runner, gmail, phone::Run { token, phone, geo, zone, country }, &mut ends).await,
+	};
 	let scrubbed = scrub(&dir).await;
 	let why = match lived.and(scrubbed) {
 		Ok(()) => "it stopped while starting".to_owned(),
@@ -127,15 +173,70 @@ pub(crate) async fn run(runner: Runner, start: Start, mut stopping: watch::Recei
 	ended.send_replace(true);
 }
 
-async fn life(runner: &Runner, gmail: i64, dir: &Path, browser: Browser, stop: &Notify, clients: &mut watch::Receiver<usize>, stopping: &mut watch::Receiver<bool>) -> eyre::Result<()> {
-	let Browser::Orbita {
+/// What ends a running browser but itself.
+pub(crate) struct Ends<'a> {
+	stop: &'a Notify,
+	clients: &'a mut watch::Receiver<usize>,
+	stopping: &'a mut watch::Receiver<bool>,
+}
+
+impl Ends<'_> {
+	/// Why it is to stop: told to, nobody held it for `idle`, or the runner stops.
+	pub(crate) async fn any(&mut self, gmail: i64, idle: Duration) {
+		let clients = &mut *self.clients;
+		let unheld = async {
+			//LOOP: until nobody has held it for `idle`
+			loop {
+				if *clients.borrow_and_update() == 0 {
+					tokio::select! {
+						() = tokio::time::sleep(idle) => return,
+						r = clients.changed() => r.expect("the slot holds the sender"),
+					}
+				} else {
+					clients.changed().await.expect("the slot holds the sender");
+				}
+			}
+		};
+		tokio::select! {
+			() = self.stop.notified() => tracing::info!(gmail, "browser told to stop"),
+			() = unheld => tracing::info!(gmail, "browser idle: stopped"),
+			_ = self.stopping.wait_for(|s| *s) => {}
+		}
+	}
+}
+
+/// It is up: its launch's waiters told.
+pub(crate) fn up(runner: &Runner, gmail: i64, up: Up) {
+	let mut profiles = runner.0.profiles.lock().expect("never held across a panic");
+	let slot = profiles.get_mut(&gmail).expect("a slot leaves only at its future's end");
+	let State::Starting(waiters) = std::mem::replace(&mut slot.state, State::Up(up)) else {
+		unreachable!("only this future moves it up");
+	};
+	for w in waiters {
+		// the asker gave up waiting: it is up all the same
+		let _told = w.send(Ok(()));
+	}
+	tracing::info!(gmail, "browser up");
+}
+
+struct Orbita {
+	preferences: Value,
+	config: Value,
+	proxy: String,
+	zone: String,
+	locale: String,
+	screen: (u32, u32),
+}
+
+async fn orbita(runner: &Runner, gmail: i64, dir: &Path, o: Orbita, ends: &mut Ends<'_>) -> eyre::Result<()> {
+	let Orbita {
 		preferences,
 		config,
 		proxy,
 		zone,
 		locale,
 		screen: (width, height),
-	} = browser;
+	} = o;
 	let prefs = dir.join("Default/Preferences");
 	tokio::fs::create_dir_all(dir.join("Default")).await.wrap_err_with(|| format!("creating {}", dir.display()))?;
 	let mut merged = match tokio::fs::read(&prefs).await {
@@ -177,8 +278,8 @@ async fn life(runner: &Runner, gmail: i64, dir: &Path, browser: Browser, stop: &
 		.process_group(0)
 		.spawn()
 		.wrap_err_with(|| format!("starting {}", runner.0.orbita.display()))?;
-	let group = Group(rustix::process::Pid::from_raw(child.id().expect("not waited on yet").try_into().expect("a pid fits an i32")).expect("a child's pid is positive"));
-	let up = async {
+	let group = Group::of(&child);
+	let port = async {
 		//LOOP: polled until the file names a port; UP_WITHIN bounds it
 		loop {
 			if let Ok(s) = tokio::fs::read_to_string(&port_file).await
@@ -190,34 +291,10 @@ async fn life(runner: &Runner, gmail: i64, dir: &Path, browser: Browser, stop: &
 		}
 	};
 	let devtools: String = tokio::select! {
-		d = tokio::time::timeout(UP_WITHIN, up) => d.map_err(|_| eyre::eyre!("no devtools within {}s; see {}/orbita.log", UP_WITHIN.as_secs(), dir.display()))?,
+		d = tokio::time::timeout(UP_WITHIN, port) => d.map_err(|_| eyre::eyre!("no devtools within {}s; see {}/orbita.log", UP_WITHIN.as_secs(), dir.display()))?,
 		status = child.wait() => eyre::bail!("it exited ({}) before it was up; see {}/orbita.log", status?, dir.display()),
 	};
-	{
-		let mut profiles = runner.0.profiles.lock().expect("never held across a panic");
-		let slot = profiles.get_mut(&gmail).expect("a slot leaves only at its future's end");
-		let State::Starting(waiters) = std::mem::replace(&mut slot.state, State::Up { devtools: devtools.clone() }) else {
-			unreachable!("only this future moves it up");
-		};
-		for w in waiters {
-			// the asker gave up waiting: it is up all the same
-			let _told = w.send(Ok(()));
-		}
-	}
-	tracing::info!(gmail, "browser up");
-	let idle = async {
-		//LOOP: until nobody has held its devtools for IDLE
-		loop {
-			if *clients.borrow_and_update() == 0 {
-				tokio::select! {
-					() = tokio::time::sleep(IDLE) => return,
-					r = clients.changed() => r.expect("the slot holds the sender"),
-				}
-			} else {
-				clients.changed().await.expect("the slot holds the sender");
-			}
-		}
-	};
+	up(runner, gmail, Up::Devtools(devtools.clone()));
 	let facing = async {
 		match with_film {
 			true => film::facing(&devtools).await,
@@ -237,9 +314,7 @@ async fn life(runner: &Runner, gmail: i64, dir: &Path, browser: Browser, stop: &
 			tracing::info!(gmail, status = %status?, "browser exited");
 			return Ok(());
 		}
-		() = stop.notified() => tracing::info!(gmail, "browser told to stop"),
-		() = idle => tracing::info!(gmail, "browser idle: stopped"),
-		_ = stopping.wait_for(|s| *s) => {}
+		() = ends.any(gmail, IDLE) => {}
 	}
 	// the browser itself shuts down cleanly on TERM, its last writes to the session kept
 	group.signal(rustix::process::Signal::TERM);
@@ -289,11 +364,15 @@ fn merge(target: &mut Value, patch: Value) {
 }
 
 /// The browser's process group: its renderers and helpers too. Killed when dropped, however
-/// [`life`] ends.
-struct Group(rustix::process::Pid);
+/// its owner ends.
+pub(crate) struct Group(pub(crate) rustix::process::Pid);
 
 impl Group {
-	fn signal(&self, signal: rustix::process::Signal) {
+	pub(crate) fn of(child: &tokio::process::Child) -> Self {
+		Self(rustix::process::Pid::from_raw(child.id().expect("not waited on yet").try_into().expect("a pid fits an i32")).expect("a child's pid is positive"))
+	}
+
+	pub(crate) fn signal(&self, signal: rustix::process::Signal) {
 		match rustix::process::kill_process_group(self.0, signal) {
 			Ok(()) | Err(rustix::io::Errno::SRCH) => {} // SRCH: every one of them has exited
 			Err(e) => panic!("signalling our own child's group {:?}: {e}", self.0),

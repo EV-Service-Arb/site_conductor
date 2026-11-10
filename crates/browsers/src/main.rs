@@ -1,8 +1,12 @@
-//! `sa_browsers serve`: the gmails' browsers, headless, one session directory each, driven only
-//! through the conductor (the routes are the lib's). Nothing here holds a secret of the
-//! conductor's: a launch brings its profile token and proxy, and an assertion is all it trusts.
+//! `sa_browsers serve`: the gmails' browsers, headless, one session directory each, and their
+//! cloud phones, driven only through the conductor (the routes are the lib's). Nothing here holds
+//! a secret of the conductor's: a launch brings its tokens and proxy, and an assertion is all it
+//! trusts.
 
+mod adb;
 mod film;
+mod mimic;
+mod phone;
 mod profile;
 
 use std::{
@@ -10,6 +14,7 @@ use std::{
 	net::SocketAddr,
 	path::PathBuf,
 	sync::{Arc, Mutex},
+	time::Duration,
 };
 
 use axum::{
@@ -54,9 +59,26 @@ enum Cmd {
 		/// The flake's `orbita`.
 		#[arg(long, env = "BROWSERS_ORBITA")]
 		orbita: PathBuf,
-		/// What makes a film the camera's and mic's files.
+		/// What makes a film the camera's and mic's files, and a phone's screen a frame.
 		#[arg(long, env = "BROWSERS_FFMPEG")]
 		ffmpeg: PathBuf,
+		/// The flake's `mlx`: the Multilogin app on its own display, whose launcher starts Mimic.
+		#[arg(long, env = "BROWSERS_MLX")]
+		mlx: PathBuf,
+		/// Its launcher, e.g. `https://launcher.mlx.yt:45001` (the name is the loopback's).
+		#[arg(long, env = "BROWSERS_MLX_LAUNCHER")]
+		launcher: String,
+		/// Multilogin's API, e.g. `https://api.multilogin.com`: the phones' starts and stops.
+		#[arg(long, env = "BROWSERS_MULTILOGIN_API")]
+		multilogin: String,
+		#[arg(long, env = "BROWSERS_ADB")]
+		adb: PathBuf,
+		/// A static aarch64 busybox: a phone's exit read from inside it.
+		#[arg(long, env = "BROWSERS_BUSYBOX")]
+		busybox: PathBuf,
+		/// ADBKeyBoard's apk: a phone's text past ASCII.
+		#[arg(long, env = "BROWSERS_ADB_KEYBOARD")]
+		adb_keyboard: PathBuf,
 		/// The conductor's public keys, as the services take them (`sa_auth::Keys`).
 		#[arg(long, env = "PANEL_ASSERTION_KEYS")]
 		keys: String,
@@ -73,21 +95,52 @@ async fn main() -> eyre::Result<()> {
 		max,
 		orbita,
 		ffmpeg,
+		mlx,
+		launcher,
+		multilogin,
+		adb,
+		busybox,
+		adb_keyboard,
 		keys,
 	} = Cli::parse().cmd;
 	let keys: Keys = keys.parse().map_err(|e| eyre::eyre!("PANEL_ASSERTION_KEYS: {e}"))?;
 	eyre::ensure!(max > 0, "BROWSERS_MAX is at least 1");
 	std::fs::create_dir_all(&dir).wrap_err_with(|| format!("creating {}", dir.display()))?;
 	let (starts, mut started) = mpsc::channel(16);
+	let http = reqwest::Client::builder().timeout(Duration::from_secs(30)).build().wrap_err("the runner's client")?;
 	let runner = Runner(Arc::new(Inner {
 		dir,
 		max,
 		orbita,
 		ffmpeg,
+		launcher: launcher.trim_end_matches('/').to_owned(),
+		multilogin: phone::Api {
+			base: multilogin.trim_end_matches('/').to_owned(),
+			http: http.clone(),
+		},
+		http,
+		adb,
+		busybox,
+		adb_keyboard,
+		minutes: phone::MobileMinutes::of_serve(),
+		records: Mutex::default(),
 		keys,
 		profiles: Mutex::default(),
 		starts,
 	}));
+	phone::reconcile(&runner).await?;
+	let mlx_log = std::fs::File::create(runner.0.dir.join("mlx.log")).wrap_err("creating mlx.log")?;
+	let mut mlx = tokio::process::Command::new(&mlx)
+		.env("MLX_OPENED", runner.0.dir.join("mlx.opened"))
+		.stdin(std::process::Stdio::null())
+		.stdout(mlx_log.try_clone()?)
+		.stderr(mlx_log)
+		.process_group(0)
+		.spawn()
+		.wrap_err_with(|| format!("starting {}", mlx.display()))?;
+	// TERM asks "Close Multilogin?" on its display, where nobody answers: its profiles are each
+	// stopped through the launcher, then the group killed
+	let mlx_group = profile::Group::of(&mlx);
 	let listener = tokio::net::TcpListener::bind(bind).await.wrap_err_with(|| format!("binding {bind}"))?;
 	tracing::info!(%bind, "serving");
 	let (stop, stopping) = watch::channel(false);
@@ -97,14 +150,16 @@ async fn main() -> eyre::Result<()> {
 	//LOOP: until the server stops; each browser is one future here, never spawned
 	let served = loop {
 		tokio::select! {
-			served = &mut server => break served,
+			served = &mut server => break served.wrap_err("HTTP server"),
+			status = mlx.wait() => break Err(eyre::eyre!("the Multilogin app exited ({}); see {}/mlx.log", status?, runner.0.dir.display())),
 			Some(start) = started.recv() => running.push(profile::run(runner.clone(), start, stopping.clone())),
 			Some(()) = running.next() => {}
 		}
 	};
 	stop.send(true).expect("the receiver is ours");
 	while running.next().await.is_some() {}
-	served.wrap_err("HTTP server")
+	drop(mlx_group);
+	served
 }
 
 #[derive(Clone)]
@@ -125,6 +180,15 @@ struct Inner {
 	max: usize,
 	orbita: PathBuf,
 	ffmpeg: PathBuf,
+	launcher: String,
+	multilogin: phone::Api,
+	http: reqwest::Client,
+	adb: PathBuf,
+	busybox: PathBuf,
+	adb_keyboard: PathBuf,
+	minutes: phone::MobileMinutes,
+	/// Held across a read and write of the phones' records.
+	records: Mutex<()>,
 	keys: Keys,
 	profiles: Mutex<HashMap<i64, profile::Slot>>,
 	starts: mpsc::Sender<profile::Start>,
@@ -137,6 +201,7 @@ fn routes(runner: Runner) -> Router {
 		.route("/profiles/{gmail}/stop", post(stop))
 		.route("/profiles/{gmail}", delete(remove))
 		.route("/profiles/{gmail}/cdp", get(cdp))
+		.route("/profiles/{gmail}/view", get(view))
 		.route("/profiles/{gmail}/film", put(set_film).delete(remove_film).layer(DefaultBodyLimit::max(FILM_MAX)))
 		.layer(middleware::from_fn_with_state(runner.clone(), conductor_only))
 		.with_state(runner)
@@ -164,6 +229,7 @@ async fn list(State(runner): State<Runner>) -> Response {
 			.map(|(gmail, slot)| Running {
 				gmail: *gmail,
 				run: slot.run.clone(),
+				stream: slot.stream(),
 			})
 			.collect()
 	};
@@ -256,8 +322,10 @@ async fn remove(State(runner): State<Runner>, Path(gmail): Path<i64>) -> Respons
 /// The browser's devtools socket, as is, while it runs; its client counted for the idle stop.
 async fn cdp(State(runner): State<Runner>, Path(gmail): Path<i64>, upgrade: Result<WebSocketUpgrade, WebSocketUpgradeRejection>) -> Response {
 	let found = runner.0.profiles.lock().expect("never held across a panic").get(&gmail).and_then(profile::Slot::client);
-	let Some((devtools, client)) = found else {
-		return (StatusCode::NOT_FOUND, "not running").into_response();
+	let (devtools, client) = match found {
+		Some((profile::Up::Devtools(d), client)) => (d, client),
+		Some((profile::Up::Phone { .. }, _)) => return (StatusCode::CONFLICT, "a cloud phone has no devtools: its viewer is /view").into_response(),
+		None => return (StatusCode::NOT_FOUND, "not running").into_response(),
 	};
 	let upgrade = match upgrade {
 		Ok(u) => u,
@@ -270,6 +338,24 @@ async fn cdp(State(runner): State<Runner>, Path(gmail): Path<i64>, upgrade: Resu
 	upgrade.max_message_size(64 << 20).on_upgrade(move |conductor| async move {
 		let _client = client;
 		pass(conductor, browser).await;
+	})
+}
+
+/// A cloud phone's viewer, spoken here; its client counted for the idle stop.
+async fn view(State(runner): State<Runner>, Path(gmail): Path<i64>, upgrade: Result<WebSocketUpgrade, WebSocketUpgradeRejection>) -> Response {
+	let found = runner.0.profiles.lock().expect("never held across a panic").get(&gmail).and_then(profile::Slot::client);
+	let (phone, client) = match found {
+		Some((profile::Up::Phone { adb, .. }, client)) => (adb, client),
+		Some((profile::Up::Devtools(_), _)) => return (StatusCode::CONFLICT, "a browser's viewer is the conductor's relay over /cdp").into_response(),
+		None => return (StatusCode::NOT_FOUND, "not running").into_response(),
+	};
+	let upgrade = match upgrade {
+		Ok(u) => u,
+		Err(rejection) => return rejection.into_response(),
+	};
+	upgrade.max_message_size(4096).on_upgrade(move |socket| async move {
+		let _client = client;
+		adb::view(socket, &phone).await;
 	})
 }
 

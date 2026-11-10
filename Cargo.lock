@@ -3945,6 +3945,7 @@ name = "sa_browsers"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base64 0.22.1",
  "clap",
  "color-eyre",
  "eyre",
@@ -3961,6 +3962,8 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
+ "ts-rs",
+ "url",
 ]
 
 [[package]]

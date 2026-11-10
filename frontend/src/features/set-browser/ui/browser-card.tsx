@@ -67,7 +67,7 @@ export function BrowserCard({ gmail, browser, onChanged }: { gmail: number; brow
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
               <dt className="text-ink-soft">{t("browser.profile")}</dt>
               <dd className="text-right text-ink">
-                {t(`browser.provider.${browser.provider}`)} · {t(`browser.device.${browser.device}`)}
+                {t(`browser.provider.${browser.provider}`)} · {browser.provider === "multilogin" ? browser.device : t(`browser.device.${browser.device as Device}`)}
               </dd>
               <dt className="text-ink-soft">{t("browser.proxy")}</dt>
               <dd className="truncate text-right font-mono text-ink">{browser.endpoint}</dd>
@@ -93,7 +93,7 @@ export function BrowserCard({ gmail, browser, onChanged }: { gmail: number; brow
                 {t("account.remove")}
               </Button>
             </div>
-            <Film gmail={gmail} browser={browser} onChanged={onChanged} />
+            {browser.provider !== "multilogin_browser" && <Film gmail={gmail} browser={browser} onChanged={onChanged} />}
           </>
         ) : (
           <BrowserForm
@@ -124,16 +124,21 @@ export function BrowserCard({ gmail, browser, onChanged }: { gmail: number; brow
   );
 }
 
-/** The server takes up to this much: a bigger file is refused before it is sent. */
+/** The server takes up to this much (a phone's: Multilogin's Library's): a bigger file is refused before it is sent. */
 const FILM_MAX = 512 * 1024 * 1024;
+const PHONE_FILM_MAX = 100 * 1024 * 1024;
 
-/** The board's "plug to submit a selected vid": a film the browser's next launch plays as its back camera. */
+/**
+ * The board's "plug to submit a selected vid": a film the browser's next launch plays as its back camera; a cloud
+ * phone's goes to Multilogin's Library, picked in its Camera panel.
+ */
 function Film({ gmail, browser, onChanged }: { gmail: number; browser: Browser; onChanged: () => void }) {
   const t = useT();
   const button = useButtonSize();
   const picker = useRef<HTMLInputElement>(null);
   const [sent, setSent] = useState<number | null>(null);
-  const running = browser.running !== null;
+  const phone = browser.provider === "multilogin";
+  const running = !phone && browser.running !== null;
   const act = async (run: () => Promise<unknown>) => {
     setSent(0);
     try {
@@ -146,7 +151,7 @@ function Film({ gmail, browser, onChanged }: { gmail: number; browser: Browser; 
     }
   };
   const upload = (file: File) => {
-    if (file.size > FILM_MAX) return void notifyFailure(new Error(t("browser.film.tooBig")), t);
+    if (file.size > (phone ? PHONE_FILM_MAX : FILM_MAX)) return void notifyFailure(new Error(t(phone ? "browser.film.phone.tooBig" : "browser.film.tooBig")), t);
     void act(() => uploadFilm(gmail, file, setSent));
   };
   return (
@@ -155,7 +160,7 @@ function Film({ gmail, browser, onChanged }: { gmail: number; browser: Browser; 
         <Camera aria-hidden className="size-4 text-ink-soft" />
         {t("browser.film.title")}
       </h4>
-      <p className="text-xs text-ink-soft">{t(browser.film ? "browser.film.set" : "browser.film.none")}</p>
+      <p className="text-xs text-ink-soft">{t(phone ? (browser.film ? "browser.film.phone.set" : "browser.film.phone.none") : browser.film ? "browser.film.set" : "browser.film.none")}</p>
       {sent !== null ? (
         <div className="flex items-center gap-2 text-xs text-ink-soft">
           <Progress value={Math.round(sent * 100)} aria-label={t("browser.film.uploading")} className="flex-1" />
@@ -199,22 +204,24 @@ function BrowserForm({
   set: Browser | null;
   busy: boolean;
   onCancel: (() => void) | undefined;
-  onSubmit: (v: { provider: Provider; device: Device; proxy: string }) => void;
+  onSubmit: (v: { provider: Provider; device: Device | null; proxy: string }) => void;
 }) {
   const t = useT();
   const id = useId();
   const button = useButtonSize();
   const size = useControlSize();
   const [provider, setProvider] = useState<Provider | "">(set?.provider ?? "");
-  const [device, setDevice] = useState<Device | "">(set?.device ?? "");
+  const [device, setDevice] = useState<Device | "">(set === null || set.provider === "multilogin" ? "" : (set.device as Device));
   const [proxy, setProxy] = useState("");
-  const ready = provider !== "" && device !== "" && proxy.trim() !== "";
+  // a cloud phone's model is drawn by the server from Multilogin's
+  const phone = provider === "multilogin";
+  const ready = provider !== "" && (phone || device !== "") && proxy.trim() !== "";
   return (
     <form
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
-        if (provider !== "" && device !== "" && proxy.trim() !== "") onSubmit({ provider, device, proxy: proxy.trim() });
+        if (ready) onSubmit({ provider, device: phone || device === "" ? null : device, proxy: proxy.trim() });
       }}
     >
       <div className="grid gap-3 sm:grid-cols-2">
@@ -229,17 +236,21 @@ function BrowserForm({
             ))}
           </NativeSelect>
         </Field>
-        <Field>
-          <FieldLabel htmlFor={`${id}-device`}>{t("browser.device")}</FieldLabel>
-          <NativeSelect id={`${id}-device`} size={size} disabled={set !== null} value={device} onChange={(e) => setDevice(e.target.value as Device)}>
-            {device === "" && <NativeSelectOption value="">—</NativeSelectOption>}
-            {DEVICES.map((d) => (
-              <NativeSelectOption key={d} value={d}>
-                {t(`browser.device.${d}`)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </Field>
+        {phone ? (
+          <p className="self-end text-xs text-ink-soft">{set === null ? t("browser.device.drawn") : set.device}</p>
+        ) : (
+          <Field>
+            <FieldLabel htmlFor={`${id}-device`}>{t("browser.device")}</FieldLabel>
+            <NativeSelect id={`${id}-device`} size={size} disabled={set !== null} value={device} onChange={(e) => setDevice(e.target.value as Device)}>
+              {device === "" && <NativeSelectOption value="">—</NativeSelectOption>}
+              {DEVICES.map((d) => (
+                <NativeSelectOption key={d} value={d}>
+                  {t(`browser.device.${d}`)}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </Field>
+        )}
       </div>
       <Field>
         <FieldLabel htmlFor={`${id}-proxy`}>{t("browser.proxy")}</FieldLabel>

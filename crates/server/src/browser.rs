@@ -2,19 +2,25 @@
 //! its proxy, started on sa_browsers' runner, and driven through the conductor alone.
 //!
 //! ```text
-//! PUT    /api/v1/gmails/{id}/browser {provider, device, proxy}  → Connections; 400 refused, nothing
-//!                                     stored; 409 provider or device another: DELETE first
+//! PUT    /api/v1/gmails/{id}/browser {provider, device?, proxy}  → Connections; 400 refused, nothing
+//!                                     stored; 409 provider or device another: DELETE first; a
+//!                                     cloud phone's model is drawn, a browser's device named
 //! POST   /api/v1/gmails/{id}/browser/test   → Connections, the exit checked again
 //! DELETE /api/v1/gmails/{id}/browser        → 204: stopped, the provider's profile and the session gone
 //! POST   /api/v1/gmails/{id}/browser/start {gmb?}  → 204 once up: at that GBP's point, else nowhere
 //! POST   /api/v1/gmails/{id}/browser/stop   → 204
 //! PUT    /api/v1/gmails/{id}/browser/film   an mp4 (≤ 512 MiB) → 204: its next launch's back camera,
-//!                                           the sound its mic; 400 no sound, 409 while it runs
+//!                                           the sound its mic; 400 no sound, 409 while it runs. A
+//!                                           cloud phone's (≤ 100 MiB) into Multilogin's Library,
+//!                                           picked in its Camera panel; Mimic's: 409, it plays none
 //! DELETE /api/v1/gmails/{id}/browser/film   → 204
 //! GET    /api/v1/gmails/{id}/browser        WebSocket, the viewer: outside the /api/v1 gate, as
-//!                                           /live; one per gmail, a new one closes the old (4409)
+//!                                           /live; one per gmail, a new one closes the old (4409);
+//!                                           a browser's through the relay here, a phone's the
+//!                                           runner's own, passed through
 //! ```
-//! Unset GOLOGIN_TOKEN and PANEL_BROWSERS_URL: 503, "browsers not connected".
+//! Unset PANEL_BROWSERS_URL: 503, "browsers not connected"; a provider without its token, 503
+//! "<provider> not connected".
 
 use std::{
 	collections::HashMap,
@@ -40,9 +46,12 @@ use eyre::WrapErr;
 use futures::{SinkExt, StreamExt};
 use jiff::Timestamp;
 use sa_auth::{Assertion, Principal, Service, Signer};
-use sa_browsers::{Launch, Profiles};
+use sa_browsers::{
+	Launch, Profiles,
+	view::{In as ViewerIn, Out as ViewerOut, Tab as TabDto, TouchPhase, web_url},
+};
 use sa_panel::{
-	browsers::{Browsers, NewBrowser, Provider, Run},
+	browsers::{Browsers, LIBRARY_MAX, NewBrowser, Provider, Run},
 	live::{Ended, Signal},
 	session::SessionKey,
 };
@@ -70,8 +79,9 @@ pub const CLOSE_NOT_RUNNING: u16 = 4404;
 /// The browser stopped, or its devtools went.
 pub const CLOSE_STOPPED: u16 = 4410;
 
-/// A launch waits on the browser's devtools (60 s at the runner) and the provider's calls.
-const LAUNCH_WITHIN: Duration = Duration::from_secs(90);
+/// A launch waits on the runner, which bounds it: a phone's start, its adb and its placement
+/// the longest.
+const LAUNCH_WITHIN: Duration = Duration::from_secs(9 * 60);
 
 const NOT_CONNECTED: &str = "browsers not connected";
 
@@ -109,118 +119,27 @@ pub struct ExitDto {
 pub struct BrowserDto {
 	#[ts(type = "Provider")]
 	pub provider: String,
-	#[ts(type = "Device")]
-	pub device: sa_browsers::Device,
+	/// A `Device`; a cloud phone's, its model.
+	pub device: String,
 	/// The proxy's host:port.
 	pub endpoint: String,
 	pub exit: ExitDto,
 	pub set_at: String,
 	/// `error` null: through the proxy, out in the country of every GBP of the gmail.
 	pub checked: CheckedDto,
-	/// What it runs for now: `gmb` null, the gmail alone; null, it does not run.
-	#[ts(type = "{ gmb: number | null } | null")]
+	/// What it runs for now: `gmb` null, the gmail alone; `stream` a cloud phone's own view at
+	/// Multilogin; null, it does not run.
+	#[ts(type = "{ gmb: number | null, stream: string | null } | null")]
 	pub running: Option<RunningDto>,
-	/// Its next launch plays the film uploaded as its back camera.
+	/// Its next launch plays the film uploaded as its back camera; a phone's is in Multilogin's
+	/// Library.
 	pub film: bool,
 }
 
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct RunningDto {
 	pub gmb: Option<i64>,
-}
-
-/// A frame of the viewer's socket, from the conductor.
-#[derive(Clone, Debug, Serialize, TS)]
-#[serde(tag = "type", rename_all = "snake_case")]
-#[ts(rename = "BrowserOut")]
-pub enum ViewerOut {
-	/// The active tab's page: a JPEG, base64, of `width` × `height` CSS px.
-	Frame {
-		data: String,
-		width: f64,
-		height: f64,
-	},
-	Tabs {
-		tabs: Vec<TabDto>,
-		active: Option<String>,
-	},
-	/// A page's `alert`, `confirm`, `prompt` or `beforeunload`, waiting on an answer.
-	Dialog {
-		kind: String,
-		message: String,
-		default: Option<String>,
-	},
-	DialogClosed,
-	/// What the browser refused of the viewer's.
-	Error {
-		message: String,
-	},
-}
-
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Tab")]
-pub struct TabDto {
-	pub id: String,
-	pub title: String,
-	pub url: String,
-}
-
-/// A frame of the viewer's socket, to the conductor; at most 4 KiB. Points are CSS px of the
-/// page the last frame showed.
-#[derive(Clone, Debug, Deserialize, TS)]
-#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
-#[ts(rename = "BrowserIn")]
-pub enum ViewerIn {
-	/// A finger: the browser is a phone.
-	Touch {
-		phase: TouchPhase,
-		x: f64,
-		y: f64,
-	},
-	/// A wheel's turn, swiped.
-	Wheel {
-		x: f64,
-		y: f64,
-		dx: f64,
-		dy: f64,
-	},
-	/// A key that types nothing: Enter, Backspace, arrows, Tab, Escape, Delete, Home, End; `ctrl`
-	/// with `a`, select all.
-	Key {
-		key: String,
-		ctrl: bool,
-	},
-	/// Text, as a phone's keyboard commits it, into the focused field.
-	Text {
-		text: String,
-	},
-	Navigate {
-		url: String,
-	},
-	/// -1 back, 1 forward.
-	History {
-		delta: i32,
-	},
-	Activate {
-		id: String,
-	},
-	NewTab,
-	CloseTab {
-		id: String,
-	},
-	/// The open dialog answered; `text` a prompt's.
-	Dialog {
-		accept: bool,
-		text: Option<String>,
-	},
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-pub enum TouchPhase {
-	Start,
-	Move,
-	End,
+	pub stream: Option<String>,
 }
 
 #[derive(Deserialize, TS)]
@@ -229,8 +148,9 @@ pub enum TouchPhase {
 pub struct SetBrowser {
 	#[ts(type = "Provider")]
 	pub provider: String,
-	#[ts(type = "Device")]
-	pub device: sa_browsers::Device,
+	/// A browser's; a cloud phone's model is drawn.
+	#[ts(type = "Device | null")]
+	pub device: Option<sa_browsers::Device>,
 	/// `socks5://` or `http://`, `user:pass@host:port`.
 	pub proxy: String,
 }
@@ -244,7 +164,7 @@ pub struct StartBrowser {
 	pub gmb: Option<i64>,
 }
 
-/// The browsers connected: the provider and the runner, with GOLOGIN_TOKEN and PANEL_BROWSERS_URL.
+/// The browsers connected: the providers and the runner, with PANEL_BROWSERS_URL.
 #[derive(Clone)]
 pub struct Connected {
 	browsers: Arc<Browsers>,
@@ -275,6 +195,7 @@ impl Connected {
 		let running = match profiles.running.iter().find(|r| r.gmail == gmail) {
 			Some(r) => Some(RunningDto {
 				gmb: r.run.parse::<Run>().map_err(|e| eyre::eyre!("the runner's run: {e}"))?.0,
+				stream: r.stream.clone(),
 			}),
 			None => None,
 		};
@@ -328,8 +249,9 @@ impl Runner {
 		}
 	}
 
-	async fn devtools(&self, gmail: i64) -> eyre::Result<Option<Devtools>> {
-		let path = format!("/profiles/{gmail}/cdp");
+	/// The runner's socket for the gmail: `cdp`, a browser's devtools; `view`, a phone's viewer.
+	async fn socket(&self, gmail: i64, which: &str) -> eyre::Result<Option<Devtools>> {
+		let path = format!("/profiles/{gmail}/{which}");
 		let ws = format!("{}{path}", self.base.replacen("http", "ws", 1));
 		let mut req = ws.into_client_request().wrap_err("the runner's devtools URL")?;
 		req.headers_mut()
@@ -337,7 +259,7 @@ impl Runner {
 		match tokio_tungstenite::connect_async(req).await {
 			Ok((ws, _)) => Ok(Some(ws)),
 			Err(tungstenite::Error::Http(res)) if res.status() == StatusCode::NOT_FOUND => Ok(None),
-			Err(e) => Err(eyre::Report::new(e).wrap_err("the runner's devtools socket")),
+			Err(e) => Err(eyre::Report::new(e).wrap_err(format!("the runner's {which} socket"))),
 		}
 	}
 }
@@ -440,17 +362,32 @@ async fn stop(State(state): State<ApiState>, Extension(caller): Extension<Caller
 async fn remove_film(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<StatusCode> {
 	let gmail = id(&raw)?;
 	let c = connected(&state)?;
-	state.panel.browser_of(caller.user_id, gmail).await??;
-	c.runner.expect_done(Method::DELETE, &format!("/profiles/{gmail}/film"), None).await?;
+	match state.panel.browser_of(caller.user_id, gmail).await??.provider {
+		Provider::Multilogin => state.panel.remove_phone_film(&c.browsers, caller.user_id, gmail).await??,
+		Provider::MultiloginBrowser | Provider::Gologin => c.runner.expect_done(Method::DELETE, &format!("/profiles/{gmail}/film"), None).await?,
+	}
 	changed(&state, caller.user_id, gmail);
 	Ok(StatusCode::NO_CONTENT)
 }
 
 /// `PUT` an mp4, streamed to the runner: the camera of the gmail's next launch, its sound the mic.
+/// A cloud phone's into Multilogin's Library instead.
 pub(crate) async fn set_film(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, film: axum::body::Body) -> ApiResult<StatusCode> {
 	let gmail = id(&raw)?;
 	let c = connected(&state)?;
-	state.panel.browser_of(caller.user_id, gmail).await??;
+	match state.panel.browser_of(caller.user_id, gmail).await??.provider {
+		Provider::Gologin => {}
+		Provider::MultiloginBrowser => return Err(ApiError::Conflict("Multilogin's browser plays no film: its camera is the host's".to_owned())),
+		Provider::Multilogin => {
+			let mp4 = axum::body::to_bytes(film, LIBRARY_MAX)
+				.await
+				.map_err(|_| ApiError::TooLarge(format!("a phone's film is {} MiB at most", LIBRARY_MAX >> 20)))?;
+			state.panel.set_phone_film(&c.browsers, caller.user_id, gmail, mp4.to_vec()).await??;
+			tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "phone's film in Multilogin's Library");
+			changed(&state, caller.user_id, gmail);
+			return Ok(StatusCode::NO_CONTENT);
+		}
+	}
 	let path = format!("/profiles/{gmail}/film");
 	let sent = c
 		.runner
@@ -538,11 +475,11 @@ async fn upgrade(State(s): State<ViewerState>, Path(raw): Path<String>, headers:
 	let Ok(gmail) = raw.parse::<i64>() else {
 		return ApiError::NotFound.into_response();
 	};
-	match s.sign_in.panel.browser_of(caller.user_id, gmail).await {
-		Ok(Ok(_)) => {}
+	let phone = match s.sign_in.panel.browser_of(caller.user_id, gmail).await {
+		Ok(Ok(b)) => b.provider == Provider::Multilogin,
 		Ok(Err(r)) => return ApiError::from(r).into_response(),
 		Err(e) => return ApiError::Internal(e).into_response(),
-	}
+	};
 	let ws = match ws {
 		Ok(ws) => ws,
 		Err(rejection) => return rejection.into_response(),
@@ -559,23 +496,29 @@ async fn upgrade(State(s): State<ViewerState>, Path(raw): Path<String>, headers:
 	ws.max_message_size(4096).max_frame_size(4096).max_write_buffer_size(4 << 20).on_upgrade(move |socket| {
 		async move {
 			let (viewing, replaced) = c.viewers.take(gmail);
-			let (code, reason) = match c.runner.devtools(gmail).await {
+			let watch = Watch {
+				sign_in: s.sign_in,
+				cookie,
+				key,
+				caller,
+				bus,
+				replaced,
+				recheck: tokio::time::interval_at(tokio::time::Instant::now() + RECHECK, RECHECK),
+			};
+			let (code, reason) = match c.runner.socket(gmail, if phone { "view" } else { "cdp" }).await {
+				Ok(Some(runner)) if phone => pass(socket, runner, watch).await,
 				Ok(Some(devtools)) =>
 					View {
 						socket,
 						devtools,
-						sign_in: s.sign_in,
-						cookie,
-						key,
-						caller,
-						bus,
+						watch,
 						next: 0,
 						pending: HashMap::new(),
 						tabs: Vec::new(),
 						active: None,
 						last: None,
 					}
-					.run(replaced)
+					.run()
 					.await,
 				Ok(None) => close(socket, CLOSE_NOT_RUNNING, "not running: start it").await,
 				Err(e) => {
@@ -605,15 +548,76 @@ enum Asked {
 	History(i32),
 }
 
-/// One viewer of one browser: the devtools' events into frames, the viewer's into input.
-struct View {
-	socket: WebSocket,
-	devtools: Devtools,
+/// What closes a viewer but its sockets: its session ended, another viewer, the server stopping.
+struct Watch {
 	sign_in: SignIn,
 	cookie: HeaderMap,
 	key: SessionKey,
 	caller: Caller,
 	bus: tokio::sync::broadcast::Receiver<sa_panel::live::Signal>,
+	replaced: oneshot::Receiver<()>,
+	recheck: tokio::time::Interval,
+}
+
+impl Watch {
+	/// Why the viewer is to close, once it is.
+	async fn ended(&mut self) -> (u16, &'static str) {
+		//LOOP: until one of them says close
+		loop {
+			tokio::select! {
+				_ = &mut self.replaced => return (CLOSE_REPLACED, "another viewer took over"),
+				signal = self.bus.recv() => match signal {
+					Ok(Signal::SessionsEnded(Ended::User(u))) if u == self.caller.user_id => return (live::CLOSE_SESSION_ENDED, "session ended"),
+					Ok(Signal::SessionsEnded(Ended::Session(k))) if k == self.key => return (live::CLOSE_SESSION_ENDED, "session ended"),
+					Ok(Signal::GoingAway) | Err(RecvError::Closed) => return (live::CLOSE_GOING_AWAY, "server stopping"),
+					Ok(_) | Err(RecvError::Lagged(_)) => {}
+				},
+				_ = self.recheck.tick() => if let Err(Denied::Unauthenticated) = signin::check(&self.sign_in, &self.cookie, Freshness::Cached).await {
+					return (live::CLOSE_SESSION_ENDED, "session ended");
+				},
+			}
+		}
+	}
+}
+
+/// A cloud phone's viewer, the runner's: each of the viewer's frames checked, then passed on.
+async fn pass(mut socket: WebSocket, mut runner: Devtools, mut watch: Watch) -> (u16, &'static str) {
+	//LOOP: until either socket ends or the viewer is to go
+	let (code, reason) = loop {
+		tokio::select! {
+			m = socket.recv() => match m {
+				Some(Ok(Message::Text(t))) => {
+					if serde_json::from_str::<ViewerIn>(&t).is_err() {
+						break (1007, "not a frame of the viewer's");
+					}
+					if runner.send(tungstenite::Message::text(t.as_str())).await.is_err() {
+						break (CLOSE_STOPPED, "the phone stopped");
+					}
+				}
+				Some(Ok(Message::Ping(_) | Message::Pong(_))) => {}
+				Some(Ok(Message::Binary(_))) => break (1003, "text frames only"),
+				Some(Ok(Message::Close(_)) | Err(_)) | None => break (1000, "viewer left"),
+			},
+			m = runner.next() => match m {
+				Some(Ok(tungstenite::Message::Text(t))) => match tokio::time::timeout(SEND_WITHIN, socket.send(Message::Text(t.as_str().into()))).await {
+					Ok(Ok(())) => {}
+					_ => break (1000, "the viewer did not keep up"),
+				},
+				Some(Ok(tungstenite::Message::Close(_)) | Err(_)) | None => break (CLOSE_STOPPED, "the phone stopped"),
+				Some(Ok(_)) => {}
+			},
+			end = watch.ended() => break end,
+		}
+	};
+	let _closed = runner.close(None).await; // the runner counts its viewers by their sockets
+	close(socket, code, reason).await
+}
+
+/// One viewer of one browser: the devtools' events into frames, the viewer's into input.
+struct View {
+	socket: WebSocket,
+	devtools: Devtools,
+	watch: Watch,
 	next: u64,
 	pending: HashMap<u64, Asked>,
 	/// Pages, in the order they opened.
@@ -625,7 +629,7 @@ struct View {
 }
 
 impl View {
-	async fn run(mut self, mut replaced: oneshot::Receiver<()>) -> (u16, &'static str) {
+	async fn run(mut self) -> (u16, &'static str) {
 		if self
 			.cdp(None, "Target.setDiscoverTargets", json!({ "discover": true }), Asked::Done("discovering the tabs"))
 			.await
@@ -633,7 +637,6 @@ impl View {
 		{
 			return close(self.socket, CLOSE_STOPPED, "its devtools went").await;
 		}
-		let mut recheck = tokio::time::interval_at(tokio::time::Instant::now() + RECHECK, RECHECK);
 		//LOOP: until either socket ends or the viewer is to go
 		loop {
 			let step: Result<(), (u16, &'static str)> = tokio::select! {
@@ -648,17 +651,7 @@ impl View {
 					Some(Ok(tungstenite::Message::Close(_)) | Err(_)) | None => Err((CLOSE_STOPPED, "the browser stopped")),
 					Some(Ok(_)) => Ok(()),
 				},
-				_ = &mut replaced => Err((CLOSE_REPLACED, "another viewer took over")),
-				signal = self.bus.recv() => match signal {
-					Ok(Signal::SessionsEnded(Ended::User(u))) if u == self.caller.user_id => Err((live::CLOSE_SESSION_ENDED, "session ended")),
-					Ok(Signal::SessionsEnded(Ended::Session(k))) if k == self.key => Err((live::CLOSE_SESSION_ENDED, "session ended")),
-					Ok(Signal::GoingAway) | Err(RecvError::Closed) => Err((live::CLOSE_GOING_AWAY, "server stopping")),
-					Ok(_) | Err(RecvError::Lagged(_)) => Ok(()),
-				},
-				_ = recheck.tick() => match signin::check(&self.sign_in, &self.cookie, Freshness::Cached).await {
-					Err(Denied::Unauthenticated) => Err((live::CLOSE_SESSION_ENDED, "session ended")),
-					_ => Ok(()),
-				},
+				end = self.watch.ended() => Err(end),
 			};
 			if let Err((code, reason)) = step {
 				let _closed = self.devtools.close(None).await; // the runner counts its clients by their sockets
@@ -839,6 +832,8 @@ impl View {
 		let p = &v["params"];
 		let from_active = v["sessionId"].as_str().is_some_and(|s| self.active.as_ref().is_some_and(|(_, a)| a == s));
 		match method {
+			// Mimic docks its own devtools in the window: not a tab, and closing it stops the page's frames
+			"Target.targetCreated" | "Target.targetInfoChanged" if p["targetInfo"]["url"].as_str().is_some_and(|u| u.starts_with("devtools://")) => Ok(()),
 			"Target.targetCreated" | "Target.targetInfoChanged" if p["targetInfo"]["type"] == "page" => {
 				let info = &p["targetInfo"];
 				let tab = TabDto {
@@ -933,11 +928,4 @@ fn key_of(key: &str, ctrl: bool) -> Option<KeyEvents> {
 		down,
 		up: json!({ "type": "keyUp", "key": key, "code": code, "windowsVirtualKeyCode": vk }),
 	})
-}
-
-/// A typed address as a phone's address bar takes it: http(s) only, `https://` when it names none.
-fn web_url(typed: &str) -> Option<String> {
-	let typed = typed.trim();
-	let url = url::Url::parse(typed).or_else(|_| url::Url::parse(&format!("https://{typed}"))).ok()?;
-	matches!(url.scheme(), "http" | "https").then(|| url.to_string())
 }

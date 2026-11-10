@@ -3,7 +3,11 @@
 /**
  * A gmail's browser, as its owner sees it: never the proxy's credentials.
  */
-export type Browser = { provider: Provider, device: Device, 
+export type Browser = { provider: Provider, 
+/**
+ * A `Device`; a cloud phone's, its model.
+ */
+device: string, 
 /**
  * The proxy's host:port.
  */
@@ -13,20 +17,21 @@ endpoint: string, exit: Exit, set_at: string,
  */
 checked: Checked, 
 /**
- * What it runs for now: `gmb` null, the gmail alone; null, it does not run.
+ * What it runs for now: `gmb` null, the gmail alone; `stream` a cloud phone's own view at
+ * Multilogin; null, it does not run.
  */
-running: { gmb: number | null } | null, 
+running: { gmb: number | null, stream: string | null } | null, 
 /**
- * Its next launch plays the film uploaded as its back camera.
+ * Its next launch plays the film uploaded as its back camera; a phone's is in Multilogin's
+ * Library.
  */
 film: boolean, };
 /**
- * A frame of the viewer's socket, to the conductor; at most 4 KiB. Points are CSS px of the
- * page the last frame showed.
+ * A frame from the viewer; at most 4 KiB. Points are in the last frame's space.
  */
 export type BrowserIn = { "type": "touch", phase: TouchPhase, x: number, y: number, } | { "type": "wheel", x: number, y: number, dx: number, dy: number, } | { "type": "key", key: string, ctrl: boolean, } | { "type": "text", text: string, } | { "type": "navigate", url: string, } | { "type": "history", delta: number, } | { "type": "activate", id: string, } | { "type": "new_tab" } | { "type": "close_tab", id: string, } | { "type": "dialog", accept: boolean, text: string | null, };
 /**
- * A frame of the viewer's socket, from the conductor.
+ * A frame to the viewer.
  */
 export type BrowserOut = { "type": "frame", data: string, width: number, height: number, } | { "type": "tabs", tabs: Array<Tab>, active: string | null, } | { "type": "dialog", kind: string, message: string, default: string | null, } | { "type": "dialog_closed" } | { "type": "error", message: string, };
 /**
@@ -192,7 +197,11 @@ name: string | null, address: string | null, };
  * Tokens a Places request on the shared keys costs; `null`, not sold yet.
  */
 export type Prices = { details: number | null, search: number | null, };
-export type SetBrowser = { provider: Provider, device: Device, 
+export type SetBrowser = { provider: Provider, 
+/**
+ * A browser's; a cloud phone's model is drawn.
+ */
+device: Device | null, 
 /**
  * `socks5://` or `http://`, `user:pass@host:port`.
  */
@@ -232,5 +241,5 @@ export type Trades = { trades: Array<Trade>, };
 export const DEVICES = ["pixel_7", "galaxy_s23", "redmi_note_14"] as const;
 export type Device = (typeof DEVICES)[number];
 
-export const PROVIDERS = ["gologin"] as const;
+export const PROVIDERS = ["multilogin", "multilogin_browser", "gologin"] as const;
 export type Provider = (typeof PROVIDERS)[number];
