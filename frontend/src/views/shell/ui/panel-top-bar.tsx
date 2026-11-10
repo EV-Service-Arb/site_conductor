@@ -43,7 +43,7 @@ import { safeLocalPath } from "@/shared/api";
 import { ROUTES } from "@/shared/config/routes";
 import { LOCALES, type Locale, chooseLocale, useLocale, useT } from "@/shared/i18n";
 
-import { toggleSidebar, useSidebar } from "../model/sidebar";
+import { toggleSidebar, useSidebarFolded } from "../model/sidebar";
 import { Outline } from "./outline";
 
 /**
@@ -100,7 +100,7 @@ export function PanelTopBar() {
                 </Link>
               ))}
               <div className="border-t border-border pt-2">
-                <Outline onNavigate={() => setOpen(false)} />
+                <Outline folded={false} onNavigate={() => setOpen(false)} className="h-auto w-auto border-r-0 bg-transparent p-0" />
               </div>
               <OwnScreens className="flex-col items-stretch border-t border-border pt-2" onNavigate={() => setOpen(false)} />
             </SheetContent>
@@ -137,13 +137,13 @@ export function PanelTopBar() {
   );
 }
 
-/** The outline beside the page, shown or hidden; a phone has it in the Sheet instead. */
+/** The outline beside the page, whole or folded to its icons; a phone has it in the Sheet instead. */
 function SidebarToggle() {
   const t = useT();
-  const shown = useSidebar();
+  const folded = useSidebarFolded();
   const keys = useSequences().get("sidebar");
   useBinding({ on: { key: "s" }, run: { id: "sidebar", label: t("keys.sidebar"), run: toggleSidebar } });
-  const Icon = shown ? PanelLeftClose : PanelLeftOpen;
+  const Icon = folded ? PanelLeftOpen : PanelLeftClose;
   return (
     <Button
       type="button"
@@ -152,7 +152,7 @@ function SidebarToggle() {
       icon
       className="hidden md:inline-flex"
       onClick={toggleSidebar}
-      aria-pressed={shown}
+      aria-pressed={folded}
       aria-label={t("keys.sidebar")}
       title={keys === undefined ? t("keys.sidebar") : `${t("keys.sidebar")} · ${keys}`}
     >

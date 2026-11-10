@@ -1,8 +1,10 @@
 "use client";
 
-import { cn } from "@evinvest/uikit";
+import { type NavSection, ShellNav, cn } from "@evinvest/uikit";
+import { Globe, MapPin, Settings, Store } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { CSSProperties } from "react";
 
 import { seesSites, useMe } from "@/entities/session";
 import { SitesElement } from "@/features/sites-element";
@@ -11,48 +13,57 @@ import { useT } from "@/shared/i18n";
 
 import { GmbTree } from "./gmb-tree";
 
-const ITEM = "rounded-md px-2 py-1.5 text-sm text-ink-soft hover:bg-hover/50 hover:text-ink";
+const WIDTH = { "--shell-rail-w": "18rem" } as CSSProperties;
 
 /**
  * The left of every page: the open app's own views, then the caller's GMBs. `mfe-sites-nav` stays
  * mounted, only hidden, off the sites (CONTRACT §9): it keeps the tab title's count on every page.
  */
-export function Outline({ onNavigate }: { onNavigate?: () => void }) {
+export function Outline({ folded, onNavigate, className }: { folded: boolean; onNavigate?: () => void; className?: string }) {
   const t = useT();
   const me = useMe();
   const pathname = usePathname();
   const app = pathname.startsWith("/sites") ? "sites" : pathname.startsWith("/review_archive") ? "archive" : null;
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      {seesSites(me) && (
-        // A click on one of its links has routed (CONTRACT §9).
-        <section hidden={app !== "sites"} aria-label={t("nav.sites")} onClick={() => onNavigate?.()}>
-          <SitesElement tag="mfe-sites-nav" />
-        </section>
-      )}
-      {app === "archive" && <ArchiveViews pathname={pathname} {...(onNavigate && { onNavigate })} />}
-      <GmbTree {...(onNavigate && { onNavigate })} />
-    </div>
-  );
-}
-
-/** The review archive's views beside its places: full navigations, its element routes them. */
-function ArchiveViews({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
-  const t = useT();
-  const views = [
-    { href: ROUTES.reviewArchive, label: t("reviewArchive.places") },
-    { href: ROUTES.reviewArchiveSettings, label: t("reviewArchive.settings") },
+  const sections: NavSection[] = [
+    ...(seesSites(me)
+      ? [
+          {
+            id: "sites",
+            label: t("nav.sites"),
+            icon: Globe,
+            hidden: app !== "sites",
+            // A click on one of its links has routed (CONTRACT §9).
+            content: (
+              <div onClick={() => onNavigate?.()}>
+                <SitesElement tag="mfe-sites-nav" />
+              </div>
+            ),
+          },
+        ]
+      : []),
+    ...(app === "archive"
+      ? [
+          {
+            id: "archive",
+            items: [
+              { id: "places", href: ROUTES.reviewArchive, label: t("reviewArchive.places"), icon: MapPin },
+              { id: "settings", href: ROUTES.reviewArchiveSettings, label: t("reviewArchive.settings"), icon: Settings },
+            ],
+          },
+        ]
+      : []),
+    { id: "gbps", label: t("nav.gbps"), icon: Store, content: <GmbTree {...(onNavigate && { onNavigate })} /> },
   ];
   return (
-    <section aria-label={t("nav.reviewArchive")} className="flex flex-col gap-0.5">
-      {views.map((v) => {
-        const here = pathname.replace(/\/$/, "") === v.href.replace(/\/$/, "");
-        return (
-          <Link key={v.href} href={v.href} onClick={() => onNavigate?.()} aria-current={here ? "page" : undefined} className={cn(ITEM, here && "bg-hover/50 text-ink")}>
-            {v.label}
-          </Link>
-        );
-      })}
-    </section>
+    <ShellNav
+      groups={sections}
+      pathname={pathname}
+      linkComponent={Link}
+      folded={folded}
+      labels={{ primary: t("nav.outline") }}
+      {...(onNavigate && { onNavigate: () => onNavigate() })}
+      style={WIDTH}
+      className={cn("gap-4 px-2 pt-2 pb-2", className)}
+    />
   );
 }

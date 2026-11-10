@@ -1,6 +1,6 @@
 "use client";
 
-import { KeymapProvider, cn } from "@evinvest/uikit";
+import { KeymapProvider } from "@evinvest/uikit";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
@@ -15,7 +15,7 @@ import { useT } from "@/shared/i18n";
 import { ROUTES } from "@/shared/config/routes";
 import { useLiveSocket } from "@/shared/lib/live";
 
-import { useSidebar } from "../model/sidebar";
+import { useSidebarFolded } from "../model/sidebar";
 import { followTitleCount } from "../model/title-count";
 import { NavKeys } from "./nav-keys";
 import { Outline } from "./outline";
@@ -33,7 +33,7 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
   const t = useT();
   const me = useMe();
   const pathname = usePathname();
-  const sidebar = useSidebar();
+  const folded = useSidebarFolded();
   const live = useLiveSocket({ onUnauthenticated: goToSignIn, onForbidden });
   const leads = t("title.leads");
   useEffect(() => followTitleCount(window, document, leads), [leads]);
@@ -49,10 +49,8 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
         <div className="flex h-svh flex-col">
           <PanelTopBar />
           <div className="relative flex min-h-0 flex-1">
-            {/* `hidden`, not unmounted, on a phone or hidden: the outline keeps `mfe-sites-nav` mounted */}
-            <aside className={cn("hidden w-72 shrink-0 flex-col border-r border-border p-2", sidebar && "md:flex")}>
-              <Outline />
-            </aside>
+            {/* `hidden`, not unmounted, on a phone: the outline keeps `mfe-sites-nav` mounted */}
+            <Outline folded={folded} className="hidden shrink-0 md:flex" />
             <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
             {PANEL.assistant && !`${pathname}/`.startsWith(ROUTES.assistant) && <Assistant />}
           </div>

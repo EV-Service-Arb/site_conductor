@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 const KEY = "sa:sidebar";
 const EVENT = "sa:sidebar-chosen";
 
-const shown = () => localStorage.getItem(KEY) !== "hidden";
+const folded = () => localStorage.getItem(KEY) === "folded";
 
 const subscribe = (onChange: () => void) => {
   for (const e of ["storage", EVENT]) window.addEventListener(e, onChange);
@@ -14,13 +14,13 @@ const subscribe = (onChange: () => void) => {
   };
 };
 
-/** Whether the outline sits beside the page on a wide screen; shown unless hidden, kept in this browser. */
-export function useSidebar(): boolean {
-  return useSyncExternalStore(subscribe, shown, () => true);
+/** Whether the outline is folded to its icons on a wide screen; kept in this browser. */
+export function useSidebarFolded(): boolean {
+  return useSyncExternalStore(subscribe, folded, () => false);
 }
 
 export function toggleSidebar(): void {
-  if (shown()) localStorage.setItem(KEY, "hidden");
-  else localStorage.removeItem(KEY);
+  if (folded()) localStorage.removeItem(KEY);
+  else localStorage.setItem(KEY, "folded");
   window.dispatchEvent(new Event(EVENT));
 }
