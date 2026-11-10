@@ -75,6 +75,10 @@ pub struct NewBrowser {
 	pub proxy: Zeroizing<String>,
 }
 
+/// What a run is for, as the runner keys it: a GBP's point, or the gmail alone.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Run(pub Option<i64>);
+
 static ZONES: LazyLock<tzf_rs::DefaultFinder> = LazyLock::new(tzf_rs::DefaultFinder::new);
 
 impl Panel {
@@ -312,10 +316,6 @@ async fn in_countries(conn: &mut sqlx::SqliteConnection, gmail_id: i64, exit: &E
 		false => Err(format!("the proxy comes out in {}, and the gmail's GBPs are in {}", exit.country, elsewhere.join(", "))),
 	})
 }
-
-/// What a run is for, as the runner keys it: a GBP's point, or the gmail alone.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Run(pub Option<i64>);
 
 impl std::fmt::Display for Run {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

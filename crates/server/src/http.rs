@@ -150,12 +150,14 @@ pub fn app(
 		map,
 		browsers: browsers.clone(),
 	};
-	let film = Router::new()
-		.route(browser::FILM, put(browser::set_film))
+	// A launch waits on GoLogin and on the browser's devtools, a film's upload on its bytes: longer
+	// than an API request may.
+	let slow = Router::new()
+		.route(browser::FILM, put(browser::set_film).layer(DefaultBodyLimit::max(browser::FILM_MAX)))
+		.route(browser::START, post(browser::start))
 		.route_layer(gate(Freshness::Cached, None))
-		.with_state(state.clone())
-		.layer(DefaultBodyLimit::max(browser::FILM_MAX));
-	let film = bounded(film, 4, Duration::from_secs(600));
+		.with_state(state.clone());
+	let slow = bounded(slow, 8, Duration::from_secs(600));
 	let api = bounded(routes.with_state(state), limits.api_concurrent, limits.api_timeout);
 	// Its own budget: the bound and the timeout cover the handshake only (the socket lives on
 	// after the 101), and a burst of reconnecting tabs must not shed the API's requests.
@@ -167,7 +169,7 @@ pub fn app(
 		.merge(auth)
 		.merge(live)
 		.merge(viewer)
-		.merge(film)
+		.merge(slow)
 		.merge(queries_cache::routes(sign_in.panel.clone(), &limits))
 		.nest("/api/v1", api);
 	let app = match forward {

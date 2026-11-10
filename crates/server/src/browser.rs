@@ -80,9 +80,9 @@ const RECHECK: Duration = Duration::from_secs(60);
 
 /// How long one frame may take to go out before the viewer is dropped.
 const SEND_WITHIN: Duration = Duration::from_secs(10);
-/// The film's upload: under the gate, outside the API's bounds — a film takes longer than a
-/// request may.
+/// Under the gate, outside the API's bounds (`http::app`).
 pub(crate) const FILM: &str = "/api/v1/gmails/{id}/browser/film";
+pub(crate) const START: &str = "/api/v1/gmails/{id}/browser/start";
 
 /// A film at most.
 pub(crate) const FILM_MAX: usize = 512 << 20;
@@ -349,7 +349,6 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::PUT, "/gmails/{id}/browser", None, Cached, set),
 		ApiRoute::new(M::POST, "/gmails/{id}/browser/test", None, Cached, test),
 		ApiRoute::new(M::DELETE, "/gmails/{id}/browser", None, Cached, remove),
-		ApiRoute::new(M::POST, "/gmails/{id}/browser/start", None, Cached, start),
 		ApiRoute::new(M::POST, "/gmails/{id}/browser/stop", None, Cached, stop),
 		ApiRoute::new(M::DELETE, "/gmails/{id}/browser/film", None, Cached, remove_film),
 	]
@@ -408,7 +407,12 @@ async fn remove(State(state): State<ApiState>, Extension(caller): Extension<Call
 	Ok(StatusCode::NO_CONTENT)
 }
 
-async fn start(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<StartBrowser>, JsonRejection>) -> ApiResult<StatusCode> {
+pub(crate) async fn start(
+	State(state): State<ApiState>,
+	Extension(caller): Extension<Caller>,
+	Path(raw): Path<String>,
+	b: Result<Json<StartBrowser>, JsonRejection>,
+) -> ApiResult<StatusCode> {
 	let gmail = id(&raw)?;
 	let c = connected(&state)?;
 	let launch = state.panel.launch(&c.browsers, caller.user_id, gmail, body(b)?.gmb, Timestamp::now()).await??;

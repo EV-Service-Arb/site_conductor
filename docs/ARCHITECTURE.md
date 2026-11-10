@@ -411,7 +411,8 @@ PUT    /gmails/{id}/browser                 {provider, device, proxy} → 200 as
 POST   /gmails/{id}/browser/test            200 as connections, the exit checked again
 DELETE /gmails/{id}/browser                 204: stopped, its GoLogin profile and session gone
 POST   /gmails/{id}/browser/{start,stop}    {gmb?} → 204 once up; 409 it runs for another
-PUT    /gmails/{id}/browser/film            an mp4 ≤ 512 MiB → 204; outside the bounds above (10 min)
+PUT    /gmails/{id}/browser/film            an mp4 ≤ 512 MiB → 204
+                                            (start and film: 8 at once, 10 min each, not the bounds above)
 DELETE /gmails/{id}/browser/film            204
 GET    /gmails/{id}/browser                 the viewer's WebSocket: outside the gate, as /live
 GET    /gmbs/resolve?place=&gmail=          {candidates: [{place_id, name, address}]} (sa_places;
