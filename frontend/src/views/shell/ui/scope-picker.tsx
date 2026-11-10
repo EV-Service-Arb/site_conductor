@@ -1,6 +1,6 @@
 "use client";
 
-import { Input, NativeSelect, NativeSelectOption, Popover, PopoverContent, PopoverTrigger, Switch, cn } from "@evinvest/uikit";
+import { Input, Popover, PopoverContent, PopoverTrigger, Switch, cn } from "@evinvest/uikit";
 import { Check, ChevronDown, ChevronRight, ListFilter, Maximize2, Plug, Plus } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { type MouseEvent, useEffect, useState } from "react";
@@ -8,9 +8,7 @@ import { type MouseEvent, useEffect, useState } from "react";
 import {
   COUNTRIES,
   type Country,
-  GMAIL_ROLES,
   type Gmail,
-  type GmailRole,
   type Gmails,
   type Gmb,
   type Pattern,
@@ -24,7 +22,6 @@ import {
   openAccount,
   openTrade as openTradeHere,
   removeGmail,
-  setGmailRole,
   under,
   useScope,
   useTrades,
@@ -172,10 +169,6 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
                 </div>
                 {unfolded && (
                   <ul className="ml-4 flex flex-col border-l border-border pl-1">
-                    <li className="flex items-center gap-2 px-2 py-1 text-xs text-ink-soft">
-                      <RoleSelect gmail={g} onChanged={onChanged} />
-                      {t("gmbs.gmail.role.hint")}
-                    </li>
                     {gmbs.length === 0 && <li className="px-2 py-1.5 text-xs text-ink-soft">{t("gmbs.gmail.empty")}</li>}
                     {gmbs.map((b) => {
                       const one = chosen !== null && isSelected(b.id);
@@ -410,32 +403,3 @@ function Room({ gmail, n }: { gmail: Gmail; n: number }) {
   const t = useT();
   return <span className="block truncate text-xs text-ink-soft tabular-nums">{[gmail.role && t(`gmbs.gmail.role.${gmail.role}`), t("account.gbps", { n })].filter(Boolean).join(" · ")}</span>;
 }
-
-function RoleSelect({ gmail, onChanged }: { gmail: Gmail; onChanged: () => void }) {
-  const t = useT();
-  const pick = async (role: GmailRole | null) => {
-    try {
-      await setGmailRole(gmail.id, role);
-      onChanged();
-    } catch (e) {
-      notifyFailure(e, t);
-    }
-  };
-  return (
-    <NativeSelect
-      size="sm"
-      wrapperClassName="w-28 shrink-0"
-      aria-label={t("gmbs.gmail.role", { gmail: gmail.gmail })}
-      value={gmail.role ?? ""}
-      onChange={(e) => void pick(e.target.value === "" ? null : (e.target.value as GmailRole))}
-    >
-      <NativeSelectOption value="">{t("gmbs.gmail.role.pick")}</NativeSelectOption>
-      {GMAIL_ROLES.map((r) => (
-        <NativeSelectOption key={r} value={r}>
-          {t(`gmbs.gmail.role.${r}`)}
-        </NativeSelectOption>
-      ))}
-    </NativeSelect>
-  );
-}
-

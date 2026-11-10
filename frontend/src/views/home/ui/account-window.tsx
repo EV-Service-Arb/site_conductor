@@ -1,9 +1,9 @@
 "use client";
 
-import { Button, Settled, Skeleton, cn } from "@evinvest/uikit";
+import { Button, NativeSelect, NativeSelectOption, Settled, Skeleton, cn } from "@evinvest/uikit";
 import { Mail, X } from "lucide-react";
 
-import { ACCOUNT_TABS, type AccountTab, type Gmail, fetchConnections, openAccount } from "@/entities/gmb";
+import { ACCOUNT_TABS, type AccountTab, GMAIL_ROLES, type Gmail, type GmailRole, fetchConnections, openAccount, setGmailRole, useGmails } from "@/entities/gmb";
 import { BrowserSession } from "@/features/browser-session";
 import { ImapCard } from "@/features/connect-imap";
 import { BrowserCard } from "@/features/set-browser";
@@ -11,6 +11,7 @@ import { MapsKeyCard } from "@/features/set-maps-key";
 import { useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { ErrorState } from "@/shared/ui/error-state";
+import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
 
 /** A managing gmail's own window over the map, shaped as a trade's: what it is connected to, and its browser. */
@@ -26,8 +27,9 @@ export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Account
             <Mail aria-hidden className="size-4 shrink-0 text-ink-soft" />
             <span className="truncate">{gmail.gmail}</span>
           </h2>
-          <p className="text-sm text-ink-soft tabular-nums">
-            {[gmail.role && t(`gmbs.gmail.role.${gmail.role}`), t("account.gbps", { n: gbps })].filter(Boolean).join(" · ")}
+          <p className="flex items-center gap-2 text-sm text-ink-soft tabular-nums">
+            {t("account.gbps", { n: gbps })}
+            <RoleSelect gmail={gmail} />
           </p>
         </div>
         <Button variant="ghost" size={button("sm")} icon aria-label={t("window.close")} title={t("window.close")} onClick={() => openAccount(null)}>
@@ -69,5 +71,35 @@ function Connections({ gmail }: { gmail: Gmail }) {
         </div>
       )}
     </Settled>
+  );
+}
+
+function RoleSelect({ gmail }: { gmail: Gmail }) {
+  const t = useT();
+  const { reload } = useGmails();
+  const pick = async (role: GmailRole | null) => {
+    try {
+      await setGmailRole(gmail.id, role);
+      reload();
+    } catch (e) {
+      notifyFailure(e, t);
+    }
+  };
+  return (
+    <NativeSelect
+      size="sm"
+      wrapperClassName="w-28 shrink-0"
+      aria-label={t("gmbs.gmail.role", { gmail: gmail.gmail })}
+      title={t("gmbs.gmail.role.hint")}
+      value={gmail.role ?? ""}
+      onChange={(e) => void pick(e.target.value === "" ? null : (e.target.value as GmailRole))}
+    >
+      <NativeSelectOption value="">{t("gmbs.gmail.role.pick")}</NativeSelectOption>
+      {GMAIL_ROLES.map((r) => (
+        <NativeSelectOption key={r} value={r}>
+          {t(`gmbs.gmail.role.${r}`)}
+        </NativeSelectOption>
+      ))}
+    </NativeSelect>
   );
 }
