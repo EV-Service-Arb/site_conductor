@@ -367,6 +367,7 @@ async fn eventually(what: &str, mut done: impl FnMut() -> bool) {
 	panic!("never: {what}");
 }
 
+// r[verify browsers.phone-stops]
 #[tokio::test]
 async fn a_phone_is_recorded_before_it_starts_driven_and_stopped_confirmed() {
 	let r = Runner::start(1).await;
@@ -421,6 +422,7 @@ async fn a_phone_is_recorded_before_it_starts_driven_and_stopped_confirmed() {
 	assert_eq!(r.running().await, Vec::<Value>::new());
 }
 
+// r[verify browsers.phone-stops]
 #[tokio::test]
 async fn a_phone_whose_exit_is_elsewhere_is_stopped() {
 	let r = Runner::start(1).await;
@@ -431,6 +433,7 @@ async fn a_phone_whose_exit_is_elsewhere_is_stopped() {
 	assert!(!r.records().contains("p1"), "{}", r.records());
 }
 
+// r[verify browsers.phone-stops]
 #[tokio::test]
 async fn sigterm_stops_every_phone_before_the_runner_exits() {
 	let mut r = Runner::start(2).await;
@@ -444,6 +447,7 @@ async fn sigterm_stops_every_phone_before_the_runner_exits() {
 	assert_eq!(serde_json::from_str::<Value>(&r.records()).unwrap(), json!([]));
 }
 
+// r[verify browsers.phone-stops]
 #[tokio::test]
 async fn a_phone_left_running_is_stopped_before_the_runner_serves() {
 	let r = Runner::with(1, &["p9"]).await;

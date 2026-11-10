@@ -8,7 +8,6 @@
 //! ```
 //! Ends: told to, the gmail removed, [`IDLE`] without a viewer, [`CAP`] since its start, the
 //! runner stopping. A stop is retried every [`RETRY`] until it is confirmed.
-//! `r[impl browsers.phone-stops]`
 
 use std::{path::Path, sync::Arc, time::Duration};
 
@@ -42,7 +41,7 @@ const EXPIRED: u64 = 3;
 pub(crate) struct MobileMinutes(());
 
 impl MobileMinutes {
-	/// `r[impl browsers.mobile-minutes]`: `serve`'s, never a test's.
+	// r[impl browsers.mobile-minutes]
 	pub(crate) fn of_serve() -> Self {
 		Self(())
 	}
@@ -64,6 +63,7 @@ struct Record {
 	token: String,
 }
 
+// r[impl browsers.phone-stops]
 pub(crate) async fn life(runner: &Runner, gmail: i64, run: Run, ends: &mut Ends<'_>) -> eyre::Result<()> {
 	let record = Record {
 		phone: run.phone.clone(),
@@ -185,6 +185,7 @@ async fn stop(runner: &Runner, r: &Record) {
 
 /// Every phone recorded and not stopped, stopped, before the runner serves; a record whose token
 /// is refused names the phone to stop by hand.
+// r[impl browsers.phone-stops]
 pub(crate) async fn reconcile(runner: &Runner) -> eyre::Result<()> {
 	for r in recorded(&runner.0.dir)? {
 		let status = runner.0.multilogin.status(&r.token, &r.phone).await.wrap_err_with(|| {
