@@ -47,7 +47,7 @@ function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Pr
         zoom: 2,
         disableDefaultUI: true,
         zoomControl: true,
-        // the bottom-right corner is the assistant's launcher
+        // the bottom-right corner is the floating assistant's
         zoomControlOptions: { position: ControlPosition.RIGHT_CENTER },
         clickableIcons: false,
       }),

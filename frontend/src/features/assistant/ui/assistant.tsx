@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@evinvest/uikit";
+import { Button, NavDot, cn } from "@evinvest/uikit";
 import { Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -15,7 +15,7 @@ import { copyLink } from "./chat-actions";
 import { ChatView } from "./chat-view";
 
 /**
- * The assistant beside every signed-in page but its own: a launcher in the bottom-right corner, opening to the sidebar
+ * The assistant beside every signed-in page but its own: the top bar's `AssistantToggle` opens it to the sidebar
  * (resizable; the whole content row on a phone) or the floating window. It knows the location the page is on, and any
  * other the asker names with `@`. Mounted inside the content row, which it positions against.
  */
@@ -29,20 +29,14 @@ export function Assistant() {
   useEffect(() => {
     if (shown !== null) show(shown);
   }, [shown, s.unread]);
-  // Folded by a press or a key, the launcher takes focus; not on a page loaded folded.
-  const [folded, setFolded] = useState(false);
-
-  const fold = () => {
-    setFolded(true);
-    show(null);
-  };
+  const fold = () => show(null);
   useKeymap({
     toggle: () => (shown !== null ? fold() : show(s.mode)),
     newChat: () => openChat(null, shown ?? s.mode),
     copyLink: shown !== null && s.current !== null ? () => copyLink(s.current!, t) : null,
   });
 
-  if (shown === null) return <Launcher focus={folded} />;
+  if (shown === null) return null;
   const view = <ChatView id={s.current} display={shown} onOpen={openChat} onHide={fold} />;
   if (!desktop)
     return (
@@ -67,25 +61,37 @@ export function Assistant() {
   );
 }
 
-/** Folded: a press opens the assistant; it spins while an answer is written, and is dotted once something happened unseen. */
-function Launcher({ focus }: { focus: boolean }) {
+/** The top bar's press that opens or folds the assistant; it spins while an answer is written, and is dotted once something happened unseen. */
+export function AssistantToggle() {
   const t = useT();
   const s = useAssistant();
+  const shown = useQuery("assistant");
   const running = s.running !== null && (s.running.answer.state === "working" || s.running.answer.state === "writing");
+  const button = useRef<HTMLButtonElement>(null);
+  // Folded from inside the assistant, focus lands here; not on a page loaded folded.
+  const was = useRef(shown);
+  useEffect(() => {
+    if (was.current !== null && shown === null) button.current?.focus();
+    was.current = shown;
+  }, [shown]);
   useNoticeShared();
   return (
-    <button
-      autoFocus={focus}
+    <Button
+      ref={button}
       type="button"
-      onClick={() => show(s.mode)}
-      aria-label={t("assistant.open")}
-      title={`${t("assistant.open")} · Ctrl+J`}
-      className="absolute right-4 bottom-4 z-30 flex size-10 items-center justify-center rounded-full border border-border bg-secondary text-ink outline-none transition-[translate,background-color] hover:-translate-y-0.5 hover:bg-popover focus-visible:ring-2 focus-visible:ring-ring"
+      variant="ghost"
+      size="sm"
+      icon
+      className="relative"
+      onClick={() => show(shown !== null ? null : s.mode)}
+      aria-pressed={shown !== null}
+      aria-label={t("keys.assistant")}
+      title={t("keys.assistant")}
     >
-      <Sparkles aria-hidden className={cn("size-5", running && "animate-pulse")} />
+      <Sparkles aria-hidden className={cn(running && "animate-pulse")} />
       {running && <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary [animation-duration:1.4s]" />}
-      {s.unread && !running && <span aria-label={t("assistant.unread")} className="absolute top-0 right-0 size-3 rounded-full border-2 border-card bg-primary" />}
-    </button>
+      {s.unread && !running && <NavDot corner label={t("assistant.unread")} />}
+    </Button>
   );
 }
 

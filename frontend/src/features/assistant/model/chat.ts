@@ -26,7 +26,7 @@ export interface Running {
 interface Prefs {
   width: number;
   approval: Approval;
-  /** The last shown, which the launcher opens; the one open is `?assistant=`. */
+  /** The last shown, which the toggle opens; the one open is `?assistant=`. */
   mode: Mode;
   /** The chat in the sidebar or the floating window; `null` for a new one. */
   current: string | null;
@@ -73,7 +73,7 @@ export function useAssistant(): State {
 
 export const newId = () => crypto.randomUUID();
 
-/** The sidebar or the floating window, else (`null`) its launcher. */
+/** The sidebar or the floating window, else (`null`) folded. */
 export function show(mode: Mode | null): void {
   setQuery({ assistant: mode });
   if (mode !== null) set((s) => ({ ...s, mode, unread: false }));
@@ -93,7 +93,7 @@ export function openChat(id: string | null, mode?: Mode): void {
   if (mode) show(mode);
 }
 
-/** Something happened in a chat: told on the launcher, and seen at once while the assistant is open. */
+/** Something happened in a chat: told on the toggle, and seen at once while the assistant is open. */
 export function notice(): void {
   set((s) => ({ ...s, unread: true }));
 }

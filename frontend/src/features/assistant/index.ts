@@ -1,2 +1,2 @@
-export { Assistant } from "./ui/assistant";
+export { Assistant, AssistantToggle } from "./ui/assistant";
 export { AssistantPage } from "./ui/assistant-page";

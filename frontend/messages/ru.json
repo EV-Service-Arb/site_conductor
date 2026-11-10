@@ -283,7 +283,6 @@
   "home.peek.leadsOverdue": "заявок за 7 дней: {n} (просрочено {overdue})",
   "home.peek.fine": "Ничего не требует внимания",
   "assistant": "Ассистент",
-  "assistant.open": "Спросить ассистента",
   "assistant.unread": "Новый ответ",
   "assistant.resize": "Изменить ширину ассистента",
   "assistant.jump": "К последнему",

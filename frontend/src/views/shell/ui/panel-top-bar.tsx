@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   NavDot,
   NavigationMenu,
@@ -23,7 +24,7 @@ import {
   navigationMenuTriggerStyle,
 } from "@evinvest/uikit";
 import { CONCIERGE_ORIGIN } from "@evinvest/concierge";
-import { Bell, Check, ChevronDown, Globe, Menu, Wallet } from "lucide-react";
+import { ArrowUpRight, Bell, Check, ChevronDown, Globe, Menu, Wallet } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -32,6 +33,7 @@ import { unreached, useAlerts } from "@/entities/alerts";
 import { DevSignInBadge, ownScreens, seesSites, useMe } from "@/entities/session";
 import { useTokens } from "@/entities/tokens";
 import { AccountChip } from "@/features/account-chip";
+import { AssistantToggle } from "@/features/assistant";
 import { useSignOut } from "@/features/sign-out";
 
 import { PANEL } from "@config";
@@ -43,7 +45,7 @@ import { LOCALES, type Locale, chooseLocale, useLocale, useT } from "@/shared/i1
 import { Outline } from "./outline";
 
 /**
- * `[Service-Arb⌄] [Sites] [Review Archive] … [tokens] [wallet] [bell] [language] [chip] [≡ Sources, Usage]`; on a phone
+ * `[Service-Arb⌄] [Sites] [Review Archive] … [tokens] [wallet] [assistant] [bell] [language] [chip] [≡ Sources, Usage]`; on a phone
  * the screens go into a Sheet, with the outline. The end slot is right-anchored, so the tokens appearing or changing width
  * grow leftwards and never move the icons.
  */
@@ -76,7 +78,7 @@ export function PanelTopBar() {
 
   return (
     <TopBar
-      className="px-4 md:px-8"
+      className="px-2"
       start={
         <>
           <Sheet open={open} onOpenChange={setOpen}>
@@ -121,6 +123,7 @@ export function PanelTopBar() {
       end={
         <div className="flex items-center gap-1">
           <OwnScreens bar className="hidden md:flex" />
+          {PANEL.assistant && !`${pathname}/`.startsWith(ROUTES.assistant) && <AssistantToggle />}
           <AlertsLink />
           <LanguageMenu />
           <AccountChip me={me} onSignOut={signOut} className="ml-1" />
@@ -131,7 +134,15 @@ export function PanelTopBar() {
   );
 }
 
-/** Service-Arb and evinvest.ltd. */
+const SITES = [
+  { name: "EV Investment", href: CONCIERGE_ORIGIN },
+  { name: "EV Estate", href: "https://estate.evinvest.ltd" },
+];
+const ELSEWHERE = [
+  { name: "GitHub", href: "https://github.com/EV-Service-Arb" },
+];
+
+/** Service-Arb and its sibling sites, then where the team is elsewhere. */
 function AppSwitcher() {
   const t = useT();
   return (
@@ -147,12 +158,24 @@ function AppSwitcher() {
             {t("app.name")}
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <a href={CONCIERGE_ORIGIN}>
-            <span aria-hidden className="size-4" />
-            evinvest.ltd
-          </a>
-        </DropdownMenuItem>
+        {SITES.map((s) => (
+          <DropdownMenuItem key={s.href} asChild>
+            <a href={s.href}>
+              <span aria-hidden className="size-4" />
+              {s.name}
+            </a>
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        {ELSEWHERE.map((s) => (
+          <DropdownMenuItem key={s.href} asChild>
+            <a href={s.href} target="_blank" rel="noreferrer">
+              <span aria-hidden className="size-4" />
+              {s.name}
+              <ArrowUpRight aria-hidden className="ml-auto size-4 text-ink-soft" />
+            </a>
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -283,7 +283,6 @@
   "home.peek.leadsOverdue": "{n} leads in 7 days ({overdue} overdue)",
   "home.peek.fine": "Nothing needs you",
   "assistant": "Assistant",
-  "assistant.open": "Ask the assistant",
   "assistant.unread": "New answer",
   "assistant.resize": "Resize the assistant",
   "assistant.jump": "Jump to latest",
