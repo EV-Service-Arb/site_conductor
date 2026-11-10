@@ -122,8 +122,8 @@ async fn started(runner: &Runner, gmail: i64, run: &Run, ends: &mut Ends<'_>) ->
 	Ok(())
 }
 
-/// The GBP's point on every location provider, the zone, ADBKeyBoard; then the exit, read from
-/// inside, in the GBP's country.
+/// The GBP's point on every location provider, the zone, ADBKeyBoard the IME; then the exit, read
+/// from inside, in the GBP's country.
 async fn placed(runner: &Runner, phone: &adb::Phone, run: &Run) -> eyre::Result<()> {
 	if let Some((lat, lng)) = run.geo {
 		phone.sh(&["appops", "set", "com.android.shell", "android:mock_location", "allow"]).await?;
@@ -142,6 +142,10 @@ async fn placed(runner: &Runner, phone: &adb::Phone, run: &Run) -> eyre::Result<
 	if phone.sh(&["pm", "list", "packages", "com.android.adbkeyboard"]).await?.is_empty() {
 		phone.install(&runner.0.adb_keyboard).await?;
 	}
+	// set before a field is focused: switched under a focused one, its view never shows to hear the text
+	phone.sh(&["ime", "enable", adb::ADB_KEYBOARD]).await?;
+	phone.sh(&["ime", "set", adb::ADB_KEYBOARD]).await?;
+	phone.sh(&["settings", "put", "secure", "show_ime_with_hard_keyboard", "1"]).await?;
 	phone.push(&runner.0.busybox, BUSYBOX_AT).await?;
 	phone.sh(&["chmod", "755", BUSYBOX_AT]).await?;
 	let seen = phone.sh(&[BUSYBOX_AT, "wget", "-qO-", "http://ip-api.com/json/?fields=countryCode,query,mobile"]).await?;

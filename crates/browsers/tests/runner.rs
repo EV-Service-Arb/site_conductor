@@ -272,7 +272,6 @@ case "$*" in
   *persist.sys.timezone*) echo Europe/Paris ;;
   *wget*) echo "{{\"countryCode\":\"$(cat {d}/country 2>/dev/null || echo FR)\",\"query\":\"92.184.1.1\",\"mobile\":true}}" ;;
   *"'pm' 'list'"*) echo package:com.android.adbkeyboard ;;
-  *default_input_method*) echo com.google.android.inputmethod.latin/.LatinIME ;;
 esac"#
 		),
 	)
@@ -378,6 +377,7 @@ async fn a_phone_is_recorded_before_it_starts_driven_and_stopped_confirmed() {
 	for placed in [
 		"'set-test-provider-location' 'gps' '--location' '45.764,4.8357'",
 		"'cmd' 'alarm' 'set-timezone' 'Europe/Paris'",
+		"'ime' 'set' 'com.android.adbkeyboard/.AdbIME'",
 		"'wget'",
 	] {
 		assert!(log.contains(placed), "{placed} in {log}");
@@ -404,7 +404,6 @@ async fn a_phone_is_recorded_before_it_starts_driven_and_stopped_confirmed() {
 		"'input' 'tap' '100' '200'".to_owned(),
 		"'input' 'swipe' '500' '1800' '500' '600'".to_owned(),
 		format!("'ADB_INPUT_B64' '--es' 'msg' '{b64}'"),
-		"'ime' 'set' 'com.google.android.inputmethod.latin/.LatinIME'".to_owned(),
 		"'-d' 'https://business.google.com/'".to_owned(),
 		"'input' 'keyevent' '4'".to_owned(),
 	] {

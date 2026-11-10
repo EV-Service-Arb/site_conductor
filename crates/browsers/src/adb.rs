@@ -1,6 +1,7 @@
 //! A cloud phone over adb, and its viewer: the screen polled (`screencap`, made a JPEG by ffmpeg),
 //! the viewer's fingers and keys as `input`, text through ADBKeyBoard (`input text` types ASCII
-//! only), Android's own UI in the frames: no tabs, no dialogs.
+//! only; the keyboard is the phone's IME for the run, its input view shown by a field's focus is
+//! what hears the broadcast), Android's own UI in the frames: no tabs, no dialogs.
 //!
 //! Its adbd answers `shell` only after `glogin <pwd>` on that connection; a login is renewed
 //! before it is [`LOGIN_FOR`] old.
@@ -25,7 +26,7 @@ const COMMAND_WITHIN: Duration = Duration::from_secs(30);
 const FRAME_EVERY: Duration = Duration::from_millis(300);
 /// A finger that moved less is a tap.
 const TAP_SLOP: f64 = 10.0;
-const ADB_KEYBOARD: &str = "com.android.adbkeyboard/.AdbIME";
+pub(crate) const ADB_KEYBOARD: &str = "com.android.adbkeyboard/.AdbIME";
 
 /// Where a finger went down, where it is, and since when.
 type Finger = ((f64, f64), (f64, f64), Instant);
@@ -140,18 +141,10 @@ impl Phone {
 		Ok(base64::engine::general_purpose::STANDARD.encode(jpeg.stdout))
 	}
 
-	/// Text past ASCII as the keyboard's broadcast, the IME it was put back after.
+	/// Into the focused field, past ASCII too.
 	async fn text(&self, text: &str) -> eyre::Result<()> {
-		let before = self.sh(&["settings", "get", "secure", "default_input_method"]).await?;
-		self.sh(&["ime", "enable", ADB_KEYBOARD]).await?;
-		self.sh(&["ime", "set", ADB_KEYBOARD]).await?;
 		let b64 = base64::engine::general_purpose::STANDARD.encode(text);
-		let sent = self.sh(&["am", "broadcast", "-a", "ADB_INPUT_B64", "--es", "msg", &b64]).await;
-		let back = match before.as_str() {
-			"" | "null" => Ok(String::new()),
-			ime => self.sh(&["ime", "set", ime]).await,
-		};
-		sent.and(back).map(drop)
+		self.sh(&["am", "broadcast", "-a", "ADB_INPUT_B64", "--es", "msg", &b64]).await.map(drop)
 	}
 }
 
