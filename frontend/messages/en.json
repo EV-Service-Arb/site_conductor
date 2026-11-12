@@ -753,5 +753,6 @@
   "trash.never": "Never delete for good",
   "trash.never.on": "Nothing here is deleted for good.",
   "trash.for.days": ", restorable for {days} days",
-  "trash.for.ever": ", kept until you restore it"
+  "trash.for.ever": ", kept until you restore it",
+  "trash.removed.today": "removed today"
 }

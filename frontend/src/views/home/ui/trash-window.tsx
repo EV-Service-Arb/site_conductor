@@ -28,7 +28,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
   const [busy, setBusy] = useState(false);
   const now = new Date().toISOString();
   const meta = (removed: string, purge: string | null) =>
-    [t("trash.removed", { days: days(removed, now) }), purge === null ? t("trash.kept") : t("trash.gone", { days: days(now, purge) })].join(" · ");
+    [days(removed, now) === 0 ? t("trash.removed.today") : t("trash.removed", { days: days(removed, now) }), purge === null ? t("trash.kept") : t("trash.gone", { days: days(now, purge) })].join(" · ");
   const act = async (run: () => Promise<void>) => {
     setBusy(true);
     try {
