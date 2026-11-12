@@ -21,11 +21,13 @@ export type Base = "schematic" | "satellite";
 const placesShown = () => localStorage.getItem(PLACES_KEY) === "shown";
 const mapTypeId = (base: Base) => (base === "satellite" ? "hybrid" : "roadmap");
 
-let made: { key: string; element: HTMLDivElement; map: Promise<google.maps.Map> } | null = null;
+// on globalThis: a hot update re-running this module keeps the page's (billed) map
+const kept = globalThis as typeof globalThis & { saMap?: { key: string; element: HTMLDivElement; map: Promise<google.maps.Map> } };
 const styles = () => (placesShown() ? [] : PLACES_HIDDEN);
 
 function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Promise<google.maps.Map> } {
-  if (made !== null) {
+  const made = kept.saMap;
+  if (made !== undefined) {
     if (made.key !== key) throw new Error("the map's key changed within a page session");
     return made;
   }
@@ -52,8 +54,8 @@ function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Pr
         clickableIcons: false,
       }),
   );
-  made = { key, element, map };
-  return made;
+  kept.saMap = { key, element, map };
+  return kept.saMap;
 }
 
 export type TheMap = { status: "loading" } | { status: "ok"; map: google.maps.Map } | { status: "error"; message: string };
@@ -93,7 +95,7 @@ const subscribeChosen = (onChange: () => void) => {
 
 const chosen = () => {
   window.dispatchEvent(new Event(CHOSEN_EVENT));
-  void made?.map.then((m) => m.setOptions({ styles: styles() }));
+  void kept.saMap?.map.then((m) => m.setOptions({ styles: styles() }));
 };
 
 /** Whether the map shows Google's own places (shops, sights, stops); hidden unless chosen, kept in this browser. */
