@@ -14,7 +14,7 @@ const NEW = "new";
 
 /**
  * The caller's trades, then "New trade…", which names one and picks it; `none` labels the choice of no trade, absent while one is held.
- * With `country`, each trade says what it resolves to there: Google's label, or not set up.
+ * With `country`, each trade says what it resolves to there: Google's primary category, or not set up.
  */
 export function TradeSelect({ value, onPick, none, label, country, className }: { value: number | null; onPick: (trade: number | null) => void; none?: string; label: string; country?: Country | null; className?: string }) {
   const t = useT();
@@ -71,7 +71,7 @@ export function TradeSelect({ value, onPick, none, label, country, className }: 
           const there = country == null ? undefined : (tr.categories.find((c) => c.country === country) ?? null);
           return (
             <NativeSelectOption key={tr.id} value={String(tr.id)}>
-              {there === undefined ? tr.name : there === null ? t("trades.option.notSetUp", { trade: tr.name, country: country! }) : `${tr.name} — ${there.google_category ?? "…"}`}
+              {there === undefined ? tr.name : there === null ? t("trades.option.notSetUp", { trade: tr.name, country: country! }) : `${tr.name} — ${there.google_primary?.name ?? "…"}`}
             </NativeSelectOption>
           );
         })}

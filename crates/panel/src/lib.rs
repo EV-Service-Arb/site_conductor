@@ -17,6 +17,7 @@ pub mod assistant;
 pub mod browsers;
 pub mod connections;
 pub mod gmbs;
+mod google_categories;
 mod imap;
 pub mod import;
 pub mod live;

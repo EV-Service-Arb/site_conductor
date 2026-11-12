@@ -21,7 +21,7 @@ import {
   buttonVariants,
   cn,
 } from "@evinvest/uikit";
-import { Copy, Ellipsis, ListFilter, Mail, Pencil, Plus, Tag, Trash2, X } from "lucide-react";
+import { Ellipsis, ListFilter, Mail, Pencil, Plus, Tag, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -47,6 +47,8 @@ import { setQuery } from "@/shared/lib/query";
 import { failureText } from "@/shared/ui/failure-text";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
+
+import { GoogleCategories } from "./google-categories";
 
 const MAX_KEYWORDS = 50;
 
@@ -245,7 +247,7 @@ function NotSetUp({ trade, country, waiting }: { trade: Trade; country: Country;
   const name = `${trade.name} · ${country}`;
   const setUp = async () => {
     try {
-      await setUpCategory(trade.id, country, { keywords: [], google_category: null, study: null });
+      await setUpCategory(trade.id, country, { keywords: [], google_primary: null, google_additional: [], study: null });
       trades.reload();
     } catch (e) {
       notifyFailure(e, t);
@@ -266,34 +268,32 @@ function NotSetUp({ trade, country, waiting }: { trade: Trade; country: Country;
 const SECTION = "flex flex-col gap-2";
 const SECTION_HEAD = "flex items-baseline gap-2 text-xs font-semibold tracking-wide text-ink-soft uppercase";
 
-/** A category's keywords, Google's label and placement's study, and the gmails holding it; each change writes the whole category. */
+/** A category's keywords, Google's categories and placement's study, and the gmails holding it; each change writes the whole category. */
 function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; category: Category; here: readonly Gmb[]; gmails: readonly Gmail[] }) {
   const t = useT();
   const locale = useLocale();
   const size = useControlSize();
-  const button = useButtonSize();
   const trades = useTrades();
   const placement = usePlacement();
   const [typed, setTyped] = useState("");
-  const [label, setLabel] = useState(category.google_category ?? "");
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failed, setFailed] = useState<{ at: "keywords" | "google"; text: string } | null>(null);
   const name = `${trade.name} · ${category.country}`;
   const lang = new Intl.DisplayNames([locale], { type: "language" }).of(category.lang) ?? category.lang;
   const country = new Intl.DisplayNames([locale], { type: "region" }).of(category.country) ?? category.country;
-  const write = async (change: Partial<Pick<Category, "keywords" | "google_category" | "study">>) => {
+  const write = async (change: Partial<Pick<Category, "keywords" | "google_primary" | "google_additional" | "study">>, at: "keywords" | "google" = "keywords") => {
+    const c = { ...category, ...change };
     try {
-      await setUpCategory(trade.id, category.country, { keywords: category.keywords, google_category: category.google_category, study: category.study, ...change });
+      await setUpCategory(trade.id, category.country, { keywords: c.keywords, google_primary: c.google_primary?.id ?? null, google_additional: c.google_additional.map((g) => g.id), study: c.study });
       setFailed(null);
       trades.reload();
       return true;
     } catch (e) {
       if (!(e instanceof ApiError)) throw e;
-      if (e.failure.kind !== "unauthenticated") setFailed(failureText(e.failure, t));
+      if (e.failure.kind !== "unauthenticated") setFailed({ at, text: failureText(e.failure, t) });
       return false;
     }
   };
   const studies = placement.status === "ok" ? placement.trades : null;
-  const typedLabel = label.trim() === "" ? null : label.trim();
   const held = [...new Set(here.map((b) => b.gmail_id))].map((id) => ({ id, gmail: id === null ? null : gmails.find((g) => g.id === id), n: here.filter((b) => b.gmail_id === id).length }));
 
   return (
@@ -329,7 +329,7 @@ function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; categ
         >
           <Input size={size} value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={t("trades.keywords.add", { lang })} aria-label={t("trades.keywords.add", { lang })} className="min-w-0 flex-1" />
         </form>
-        {failed !== null ? <p className="text-xs text-accent-error">{failed}</p> : <p className="text-xs text-ink-soft">{t("trades.keywords.why")}</p>}
+        {failed?.at === "keywords" ? <p className="text-xs text-accent-error">{failed.text}</p> : <p className="text-xs text-ink-soft">{t("trades.keywords.why")}</p>}
       </section>
 
       <section className={SECTION}>
@@ -338,28 +338,8 @@ function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; categ
           <span className="flex-1" />
           <span className="font-normal tracking-normal normal-case">{t("trades.google.where", { country })}</span>
         </h3>
-        <form
-          className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void write({ google_category: typedLabel });
-          }}
-        >
-          <Input size={size} value={label} onChange={(e) => setLabel(e.target.value)} aria-label={t("trades.google")} className="min-w-0 flex-1" />
-          {typedLabel === category.google_category ? (
-            label !== "" && (
-              <Button type="button" variant="ghost" size={button("sm")} onClick={() => void navigator.clipboard.writeText(label)}>
-                <Copy aria-hidden />
-                {t("trades.google.copy")}
-              </Button>
-            )
-          ) : (
-            <Button type="submit" variant="outline" size={button("sm")}>
-              {t("gmbs.gbp.save")}
-            </Button>
-          )}
-        </form>
-        <p className="text-xs text-ink-soft">{t("trades.google.why", { category: name })}</p>
+        <GoogleCategories category={category} write={(change) => void write(change, "google")} />
+        {failed?.at === "google" ? <p className="text-xs text-accent-error">{failed.text}</p> : <p className="text-xs text-ink-soft">{t("trades.google.why", { category: name, lang })}</p>}
       </section>
 
       <section className={SECTION}>

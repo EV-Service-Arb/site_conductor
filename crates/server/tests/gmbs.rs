@@ -427,7 +427,7 @@ async fn a_trade_is_its_owners() {
 	let (_, mine) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Lyon 7" }))).await;
 	let (status, _) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
 	assert_eq!(status, StatusCode::CREATED, "a name is one owner's");
-	let set_up = json!({ "keywords": [], "google_category": null, "study": null });
+	let set_up = json!({ "keywords": [], "google_primary": null, "google_additional": [], "study": null });
 	for (method, uri, body) in [
 		(Method::PATCH, format!("/api/v1/gmbs/{}", mine["id"]), Some(json!({ "trade": theirs }))),
 		(Method::POST, "/api/v1/gmbs".to_owned(), Some(json!({ "name": "Lyon 8", "trade": theirs }))),
@@ -448,7 +448,7 @@ async fn a_trade_a_live_gbp_holds_is_not_deleted() {
 	let (app, mut b, _, _) = beside_another(&db).await;
 	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
 	let uri = format!("/api/v1/trades/{}", trade["id"]);
-	let set_up = json!({ "keywords": ["plombier"], "google_category": "Plombier", "study": "plumbing" });
+	let set_up = json!({ "keywords": ["plombier"], "google_primary": "gcid:plumber", "google_additional": [], "study": "plumbing" });
 	let (status, _) = call(&mut b, &app, Method::PUT, &format!("{uri}/FR"), Some(set_up)).await;
 	assert_eq!(status, StatusCode::OK);
 	let (_, gbp) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Lyon 7", "trade": trade["id"] }))).await;
@@ -472,12 +472,63 @@ async fn keywords_are_one_spelling_each_and_none_twice() {
 	let (status, _) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": " PLUMBING " }))).await;
 	assert_eq!(status, StatusCode::CONFLICT, "a name whatever its case");
 	let uri = format!("/api/v1/trades/{}/FR", trade["id"]);
-	let keywords = |k: Value| Some(json!({ "keywords": k, "google_category": null, "study": null }));
+	let keywords = |k: Value| Some(json!({ "keywords": k, "google_primary": null, "google_additional": [], "study": null }));
 
 	let (status, body) = call(&mut b, &app, Method::PUT, &uri, keywords(json!(["Plombier", " plombier  "]))).await;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
 	let (status, body) = call(&mut b, &app, Method::PUT, &uri, keywords(json!(["  Fuite \t d'eau ", "Plombier"]))).await;
 	assert_eq!((status, &body["categories"][0]["keywords"]), (StatusCode::OK, &json!(["fuite d'eau", "plombier"])), "{body}");
+}
+
+#[tokio::test]
+async fn google_categories_are_googles_in_the_country_in_order() {
+	let db = TestDb::create().await;
+	let (app, mut b, _, _) = beside_another(&db).await;
+	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
+	let uri = format!("/api/v1/trades/{}/FR", trade["id"]);
+	let google = |primary: Value, additional: Value| Some(json!({ "keywords": [], "google_primary": primary, "google_additional": additional, "study": null }));
+
+	let (status, body) = call(
+		&mut b,
+		&app,
+		Method::PUT,
+		&uri,
+		google(json!("gcid:plumber"), json!(["gcid:heating_contractor", "gcid:drainage_service"])),
+	)
+	.await;
+	assert_eq!(status, StatusCode::OK, "{body}");
+	assert_eq!(body["categories"][0]["google_primary"], json!({ "id": "gcid:plumber", "name": "Plombier" }));
+	let names: Vec<&str> = body["categories"][0]["google_additional"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|g| g["name"].as_str().unwrap())
+		.collect();
+	assert_eq!(names, ["Chauffagiste", "Service d'évacuation des eaux"]);
+
+	let ten: Vec<Value> = [
+		"electrician", "roofing_contractor", "painter", "carpenter", "locksmith", "glazier", "general_contractor", "tile_contractor", "handyman", "gardener",
+	]
+	.map(|g| json!(format!("gcid:{g}")))
+	.into();
+	for (primary, additional, why) in [
+		(json!("gcid:no_such_thing"), json!([]), "not Google's"),
+		(json!("gcid:chinatown"), json!([]), "not Google's in FR"),
+		(json!(null), json!(["gcid:plumber"]), "additional without a primary"),
+		(json!("gcid:plumber"), json!(["gcid:plumber"]), "the primary twice"),
+		(json!("gcid:plumber"), json!(["gcid:electrician", "gcid:electrician"]), "an additional twice"),
+		(json!("gcid:plumber"), json!(ten), "10 additional"),
+	] {
+		let (status, body) = call(&mut b, &app, Method::PUT, &uri, google(primary, additional)).await;
+		assert_eq!(status, StatusCode::BAD_REQUEST, "{why}: {body}");
+	}
+
+	let (status, listed) = call(&mut b, &app, Method::GET, "/api/v1/google-categories/FR", None).await;
+	assert_eq!(status, StatusCode::OK);
+	assert!(
+		listed["categories"].as_array().unwrap().contains(&json!({ "id": "gcid:plumber", "name": "Plombier" })),
+		"{listed}"
+	);
 }
 
 async fn trade_ids(b: &mut Browser, app: &Router) -> Vec<Value> {

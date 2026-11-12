@@ -29,7 +29,7 @@ function FormValues({ gmb, type }: { gmb: Gmb; type: TypeIn }) {
       </header>
       <ol className="flex flex-col gap-3">
         <Value label={t("launch.must.name")} value={gmb.name} type={type} />
-        <Value label={t("launch.must.category")} value={placed?.status === "set_up" ? placed.category.google_category : null} type={type} />
+        <Value label={t("launch.must.category")} value={placed?.status === "set_up" ? (placed.category.google_primary?.name ?? null) : null} type={type} />
         <li className="flex flex-col gap-0.5 text-sm">
           <span className="text-xs text-ink-soft">{t("window.browser.visit")}</span>
           {gmb.customers_visit === null ? <span className="text-accent-warn">{t("window.browser.unset")}</span> : <span className="text-ink">{t(gmb.customers_visit ? "launch.visit.yes" : "launch.visit.no")}</span>}

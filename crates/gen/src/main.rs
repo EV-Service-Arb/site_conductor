@@ -15,7 +15,7 @@ use sa_server::{
 	assistant::{AccessDto, ChatDto, ChatsDto, PeopleDto},
 	browser::{SetBrowser, StartBrowser},
 	connections::ConnectionsDto,
-	gmbs::{CandidatesDto, GmailsDto, MapDto, TradesDto},
+	gmbs::{CandidatesDto, GmailsDto, GoogleCategoriesDto, MapDto, TradesDto},
 	signin::Caller,
 	tokens::{BalanceChangeDto, BalanceDto, LedgerDto, SetPricesDto, TokenHoldersDto, TokensDto, UsageDto},
 };
@@ -49,7 +49,7 @@ fn main() {
 				GmailsDto,
 				CandidatesDto,
 				MapDto,
-				TradesDto,
+				(TradesDto, GoogleCategoriesDto),
 				OnGoogle,
 				ConnectionsDto,
 				SetBrowser,

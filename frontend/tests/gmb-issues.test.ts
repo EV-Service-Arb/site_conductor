@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ArchiveTag, Gmail, Gmb, SiteTag, Trade } from "@/entities/gmb/model/gmb";
+import type { ArchiveTag, Gmail, Gmb, GoogleCategory, SiteTag, Trade } from "@/entities/gmb/model/gmb";
 import { type Issue, type Tags, issueCounts, issueOf, issueText } from "@/entities/gmb/model/issues";
 import { readiness } from "@/entities/gmb/model/readiness";
 import { translator } from "@/shared/i18n/translate";
@@ -28,9 +28,9 @@ const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
 const archive = (suspended: number, failing: boolean): ArchiveTag => ({ tracked: true, rating: 4.5, reviews: 10, suspended, reinstating: 0, failing });
 const site = (overdue: number): SiteTag => ({ brand: "aquafix", location: "lyon-9", leads_7d: 3, overdue });
 const PLUMBING = 7;
-/** Plumbing, set up in FR with Google's label unless `label` is null. */
-const plumbing = (label: string | null = "Plombier"): Trade[] => [
-  { id: PLUMBING, name: "Plumbing", created_at: "2026-11-09T00:00:00Z", categories: [{ country: "FR", lang: "fr", keywords: ["plombier"], google_category: label, study: null }] },
+/** Plumbing, set up in FR with Google's primary category unless `primary` is null. */
+const plumbing = (primary: GoogleCategory | null = { id: "gcid:plumber", name: "Plombier" }): Trade[] => [
+  { id: PLUMBING, name: "Plumbing", created_at: "2026-11-09T00:00:00Z", categories: [{ country: "FR", lang: "fr", keywords: ["plombier"], google_primary: primary, google_additional: [], study: null }] },
 ];
 
 /** Each GMB's issue under `tags`, by id. */
@@ -126,11 +126,11 @@ describe("a draft's readiness", () => {
     expect(ready(draft(1, { ...full, customers_visit: null }), { archive: null, sites: null, trades: plumbing() })).not.toContain("hidden_address");
   });
 
-  it("has its category only once its trade is set up in its country with Google's label", () => {
+  it("has its category only once its trade is set up in its country with Google's primary category", () => {
     for (const [why, fill, trades] of [
       ["no country", { ...full, country: null }, plumbing()],
       ["not set up there", { ...full, country: { code: "US", by_hand: true } }, plumbing()],
-      ["no label", full, plumbing(null)],
+      ["no primary", full, plumbing(null)],
       ["the trades unread", full, null],
     ] as const) {
       expect(ready(draft(1, fill), { archive: null, sites: null, trades }), why).not.toContain("category");

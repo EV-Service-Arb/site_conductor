@@ -9,6 +9,7 @@ import {
   type GmailRole,
   type Gmails,
   type Gmb,
+  type GoogleCategory,
   type LatLng,
   type MapConfig,
   type SitesPlace,
@@ -17,6 +18,7 @@ import {
   candidatesParser,
   gmailsParser,
   gmbParser,
+  googleCategoriesParser,
   mapConfigParser,
   sitesPlacesParser,
   tradeParser,
@@ -181,8 +183,13 @@ export async function deleteTrade(id: number): Promise<void> {
 }
 
 /** Sets the trade up in `country`, or edits it there; refused for a keyword twice once lowercased. */
-export function setUpCategory(id: number, country: Country, c: { keywords: string[]; google_category: string | null; study: string | null }): Promise<Trade> {
+export function setUpCategory(id: number, country: Country, c: { keywords: string[]; google_primary: string | null; google_additional: string[]; study: string | null }): Promise<Trade> {
   return http.send("PUT", `/api/v1/trades/${id}/${country}`, c, tradeParser);
+}
+
+/** Google's list in `country`, named in its language. */
+export async function fetchGoogleCategories(country: Country): Promise<GoogleCategory[]> {
+  return (await http.get(`/api/v1/google-categories/${country}`, googleCategoriesParser)).categories;
 }
 
 export async function removeCategory(id: number, country: Country): Promise<void> {

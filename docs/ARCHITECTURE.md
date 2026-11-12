@@ -461,13 +461,17 @@ PUT    /gmbs/{id}/country                   {country} → 204, set by hand; 409 
 GET    /map                                 {key}: the browser's Maps JS key; 404 without
                                             GOOGLE_MAPS_BROWSER_KEY
 GET    /trades                              {trades: [{id, name, created_at, categories: [{country, lang,
-                                            keywords, google_category, study}]}]}
+                                            keywords, google_primary: {id, name} | null,
+                                            google_additional: [{id, name}], study}]}]}
 POST   /trades                              {name} → 201 the trade; 409 the caller's already, any case
 PATCH  /trades/{id}                         {name} → 200 the trade; 409
 DELETE /trades/{id}                         204, its categories with it; 409 while a live GBP holds it
-PUT    /trades/{id}/{country}               {keywords, google_category, study} → 200 the trade: set up
-                                            there, or edited; 400 a keyword twice once normalized
+PUT    /trades/{id}/{country}               {keywords, google_primary: gcid | null, google_additional:
+                                            [gcid], study} → 200 the trade: set up there, or edited;
+                                            400 a keyword twice once normalized, a gcid not Google's
+                                            there or twice, additional ones past 9 or without a primary
 DELETE /trades/{id}/{country}               204
+GET    /google-categories/{country}         {categories: [{id, name}]}: Google's list there
 GET    /tokens                              {balance, daily, cap, kickbacks}: renewed, the
                                             kick-backs not claimed
 GET    /tokens/ledger?before=&limit=        {entries, next}: newest first, limit 1–200
@@ -598,18 +602,27 @@ review_archive's lookups and placement's sweeps are the house's for now.
   draft's to change; the place is set once, onto Google (draft → verifying), with Google's address,
   point and country.
 - **A draft's must-haves** are what Google's form asks and what stands behind it: name, category
-  (set up, with Google's label), service areas (≤ 20), phone, a site page (sites' link), the hidden address with whether
+  (set up, with its primary Google category), service areas (≤ 20), phone, a site page (sites' link), the hidden address with whether
   customers visit, the verification film, the managing gmail, its browser (Browsers: set up, its last check
   through). The film is a reference set by hand until verif_vid fills it. How many are ready
   is advice the front end computes; the move onto Google never checks it.
 - **A gmail's role** on its GBPs, owner or manager, unknown until said, caps what it holds before
   Google grows wary (`sa_core::gbp::GmailRole::cap`): room shown, never refused.
 - **A GBP's category** is its trade (its owner's: Plumbing) in its own country, derived, never
-  stored: Plumbing · FR. The trade set up for a country holds Google's label there, placement's
+  stored: Plumbing · FR. The trade set up for a country holds its Google categories there, placement's
   study of it, and its keywords (`sa_core::gbp::keywords`), the terms every GBP of the category is
   compared on, in the country's language; any other term is one study's or one location's own and
   stays out of comparisons. Not set up there is shown so, never filled from another country. A
   trade is deleted only once no live GBP holds it; no service stores its id.
+- **Google's categories** are a closed list: a gcid (`gcid:plumber`) and a name per language. A
+  GBP takes a primary one and up to 9 additional ones, entered into Google's form in order; the
+  names shown are the country's language's. The list is `crates/panel/google_categories.json`, one
+  gcid a line: `{countries, names: {lang: name}}`, a gcid in a country only with a name in its
+  language. It is drawn from two pulls of Google's Business Information API:
+  jepto/google-business-profile-categories `data/categories.json` (every gcid, its English name,
+  its regions) and Hypetrix's `wp-json/hypetrix/v1/gbp-categories?region=US&lang=fr` (the French
+  names). A refresh dropping a gcid a trade holds makes reading it fail until a migration moves
+  it to what Google replaced it with.
 - **A GBP with a place has a gmail and a country** (the schema's CHECK on live rows): the archive
   reads its language from it. One on Google already is added verifying, verified or suspended.
 - A transfer moves it to another gmail of its owner's. Removed is once, apart from the state; a

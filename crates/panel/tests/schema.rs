@@ -24,6 +24,8 @@ use zeroize::Zeroizing;
 
 /// The migration that made Telegram one method of the alerts hub.
 const ALERTS: i64 = 20261105090000;
+/// The migration that took a trade's Google categories off Google's list.
+const GOOGLE_CATEGORIES: i64 = 20261112090000;
 
 /// A refresher that must not be asked: the tokens above are fresh.
 struct Never;
@@ -510,6 +512,41 @@ async fn telegram_links_become_private_destinations_both_ways() {
 	assert_eq!(rules, [(ann, "new_lead".to_owned(), false)]);
 	let notes_after: i64 = sqlx::query_scalar("SELECT notes_after FROM telegram_poller").fetch_one(&pool).await.unwrap();
 	assert_eq!(notes_after, 42);
+}
+
+/// A free-text Google category becomes its gcid by its exact name, none stays none, and a label the
+/// migration does not know stops it, named.
+#[tokio::test]
+async fn google_labels_become_gcids() {
+	let db = TestDb::create().await;
+	let pool = db.pool().await;
+	// One connection: another may still read the schema as it was before an undo.
+	let mut conn = pool.acquire().await.unwrap();
+	let migrator = sqlx::migrate!("./migrations");
+	migrator.undo(&mut *conn, GOOGLE_CATEGORIES - 1).await.unwrap();
+	for sql in [
+		"INSERT INTO users VALUES (x'00000000000000000000000000000001', 'ann@localhost', 'Ann', 1, 1)",
+		"INSERT INTO trades (owner, name, created_at) VALUES (x'00000000000000000000000000000001', 'Plumbing', 1)",
+		"INSERT INTO categories VALUES (1, 'FR', '[]', 'Plombier', NULL)",
+		"INSERT INTO categories VALUES (1, 'US', '[]', NULL, NULL)",
+	] {
+		sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&mut *conn).await.unwrap();
+	}
+	migrator.run(&mut *conn).await.unwrap();
+	let categories: Vec<(String, Option<String>, String)> = sqlx::query_as("SELECT country, google_primary, google_additional FROM categories ORDER BY country")
+		.fetch_all(&mut *conn)
+		.await
+		.unwrap();
+	assert_eq!(categories, [("FR".into(), Some("gcid:plumber".into()), "[]".into()), ("US".into(), None, "[]".into())]);
+
+	migrator.undo(&mut *conn, GOOGLE_CATEGORIES - 1).await.unwrap();
+	sqlx::query("INSERT INTO categories VALUES (1, 'GB', '[]', 'Plumbing contractor', NULL)")
+		.execute(&mut *conn)
+		.await
+		.unwrap();
+	let err = migrator.run(&mut *conn).await.unwrap_err().to_string();
+	assert!(err.contains("GB 'Plumbing contractor'"), "the down migration's gcid stays: {err}");
+	assert!(!err.contains("FR"), "the down migration's gcid stays: {err}");
 }
 
 fn origin(raw: &str) -> SiteOrigin {

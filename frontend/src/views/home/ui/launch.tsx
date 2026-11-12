@@ -76,7 +76,7 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
   const parts: Record<MustHave, { value: ReactNode; editor: ReactNode; why: string | null }> = {
     name: { value: gmb.name, editor: text("name", gmb.name, (v) => ({ name: v ?? "" })), why: t("launch.why.name") },
     category: {
-      value: placed?.status === "set_up" && `${categoryName(placed.trade, placed.category.country)} · ${placed.category.google_category}`,
+      value: placed?.status === "set_up" && [categoryName(placed.trade, placed.category.country), placed.category.google_primary?.name].filter(Boolean).join(" · "),
       editor: (
         <span className="flex flex-col gap-2">
           <TradeSelect value={gmb.trade_id} country={gmb.country?.code ?? null} className="w-80 max-w-full" label={t("launch.must.category")} onPick={(trade) => void save("category")({ trade })} />
@@ -278,7 +278,7 @@ function AreasEditor({ areas, onSave }: { areas: string[]; onSave: (areas: strin
   );
 }
 
-/** Where the trade resolves in the GBP's country, and what it lacks with its one fix, or Google's label to type into its form. */
+/** Where the trade resolves in the GBP's country, and what it lacks with its one fix, or Google's categories to type into its form, in order. */
 function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: () => void }) {
   const t = useT();
   const locale = useLocale();
@@ -297,7 +297,7 @@ function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: 
     );
   const country = placed.status === "set_up" ? placed.category.country : placed.country;
   const name = categoryName(placed.trade, country);
-  const lacking = placed.status === "not_set_up" ? "launch.category.notSetUp" : placed.category.google_category === null ? "launch.category.noLabel" : null;
+  const lacking = placed.status === "not_set_up" ? "launch.category.notSetUp" : placed.category.google_primary === null ? "launch.category.noPrimary" : null;
   return (
     <span className="flex flex-col gap-1">
       <span className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
@@ -313,7 +313,24 @@ function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: 
         <span className="text-xs text-accent-warn">{t(lacking, { category: name })}</span>
       ) : (
         placed.status === "set_up" &&
-        placed.category.google_category !== null && <TypeIn label={placed.category.google_category} />
+        placed.category.google_primary !== null && (
+          <>
+            <TypeIn label={placed.category.google_primary.name} />
+            {placed.category.google_additional.length > 0 && (
+              <span className="flex flex-col gap-1 text-xs text-ink-soft">
+                {t("launch.category.then")}
+                <ol className="flex flex-col gap-0.5">
+                  {placed.category.google_additional.map((g, i) => (
+                    <li key={g.id} className="flex items-center gap-2">
+                      <span className="w-4 text-right font-mono tabular-nums">{i + 1}</span>
+                      <Copyable label={g.name} />
+                    </li>
+                  ))}
+                </ol>
+              </span>
+            )}
+          </>
+        )
       )}
     </span>
   );
@@ -321,12 +338,21 @@ function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: 
 
 function TypeIn({ label }: { label: string }) {
   const t = useT();
-  const button = useButtonSize();
   return (
     <span className="flex items-center gap-2 text-xs text-ink-soft">
       {t("launch.category.type")}
+      <Copyable label={label} />
+    </span>
+  );
+}
+
+function Copyable({ label }: { label: string }) {
+  const t = useT();
+  const button = useButtonSize();
+  return (
+    <span className="flex items-center gap-1">
       <span className="rounded bg-hover px-1.5 py-0.5 font-mono text-sm text-ink">{label}</span>
-      <Button variant="ghost" size={button("sm")} icon aria-label={t("launch.category.copy")} title={t("launch.category.copy")} onClick={() => void navigator.clipboard.writeText(label)}>
+      <Button variant="ghost" size={button("sm")} icon aria-label={t("launch.category.copy", { category: label })} title={t("launch.category.copy", { category: label })} onClick={() => void navigator.clipboard.writeText(label)}>
         <Copy aria-hidden />
       </Button>
     </span>

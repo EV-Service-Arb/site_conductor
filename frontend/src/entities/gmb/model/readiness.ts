@@ -11,7 +11,7 @@ export function readiness({ gmb, gmail }: Listed, tags: Tags): { must: MustHave;
   const placed = tags.trades === null ? null : categoryOf(gmb, tags.trades);
   const ready: Record<MustHave, boolean> = {
     name: true,
-    category: placed?.status === "set_up" && placed.category.google_category !== null,
+    category: placed?.status === "set_up" && placed.category.google_primary !== null,
     areas: gmb.areas.length > 0,
     phone: gmb.phone !== null,
     site: tags.sites?.has(gmb.id) ?? false,

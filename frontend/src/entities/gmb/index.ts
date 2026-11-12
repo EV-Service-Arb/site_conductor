@@ -7,6 +7,7 @@ export {
   deleteTrade,
   editGmb,
   fetchGmails,
+  fetchGoogleCategories,
   fetchMapConfig,
   fetchSitesPlaces,
   linkPlace,
@@ -30,7 +31,7 @@ export { GmailsProvider, useGmails, useGmbTags, useTrades, useUndoable } from ".
 export { COUNTRIES, type Country, GMAIL_ROLES, ON_GOOGLE, type OnGoogle, type State } from "./model/gmb";
 export { DEVICES, type Device, PROVIDERS, type Provider } from "./model/generated";
 export type { Browser, BrowserIn, BrowserOut, Checked, Connections, Imap, MapsKey, Prices } from "./model/generated";
-export type { ArchiveTag, Candidate, Category, Gmail, GmailRole, Gmails, Gmb, LatLng, MapConfig, SiteTag, SitesPlace, Trade } from "./model/gmb";
+export type { ArchiveTag, Candidate, Category, Gmail, GmailRole, Gmails, Gmb, GoogleCategory, LatLng, MapConfig, SiteTag, SitesPlace, Trade } from "./model/gmb";
 export { ISSUES, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
 export { type Listed, byView, narrowed, under } from "./model/narrow";
 export { MUST_HAVES, type MustHave, readiness } from "./model/readiness";

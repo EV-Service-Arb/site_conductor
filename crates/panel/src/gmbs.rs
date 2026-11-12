@@ -12,11 +12,14 @@ use sa_core::gbp::{Country, GmailRole, OnGoogle, State};
 use sa_places::{Ask, LatLng, Place};
 use uuid::Uuid;
 
-pub use crate::store::gmbs::{Category, GbpCountry, Gmail, Gmb, Point, Trade};
 use crate::{
 	Panel, Refused,
 	store::gmbs::{self as db, NewGmb, Unique},
 	tokens::is_open,
+};
+pub use crate::{
+	google_categories::GoogleCategory,
+	store::gmbs::{Category, GbpCountry, Gmail, Gmb, Point, Trade},
 };
 
 /// What [`Panel::locate`] did.
@@ -631,22 +634,28 @@ impl Panel {
 	}
 
 	/// The owner's trade `id` set up for `c.country` as `c` says, over what it was: the keywords in
-	/// [`sa_core::gbp::keywords`]' form, each text trimmed and not empty.
+	/// [`sa_core::gbp::keywords`]' form, the study trimmed and not empty, at most 9 additional
+	/// Google categories beside a primary, none twice.
 	pub async fn set_up(&self, owner: Uuid, id: i64, c: Category) -> eyre::Result<Result<Trade, Refused>> {
-		let text = |what: &str, raw: Option<String>| match raw.as_deref().map(str::trim) {
-			Some("") => Err(Refused::Invalid(format!("a category's {what} is not empty: null clears it"))),
-			t => Ok(t.map(str::to_owned)),
+		let study = match c.study.as_deref().map(str::trim) {
+			Some("") => return Ok(Err(Refused::Invalid("a category's study is not empty: null clears it".to_owned()))),
+			t => t.map(str::to_owned),
 		};
-		let c = match (sa_core::gbp::keywords(&c.keywords), text("Google category", c.google_category), text("study", c.study)) {
-			(Ok(keywords), Ok(google_category), Ok(study)) => Category {
-				country: c.country,
-				keywords,
-				google_category,
-				study,
-			},
-			(Err(e), _, _) => return Ok(Err(Refused::Invalid(e.to_string()))),
-			(_, Err(r), _) | (_, _, Err(r)) => return Ok(Err(r)),
+		let keywords = match sa_core::gbp::keywords(&c.keywords) {
+			Ok(k) => k,
+			Err(e) => return Ok(Err(Refused::Invalid(e.to_string()))),
 		};
+		if c.google_additional.len() > 9 {
+			return Ok(Err(Refused::Invalid("Google takes at most 9 additional categories".to_owned())));
+		}
+		if c.google_primary.is_none() && !c.google_additional.is_empty() {
+			return Ok(Err(Refused::Invalid("additional Google categories need a primary one".to_owned())));
+		}
+		let mut seen = BTreeSet::new();
+		if let Some(twice) = c.google_primary.iter().chain(&c.google_additional).find(|g| !seen.insert(g.id)) {
+			return Ok(Err(Refused::Invalid(format!("Google category {} twice", twice.id))));
+		}
+		let c = Category { keywords, study, ..c };
 		let mut tx = self.store.begin_write().await?;
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));

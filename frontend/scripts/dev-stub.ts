@@ -85,7 +85,7 @@ const gmbs: Json[] = [
   { id: 3, gmail_id: null, place_id: null, name: "Électricien Lille (stub draft)", address: null, state: "draft", next: ["verifying"], country: null, phone: null, trade_id: null, areas: [], hidden_address: null, customers_visit: null, film: null, created_at: minsAgo(60 * 24), enabled: true, location: null },
   { id: 4, gmail_id: 1, place_id: null, name: "Plombier Lyon 8 (stub draft)", address: null, state: "draft", next: ["verifying"], country: { code: "FR", by_hand: true }, phone: "+33 4 28 29 41 07", trade_id: 1, areas: ["Lyon 8e", "Vénissieux", "Bron"], hidden_address: "14 rue Laënnec, 69008 Lyon", customers_visit: false, film: null, created_at: minsAgo(60 * 5), enabled: true, location: { lat: 45.7347, lng: 4.8691, placed: true } },
 ];
-const trades = [{ id: 1, name: "Plumbing", created_at: minsAgo(60 * 24 * 7), categories: [{ country: "FR", lang: "fr", keywords: ["plombier"], google_category: "Plombier", study: null }] }];
+const trades = [{ id: 1, name: "Plumbing", created_at: minsAgo(60 * 24 * 7), categories: [{ country: "FR", lang: "fr", keywords: ["plombier"], google_primary: { id: "gcid:plumber", name: "Plombier" }, google_additional: [], study: null }] }];
 const connections = (gmail: number) => ({ imap: null, maps_key: null, prices: { details: null, search: null }, browser: browserOf(gmail).browser });
 const tokens = { balance: 75, daily: 15, cap: 500, kickbacks: [{ id: 1, at: minsAgo(90), amount: 12, service: "review_archive", key: "run:42", label: "Plombier Paris 11 (stub)", by: null, note: null }] };
 const ledger = Array.from({ length: 8 }, (_, i) => ({ id: 8 - i, at: minsAgo(60 * 24 * i), delta: i % 2 ? -12 : 15, kind: i % 2 ? "charge" : "accrual", service: i % 2 ? "review_archive" : null, key: i % 2 ? `run:${40 - i}` : null, label: i % 2 ? "Plombier Paris 11 (stub)" : null, by: null, note: null }));
@@ -124,6 +124,8 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   }
   if (path === "/gmails" && req.method === "GET") return send(res, 200, { gmails: gmails.map((g) => ({ ...g, browser: browserOf(g.id).ready })), gmbs });
   if (path === "/trades" && req.method === "GET") return send(res, 200, { trades });
+  if (path.startsWith("/google-categories/") && req.method === "GET")
+    return send(res, 200, { categories: [{ id: "gcid:plumber", name: "Plombier" }, { id: "gcid:heating_contractor", name: "Chauffagiste" }, { id: "gcid:drainage_service", name: "Service d'évacuation des eaux" }] });
   const connected = path.match(/^\/gmails\/(\d+)\/connections$/);
   if (connected && req.method === "GET") return send(res, 200, connections(Number(connected[1])));
   if (await browserRoute(req, res, path, () => readJson(req), send, connections)) return;

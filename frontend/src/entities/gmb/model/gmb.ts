@@ -1,8 +1,8 @@
 import { type Infer, type Parser, arrayOf, bool, nullable, num, object, oneOf, str } from "@/shared/lib/parse";
 
-import type { Candidates, Category, Country, Gmail, GmailRole, Gmails, Gmb, MapConfig, OnGoogle, Place, State, Trade, Trades } from "./generated";
+import type { Candidates, Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategories, GoogleCategory, MapConfig, OnGoogle, Place, State, Trade, Trades } from "./generated";
 
-export type { Category, Country, Gmail, GmailRole, Gmails, Gmb, MapConfig, OnGoogle, Place as Candidate, State, Trade, Trades } from "./generated";
+export type { Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategory, MapConfig, OnGoogle, Place as Candidate, State, Trade, Trades } from "./generated";
 
 export type LatLng = { lat: number; lng: number };
 
@@ -37,7 +37,16 @@ export const mapConfigParser: Parser<MapConfig> = object({ key: str });
 const gmailParser: Parser<Gmail> = object({ id: num, gmail: str, role: nullable(oneOf(GMAIL_ROLES)), created_at: str, browser: bool });
 export const gmailsParser: Parser<Gmails> = object({ gmails: arrayOf(gmailParser), gmbs: arrayOf(gmbParser) });
 
-const categoryParser: Parser<Category> = object({ country: oneOf(COUNTRIES), lang: str, keywords: arrayOf(str), google_category: nullable(str), study: nullable(str) });
+const googleCategoryParser: Parser<GoogleCategory> = object({ id: str, name: str });
+export const googleCategoriesParser: Parser<GoogleCategories> = object({ categories: arrayOf(googleCategoryParser) });
+const categoryParser: Parser<Category> = object({
+  country: oneOf(COUNTRIES),
+  lang: str,
+  keywords: arrayOf(str),
+  google_primary: nullable(googleCategoryParser),
+  google_additional: arrayOf(googleCategoryParser),
+  study: nullable(str),
+});
 export const tradeParser: Parser<Trade> = object({ id: num, name: str, created_at: str, categories: arrayOf(categoryParser) });
 export const tradesParser: Parser<Trades> = object({ trades: arrayOf(tradeParser) });
 

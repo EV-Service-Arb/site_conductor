@@ -43,7 +43,7 @@ export type Candidates = { candidates: Array<Place>, };
  */
 export type Category = { country: Country, 
 /**
- * The country's language, its keywords' and Google's label's: `fr`.
+ * The country's language, its keywords' and Google's categories' names': `fr`.
  */
 lang: string, 
 /**
@@ -52,9 +52,13 @@ lang: string,
  */
 keywords: Array<string>, 
 /**
- * The label typed into Google's form.
+ * What Google's form is given as the category.
  */
-google_category: string | null, 
+google_primary: GoogleCategory | null, 
+/**
+ * At most 9, in the order they are entered into Google's form.
+ */
+google_additional: Array<GoogleCategory>, 
 /**
  * Placement's trade that studies it.
  */
@@ -167,6 +171,22 @@ enabled: boolean,
  * the map by hand.
  */
 location: { lat: number, lng: number, placed: boolean } | null, };
+/**
+ * `GET /google-categories/{country}`.
+ */
+export type GoogleCategories = { categories: Array<GoogleCategory>, };
+/**
+ * One of Google's categories, named in a country's language.
+ */
+export type GoogleCategory = { 
+/**
+ * `gcid:plumber`.
+ */
+id: string, 
+/**
+ * `Plombier`.
+ */
+name: string, };
 export type Imap = { host: string, username: string, set_at: string, checked: Checked, };
 /**
  * `GET /map`: the browser's Maps JS key, referrer-restricted.

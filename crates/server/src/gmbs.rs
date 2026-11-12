@@ -22,8 +22,10 @@
 //! POST   /api/v1/trades {name}        → 201 Trade; 409 the name theirs already, whatever its case
 //! PATCH  /api/v1/trades/{id} {name}   → 200 Trade; 409
 //! DELETE /api/v1/trades/{id}          → 204; 409 while a live GBP holds it
-//! PUT    /api/v1/trades/{id}/{country} {keywords, google_category, study}  → 200 Trade
+//! PUT    /api/v1/trades/{id}/{country} {keywords, google_primary, google_additional, study}
+//!                                     → 200 Trade; the gcids Google's in that country
 //! DELETE /api/v1/trades/{id}/{country}  → 204
+//! GET    /api/v1/google-categories/{country}  GoogleCategories: Google's list there
 //! PUT    /api/v1/gmbs/{id}/location {lat, lng}  → 204; 409 Google has its point
 //! DELETE /api/v1/gmbs/{id}/location   → 204; 409 no point placed by hand
 //! PUT    /api/v1/gmbs/{id}/country {country}   → 204; 409 Google has its country
@@ -45,7 +47,7 @@ use jiff::Timestamp;
 use sa_core::gbp::{Country, GmailRole, State as GbpState};
 use sa_panel::{
 	Panel,
-	gmbs::{Category, Edit, Existing, Gmail, Gmb, Trade},
+	gmbs::{Category, Edit, Existing, Gmail, Gmb, GoogleCategory, Trade},
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -122,15 +124,43 @@ pub struct TradeDto {
 #[ts(rename = "Category")]
 pub struct CategoryDto {
 	pub country: Country,
-	/// The country's language, its keywords' and Google's label's: `fr`.
+	/// The country's language, its keywords' and Google's categories' names': `fr`.
 	pub lang: String,
 	/// Lowercase, in the country's language, none naming a city: the terms every GBP of the
 	/// category is compared on.
 	pub keywords: Vec<String>,
-	/// The label typed into Google's form.
-	pub google_category: Option<String>,
+	/// What Google's form is given as the category.
+	pub google_primary: Option<GoogleCategoryDto>,
+	/// At most 9, in the order they are entered into Google's form.
+	pub google_additional: Vec<GoogleCategoryDto>,
 	/// Placement's trade that studies it.
 	pub study: Option<String>,
+}
+
+/// One of Google's categories, named in a country's language.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(rename = "GoogleCategory")]
+pub struct GoogleCategoryDto {
+	/// `gcid:plumber`.
+	pub id: String,
+	/// `Plombier`.
+	pub name: String,
+}
+
+/// `GET /google-categories/{country}`.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(rename = "GoogleCategories")]
+pub struct GoogleCategoriesDto {
+	pub categories: Vec<GoogleCategoryDto>,
+}
+
+impl From<GoogleCategory> for GoogleCategoryDto {
+	fn from(g: GoogleCategory) -> Self {
+		Self {
+			id: g.id.to_owned(),
+			name: g.name.to_owned(),
+		}
+	}
 }
 
 /// `GET /trades`.
@@ -206,6 +236,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::DELETE, "/trades/{id}", None, Cached, delete_trade),
 		ApiRoute::new(M::PUT, "/trades/{id}/{country}", None, Cached, set_up),
 		ApiRoute::new(M::DELETE, "/trades/{id}/{country}", None, Cached, remove_category),
+		ApiRoute::new(M::GET, "/google-categories/{country}", None, Cached, google_categories),
 	]
 }
 
@@ -258,7 +289,8 @@ impl From<Trade> for TradeDto {
 					country: c.country,
 					lang: c.country.lang().to_owned(),
 					keywords: c.keywords,
-					google_category: c.google_category,
+					google_primary: c.google_primary.map(GoogleCategoryDto::from),
+					google_additional: c.google_additional.into_iter().map(GoogleCategoryDto::from).collect(),
 					study: c.study,
 				})
 				.collect(),
@@ -557,7 +589,8 @@ async fn delete_trade(State(panel): State<Panel>, Extension(caller): Extension<C
 #[serde(deny_unknown_fields)]
 struct SetUp {
 	keywords: Vec<String>,
-	google_category: Option<String>,
+	google_primary: Option<String>,
+	google_additional: Vec<String>,
 	study: Option<String>,
 }
 
@@ -569,11 +602,18 @@ async fn set_up(
 ) -> ApiResult<Json<TradeDto>> {
 	let trade = id(&raw)?;
 	let country: Country = country.parse()?;
-	let SetUp { keywords, google_category, study } = body(b)?;
+	let SetUp {
+		keywords,
+		google_primary,
+		google_additional,
+		study,
+	} = body(b)?;
+	let google = |id: &str| GoogleCategory::find(country, id);
 	let category = Category {
 		country,
 		keywords,
-		google_category,
+		google_primary: google_primary.as_deref().map(google).transpose()?,
+		google_additional: google_additional.iter().map(|id| google(id)).collect::<Result<_, _>>()?,
 		study,
 	};
 	let set = panel.set_up(caller.user_id, trade, category).await??;
@@ -587,4 +627,11 @@ async fn remove_category(State(panel): State<Panel>, Extension(caller): Extensio
 	panel.remove_category(caller.user_id, trade, country).await??;
 	tracing::info!(user_id = %caller.user_id, trade_id = trade, %country, "category removed");
 	Ok(StatusCode::NO_CONTENT)
+}
+
+async fn google_categories(Path(country): Path<String>) -> ApiResult<Json<GoogleCategoriesDto>> {
+	let country: Country = country.parse()?;
+	Ok(Json(GoogleCategoriesDto {
+		categories: GoogleCategory::all(country).map(GoogleCategoryDto::from).collect(),
+	}))
 }
