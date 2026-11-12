@@ -27,7 +27,7 @@ use sa_server::{
 	http, live,
 	signin::{SignIn, SignInConfig},
 	telegram::{self, BotApi, BotName},
-	tokens,
+	tokens, trash,
 	web::{self, Files},
 };
 
@@ -425,6 +425,7 @@ async fn serve(
 	browsers: Option<sa_server::browser::Connected>,
 	bind: SocketAddr,
 ) -> eyre::Result<()> {
+	let keep_by_default = matches!(identity, Identity::Dev(_));
 	let (concierge, config) = match identity {
 		Identity::Concierge(s) => {
 			tracing::info!(panel_origin = s.panel_origin, "signing in through concierge");
@@ -486,6 +487,7 @@ async fn serve(
 		}
 	};
 	let engine = panel.clone();
+	let purger = panel.clone();
 	let grafana_root = format!("{}/grafana/", config.panel_origin.trim_end_matches('/'));
 	let sign_in = SignIn::new(panel, concierge, config);
 	let forward = match &services {
@@ -553,7 +555,8 @@ async fn serve(
 				grafana.run(&server, &grafana_root, stopped.clone()).await;
 			}
 		};
-		tokio::join!(bot, feed, tokens, grafana);
+		let purge = trash::run(purger, keep_by_default, stopped.clone());
+		tokio::join!(bot, feed, tokens, grafana, purge);
 	};
 	let (served, ()) = tokio::join!(server, hubs);
 	served

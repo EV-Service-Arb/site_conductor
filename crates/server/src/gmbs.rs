@@ -328,7 +328,7 @@ impl From<Trade> for TradeDto {
 }
 
 /// A path's id: one that is no number is no id of the caller's.
-fn id(raw: &str) -> ApiResult<i64> {
+pub(crate) fn id(raw: &str) -> ApiResult<i64> {
 	raw.parse().map_err(|_| ApiError::NotFound)
 }
 

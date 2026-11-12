@@ -696,3 +696,31 @@ async fn gbps_are_given_a_trade_every_one_or_none() {
 	assert_eq!(status, StatusCode::NO_CONTENT);
 	assert_eq!(trade_ids(&mut b, &app).await, [trade["id"].clone(), Value::Null]);
 }
+
+#[tokio::test]
+async fn a_removed_gmail_is_restored_from_the_trash_and_only_an_admin_keeps_it_forever() {
+	let db = TestDb::create().await;
+	let p = panel(&db, None).await;
+	opened(&p).await;
+	let app = app(p, None);
+	let mut b = Browser::default();
+	b.sign_in(&app).await;
+	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
+	call(&mut b, &app, Method::DELETE, &format!("/api/v1/gmails/{}", gmail["id"]), None).await;
+
+	let (_, trash) = call(&mut b, &app, Method::GET, "/api/v1/trash", None).await;
+	assert_eq!(trash["settings"], json!({ "keep_days": 30, "never_purge": true }), "dev sign-in keeps everything: {trash}");
+	assert_eq!((&trash["gmails"][0]["gmail"], &trash["gmails"][0]["purge_at"]), (&json!("a@gmail.com"), &Value::Null));
+
+	let (status, _) = call(&mut b, &app, Method::PUT, "/api/v1/trash/settings", Some(json!({ "keep_days": 10, "never_purge": false }))).await;
+	assert_eq!(status, StatusCode::FORBIDDEN, "an operator holds no sa:admin:trash:keep");
+	let (status, _) = call(&mut b, &app, Method::PUT, "/api/v1/trash/settings", Some(json!({ "keep_days": 10 }))).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+
+	let (status, _) = call(&mut b, &app, Method::POST, &format!("/api/v1/trash/gmails/{}/restore", gmail["id"]), None).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	let (_, listed) = call(&mut b, &app, Method::GET, "/api/v1/gmails", None).await;
+	assert_eq!(listed["gmails"][0]["id"], gmail["id"], "{listed}");
+	let (status, _) = call(&mut b, &app, Method::POST, &format!("/api/v1/trash/gmails/{}/restore", gmail["id"]), None).await;
+	assert_eq!(status, StatusCode::NOT_FOUND, "out of the trash");
+}

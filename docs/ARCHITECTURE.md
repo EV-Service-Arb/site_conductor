@@ -50,7 +50,8 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          `browsers` (a gmail's browser: its proxy checked and sealed, Multilogin and
                          GoLogin, a launch),
                          `tokens` (the ledger, review_archive's charges, the snapshot), `import`
-                         (review_archive's, once), `assistant` (the assistant's chats)
+                         (review_archive's, once), `assistant` (the assistant's chats), `trash`
+                         (what was removed, restored until purged)
 crates/alerts/           no I/O: the alert rules, and the notes a service publishes to the
                          conductor and their check; sites and review_archive take it too
 crates/auth/             the `sa` permissions (concierge_iam derives), the aliases `sa:operator` /
@@ -88,6 +89,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/browser.rs         /api/v1/gmails/{id}/browser{,/test,/start,/stop,/film}; the runner; the viewer's
                          socket, the relay between it and a browser's devtools, a phone's passed through
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
+  src/trash.rs           /api/v1/trash; the hourly purge
   src/assistant.rs       /api/v1/assistant; the turns' shape
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
                          work in `serve`
@@ -413,8 +415,8 @@ GET    /gmails                              {gmails: [{id, gmail, role, cap, cre
                                             only is certain; cap null while the role is unknown
 POST   /gmails                              {gmail} → 201 the gmail; 409 held already
 PATCH  /gmails/{id}                         {role: owner|manager} → 200 the gmail
-DELETE /gmails/{id}                         204; its GBPs and connections removed with it; 409 while
-                                            it has a browser
+DELETE /gmails/{id}                         204: to the trash, its GBPs with it; 409 while it has a
+                                            browser
 GET    /gmails/{id}/connections             {imap: {host, username, set_at, checked: {at, error}} | null,
                                             maps_key: {last4, set_at, checked, out} | null, prices:
                                             {details, search, autocomplete}, browser: {provider, device, endpoint,
@@ -459,7 +461,7 @@ PATCH  /gmbs/{id}                           {name?, gmail_id?, phone?, trade?, a
 PUT    /gmbs/{id}/state                     {state, place?} → 200 the GBP; 400 a move the drawing
                                             below lacks; `place` taken while it has none, needed to
                                             become verified
-DELETE /gmbs/{id}                           204
+DELETE /gmbs/{id}                           204: to the trash
 PUT    /gmbs/enabled                        {gmbs: [id], enabled} → 204: every one switched, or none
                                             (404 one not the caller's)
 PUT    /gmbs/trade                          {gmbs: [id], trade: id | null} → 204: every one, or none
@@ -480,6 +482,15 @@ PUT    /trades/{id}/{country}               {keywords, google_primary: gcid | nu
                                             there or twice, additional ones past 9 or without a primary
 DELETE /trades/{id}/{country}               204
 GET    /google-categories/{country}         {categories: [{id, name}]}: Google's list there
+GET    /trash                               {settings: {keep_days, never_purge}, gmails: [{id, gmail,
+                                            removed_at, purge_at, gmbs, blocked}], gmbs: [{id, name,
+                                            state, gmail, removed_at, purge_at, blocked}]}: gmbs those
+                                            removed on their own; blocked why a restore is refused
+POST   /trash/{gmails,gmbs}/{id}/restore    204, a gmail with the GBPs removed with it; 409 blocked: a
+                                            GBP's gmail in the trash, a live gmail's address, a live
+                                            GBP's name, place or phone
+PUT    /trash/settings                      {keep_days: 1–90, never_purge?} → 204; never_purge needs
+                                            sa:admin:trash:keep (403)
 GET    /tokens                              {balance, daily, cap, kickbacks}: renewed, the
                                             kick-backs not claimed
 GET    /tokens/ledger?before=&limit=        {entries, next}: newest first, limit 1–200
@@ -638,8 +649,12 @@ review_archive's lookups and placement's sweeps are the house's for now.
 - **Past a draft a GBP has a gmail and a country** (the schema's CHECK on live rows): the archive
   reads its language from it. One on Google is added verifying, verified or suspended: by its
   place, or without one (not verified) with its country and point by hand.
-- A transfer moves it to another gmail of its owner's. Removed is once, apart from the state; a
+- A transfer moves it to another gmail of its owner's. Removed is apart from the state; a
   gmail removed removes its GBPs.
+- **The trash.** A removed gmail or GBP is its owner's to restore (a gmail with the GBPs removed
+  at its `removed_at`) until purged: `keep_days` after its removal (30 unsaid, 1–90), never with
+  `never_purge` (an admin's say; unsaid, on under dev sign-in). Purged is gone for good: its
+  gmail's IMAP and Maps key deleted, its row kept.
 
 ```text
 follow (10 s)   GET review_archive /api/conductor/charges?after=<cursor>&limit=500 (Conductor)
@@ -804,8 +819,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   on every way its run ends (docs/spec/browsers.md).
 - **No two gmails share a proxy**: an exit two accounts share is a link Google can draw.
 - **The ledger is append-only, and nothing a service stores an id of is deleted.**
-  `token_ledger` refuses UPDATE and DELETE; gmails and GBPs only get `removed_at`, kick-backs
-  only `claimed_at`, each once.
+  `token_ledger` refuses UPDATE and DELETE; gmails and GBPs get `removed_at`, which a restore
+  clears until `purged_at`, set once; kick-backs only `claimed_at`, once.
 - **A GBP with a place is tracked in review_archive; it is walked only while Verified.** The
   snapshot carries every GBP with a place, its state and country; the archive derives the track.
 - **One file, migrated on open.** `PANEL_DB_PATH` names it (`/data/panel.db` in the image); every

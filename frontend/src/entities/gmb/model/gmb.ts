@@ -7,7 +7,7 @@ export type { Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategory, 
 export type LatLng = { lat: number; lng: number };
 
 /** Each a key, so the compiler holds the lists to the generated unions. */
-const STATES = Object.keys({ draft: true, verifying: true, verified: true, suspended: true } satisfies Record<State, true>) as State[];
+export const STATES = Object.keys({ draft: true, verifying: true, verified: true, suspended: true } satisfies Record<State, true>) as State[];
 export const ON_GOOGLE = Object.keys({ verifying: true, verified: true, suspended: true } satisfies Record<OnGoogle, true>) as OnGoogle[];
 export const COUNTRIES = Object.keys({ FR: true, US: true, CA: true, GB: true } satisfies Record<Country, true>) as Country[];
 export const GMAIL_ROLES = Object.keys({ owner: true, manager: true } satisfies Record<GmailRole, true>) as GmailRole[];

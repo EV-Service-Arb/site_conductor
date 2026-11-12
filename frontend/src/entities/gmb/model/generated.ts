@@ -230,6 +230,14 @@ device: Device | null,
  * `socks5://` or `http://`, `user:pass@host:port`.
  */
 proxy: string, };
+/**
+ * `PUT /trash/settings`.
+ */
+export type SetTrashSettings = { keep_days: number, 
+/**
+ * Absent: left as it is. Present: `sa:admin:trash:keep` only.
+ */
+never_purge?: boolean, };
 export type StartBrowser = { 
 /**
  * At this GBP's point; none, the position blocked.
@@ -277,6 +285,51 @@ categories: Array<Category>, };
  * `GET /trades`.
  */
 export type Trades = { trades: Array<Trade>, };
+/**
+ * `GET /trash`.
+ */
+export type Trash = { settings: TrashSettings, gmails: Array<TrashedGmail>, gmbs: Array<TrashedGmb>, };
+export type TrashSettings = { 
+/**
+ * 1 to 90.
+ */
+keep_days: number, 
+/**
+ * Nothing purged, ever.
+ */
+never_purge: boolean, };
+/**
+ * A gmail in the trash.
+ */
+export type TrashedGmail = { id: number, gmail: string, 
+/**
+ * RFC 3339.
+ */
+removed_at: string, 
+/**
+ * RFC 3339; `null`: kept until restored.
+ */
+purge_at: string | null, 
+/**
+ * Its GBPs removed with it, which come back with it.
+ */
+gmbs: number, 
+/**
+ * Why it cannot be restored now.
+ */
+blocked: string | null, };
+/**
+ * A GBP in the trash on its own.
+ */
+export type TrashedGmb = { id: number, name: string, state: State, gmail: string | null, 
+/**
+ * RFC 3339.
+ */
+removed_at: string, 
+/**
+ * RFC 3339; `null`: kept until restored.
+ */
+purge_at: string | null, blocked: string | null, };
 
 export const DEVICES = ["pixel_7", "galaxy_s23", "redmi_note_14"] as const;
 export type Device = (typeof DEVICES)[number];

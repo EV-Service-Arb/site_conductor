@@ -26,6 +26,7 @@ pub mod telegram;
 #[cfg(feature = "testing")]
 pub mod testing;
 pub mod tokens;
+pub mod trash;
 pub mod web;
 
 /// What the contract's `provides` names, as the router mounts it (`--print-provided-paths`).

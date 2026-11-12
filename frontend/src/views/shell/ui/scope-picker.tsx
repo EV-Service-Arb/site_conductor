@@ -29,7 +29,7 @@ import { AddGmailButton } from "@/features/add-gmail";
 import { AddGmbButton } from "@/features/add-gmb";
 import { useT } from "@/shared/i18n";
 
-import { HEADING, ON_HOVER, ROW, Remove, ResetSelection } from "./outline-parts";
+import { HEADING, ON_HOVER, ROW, Remove, ResetSelection, useKept } from "./outline-parts";
 
 const same = (a: Pattern, b: Pattern) => a.trade === b.trade && a.country === b.country;
 /** Shift, Ctrl or Cmd: a click adds to what is picked rather than replacing it. */
@@ -45,6 +45,7 @@ const META = "font-normal tracking-normal normal-case";
  */
 export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmails; selection: Selection; onFlip: (gmbs: Gmb[], enabled: boolean) => Promise<void>; onChanged: () => void }) {
   const t = useT();
+  const kept = useKept();
   const trades = useTrades();
   const scope = useScope();
   const [open, setOpen] = useState(false);
@@ -161,7 +162,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
                   <span className={cn("flex items-center", ON_HOVER)}>
                     <OpenAccount gmail={g} onOpened={() => setOpen(false)} />
                     <AddGmbButton gmailId={g.id} trade={null} onAdded={onChanged} />
-                    <Remove title={t("gmbs.gmail.remove.title", { gmail: g.gmail })} body={t("gmbs.gmail.remove.body")} remove={() => removeGmail(g.id)} onRemoved={onChanged} />
+                    <Remove title={t("gmbs.gmail.remove.title", { gmail: g.gmail })} body={t("gmbs.gmail.remove.body", { kept })} remove={() => removeGmail(g.id)} onRemoved={onChanged} />
                   </span>
                   <span className="text-xs text-ink-soft tabular-nums" title={t("scope.gmail.count")}>
                     {edited && k > 0 && !full ? `${k}/${gmbs.length}` : inScope}

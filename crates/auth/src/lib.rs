@@ -93,6 +93,13 @@ pub enum Tokens {
 	Grant,
 }
 
+/// `Keep`: one's own trash never purged.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Permission)]
+#[permission("sa:admin:trash")]
+pub enum Trash {
+	Keep,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Permission)]
 #[permission("sa:review_archive:members")]
 pub enum Members {
@@ -130,6 +137,7 @@ alias!(
 		Sources::Manage,
 		Archive::Operate,
 		Tokens::Grant,
+		Trash::Keep,
 		Members::ActAs,
 		Mcp::Use,
 		Study::Read,

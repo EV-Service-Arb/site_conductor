@@ -145,7 +145,8 @@ pub async fn add_gmail(conn: &mut SqliteConnection, id: Option<i64>, owner: Uuid
 	row.map(gmail).transpose()
 }
 
-/// The gmail removed, and the GBPs it manages with it. `false`: no such gmail of the owner's, or
+/// The gmail removed, and the GBPs it manages with it, at one `now` (a restore brings back
+/// those). `false`: no such gmail of the owner's, or
 /// it is removed already.
 pub async fn remove_gmail(conn: &mut SqliteConnection, owner: Uuid, id: i64, now: Timestamp) -> eyre::Result<bool> {
 	let done = sqlx::query("UPDATE gmails SET removed_at = $3 WHERE id = $1 AND owner = $2 AND removed_at IS NULL")
@@ -164,9 +165,6 @@ pub async fn remove_gmail(conn: &mut SqliteConnection, owner: Uuid, id: i64, now
 		.execute(&mut *conn)
 		.await
 		.wrap_err("removing a gmail's GMBs")?;
-	for which in [super::connections::Connection::Imap, super::connections::Connection::MapsKey] {
-		super::connections::delete(conn, id, which).await?;
-	}
 	Ok(true)
 }
 

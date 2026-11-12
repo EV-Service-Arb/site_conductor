@@ -18,6 +18,7 @@ use sa_server::{
 	gmbs::{CandidatesDto, GmailsDto, GoogleCategoriesDto, MapDto, SuggestionsDto, TradesDto},
 	signin::Caller,
 	tokens::{BalanceChangeDto, BalanceDto, LedgerDto, SetPricesDto, TokenHoldersDto, TokensDto, UsageDto},
+	trash::{SetSettingsDto, TrashDto},
 };
 
 fn main() {
@@ -51,7 +52,7 @@ fn main() {
 				MapDto,
 				(TradesDto, GoogleCategoriesDto),
 				OnGoogle,
-				ConnectionsDto,
+				(ConnectionsDto, TrashDto, SetSettingsDto),
 				SetBrowser,
 				StartBrowser,
 				ViewerIn,

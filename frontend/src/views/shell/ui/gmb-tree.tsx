@@ -1,9 +1,9 @@
 "use client";
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn } from "@evinvest/uikit";
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn } from "@evinvest/uikit";
 import { ChevronDown, CircleMinus, CirclePlus, Link2, Pencil, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 
 import {
@@ -22,6 +22,7 @@ import {
   issueOf,
   issueText,
   open,
+  openTrash,
   readiness,
   removeGmb,
   select,
@@ -37,6 +38,7 @@ import {
   useScope,
   useSelection,
   useTrades,
+  useTrash,
   useUndoable,
 } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
@@ -48,8 +50,9 @@ import { ROUTES } from "@/shared/config/routes";
 import { useT } from "@/shared/i18n";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
+import { useButtonSize } from "@/shared/ui/touch";
 
-import { HEADING, ROW, RemoveDialog, ResetSelection } from "./outline-parts";
+import { HEADING, ROW, RemoveDialog, ResetSelection, useKept } from "./outline-parts";
 import { ScopePicker } from "./scope-picker";
 
 const SUBHEADING = "flex items-center gap-1 px-2 pt-1.5 pb-0.5 text-xs text-ink-soft";
@@ -219,10 +222,39 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
           </Group>
         </>
       )}
-      {scoped.length <= 1 && (
-        <AddGmbButton labeled gmailId={scoped[0]?.id ?? null} trade={categories?.length === 1 && categories[0]!.trade !== "*" ? categories[0]!.trade : null} onAdded={changed} />
-      )}
+      <footer className="flex items-center">
+        {scoped.length <= 1 && (
+          <AddGmbButton labeled gmailId={scoped[0]?.id ?? null} trade={categories?.length === 1 && categories[0]!.trade !== "*" ? categories[0]!.trade : null} onAdded={changed} />
+        )}
+        <span className="flex-1" />
+        <TrashButton />
+      </footer>
     </section>
+  );
+}
+
+/** The trash, with how much waits in it. */
+function TrashButton() {
+  const t = useT();
+  const trash = useTrash();
+  const router = useRouter();
+  const pathname = usePathname();
+  const button = useButtonSize();
+  const n = trash.status === "ok" ? trash.data.gmails.length + trash.data.gmbs.length : null;
+  return (
+    <Button
+      variant="ghost"
+      size={button("sm")}
+      className="text-ink-soft"
+      onClick={() => {
+        if (pathname === "/") openTrash(true);
+        else router.push("/?trash");
+      }}
+    >
+      <Trash2 aria-hidden />
+      {t("trash.open")}
+      {n !== null && n > 0 && <span className="tabular-nums">{n}</span>}
+    </Button>
   );
 }
 
@@ -374,6 +406,7 @@ function GmbRow({
   onNavigate?: () => void;
 }) {
   const t = useT();
+  const kept = useKept();
   const hovered = useOnMap((s) => s.hovered === gmb.id);
   const [dialog, setDialog] = useState<"edit" | "link" | "remove" | null>(null);
   const name = gmb.name;
@@ -455,7 +488,7 @@ function GmbRow({
       </DropdownMenu>
       {dialog === "edit" && <EditGbp gmb={gmb} onClose={() => setDialog(null)} onChanged={onChanged} />}
       {dialog === "link" && linked && <LinkPlace gmbId={gmb.id} linked={linked} onClose={() => setDialog(null)} onDone={onChanged} />}
-      {dialog === "remove" && <RemoveDialog title={t("gmbs.gmb.remove.title", { name })} body={t("gmbs.gmb.remove.body")} remove={() => removeGmb(gmb.id)} onRemoved={onChanged} onClose={() => setDialog(null)} />}
+      {dialog === "remove" && <RemoveDialog title={t("gmbs.gmb.remove.title", { name })} body={t("gmbs.gmb.remove.body", { kept })} remove={() => removeGmb(gmb.id)} onRemoved={onChanged} onClose={() => setDialog(null)} />}
       {onMap ? (
         <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => open(gmb)}>
           {label}

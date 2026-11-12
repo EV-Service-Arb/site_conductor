@@ -9,7 +9,7 @@
 //! [`tokens`] their balances and review_archive's charges, and [`import`] both from there;
 //! [`alerts`] the hub: users' destinations and rules, the feeds fanned out to them; [`telegram`]
 //! the method that reaches them; [`live`] the bus that tells the server's sockets what changed;
-//! [`assistant`] the assistant's chats.
+//! [`assistant`] the assistant's chats; [`trash`] what was removed, until it is purged.
 
 pub mod access;
 pub mod alerts;
@@ -28,6 +28,7 @@ pub mod telegram;
 #[cfg(feature = "testing")]
 pub mod testing;
 pub mod tokens;
+pub mod trash;
 
 use std::{collections::BTreeSet, sync::Arc};
 

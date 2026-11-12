@@ -15,7 +15,7 @@ import {
 import { Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import { select } from "@/entities/gmb";
+import { select, useTrash } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -23,6 +23,15 @@ import { useButtonSize } from "@/shared/ui/touch";
 export const ROW = "group flex min-w-0 items-center gap-1 rounded-md pr-1 text-sm hover:bg-hover/50";
 /** Shown on the row's hover or focus only, so the names keep the width. */
 export const ON_HOVER = "hidden group-hover:flex group-focus-within:flex";
+/** How long a removal waits in the trash, for a remove dialog's `{kept}`; unsaid until the trash is read. */
+export function useKept(): string {
+  const t = useT();
+  const trash = useTrash();
+  if (trash.status !== "ok") return "";
+  const { never_purge, keep_days } = trash.data.settings;
+  return never_purge ? t("trash.for.ever") : t("trash.for.days", { days: keep_days });
+}
+
 export const HEADING = "flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-medium tracking-wide text-ink-soft uppercase";
 
 export function Remove({ title, body, remove, onRemoved }: { title: string; body: string; remove: () => Promise<void>; onRemoved: () => void }) {

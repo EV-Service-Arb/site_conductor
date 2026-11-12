@@ -7,8 +7,10 @@ import { type Resource, useResource } from "@/shared/lib/use-resource";
 
 import { fetchGmails, fetchTrades } from "../api/gmbs";
 import { fetchArchive, fetchSiteTags } from "../api/tags";
+import { fetchTrash } from "../api/trash";
 import type { Archive, Gmails, SiteTag, Trade } from "./gmb";
 import type { Tags } from "./issues";
+import type { Trash } from "./trash";
 
 type Read<T> = Resource<T> & { reload: () => void };
 
@@ -17,6 +19,7 @@ interface Gmbs {
   trades: Read<Trade[]>;
   archive: Read<Archive | null>;
   sites: Read<Map<number, SiteTag> | null>;
+  trash: Read<Trash>;
 }
 
 const GmbsContext = createContext<Gmbs | null>(null);
@@ -28,7 +31,10 @@ export function GmailsProvider({ seesSites, children }: { seesSites: boolean; ch
   const trades = useResource("trades", fetchTrades, "trades", { focus: true });
   const archive = useResource("gmbs.archive", fetchArchive, "gmbs.archive", { focus: true });
   const sites = useResource(`gmbs.sites.${seesSites}`, () => (seesSites ? fetchSiteTags() : Promise.resolve(null)), "gmbs.sites", { focus: true });
-  return <GmbsContext value={{ gmails, trades, archive, sites }}>{children}</GmbsContext>;
+  const trash = useResource("trash", fetchTrash, "trash", { focus: true });
+  // whatever changes the gmails may put something in the trash or take it out
+  const both = { ...gmails, reload: () => (gmails.reload(), trash.reload()) };
+  return <GmbsContext value={{ gmails: both, trades, archive, sites, trash: { ...trash, reload: both.reload } }}>{children}</GmbsContext>;
 }
 
 function useGmbs(): Gmbs {
@@ -46,6 +52,10 @@ export function useUndoable(): (entry: UndoEntry) => void {
   const push = useUndo();
   const { reload } = useGmails();
   return (e) => push({ label: e.label, undo: () => e.undo().finally(reload), redo: () => e.redo().finally(reload) });
+}
+
+export function useTrash(): Read<Trash> {
+  return useGmbs().trash;
 }
 
 export function useTrades(): Read<Trade[]> {
