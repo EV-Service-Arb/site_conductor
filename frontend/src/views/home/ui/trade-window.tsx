@@ -228,10 +228,16 @@ export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; g
                         {renaming === tr.id ? (
                           <Rename trade={tr} onDone={() => setRenaming(null)} />
                         ) : (
-                          <span className="flex flex-col">
+                          <button
+                            type="button"
+                            title={t("categories.open", { trade: tr.name })}
+                            // shortcut: the first country column it is set up in, else the first column; upgrade once a trade has a view of its own
+                            onClick={() => openTrade(tr.id, countries.find((c) => tr.categories.some((k) => k.country === c)) ?? countries[0])}
+                            className="-mx-1 flex flex-col rounded px-1 text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+                          >
                             <span className="font-medium text-ink">{tr.name}</span>
                             <span className="text-xs text-ink-soft tabular-nums">{t("categories.row", { gbps: held.length, countries: where })}</span>
-                          </span>
+                          </button>
                         )}
                       </th>
                       {countries.map((c) => {

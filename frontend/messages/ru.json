@@ -735,5 +735,6 @@
   "categories.new.why": "У новой ниши нет страны: «Настроить» в ячейке добавляет её.",
   "categories.untraded": "GBP без ниши: {n} — нет ключевых слов для ранжирования, нет категории Google в Launch.",
   "categories.untraded.show": "Показать · Без категории {n}",
-  "categories.row": "GBP: {gbps} · стран: {countries}"
+  "categories.row": "GBP: {gbps} · стран: {countries}",
+  "categories.open": "Открыть {trade}"
 }

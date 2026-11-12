@@ -735,5 +735,6 @@
   "categories.new.why": "A new trade has no country yet: a cell's Set up gives it one.",
   "categories.untraded": "{n} GBPs hold no trade: no category keywords to rank on, no Google category on Launch.",
   "categories.untraded.show": "Show them · No category {n}",
-  "categories.row": "{gbps} GBPs · {countries} countries"
+  "categories.row": "{gbps} GBPs · {countries} countries",
+  "categories.open": "Open {trade}"
 }
