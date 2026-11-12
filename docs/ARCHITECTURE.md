@@ -615,13 +615,14 @@ review_archive's lookups and placement's sweeps are the house's for now.
   stays out of comparisons. Not set up there is shown so, never filled from another country. A
   trade is deleted only once no live GBP holds it; no service stores its id.
 - **Google's categories** are a closed list: a gcid (`gcid:plumber`) and a name per language. A
-  GBP takes a primary one and up to 9 additional ones, entered into Google's form in order; the
-  names shown are the country's language's. The list is `crates/panel/google_categories.json`, one
-  gcid a line: `{countries, names: {lang: name}}`, a gcid in a country only with a name in its
-  language. It is drawn from two pulls of Google's Business Information API:
+  GBP takes a primary one and up to 9 additional ones, entered into Google's form in order; a
+  name is shown in the reader's language and copied in the country's, as the form in the GBP's
+  browser (its country's locale) names it. The list is `crates/panel/google_categories.json`, one
+  gcid a line: `{countries, names: {lang: name}}`, named in its countries' languages and the
+  front end's. It is drawn from pulls of Google's Business Information API:
   jepto/google-business-profile-categories `data/categories.json` (every gcid, its English name,
-  its regions) and Hypetrix's `wp-json/hypetrix/v1/gbp-categories?region=US&lang=fr` (the French
-  names). A refresh dropping a gcid a trade holds makes reading it fail until a migration moves
+  its regions) and hypetrix.com's `wp-json/hypetrix/v1/gbp-categories?region=US&lang=<fr|ru>`
+  (US only: the 25 GB/CA-only gcids carry their English name as `ru`). A refresh dropping a gcid a trade holds makes reading it fail until a migration moves
   it to what Google replaced it with.
 - **A GBP with a place has a gmail and a country** (the schema's CHECK on live rows): the archive
   reads its language from it. One on Google already is added verifying, verified or suspended.

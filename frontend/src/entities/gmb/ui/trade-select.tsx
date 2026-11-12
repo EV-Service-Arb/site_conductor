@@ -5,8 +5,8 @@ import { useState } from "react";
 
 import { addTrade } from "../api/gmbs";
 import { useTrades } from "../model/gmails-context";
-import type { Country } from "../model/gmb";
-import { useT } from "@/shared/i18n";
+import { type Country, googleName } from "../model/gmb";
+import { useLocale, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
@@ -18,6 +18,7 @@ const NEW = "new";
  */
 export function TradeSelect({ value, onPick, none, label, country, className }: { value: number | null; onPick: (trade: number | null) => void; none?: string; label: string; country?: Country | null; className?: string }) {
   const t = useT();
+  const locale = useLocale();
   const size = useControlSize();
   const button = useButtonSize();
   const trades = useTrades();
@@ -71,7 +72,7 @@ export function TradeSelect({ value, onPick, none, label, country, className }: 
           const there = country == null ? undefined : (tr.categories.find((c) => c.country === country) ?? null);
           return (
             <NativeSelectOption key={tr.id} value={String(tr.id)}>
-              {there === undefined ? tr.name : there === null ? t("trades.option.notSetUp", { trade: tr.name, country: country! }) : `${tr.name} — ${there.google_primary?.name ?? "…"}`}
+              {there === undefined ? tr.name : there === null ? t("trades.option.notSetUp", { trade: tr.name, country: country! }) : `${tr.name} — ${there.google_primary === null ? "…" : googleName(there.google_primary, locale)}`}
             </NativeSelectOption>
           );
         })}

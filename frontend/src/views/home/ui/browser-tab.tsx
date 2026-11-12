@@ -3,7 +3,7 @@
 import { Button } from "@evinvest/uikit";
 import { Copy, Keyboard } from "lucide-react";
 
-import { type Gmb, type Listed, categoryOf, useGmbTags } from "@/entities/gmb";
+import { type Gmb, type Listed, categoryOf, googleName, useGmbTags } from "@/entities/gmb";
 import { BrowserSession, type TypeIn } from "@/features/browser-session";
 import { useT } from "@/shared/i18n";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -29,7 +29,7 @@ function FormValues({ gmb, type }: { gmb: Gmb; type: TypeIn }) {
       </header>
       <ol className="flex flex-col gap-3">
         <Value label={t("launch.must.name")} value={gmb.name} type={type} />
-        <Value label={t("launch.must.category")} value={placed?.status === "set_up" ? (placed.category.google_primary?.name ?? null) : null} type={type} />
+        <Value label={t("launch.must.category")} value={placed?.status === "set_up" && placed.category.google_primary !== null ? googleName(placed.category.google_primary, placed.category.lang) : null} type={type} />
         <li className="flex flex-col gap-0.5 text-sm">
           <span className="text-xs text-ink-soft">{t("window.browser.visit")}</span>
           {gmb.customers_visit === null ? <span className="text-accent-warn">{t("window.browser.unset")}</span> : <span className="text-ink">{t(gmb.customers_visit ? "launch.visit.yes" : "launch.visit.no")}</span>}

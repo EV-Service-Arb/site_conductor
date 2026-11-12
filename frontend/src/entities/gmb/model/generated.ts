@@ -43,7 +43,7 @@ export type Candidates = { candidates: Array<Place>, };
  */
 export type Category = { country: Country, 
 /**
- * The country's language, its keywords' and Google's categories' names': `fr`.
+ * The country's language, its keywords' and Google's form's: `fr`.
  */
 lang: string, 
 /**
@@ -176,7 +176,7 @@ location: { lat: number, lng: number, placed: boolean } | null, };
  */
 export type GoogleCategories = { categories: Array<GoogleCategory>, };
 /**
- * One of Google's categories, named in a country's language.
+ * One of Google's categories.
  */
 export type GoogleCategory = { 
 /**
@@ -184,9 +184,9 @@ export type GoogleCategory = {
  */
 id: string, 
 /**
- * `Plombier`.
+ * By language: shown in the reader's, typed into Google's form in the country's.
  */
-name: string, };
+names: { [key in string]: string }, };
 export type Imap = { host: string, username: string, set_at: string, checked: Checked, };
 /**
  * `GET /map`: the browser's Maps JS key, referrer-restricted.

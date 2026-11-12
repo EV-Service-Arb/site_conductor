@@ -1,4 +1,4 @@
-import { type Infer, type Parser, arrayOf, bool, nullable, num, object, oneOf, str } from "@/shared/lib/parse";
+import { type Infer, type Parser, arrayOf, bool, nullable, num, object, oneOf, recordOf, str } from "@/shared/lib/parse";
 
 import type { Candidates, Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategories, GoogleCategory, MapConfig, OnGoogle, Place, State, Trade, Trades } from "./generated";
 
@@ -37,7 +37,14 @@ export const mapConfigParser: Parser<MapConfig> = object({ key: str });
 const gmailParser: Parser<Gmail> = object({ id: num, gmail: str, role: nullable(oneOf(GMAIL_ROLES)), created_at: str, browser: bool });
 export const gmailsParser: Parser<Gmails> = object({ gmails: arrayOf(gmailParser), gmbs: arrayOf(gmbParser) });
 
-const googleCategoryParser: Parser<GoogleCategory> = object({ id: str, name: str });
+const googleCategoryParser: Parser<GoogleCategory> = object({ id: str, names: recordOf(str) });
+
+/** `g`'s name in `lang`: the reader's, or its country's, which Google's form there reads. */
+export function googleName(g: GoogleCategory, lang: string): string {
+  const name = g.names[lang];
+  if (name === undefined) throw new Error(`${g.id} has no name in ${lang}`);
+  return name;
+}
 export const googleCategoriesParser: Parser<GoogleCategories> = object({ categories: arrayOf(googleCategoryParser) });
 const categoryParser: Parser<Category> = object({
   country: oneOf(COUNTRIES),

@@ -4,8 +4,8 @@ import { Button, Command, CommandEmpty, CommandInput, CommandItem, CommandList, 
 import { ChevronLeft, ChevronRight, ChevronsUpDown, Copy, GripVertical, Plus, X } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
-import { type Category, type Country, type GoogleCategory, fetchGoogleCategories } from "@/entities/gmb";
-import { useT } from "@/shared/i18n";
+import { type Category, type Country, type GoogleCategory, fetchGoogleCategories, googleName } from "@/entities/gmb";
+import { useLocale, useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { failureText } from "@/shared/ui/failure-text";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -20,6 +20,7 @@ type Google = Pick<Category, "google_primary" | "google_additional">;
 /** A category's primary and additional Google categories, off Google's list; `write` sends both whole. */
 export function GoogleCategories({ category, write }: { category: Category; write: (change: Google) => void }) {
   const t = useT();
+  const locale = useLocale();
   const button = useButtonSize();
   const { google_primary: primary, google_additional: additional } = category;
   const [dragged, setDragged] = useState<number | null>(null);
@@ -37,12 +38,12 @@ export function GoogleCategories({ category, write }: { category: Category; writ
       <span className="flex items-center gap-2">
         <Picker country={category.country} lang={category.lang} exclude={primary === null ? new Set() : new Set([primary.id])} onPick={(g) => write({ google_primary: g, google_additional: additional.filter((a) => a.id !== g.id) })}>
           <Button variant="outline" size={button("sm")} className={cn("max-w-md min-w-0 flex-1 justify-between", primary === null && "border-accent-warn/60 text-accent-warn")}>
-            <span className="truncate">{primary?.name ?? t("trades.google.pick")}</span>
+            <span className="truncate">{primary === null ? t("trades.google.pick") : googleName(primary, locale)}</span>
             <ChevronsUpDown aria-hidden className="text-ink-soft" />
           </Button>
         </Picker>
         {primary !== null && (
-          <Button type="button" variant="ghost" size={button("sm")} onClick={() => void navigator.clipboard.writeText(primary.name)}>
+          <Button type="button" variant="ghost" size={button("sm")} title={googleName(primary, category.lang)} onClick={() => void navigator.clipboard.writeText(googleName(primary, category.lang))}>
             <Copy aria-hidden />
             {t("trades.google.copy")}
           </Button>
@@ -62,7 +63,7 @@ export function GoogleCategories({ category, write }: { category: Category; writ
             key={g.id}
             draggable
             onDragStart={(e) => {
-              e.dataTransfer.setData("text/plain", g.name);
+              e.dataTransfer.setData("text/plain", googleName(g, category.lang));
               e.dataTransfer.effectAllowed = "move";
               setDragged(i);
             }}
@@ -90,14 +91,14 @@ export function GoogleCategories({ category, write }: { category: Category; writ
           >
             <GripVertical aria-hidden className="size-3 text-ink-faint" />
             <span className="font-mono text-ink-soft tabular-nums">{i + 1}</span>
-            <span className="px-0.5">{g.name}</span>
-            <ChipButton label={t("trades.google.additional.earlier", { category: g.name })} disabled={i === 0} onClick={() => move(i, i - 1)}>
+            <span className="px-0.5">{googleName(g, locale)}</span>
+            <ChipButton label={t("trades.google.additional.earlier", { category: googleName(g, locale) })} disabled={i === 0} onClick={() => move(i, i - 1)}>
               <ChevronLeft aria-hidden className="size-3" />
             </ChipButton>
-            <ChipButton label={t("trades.google.additional.later", { category: g.name })} disabled={i === additional.length - 1} onClick={() => move(i, i + 1)}>
+            <ChipButton label={t("trades.google.additional.later", { category: googleName(g, locale) })} disabled={i === additional.length - 1} onClick={() => move(i, i + 1)}>
               <ChevronRight aria-hidden className="size-3" />
             </ChipButton>
-            <ChipButton label={t("trades.google.additional.remove", { category: g.name })} onClick={() => write({ google_primary: primary, google_additional: additional.filter((a) => a.id !== g.id) })}>
+            <ChipButton label={t("trades.google.additional.remove", { category: googleName(g, locale) })} onClick={() => write({ google_primary: primary, google_additional: additional.filter((a) => a.id !== g.id) })}>
               <X aria-hidden className="size-3" />
             </ChipButton>
           </li>
@@ -163,22 +164,24 @@ function Picker({ country, lang, exclude, onPick, children }: { country: Country
 const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 const WORD = /[^\p{L}\p{N}]+/u;
 
-/** Every term must match the name or the gcid's slug, so English terms find French names; prefix, then word-start, then the rest. */
+/** Every term must match the reader's name, the country's or the gcid's slug; prefix, then word-start, then the rest. */
 function Search({ country, lang, exclude, onPick }: { country: Country; lang: string; exclude: ReadonlySet<string>; onPick: (g: GoogleCategory) => void }) {
   const t = useT();
+  const locale = useLocale();
   const list = useResource(`google-categories.${country}`, () => fetchGoogleCategories(country));
   const [search, setSearch] = useState("");
   const data = list.status === "ok" ? list.data : null;
   const indexed = useMemo(() => {
-    const collator = new Intl.Collator(lang);
+    const collator = new Intl.Collator(locale);
     return (data ?? [])
       .map((g) => {
-        const name = fold(g.name);
-        const slug = g.id.replace(/^gcid:/, "").replaceAll("_", " ");
-        return { g, name, slug, nameWords: name.split(WORD), words: [...name.split(WORD), ...slug.split(" ")] };
+        const shown = googleName(g, locale);
+        const name = fold(shown);
+        const slug = [g.id.replace(/^gcid:/, "").replaceAll("_", " "), fold(googleName(g, lang))].join(" ");
+        return { g, shown, name, slug, nameWords: name.split(WORD), words: [...name.split(WORD), ...slug.split(WORD)] };
       })
-      .sort((a, b) => collator.compare(a.g.name, b.g.name));
-  }, [data, lang]);
+      .sort((a, b) => collator.compare(a.shown, b.shown));
+  }, [data, lang, locale]);
   const terms = fold(search).split(/\s+/).filter((x) => x !== "");
   const whole = terms.join(" ");
   const ranked = indexed
@@ -190,7 +193,7 @@ function Search({ country, lang, exclude, onPick }: { country: Country; lang: st
     })
     // stable: the collator's order within a rank
     .sort((a, b) => a.rank - b.rank)
-    .map(({ x }) => x.g);
+    .map(({ x }) => x);
 
   return (
     <Command shouldFilter={false} search={search} onSearchChange={setSearch}>
@@ -198,10 +201,10 @@ function Search({ country, lang, exclude, onPick }: { country: Country; lang: st
       <CommandList>
         {list.status === "loading" && <p className="px-3 py-2 text-sm text-ink-soft">{t("state.loading")}</p>}
         {list.status === "error" && <p className="px-3 py-2 text-sm text-accent-error">{failureText(list.failure, t)}</p>}
-        {ranked.slice(0, SHOWN).map((g) => (
+        {ranked.slice(0, SHOWN).map(({ g, shown }) => (
           <CommandItem key={g.id} value={g.id} onSelect={() => onPick(g)}>
-            <span className="min-w-0 flex-1 truncate" title={g.name}>
-              {g.name}
+            <span className="min-w-0 flex-1 truncate" title={shown}>
+              {shown}
             </span>
             <span className="max-w-[40%] truncate font-mono text-xs text-ink-faint">{g.id.replace(/^gcid:/, "")}</span>
           </CommandItem>

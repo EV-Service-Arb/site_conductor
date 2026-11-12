@@ -34,6 +34,7 @@ import {
   chooseCategoryScope,
   chooseGmailScope,
   addTrade,
+  googleName,
   deleteTrade,
   openCategories,
   openTrade,
@@ -155,6 +156,7 @@ export function TradeWindow({ trade, tab, gmbs, gmails }: { trade: Trade; tab: C
 /** Every trade by country, managed: the level a trade's window sits under, opened from the scope picker, which only selects. */
 export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; gmbs: readonly Gmb[] }) {
   const t = useT();
+  const locale = useLocale();
   const button = useButtonSize();
   const [added, setAdded] = useState<readonly Country[]>([]);
   const [renaming, setRenaming] = useState<number | null>(null);
@@ -242,7 +244,7 @@ export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; g
                               <button type="button" title={t("scope.matrix.open", { category: name })} onClick={() => openTrade(tr.id, c)} className={cn(cell, "hover:bg-hover")}>
                                 <span className={cn("font-semibold tabular-nums", n === 0 ? "text-ink-soft" : "text-ink")}>{n}</span>
                                 <span className="max-w-full truncate text-xs text-ink-soft">
-                                  {[t("categories.keywords", { n: category.keywords.length }), category.google_primary?.name ?? t("categories.noGoogle")].join(" · ")}
+                                  {[t("categories.keywords", { n: category.keywords.length }), category.google_primary === null ? t("categories.noGoogle") : googleName(category.google_primary, locale)].join(" · ")}
                                 </span>
                               </button>
                             ) : n > 0 ? (
@@ -484,7 +486,6 @@ function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; categ
         <h3 className={SECTION_HEAD}>
           {t("trades.keywords")}
           <span className="flex-1" />
-          <span className="font-normal tracking-normal normal-case">{lang}</span>
           <span className="font-mono font-normal tabular-nums">
             {category.keywords.length} / {MAX_KEYWORDS}
           </span>
@@ -509,7 +510,7 @@ function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; categ
             if (added.length > 0) void write({ keywords: [...category.keywords, ...added] }).then((ok) => ok && setTyped(""));
           }}
         >
-          <Input size={size} value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={t("trades.keywords.add", { lang })} aria-label={t("trades.keywords.add", { lang })} className="min-w-0 flex-1" />
+          <Input size={size} value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={t("trades.keywords.add")} aria-label={t("trades.keywords.add")} className="min-w-0 flex-1" />
         </form>
         {failed?.at === "keywords" ? <p className="text-xs text-accent-error">{failed.text}</p> : <p className="text-xs text-ink-soft">{t("trades.keywords.why")}</p>}
       </section>
@@ -518,10 +519,10 @@ function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; categ
         <h3 className={SECTION_HEAD}>
           {t("trades.google")}
           <span className="flex-1" />
-          <span className="font-normal tracking-normal normal-case">{t("trades.google.where", { country })}</span>
+          <span className="font-normal tracking-normal normal-case">{t("trades.google.where", { country, lang })}</span>
         </h3>
         <GoogleCategories category={category} write={(change) => void write(change, "google")} />
-        {failed?.at === "google" ? <p className="text-xs text-accent-error">{failed.text}</p> : <p className="text-xs text-ink-soft">{t("trades.google.why", { category: name, lang })}</p>}
+        {failed?.at === "google" ? <p className="text-xs text-accent-error">{failed.text}</p> : <p className="text-xs text-ink-soft">{t("trades.google.why", { category: name })}</p>}
       </section>
 
       <section className={SECTION}>

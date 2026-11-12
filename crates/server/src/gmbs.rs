@@ -34,6 +34,8 @@
 //!
 //! Before the import from review_archive, the writes answer 503.
 
+use std::collections::BTreeMap;
+
 use axum::{
 	Extension, Json,
 	extract::{
@@ -124,7 +126,7 @@ pub struct TradeDto {
 #[ts(rename = "Category")]
 pub struct CategoryDto {
 	pub country: Country,
-	/// The country's language, its keywords' and Google's categories' names': `fr`.
+	/// The country's language, its keywords' and Google's form's: `fr`.
 	pub lang: String,
 	/// Lowercase, in the country's language, none naming a city: the terms every GBP of the
 	/// category is compared on.
@@ -137,14 +139,14 @@ pub struct CategoryDto {
 	pub study: Option<String>,
 }
 
-/// One of Google's categories, named in a country's language.
+/// One of Google's categories.
 #[derive(Clone, Debug, Serialize, TS)]
 #[ts(rename = "GoogleCategory")]
 pub struct GoogleCategoryDto {
 	/// `gcid:plumber`.
 	pub id: String,
-	/// `Plombier`.
-	pub name: String,
+	/// By language: shown in the reader's, typed into Google's form in the country's.
+	pub names: BTreeMap<String, String>,
 }
 
 /// `GET /google-categories/{country}`.
@@ -158,7 +160,7 @@ impl From<GoogleCategory> for GoogleCategoryDto {
 	fn from(g: GoogleCategory) -> Self {
 		Self {
 			id: g.id.to_owned(),
-			name: g.name.to_owned(),
+			names: g.names.clone(),
 		}
 	}
 }

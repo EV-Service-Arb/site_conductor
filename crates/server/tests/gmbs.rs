@@ -497,12 +497,13 @@ async fn google_categories_are_googles_in_the_country_in_order() {
 	)
 	.await;
 	assert_eq!(status, StatusCode::OK, "{body}");
-	assert_eq!(body["categories"][0]["google_primary"], json!({ "id": "gcid:plumber", "name": "Plombier" }));
+	assert_eq!(body["categories"][0]["google_primary"]["id"], "gcid:plumber");
+	assert_eq!(body["categories"][0]["google_primary"]["names"]["fr"], "Plombier");
 	let names: Vec<&str> = body["categories"][0]["google_additional"]
 		.as_array()
 		.unwrap()
 		.iter()
-		.map(|g| g["name"].as_str().unwrap())
+		.map(|g| g["names"]["fr"].as_str().unwrap())
 		.collect();
 	assert_eq!(names, ["Chauffagiste", "Service d'évacuation des eaux"]);
 
@@ -525,10 +526,13 @@ async fn google_categories_are_googles_in_the_country_in_order() {
 
 	let (status, listed) = call(&mut b, &app, Method::GET, "/api/v1/google-categories/FR", None).await;
 	assert_eq!(status, StatusCode::OK);
-	assert!(
-		listed["categories"].as_array().unwrap().contains(&json!({ "id": "gcid:plumber", "name": "Plombier" })),
-		"{listed}"
-	);
+	let plumber = listed["categories"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.find(|g| g["id"] == "gcid:plumber")
+		.expect("Google lists plumbers in FR");
+	assert_eq!(plumber["names"]["fr"], "Plombier");
 }
 
 async fn trade_ids(b: &mut Browser, app: &Router) -> Vec<Value> {
