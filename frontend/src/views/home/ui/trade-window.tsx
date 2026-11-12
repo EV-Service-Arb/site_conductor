@@ -33,10 +33,13 @@ import {
   type Trade,
   chooseCategoryScope,
   chooseGmailScope,
+  addTrade,
   deleteTrade,
+  openCategories,
   openTrade,
   removeCategory,
   renameTrade,
+  setOnly,
   setUpCategory,
   useTrades,
 } from "@/entities/gmb";
@@ -74,6 +77,12 @@ export function TradeWindow({ trade, tab, gmbs, gmails }: { trade: Trade; tab: C
           ) : (
             <h2 className="flex min-w-0 items-center gap-2 text-lg font-semibold text-ink">
               <Tag aria-hidden className="size-4 shrink-0 text-ink-soft" />
+              <button type="button" onClick={() => openCategories(true)} className="shrink-0 rounded font-medium text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+                {t("scope.categories")}
+              </button>
+              <span aria-hidden className="text-ink-soft/60">
+                /
+              </span>
               <span className="truncate">{tab === null ? trade.name : `${trade.name} · ${tab}`}</span>
             </h2>
           )}
@@ -140,6 +149,179 @@ export function TradeWindow({ trade, tab, gmbs, gmails }: { trade: Trade; tab: C
         )}
       </div>
     </section>
+  );
+}
+
+/** Every trade by country, managed: the level a trade's window sits under, opened from the scope picker, which only selects. */
+export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; gmbs: readonly Gmb[] }) {
+  const t = useT();
+  const button = useButtonSize();
+  const [added, setAdded] = useState<readonly Country[]>([]);
+  const [renaming, setRenaming] = useState<number | null>(null);
+  const traded = gmbs.filter((b) => b.trade_id !== null);
+  const countries = COUNTRIES.filter((c) => added.includes(c) || gmbs.some((b) => b.country?.code === c) || trades.some((tr) => tr.categories.some((k) => k.country === c)));
+  const rest = COUNTRIES.filter((c) => !countries.includes(c));
+  const untraded = gmbs.length - traded.length;
+  const cell = "flex h-14 w-full flex-col items-start justify-center gap-0.5 rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+  return (
+    <section aria-label={t("scope.categories")} className="absolute inset-y-0 right-0 left-0 flex flex-col overflow-y-auto border-l border-border bg-background md:left-36">
+      <header className="flex items-start gap-3 border-b border-border px-6 pt-4 pb-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
+            <Tag aria-hidden className="size-4 shrink-0 text-ink-soft" />
+            {t("scope.categories")}
+          </h2>
+          <p className="text-sm text-ink-soft tabular-nums">{t("categories.counts", { trades: trades.length, countries: countries.length, held: traded.length, of: gmbs.length })}</p>
+        </div>
+        <Button variant="ghost" size={button("sm")} icon aria-label={t("window.close")} title={t("window.close")} onClick={() => openCategories(false)}>
+          <X aria-hidden />
+        </Button>
+      </header>
+      <div className="flex max-w-3xl flex-col gap-6 p-6">
+        <section className={SECTION}>
+          <h3 className={SECTION_HEAD}>
+            {t("categories.trades")}
+            <span className="flex-1" />
+            <span className="font-normal tracking-normal normal-case">{t("categories.how")}</span>
+          </h3>
+          {trades.length === 0 ? (
+            <p className="text-sm text-ink-soft">{t("categories.none")}</p>
+          ) : (
+            <table className="w-full table-fixed border-separate border-spacing-0 overflow-hidden rounded-lg border border-border text-sm">
+              <thead className="bg-hover/50 text-xs">
+                <tr>
+                  <th className="w-44 px-3 py-2 text-left font-semibold text-ink">{t("trades.trade")}</th>
+                  {countries.map((c) => (
+                    <th key={c} className="px-3 py-2 text-left font-semibold text-ink">
+                      {c} <span className="font-normal text-ink-soft tabular-nums">{traded.filter((b) => b.country?.code === c).length}</span>
+                    </th>
+                  ))}
+                  <th className="w-28 px-2 py-1 text-right font-normal">
+                    {rest.length > 0 && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className="flex items-center gap-1 rounded px-1 py-1 whitespace-nowrap text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+                          <Plus aria-hidden className="size-3.5" />
+                          {t("trades.window.country")}
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {rest.map((c) => (
+                            <DropdownMenuItem key={c} onClick={() => setAdded([...added, c])}>
+                              {c}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {trades.map((tr) => {
+                  const held = gmbs.filter((b) => b.trade_id === tr.id);
+                  const where = new Set(held.flatMap((b) => (b.country === null ? [] : [b.country.code]))).size;
+                  return (
+                    <tr key={tr.id} className="hover:bg-hover/30 [&>*]:border-t [&>*]:border-border">
+                      <th className="px-3 py-1 text-left font-normal">
+                        {renaming === tr.id ? (
+                          <Rename trade={tr} onDone={() => setRenaming(null)} />
+                        ) : (
+                          <span className="flex flex-col">
+                            <span className="font-medium text-ink">{tr.name}</span>
+                            <span className="text-xs text-ink-soft tabular-nums">{t("categories.row", { gbps: held.length, countries: where })}</span>
+                          </span>
+                        )}
+                      </th>
+                      {countries.map((c) => {
+                        const category = tr.categories.find((k) => k.country === c);
+                        const n = held.filter((b) => b.country?.code === c).length;
+                        const name = `${tr.name} · ${c}`;
+                        return (
+                          <td key={c} className="p-1">
+                            {category !== undefined ? (
+                              <button type="button" title={t("scope.matrix.open", { category: name })} onClick={() => openTrade(tr.id, c)} className={cn(cell, "hover:bg-hover")}>
+                                <span className={cn("font-semibold tabular-nums", n === 0 ? "text-ink-soft" : "text-ink")}>{n}</span>
+                                <span className="max-w-full truncate text-xs text-ink-soft">
+                                  {[t("categories.keywords", { n: category.keywords.length }), category.google_primary?.name ?? t("categories.noGoogle")].join(" · ")}
+                                </span>
+                              </button>
+                            ) : n > 0 ? (
+                              <button type="button" title={t("scope.matrix.notSetUp", { category: name })} onClick={() => openTrade(tr.id, c)} className={cn(cell, "border border-dashed border-accent-warn text-accent-warn hover:bg-accent-warn/10")}>
+                                <span className="font-semibold tabular-nums">{t("trades.window.tab.notSetUp", { n })}</span>
+                                <span className="flex items-center gap-1 text-xs">
+                                  <Plus aria-hidden className="size-3" />
+                                  {t("categories.setUp")}
+                                </span>
+                              </button>
+                            ) : (
+                              <button type="button" aria-label={t("trades.window.setUp", { category: name })} onClick={() => openTrade(tr.id, c)} className={cn(cell, "group/cell text-ink-soft hover:bg-hover hover:text-ink focus-visible:text-ink")}>
+                                <span className="group-hover/cell:hidden group-focus-visible/cell:hidden">—</span>
+                                <span className="hidden items-center gap-1.5 text-xs font-medium group-hover/cell:flex group-focus-visible/cell:flex">
+                                  <Plus aria-hidden className="size-3.5" />
+                                  {t("trades.window.setUp", { category: name })}
+                                </span>
+                              </button>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="px-2 text-right">
+                        <More trade={tr} tab={null} holders={held.length} onRename={() => setRenaming(tr.id)} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          <NewTrade />
+          <p className="text-xs text-ink-soft">{t("categories.new.why")}</p>
+        </section>
+        {untraded > 0 && (
+          <section className={SECTION}>
+            <h3 className={SECTION_HEAD}>{t("trades.none")}</h3>
+            <p className="flex flex-wrap items-center gap-3 text-sm text-ink">
+              <span className="min-w-0 flex-1">{t("categories.untraded", { n: untraded })}</span>
+              <Button variant="outline" size={button("sm")} onClick={() => setOnly("no_category")}>
+                <Tag aria-hidden />
+                {t("categories.untraded.show", { n: untraded })}
+              </Button>
+            </p>
+          </section>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function NewTrade() {
+  const t = useT();
+  const size = useControlSize();
+  const button = useButtonSize();
+  const trades = useTrades();
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setBusy(true);
+        void addTrade(name.trim())
+          .then(() => {
+            setName("");
+            trades.reload();
+          })
+          .catch((err: unknown) => notifyFailure(err, t))
+          .finally(() => setBusy(false));
+      }}
+    >
+      <Input size={size} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("trades.new.name")} aria-label={t("trades.new.name")} className="min-w-0 flex-1" />
+      <Button type="submit" variant="outline" size={button("sm")} disabled={busy || name.trim() === ""}>
+        <Plus aria-hidden />
+        {t("trades.new.add")}
+      </Button>
+    </form>
   );
 }
 

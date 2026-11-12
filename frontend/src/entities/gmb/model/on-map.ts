@@ -66,7 +66,7 @@ export function useTab(): Tab | null {
 /** The GBP's window, on the open tab while its state has it, else on its state's first; its card alone where it has none. */
 export function open(gmb: Gmb): void {
   const tabs = TABS[gmb.state];
-  setQuery((now) => ({ gmb: String(gmb.id), trade: null, account: null, tab: now.trade === null && tabs.includes(now.tab as Tab) ? now.tab : (tabs[0] ?? null) }));
+  setQuery((now) => ({ gmb: String(gmb.id), trade: null, categories: null, account: null, tab: now.trade === null && tabs.includes(now.tab as Tab) ? now.tab : (tabs[0] ?? null) }));
 }
 
 /** The trade whose window is open, on a country's tab; `null` tab: the trade has none set up yet, or none picked. One window at a time: it and a GBP's share `?tab`. */
@@ -81,7 +81,16 @@ export function useTradeWindow(): { trade: number; tab: Country | null } | null 
 }
 
 export function openTrade(trade: number | null, tab?: Country): void {
-  setQuery({ trade: trade === null ? null : String(trade), tab: tab ?? null, gmb: null, account: null });
+  setQuery({ trade: trade === null ? null : String(trade), tab: tab ?? null, categories: null, gmb: null, account: null });
+}
+
+/** Every trade by country, the level a trade's window sits under (`?categories`). */
+export function useCategoriesWindow(): boolean {
+  return useQuery("categories") !== null;
+}
+
+export function openCategories(on: boolean): void {
+  setQuery({ categories: on ? "" : null, trade: null, tab: null, gmb: null, account: null });
 }
 
 export const ACCOUNT_TABS = ["connections", "browser"] as const;
@@ -99,5 +108,5 @@ export function useAccountWindow(): { gmail: number; tab: AccountTab } | null {
 }
 
 export function openAccount(at: { gmail: number; tab: AccountTab } | null): void {
-  setQuery({ account: at === null ? null : String(at.gmail), tab: at?.tab ?? null, gmb: null, trade: null });
+  setQuery({ account: at === null ? null : String(at.gmail), tab: at?.tab ?? null, gmb: null, trade: null, categories: null });
 }

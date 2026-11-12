@@ -1,7 +1,7 @@
 "use client";
 
-import { Input, Popover, PopoverContent, PopoverTrigger, Switch, cn } from "@evinvest/uikit";
-import { Check, ChevronDown, ChevronRight, ListFilter, Maximize2, Plug, Plus } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger, Switch, cn } from "@evinvest/uikit";
+import { Check, ChevronDown, ChevronRight, ListFilter, Plug, Settings } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { type MouseEvent, useEffect, useState } from "react";
 
@@ -14,13 +14,12 @@ import {
   type Pattern,
   type Selection,
   type Trade,
-  addTrade,
   chooseCategoryScope,
   chooseGmailScope,
   covers,
   inCategories,
   openAccount,
-  openTrade as openTradeHere,
+  openCategories,
   removeGmail,
   under,
   useScope,
@@ -29,7 +28,6 @@ import {
 import { AddGmailButton } from "@/features/add-gmail";
 import { AddGmbButton } from "@/features/add-gmb";
 import { useT } from "@/shared/i18n";
-import { notifyFailure } from "@/shared/ui/notify";
 
 import { HEADING, ON_HOVER, ROW, Remove, ResetSelection } from "./outline-parts";
 
@@ -102,6 +100,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
       <PopoverContent align="start" className="max-h-[80svh] w-96 overflow-y-auto p-1.5">
         <div className={HEADING}>
           {t("scope.categories")}
+          <ManageCategories onOpened={() => setOpen(false)} />
           <span className="flex-1" />
           {known !== null && (
             <span className={META}>
@@ -109,10 +108,9 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
             </span>
           )}
         </div>
-        {known !== null && <Matrix all={data.gmbs} gmbs={data.gmbs.filter(byGmail)} trades={known} picked={scope.categories} onOpened={() => setOpen(false)} />}
+        {known !== null && <Matrix all={data.gmbs} gmbs={data.gmbs.filter(byGmail)} trades={known} picked={scope.categories} />}
         <p className="px-2 pt-1 text-xs text-ink-soft">{t("scope.matrix.how")}</p>
         {data.gmbs.some((b) => b.trade_id === null) && <p className="px-2 text-xs text-ink-soft">{t("scope.matrix.untraded", { n: data.gmbs.filter((b) => b.trade_id === null).length })}</p>}
-        <NewTrade onAdded={trades.reload} />
         <div className={cn(HEADING, "mt-1 border-t border-border pt-2")}>
           {t("scope.gmails")}
           <span className="flex-1" />
@@ -214,9 +212,8 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
  * Trades by the countries that have GBPs or categories: a cell counts the GBPs of that category under the gmails picked. Blank:
  * not set up and holding none; `0`: set up and holding none; dashed, in the warning tone: GBPs there, the trade not set up.
  */
-function Matrix({ all, gmbs, trades, picked, onOpened }: { all: readonly Gmb[]; gmbs: Gmb[]; trades: readonly Trade[]; picked: readonly Pattern[] | null; onOpened: () => void }) {
+function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[]; trades: readonly Trade[]; picked: readonly Pattern[] | null }) {
   const t = useT();
-  const openTrade = useOpenTrade(onOpened);
   const countries = COUNTRIES.filter((c) => all.some((b) => b.country?.code === c) || trades.some((tr) => tr.categories.some((k) => k.country === c)));
   if (trades.length === 0) return <p className="px-2 py-1.5 text-xs text-ink-soft">{t("scope.categories.none")}</p>;
   const pick = (p: Pattern) => (e: MouseEvent) => {
@@ -261,8 +258,8 @@ function Matrix({ all, gmbs, trades, picked, onOpened }: { all: readonly Gmb[]; 
           const row: Pattern = { trade: tr.id, country: "*" };
           return (
             <tr key={tr.id}>
-              <th className="group/head font-normal">
-                <span className="relative flex items-center">
+              <th className="font-normal">
+                <span className="flex items-center">
                   <button
                     type="button"
                     aria-pressed={state(row) !== null}
@@ -273,7 +270,6 @@ function Matrix({ all, gmbs, trades, picked, onOpened }: { all: readonly Gmb[]; 
                     <span className="min-w-0 flex-1 truncate text-left">{tr.name}</span>
                     <span className="text-xs text-ink-soft">{count(tr.id, "*")}</span>
                   </button>
-                  <OpenTrade trade={tr} onOpened={onOpened} className="absolute right-0.5 opacity-0 group-hover/head:opacity-100 focus-visible:opacity-100" />
                 </span>
               </th>
               {countries.map((c) => {
@@ -281,22 +277,9 @@ function Matrix({ all, gmbs, trades, picked, onOpened }: { all: readonly Gmb[]; 
                 const setUp = tr.categories.some((k) => k.country === c);
                 const n = count(tr.id, c);
                 const covering = state(p) === null && picked !== null && picked.some((q) => covers(q, tr.id, c));
-                if (!setUp && n === 0)
-                  return (
-                    <td key={c} className="group/cell">
-                      <button
-                        type="button"
-                        onClick={() => openTrade(tr.id, c)}
-                        aria-label={t("scope.matrix.setUp", { category: `${tr.name} · ${c}` })}
-                        title={t("scope.matrix.setUp", { category: `${tr.name} · ${c}` })}
-                        className={cn(box, "w-full text-ink-soft opacity-0 group-hover/cell:opacity-100 focus-visible:opacity-100")}
-                      >
-                        <Plus aria-hidden className="mx-auto size-3.5" />
-                      </button>
-                    </td>
-                  );
+                if (!setUp && n === 0) return <td key={c} />;
                 return (
-                  <td key={c} className="group/cell relative">
+                  <td key={c}>
                     <button
                       type="button"
                       aria-pressed={state(p) !== null}
@@ -312,7 +295,6 @@ function Matrix({ all, gmbs, trades, picked, onOpened }: { all: readonly Gmb[]; 
                     >
                       {n}
                     </button>
-                    <OpenTrade trade={tr} country={c} onOpened={onOpened} className="absolute top-1/2 right-0 -translate-y-1/2 opacity-0 group-hover/cell:opacity-100 focus-visible:opacity-100" />
                   </td>
                 );
               })}
@@ -324,30 +306,24 @@ function Matrix({ all, gmbs, trades, picked, onOpened }: { all: readonly Gmb[]; 
   );
 }
 
-/** The trade's window lives over the map: from another page, the map opens with it. */
-function useOpenTrade(onOpened: () => void): (trade: number, country: Country | undefined) => void {
+/** The categories' own window, where they are managed; the picker only selects. */
+function ManageCategories({ onOpened }: { onOpened: () => void }) {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
-  return (trade, country) => {
-    onOpened();
-    if (pathname === "/") openTradeHere(trade, country);
-    else router.push(`/?trade=${trade}${country === undefined ? "" : `&tab=${country}`}`);
-  };
-}
-
-function OpenTrade({ trade, country, className, onOpened }: { trade: Trade; country?: Country; className: string; onOpened: () => void }) {
-  const t = useT();
-  const openTrade = useOpenTrade(onOpened);
-  const label = t("scope.matrix.open", { category: country === undefined ? trade.name : `${trade.name} · ${country}` });
   return (
     <button
       type="button"
-      onClick={() => openTrade(trade.id, country ?? trade.categories[0]?.country)}
-      aria-label={label}
-      title={label}
-      className={cn("rounded bg-background p-0.5 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring", className)}
+      onClick={() => {
+        onOpened();
+        if (pathname === "/") openCategories(true);
+        else router.push("/?categories");
+      }}
+      aria-label={t("scope.categories.manage")}
+      title={t("scope.categories.manage")}
+      className="rounded p-0.5 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <Maximize2 aria-hidden className="size-3" />
+      <Settings aria-hidden className="size-3.5" />
     </button>
   );
 }
@@ -372,33 +348,6 @@ function OpenAccount({ gmail, onOpened }: { gmail: Gmail; onOpened: () => void }
     >
       <Plug aria-hidden className="size-3.5" />
     </button>
-  );
-}
-
-function NewTrade({ onAdded }: { onAdded: () => void }) {
-  const t = useT();
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-  return (
-    <form
-      className="flex items-center gap-1 px-1 pt-1"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setBusy(true);
-        void addTrade(name.trim())
-          .then(() => {
-            setName("");
-            onAdded();
-          })
-          .catch((err: unknown) => notifyFailure(err, t))
-          .finally(() => setBusy(false));
-      }}
-    >
-      <Input size="sm" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("trades.new.name")} aria-label={t("trades.new.name")} className="min-w-0 flex-1" />
-      <button type="submit" disabled={busy || name.trim() === ""} aria-label={t("trades.new.add")} title={t("trades.new.add")} className="rounded p-1 text-ink-soft outline-none enabled:hover:text-ink disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring">
-        <Plus aria-hidden className="size-4" />
-      </button>
-    </form>
   );
 }
 

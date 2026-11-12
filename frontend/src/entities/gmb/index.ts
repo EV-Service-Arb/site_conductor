@@ -35,7 +35,7 @@ export type { ArchiveTag, Candidate, Category, Gmail, GmailRole, Gmails, Gmb, Go
 export { ISSUES, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
 export { type Listed, byView, narrowed, under } from "./model/narrow";
 export { MUST_HAVES, type MustHave, readiness } from "./model/readiness";
-export { ACCOUNT_TABS, type AccountTab, type OnMap, TABS, type Tab, open, openAccount, openTrade, peek, setOnMap, useAccountWindow, useOnMap, usePeeked, useTab, useTradeWindow } from "./model/on-map";
+export { ACCOUNT_TABS, type AccountTab, type OnMap, TABS, type Tab, open, openAccount, openCategories, openTrade, peek, setOnMap, useAccountWindow, useCategoriesWindow, useOnMap, usePeeked, useTab, useTradeWindow } from "./model/on-map";
 export { type Pattern, type Scope, chooseCategoryScope, chooseGmailScope, covers, inCategories, inScope, useScope } from "./model/scope";
 export { PublishSelection, type Selection, select, setFilter, setOnly, useSelection } from "./model/selection";
 export { TradeSelect } from "./ui/trade-select";

@@ -20,6 +20,7 @@ import {
   setOnMap,
   under,
   useAccountWindow,
+  useCategoriesWindow,
   useGmails,
   useGmbTags,
   useOnMap,
@@ -41,7 +42,7 @@ import { ErrorState } from "@/shared/ui/error-state";
 
 import { AccountWindow } from "./account-window";
 import { Peek } from "./peek";
-import { TradeWindow } from "./trade-window";
+import { CategoriesWindow, TradeWindow } from "./trade-window";
 import { LocationWindow } from "./window";
 
 /** `/`: the caller's GMBs on a map, unless they come back from the sign-in dialog to the page they were on. */
@@ -208,6 +209,7 @@ function GmbMap({ config }: { config: MapConfig }) {
   useEffect(() => {
     if (gone) setQuery({ trade: null, tab: null });
   }, [gone]);
+  const categoriesWindow = useCategoriesWindow();
   const accountWindow = useAccountWindow();
   const account = accountWindow !== null && gmails.status === "ok" ? gmails.data.gmails.find((g) => g.id === accountWindow.gmail) : undefined;
   // a gmail removed, here or in another tab: its window closes
@@ -232,6 +234,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       {peekedListed && placed === undefined && !windowed && <Peek listed={peekedListed} onClose={() => peek(null)} />}
       {peekedListed && placed === undefined && windowed && <LocationWindow listed={peekedListed} tab={tab} />}
       {opened && tradeWindow && gmails.status === "ok" && placed === undefined && <TradeWindow trade={opened} tab={tradeWindow.tab} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
+      {categoriesWindow && trades.status === "ok" && gmails.status === "ok" && placed === undefined && <CategoriesWindow trades={trades.data} gmbs={gmails.data.gmbs} />}
       {account && accountWindow && gmails.status === "ok" && placed === undefined && <AccountWindow gmail={account} tab={accountWindow.tab} gbps={under(gmails.data, account.id).length} />}
       {map.status === "ok" && placed !== undefined && placedAt !== null && <PlacingBar gmb={placed} map={map.map} at={placedAt} onMove={(at) => setMoved({ gmb: placed.id, at })} />}
     </>
