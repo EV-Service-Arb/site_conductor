@@ -220,10 +220,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
         </>
       )}
       {scoped.length <= 1 && (
-        <div className="flex items-center gap-1 px-1 text-sm text-ink-soft">
-          <AddGmbButton gmailId={scoped[0]?.id ?? null} trade={categories?.length === 1 && categories[0]!.trade !== "*" ? categories[0]!.trade : null} onAdded={changed} />
-          {t("gmbs.gmb.add")}
-        </div>
+        <AddGmbButton labeled gmailId={scoped[0]?.id ?? null} trade={categories?.length === 1 && categories[0]!.trade !== "*" ? categories[0]!.trade : null} onAdded={changed} />
       )}
     </section>
   );
