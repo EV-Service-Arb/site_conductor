@@ -410,7 +410,7 @@ function Behind({ listed: { gmb } }: { listed: Listed }) {
   );
 }
 
-/** Once Google's form is sent: its place pasted, and the draft is verifying. */
+/** Once Google's form is sent, the draft is verifying: its place pasted if Maps shows it yet. */
 function OntoGoogle({ gmbId, onMoved }: { gmbId: number; onMoved: () => void }) {
   const t = useT();
   const size = useControlSize();
@@ -421,7 +421,7 @@ function OntoGoogle({ gmbId, onMoved }: { gmbId: number; onMoved: () => void }) 
   const move = async () => {
     setBusy(true);
     try {
-      await moveGmb(gmbId, "verifying", place.trim());
+      await moveGmb(gmbId, "verifying", place.trim() === "" ? undefined : place.trim());
       onMoved();
     } catch (e) {
       if (!(e instanceof ApiError)) throw e;
@@ -441,7 +441,7 @@ function OntoGoogle({ gmbId, onMoved }: { gmbId: number; onMoved: () => void }) 
         }}
       >
         <Input size={size} autoCapitalize="none" value={place} onChange={(e) => setPlace(e.target.value)} className="min-w-0 flex-1" aria-label={t("gmbs.gbp.toGoogle")} />
-        <Button type="submit" size={button("sm")} disabled={busy || place.trim() === ""}>
+        <Button type="submit" size={button("sm")} disabled={busy}>
           {t("launch.toVerifying")}
         </Button>
       </form>

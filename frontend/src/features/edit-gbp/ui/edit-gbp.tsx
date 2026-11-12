@@ -38,6 +38,7 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
   const [phone, setPhone] = useState(gmb.phone ?? "");
   const [trade, setTrade] = useState(gmb.trade_id);
   const [country, setCountryPicked] = useState<Country | null>(gmb.country?.code ?? null);
+  const [place, setPlace] = useState("");
   const [busy, setBusy] = useState(false);
   const googles = gmb.country !== null && !gmb.country.by_hand;
   const title = t("gmbs.gbp.edit", { name: gmb.name });
@@ -66,7 +67,7 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
       if (country !== null && country !== gmb.country?.code) await setCountry(gmb.id, country);
     });
 
-  const move = (to: State) => act(() => moveGmb(gmb.id, to).then(() => undefined));
+  const move = (to: State) => act(() => moveGmb(gmb.id, to, place.trim() === "" ? undefined : place.trim()).then(() => undefined));
 
   if (gmb.state === "draft") throw new Error("a draft is edited on its Launch tab");
   return (
@@ -137,10 +138,17 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
           </DialogFooter>
         </form>
         <div className="flex flex-col gap-2 border-t border-border pt-3">
+          {gmb.place_id === null && (
+            <Field className="flex flex-col gap-1">
+              <FieldLabel htmlFor={`${id}-place`}>{t("gmbs.gbp.toGoogle")}</FieldLabel>
+              <Input id={`${id}-place`} size={size} autoCapitalize="none" value={place} onChange={(e) => setPlace(e.target.value)} />
+              <FieldDescription>{t("gmbs.gbp.place.needed")}</FieldDescription>
+            </Field>
+          )}
           <div className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
             {t("gmbs.gbp.move")}
             {gmb.next.map((to) => (
-              <Button key={to} variant="outline" size={button("sm")} disabled={busy} onClick={() => void move(to)}>
+              <Button key={to} variant="outline" size={button("sm")} disabled={busy || (to === "verified" && gmb.place_id === null && place.trim() === "")} onClick={() => void move(to)}>
                 {t(`gmbs.state.${to}`)}
               </Button>
             ))}

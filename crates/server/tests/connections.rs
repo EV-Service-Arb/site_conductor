@@ -133,15 +133,29 @@ impl World {
 
 	async fn price(&self, details: i64) {
 		self.panel
-			.set_prices(&[(Sku::Details, details), (Sku::Search, 2 * details)], "admin@localhost", jiff::Timestamp::now())
+			.set_prices(
+				&[(Sku::Details, details), (Sku::Search, 2 * details), (Sku::Autocomplete, details)],
+				"admin@localhost",
+				jiff::Timestamp::now(),
+			)
 			.await
 			.unwrap()
 			.unwrap();
 	}
 
+	/// Of the caller's trade, added the first time.
 	async fn add_gbp(&mut self, gmail: i64, place: &str) -> (StatusCode, Value) {
-		self.call(Method::POST, &format!("/api/v1/gmails/{gmail}/gmbs"), Some(json!({ "place_id": place, "state": "verified" })))
-			.await
+		let (_, trades) = self.call(Method::GET, "/api/v1/trades", None).await;
+		let trade = match &trades["trades"][0]["id"] {
+			Value::Null => self.call(Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await.1["id"].clone(),
+			id => id.clone(),
+		};
+		self.call(
+			Method::POST,
+			&format!("/api/v1/gmails/{gmail}/gmbs"),
+			Some(json!({ "place_id": place, "state": "verified", "trade": trade })),
+		)
+		.await
 	}
 
 	/// The keys the billed requests went out with since asked last.

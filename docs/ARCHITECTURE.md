@@ -61,7 +61,8 @@ crates/browsers/         sa_browsers: the devices a browser poses as, a launch's
                          the Multilogin app's launcher, a browser's devtools passed to the conductor
                          alone, a film made the camera; a cloud phone's life and its viewer over adb
 crates/places/           Google Places: a place from what a person pastes (an id, a Maps URL, a
-                         search), its point; every request through the queries cache (in process,
+                         search), its point; suggestions as one types (Autocomplete, no session
+                         token); every request through the queries cache (in process,
                          or `Remote` over /api/queries_cache), then the payer's own keys, then the
                          rotation its purse pays for; review_archive takes it too
 crates/ui/               Dioxus components the services' front ends share
@@ -408,15 +409,15 @@ GET    /gmails                              {gmails: [{id, gmail, role, cap, cre
                                             phone, trade_id, areas, hidden_address, customers_visit,
                                             film, created_at, enabled, location: {lat, lng,
                                             placed} | null}]} the caller's, removed ones left out; a
-                                            draft's gmail_id and place_id may be null; cap null
-                                            while the role is unknown
+                                            draft's gmail_id may be null, place_id a verified one's
+                                            only is certain; cap null while the role is unknown
 POST   /gmails                              {gmail} → 201 the gmail; 409 held already
 PATCH  /gmails/{id}                         {role: owner|manager} → 200 the gmail
 DELETE /gmails/{id}                         204; its GBPs and connections removed with it; 409 while
                                             it has a browser
 GET    /gmails/{id}/connections             {imap: {host, username, set_at, checked: {at, error}} | null,
                                             maps_key: {last4, set_at, checked, out} | null, prices:
-                                            {details, search}, browser: {provider, device, endpoint,
+                                            {details, search, autocomplete}, browser: {provider, device, endpoint,
                                             exit, set_at, checked, running: {gmb} | null, film} | null}:
                                             no secret, ever
 PUT    /gmails/{id}/imap                    {host, username, password} → 200 as GET, once it logs in
@@ -438,10 +439,16 @@ PUT    /gmails/{id}/browser/film            an mp4 ≤ 512 MiB → 204; a phone'
                                             (start and film: 8 at once, 10 min each, not the bounds above)
 DELETE /gmails/{id}/browser/film            204
 GET    /gmails/{id}/browser                 the viewer's WebSocket: outside the gate, as /live
-GET    /gmbs/resolve?place=&gmail=          {candidates: [{place_id, name, address}]} (sa_places;
-                                            `gmail`'s key first)
-POST   /gmbs                                {name, trade?} → 201 a draft; 409 the name a live GBP's
-POST   /gmails/{id}/gmbs                    {place_id, state, name?, country?, trade?} → 201 a GBP on Google
+GET    /gmbs/resolve?place=&gmail=          {candidates: [{place_id, name, address, location: {lat, lng}
+                                            | null, country | null}]} (sa_places; `gmail`'s key
+                                            first); 400 one in a country not served
+GET    /gmbs/suggest?input=&gmail=          {suggestions: [{place_id, main, secondary | null}]}: Places
+                                            Autocomplete in the countries served, paid as resolve
+POST   /gmbs                                {name, trade, state, gmail_id?, country?, location?} → 201 a
+                                            GBP no place is known of: draft, verifying or suspended;
+                                            past a draft gmail_id and country (by hand) required;
+                                            location placed by hand; 409 the name a live GBP's
+POST   /gmails/{id}/gmbs                    {place_id, state, name?, country?, trade} → 201 a GBP on Google
                                             already (state not draft; name and country fill what
                                             Google lacks, else 400); 409 the name or place taken
 PATCH  /gmbs/{id}                           {name?, gmail_id?, phone?, trade?, areas?,
@@ -450,7 +457,8 @@ PATCH  /gmbs/{id}                           {name?, gmail_id?, phone?, trade?, a
                                             of the caller's (a transfer), null clears the rest; 409
                                             a name or a phone another live GBP's
 PUT    /gmbs/{id}/state                     {state, place?} → 200 the GBP; 400 a move the drawing
-                                            below lacks; a draft goes to verifying with its place
+                                            below lacks; `place` taken while it has none, needed to
+                                            become verified
 DELETE /gmbs/{id}                           204
 PUT    /gmbs/enabled                        {gmbs: [id], enabled} → 204: every one switched, or none
                                             (404 one not the caller's)
@@ -480,9 +488,9 @@ POST   /tokens/claim                        → 200 as GET /tokens
 GET    /admin/tokens         Tokens         {users: [{user_id, email, name, balance}]}
 POST   /admin/tokens/{user}  Tokens, fresh  {set: n, note?} | {add: n, note?} | {grant: n, note}
                                             → 200 {balance}; a grant is owed until claimed
-GET    /admin/tokens/prices  Tokens         {details, search}: tokens a Places request on the
-                                            shared keys costs; null, not sold
-PUT    /admin/tokens/prices  Tokens, fresh  {details, search} (0 or more) → 200 as GET
+GET    /admin/tokens/prices  Tokens         {details, search, autocomplete}: tokens a Places request
+                                            on the shared keys costs; null, not sold
+PUT    /admin/tokens/prices  Tokens, fresh  {details, search, autocomplete} (0 or more) → 200 as GET
 GET    /assistant/chats                     {chats}: owned and joined, the caller's marks, newest
                                             first
 POST   /assistant/chats                     {id, title, turns} → 201 the chat (version 1); 409 the
@@ -581,7 +589,7 @@ Places requests charge at the buy.
 
 **Who pays a Places request** about a GBP or a gmail: its gmail's own Maps key, then its owner's
 other gmails' keys, free; then `GOOGLE_MAPS_KEYS` at the admin's price per request kind (Places'
-SKU: details, search), held under one lock per person from the balance read to the charge, so a
+SKU: details, search, autocomplete), held under one lock per person from the balance read to the charge, so a
 request below the price, or unpriced, is refused before Google is asked. A cached answer costs
 nothing. The operator's commands (`gmb add`, `locate`) try the gmail's keys, then the house pays.
 review_archive's lookups and placement's sweeps are the house's for now.
@@ -589,18 +597,21 @@ review_archive's lookups and placement's sweeps are the house's for now.
 **A GBP's life** (`sa_core::gbp::State::nexts`; the schema checks each move again):
 
 ```text
-             name (unique)        + gmail, place_id, country       walked
+             name (unique)    + gmail, country     + place, if none yet   walked
  ┌───────┐  ─────────────▶ ┌───────────┐ ─────────▶ ┌──────────┐ ◀────────▶ ┌───────────┐
  │ Draft │                 │ Verifying │            │ Verified │            │ Suspended │
  └───────┘                 └───────────┘ ◀───────── └──────────┘            └───────────┘
-  phone, point,             place guaranteed;  Google re-asks │  ▲ reinstated        │
-  gmail/country optional    snapshot → archive               └──┼──────────────────┘
-                            track exists, not walked             └ re-verify ◀──────┘
+  no place;                 place optional  Google re-asks │  ▲ reinstated    place optional
+  phone, point,             (off Maps)                     └──┼──────────────────┘
+  gmail/country optional                                      └ re-verify ◀──────┘
+                            place certain only once Verified (on Maps); with one, the
+                            snapshot → archive: a track, walked only while Verified
 ```
 
 - A name, a place and a phone (`sa_core::gbp::phone`'s spelling) are one live GBP's. The name is a
-  draft's to change; the place is set once, onto Google (draft → verifying), with Google's address,
-  point and country.
+  draft's to change. A GBP verifying or suspended is not on Maps, so Places may not find it: its
+  place is set once, on any move while it has none (with Google's address, point and country),
+  and must be by the time it is verified. A GBP is created with its trade.
 - **A draft's must-haves** are what Google's form asks and what stands behind it: name, category
   (set up, with its primary Google category), service areas (≤ 20), phone, a site page (sites' link), the hidden address with whether
   customers visit, the verification film, the managing gmail, its browser (Browsers: set up, its last check
@@ -624,8 +635,9 @@ review_archive's lookups and placement's sweeps are the house's for now.
   its regions) and hypetrix.com's `wp-json/hypetrix/v1/gbp-categories?region=US&lang=<fr|ru>`
   (US only: the 25 GB/CA-only gcids carry their English name as `ru`). A refresh dropping a gcid a trade holds makes reading it fail until a migration moves
   it to what Google replaced it with.
-- **A GBP with a place has a gmail and a country** (the schema's CHECK on live rows): the archive
-  reads its language from it. One on Google already is added verifying, verified or suspended.
+- **Past a draft a GBP has a gmail and a country** (the schema's CHECK on live rows): the archive
+  reads its language from it. One on Google is added verifying, verified or suspended: by its
+  place, or without one (not verified) with its country and point by hand.
 - A transfer moves it to another gmail of its owner's. Removed is once, apart from the state; a
   gmail removed removes its GBPs.
 
@@ -658,7 +670,7 @@ push (a change, a page, 60 s)
 - **A place's site** is sites': its `places.gmb_id`, linked from the outline through the forward;
   sites down or refusing leaves the GMBs without the link.
 - **A GBP's point** is on its row: Google's, else one the operator places on the map (a
-  service-area place has none on Google, a draft no place). Google's replaces a placed one, a
+  service-area place has none on Google, a GBP without a place none at all). Google's replaces a placed one, a
   placed one never replaces Google's. Google's is written with the GBP from the answer that named
   it; a GBP added without a key, or imported, has none until `panel gmb locate` asks for the
   missing ones and lists those Google gives no point: a command, so the spend is explicit; run

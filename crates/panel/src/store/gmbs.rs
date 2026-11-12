@@ -78,7 +78,7 @@ pub struct GbpCountry {
 	pub by_hand: bool,
 }
 
-/// What a new GBP row holds; `gmail_id` and `place_id` absent for a draft.
+/// What a new GBP row holds; `gmail_id` absent for a draft, `place_id` for one not on Maps.
 pub struct NewGmb<'a> {
 	pub owner: Uuid,
 	pub gmail_id: Option<i64>,
@@ -89,8 +89,9 @@ pub struct NewGmb<'a> {
 	pub country: Option<Country>,
 	/// Set by hand, not Google's.
 	pub country_by_hand: bool,
-	/// Google's.
 	pub at: Option<LatLng>,
+	/// Placed by hand, not Google's.
+	pub at_by_hand: bool,
 	/// The owner's.
 	pub trade_id: Option<i64>,
 }
@@ -224,8 +225,8 @@ pub async fn taken(conn: &mut SqliteConnection, u: Unique<'_>, except: Option<i6
 /// `id` explicit only on import. Its name and place are free ([`taken`]).
 pub async fn add_gmb(conn: &mut SqliteConnection, id: Option<i64>, new: &NewGmb<'_>, now: Timestamp) -> eyre::Result<Gmb> {
 	let added: i64 = sqlx::query_scalar(
-		"INSERT INTO gmbs (id, owner, gmail_id, place_id, name, address, state, country, country_by, lat, lng, created_at, trade_id) \
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $9 THEN $2 END, $10, $11, $12, $13) RETURNING id",
+		"INSERT INTO gmbs (id, owner, gmail_id, place_id, name, address, state, country, country_by, lat, lng, placed_by, created_at, trade_id) \
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $9 THEN $2 END, $10, $11, CASE WHEN $12 THEN $2 END, $13, $14) RETURNING id",
 	)
 	.bind(id)
 	.bind(new.owner)
@@ -238,6 +239,7 @@ pub async fn add_gmb(conn: &mut SqliteConnection, id: Option<i64>, new: &NewGmb<
 	.bind(new.country_by_hand)
 	.bind(new.at.map(|a| a.lat))
 	.bind(new.at.map(|a| a.lng))
+	.bind(new.at_by_hand)
 	.bind(to_db(now))
 	.bind(new.trade_id)
 	.fetch_one(&mut *conn)
@@ -307,9 +309,9 @@ pub async fn set_state(conn: &mut SqliteConnection, id: i64, to: State) -> eyre:
 	Ok(())
 }
 
-/// A draft onto Google: its place, Google's address, and Google's point and country over those
+/// GBP `id` in `to` with its place: Google's address, and Google's point and country over those
 /// set by hand.
-pub async fn place_draft(conn: &mut SqliteConnection, id: i64, place_id: &str, address: Option<&str>, at: Option<LatLng>, country: Option<Country>) -> eyre::Result<()> {
+pub async fn place_on_google(conn: &mut SqliteConnection, id: i64, place_id: &str, address: Option<&str>, at: Option<LatLng>, country: Option<Country>, to: State) -> eyre::Result<()> {
 	// country first: the schema refuses a placed GBP without one
 	if let Some(c) = country {
 		set_country(conn, id, c).await?;
@@ -317,13 +319,14 @@ pub async fn place_draft(conn: &mut SqliteConnection, id: i64, place_id: &str, a
 	if let Some(at) = at {
 		set_point(conn, id, at).await?;
 	}
-	sqlx::query("UPDATE gmbs SET place_id = $2, address = $3, state = 'verifying' WHERE id = $1")
+	sqlx::query("UPDATE gmbs SET place_id = $2, address = $3, state = $4 WHERE id = $1")
 		.bind(id)
 		.bind(place_id)
 		.bind(address)
+		.bind(to.as_str())
 		.execute(&mut *conn)
 		.await
-		.wrap_err("placing a draft on Google")?;
+		.wrap_err("placing a GBP on Google")?;
 	Ok(())
 }
 

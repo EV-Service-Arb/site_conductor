@@ -38,7 +38,7 @@ by: string | null, note: string | null, };
 /**
  * Every request kind priced, in tokens.
  */
-export type SetPrices = { details: number, search: number, };
+export type SetPrices = { details: number, search: number, autocomplete: number, };
 export type TokenHolder = { user_id: string, email: string, name: string, balance: number, };
 /**
  * `GET /admin/tokens`.

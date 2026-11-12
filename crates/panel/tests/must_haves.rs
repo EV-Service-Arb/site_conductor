@@ -4,7 +4,7 @@
 use jiff::Timestamp;
 use sa_panel::{
 	Panel, Refused,
-	gmbs::{Edit, Gmb},
+	gmbs::{Edit, Gmb, Unplaced},
 	import::Export,
 	testing::{TestDb, panel},
 	tokens::User,
@@ -39,6 +39,23 @@ async fn opened(db: &TestDb) -> (Panel, Uuid) {
 	(p, owner)
 }
 
+/// A draft of `owner`'s, of their trade (added the first time).
+async fn draft(p: &Panel, owner: Uuid, name: &str) -> Gmb {
+	let trade = match p.trades(owner).await.unwrap().first() {
+		Some(t) => t.id,
+		None => p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap().id,
+	};
+	let unplaced = Unplaced {
+		name: name.to_owned(),
+		trade,
+		state: sa_core::gbp::State::Draft,
+		gmail_id: None,
+		country: None,
+		at: None,
+	};
+	p.create_gmb(owner, unplaced, now()).await.unwrap().unwrap()
+}
+
 fn areas(n: usize) -> Edit {
 	Edit {
 		areas: Some(Some((1..=n).map(|i| format!("Lyon {i}")).collect())),
@@ -50,8 +67,8 @@ fn areas(n: usize) -> Edit {
 async fn must_haves_are_stored_and_cleared() {
 	let db = TestDb::create().await;
 	let (p, owner) = opened(&db).await;
-	let draft = p.create_draft(owner, "Plombier Lyon 7", None, now()).await.unwrap().unwrap();
-	let trade = p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap();
+	let draft = draft(&p, owner, "Plombier Lyon 7").await;
+	let trade = p.add_trade(owner, "Heating", now()).await.unwrap().unwrap();
 
 	let set = Edit {
 		phone: Some(Some(" +33 (4) 78-00.00.01 ".to_owned())),
@@ -98,7 +115,7 @@ async fn must_haves_are_stored_and_cleared() {
 async fn what_is_wrong_is_refused_not_fixed() {
 	let db = TestDb::create().await;
 	let (p, owner) = opened(&db).await;
-	let draft = p.create_draft(owner, "Draft", None, now()).await.unwrap().unwrap();
+	let draft = draft(&p, owner, "Draft").await;
 	let text = |raw: &str| Some(Some(raw.to_owned()));
 	let list = |raw: &[&str]| Some(Some(raw.iter().map(|a| a.to_string()).collect()));
 	for (why, edit) in [
@@ -163,8 +180,8 @@ async fn what_is_wrong_is_refused_not_fixed() {
 async fn a_phone_is_one_live_gbps_however_spelled() {
 	let db = TestDb::create().await;
 	let (p, owner) = opened(&db).await;
-	let first = p.create_draft(owner, "First", None, now()).await.unwrap().unwrap();
-	let second = p.create_draft(owner, "Second", None, now()).await.unwrap().unwrap();
+	let first = draft(&p, owner, "First").await;
+	let second = draft(&p, owner, "Second").await;
 	let phone = |raw: &str| Edit {
 		phone: Some(Some(raw.to_owned())),
 		..Edit::default()
@@ -186,7 +203,7 @@ async fn the_migration_rewrites_phones_to_one_spelling() {
 	let spelled = ["+33 4 78 00 00 01", "(04) 78-00-00-02", "04.78.00.00.03", "0478000004"];
 	let mut drafts = Vec::new();
 	for (i, _) in spelled.iter().enumerate() {
-		drafts.push(p.create_draft(owner, &format!("Draft {i}"), None, now()).await.unwrap().unwrap().id);
+		drafts.push(draft(&p, owner, &format!("Draft {i}")).await.id);
 	}
 	let pool = db.pool().await;
 	let migrator = sqlx::migrate!("./migrations");

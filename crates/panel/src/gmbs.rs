@@ -1,6 +1,7 @@
 //! The gmails a person manages GBPs with, and those GBPs. The ids are the conductor's, and every
 //! service stores them, so nothing is deleted: a gmail or a GBP is removed, a gmail with its GBPs.
-//! A GBP moves through [`State`]s: a draft (a name, no place yet), then on Google. One on or off
+//! A GBP moves through [`State`]s: a draft (a name, no place yet), then on Google, its place certain
+//! only once verified. One on or off
 //! by its owner's switch. review_archive hears of every change through the snapshot
 //! ([`crate::tokens`]).
 
@@ -9,7 +10,7 @@ use std::collections::BTreeSet;
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_core::gbp::{Country, GmailRole, OnGoogle, State};
-use sa_places::{Ask, LatLng, Place};
+use sa_places::{Ask, LatLng, Place, Suggestion};
 use uuid::Uuid;
 
 use crate::{
@@ -46,7 +47,23 @@ pub struct Existing {
 	pub name: Option<String>,
 	pub country: Option<Country>,
 	/// The owner's.
-	pub trade: Option<i64>,
+	pub trade: i64,
+}
+
+/// A GBP no place is known of yet: a draft, or one on Google not on Maps.
+#[derive(Clone, Debug)]
+pub struct Unplaced {
+	pub name: String,
+	/// The owner's.
+	pub trade: i64,
+	/// Not verified: a verified GBP is on Maps, added by its place ([`Existing`]).
+	pub state: State,
+	/// The owner's; past a draft, required.
+	pub gmail_id: Option<i64>,
+	/// Set by hand; past a draft, required.
+	pub country: Option<Country>,
+	/// Placed by hand.
+	pub at: Option<LatLng>,
 }
 
 /// What changes of a GBP; each absent is left, `Some(None)` clears it.
@@ -147,6 +164,13 @@ fn areas(raw: Vec<String>) -> Result<Vec<String>, Refused> {
 	}
 }
 
+fn on_earth(at: LatLng) -> Result<(), Refused> {
+	match at.lat.is_finite() && at.lng.is_finite() && (-90.0..=90.0).contains(&at.lat) && (-180.0..=180.0).contains(&at.lng) {
+		true => Ok(()),
+		false => Err(Refused::Invalid(format!("({}, {}) is no point on Earth", at.lat, at.lng))),
+	}
+}
+
 /// Google's country of `place`: one it puts in a country not served is refused.
 fn google_country(place: Option<&Place>) -> Result<Option<Country>, Refused> {
 	match place.and_then(|p| p.country.as_deref()) {
@@ -211,23 +235,58 @@ impl Panel {
 
 	/// Every place `input` may mean (see [`sa_places::Google::candidates`]), asked for `owner`:
 	/// their `gmail`'s key first, if they name one of theirs.
-	pub async fn place_candidates(&self, owner: Uuid, gmail: Option<i64>, input: &str) -> eyre::Result<Result<Vec<(String, Option<Place>)>, Refused>> {
-		if let Some(g) = gmail
-			&& db::gmail_owner(&mut *self.store.pool().acquire().await.wrap_err("a connection for a gmail")?, g).await? != Some(owner)
-		{
+	/// Each with Google's country of it: one in a country not served refuses them all, as adding it
+	/// would.
+	pub async fn place_candidates(&self, owner: Uuid, gmail: Option<i64>, input: &str) -> eyre::Result<Result<Vec<(String, Option<Place>, Option<Country>)>, Refused>> {
+		if !self.gmail_is(owner, gmail).await? {
 			return Ok(Err(Refused::NotFound));
 		}
 		let purse = self.purse(owner);
 		let payer = self.payer(owner, gmail, Some(&purse)).await?;
-		match self.google.candidates(input, &payer).await {
-			Ok(places) => Ok(Ok(places)),
+		let places = match self.google.candidates(input, &payer).await {
+			Ok(places) => places,
+			Err(e) => return Ok(Err(places_error(e)?)),
+		};
+		Ok(places.into_iter().map(|(id, place)| google_country(place.as_ref()).map(|c| (id, place, c))).collect())
+	}
+
+	/// The places `input` may be heading for, in the countries served (see
+	/// [`sa_places::Google::suggest`]), paid for as [`Self::place_candidates`].
+	pub async fn suggest(&self, owner: Uuid, gmail: Option<i64>, input: &str) -> eyre::Result<Result<Vec<Suggestion>, Refused>> {
+		if !self.gmail_is(owner, gmail).await? {
+			return Ok(Err(Refused::NotFound));
+		}
+		let purse = self.purse(owner);
+		let payer = self.payer(owner, gmail, Some(&purse)).await?;
+		let regions: Vec<&str> = <Country as strum::VariantArray>::VARIANTS.iter().map(|c| c.as_str()).collect();
+		match self.google.suggest(input, &regions, &payer).await {
+			Ok(found) => Ok(Ok(found)),
 			Err(e) => Ok(Err(places_error(e)?)),
 		}
 	}
 
-	/// A GBP not on Google yet: its name, which no live GBP has, and the owner's `trade`.
-	pub async fn create_draft(&self, owner: Uuid, raw: &str, trade: Option<i64>, now: Timestamp) -> eyre::Result<Result<Gmb, Refused>> {
-		let name = match name(raw) {
+	/// `gmail`, if any, is `owner`'s.
+	async fn gmail_is(&self, owner: Uuid, gmail: Option<i64>) -> eyre::Result<bool> {
+		Ok(match gmail {
+			None => true,
+			Some(g) => db::gmail_owner(&mut *self.store.pool().acquire().await.wrap_err("a connection for a gmail")?, g).await? == Some(owner),
+		})
+	}
+
+	/// A GBP no place is known of: its name, which no live GBP has, the owner's trade; past a
+	/// draft, the owner's gmail and its country.
+	pub async fn create_gmb(&self, owner: Uuid, u: Unplaced, now: Timestamp) -> eyre::Result<Result<Gmb, Refused>> {
+		let checked = name(&u.name).and_then(|n| {
+			if u.state == State::Verified {
+				return Err(Refused::Invalid("a verified GBP is on Maps: add it by its place".to_owned()));
+			}
+			if u.state != State::Draft && (u.gmail_id.is_none() || u.country.is_none()) {
+				return Err(Refused::Invalid(format!("a {} GBP is on Google under a gmail, in a country: give both", u.state)));
+			}
+			u.at.map(on_earth).transpose()?;
+			Ok(n)
+		});
+		let name = match checked {
 			Ok(n) => n,
 			Err(r) => return Ok(Err(r)),
 		};
@@ -235,7 +294,12 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
-		if !trade_is(&mut tx, owner, trade).await? {
+		if !trade_is(&mut tx, owner, Some(u.trade)).await? {
+			return Ok(Err(Refused::NotFound));
+		}
+		if let Some(g) = u.gmail_id
+			&& db::gmail_owner(&mut tx, g).await? != Some(owner)
+		{
 			return Ok(Err(Refused::NotFound));
 		}
 		if let Some(why) = db::taken(
@@ -252,18 +316,19 @@ impl Panel {
 		}
 		let new = NewGmb {
 			owner,
-			gmail_id: None,
+			gmail_id: u.gmail_id,
 			place_id: None,
 			name: &name,
 			address: None,
-			state: State::Draft,
-			country: None,
-			country_by_hand: false,
-			at: None,
-			trade_id: trade,
+			state: u.state,
+			country: u.country,
+			country_by_hand: u.country.is_some(),
+			at: u.at,
+			at_by_hand: u.at.is_some(),
+			trade_id: Some(u.trade),
 		};
 		let added = db::add_gmb(&mut tx, None, &new, now).await?;
-		tx.commit().await.wrap_err("committing a draft")?;
+		tx.commit().await.wrap_err("committing a GBP without a place")?;
 		self.snapshot_due.notify_one();
 		Ok(Ok(added))
 	}
@@ -306,7 +371,7 @@ impl Panel {
 			Some(o) if owner.is_none_or(|owner| owner == o) => o,
 			_ => return Ok(Err(Refused::NotFound)),
 		};
-		if !trade_is(&mut tx, gmail_owner, e.trade).await? {
+		if !trade_is(&mut tx, gmail_owner, Some(e.trade)).await? {
 			return Ok(Err(Refused::NotFound));
 		}
 		if let Some(why) = db::taken(
@@ -332,7 +397,8 @@ impl Panel {
 			country: Some(country),
 			country_by_hand: by_hand,
 			at: place.as_ref().and_then(|p| p.location),
-			trade_id: e.trade,
+			at_by_hand: false,
+			trade_id: Some(e.trade),
 		};
 		let added = db::add_gmb(&mut tx, None, &new, now).await?;
 		tx.commit().await.wrap_err("committing a GMB")?;
@@ -383,18 +449,24 @@ impl Panel {
 		Ok(Ok(edited))
 	}
 
-	/// GBP `id` in `to`, as [`State::next`] allows. A draft goes onto Google with its place
-	/// (`place`, as a person pastes it): its gmail and its country, Google's or set by hand,
-	/// needed. `owner` is whose it must be; `None`, the operator's CLI.
+	/// GBP `id` in `to`, as [`State::next`] allows; past a draft, with its gmail and its country.
+	/// One without a place takes it (`place`, as a person pastes it) on any move onto Google, and
+	/// must on one to verified. `owner` is whose it must be; `None`, the operator's CLI.
 	pub async fn advance(&self, owner: Option<Uuid>, id: i64, to: State, place: Option<&str>) -> eyre::Result<Result<Gmb, Refused>> {
 		let Some(read) = db::gmb_of(&mut *self.store.pool().acquire().await.wrap_err("a connection for a GMB")?, owner, id).await? else {
 			return Ok(Err(Refused::NotFound));
 		};
-		let placed = match (read.state, place) {
-			(State::Draft, Some(_)) if read.gmail_id.is_none() => {
+		if let Err(e) = read.state.next(to) {
+			return Ok(Err(Refused::Invalid(e.to_string())));
+		}
+		let placed = match (place, &read.place_id) {
+			(Some(_), Some(had)) => return Ok(Err(Refused::Invalid(format!("GBP {id} is on {had} already: a place is set once")))),
+			(None, None) if to == State::Verified => return Ok(Err(Refused::Invalid(format!("a verified GBP is on Maps: paste GBP {id}'s place")))),
+			(None, _) => None,
+			(Some(_), None) if read.gmail_id.is_none() => {
 				return Ok(Err(Refused::Invalid(format!("GBP {id} goes onto Google under a gmail: give it its gmail first"))));
 			}
-			(State::Draft, Some(input)) => {
+			(Some(input), None) => {
 				let gmail = read.gmail_id.expect("refused above without one");
 				let Some(gmail_owner) = db::gmail_owner(&mut *self.store.pool().acquire().await.wrap_err("a connection for a gmail")?, gmail).await? else {
 					return Ok(Err(Refused::NotFound)); // its gmail removed since it was read, and the GBP with it
@@ -406,9 +478,6 @@ impl Panel {
 					Err(e) => return Ok(Err(places_error(e)?)),
 				}
 			}
-			(State::Draft, None) if to == State::Verifying => return Ok(Err(Refused::Invalid("a draft goes onto Google with its place: paste it".to_owned()))),
-			(_, Some(_)) => return Ok(Err(Refused::Invalid(format!("GBP {id} is on Google already: only a draft takes a place")))),
-			(_, None) => None,
 		};
 		let mut tx = self.store.begin_write().await?;
 		if !is_open(&mut tx).await? {
@@ -417,22 +486,21 @@ impl Panel {
 		let Some(gbp) = db::gmb_of(&mut tx, owner, id).await? else {
 			return Ok(Err(Refused::NotFound));
 		};
-		if let Err(e) = gbp.state.next(to) {
-			return Ok(Err(Refused::Invalid(e.to_string())));
+		if gbp.state != read.state || gbp.place_id != read.place_id {
+			return Ok(Err(Refused::Conflict(format!("GBP {id} changed meanwhile: read it again"))));
+		}
+		let google = match placed.as_ref().map(|(_, p)| google_country(p.as_ref())).transpose() {
+			Ok(c) => c.flatten(),
+			Err(r) => return Ok(Err(r)),
+		};
+		if gbp.gmail_id.is_none() {
+			return Ok(Err(Refused::Invalid(format!("GBP {id} goes onto Google under a gmail: give it its gmail first"))));
+		}
+		if google.is_none() && gbp.country.is_none() {
+			return Ok(Err(Refused::Invalid(format!("GBP {id} goes onto Google in a country: set its country first"))));
 		}
 		match placed {
-			Some(_) if gbp.state != read.state => return Ok(Err(Refused::Conflict(format!("GBP {id} became {} meanwhile", gbp.state)))),
 			Some((place_id, place)) => {
-				let google = match google_country(place.as_ref()) {
-					Ok(c) => c,
-					Err(r) => return Ok(Err(r)),
-				};
-				if gbp.gmail_id.is_none() {
-					return Ok(Err(Refused::Invalid(format!("GBP {id} goes onto Google under a gmail: give it its gmail first"))));
-				}
-				if google.is_none() && gbp.country.is_none() {
-					return Ok(Err(Refused::Invalid(format!("Google gives {place_id} no country: set GBP {id}'s first"))));
-				}
 				if let Some(why) = db::taken(
 					&mut tx,
 					Unique {
@@ -446,7 +514,7 @@ impl Panel {
 					return Ok(Err(Refused::Conflict(why)));
 				}
 				let place = place.as_ref();
-				db::place_draft(&mut tx, id, &place_id, place.and_then(|p| p.address.as_deref()), place.and_then(|p| p.location), google).await?;
+				db::place_on_google(&mut tx, id, &place_id, place.and_then(|p| p.address.as_deref()), place.and_then(|p| p.location), google, to).await?;
 			}
 			None => db::set_state(&mut tx, id, to).await?,
 		}
@@ -515,8 +583,8 @@ impl Panel {
 
 	/// The owner's GBP `id` placed at `at` on the map: its point while Google has none.
 	pub async fn place_gmb(&self, owner: Uuid, id: i64, at: LatLng) -> eyre::Result<Result<(), Refused>> {
-		if !(at.lat.is_finite() && at.lng.is_finite() && (-90.0..=90.0).contains(&at.lat) && (-180.0..=180.0).contains(&at.lng)) {
-			return Ok(Err(Refused::Invalid(format!("({}, {}) is no point on Earth", at.lat, at.lng))));
+		if let Err(r) = on_earth(at) {
+			return Ok(Err(r));
 		}
 		let mut tx = self.store.begin_write().await?;
 		if !is_open(&mut tx).await? {

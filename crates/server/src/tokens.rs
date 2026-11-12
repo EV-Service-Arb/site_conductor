@@ -236,6 +236,8 @@ pub struct SetPricesDto {
 	pub details: i64,
 	#[ts(type = "number")]
 	pub search: i64,
+	#[ts(type = "number")]
+	pub autocomplete: i64,
 }
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
@@ -386,7 +388,13 @@ async fn prices(State(panel): State<Panel>) -> ApiResult<Json<PricesDto>> {
 
 async fn set_prices(State(panel): State<Panel>, Extension(caller): Extension<Caller>, b: Result<Json<SetPricesDto>, JsonRejection>) -> ApiResult<Json<PricesDto>> {
 	let b = body(b)?;
-	panel.set_prices(&[(Sku::Details, b.details), (Sku::Search, b.search)], &caller.email, Timestamp::now()).await??;
+	panel
+		.set_prices(
+			&[(Sku::Details, b.details), (Sku::Search, b.search), (Sku::Autocomplete, b.autocomplete)],
+			&caller.email,
+			Timestamp::now(),
+		)
+		.await??;
 	Ok(Json(panel.prices().await?.into()))
 }
 

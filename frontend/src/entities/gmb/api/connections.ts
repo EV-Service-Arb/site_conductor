@@ -6,7 +6,7 @@ import { type Browser, type Checked, type Connections, type Imap, type MapsKey, 
 const checkedParser: Parser<Checked> = object({ at: str, error: nullable(str) });
 const imapParser: Parser<Imap> = object({ host: str, username: str, set_at: str, checked: checkedParser });
 const mapsKeyParser: Parser<MapsKey> = object({ last4: str, set_at: str, checked: checkedParser, out: nullable(str) });
-export const pricesParser: Parser<Prices> = object({ details: nullable(num), search: nullable(num) });
+export const pricesParser: Parser<Prices> = object({ details: nullable(num), search: nullable(num), autocomplete: nullable(num) });
 const browserParser: Parser<Browser> = object({
   provider: oneOf(PROVIDERS),
   device: str,
@@ -75,6 +75,6 @@ export function fetchPrices(): Promise<Prices> {
   return http.get("/api/v1/admin/tokens/prices", pricesParser);
 }
 
-export function setPrices(prices: { details: number; search: number }): Promise<Prices> {
+export function setPrices(prices: { details: number; search: number; autocomplete: number }): Promise<Prices> {
   return http.send("PUT", "/api/v1/admin/tokens/prices", prices, pricesParser);
 }

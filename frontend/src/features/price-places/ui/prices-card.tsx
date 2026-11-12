@@ -18,10 +18,12 @@ export function PricesCard({ prices, onSaved }: { prices: Prices; onSaved: () =>
   const size = useControlSize();
   const [details, setDetails] = useState(prices.details?.toString() ?? "");
   const [search, setSearch] = useState(prices.search?.toString() ?? "");
+  const [autocomplete, setAutocomplete] = useState(prices.autocomplete?.toString() ?? "");
   const [busy, setBusy] = useState(false);
   const d = tokens(details);
   const s = tokens(search);
-  const changed = d !== prices.details || s !== prices.search;
+  const a = tokens(autocomplete);
+  const changed = d !== prices.details || s !== prices.search || a !== prices.autocomplete;
 
   return (
     <Card className="gap-3 py-4">
@@ -32,9 +34,9 @@ export function PricesCard({ prices, onSaved }: { prices: Prices; onSaved: () =>
           className="flex flex-wrap items-end gap-3"
           onSubmit={(e) => {
             e.preventDefault();
-            if (d === null || s === null) return;
+            if (d === null || s === null || a === null) return;
             setBusy(true);
-            setPrices({ details: d, search: s })
+            setPrices({ details: d, search: s, autocomplete: a })
               .then(() => {
                 toast.positive(t("prices.saved"));
                 onSaved();
@@ -51,11 +53,15 @@ export function PricesCard({ prices, onSaved }: { prices: Prices; onSaved: () =>
             <FieldLabel htmlFor={`${id}-search`}>{t("prices.search")}</FieldLabel>
             <Input id={`${id}-search`} type="number" inputMode="numeric" min={0} size={size} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("prices.unset")} />
           </Field>
-          <Button type="submit" size={button("sm")} disabled={busy || d === null || s === null || !changed}>
+          <Field className="w-36">
+            <FieldLabel htmlFor={`${id}-autocomplete`}>{t("prices.autocomplete")}</FieldLabel>
+            <Input id={`${id}-autocomplete`} type="number" inputMode="numeric" min={0} size={size} value={autocomplete} onChange={(e) => setAutocomplete(e.target.value)} placeholder={t("prices.unset")} />
+          </Field>
+          <Button type="submit" size={button("sm")} disabled={busy || d === null || s === null || a === null || !changed}>
             {t("prices.save")}
           </Button>
         </form>
-        {(prices.details === null || prices.search === null) && <p className="text-xs text-accent-warn">{t("prices.unpriced")}</p>}
+        {(prices.details === null || prices.search === null || prices.autocomplete === null) && <p className="text-xs text-accent-warn">{t("prices.unpriced")}</p>}
       </CardContent>
     </Card>
   );

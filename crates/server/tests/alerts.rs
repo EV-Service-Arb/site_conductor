@@ -421,13 +421,14 @@ impl Setup {
 			.await
 			.unwrap();
 		let gmail = self.panel.add_gmail(user, gmail, t0()).await.unwrap().unwrap();
+		let trade = self.panel.add_trade(user, &format!("Plumbing {}", gmail.id), t0()).await.unwrap().unwrap().id;
 		let existing = Existing {
 			gmail_id: gmail.id,
 			place: place.to_owned(),
 			state: OnGoogle::Verified,
 			name: Some(place.to_owned()),
 			country: Some(Country::FR),
-			trade: None,
+			trade,
 		};
 		let gmb = self.panel.add_gmb(Some(user), existing, t0()).await.unwrap().unwrap();
 		(gmail.id, gmb.id)

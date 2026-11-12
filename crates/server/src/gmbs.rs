@@ -8,8 +8,11 @@
 //! DELETE /api/v1/gmails/{id}          → 204 (removed; its GBPs with it)
 //! GET    /api/v1/gmbs/resolve?place=&gmail=  Candidates; the caller's keys first, `gmail`'s
 //!                                     before their others', then the shared ones they pay for
-//! POST   /api/v1/gmbs {name, trade?}  → 201 Gmb, a draft; 409 the name taken
-//! POST   /api/v1/gmails/{id}/gmbs {place_id, state, name?, country?, trade?}  → 201 Gmb, on
+//! GET    /api/v1/gmbs/suggest?input=&gmail=  Suggestions: Places Autocomplete in the countries
+//!                                     served, paid for as resolve
+//! POST   /api/v1/gmbs {name, trade, state, gmail_id?, country?, location?}  → 201 Gmb, no place
+//!                                     known (not verified); 409 the name taken
+//! POST   /api/v1/gmails/{id}/gmbs {place_id, state, name?, country?, trade}  → 201 Gmb, on
 //!                                     Google already; 409 the name or the place taken
 //! PATCH  /api/v1/gmbs/{id} {name?, gmail_id?, phone?, trade?, areas?, hidden_address?,
 //!        customers_visit?, film?}  → 200 Gmb; null clears; 409 a name not a draft's,
@@ -49,7 +52,7 @@ use jiff::Timestamp;
 use sa_core::gbp::{Country, GmailRole, State as GbpState};
 use sa_panel::{
 	Panel,
-	gmbs::{Category, Edit, Existing, Gmail, Gmb, GoogleCategory, Trade},
+	gmbs::{Category, Edit, Existing, Gmail, Gmb, GoogleCategory, Trade, Unplaced},
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -76,7 +79,7 @@ pub struct GmbDto {
 	/// `null`: a draft no gmail manages yet.
 	#[ts(type = "number | null")]
 	pub gmail_id: Option<i64>,
-	/// Google's place id; `null` while a draft, and only then.
+	/// Google's place id; `null` while a draft, and maybe while verifying or suspended: off Maps.
 	pub place_id: Option<String>,
 	pub name: String,
 	pub address: Option<String>,
@@ -203,6 +206,11 @@ pub struct PlaceDto {
 	/// Named and addressed only with the conductor's Places API key.
 	pub name: Option<String>,
 	pub address: Option<String>,
+	/// `null`: a service-area place, or no key.
+	#[ts(type = "{ lat: number, lng: number } | null")]
+	pub location: Option<sa_places::LatLng>,
+	/// `null`: none on Google, or no key.
+	pub country: Option<Country>,
 }
 
 /// `GET /gmbs/resolve`.
@@ -210,6 +218,24 @@ pub struct PlaceDto {
 #[ts(rename = "Candidates")]
 pub struct CandidatesDto {
 	pub candidates: Vec<PlaceDto>,
+}
+
+/// A place what is being typed may be heading for.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(rename = "Suggestion")]
+pub struct SuggestionDto {
+	pub place_id: String,
+	/// Its name, or the address's first line.
+	pub main: String,
+	/// The rest of its address.
+	pub secondary: Option<String>,
+}
+
+/// `GET /gmbs/suggest`.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(rename = "Suggestions")]
+pub struct SuggestionsDto {
+	pub suggestions: Vec<SuggestionDto>,
 }
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
@@ -221,7 +247,8 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::PATCH, "/gmails/{id}", None, Cached, set_role),
 		ApiRoute::new(M::DELETE, "/gmails/{id}", None, Cached, remove_gmail),
 		ApiRoute::new(M::GET, "/gmbs/resolve", None, Cached, resolve),
-		ApiRoute::new(M::POST, "/gmbs", None, Cached, create_draft),
+		ApiRoute::new(M::GET, "/gmbs/suggest", None, Cached, suggest),
+		ApiRoute::new(M::POST, "/gmbs", None, Cached, create_gmb),
 		ApiRoute::new(M::POST, "/gmails/{id}/gmbs", None, Cached, add_gmb),
 		ApiRoute::new(M::PATCH, "/gmbs/{id}", None, Cached, edit),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/state", None, Cached, advance),
@@ -361,10 +388,35 @@ async fn resolve(State(panel): State<Panel>, Extension(caller): Extension<Caller
 	Ok(Json(CandidatesDto {
 		candidates: candidates
 			.into_iter()
-			.map(|(place_id, p)| PlaceDto {
+			.map(|(place_id, p, country)| PlaceDto {
 				place_id,
 				name: p.as_ref().and_then(|p| p.name.clone()),
-				address: p.and_then(|p| p.address),
+				address: p.as_ref().and_then(|p| p.address.clone()),
+				location: p.and_then(|p| p.location),
+				country,
+			})
+			.collect(),
+	}))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Suggest {
+	input: String,
+	/// The caller's gmail whose key is tried first.
+	gmail: Option<i64>,
+}
+
+async fn suggest(State(panel): State<Panel>, Extension(caller): Extension<Caller>, q: Result<Query<Suggest>, QueryRejection>) -> ApiResult<Json<SuggestionsDto>> {
+	let Query(q) = q.map_err(|e| ApiError::BadRequest(e.body_text()))?;
+	let found = panel.suggest(caller.user_id, q.gmail, &q.input).await??;
+	Ok(Json(SuggestionsDto {
+		suggestions: found
+			.into_iter()
+			.map(|s| SuggestionDto {
+				place_id: s.place_id,
+				main: s.main,
+				secondary: s.secondary,
 			})
 			.collect(),
 	}))
@@ -376,15 +428,34 @@ async fn map(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct NewDraft {
+struct NewUnplaced {
 	name: String,
-	trade: Option<i64>,
+	trade: i64,
+	state: String,
+	gmail_id: Option<i64>,
+	country: Option<String>,
+	location: Option<sa_places::LatLng>,
 }
 
-async fn create_draft(State(panel): State<Panel>, Extension(caller): Extension<Caller>, b: Result<Json<NewDraft>, JsonRejection>) -> ApiResult<Response> {
-	let NewDraft { name, trade } = body(b)?;
-	let added = panel.create_draft(caller.user_id, &name, trade, Timestamp::now()).await??;
-	tracing::info!(user_id = %caller.user_id, gmb_id = added.id, "draft GBP created");
+async fn create_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller>, b: Result<Json<NewUnplaced>, JsonRejection>) -> ApiResult<Response> {
+	let NewUnplaced {
+		name,
+		trade,
+		state,
+		gmail_id,
+		country,
+		location,
+	} = body(b)?;
+	let unplaced = Unplaced {
+		name,
+		trade,
+		state: state.parse()?,
+		gmail_id,
+		country: country.as_deref().map(str::parse).transpose()?,
+		at: location,
+	};
+	let added = panel.create_gmb(caller.user_id, unplaced, Timestamp::now()).await??;
+	tracing::info!(user_id = %caller.user_id, gmb_id = added.id, state = %added.state, "GBP without a place created");
 	Ok((StatusCode::CREATED, Json(GmbDto::from(added))).into_response())
 }
 
@@ -395,7 +466,7 @@ struct NewGmb {
 	state: String,
 	name: Option<String>,
 	country: Option<String>,
-	trade: Option<i64>,
+	trade: i64,
 }
 
 async fn add_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<NewGmb>, JsonRejection>) -> ApiResult<Response> {

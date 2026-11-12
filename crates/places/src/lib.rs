@@ -21,6 +21,8 @@ use zeroize::Zeroizing;
 const SEARCH_MASK: &str = "places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents";
 
 const DETAILS_MASK: &str = "id,displayName,formattedAddress,location,addressComponents";
+
+const AUTOCOMPLETE_MASK: &str = "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat";
 /// A GMB created on Google today is findable by name tomorrow.
 const SEARCH_AGE: Duration = Duration::from_secs(86_400);
 /// The place a key is tried on: Google's own office, the one its docs ask about.
@@ -47,6 +49,8 @@ pub enum Sku {
 	Details,
 	/// Text Search Pro.
 	Search,
+	/// Autocomplete Requests: per request, no session token.
+	Autocomplete,
 }
 
 /// Who a request is made for.
@@ -83,6 +87,16 @@ pub struct Place {
 	pub location: Option<LatLng>,
 	/// ISO 3166-1 alpha-2; None for a service-area business, as its point.
 	pub country: Option<String>,
+}
+
+/// A place an input being typed may be heading for, as Google's own search box offers it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Suggestion {
+	pub place_id: String,
+	/// Its name, or the address's first line.
+	pub main: String,
+	/// The rest of its address; Google gives some none.
+	pub secondary: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
@@ -204,6 +218,61 @@ impl Google {
 		Ok(serde_json::from_value::<Hit>(json)?.into())
 	}
 
+	/// The places `input` may be heading for, within `regions` (ISO 3166-1 alpha-2, at most 15).
+	/// No session token: each answer is its request's, so the queries cache serves it again.
+	pub async fn suggest(&self, input: &str, regions: &[&str], payer: &Payer<'_>) -> Result<Vec<Suggestion>, Error> {
+		#[derive(Deserialize)]
+		struct Resp {
+			#[serde(default)]
+			suggestions: Vec<Suggested>,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct Suggested {
+			place_prediction: Option<Prediction>,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct Prediction {
+			place_id: String,
+			structured_format: Structured,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct Structured {
+			main_text: Text,
+			secondary_text: Option<Text>,
+		}
+
+		let input = input.split_whitespace().collect::<Vec<_>>().join(" ");
+		if input.is_empty() {
+			return Err(Error::Invalid("nothing typed to suggest places for".to_owned()));
+		}
+		let (url, body) = (
+			format!("{}:autocomplete", self.base),
+			serde_json::json!({ "input": input, "includedRegionCodes": regions }).to_string(),
+		);
+		let req = Request {
+			method: "POST",
+			url: &url,
+			mask: AUTOCOMPLETE_MASK,
+			body: &body,
+			sku: Sku::Autocomplete,
+			subject: &input,
+		};
+		let (json, _) = self.ask(&req, Some(SEARCH_AGE), Ask::Cached, payer).await?;
+		Ok(serde_json::from_value::<Resp>(json)?
+			.suggestions
+			.into_iter()
+			.filter_map(|s| s.place_prediction) // a query prediction names no place; none asked for, Google may still send one
+			.map(|p| Suggestion {
+				place_id: p.place_id,
+				main: p.structured_format.main_text.text,
+				secondary: p.structured_format.secondary_text.map(|t| t.text),
+			})
+			.collect())
+	}
+
 	/// Text search: every hit bearing the name searched for, best first. Each place it pays for is
 	/// cached as that place's details.
 	async fn search(&self, query: &str, near: Option<(f64, f64)>, payer: &Payer<'_>) -> Result<Vec<Place>, Error> {
@@ -299,6 +368,7 @@ impl Google {
 			let label = match req.sku {
 				Sku::Details => format!("Places details · {}", req.subject),
 				Sku::Search => format!("Places search · {:?}", req.subject),
+				Sku::Autocomplete => format!("Places autocomplete · {:?}", req.subject),
 			};
 			hold.paid(Bought { key, sku: req.sku, label }).await?;
 		}

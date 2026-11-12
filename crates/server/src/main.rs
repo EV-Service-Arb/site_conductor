@@ -125,6 +125,9 @@ enum GmbCmd {
 		/// Its country (FR, US, CA, GB), when Google gives none.
 		#[arg(long)]
 		country: Option<String>,
+		/// The owner's trade it is of.
+		#[arg(long)]
+		trade: i64,
 	},
 	/// Locate every GMB's place that has no point or no country of Google's yet, through the
 	/// Places cache: run once after a deploy that brings points or countries, and after
@@ -297,6 +300,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 			state,
 			name,
 			country,
+			trade,
 		}) => {
 			let existing = Existing {
 				gmail_id,
@@ -304,7 +308,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				state: state.parse()?,
 				name,
 				country: country.as_deref().map(str::parse).transpose()?,
-				trade: None,
+				trade,
 			};
 			let added = connect().await?.add_gmb(None, existing, Timestamp::now()).await??;
 			println!("GBP {}: {} {}", added.id, added.place_id.expect("on Google"), added.name);

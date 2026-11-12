@@ -70,6 +70,8 @@ pub struct PricesDto {
 	pub details: Option<i64>,
 	#[ts(type = "number | null")]
 	pub search: Option<i64>,
+	#[ts(type = "number | null")]
+	pub autocomplete: Option<i64>,
 }
 
 #[derive(Clone, Debug, Serialize, TS)]
@@ -237,6 +239,7 @@ impl From<Vec<(Sku, Option<i64>)>> for PricesDto {
 		Self {
 			details: of(Sku::Details),
 			search: of(Sku::Search),
+			autocomplete: of(Sku::Autocomplete),
 		}
 	}
 }

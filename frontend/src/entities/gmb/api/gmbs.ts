@@ -6,6 +6,7 @@ import type { T } from "@/shared/i18n";
 import {
   type Candidate,
   type Country,
+  type Gmail,
   type GmailRole,
   type Gmails,
   type Gmb,
@@ -14,13 +15,16 @@ import {
   type MapConfig,
   type SitesPlace,
   type State,
+  type Suggestion,
   type Trade,
   candidatesParser,
+  gmailParser,
   gmailsParser,
   gmbParser,
   googleCategoriesParser,
   mapConfigParser,
   sitesPlacesParser,
+  suggestionsParser,
   tradeParser,
   tradesParser,
 } from "../model/gmb";
@@ -39,8 +43,8 @@ export async function fetchMapConfig(): Promise<MapConfig | null> {
   }
 }
 
-export async function addGmail(gmail: string): Promise<void> {
-  await http.send("POST", "/api/v1/gmails", { gmail }, ignoreBody);
+export function addGmail(gmail: string): Promise<Gmail> {
+  return http.send("POST", "/api/v1/gmails", { gmail }, gmailParser);
 }
 
 export async function setGmailRole(id: number, role: GmailRole | null): Promise<void> {
@@ -56,14 +60,19 @@ export async function resolvePlace(place: string, gmail: number | null): Promise
   return (await http.get("/api/v1/gmbs/resolve", candidatesParser, gmail === null ? { place } : { place, gmail: String(gmail) })).candidates;
 }
 
-/** A GBP on Google already; `name` and `country` fill what Google lacks. */
-export function addGmb(gmailId: number, add: { place_id: string; state: State; name?: string; country?: Country; trade: number | null }): Promise<Gmb> {
+/** Places Autocomplete in the countries served, paid for as `resolvePlace`; the caller debounces: each distinct input is a request. */
+export async function suggestPlaces(input: string, gmail: number | null): Promise<Suggestion[]> {
+  return (await http.get("/api/v1/gmbs/suggest", suggestionsParser, gmail === null ? { input } : { input, gmail: String(gmail) })).suggestions;
+}
+
+/** A GBP on Google already, by its place; `name` and `country` fill what Google lacks. */
+export function addGmb(gmailId: number, add: { place_id: string; state: State; name?: string; country?: Country; trade: number }): Promise<Gmb> {
   return http.send("POST", `/api/v1/gmails/${gmailId}/gmbs`, add, gmbParser);
 }
 
-/** A GBP not on Google yet; refused when a live one has the name. */
-export function createDraft(name: string, trade: number | null): Promise<Gmb> {
-  return http.send("POST", "/api/v1/gmbs", { name, trade }, gmbParser);
+/** A GBP no place is known of: a draft, or one verifying or suspended (off Maps), which needs `gmail_id` and `country`; `location` is placed by hand. Refused when a live one has the name. */
+export function createGmb(add: { name: string; trade: number; state: Exclude<State, "verified">; gmail_id?: number; country?: Country; location?: LatLng }): Promise<Gmb> {
+  return http.send("POST", "/api/v1/gmbs", add, gmbParser);
 }
 
 /** What a GBP's PATCH takes: `name` a draft's only, `null` clears a field. */
@@ -79,7 +88,7 @@ export function editGmb(id: number, edit: GmbEdit): Promise<Gmb> {
   return http.send("PATCH", `/api/v1/gmbs/${id}`, edit, gmbParser);
 }
 
-/** `place` (pasted) takes a draft onto Google; refused for a move not in its `next`. */
+/** `place` (pasted) is taken while the GBP has none, and needed to become verified; refused for a move not in its `next`. */
 export function moveGmb(id: number, state: State, place?: string): Promise<Gmb> {
   return http.send("PUT", `/api/v1/gmbs/${id}/state`, place === undefined ? { state } : { state, place }, gmbParser);
 }

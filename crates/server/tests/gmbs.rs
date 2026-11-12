@@ -14,7 +14,7 @@ use axum::{
 use sa_core::gbp::{Country, OnGoogle};
 use sa_panel::{
 	Panel,
-	gmbs::{Existing, Located},
+	gmbs::{Existing, Gmb, Located, Unplaced},
 	import::Export,
 	seal::DataKey,
 	testing::{TestDb, operator, panel_on},
@@ -50,8 +50,18 @@ async fn places() -> (Arc<Mutex<Vec<String>>>, String) {
 		)
 		.into_response()
 	}
+	async fn autocomplete(State(asked): State<Arc<Mutex<Vec<String>>>>, Json(body): Json<Value>) -> Json<Value> {
+		asked.lock().unwrap().push(format!("autocomplete {}", body["input"]));
+		Json(json!({ "suggestions": [
+			{ "placePrediction": { "placeId": FLORE, "structuredFormat": { "mainText": { "text": "Café de Flore" }, "secondaryText": { "text": "Paris, France" } } } },
+			{ "placePrediction": { "placeId": ASSIST, "structuredFormat": { "mainText": { "text": "Mold Assist" } } } }
+		] }))
+	}
 	let asked = Arc::<Mutex<Vec<String>>>::default();
-	let app = Router::new().route("/v1/places/{id}", get(details)).with_state(asked.clone());
+	let app = Router::new()
+		.route("/v1/places/{id}", get(details))
+		.route("/v1/places:autocomplete", axum::routing::post(autocomplete))
+		.with_state(asked.clone());
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let base = format!("http://{}/v1/places", listener.local_addr().unwrap());
 	tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -69,7 +79,7 @@ async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
 	let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
 	let p = panel_on(db.store().await, key, google);
 	// what a point costs is tests/connections.rs's
-	p.set_prices(&[(Sku::Details, 0), (Sku::Search, 0)], "admin@localhost", jiff::Timestamp::now())
+	p.set_prices(&[(Sku::Details, 0), (Sku::Search, 0), (Sku::Autocomplete, 0)], "admin@localhost", jiff::Timestamp::now())
 		.await
 		.unwrap()
 		.unwrap();
@@ -131,7 +141,8 @@ async fn a_gmb_is_located_when_added_and_its_place_asked_once() {
 		assert_eq!(status, StatusCode::CREATED, "{added}");
 		gmails.push(added["id"].as_i64().unwrap());
 	}
-	let add = json!({ "place_id": PROCOPE, "state": "verified" });
+	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
+	let add = json!({ "place_id": PROCOPE, "state": "verified", "trade": trade["id"] });
 	let (status, gmb) = call(&mut b, &app, Method::POST, &format!("/api/v1/gmails/{}/gmbs", gmails[0]), Some(add.clone())).await;
 	assert_eq!(status, StatusCode::CREATED, "{gmb}");
 	assert_eq!(gmb["location"], json!({ "lat": 48.853, "lng": 2.3389, "placed": false }));
@@ -154,7 +165,7 @@ async fn locate_fills_only_the_missing_points_and_pays_for_each_once() {
 	let owner = seen(&keyless, "dev@localhost").await;
 	let gmail = keyless.add_gmail(owner, "a@gmail.com", jiff::Timestamp::now()).await.unwrap().unwrap();
 	for place in [PROCOPE, FLORE] {
-		let gmb = keyless.add_gmb(Some(owner), existing(gmail.id, place), jiff::Timestamp::now()).await.unwrap().unwrap();
+		let gmb = add(&keyless, owner, gmail.id, place).await;
 		assert_eq!(gmb.location, None, "no key, no point");
 	}
 
@@ -169,16 +180,22 @@ async fn locate_fills_only_the_missing_points_and_pays_for_each_once() {
 	assert_eq!(asked.lock().unwrap().len(), 2, "a second run asks nothing");
 }
 
-/// On Google already, named and put in France by hand: what Places, keyless, cannot say.
-fn existing(gmail_id: i64, place: &str) -> Existing {
-	Existing {
+/// On Google already, named and put in France by hand: what Places, keyless, cannot say. Of the
+/// owner's trade, added the first time.
+async fn add(p: &Panel, owner: uuid::Uuid, gmail_id: i64, place: &str) -> Gmb {
+	let trade = match p.trades(owner).await.unwrap().first() {
+		Some(t) => t.id,
+		None => p.add_trade(owner, "Plumbing", jiff::Timestamp::now()).await.unwrap().unwrap().id,
+	};
+	let existing = Existing {
 		gmail_id,
 		place: place.to_owned(),
 		state: OnGoogle::Verified,
 		name: Some(place.to_owned()),
 		country: Some(Country::FR),
-		trade: None,
-	}
+		trade,
+	};
+	p.add_gmb(Some(owner), existing, jiff::Timestamp::now()).await.unwrap().unwrap()
 }
 
 fn located(n: usize, no_point: &[&str], no_country: &[&str]) -> Located {
@@ -210,7 +227,7 @@ async fn a_service_area_gmb_has_no_point_until_placed_on_the_map() {
 	opened(&keyless).await;
 	let owner = seen(&keyless, "dev@localhost").await;
 	let gmail = keyless.add_gmail(owner, "a@gmail.com", jiff::Timestamp::now()).await.unwrap().unwrap();
-	keyless.add_gmb(Some(owner), existing(gmail.id, FLORE), jiff::Timestamp::now()).await.unwrap().unwrap();
+	add(&keyless, owner, gmail.id, FLORE).await;
 
 	let keyed = panel(&db, Some(&base)).await;
 	let app = app(keyed.clone(), None);
@@ -221,7 +238,7 @@ async fn a_service_area_gmb_has_no_point_until_placed_on_the_map() {
 		&app,
 		Method::POST,
 		&format!("/api/v1/gmails/{}/gmbs", gmail.id),
-		Some(json!({ "place_id": ASSIST, "state": "verified", "country": "CA" })),
+		Some(json!({ "place_id": ASSIST, "state": "verified", "country": "CA", "trade": keyed.trades(owner).await.unwrap()[0].id })),
 	)
 	.await;
 	assert_eq!((status, &assist["location"]), (StatusCode::CREATED, &Value::Null), "{assist}");
@@ -253,14 +270,15 @@ async fn a_point_is_placed_and_taken_back_only_on_the_callers_gmb_without_google
 	opened(&p).await;
 	let other = seen(&p, "other@localhost").await;
 	let theirs = p.add_gmail(other, "other@gmail.com", jiff::Timestamp::now()).await.unwrap().unwrap();
-	let theirs = p.add_gmb(Some(other), existing(theirs.id, FLORE), jiff::Timestamp::now()).await.unwrap().unwrap();
+	let theirs = add(&p, other, theirs.id, FLORE).await;
 	let app = app(p, None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
+	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
 	let mut mine = Vec::new();
 	for place in [PROCOPE, ASSIST] {
-		let add = json!({ "place_id": place, "state": "verified", "country": "FR" });
+		let add = json!({ "place_id": place, "state": "verified", "country": "FR", "trade": trade["id"] });
 		let (_, gmb) = call(&mut b, &app, Method::POST, &format!("/api/v1/gmails/{}/gmbs", gmail["id"]), Some(add)).await;
 		mine.push(gmb["id"].as_i64().unwrap());
 	}
@@ -307,13 +325,15 @@ async fn a_draft_goes_onto_google_and_is_verified() {
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
 
-	let (status, draft) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Café de Flore" }))).await;
+	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
+	let new = json!({ "name": "Café de Flore", "trade": trade["id"], "state": "draft" });
+	let (status, draft) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(new.clone())).await;
 	assert_eq!(
 		(status, &draft["state"], &draft["gmail_id"], &draft["place_id"]),
 		(StatusCode::CREATED, &json!("draft"), &Value::Null, &Value::Null)
 	);
 	let gbp = format!("/api/v1/gmbs/{}", draft["id"]);
-	let (status, _) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Café de Flore" }))).await;
+	let (status, _) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(new)).await;
 	assert_eq!(status, StatusCode::CONFLICT);
 	let (_, listed) = call(&mut b, &app, Method::GET, "/api/v1/gmails", None).await;
 	assert_eq!(listed["gmbs"][0]["id"], draft["id"], "a draft is listed with no gmail: {listed}");
@@ -342,6 +362,75 @@ async fn a_draft_goes_onto_google_and_is_verified() {
 }
 
 #[tokio::test]
+async fn a_gbp_off_maps_is_added_without_its_place_and_given_it_once_verified() {
+	let (asked, base) = places().await;
+	let db = TestDb::create().await;
+	let p = panel(&db, Some(&base)).await;
+	opened(&p).await;
+	let app = app(p, None);
+	let mut b = Browser::default();
+	b.sign_in(&app).await;
+	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
+	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
+
+	let suggested = json!({ "suggestions": [
+		{ "place_id": FLORE, "main": "Café de Flore", "secondary": "Paris, France" },
+		{ "place_id": ASSIST, "main": "Mold Assist", "secondary": null }
+	] });
+	for input in ["Caf%C3%A9+de+Flore", "+Caf%C3%A9++de+Flore"] {
+		let got = call(&mut b, &app, Method::GET, &format!("/api/v1/gmbs/suggest?input={input}&gmail={}", gmail["id"]), None).await;
+		assert_eq!(got, (StatusCode::OK, suggested.clone()), "{input}");
+	}
+	assert_eq!(
+		*asked.lock().unwrap(),
+		[r#"autocomplete "Café de Flore""#],
+		"the same input, spaced otherwise, is not paid for again"
+	);
+	let (status, found) = call(&mut b, &app, Method::GET, &format!("/api/v1/gmbs/resolve?place={FLORE}"), None).await;
+	assert_eq!(
+		(status, &found["candidates"][0]["location"], &found["candidates"][0]["country"]),
+		(StatusCode::OK, &json!({ "lat": 48.854, "lng": 2.3326 }), &json!("FR")),
+		"{found}"
+	);
+
+	let new = json!({ "name": "Flore", "trade": trade["id"], "state": "verifying", "gmail_id": gmail["id"], "country": "FR", "location": { "lat": 48.85, "lng": 2.33 } });
+	for (field, value) in [("state", json!("verified")), ("trade", Value::Null), ("gmail_id", Value::Null), ("country", Value::Null)] {
+		let mut refused = new.clone();
+		refused[field] = value;
+		let (status, body) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(refused)).await;
+		assert_eq!(status, StatusCode::BAD_REQUEST, "{field}: {body}");
+	}
+	let (status, gbp) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(new)).await;
+	assert_eq!(status, StatusCode::CREATED, "{gbp}");
+	assert_eq!(
+		(&gbp["state"], &gbp["place_id"], &gbp["location"], &gbp["country"]),
+		(
+			&json!("verifying"),
+			&Value::Null,
+			&json!({ "lat": 48.85, "lng": 2.33, "placed": true }),
+			&json!({ "code": "FR", "by_hand": true })
+		)
+	);
+
+	let state = format!("/api/v1/gmbs/{}/state", gbp["id"]);
+	let (status, body) = call(&mut b, &app, Method::PUT, &state, Some(json!({ "state": "verified" }))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "verified with its place: {body}");
+	let (status, verified) = call(&mut b, &app, Method::PUT, &state, Some(json!({ "state": "verified", "place": FLORE }))).await;
+	assert_eq!(status, StatusCode::OK, "{verified}");
+	assert_eq!(
+		(&verified["state"], &verified["place_id"], &verified["location"], &verified["country"]),
+		(
+			&json!("verified"),
+			&json!(FLORE),
+			&json!({ "lat": 48.854, "lng": 2.3326, "placed": false }),
+			&json!({ "code": "FR", "by_hand": false })
+		),
+		"Google's over what was set by hand"
+	);
+	assert_eq!(asked.lock().unwrap().iter().filter(|a| *a == FLORE).count(), 1, "the place picked is asked once");
+}
+
+#[tokio::test]
 async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 	let db = TestDb::create().await;
 	let p = panel(&db, None).await;
@@ -349,8 +438,23 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 	let app = app(p, None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
-	let (_, first) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Lyon 7" }))).await;
-	let (_, second) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Lyon 8" }))).await;
+	let (_, heating) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Heating" }))).await;
+	let (_, first) = call(
+		&mut b,
+		&app,
+		Method::POST,
+		"/api/v1/gmbs",
+		Some(json!({ "name": "Lyon 7", "trade": heating["id"], "state": "draft" })),
+	)
+	.await;
+	let (_, second) = call(
+		&mut b,
+		&app,
+		Method::POST,
+		"/api/v1/gmbs",
+		Some(json!({ "name": "Lyon 8", "trade": heating["id"], "state": "draft" })),
+	)
+	.await;
 	let first = format!("/api/v1/gmbs/{}", first["id"]);
 	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
 
@@ -413,7 +517,15 @@ async fn beside_another(db: &TestDb) -> (Router, Browser, i64, i64) {
 	opened(&p).await;
 	let other = seen(&p, "other@localhost").await;
 	let trade = p.add_trade(other, "Plumbing", jiff::Timestamp::now()).await.unwrap().unwrap();
-	let gbp = p.create_draft(other, "Theirs", None, jiff::Timestamp::now()).await.unwrap().unwrap();
+	let unplaced = Unplaced {
+		name: "Theirs".to_owned(),
+		trade: trade.id,
+		state: sa_core::gbp::State::Draft,
+		gmail_id: None,
+		country: None,
+		at: None,
+	};
+	let gbp = p.create_gmb(other, unplaced, jiff::Timestamp::now()).await.unwrap().unwrap();
 	let app = app(p, None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
@@ -424,13 +536,20 @@ async fn beside_another(db: &TestDb) -> (Router, Browser, i64, i64) {
 async fn a_trade_is_its_owners() {
 	let db = TestDb::create().await;
 	let (app, mut b, theirs, _) = beside_another(&db).await;
-	let (_, mine) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Lyon 7" }))).await;
-	let (status, _) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
+	let (status, plumbing) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
 	assert_eq!(status, StatusCode::CREATED, "a name is one owner's");
+	let (_, mine) = call(
+		&mut b,
+		&app,
+		Method::POST,
+		"/api/v1/gmbs",
+		Some(json!({ "name": "Lyon 7", "trade": plumbing["id"], "state": "draft" })),
+	)
+	.await;
 	let set_up = json!({ "keywords": [], "google_primary": null, "google_additional": [], "study": null });
 	for (method, uri, body) in [
 		(Method::PATCH, format!("/api/v1/gmbs/{}", mine["id"]), Some(json!({ "trade": theirs }))),
-		(Method::POST, "/api/v1/gmbs".to_owned(), Some(json!({ "name": "Lyon 8", "trade": theirs }))),
+		(Method::POST, "/api/v1/gmbs".to_owned(), Some(json!({ "name": "Lyon 8", "trade": theirs, "state": "draft" }))),
 		(Method::PATCH, format!("/api/v1/trades/{theirs}"), Some(json!({ "name": "Mine" }))),
 		(Method::PUT, format!("/api/v1/trades/{theirs}/FR"), Some(set_up)),
 		(Method::DELETE, format!("/api/v1/trades/{theirs}"), None),
@@ -451,7 +570,14 @@ async fn a_trade_a_live_gbp_holds_is_not_deleted() {
 	let set_up = json!({ "keywords": ["plombier"], "google_primary": "gcid:plumber", "google_additional": [], "study": "plumbing" });
 	let (status, _) = call(&mut b, &app, Method::PUT, &format!("{uri}/FR"), Some(set_up)).await;
 	assert_eq!(status, StatusCode::OK);
-	let (_, gbp) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Lyon 7", "trade": trade["id"] }))).await;
+	let (_, gbp) = call(
+		&mut b,
+		&app,
+		Method::POST,
+		"/api/v1/gmbs",
+		Some(json!({ "name": "Lyon 7", "trade": trade["id"], "state": "draft" })),
+	)
+	.await;
 	assert_eq!(gbp["trade_id"], trade["id"], "{gbp}");
 
 	let (status, body) = call(&mut b, &app, Method::DELETE, &uri, None).await;
@@ -544,15 +670,23 @@ async fn trade_ids(b: &mut Browser, app: &Router) -> Vec<Value> {
 async fn gbps_are_given_a_trade_every_one_or_none() {
 	let db = TestDb::create().await;
 	let (app, mut b, _, theirs) = beside_another(&db).await;
+	let (_, heating) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Heating" }))).await;
 	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
 	let mut mine = Vec::new();
 	for name in ["Lyon 7", "Lyon 8"] {
-		let (_, gbp) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": name }))).await;
+		let (_, gbp) = call(
+			&mut b,
+			&app,
+			Method::POST,
+			"/api/v1/gmbs",
+			Some(json!({ "name": name, "trade": heating["id"], "state": "draft" })),
+		)
+		.await;
 		mine.push(gbp["id"].as_i64().unwrap());
 	}
 	let (status, _) = call(&mut b, &app, Method::PUT, "/api/v1/gmbs/trade", Some(json!({ "gmbs": [mine[0], theirs], "trade": trade["id"] }))).await;
 	assert_eq!(status, StatusCode::NOT_FOUND);
-	assert_eq!(trade_ids(&mut b, &app).await, [Value::Null, Value::Null], "none given it");
+	assert_eq!(trade_ids(&mut b, &app).await, [heating["id"].clone(), heating["id"].clone()], "none given it");
 
 	let (status, _) = call(&mut b, &app, Method::PUT, "/api/v1/gmbs/trade", Some(json!({ "gmbs": mine, "trade": trade["id"] }))).await;
 	assert_eq!(status, StatusCode::NO_CONTENT);

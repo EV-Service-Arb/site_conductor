@@ -232,18 +232,14 @@ impl World {
 		added["id"].as_i64().unwrap()
 	}
 
-	/// A draft of `gmail`'s in `country`, at a point in Lyon.
+	/// A draft of `gmail`'s in `country`, at a point in Lyon, of a trade named as it.
 	async fn gbp(&mut self, gmail: i64, name: &str, country: &str) -> i64 {
-		let (status, draft) = self.call(Method::POST, "/api/v1/gmbs", Some(json!({ "name": name }))).await;
+		let (status, trade) = self.call(Method::POST, "/api/v1/trades", Some(json!({ "name": name }))).await;
+		assert_eq!(status, StatusCode::CREATED, "{trade}");
+		let draft = json!({ "name": name, "trade": trade["id"], "state": "draft", "gmail_id": gmail, "country": country, "location": { "lat": 45.75, "lng": 4.85 } });
+		let (status, draft) = self.call(Method::POST, "/api/v1/gmbs", Some(draft)).await;
 		assert_eq!(status, StatusCode::CREATED, "{draft}");
-		let id = draft["id"].as_i64().unwrap();
-		let (status, moved) = self.call(Method::PATCH, &format!("/api/v1/gmbs/{id}"), Some(json!({ "gmail_id": gmail }))).await;
-		assert_eq!(status, StatusCode::OK, "{moved}");
-		let (status, _) = self.call(Method::PUT, &format!("/api/v1/gmbs/{id}/country"), Some(json!({ "country": country }))).await;
-		assert_eq!(status, StatusCode::NO_CONTENT);
-		let (status, _) = self.call(Method::PUT, &format!("/api/v1/gmbs/{id}/location"), Some(json!({ "lat": 45.75, "lng": 4.85 }))).await;
-		assert_eq!(status, StatusCode::NO_CONTENT);
-		id
+		draft["id"].as_i64().unwrap()
 	}
 
 	/// `user`'s proxy through ip-api's stub.

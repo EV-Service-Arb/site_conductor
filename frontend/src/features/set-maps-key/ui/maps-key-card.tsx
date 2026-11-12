@@ -35,7 +35,9 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
   };
   const failing = mapsKey !== null && (mapsKey.checked.error !== null || mapsKey.out !== null);
   const cost =
-    prices.details === null || prices.search === null ? t("account.mapsKey.unpriced") : t("account.mapsKey.cost", { details: prices.details, search: prices.search });
+    prices.details === null || prices.search === null || prices.autocomplete === null
+      ? t("account.mapsKey.unpriced")
+      : t("account.mapsKey.cost", { details: prices.details, search: prices.search, autocomplete: prices.autocomplete });
 
   return (
     <Card className="gap-3 py-4">

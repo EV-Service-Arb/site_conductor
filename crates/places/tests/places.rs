@@ -104,6 +104,19 @@ async fn search_text(State(s): State<Stub>, headers: HeaderMap, body: String) ->
 	}
 }
 
+async fn autocomplete(State(s): State<Stub>, headers: HeaderMap, body: String) -> Response {
+	let body: Value = serde_json::from_str(&body).unwrap();
+	if let Some(refused) = s.refusal(&headers, body) {
+		return refused;
+	}
+	axum::Json(json!({ "suggestions": [
+		{ "placePrediction": { "placeId": PROCOPE, "structuredFormat": { "mainText": { "text": "Le Procope" }, "secondaryText": { "text": "Rue de l'Ancienne Comédie, Paris, France" } } } },
+		{ "queryPrediction": { "text": { "text": "le procope menu" } } },
+		{ "placePrediction": { "placeId": MOLD_ASSIST, "structuredFormat": { "mainText": { "text": "Mold Assist" } } } }
+	] }))
+	.into_response()
+}
+
 async fn place_details(State(s): State<Stub>, headers: HeaderMap, Path(id): Path<String>) -> Response {
 	if let Some(refused) = s.refusal(&headers, json!(id)) {
 		return refused;
@@ -173,6 +186,7 @@ async fn google_on(keys: &[&str], cache: Arc<dyn QueriesCache>) -> (Stub, Google
 	let s = Stub::default();
 	let app = Router::new()
 		.route("/v1/places:searchText", post(search_text))
+		.route("/v1/places:autocomplete", post(autocomplete))
 		.route("/v1/places/{id}", get(place_details))
 		.with_state(s.clone());
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -247,6 +261,26 @@ async fn without_a_key_a_place_id_resolves_unnamed() {
 	assert_eq!(got, [(PROCOPE.to_owned(), None)]);
 	assert!(matches!(search, Error::Invalid(_)), "{search:#}");
 	assert_eq!(s.asked(), 0);
+}
+
+#[tokio::test]
+async fn suggestions_are_places_in_the_regions_asked_and_paid_for_once() {
+	let (s, google, _store, server) = google(&["k"]).await;
+	let got = google.suggest(" le  procope", &["FR", "US"], &Payer::house()).await.unwrap();
+	let again = google.suggest("le procope ", &["FR", "US"], &Payer::house()).await.unwrap();
+	let empty = google.suggest("  ", &["FR"], &Payer::house()).await.unwrap_err();
+	server.abort();
+	let shown: Vec<_> = got.iter().map(|g| (g.place_id.as_str(), g.main.as_str(), g.secondary.as_deref())).collect();
+	assert_eq!(
+		shown,
+		[(PROCOPE, "Le Procope", Some("Rue de l'Ancienne Comédie, Paris, France")), (MOLD_ASSIST, "Mold Assist", None)],
+		"a query prediction names no place"
+	);
+	assert_eq!(again, got);
+	assert!(matches!(empty, Error::Invalid(_)), "{empty:#}");
+	let [(_, mask, body)] = s.got.lock().unwrap().clone().try_into().unwrap();
+	assert_eq!(mask, "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat");
+	assert_eq!(body, json!({ "input": "le procope", "includedRegionCodes": ["FR", "US"] }));
 }
 
 #[tokio::test]

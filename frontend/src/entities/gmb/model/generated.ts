@@ -123,7 +123,7 @@ export type Gmb = { id: number,
  */
 gmail_id: number | null, 
 /**
- * Google's place id; `null` while a draft, and only then.
+ * Google's place id; `null` while a draft, and maybe while verifying or suspended: off Maps.
  */
 place_id: string | null, name: string, address: string | null, state: State, 
 /**
@@ -198,7 +198,7 @@ export type MapsKey = { last4: string, set_at: string, checked: Checked,
  */
 out: string | null, };
 /**
- * A [`State`] with a place on Google: every one but a draft.
+ * A [`State`] on Google: every one but a draft.
  */
 export type OnGoogle = "verifying" | "verified" | "suspended";
 /**
@@ -208,11 +208,19 @@ export type Place = { place_id: string,
 /**
  * Named and addressed only with the conductor's Places API key.
  */
-name: string | null, address: string | null, };
+name: string | null, address: string | null, 
+/**
+ * `null`: a service-area place, or no key.
+ */
+location: { lat: number, lng: number } | null, 
+/**
+ * `null`: none on Google, or no key.
+ */
+country: Country | null, };
 /**
  * Tokens a Places request on the shared keys costs; `null`, not sold yet.
  */
-export type Prices = { details: number | null, search: number | null, };
+export type Prices = { details: number | null, search: number | null, autocomplete: number | null, };
 export type SetBrowser = { provider: Provider, 
 /**
  * A browser's; a cloud phone's model is drawn.
@@ -235,6 +243,22 @@ gmb: number | null, };
  * ```
  */
 export type State = "draft" | "verifying" | "verified" | "suspended";
+/**
+ * A place what is being typed may be heading for.
+ */
+export type Suggestion = { place_id: string, 
+/**
+ * Its name, or the address's first line.
+ */
+main: string, 
+/**
+ * The rest of its address.
+ */
+secondary: string | null, };
+/**
+ * `GET /gmbs/suggest`.
+ */
+export type Suggestions = { suggestions: Array<Suggestion>, };
 export type Tab = { id: string, title: string, url: string, };
 export type TouchPhase = "start" | "move" | "end";
 /**

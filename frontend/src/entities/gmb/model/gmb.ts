@@ -1,8 +1,8 @@
 import { type Infer, type Parser, arrayOf, bool, nullable, num, object, oneOf, recordOf, str } from "@/shared/lib/parse";
 
-import type { Candidates, Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategories, GoogleCategory, MapConfig, OnGoogle, Place, State, Trade, Trades } from "./generated";
+import type { Candidates, Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategories, GoogleCategory, MapConfig, OnGoogle, Place, State, Suggestion, Suggestions, Trade, Trades } from "./generated";
 
-export type { Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategory, MapConfig, OnGoogle, Place as Candidate, State, Trade, Trades } from "./generated";
+export type { Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategory, MapConfig, OnGoogle, Place as Candidate, State, Suggestion, Trade, Trades } from "./generated";
 
 export type LatLng = { lat: number; lng: number };
 
@@ -34,7 +34,7 @@ export const gmbParser: Parser<Gmb> = object({
 
 export const mapConfigParser: Parser<MapConfig> = object({ key: str });
 
-const gmailParser: Parser<Gmail> = object({ id: num, gmail: str, role: nullable(oneOf(GMAIL_ROLES)), created_at: str, browser: bool });
+export const gmailParser: Parser<Gmail> = object({ id: num, gmail: str, role: nullable(oneOf(GMAIL_ROLES)), created_at: str, browser: bool });
 export const gmailsParser: Parser<Gmails> = object({ gmails: arrayOf(gmailParser), gmbs: arrayOf(gmbParser) });
 
 const googleCategoryParser: Parser<GoogleCategory> = object({ id: str, names: recordOf(str) });
@@ -57,8 +57,16 @@ const categoryParser: Parser<Category> = object({
 export const tradeParser: Parser<Trade> = object({ id: num, name: str, created_at: str, categories: arrayOf(categoryParser) });
 export const tradesParser: Parser<Trades> = object({ trades: arrayOf(tradeParser) });
 
-const candidateParser: Parser<Place> = object({ place_id: str, name: nullable(str), address: nullable(str) });
+const candidateParser: Parser<Place> = object({
+  place_id: str,
+  name: nullable(str),
+  address: nullable(str),
+  location: nullable(object({ lat: num, lng: num })),
+  country: nullable(oneOf(COUNTRIES)),
+});
 export const candidatesParser: Parser<Candidates> = object({ candidates: arrayOf(candidateParser) });
+const suggestionParser: Parser<Suggestion> = object({ place_id: str, main: str, secondary: nullable(str) });
+export const suggestionsParser: Parser<Suggestions> = object({ suggestions: arrayOf(suggestionParser) });
 
 /** A JSON object keyed by GMB id, each value checked. */
 function byGmb<T>(p: Parser<T>): Parser<Map<number, T>> {

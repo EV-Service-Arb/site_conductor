@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::Invalid;
 
 /// ISO 3166-1 alpha-2, of the countries GBPs are in.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, strum::VariantArray)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub enum Country {
@@ -140,11 +140,13 @@ impl FromStr for GmailRole {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum State {
-	/// No place on Google yet.
+	/// Not on Google yet: no place.
 	Draft,
-	/// On Google, Google verifying it.
+	/// On Google, Google verifying it: not on Maps, so its place may be unknown.
 	Verifying,
+	/// On Maps: its place is certain.
 	Verified,
+	/// Off Maps: its place, if it had none, may still be unknown.
 	Suspended,
 }
 
@@ -197,7 +199,7 @@ impl fmt::Display for State {
 	}
 }
 
-/// A [`State`] with a place on Google: every one but a draft.
+/// A [`State`] on Google: every one but a draft.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
@@ -254,7 +256,7 @@ impl fmt::Display for OnGoogle {
 	}
 }
 
-/// A GBP with a place, as the services are told of it.
+/// A GBP with a place, as the services are told of it: one on Google without one is not.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(deny_unknown_fields)]
