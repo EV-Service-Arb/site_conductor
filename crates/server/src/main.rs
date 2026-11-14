@@ -520,9 +520,20 @@ async fn serve(
 		tracing::warn!("ANTHROPIC_API_KEY unset: no assistant, asking it answers 503");
 	}
 	let catalog = forward.as_ref().map(|f| f.catalog().clone());
-	let app = http::app(sign_in, forward, grafana.as_ref().map(|(g, _)| g), http::Limits::default(), bot.clone(), map, browsers, model);
+	let panel_for_pages = sign_in.panel.clone();
+	let app = http::app(
+		sign_in,
+		forward,
+		grafana.as_ref().map(|(g, _)| g),
+		http::Limits::default(),
+		bot.clone(),
+		map,
+		browsers,
+		files.as_ref(),
+		model,
+	);
 	let app = match files {
-		Some(files) => web::serve(app, files),
+		Some(files) => web::serve(app, files, panel_for_pages),
 		None => {
 			tracing::warn!("PANEL_WEB_DIR unset: serving the API alone, no front end");
 			app

@@ -38,7 +38,7 @@ use crate::{
 	forward::{Forward, Services},
 	gmbs,
 	grafana::Grafana,
-	ingest,
+	ingest, kit,
 	live::{self, Live, LiveLimits},
 	mcp, oauth, queries_cache,
 	signin::{self, Caller, Freshness, Gatekeeper, SignIn},
@@ -144,8 +144,10 @@ pub struct Limits {
 	pub live: LiveLimits,
 }
 
-/// Everything the conductor answers but the front end's files; ingest and the forward only with
-/// `forward`, `/grafana/` only with `grafana`.
+/// Everything the conductor answers but the front end's files; ingest, the forward and the
+/// landings' kit only with `forward`, `/grafana/` only with `grafana`. `web`: the front end's
+/// files, whose directories no kit area may take.
+#[expect(clippy::too_many_arguments, reason = "each is one optional part of the deployment")]
 pub fn app(
 	sign_in: SignIn,
 	forward: Option<Forward>,
@@ -154,6 +156,7 @@ pub fn app(
 	telegram: Option<Telegram>,
 	map: Option<gmbs::MapDto>,
 	browsers: Option<browser::Connected>,
+	web: Option<&crate::web::Files>,
 	model: Option<Model>,
 ) -> Router {
 	let auth = Router::new()
@@ -186,11 +189,14 @@ pub fn app(
 	};
 	// A call waits as long as the slowest operation it runs.
 	let agents = bounded(oauth::routes(sign_in.clone()), limits.auth_concurrent, limits.auth_timeout).merge(bounded(mcp::routes(agents), limits.api_concurrent, Duration::from_secs(600)));
+	let pages = forward.as_ref().map(|f| kit::Pages::new(f.services().clone()));
 	let state = ApiState {
 		catalog,
 		tools: tools.clone(),
 		panel: sign_in.panel.clone(),
 		sites: forward.as_ref().map(|f| f.services().clone()),
+		pages: pages.clone(),
+		web: web.cloned(),
 		probe: connected::probe_client(),
 		telegram,
 		map,
@@ -224,7 +230,10 @@ pub fn app(
 		.merge(queries_cache::routes(sign_in.panel.clone(), &limits))
 		.nest("/api/v1", api);
 	let app = match forward {
-		Some(forward) => app.merge(ingest::routes(forward.clone(), &limits)).merge(forward.routes()),
+		Some(forward) => app
+			.merge(ingest::routes(forward.clone(), &limits))
+			.merge(kit::landing_routes(sign_in.panel.clone(), pages.expect("made with the forward"), &limits))
+			.merge(forward.routes()),
 		None => app,
 	};
 	let app = match grafana {
@@ -248,6 +257,7 @@ pub(crate) fn api_routes() -> Vec<ApiRoute> {
 		tokens::routes(),
 		trash::routes(),
 		assistant::routes(),
+		kit::routes(),
 	]
 	.into_iter()
 	.flatten()
@@ -311,6 +321,10 @@ pub(crate) struct ApiState {
 	pub(crate) browsers: Option<browser::Connected>,
 	/// With ANTHROPIC_API_KEY: the assistant's.
 	pub(crate) model: Option<Model>,
+	/// With the forward: which landing page is which GBP.
+	pub(crate) pages: Option<kit::Pages>,
+	/// PANEL_WEB_DIR's.
+	pub(crate) web: Option<crate::web::Files>,
 }
 
 impl FromRef<ApiState> for Panel {

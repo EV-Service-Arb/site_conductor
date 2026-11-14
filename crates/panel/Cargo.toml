@@ -21,6 +21,7 @@ getrandom.workspace = true
 hex.workspace = true
 hmac.workspace = true
 icu_locale.workspace = true
+image.workspace = true
 jiff = { workspace = true, features = ["serde"] }
 percent-encoding.workspace = true
 reqwest = { workspace = true, features = ["multipart", "socks"] }

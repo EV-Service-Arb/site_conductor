@@ -1,0 +1,936 @@
+//! The review kit (`sa_panel::kit`): the owner's routes under `/api/v1`, and the landings' under
+//! `/api/kit/v1`, signed as ingest is and answered here.
+//!
+//! ```text
+//! GET    /api/kit/v1/offer?brand&slug[&qr=1]                  KitOffer | 404 the kit off
+//! GET    /api/kit/v1/photos/{p}.jpg?view=                     image/jpeg, offered to that view
+//! POST   /api/kit/v1/events {view, copied: d} | {view, saved: [p]}   204; 409 went there already
+//! ```
+//!
+//! A landing signs as ingest's sources do (a GET over `GET <path?query>`); the key's brands must
+//! hold the place's. (brand, slug) ↔ GBP is sites': `GET /api/conductor/places`, kept 60 s.
+
+use std::{
+	sync::{Arc, Mutex},
+	time::{Duration, Instant},
+};
+
+use axum::{
+	Extension, Json, Router,
+	body::{Bytes, to_bytes},
+	error_handling::HandleErrorLayer,
+	extract::{DefaultBodyLimit, FromRequest, OriginalUri, Path, Query, Request, State, rejection::QueryRejection},
+	http::{HeaderMap, HeaderValue, Method, StatusCode, header},
+	response::{IntoResponse, NoContent, Response},
+	routing::{get, post},
+};
+use ev_lib::api::{
+	Created, GenContext, JsonSchema, OperationInput, OperationOutput,
+	openapi::{MediaType, Operation, ReferenceOr, RequestBody, Response as Answer, StatusCode as Status},
+};
+use jiff::Timestamp;
+use sa_auth::SourceKind;
+use sa_core::gbp::{Country, State as GbpState};
+use sa_panel::{
+	Grant, Panel, SignedBatch,
+	kit::{Area, Event, Kit, Nearby, NewArea, Offer, PHOTO_MAX, Pool, Ranked, Shape, Target},
+	store::kit::Removable,
+};
+use sa_places::{LatLng, Locality, Viewport};
+use serde::{Deserialize, Serialize};
+use tower::{BoxError, ServiceBuilder};
+use tower_http::timeout::{RequestBodyTimeoutLayer, TimeoutLayer};
+use uuid::Uuid;
+
+use crate::{
+	api::{ApiError, ApiResult, Body, Id, Ids, Params},
+	forward::Services,
+	gmbs::{SuggestionDto, SuggestionsDto, TradeIn},
+	http::{ApiRoute, ApiState, Gate, Limits},
+	ingest,
+	signin::Caller,
+};
+
+/// The landings' routes sit under it.
+pub const LANDING: &str = "/api/kit/v1";
+
+/// How long sites' places are kept.
+const PAGES_FOR: Duration = Duration::from_secs(60);
+
+/// The landing's path a GBP's page is at, under its site key's origin.
+const PAGE: &str = "/avis/";
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "KitDraft")]
+pub(crate) struct DraftDto {
+	pub id: i64,
+	pub text: String,
+	pub photos: Vec<i64>,
+	/// Copies, every GBP.
+	pub uses: i64,
+	pub created_at: String,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "KitPhoto")]
+pub(crate) struct PhotoDto {
+	pub id: i64,
+	pub width: i64,
+	pub height: i64,
+	/// Saved, every GBP.
+	pub uses: i64,
+	pub created_at: String,
+}
+
+/// A category's drafts and photos.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "KitPool")]
+pub(crate) struct PoolDto {
+	pub drafts: Vec<DraftDto>,
+	/// Newest first.
+	pub photos: Vec<PhotoDto>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "NewKitDraft")]
+#[serde(deny_unknown_fields)]
+pub(crate) struct NewDraftDto {
+	pub text: String,
+	pub photos: Vec<i64>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "EditKitDraft")]
+#[serde(deny_unknown_fields)]
+pub(crate) struct EditDraftDto {
+	pub text: Option<String>,
+	pub photos: Option<Vec<i64>>,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "KitRankedPhoto")]
+pub(crate) struct RankedPhotoDto {
+	pub id: i64,
+	pub width: i64,
+	pub height: i64,
+	pub uses: i64,
+	/// Saved on this GBP: never offered here again.
+	pub went_here: bool,
+}
+
+/// A draft as the offer weighs it for one GBP.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "KitRanked")]
+pub(crate) struct RankedDto {
+	pub id: i64,
+	pub text: String,
+	pub uses: i64,
+	/// Copied on this GBP.
+	pub went_here: bool,
+	/// Held by a reviewer's page open now.
+	pub held: bool,
+	/// Among what a reviewer is offered now.
+	pub offered: bool,
+	pub photos: Vec<RankedPhotoDto>,
+}
+
+/// The last 30 days.
+#[derive(Clone, Copy, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "KitFunnel")]
+pub(crate) struct FunnelDto {
+	pub shown: i64,
+	pub scanned: i64,
+	pub opened: i64,
+	pub copied: i64,
+	pub photos_saved: i64,
+}
+
+/// A GBP's kit.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "GmbKit")]
+pub(crate) struct GmbKitDto {
+	/// `null`: off.
+	pub target: Option<Target>,
+	/// What its QR encodes; `null` while off.
+	pub url: Option<String>,
+	/// Its page on its landing: `null` without one, and then only `google` is open to it.
+	pub page: Option<String>,
+	/// Its category's drafts in the offer's order.
+	pub drafts: Vec<RankedDto>,
+	pub funnel: FunnelDto,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "SetKit")]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SetKitDto {
+	pub target: Option<Target>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "Viewport")]
+pub(crate) struct ViewportDto {
+	pub south: f64,
+	pub west: f64,
+	pub north: f64,
+	pub east: f64,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "KitShape")]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(crate) enum ShapeDto {
+	City {
+		place_id: String,
+		viewport: ViewportDto,
+	},
+	Circle {
+		radius_m: i64,
+	},
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "KitArea")]
+pub(crate) struct AreaDto {
+	pub slug: String,
+	pub name: String,
+	pub center: LatLng,
+	pub shape: ShapeDto,
+	pub margin_m: i64,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "KitAreas")]
+pub(crate) struct AreasDto {
+	pub areas: Vec<AreaDto>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "PutKitArea")]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub(crate) enum PutAreaDto {
+	City {
+		place_id: String,
+		margin_m: i64,
+	},
+	Circle {
+		name: String,
+		lat: f64,
+		lng: f64,
+		radius_m: i64,
+		margin_m: i64,
+	},
+}
+
+/// One of the caller's GBPs by an area.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "KitNearby")]
+pub(crate) struct NearbyDto {
+	pub id: i64,
+	pub name: String,
+	pub state: GbpState,
+	pub address: Option<String>,
+	pub location: LatLng,
+	pub distance_m: f64,
+	/// `false`: within the margin outside it.
+	pub inside: bool,
+	pub target: Option<Target>,
+	pub last_shown: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "KitAreaGmbs")]
+pub(crate) struct AreaGmbsDto {
+	pub area: AreaDto,
+	pub gmbs: Vec<NearbyDto>,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[schemars(rename = "Locality")]
+pub(crate) struct LocalityDto {
+	pub place_id: String,
+	pub name: String,
+	pub location: LatLng,
+	pub viewport: ViewportDto,
+}
+
+/// What a reviewer's page shows (`/api/kit/v1/offer`).
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct OfferDto {
+	pub target: Target,
+	pub place_id: String,
+	pub name: String,
+	pub lang: String,
+	/// Google's form for the place (Places' writeAReviewUri).
+	pub review_uri: String,
+	pub view: Uuid,
+	pub drafts: Vec<OfferedDto>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct OfferedDto {
+	pub id: i64,
+	pub text: String,
+	pub photos: Vec<OfferedPhotoDto>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct OfferedPhotoDto {
+	pub id: i64,
+	pub width: i64,
+	pub height: i64,
+}
+
+/// Which GBP each landing page is: sites' places, kept [`PAGES_FOR`].
+#[derive(Clone)]
+pub(crate) struct Pages {
+	services: Services,
+	kept: Arc<Mutex<Option<(Instant, Arc<Vec<SitePlace>>)>>>,
+}
+impl Pages {
+	pub(crate) fn new(services: Services) -> Self {
+		Self { services, kept: Arc::default() }
+	}
+
+	async fn all(&self) -> Result<Arc<Vec<SitePlace>>, ApiError> {
+		if let Some((at, places)) = self.kept.lock().expect("never poisoned: no panic while held").as_ref()
+			&& at.elapsed() < PAGES_FOR
+		{
+			return Ok(places.clone());
+		}
+		let fetched: SitePlaces = self.services.conductor_get("/api/conductor/places").await.map_err(|e| {
+			tracing::warn!(error = %e, "kit: sites' places");
+			ApiError::Unavailable("sites did not say which page is which place".to_owned())
+		})?;
+		let places = Arc::new(fetched.places);
+		*self.kept.lock().expect("never poisoned: no panic while held") = Some((Instant::now(), places.clone()));
+		Ok(places)
+	}
+
+	async fn of_gmb(&self, gmb: i64) -> Result<Option<SitePlace>, ApiError> {
+		Ok(self.all().await?.iter().find(|p| p.gmb_id == gmb).cloned())
+	}
+
+	async fn gmb_at(&self, brand: &str, slug: &str) -> Result<Option<i64>, ApiError> {
+		Ok(self.all().await?.iter().find(|p| p.brand == brand && p.slug == slug).map(|p| p.gmb_id))
+	}
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct SitePlace {
+	gmb_id: i64,
+	brand: String,
+	slug: String,
+}
+
+#[derive(Deserialize)]
+struct SitePlaces {
+	places: Vec<SitePlace>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EventDto {
+	view: Uuid,
+	copied: Option<i64>,
+	saved: Option<Vec<i64>>,
+}
+
+impl From<Pool> for PoolDto {
+	fn from(p: Pool) -> Self {
+		Self {
+			drafts: p
+				.drafts
+				.into_iter()
+				.map(|d| DraftDto {
+					id: d.id,
+					text: d.text,
+					photos: d.photos,
+					uses: d.uses,
+					created_at: d.created_at.to_string(),
+				})
+				.collect(),
+			photos: p
+				.photos
+				.into_iter()
+				.map(|p| PhotoDto {
+					id: p.id,
+					width: p.width,
+					height: p.height,
+					uses: p.uses,
+					created_at: p.created_at.to_string(),
+				})
+				.collect(),
+		}
+	}
+}
+
+impl From<Viewport> for ViewportDto {
+	fn from(v: Viewport) -> Self {
+		Self {
+			south: v.south,
+			west: v.west,
+			north: v.north,
+			east: v.east,
+		}
+	}
+}
+
+impl From<Area> for AreaDto {
+	fn from(a: Area) -> Self {
+		Self {
+			slug: a.slug,
+			name: a.name,
+			center: a.center,
+			shape: match a.shape {
+				Shape::City { place_id, viewport } => ShapeDto::City {
+					place_id,
+					viewport: viewport.into(),
+				},
+				Shape::Circle { radius_m } => ShapeDto::Circle { radius_m },
+			},
+			margin_m: a.margin_m,
+		}
+	}
+}
+
+impl From<Locality> for LocalityDto {
+	fn from(l: Locality) -> Self {
+		Self {
+			place_id: l.place_id,
+			name: l.name,
+			location: l.location,
+			viewport: l.viewport.into(),
+		}
+	}
+}
+
+impl From<Nearby> for NearbyDto {
+	fn from(n: Nearby) -> Self {
+		Self {
+			id: n.gmb.id,
+			name: n.gmb.name,
+			state: n.gmb.state,
+			address: n.gmb.address,
+			location: n.gmb.location.expect("only a GBP with a point is by an area").at,
+			distance_m: n.distance_m.round(),
+			inside: n.inside,
+			target: n.target,
+			last_shown: n.last_shown.map(|t| t.to_string()),
+		}
+	}
+}
+
+fn ranked(drafts: Vec<Ranked>, target: Option<Target>) -> Vec<RankedDto> {
+	let shown = match target {
+		Some(Target::Drafts) => sa_panel::kit::OFFERED,
+		Some(Target::OneTap) => 1,
+		Some(Target::Google) | None => 0,
+	};
+	let mut open = 0;
+	drafts
+		.into_iter()
+		.map(|d| {
+			let offered = !d.went_here && !d.held && open < shown;
+			open += usize::from(!d.went_here && !d.held);
+			RankedDto {
+				id: d.id,
+				text: d.text,
+				uses: d.uses,
+				went_here: d.went_here,
+				held: d.held,
+				offered,
+				photos: d
+					.photos
+					.into_iter()
+					.map(|p| RankedPhotoDto {
+						id: p.id,
+						width: p.width,
+						height: p.height,
+						uses: p.uses,
+						went_here: p.went_here,
+					})
+					.collect(),
+			}
+		})
+		.collect()
+}
+
+pub(crate) fn routes() -> Vec<ApiRoute> {
+	use Method as M;
+	let user = Gate::USER;
+	vec![
+		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit", user, kit_pool),
+		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/drafts", user, add_kit_draft),
+		ApiRoute::new(M::PATCH, "/trades/{id}/{country}/kit/drafts/{draft}", user, edit_kit_draft),
+		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/drafts/{draft}", user, remove_kit_draft),
+		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/photos", user.slow(), add_kit_photo).layer(|h| h.layer(DefaultBodyLimit::max(PHOTO_MAX))),
+		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit/photos/{file}", user, kit_photo),
+		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/photos/{file}", user, remove_kit_photo),
+		ApiRoute::new(M::GET, "/gmbs/{id}/kit", user, gmb_kit),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/kit", user, set_gmb_kit).spends(),
+		ApiRoute::new(M::POST, "/gmbs/{id}/kit/shown", user, kit_shown),
+		ApiRoute::new(M::GET, "/kit/areas", user, kit_areas),
+		ApiRoute::new(M::GET, "/kit/areas/{slug}", user, kit_area),
+		ApiRoute::new(M::PUT, "/kit/areas/{slug}", user, put_kit_area).spends(),
+		ApiRoute::new(M::GET, "/kit/areas/{slug}/gmbs", user, kit_area_gmbs),
+		ApiRoute::new(M::GET, "/kit/cities", user, kit_cities).spends(),
+		ApiRoute::new(M::GET, "/kit/cities/{place_id}", user, kit_city).spends(),
+		ApiRoute::new(M::GET, "/kit/locality", user, kit_locality).spends(),
+	]
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct DraftIn {
+	id: i64,
+	country: Country,
+	draft: i64,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct PhotoIn {
+	id: i64,
+	country: Country,
+	file: i64,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct JpgIn {
+	id: i64,
+	country: Country,
+	/// `<photo>.jpg`.
+	file: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct SlugIn {
+	slug: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct PlaceIn {
+	place_id: String,
+}
+
+/// `<id>.jpg` → id.
+fn jpg(file: &str) -> ApiResult<i64> {
+	file.strip_suffix(".jpg").and_then(|id| id.parse().ok()).ok_or(ApiError::NotFound)
+}
+
+/// A photo's bytes, never changed under its id.
+struct Jpeg(Vec<u8>);
+
+impl IntoResponse for Jpeg {
+	fn into_response(self) -> Response {
+		([(header::CONTENT_TYPE, "image/jpeg"), (header::CACHE_CONTROL, "private, max-age=31536000, immutable")], self.0).into_response()
+	}
+}
+
+impl OperationOutput for Jpeg {
+	type Inner = Self;
+
+	fn operation_response(_: &mut GenContext, _: &mut Operation) -> Option<Answer> {
+		Some(Answer {
+			description: "A JPEG.".to_owned(),
+			content: [("image/jpeg".into(), MediaType::default())].into_iter().collect(),
+			..Answer::default()
+		})
+	}
+
+	fn inferred_responses(ctx: &mut GenContext, op: &mut Operation) -> Vec<(Option<Status>, Answer)> {
+		Self::operation_response(ctx, op).map(|r| (Some(Status::Code(200)), r)).into_iter().collect()
+	}
+}
+
+/// An uploaded photo: JPEG, PNG or WebP, ≤ [`PHOTO_MAX`].
+struct Image(Bytes);
+
+impl<S: Send + Sync> FromRequest<S> for Image {
+	type Rejection = ApiError;
+
+	async fn from_request(req: Request, state: &S) -> Result<Self, ApiError> {
+		Bytes::from_request(req, state).await.map(Self).map_err(|e| match e.status() {
+			StatusCode::PAYLOAD_TOO_LARGE => ApiError::TooLarge(format!("a photo is {} MiB at most", PHOTO_MAX >> 20)),
+			_ => ApiError::BadRequest(e.body_text()),
+		})
+	}
+}
+
+impl OperationInput for Image {
+	fn operation_input(_: &mut GenContext, op: &mut Operation) {
+		op.request_body = Some(ReferenceOr::Item(RequestBody {
+			content: ["image/jpeg", "image/png", "image/webp"].into_iter().map(|t| (t.into(), MediaType::default())).collect(),
+			required: true,
+			..RequestBody::default()
+		}));
+	}
+}
+
+/// The category's drafts and photos.
+async fn kit_pool(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(TradeIn { id: trade, country }): Ids<TradeIn>) -> ApiResult<Json<PoolDto>> {
+	Ok(Json(panel.kit_pool(caller.user_id, trade, country).await??.into()))
+}
+
+/// Adds a draft to the category, selecting some of its photos; answers the category's drafts and
+/// photos.
+async fn add_kit_draft(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(TradeIn { id: trade, country }): Ids<TradeIn>, Body(b): Body<NewDraftDto>) -> ApiResult<Created<PoolDto>> {
+	let draft = panel.add_draft(caller.user_id, trade, country, &b.text, &b.photos, Timestamp::now()).await??;
+	tracing::info!(user_id = %caller.user_id, trade_id = trade, %country, draft, "kit draft added");
+	Ok(Created(panel.kit_pool(caller.user_id, trade, country).await??.into()))
+}
+
+/// Edits a draft's text or the photos it selects; answers the category's drafts and photos.
+///
+/// 409 the text of one already copied: a use is of the text it had.
+async fn edit_kit_draft(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(DraftIn { id: trade, country, draft }): Ids<DraftIn>, Body(b): Body<EditDraftDto>) -> ApiResult<Json<PoolDto>> {
+	panel.edit_draft(caller.user_id, trade, country, draft, b.text.as_deref(), b.photos.as_deref()).await??;
+	Ok(Json(panel.kit_pool(caller.user_id, trade, country).await??.into()))
+}
+
+/// Removes a draft: out of every offer, its uses kept.
+async fn remove_kit_draft(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(DraftIn { id: trade, country, draft }): Ids<DraftIn>) -> ApiResult<NoContent> {
+	panel.remove_from_kit(caller.user_id, trade, country, Removable::Draft, draft, Timestamp::now()).await??;
+	Ok(NoContent)
+}
+
+/// Adds a photo to the category, ≤ 10 MiB: re-encoded as a JPEG, its EXIF (GPS with it) gone,
+/// turned upright; the same bytes again are the same photo, back if removed. Answers the
+/// category's drafts and photos.
+async fn add_kit_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(TradeIn { id: trade, country }): Ids<TradeIn>, Image(bytes): Image) -> ApiResult<Created<PoolDto>> {
+	let photo = panel.add_photo(caller.user_id, trade, country, bytes.to_vec(), Timestamp::now()).await??;
+	tracing::info!(user_id = %caller.user_id, trade_id = trade, %country, photo, "kit photo added");
+	Ok(Created(panel.kit_pool(caller.user_id, trade, country).await??.into()))
+}
+
+/// A photo of the category, `{file}` being `<photo>.jpg`.
+async fn kit_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(JpgIn { id: trade, country, file }): Ids<JpgIn>) -> ApiResult<Jpeg> {
+	Ok(Jpeg(panel.kit_photo(caller.user_id, trade, country, jpg(&file)?).await??))
+}
+
+/// Removes a photo, as a draft is: out of every offer, its uses kept.
+async fn remove_kit_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PhotoIn { id: trade, country, file }): Ids<PhotoIn>) -> ApiResult<NoContent> {
+	panel.remove_from_kit(caller.user_id, trade, country, Removable::Photo, file, Timestamp::now()).await??;
+	Ok(NoContent)
+}
+
+/// The landing page of the GBP, `<origin>/avis/<slug>`: the origin of the active site key of its
+/// brand.
+async fn page_of(s: &ApiState, gmb: i64) -> ApiResult<Option<String>> {
+	let pages = s
+		.pages
+		.as_ref()
+		.ok_or_else(|| ApiError::Unavailable("sites not connected: no landing page is known".to_owned()))?;
+	let Some(place) = pages.of_gmb(gmb).await? else {
+		return Ok(None);
+	};
+	let mut origins: Vec<String> = s
+		.panel
+		.store()
+		.sources()
+		.await?
+		.into_iter()
+		.filter(|k| k.revoked_at.is_none() && k.grant.kind == SourceKind::Site && k.grant.brands.iter().any(|b| b.as_str() == place.brand))
+		.filter_map(|k| k.origin.map(|o| o.to_string()))
+		.collect();
+	origins.sort();
+	origins.dedup();
+	match <[String; 1]>::try_from(origins) {
+		Ok([origin]) => Ok(Some(format!("{origin}{PAGE}{}", place.slug))),
+		Err(none) if none.is_empty() => Ok(None),
+		Err(many) => Err(ApiError::Conflict(format!("{}'s site keys have {} origins: {}", place.brand, many.len(), many.join(", ")))),
+	}
+}
+
+async fn kit_dto(s: &ApiState, caller: &Caller, gmb: i64) -> ApiResult<GmbKitDto> {
+	let Kit { target, review_uri, drafts, funnel } = s.panel.kit(caller.user_id, gmb, Timestamp::now()).await??;
+	let page = page_of(s, gmb).await?;
+	let url = match (&page, target) {
+		(_, None) => None,
+		(Some(page), Some(_)) => Some(format!("{page}?qr")),
+		(None, Some(_)) => review_uri,
+	};
+	Ok(GmbKitDto {
+		target,
+		url,
+		page,
+		drafts: ranked(drafts, target),
+		funnel: FunnelDto {
+			shown: funnel.shown,
+			scanned: funnel.scanned,
+			opened: funnel.opened,
+			copied: funnel.copied,
+			photos_saved: funnel.photos_saved,
+		},
+	})
+}
+
+/// The GBP's kit: where its QR leads, its category's drafts as its offer weighs them, and the
+/// last 30 days' funnel.
+async fn gmb_kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>) -> ApiResult<Json<GmbKitDto>> {
+	Ok(Json(kit_dto(&s, &caller, gmb).await?))
+}
+
+/// Points the GBP's QR at `target`, `null` turning the kit off. On, its review link is asked of
+/// Places once (a Place Details, paid as a lookup).
+///
+/// 409 no place on Google yet, or `drafts` / `one_tap` without a landing page of its.
+async fn set_gmb_kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>, Body(SetKitDto { target }): Body<SetKitDto>) -> ApiResult<Json<GmbKitDto>> {
+	if matches!(target, Some(Target::Drafts | Target::OneTap)) && page_of(&s, gmb).await?.is_none() {
+		return Err(ApiError::Conflict("no landing page of its: only Google's form".to_owned()));
+	}
+	s.panel.set_kit_target(caller.user_id, gmb, target, Timestamp::now()).await??;
+	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, ?target, "kit target set");
+	Ok(Json(kit_dto(&s, &caller, gmb).await?))
+}
+
+/// The operator showed the GBP's QR: the funnel's `shown`.
+async fn kit_shown(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>) -> ApiResult<NoContent> {
+	panel.kit_shown(caller.user_id, gmb, Timestamp::now()).await??;
+	Ok(NoContent)
+}
+
+/// Every kit area, everyone's.
+async fn kit_areas(State(panel): State<Panel>) -> ApiResult<Json<AreasDto>> {
+	Ok(Json(AreasDto {
+		areas: panel.kit_areas().await?.into_iter().map(Into::into).collect(),
+	}))
+}
+
+/// The area at `/<slug>/`.
+async fn kit_area(State(panel): State<Panel>, Ids(SlugIn { slug }): Ids<SlugIn>) -> ApiResult<Json<AreaDto>> {
+	Ok(Json(panel.kit_area(&slug).await?.ok_or(ApiError::NotFound)?.into()))
+}
+
+/// Draws the area at `/<slug>/`: a city (its outline asked of Places, paid by the caller) or a
+/// circle, with a margin around it that is "next to it"; over what it was if the caller drew it.
+///
+/// 400 a link the conductor's own pages hold; 409 someone else's area.
+async fn put_kit_area(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>, Body(b): Body<PutAreaDto>) -> ApiResult<Json<AreaDto>> {
+	if crate::web::taken(&slug, s.web.as_ref()) {
+		return Err(ApiError::BadRequest(format!("/{slug}/ is one of the conductor's own pages")));
+	}
+	let new = match b {
+		PutAreaDto::City { place_id, margin_m } => NewArea::City { place_id, margin_m },
+		PutAreaDto::Circle { name, lat, lng, radius_m, margin_m } => NewArea::Circle {
+			name,
+			center: LatLng { lat, lng },
+			radius_m,
+			margin_m,
+		},
+	};
+	let area = s.panel.put_kit_area(caller.user_id, &slug, new, Timestamp::now()).await??;
+	tracing::info!(user_id = %caller.user_id, slug, "kit area drawn");
+	Ok(Json(area.into()))
+}
+
+/// The area and the caller's GBPs with a point in it or within its margin, nearest its centre
+/// first.
+async fn kit_area_gmbs(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>) -> ApiResult<Json<AreaGmbsDto>> {
+	let gmbs = panel.area_gmbs(caller.user_id, &slug).await??;
+	let area = panel.kit_area(&slug).await?.ok_or(ApiError::NotFound)?;
+	Ok(Json(AreaGmbsDto {
+		area: area.into(),
+		gmbs: gmbs.into_iter().map(Into::into).collect(),
+	}))
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct Typed {
+	/// What is typed so far.
+	input: String,
+}
+
+/// Cities and towns what is typed may be heading for, in the countries served (Places
+/// Autocomplete, paid by the caller).
+async fn kit_cities(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(q): Params<Typed>) -> ApiResult<Json<SuggestionsDto>> {
+	let found = panel.cities(caller.user_id, &q.input).await??;
+	Ok(Json(SuggestionsDto {
+		suggestions: found
+			.into_iter()
+			.map(|s| SuggestionDto {
+				place_id: s.place_id,
+				main: s.main,
+				secondary: s.secondary,
+			})
+			.collect(),
+	}))
+}
+
+/// The city or town a suggestion is: its point and the rectangle that frames it (Places, paid by
+/// the caller).
+async fn kit_city(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PlaceIn { place_id }): Ids<PlaceIn>) -> ApiResult<Json<LocalityDto>> {
+	Ok(Json(panel.locality(caller.user_id, &place_id).await??.into()))
+}
+
+/// The city or town a point lies in (Geocoding, paid by the caller). 404 outside any.
+async fn kit_locality(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(at): Params<LatLng>) -> ApiResult<Json<LocalityDto>> {
+	Ok(Json(panel.locality_at(caller.user_id, at).await??.ok_or(ApiError::NotFound)?.into()))
+}
+
+/// What the landings' routes are served on.
+#[derive(Clone)]
+pub(crate) struct Landing {
+	panel: Panel,
+	pages: Pages,
+}
+
+/// The landings' routes, bounded as ingest's.
+pub(crate) fn landing_routes(panel: Panel, pages: Pages, limits: &Limits) -> Router {
+	let layers = ServiceBuilder::new()
+		.layer(HandleErrorLayer::new(|_: BoxError| async { ingest::error(StatusCode::SERVICE_UNAVAILABLE, "busy, try again") }))
+		.load_shed()
+		.concurrency_limit(limits.max_concurrent)
+		.layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, limits.request_timeout))
+		.layer(RequestBodyTimeoutLayer::new(limits.body_timeout));
+	Router::new()
+		.route(&format!("{LANDING}/offer"), get(offer))
+		.route(&format!("{LANDING}/photos/{{file}}"), get(offered_photo))
+		.route(&format!("{LANDING}/events"), post(event))
+		.layer(layers)
+		.with_state(Landing { panel, pages })
+}
+
+/// The landing's key, its MAC over `body` (a GET's: `GET <path?query>`).
+async fn landing_key(l: &Landing, headers: &HeaderMap, body: &[u8]) -> Result<Grant, Response> {
+	let (key_id, timestamp, signature) = ingest::signed(headers).ok_or_else(ingest::unsigned)?;
+	let batch = SignedBatch { key_id, timestamp, signature, body };
+	l.panel.authenticate(batch, Timestamp::now()).await.map_err(ingest::refused)
+}
+
+fn answer(e: ApiError) -> Response {
+	e.into_response()
+}
+
+/// The GBP `view` showed, its brand one of `key`'s.
+async fn view_of(l: &Landing, key: &Grant, view: Uuid) -> Result<(), Response> {
+	let mut conn = l.panel.store().pool().acquire().await.map_err(|e| answer(ApiError::Internal(e.into())))?;
+	let gmb = sa_panel::store::kit::view_gmb(&mut conn, view)
+		.await
+		.map_err(|e| answer(ApiError::Internal(e)))?
+		.ok_or_else(|| answer(ApiError::NotFound))?;
+	let place = l.pages.of_gmb(gmb).await.map_err(answer)?.ok_or_else(|| answer(ApiError::NotFound))?;
+	if !key.brands.iter().any(|b| b.as_str() == place.brand) {
+		return Err(answer(ApiError::NotFound));
+	}
+	Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OfferQuery {
+	brand: String,
+	slug: String,
+	qr: Option<u8>,
+}
+
+async fn offer(State(l): State<Landing>, OriginalUri(uri): OriginalUri, headers: HeaderMap, q: Result<Query<OfferQuery>, QueryRejection>) -> Response {
+	let signed = format!("GET {}", uri.path_and_query().map_or_else(|| uri.path(), |pq| pq.as_str()));
+	let key = match landing_key(&l, &headers, signed.as_bytes()).await {
+		Ok(k) => k,
+		Err(res) => return res,
+	};
+	let Ok(Query(q)) = q else {
+		return answer(ApiError::BadRequest("brand, slug and qr=1 if it came from the QR".to_owned()));
+	};
+	if !key.brands.iter().any(|b| b.as_str() == q.brand) {
+		return answer(ApiError::NotFound);
+	}
+	let gmb = match l.pages.gmb_at(&q.brand, &q.slug).await {
+		Ok(Some(g)) => g,
+		Ok(None) => return answer(ApiError::NotFound),
+		Err(e) => return answer(e),
+	};
+	match l.panel.kit_offer(gmb, q.qr == Some(1), Timestamp::now()).await {
+		Ok(Ok(o)) => {
+			let mut res = Json(OfferDto::from(o)).into_response();
+			res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+			res
+		}
+		Ok(Err(r)) => answer(r.into()),
+		Err(e) => answer(ApiError::Internal(e)),
+	}
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ViewQuery {
+	view: Uuid,
+}
+
+async fn offered_photo(State(l): State<Landing>, OriginalUri(uri): OriginalUri, headers: HeaderMap, Path(file): Path<String>, q: Result<Query<ViewQuery>, QueryRejection>) -> Response {
+	let signed = format!("GET {}", uri.path_and_query().map_or_else(|| uri.path(), |pq| pq.as_str()));
+	let key = match landing_key(&l, &headers, signed.as_bytes()).await {
+		Ok(k) => k,
+		Err(res) => return res,
+	};
+	let (Ok(Query(q)), Ok(photo)) = (q, jpg(&file)) else {
+		return answer(ApiError::NotFound);
+	};
+	if let Err(res) = view_of(&l, &key, q.view).await {
+		return res;
+	}
+	match l.panel.offered_photo(q.view, photo).await {
+		Ok(Ok(bytes)) => Jpeg(bytes).into_response(),
+		Ok(Err(r)) => answer(r.into()),
+		Err(e) => answer(ApiError::Internal(e)),
+	}
+}
+
+async fn event(State(l): State<Landing>, headers: HeaderMap, body: axum::body::Body) -> Response {
+	let body = match to_bytes(body, 64 * 1024).await {
+		Ok(b) => b,
+		Err(e) => return ingest::body_error(e, 64 * 1024),
+	};
+	let key = match landing_key(&l, &headers, &body).await {
+		Ok(k) => k,
+		Err(res) => return res,
+	};
+	let e: EventDto = match serde_json::from_slice(&body) {
+		Ok(e) => e,
+		Err(e) => return answer(ApiError::BadRequest(e.to_string())),
+	};
+	let event = match (e.copied, e.saved) {
+		(Some(draft), None) => Event::Copied(draft),
+		(None, Some(photos)) => Event::Saved(photos),
+		_ => return answer(ApiError::BadRequest("one of copied or saved".to_owned())),
+	};
+	if let Err(res) = view_of(&l, &key, e.view).await {
+		return res;
+	}
+	match l.panel.kit_event(e.view, event, Timestamp::now()).await {
+		Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
+		Ok(Err(r)) => answer(r.into()),
+		Err(e) => answer(ApiError::Internal(e)),
+	}
+}
+
+impl From<Offer> for OfferDto {
+	fn from(o: Offer) -> Self {
+		Self {
+			target: o.target,
+			place_id: o.place_id,
+			name: o.name,
+			lang: o.lang.to_owned(),
+			review_uri: o.review_uri,
+			view: o.view,
+			drafts: o
+				.drafts
+				.into_iter()
+				.map(|d| OfferedDto {
+					id: d.id,
+					text: d.text,
+					photos: d
+						.photos
+						.into_iter()
+						.map(|p| OfferedPhotoDto {
+							id: p.id,
+							width: p.width,
+							height: p.height,
+						})
+						.collect(),
+				})
+				.collect(),
+		}
+	}
+}

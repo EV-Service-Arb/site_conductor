@@ -285,6 +285,5 @@ pub struct Snapshot {
 	/// The last of review_archive's charges in these balances.
 	pub charges_through: i64,
 	/// What its walks cost; a step without a price is not walked.
-	#[cfg_attr(feature = "utoipa", schema(value_type = BTreeMap<String, i64>))]
 	pub prices: crate::prices::Prices,
 }

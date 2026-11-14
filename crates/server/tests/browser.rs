@@ -196,7 +196,7 @@ impl World {
 		};
 		let browsers = Browsers::stubbed(&gologin_base, &multilogin_base, "http://ip-api.test/json/");
 		let connected = Connected::try_new(browsers, &runner_base, SEED.parse().unwrap()).unwrap();
-		let app = http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, None, Some(connected), None);
+		let app = http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, None, Some(connected), None, None);
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		Self {
@@ -477,7 +477,7 @@ async fn next<S: futures::Stream<Item = Result<tokio_tungstenite::tungstenite::M
 
 #[tokio::test]
 async fn the_viewer_sees_the_page_and_touches_it_as_a_phone_one_viewer_at_a_time() {
-	use futures::{SinkExt, StreamExt};
+	use futures::SinkExt;
 	use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
 
 	let told: Arc<Mutex<Vec<Value>>> = Arc::default();
@@ -629,7 +629,7 @@ async fn multilogins_browser_is_made_in_the_conductors_folder_and_told_the_place
 
 #[tokio::test]
 async fn a_phones_viewer_is_the_runners_its_frames_checked_and_passed_both_ways() {
-	use futures::{SinkExt, StreamExt};
+	use futures::SinkExt;
 	use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
 
 	let heard: Arc<Mutex<Vec<String>>> = Arc::default();

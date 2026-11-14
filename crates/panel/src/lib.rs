@@ -10,7 +10,7 @@
 //! [`alerts`] the hub: users' destinations and rules, the feeds fanned out to them; [`telegram`]
 //! the method that reaches them; [`live`] the bus that tells the server's sockets what changed;
 //! [`assistant`] the assistant's chats; [`trash`] what was removed, until it is purged; [`oauth`]
-//! the MCP clients and the sessions granted them.
+//! the MCP clients and the sessions granted them; [`kit`] the review kit.
 
 pub mod access;
 pub mod alerts;
@@ -21,6 +21,7 @@ pub mod gmbs;
 mod google_categories;
 mod imap;
 pub mod import;
+pub mod kit;
 pub mod live;
 pub mod oauth;
 pub mod seal;

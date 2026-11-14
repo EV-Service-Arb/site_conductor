@@ -2479,6 +2479,138 @@
         }
       }
     },
+    "/gmbs/{id}/kit": {
+      "get": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "The GBP's kit: where its QR leads, its category's drafts as its offer weighs them, and the last 30 days' funnel.",
+        "operationId": "gmb_kit",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A GBP's kit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GmbKit"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "Points the GBP's QR at `target`, `null` turning the kit off. On, its review link is asked of Places once (a Place Details, paid as a lookup).",
+        "description": "409 no place on Google yet, or `drafts` / `one_tap` without a landing page of its.",
+        "operationId": "set_gmb_kit",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetKit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A GBP's kit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GmbKit"
+                }
+              }
+            }
+          }
+        },
+        "x-spends": true
+      }
+    },
+    "/gmbs/{id}/kit/shown": {
+      "post": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "The operator showed the GBP's QR: the funnel's `shown`.",
+        "operationId": "kit_shown",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
     "/gmbs/{id}/location": {
       "put": {
         "tags": [
@@ -2706,6 +2838,315 @@
             }
           }
         }
+      }
+    },
+    "/kit/areas": {
+      "get": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "Every kit area, everyone's.",
+        "operationId": "kit_areas",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KitAreas"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kit/areas/{slug}": {
+      "get": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "The area at `/<slug>/`.",
+        "operationId": "kit_area",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KitArea"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "Draws the area at `/<slug>/`: a city (its outline asked of Places, paid by the caller) or a circle, with a margin around it that is \"next to it\"; over what it was if the caller drew it.",
+        "description": "400 a link the conductor's own pages hold; 409 someone else's area.",
+        "operationId": "put_kit_area",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutKitArea"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KitArea"
+                }
+              }
+            }
+          }
+        },
+        "x-spends": true
+      }
+    },
+    "/kit/areas/{slug}/gmbs": {
+      "get": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "The area and the caller's GBPs with a point in it or within its margin, nearest its centre first.",
+        "operationId": "kit_area_gmbs",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KitAreaGmbs"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kit/cities": {
+      "get": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "Cities and towns what is typed may be heading for, in the countries served (Places Autocomplete, paid by the caller).",
+        "operationId": "kit_cities",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "input",
+            "description": "What is typed so far.",
+            "required": true,
+            "schema": {
+              "description": "What is typed so far.",
+              "type": "string"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /gmbs/suggest`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Suggestions"
+                }
+              }
+            }
+          }
+        },
+        "x-spends": true
+      }
+    },
+    "/kit/cities/{place_id}": {
+      "get": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "The city or town a suggestion is: its point and the rectangle that frames it (Places, paid by the caller).",
+        "operationId": "kit_city",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "place_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Locality"
+                }
+              }
+            }
+          }
+        },
+        "x-spends": true
+      }
+    },
+    "/kit/locality": {
+      "get": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "The city or town a point lies in (Geocoding, paid by the caller). 404 outside any.",
+        "operationId": "kit_locality",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "lng",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Locality"
+                }
+              }
+            }
+          }
+        },
+        "x-spends": true
       }
     },
     "/map": {
@@ -3348,6 +3789,418 @@
             "required": true,
             "schema": {
               "$ref": "#/components/schemas/Country"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/trades/{id}/{country}/kit": {
+      "get": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "The category's drafts and photos.",
+        "operationId": "kit_pool",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A category's drafts and photos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KitPool"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trades/{id}/{country}/kit/drafts": {
+      "post": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "Adds a draft to the category, selecting some of its photos; answers the category's drafts and photos.",
+        "operationId": "add_kit_draft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewKitDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A category's drafts and photos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KitPool"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trades/{id}/{country}/kit/drafts/{draft}": {
+      "delete": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "Removes a draft: out of every offer, its uses kept.",
+        "operationId": "remove_kit_draft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "draft",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "Edits a draft's text or the photos it selects; answers the category's drafts and photos.",
+        "description": "409 the text of one already copied: a use is of the text it had.",
+        "operationId": "edit_kit_draft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "draft",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditKitDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A category's drafts and photos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KitPool"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trades/{id}/{country}/kit/photos": {
+      "post": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "Adds a photo to the category, ≤ 10 MiB: re-encoded as a JPEG, its EXIF (GPS with it) gone, turned upright; the same bytes again are the same photo, back if removed. Answers the category's drafts and photos.",
+        "operationId": "add_kit_photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "image/jpeg": {},
+            "image/png": {},
+            "image/webp": {}
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A category's drafts and photos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KitPool"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trades/{id}/{country}/kit/photos/{file}": {
+      "get": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "A photo of the category, `{file}` being `<photo>.jpg`.",
+        "operationId": "kit_photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "file",
+            "description": "`<photo>.jpg`.",
+            "required": true,
+            "schema": {
+              "description": "`<photo>.jpg`.",
+              "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A JPEG.",
+            "content": {
+              "image/jpeg": {}
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "Removes a photo, as a draft is: out of every offer, its uses kept.",
+        "operationId": "remove_kit_photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "file",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
             },
             "style": "simple"
           },
@@ -4490,6 +5343,28 @@
           "redmi_note_14"
         ]
       },
+      "EditKitDraft": {
+        "type": "object",
+        "properties": {
+          "photos": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "Error": {
         "description": "What every failed operation answers, its status saying which failure.",
         "type": "object",
@@ -4946,6 +5821,54 @@
         },
         "additionalProperties": false
       },
+      "GmbKit": {
+        "description": "A GBP's kit.",
+        "type": "object",
+        "properties": {
+          "drafts": {
+            "description": "Its category's drafts in the offer's order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KitRanked"
+            }
+          },
+          "funnel": {
+            "$ref": "#/components/schemas/KitFunnel"
+          },
+          "page": {
+            "description": "Its page on its landing: `null` without one, and then only `google` is open to it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target": {
+            "description": "`null`: off.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KitTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "description": "What its QR encodes; `null` while off.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "target",
+          "url",
+          "page",
+          "drafts",
+          "funnel"
+        ]
+      },
       "GoogleCategories": {
         "description": "`GET /google-categories/{country}`.",
         "type": "object",
@@ -5112,6 +6035,374 @@
           "note"
         ]
       },
+      "KitArea": {
+        "type": "object",
+        "properties": {
+          "center": {
+            "$ref": "#/components/schemas/LatLng"
+          },
+          "margin_m": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shape": {
+            "$ref": "#/components/schemas/KitShape"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "center",
+          "shape",
+          "margin_m"
+        ]
+      },
+      "KitAreaGmbs": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "$ref": "#/components/schemas/KitArea"
+          },
+          "gmbs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KitNearby"
+            }
+          }
+        },
+        "required": [
+          "area",
+          "gmbs"
+        ]
+      },
+      "KitAreas": {
+        "type": "object",
+        "properties": {
+          "areas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KitArea"
+            }
+          }
+        },
+        "required": [
+          "areas"
+        ]
+      },
+      "KitDraft": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "photos": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "text": {
+            "type": "string"
+          },
+          "uses": {
+            "description": "Copies, every GBP.",
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "photos",
+          "uses",
+          "created_at"
+        ]
+      },
+      "KitFunnel": {
+        "description": "The last 30 days.",
+        "type": "object",
+        "properties": {
+          "copied": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "opened": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "photos_saved": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "scanned": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "shown": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "shown",
+          "scanned",
+          "opened",
+          "copied",
+          "photos_saved"
+        ]
+      },
+      "KitNearby": {
+        "description": "One of the caller's GBPs by an area.",
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "distance_m": {
+            "type": "number",
+            "format": "double"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "inside": {
+            "description": "`false`: within the margin outside it.",
+            "type": "boolean"
+          },
+          "last_shown": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "location": {
+            "$ref": "#/components/schemas/LatLng"
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/State"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KitTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state",
+          "address",
+          "location",
+          "distance_m",
+          "inside",
+          "target",
+          "last_shown"
+        ]
+      },
+      "KitPhoto": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "uses": {
+            "description": "Saved, every GBP.",
+            "type": "integer",
+            "format": "int64"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "id",
+          "width",
+          "height",
+          "uses",
+          "created_at"
+        ]
+      },
+      "KitPool": {
+        "description": "A category's drafts and photos.",
+        "type": "object",
+        "properties": {
+          "drafts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KitDraft"
+            }
+          },
+          "photos": {
+            "description": "Newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KitPhoto"
+            }
+          }
+        },
+        "required": [
+          "drafts",
+          "photos"
+        ]
+      },
+      "KitRanked": {
+        "description": "A draft as the offer weighs it for one GBP.",
+        "type": "object",
+        "properties": {
+          "held": {
+            "description": "Held by a reviewer's page open now.",
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offered": {
+            "description": "Among what a reviewer is offered now.",
+            "type": "boolean"
+          },
+          "photos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KitRankedPhoto"
+            }
+          },
+          "text": {
+            "type": "string"
+          },
+          "uses": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "went_here": {
+            "description": "Copied on this GBP.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "uses",
+          "went_here",
+          "held",
+          "offered",
+          "photos"
+        ]
+      },
+      "KitRankedPhoto": {
+        "type": "object",
+        "properties": {
+          "height": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "uses": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "went_here": {
+            "description": "Saved on this GBP: never offered here again.",
+            "type": "boolean"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "id",
+          "width",
+          "height",
+          "uses",
+          "went_here"
+        ]
+      },
+      "KitShape": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "city"
+              },
+              "place_id": {
+                "type": "string"
+              },
+              "viewport": {
+                "$ref": "#/components/schemas/Viewport"
+              }
+            },
+            "required": [
+              "kind",
+              "place_id",
+              "viewport"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "circle"
+              },
+              "radius_m": {
+                "type": "integer",
+                "format": "int64"
+              }
+            },
+            "required": [
+              "kind",
+              "radius_m"
+            ]
+          }
+        ]
+      },
+      "KitTarget": {
+        "description": "Where a GBP's QR leads.\n\n- `google`: Google's form, no draft.\n- `drafts`: Our page: the drafts to pick from.\n- `one_tap`: Our page: the top draft, one tap.",
+        "type": "string",
+        "enum": [
+          "google",
+          "drafts",
+          "one_tap"
+        ]
+      },
       "LatLng": {
         "type": "object",
         "properties": {
@@ -5223,6 +6514,29 @@
           "charge",
           "accrual",
           "kickback"
+        ]
+      },
+      "Locality": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/LatLng"
+          },
+          "name": {
+            "type": "string"
+          },
+          "place_id": {
+            "type": "string"
+          },
+          "viewport": {
+            "$ref": "#/components/schemas/Viewport"
+          }
+        },
+        "required": [
+          "place_id",
+          "name",
+          "location",
+          "viewport"
         ]
       },
       "MapConfig": {
@@ -5392,6 +6706,26 @@
           "place_id",
           "state",
           "trade"
+        ]
+      },
+      "NewKitDraft": {
+        "type": "object",
+        "properties": {
+          "photos": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "photos"
         ]
       },
       "NewSourceKey": {
@@ -5716,6 +7050,7 @@
           "places.details",
           "places.search",
           "places.autocomplete",
+          "places.geocode",
           "street_view.panorama",
           "walk.open",
           "walk.reviews",
@@ -5794,6 +7129,69 @@
           "multilogin",
           "multilogin_browser",
           "gologin"
+        ]
+      },
+      "PutKitArea": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "city"
+              },
+              "margin_m": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "place_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "place_id",
+              "margin_m"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "circle"
+              },
+              "lat": {
+                "type": "number",
+                "format": "double"
+              },
+              "lng": {
+                "type": "number",
+                "format": "double"
+              },
+              "margin_m": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "name": {
+                "type": "string"
+              },
+              "radius_m": {
+                "type": "integer",
+                "format": "int64"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name",
+              "lat",
+              "lng",
+              "radius_m",
+              "margin_m"
+            ]
+          }
         ]
       },
       "Question": {
@@ -6123,6 +7521,22 @@
           "password"
         ]
       },
+      "SetKit": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KitTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "SetMapsKey": {
         "type": "object",
         "properties": {
@@ -6150,6 +7564,13 @@
                 "format": "int64"
               },
               "places.details": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "places.geocode": {
                 "type": [
                   "integer",
                   "null"
@@ -7372,6 +8793,33 @@
           "day",
           "charges",
           "tokens"
+        ]
+      },
+      "Viewport": {
+        "type": "object",
+        "properties": {
+          "east": {
+            "type": "number",
+            "format": "double"
+          },
+          "north": {
+            "type": "number",
+            "format": "double"
+          },
+          "south": {
+            "type": "number",
+            "format": "double"
+          },
+          "west": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "south",
+          "west",
+          "north",
+          "east"
         ]
       },
       "BrowserIn": {

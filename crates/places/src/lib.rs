@@ -26,6 +26,12 @@ const SEARCH_MASK: &str = "places.id,places.displayName,places.formattedAddress,
 const DETAILS_MASK: &str = "id,displayName,formattedAddress,location,addressComponents";
 
 const AUTOCOMPLETE_MASK: &str = "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat";
+
+const LOCALITY_MASK: &str = "id,displayName,location,viewport";
+
+const REVIEW_LINK_MASK: &str = "googleMapsLinks.writeAReviewUri";
+
+const GEOCODE_MASK: &str = "results.placeId,results.location,results.viewport,results.addressComponents";
 /// A GMB created on Google today is findable by name tomorrow.
 const SEARCH_AGE: Duration = Duration::from_secs(86_400);
 /// The place a key is tried on: Google's own office, the one its docs ask about.
@@ -95,6 +101,23 @@ pub struct LatLng {
 	pub lng: f64,
 }
 
+/// A city or town, as Google draws it: a point and the rectangle that frames it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Locality {
+	pub place_id: String,
+	pub name: String,
+	pub location: LatLng,
+	pub viewport: Viewport,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Viewport {
+	pub south: f64,
+	pub west: f64,
+	pub north: f64,
+	pub east: f64,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// What the person pasted names no one place: theirs to fix.
@@ -142,6 +165,8 @@ pub struct Google {
 	cache: Arc<dyn QueriesCache>,
 	/// `…/v1/places`.
 	base: String,
+	/// `…/v4/geocode/location`.
+	geocode: String,
 }
 
 impl Google {
@@ -153,6 +178,7 @@ impl Google {
 			keys,
 			cache,
 			base: "https://places.googleapis.com/v1/places".to_owned(),
+			geocode: "https://geocode.googleapis.com/v4/geocode/location".to_owned(),
 		})
 	}
 
@@ -208,9 +234,117 @@ impl Google {
 		Ok(serde_json::from_value::<Hit>(json)?.into())
 	}
 
-	/// The places `input` may be heading for, within `regions` (ISO 3166-1 alpha-2, at most 15).
+	/// The city or town `place_id` names, with its viewport.
+	pub async fn locality(&self, place_id: &str, payer: &Payer<'_>) -> Result<Locality, Error> {
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct Resp {
+			id: String,
+			display_name: Text,
+			location: Location,
+			viewport: Bounds,
+		}
+		let url = format!("{}/{place_id}", self.base);
+		let req = Request {
+			mask: LOCALITY_MASK,
+			..Request::details(&url, place_id)
+		};
+		let (json, _) = match self.ask(&req, None, Ask::Cached, payer).await {
+			Err(Error::Api { status: 400 | 404, .. }) => return Err(Error::Invalid(format!("Places knows no place {place_id:?}"))),
+			r => r?,
+		};
+		let r: Resp = serde_json::from_value(json)?;
+		Ok(Locality {
+			place_id: r.id,
+			name: r.display_name.text,
+			location: r.location.into(),
+			viewport: r.viewport.into(),
+		})
+	}
+
+	/// The locality (Google's `locality`: a city or town) the point lies in; `None` outside any.
+	/// The point is rounded to about 10 m, so a click beside another asks nothing new.
+	pub async fn locality_at(&self, at: LatLng, payer: &Payer<'_>) -> Result<Option<Locality>, Error> {
+		#[derive(Deserialize)]
+		struct Resp {
+			#[serde(default)]
+			results: Vec<Geocoded>,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct Geocoded {
+			place_id: String,
+			location: Location,
+			viewport: Bounds,
+			#[serde(default)]
+			address_components: Vec<Named>,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct Named {
+			long_text: String,
+			types: Vec<String>,
+		}
+		let point = format!("{:.4},{:.4}", at.lat, at.lng);
+		let url = format!("{}/{point}?types=locality", self.geocode);
+		let req = Request {
+			method: "GET",
+			url: &url,
+			mask: GEOCODE_MASK,
+			body: "",
+			sku: PlacesRequest::Geocode,
+			subject: &point,
+		};
+		let (json, _) = self.ask(&req, None, Ask::Cached, payer).await?;
+		let Some(g) = serde_json::from_value::<Resp>(json)?.results.into_iter().next() else {
+			return Ok(None);
+		};
+		let name = g
+			.address_components
+			.into_iter()
+			.find(|c| c.types.iter().any(|t| t == "locality"))
+			.map(|c| c.long_text)
+			.ok_or_else(|| Error::Api {
+				asked: format!("GET {url}"),
+				status: 200,
+				body: "a locality without a locality component".to_owned(),
+			})?;
+		Ok(Some(Locality {
+			place_id: g.place_id,
+			name,
+			location: g.location.into(),
+			viewport: g.viewport.into(),
+		}))
+	}
+
+	/// The link that opens Google's review form for `place_id` (`googleMapsLinks.writeAReviewUri`).
+	pub async fn review_link(&self, place_id: &str, payer: &Payer<'_>) -> Result<String, Error> {
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct Resp {
+			google_maps_links: Links,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct Links {
+			write_a_review_uri: String,
+		}
+		let url = format!("{}/{place_id}", self.base);
+		let req = Request {
+			mask: REVIEW_LINK_MASK,
+			..Request::details(&url, place_id)
+		};
+		let (json, _) = match self.ask(&req, None, Ask::Cached, payer).await {
+			Err(Error::Api { status: 400 | 404, .. }) => return Err(Error::Invalid(format!("Places knows no place {place_id:?}"))),
+			r => r?,
+		};
+		Ok(serde_json::from_value::<Resp>(json)?.google_maps_links.write_a_review_uri)
+	}
+
+	/// The places `input` may be heading for, within `regions` (ISO 3166-1 alpha-2, at most 15),
+	/// of `types` (Google's primary types or a collection such as `(cities)`; none: any).
 	/// No session token: each answer is its request's, so the queries cache serves it again.
-	pub async fn suggest(&self, input: &str, regions: &[&str], payer: &Payer<'_>) -> Result<Vec<Suggestion>, Error> {
+	pub async fn suggest(&self, input: &str, regions: &[&str], types: &[&str], payer: &Payer<'_>) -> Result<Vec<Suggestion>, Error> {
 		#[derive(Deserialize)]
 		struct Resp {
 			#[serde(default)]
@@ -238,10 +372,11 @@ impl Google {
 		if input.is_empty() {
 			return Err(Error::Invalid("nothing typed to suggest places for".to_owned()));
 		}
-		let (url, body) = (
-			format!("{}:autocomplete", self.base),
-			serde_json::json!({ "input": input, "includedRegionCodes": regions }).to_string(),
-		);
+		let mut body = serde_json::json!({ "input": input, "includedRegionCodes": regions });
+		if !types.is_empty() {
+			body["includedPrimaryTypes"] = serde_json::json!(types);
+		}
+		let (url, body) = (format!("{}:autocomplete", self.base), body.to_string());
 		let req = Request {
 			method: "POST",
 			url: &url,
@@ -359,6 +494,7 @@ impl Google {
 				PlacesRequest::Details => format!("Places details · {}", req.subject),
 				PlacesRequest::Search => format!("Places search · {:?}", req.subject),
 				PlacesRequest::Autocomplete => format!("Places autocomplete · {:?}", req.subject),
+				PlacesRequest::Geocode => format!("Geocoding · {}", req.subject),
 			};
 			hold.paid(Bought { key, sku: req.sku, label }).await?;
 		}
@@ -503,13 +639,36 @@ struct Location {
 	longitude: f64,
 }
 
+impl From<Location> for LatLng {
+	fn from(l: Location) -> Self {
+		Self { lat: l.latitude, lng: l.longitude }
+	}
+}
+
+#[derive(Deserialize)]
+struct Bounds {
+	low: Location,
+	high: Location,
+}
+
+impl From<Bounds> for Viewport {
+	fn from(b: Bounds) -> Self {
+		Self {
+			south: b.low.latitude,
+			west: b.low.longitude,
+			north: b.high.latitude,
+			east: b.high.longitude,
+		}
+	}
+}
+
 impl From<Hit> for Place {
 	fn from(h: Hit) -> Self {
 		Self {
 			place_id: h.id,
 			name: h.display_name.map(|t| t.text),
 			address: h.formatted_address,
-			location: h.location.map(|l| LatLng { lat: l.latitude, lng: l.longitude }),
+			location: h.location.map(Into::into),
 			country: h.address_components.into_iter().find(|c| c.types.iter().any(|t| t == "country")).map(|c| c.short_text),
 		}
 	}

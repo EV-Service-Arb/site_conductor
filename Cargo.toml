@@ -37,6 +37,7 @@ hmac = "0.13"
 http-body-util = "0.1"
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
 icu_locale = "2"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 jiff = "0.2"
 percent-encoding = "2"
 prost = "0.14"

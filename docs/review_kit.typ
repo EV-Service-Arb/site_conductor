@@ -102,7 +102,7 @@ Nothing a page does removes the tap: it is what lets the copy happen.
               not on the review
 ```
 
-The photos are the reviewer's own: Google's policy prohibits copied photos.
+Google's policy prohibits photos that are not the reviewer's own; the kit's photos are the category's (§6), against it.
 
 == 5. Taps after the scan
 
@@ -142,3 +142,39 @@ Counted from the scan; the scan itself is one more tap on each (the camera's lin
   edge(<pa>, <p>, "->"),
   edge(<pi>, <p>, "->"),
 ))
+
+== 6. The offer
+
+Drafts and photos are a category's (trade × country); each view of a GBP's page is offered from
+them. A draft or a photo goes to one GBP once: the reviewer's copy (or save) is its use there.
+
+```
+ a view of GBP g                         excluded                         order
+   drafts of g's category ──────────▶  copied on g                    copies ↑
+   (not removed)                        held by another live view      saves of its photos still
+                                        of g (15-min lease)             offerable on g ↑
+                                                                        oldest first
+   take 6 (one tap: 1) → leased to this view
+   each draft's photos                  saved on g                     saves ↑
+```
+
+#align(center, diagram(
+  spacing: (14mm, 9mm),
+  node-corner-radius: 2pt,
+  node-stroke: 0.7pt,
+  label-size: 7.5pt,
+  node((0, 0), [category pool], fill: luma(235), name: <pool>),
+  node((1.4, 0), [view of g \ ≤ 6 leased], name: <view>),
+  node((2.8, -0.7), [copy tap \ use (draft, g)], fill: rgb("#dcfce7"), name: <copy>),
+  node((2.8, 0.7), [save photos \ use (photo, g)], fill: rgb("#dcfce7"), name: <save>),
+  node((4.2, 0), [never offered \ on g again], fill: rgb("#fee2e2"), name: <gone>),
+  edge(<pool>, <view>, "->", label: [− used on g, − held]),
+  edge(<view>, <copy>, "->"),
+  edge(<view>, <save>, "->"),
+  edge(<copy>, <gone>, "->"),
+  edge(<save>, <gone>, "->"),
+))
+
+A copy never posted still keeps the draft off g: posting is confirmed later, from the archive. A
+photo saved on g drops out of its draft's photos there; the draft stays offered. The lease is for
+people standing together who scan one QR.

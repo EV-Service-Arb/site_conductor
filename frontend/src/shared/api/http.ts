@@ -120,8 +120,8 @@ export interface Http {
     headers?: Readonly<Record<string, string>>,
     init?: SendInit,
   ): Promise<T>;
-  /** A raw body PUT, its progress told as a fraction sent; the CSRF header as every write. */
-  upload(path: string, body: Blob, contentType: string, onProgress: (sent: number) => void): Promise<void>;
+  /** A raw body, its progress told as a fraction sent; the CSRF header as every write. */
+  upload(method: "POST" | "PUT", path: string, body: Blob, contentType: string, onProgress: (sent: number) => void): Promise<void>;
 }
 
 export function createHttp(deps: HttpDeps): Http {
@@ -155,10 +155,10 @@ export function createHttp(deps: HttpDeps): Http {
       return call(path, init, parser);
     },
     // XHR: fetch tells nothing of an upload's progress
-    upload: (path, body, contentType, onProgress) =>
+    upload: (method, path, body, contentType, onProgress) =>
       new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("PUT", path);
+        xhr.open(method, path);
         xhr.setRequestHeader("content-type", contentType);
         xhr.setRequestHeader("accept", "application/json");
         const csrf = readCsrf(deps.cookie());

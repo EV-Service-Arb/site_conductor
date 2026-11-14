@@ -22,7 +22,7 @@ export default function config(phase: string): NextConfig {
       // A trailing-slash redirect would run before the rewrite and bounce /api/v1/me.
       skipTrailingSlashRedirect: true,
       async rewrites() {
-        return [
+        const afterFiles = [
           { source: "/api/:path*", destination: `${backend}/api/:path*` },
           { source: "/auth/:path*", destination: `${backend}/auth/:path*` },
           { source: "/sites/mfe/:path*", destination: `${backend}/sites/mfe/:path*` },
@@ -34,6 +34,8 @@ export default function config(phase: string): NextConfig {
           { source: "/review_archive/:view+", destination: "/review_archive" },
           { source: "/sites/:view+", destination: "/sites" },
         ];
+        // a kit area's page, after every page and file, as `panel serve` answers `/<slug>/` (web.rs)
+        return { beforeFiles: [], afterFiles, fallback: [{ source: "/:slug/", destination: "/kit" }] };
       },
     };
   }

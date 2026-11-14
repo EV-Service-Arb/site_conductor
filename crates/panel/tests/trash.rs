@@ -191,4 +191,5 @@ async fn never_purge_keeps_everything() {
 
 	assert!(matches!(p.set_trash_settings(owner, 91, None).await.unwrap(), Err(Refused::Invalid(_))));
 	assert!(matches!(p.set_trash_settings(owner, 0, None).await.unwrap(), Err(Refused::Invalid(_))));
+	assert!(matches!(p.set_trash_settings(owner, 5, None).await.unwrap(), Err(Refused::Invalid(_))), "1, 7, 30 or 90 only");
 }

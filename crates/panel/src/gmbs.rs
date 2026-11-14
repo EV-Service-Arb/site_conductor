@@ -122,7 +122,7 @@ async fn trade_is(conn: &mut sqlx::SqliteConnection, owner: Uuid, trade: Option<
 	})
 }
 
-fn places_error(e: sa_places::Error) -> eyre::Result<Refused> {
+pub(crate) fn places_error(e: sa_places::Error) -> eyre::Result<Refused> {
 	match e {
 		sa_places::Error::Invalid(why) => Ok(Refused::Invalid(why)),
 		e @ sa_places::Error::OwnKey { .. } => Ok(Refused::Invalid(format!("{e}; replace it on its gmail's Connections"))),
@@ -285,7 +285,7 @@ impl Panel {
 		let purse = self.purse(owner);
 		let payer = self.payer(owner, gmail, Some(&purse)).await?;
 		let regions: Vec<&str> = <Country as strum::VariantArray>::VARIANTS.iter().map(|c| c.as_str()).collect();
-		match self.google.suggest(input, &regions, &payer).await {
+		match self.google.suggest(input, &regions, &[], &payer).await {
 			Ok(found) => Ok(Ok(found)),
 			Err(e) => Ok(Err(places_error(e)?)),
 		}
@@ -752,9 +752,13 @@ impl Panel {
 			return Ok(Err(Refused::NotFound));
 		}
 		match db::trade_holders(&mut tx, id).await? {
-			0 => db::delete_trade(&mut tx, id).await?,
+			0 => {}
 			n => return Ok(Err(Refused::Conflict(format!("{n} GBPs hold trade {id}: give them another first")))),
 		}
+		if crate::store::kit::held(&mut tx, id, None).await? > 0 {
+			return Ok(Err(Refused::Conflict(format!("trade {id} has review drafts or photos: their uses are kept"))));
+		}
+		db::delete_trade(&mut tx, id).await?;
 		tx.commit().await.wrap_err("committing a trade's deletion")?;
 		Ok(Ok(()))
 	}
@@ -801,7 +805,13 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
-		if db::trade_owner(&mut tx, id).await? != Some(owner) || !db::remove_category(&mut tx, id, country).await? {
+		if db::trade_owner(&mut tx, id).await? != Some(owner) {
+			return Ok(Err(Refused::NotFound));
+		}
+		if crate::store::kit::held(&mut tx, id, Some(country)).await? > 0 {
+			return Ok(Err(Refused::Conflict(format!("{country} has review drafts or photos: their uses are kept"))));
+		}
+		if !db::remove_category(&mut tx, id, country).await? {
 			return Ok(Err(Refused::NotFound));
 		}
 		tx.commit().await.wrap_err("committing a category's removal")?;

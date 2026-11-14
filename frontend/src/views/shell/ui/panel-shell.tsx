@@ -20,15 +20,17 @@ import { SignInOverlay } from "./signin-overlay";
  * "no access", a 503 is "try again" without signing anyone out. The live socket
  * can end the session the same two ways later (4401, 4403), an element by `sa:unauthenticated`.
  */
-export function PanelShell({ children }: { children: ReactNode }) {
+export function PanelShell({ bare = false, children }: { bare?: boolean; children: ReactNode }) {
   // Mounted from the first render: the 401 of `/me` can land before anything else has.
   return (
     <>
-      <PanelBody>{children}</PanelBody>
+      <PanelBody bare={bare}>{children}</PanelBody>
       <SignInOverlay />
-      <Suspense>
-        <RoutedElements />
-      </Suspense>
+      {!bare && (
+        <Suspense>
+          <RoutedElements />
+        </Suspense>
+      )}
     </>
   );
 }
@@ -45,7 +47,8 @@ function RoutedElements() {
   return null;
 }
 
-function PanelBody({ children }: { children: ReactNode }) {
+/** `bare`: the gate alone, without the frame: a page of its own (the kit's `/<area>/`). */
+function PanelBody({ bare, children }: { bare: boolean; children: ReactNode }) {
   const me = useResource("me", () => ok(api.GET("/me")));
   const [accessLost, setAccessLost] = useState(false);
 
@@ -70,7 +73,7 @@ function PanelBody({ children }: { children: ReactNode }) {
 
   return (
     <MeProvider me={me.data}>
-      <ShellFrame onForbidden={() => setAccessLost(true)}>{children}</ShellFrame>
+      {bare ? children : <ShellFrame onForbidden={() => setAccessLost(true)}>{children}</ShellFrame>}
       <Toaster position="bottom-right" />
     </MeProvider>
   );

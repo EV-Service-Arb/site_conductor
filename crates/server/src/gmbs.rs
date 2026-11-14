@@ -287,8 +287,8 @@ impl From<Trade> for TradeDto {
 /// A path's trade and country.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct TradeIn {
-	id: i64,
-	country: Country,
+	pub(crate) id: i64,
+	pub(crate) country: Country,
 }
 
 /// A path's country.

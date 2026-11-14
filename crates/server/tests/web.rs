@@ -9,6 +9,7 @@ use axum::{
 	http::{HeaderMap, Method, Request, StatusCode, header},
 	routing::get,
 };
+use sa_panel::testing::{TestDb, panel};
 use sa_server::web::{self, Files};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -19,6 +20,9 @@ const LEADS: &str = r#"<html><script>self.__next_f.push([1,"leads"])</script><SC
 
 /// The page the sites' element mounts in, routing inside it.
 const SITES: &str = r#"<html><mfe-sites-panel api="/api/sites" base="/sites"></mfe-sites-panel></html>"#;
+
+/// The page a kit area's link serves.
+const KIT: &str = r#"<html><main id="kit"></main></html>"#;
 
 /// A scratch directory holding `web/` (a stand-in export) and, beside it, a file the server
 /// must never hand out.
@@ -38,6 +42,8 @@ impl Export {
 			("web/sites/__next._tree.txt", "sites tree"),
 			("web/_next/static/chunks/app-3f2a.js", "console.log(1)"),
 			("web/favicon.ico", "ico"),
+			("web/kit/index.html", KIT),
+			("web/kit/index.txt", "kit payload"),
 			("secret.txt", "do not serve"),
 		] {
 			let path = root.join(path);
@@ -65,8 +71,8 @@ fn app_routes() -> Router {
 	Router::new().route("/health", get(|| async { "ok" })).nest("/api/v1", api)
 }
 
-fn app(dir: &Path) -> Router {
-	web::serve(app_routes(), Files::try_new(dir).unwrap())
+async fn app(dir: &Path, db: &TestDb) -> Router {
+	web::serve(app_routes(), Files::try_new(dir).unwrap(), panel(db).await)
 }
 
 async fn send(app: &Router, method: Method, uri: &str, headers: &[(header::HeaderName, &str)]) -> (StatusCode, HeaderMap, String) {
@@ -96,7 +102,8 @@ fn is_page(h: &HeaderMap) -> bool {
 #[tokio::test]
 async fn pages_directories_and_the_404_page() {
 	let export = Export::new();
-	let app = app(&export.web());
+	let db = TestDb::create().await;
+	let app = app(&export.web(), &db).await;
 
 	let (status, h, body) = get_(&app, "/").await;
 	assert_eq!((status, body.as_str()), (StatusCode::OK, INDEX));
@@ -126,7 +133,8 @@ async fn pages_directories_and_the_404_page() {
 #[tokio::test]
 async fn hashed_assets_are_immutable_and_nothing_revalidates_by_date() {
 	let export = Export::new();
-	let app = app(&export.web());
+	let db = TestDb::create().await;
+	let app = app(&export.web(), &db).await;
 
 	let (status, h, body) = get_(&app, "/_next/static/chunks/app-3f2a.js").await;
 	assert_eq!((status, body.as_str()), (StatusCode::OK, "console.log(1)"));
@@ -151,7 +159,8 @@ async fn hashed_assets_are_immutable_and_nothing_revalidates_by_date() {
 #[tokio::test]
 async fn the_sites_page_serves_every_view_of_it() {
 	let export = Export::new();
-	let app = app(&export.web());
+	let db = TestDb::create().await;
+	let app = app(&export.web(), &db).await;
 	for uri in ["/sites/", "/sites/leads", "/sites/leads/", "/sites/leads/aquafix/L-1"] {
 		let (status, h, body) = get_(&app, uri).await;
 		assert_eq!((status, body.as_str()), (StatusCode::OK, SITES), "{uri}");
@@ -174,7 +183,8 @@ async fn the_sites_page_serves_every_view_of_it() {
 #[tokio::test]
 async fn the_api_side_never_falls_through_to_the_front_end() {
 	let export = Export::new();
-	let app = app(&export.web());
+	let db = TestDb::create().await;
+	let app = app(&export.web(), &db).await;
 
 	assert_eq!(get_(&app, "/health").await.2, "ok");
 	assert_eq!(get_(&app, "/api/v1/me").await.2, "me");
@@ -203,7 +213,8 @@ async fn the_retired_mfe_paths_are_json_404s_never_a_page() {
 	// The chip and the sign-in load from the platform now; a tab on an earlier build may still
 	// ask here, and a script request must not get the panel's HTML.
 	let export = Export::new();
-	let app = app(&export.web());
+	let db = TestDb::create().await;
+	let app = app(&export.web(), &db).await;
 	for uri in ["/cabinet/mfe/account-chip.js", "/cabinet", "/cabinet/elsewhere", "/auth/mfe/account-chip.js"] {
 		let (status, h, body) = get_(&app, uri).await;
 		assert_eq!((status, body.as_str()), (StatusCode::NOT_FOUND, r#"{"error":"not found"}"#), "{uri}");
@@ -214,7 +225,8 @@ async fn the_retired_mfe_paths_are_json_404s_never_a_page() {
 #[tokio::test]
 async fn nothing_outside_the_directory() {
 	let export = Export::new();
-	let app = app(&export.web());
+	let db = TestDb::create().await;
+	let app = app(&export.web(), &db).await;
 	for uri in [
 		"/../secret.txt",
 		"/%2e%2e/secret.txt",
@@ -236,4 +248,39 @@ fn a_directory_without_the_export_is_refused_at_boot() {
 	let e = Files::try_new(&export.root).unwrap_err();
 	assert!(format!("{e}").contains("has no index.html"), "{e}");
 	assert!(Files::try_new(&export.root.join("missing")).is_err());
+}
+
+#[tokio::test]
+async fn a_kit_areas_link_is_the_kit_page() {
+	let export = Export::new();
+	let db = TestDb::create().await;
+	let app = app(&export.web(), &db).await;
+	let pool = db.pool().await;
+	let user = Uuid::now_v7();
+	sqlx::query("INSERT INTO users (user_id, email, name, first_seen, last_seen) VALUES ($1, 'a@localhost', 'A', 0, 0)")
+		.bind(user)
+		.execute(&pool)
+		.await
+		.unwrap();
+	sqlx::query(
+		"INSERT INTO kit_areas (slug, kind, name, lat, lng, radius_m, margin_m, created_by, created_at) VALUES ('chassieu-10km', 'circle', 'Chassieu', 45.74, 4.97, 10000, 2000, $1, 0)",
+	)
+	.bind(user)
+	.execute(&pool)
+	.await
+	.unwrap();
+
+	for path in ["/chassieu-10km/", "/chassieu-10km"] {
+		let (status, h, body) = get_(&app, path).await;
+		assert_eq!((status, body.as_str()), (StatusCode::OK, KIT), "{path}");
+		assert!(is_page(&h), "{h:?}");
+	}
+	let (status, _, body) = get_(&app, "/chassieu-10km/index.txt").await;
+	assert_eq!((status, body.as_str()), (StatusCode::OK, "kit payload"));
+	for path in ["/lyon/", "/chassieu-10km/deeper/", "/chassieu-10km/a/b.txt"] {
+		let (status, _, body) = get_(&app, path).await;
+		assert_eq!((status, body.as_str()), (StatusCode::NOT_FOUND, "<html>not here</html>"), "{path}");
+	}
+	let (status, _, body) = get_(&app, "/leads/").await;
+	assert_eq!((status, body.as_str()), (StatusCode::OK, LEADS), "a page of the export is never an area's");
 }

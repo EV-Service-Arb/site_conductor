@@ -11,5 +11,5 @@ const FILM_TYPE: keyof paths[typeof FILM]["put"]["requestBody"]["content"] = "vi
 
 /** Played as the back camera by the browser's next launch; refused while it runs, or when ffmpeg cannot cut it. Not through `api`: fetch tells nothing of an upload's progress. */
 export function uploadFilm(gmail: number, film: Blob, onProgress: (sent: number) => void): Promise<void> {
-  return http.upload(`/api/v1${FILM.replace("{id}", String(gmail))}`, film, FILM_TYPE, onProgress);
+  return http.upload("PUT", `/api/v1${FILM.replace("{id}", String(gmail))}`, film, FILM_TYPE, onProgress);
 }

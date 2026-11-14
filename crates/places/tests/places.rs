@@ -266,9 +266,9 @@ async fn without_a_key_a_place_id_resolves_unnamed() {
 #[tokio::test]
 async fn suggestions_are_places_in_the_regions_asked_and_paid_for_once() {
 	let (s, google, _store, server) = google(&["k"]).await;
-	let got = google.suggest(" le  procope", &["FR", "US"], &Payer::house()).await.unwrap();
-	let again = google.suggest("le procope ", &["FR", "US"], &Payer::house()).await.unwrap();
-	let empty = google.suggest("  ", &["FR"], &Payer::house()).await.unwrap_err();
+	let got = google.suggest(" le  procope", &["FR", "US"], &[], &Payer::house()).await.unwrap();
+	let again = google.suggest("le procope ", &["FR", "US"], &[], &Payer::house()).await.unwrap();
+	let empty = google.suggest("  ", &["FR"], &[], &Payer::house()).await.unwrap_err();
 	server.abort();
 	let shown: Vec<_> = got.iter().map(|g| (g.place_id.as_str(), g.main.as_str(), g.secondary.as_deref())).collect();
 	assert_eq!(
