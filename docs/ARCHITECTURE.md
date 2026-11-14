@@ -37,8 +37,9 @@ crates/core/             no I/O: the queries cache's wire, a GBP's states and mo
                          snapshot the services are told (`gbp`; review_archive takes it too),
                          brand ids, the HMAC of a signed request and its window, the
                          conductor's own alert messages, the buttons' signed data, retry and
-                         pacing, tokens' renewal and a charge's split, and the charge feed's
-                         page (`tokens::ChargePage`; review_archive takes it too)
+                         pacing, tokens' renewal and a charge's split, the charge feed's
+                         page (`tokens::ChargePage`; review_archive takes it too), and what
+                         costs tokens (`prices`: every tool that charges, its items)
 crates/panel/            the engine: `Panel` (sources and their authentication, sessions, access
                          requests, the hubs' state), `seal` (XChaCha20-Poly1305 at rest), `store`
                          (SQLite, migrations/ applied on open, writes BEGIN IMMEDIATE; the queries
@@ -82,7 +83,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/forward.rs         the services behind the origin; `Services`, the one client and signing
                          key every call to them goes through
   src/grafana.rs         Grafana: its process, /grafana/, the viewers' tokens and the loopback
-                         listener they work on, the services' dashboards
+                         listener they work on, the services' dashboards and its own (dashboards/)
   src/live.rs            GET /api/v1/live, and the follower of sites' change feed
   src/gmbs.rs            /api/v1/gmails, /api/v1/gmbs, /api/v1/trades
   src/connections.rs     /api/v1/gmails/{id}/{connections,imap,maps_key}
@@ -299,15 +300,18 @@ dir, its root URL `<PANEL_PUBLIC_ORIGIN>/grafana/`.
 ```text
 browser ── /grafana/* ────────────▶ conductor (session; a POST is a read) ──socket──▶ Grafana
 browser ── /grafana/api/ds/query ─▶ conductor: a viewer token into each query whose datasource
-                                    uid is a service; dead once Grafana answers
+                                    uid is a service or the conductor; dead once Grafana answers
 Grafana (Infinity) ── GET 127.0.0.1:<any>/api/<service>/… + token ──▶ the forward, as that viewer
+Grafana (Infinity) ── GET 127.0.0.1:<any>/api/v1/… + token ──▶ the conductor's own GETs, as that viewer
 conductor ── GET /dashboards (Conductor), every 60 s, conditional ──▶ each service of
              forward::DASHBOARDS ──▶ <dir>/dashboards/<service>/<uid>.json ──▶ Grafana
 ```
 
 - **Datasources are derived:** one Infinity datasource per service's API (`/api/<service>`), its
-  uid the service's name, its url that API on the loopback listener and nothing beyond it
-  allowed; written, with the dashboards' provider, before Grafana starts.
+  uid the service's name, and `conductor` for the conductor's own GETs (`/api/v1`, each route's
+  section checked against the viewer); its url that API on the loopback listener and nothing
+  beyond it allowed; written, with the dashboards' provider and the conductor's own dashboards,
+  before Grafana starts.
 - **Dashboards are the services':** coupled to a service's API, they ship with its release. A
   service that has them is in `forward::DASHBOARDS`, and its `GET /dashboards` answers a JSON
   array of them, each with its `uid`, and an ETag. A pull that fails — no answer, a 404, a uid
@@ -419,7 +423,7 @@ DELETE /gmails/{id}                         204: to the trash, its GBPs with it;
                                             browser
 GET    /gmails/{id}/connections             {imap: {host, username, set_at, checked: {at, error}} | null,
                                             maps_key: {last4, set_at, checked, out} | null, prices:
-                                            {details, search, autocomplete}, browser: {provider, device, endpoint,
+                                            [the Places items of /admin/tokens/prices], browser: {provider, device, endpoint,
                                             exit, set_at, checked, running: {gmb} | null, film} | null}:
                                             no secret, ever
 PUT    /gmails/{id}/imap                    {host, username, password} → 200 as GET, once it logs in
@@ -499,9 +503,15 @@ POST   /tokens/claim                        → 200 as GET /tokens
 GET    /admin/tokens         Tokens         {users: [{user_id, email, name, balance}]}
 POST   /admin/tokens/{user}  Tokens, fresh  {set: n, note?} | {add: n, note?} | {grant: n, note}
                                             → 200 {balance}; a grant is owed until claimed
-GET    /admin/tokens/prices  Tokens         {details, search, autocomplete}: tokens a Places request
-                                            on the shared keys costs; null, not sold
-PUT    /admin/tokens/prices  Tokens, fresh  {details, search, autocomplete} (0 or more) → 200 as GET
+GET    /admin/tokens/prices  Tokens         {prices: [{item, scope, tool, tool_title, title, description,
+                                            tokens, set_by, set_at}]}: every item of `sa_core::prices`,
+                                            in its order; tokens null, not sold
+PUT    /admin/tokens/prices  Tokens, fresh  {prices: {item: n | null}} (n 0 or more; the others stay)
+                                            → 200 as GET; 400 an item not priced
+GET    /admin/tokens/flows?from=&to=  Tokens  {flows: [{at, email, name, kind, tokens, service, label, by,
+                                            note}]}: everyone's ledger and grants given, Unix ms, ≤ 400
+                                            days; kind renewal, purchase, set, spend, refund,
+                                            grant_claimed, granted
 GET    /assistant/chats                     {chats}: owned and joined, the caller's marks, newest
                                             first
 POST   /assistant/chats                     {id, title, turns} → 201 the chat (version 1); 409 the
@@ -600,10 +610,15 @@ Places requests charge at the buy.
 
 **Who pays a Places request** about a GBP or a gmail: its gmail's own Maps key, then its owner's
 other gmails' keys, free; then `GOOGLE_MAPS_KEYS` at the admin's price per request kind (Places'
-SKU: details, search, autocomplete), held under one lock per person from the balance read to the charge, so a
+SKU), held under one lock per person from the balance read to the charge, so a
 request below the price, or unpriced, is refused before Google is asked. A cached answer costs
 nothing. The operator's commands (`gmb add`, `locate`) try the gmail's keys, then the house pays.
 review_archive's lookups and placement's sweeps are the house's for now.
+
+**Prices are the admin's.** Whatever charges tokens charges items of `sa_core::prices`: each tool
+that charges declares its items there once (an enum, a variant's message its name and its doc
+what it is), and the admin's page, `token_prices` and the snapshot are walked from it. An item
+without a price is not sold: a Places request is refused, a walk step not walked.
 
 **A GBP's life** (`sa_core::gbp::State::nexts`; the schema checks each move again):
 
@@ -666,8 +681,9 @@ follow (10 s)   GET review_archive /api/conductor/charges?after=<cursor>&limit=5
 push (a change, a page, 60 s)
                 PUT review_archive /api/conductor/gmbs (Conductor), an `sa_core::gbp::Snapshot`: every GBP that ever had a place
                 ({id, gmail_id, gmail, owner, place_id, state, country, name, address,
-                removed, enabled}), every user's balance renewed, and the cursor they were read at,
-                from one transaction; review_archive gives each live one its track
+                removed, enabled}), every user's balance renewed, the cursor they were read at and
+                every price, from one transaction; review_archive gives each live one its track
+                and meters its walks at those prices
 ```
 
 - **The archive's allowance** is that snapshot's balance less its own charges past the cursor,
@@ -801,6 +817,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   texts and a gmail's IMAP password, Maps key and proxy are sealed (XChaCha20-Poly1305, what they belong
   to as associated data) under `PANEL_DATA_KEY`, whose fingerprint is stored beside each. A
   person's are never read back out: the browser sees a key's last four.
+- **No price beside its use.** What a person is charged is an item of `sa_core::prices` at the
+  admin's price; no cost is written where it is spent.
 - **No buy on credit.** A Places request on the shared keys for a person is charged at its price,
   and refused before it is sent when their balance is below it; their own keys and the queries
   cache cost nothing.
