@@ -9,7 +9,8 @@
 //! - [`notify`]: the Telegram rules, the conductor's own messages, the buttons' signed data, and
 //!   how a delivery is retried;
 //! - [`prices`]: what costs tokens, tool by tool;
-//! - [`tokens`]: how a balance renews and a charge falls on its payers.
+//! - [`tokens`]: how a balance renews and a charge falls on its payers;
+//! - [`usage`]: what was spent on vendors, as a service's feed tells it.
 
 pub mod gbp;
 pub mod ids;
@@ -18,6 +19,7 @@ pub mod prices;
 pub mod queries_cache;
 pub mod signature;
 pub mod tokens;
+pub mod usage;
 
 /// Why an input cannot be accepted. The message is what the caller is told, so it names the
 /// field and never echoes a secret or PII.

@@ -96,6 +96,7 @@ async fn a_write_is_kept_only_under_its_querys_digest() {
 	let put = Put {
 		answer: json!({}),
 		request: "GET x".into(),
+		bought: None,
 	};
 	let mismatched = cache.put(Key([0; 32]), put.clone()).await.unwrap_err();
 	assert!(mismatched.to_string().contains("400"), "{mismatched:#}");

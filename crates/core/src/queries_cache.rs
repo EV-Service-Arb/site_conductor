@@ -108,6 +108,8 @@ pub struct Put {
 	pub answer: serde_json::Value,
 	/// What was asked, headers aside: method, URL, field mask and body.
 	pub request: String,
+	/// What it was bought as; `None`, kept from another answer bought, nothing billed for it.
+	pub bought: Option<crate::usage::Billed>,
 }
 
 /// A query's path under the cache's URL (`<origin>/api/queries_cache`, what a client is given).

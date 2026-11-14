@@ -94,10 +94,10 @@ export type UsageDay = {
  */
 day: string, charges: number, tokens: number, };
 
-export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step"] as const;
+export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "browser.gologin", "browser.mimic"] as const;
 export type PricedItem = (typeof PRICED_ITEMS)[number];
 
-export const SCOPES = ["conductor", "review_archive"] as const;
+export const SCOPES = ["conductor", "review_archive", "browsers"] as const;
 export type Scope = (typeof SCOPES)[number];
 
 export const FLOW_KINDS = ["renewal", "purchase", "set", "spend", "refund", "grant_claimed", "granted"] as const;
