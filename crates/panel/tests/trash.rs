@@ -156,12 +156,12 @@ async fn the_purge_ends_a_restore_once_the_kept_days_pass() {
 	let one = p.add_gmb(Some(owner), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();
 	connect(&db, gmail.id).await;
 	p.remove_gmail(owner, gmail.id, now()).await.unwrap().unwrap();
-	p.set_trash_settings(owner, 5, None).await.unwrap().unwrap();
+	p.set_trash_settings(owner, 7, None).await.unwrap().unwrap();
 
-	p.purge(now() + days(4), false).await.unwrap();
+	p.purge(now() + days(6), false).await.unwrap();
 	assert_eq!(listed(&p.trash(owner, false).await.unwrap()), (vec![(gmail.id, 1)], vec![]));
 
-	p.purge(now() + days(5), false).await.unwrap();
+	p.purge(now() + days(7), false).await.unwrap();
 	assert_eq!(listed(&p.trash(owner, false).await.unwrap()), (vec![], vec![]), "gone for good");
 	assert_eq!(connections(&db, gmail.id).await, (0, 0));
 	assert!(matches!(p.restore_gmail(owner, gmail.id).await.unwrap(), Err(Refused::NotFound)));
@@ -191,4 +191,5 @@ async fn never_purge_keeps_everything() {
 
 	assert!(matches!(p.set_trash_settings(owner, 91, None).await.unwrap(), Err(Refused::Invalid(_))));
 	assert!(matches!(p.set_trash_settings(owner, 0, None).await.unwrap(), Err(Refused::Invalid(_))));
+	assert!(matches!(p.set_trash_settings(owner, 5, None).await.unwrap(), Err(Refused::Invalid(_))), "1, 7, 30 or 90 only");
 }
