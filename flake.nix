@@ -65,11 +65,12 @@
                 pass_filenames = false;
                 require_serial = true;
               };
-              # English from the code, stale and orphaned translations dropped: nothing in messages/ is edited but ru overrides.
+              # English from the code, stale and orphaned translations dropped, the untranslated asked of ask_llm:
+              # nothing in messages/ is edited but ru overrides.
               i18n = {
                 enable = true;
                 name = "regenerate i18n catalogues";
-                entry = "bash -c 'npm --prefix frontend run --silent i18n && git add -A frontend/messages'";
+                entry = "bash -c 'npm --prefix frontend run --silent i18n && npm --prefix frontend run --silent i18n:translate && git add -A frontend/messages'";
                 pass_filenames = false;
                 require_serial = true;
               };

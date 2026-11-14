@@ -16,7 +16,8 @@
     "test": "vitest run",
     "postinstall": "[ -z \"$IN_NIX_SHELL\" ] || js-local",
     "i18n": "evinvest-i18n-extract --exclude out,public,messages,tests,tmp,scripts",
-    "i18n:release": "evinvest-i18n-check --release --exclude out,public,messages,tests,tmp,scripts"
+    "i18n:release": "evinvest-i18n-check --release --exclude out,public,messages,tests,tmp,scripts",
+    "i18n:translate": "evinvest-i18n-translate --exclude out,public,messages,tests,tmp,scripts"
   },
   "dependencies": {
     "@evinvest/concierge": "^0.5.0",
