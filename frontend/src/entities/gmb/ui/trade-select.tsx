@@ -44,12 +44,12 @@ export function TradeSelect({ value, onPick, none, label, country, className }: 
             .finally(() => setBusy(false));
         }}
       >
-        <Input size={size} autoFocus aria-label={t("A trade's name: Plumbing")} placeholder={t("A trade's name: Plumbing")} value={name} onChange={(e) => setName(e.target.value)} className="min-w-0 flex-1" />
+        <Input size={size} autoFocus aria-label={t("trades.new.name")} placeholder={t("trades.new.name")} value={name} onChange={(e) => setName(e.target.value)} className="min-w-0 flex-1" />
         <Button type="submit" size={button("sm")} disabled={busy || name.trim() === ""}>
-          {t("Add the trade")}
+          {t("trades.new.add")}
         </Button>
         <Button type="button" variant="ghost" size={button("sm")} onClick={() => setNaming(false)}>
-          {t("Cancel")}
+          {t("move.cancel")}
         </Button>
       </form>
     );
@@ -66,17 +66,17 @@ export function TradeSelect({ value, onPick, none, label, country, className }: 
         else onPick(v === "" ? null : Number(v));
       }}
     >
-      {(value === null || none !== undefined) && <NativeSelectOption value="">{none ?? t("Pick a trade")}</NativeSelectOption>}
+      {(value === null || none !== undefined) && <NativeSelectOption value="">{none ?? t("trades.pick")}</NativeSelectOption>}
       {trades.status === "ok" &&
         trades.data.map((tr) => {
           const there = country == null ? undefined : (tr.categories.find((c) => c.country === country) ?? null);
           return (
             <NativeSelectOption key={tr.id} value={String(tr.id)}>
-              {there === undefined ? tr.name : there === null ? t("{trade} — not set up in {country}", { trade: tr.name, country: country! }) : `${tr.name} — ${there.google_primary === null ? "…" : googleName(there.google_primary, locale)}`}
+              {there === undefined ? tr.name : there === null ? t("trades.option.notSetUp", { trade: tr.name, country: country! }) : `${tr.name} — ${there.google_primary === null ? "…" : googleName(there.google_primary, locale)}`}
             </NativeSelectOption>
           );
         })}
-      <NativeSelectOption value={NEW}>{t("New trade…")}</NativeSelectOption>
+      <NativeSelectOption value={NEW}>{t("trades.new")}</NativeSelectOption>
     </NativeSelect>
   );
 }

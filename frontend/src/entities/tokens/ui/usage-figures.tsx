@@ -13,21 +13,21 @@ export function UsageFigures({ days }: { days: UsageDay[] }) {
   return (
     <>
       {[
-        { label: t("Last 7 days"), days: days.slice(-7) },
-        { label: t("Last 30 days"), days },
+        { label: t("account.usage.week"), days: days.slice(-7) },
+        { label: t("account.usage.month"), days },
       ].map(({ label, days }) => (
         <div key={label} className="grid grid-cols-(--grid-account-row) items-baseline gap-3 text-sm">
           <span className="text-ink-soft">{label}</span>
           <span className="min-w-0 text-ink">
-            {t("{n} walks paid", { n: total(days, "charges") })} · {t("{n} tokens spent", { n: total(days, "tokens") })}
+            {t("account.usage.charges", { n: total(days, "charges") })} · {t("account.usage.spent", { n: total(days, "tokens") })}
           </span>
         </div>
       ))}
-      <figure className="flex h-16 items-end gap-0.5 pt-2" aria-label={t("Tokens spent per day, last 30 days")} role="img">
+      <figure className="flex h-16 items-end gap-0.5 pt-2" aria-label={t("account.usage.chart")} role="img">
         {days.map((d) => (
           <span
             key={d.day}
-            title={`${d.day}: ${t("{n} tokens spent", { n: d.tokens })}`}
+            title={`${d.day}: ${t("account.usage.spent", { n: d.tokens })}`}
             className="flex-1 rounded-t-sm bg-primary/70"
             style={{ height: `${Math.max(2, (d.tokens / peak) * 100)}%` }}
           />

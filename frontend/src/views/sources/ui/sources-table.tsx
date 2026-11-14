@@ -28,7 +28,7 @@ export function SourcesTable({ sources, onRevoked }: { sources: Source[]; onRevo
 function State({ source, onRevoked }: { source: Source; onRevoked: () => void }) {
   const t = useT();
   const locale = useLocale();
-  if (source.revoked_at) return <Badge tone="neutral">{t("Revoked {at}", { at: formatDateTime(source.revoked_at, locale) })}</Badge>;
+  if (source.revoked_at) return <Badge tone="neutral">{t("sources.revoked", { at: formatDateTime(source.revoked_at, locale) })}</Badge>;
   return <RevokeButton keyId={source.key_id} onRevoked={onRevoked} />;
 }
 
@@ -39,12 +39,12 @@ function Wide({ sources, onRevoked }: { sources: Source[]; onRevoked: () => void
     <Table>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          <TableHead className={HEAD}>{t("Key id")}</TableHead>
-          <TableHead className={HEAD}>{t("Kind")}</TableHead>
-          <TableHead className={HEAD}>{t("Brands")}</TableHead>
-          <TableHead className={cn(HEAD, "text-right")}>{t("Added")}</TableHead>
+          <TableHead className={HEAD}>{t("sources.keyId")}</TableHead>
+          <TableHead className={HEAD}>{t("sources.kind")}</TableHead>
+          <TableHead className={HEAD}>{t("sources.brands")}</TableHead>
+          <TableHead className={cn(HEAD, "text-right")}>{t("sources.created")}</TableHead>
           <TableHead className={HEAD}>
-            <span className="sr-only">{t("State")}</span>
+            <span className="sr-only">{t("sources.state")}</span>
           </TableHead>
         </TableRow>
       </TableHeader>

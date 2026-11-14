@@ -68,7 +68,7 @@ export function Home() {
           <ErrorState failure={config.failure} onRetry={config.reload} />
         </div>
       )}
-      {config.status === "ok" && config.data === null && <EmptyState className="m-6" title={t("No map here")} description={t("The conductor has no Google Maps browser key (GOOGLE_MAPS_BROWSER_KEY). Your GMBs are in the list beside.")} />}
+      {config.status === "ok" && config.data === null && <EmptyState className="m-6" title={t("home.noMap")} description={t("home.noMap.why")} />}
       {config.status === "ok" && config.data !== null && <GmbMap config={config.data} />}
     </div>
   );

@@ -22,8 +22,8 @@ import { Outline } from "./outline";
 import { PanelHotbar } from "./panel-hotbar";
 import { PanelTopBar } from "./panel-top-bar";
 
-/** Option on macOS too: the keymap reads the key's Latin label when Option composes `ß`, so in a field too it opens the leader rather than typing `ß`. */
-const LEADER = { key: "s", alt: true };
+/** Bare `z`: Alt chords get eaten by key remappers (keyd's Alt layer); in a field it types. */
+const LEADER = { key: "z" };
 
 /** CONTRACT §9: an element's API answered 401. */
 const UNAUTHENTICATED_EVENT = "sa:unauthenticated";
@@ -35,16 +35,16 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
   const pathname = usePathname();
   const folded = useSidebarFolded();
   const live = useLiveSocket({ onUnauthenticated: goToSignIn, onForbidden });
-  const leads = t("Leads");
+  const leads = t("title.leads");
   useEffect(() => followTitleCount(window, document, leads), [leads]);
   useEffect(() => {
     window.addEventListener(UNAUTHENTICATED_EVENT, goToSignIn);
     return () => window.removeEventListener(UNAUTHENTICATED_EVENT, goToSignIn);
   }, []);
-  const elements = Object.fromEntries(Object.entries(PANEL.elementKeys).map(([tag, k]) => [tag, { on: { key: k.key }, label: k.label(t) }]));
+  const elements = Object.fromEntries(Object.entries(PANEL.elementKeys).map(([tag, k]) => [tag, { on: { key: k.key }, label: t(k.label) }]));
   return (
-    <KeymapProvider leader={LEADER} elements={elements} labels={{ title: t("Keybinds") }}>
-      <UndoProvider labels={{ undo: t.ctx("undone", "Undo"), redo: t("Redo") }}>
+    <KeymapProvider leader={LEADER} elements={elements} labels={{ title: t("keys.help") }}>
+      <UndoProvider labels={{ undo: t("undo.undo"), redo: t("undo.redo") }}>
         <GmailsProvider seesSites={seesSites(me)}>
           <PublishSelection />
           <NavKeys />

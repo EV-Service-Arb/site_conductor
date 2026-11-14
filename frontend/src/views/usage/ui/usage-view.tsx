@@ -6,18 +6,18 @@ import { type Permission, useMe } from "@/entities/session";
 import { fetchArchive } from "@/entities/gmb";
 import { UsageFigures, fetchUsage } from "@/entities/tokens";
 import { ROUTES } from "@/shared/config/routes";
-import { type T, useT } from "@/shared/i18n";
+import { type MessageKey, useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 
 /** Who grants it, by a permission's second segment: the service, or the conductor's own admin. */
-const SECTION: Record<string, (t: T) => string> = {
-  sites: (t) => t("Sites"),
-  admin: (t) => t("Administration"),
-  review_archive: (t) => t("Review Archive"),
-  playbook: (t) => t("Playbook"),
+const SECTION: Record<string, MessageKey> = {
+  sites: "nav.sites",
+  admin: "usage.access.admin",
+  review_archive: "nav.reviewArchive",
+  playbook: "account.access.playbook",
 };
 
-function sectionOf(p: Permission): (t: T) => string {
+function sectionOf(p: Permission): MessageKey {
   const key = SECTION[p.split(":")[1] ?? ""];
   if (key === undefined) throw new Error(`no section for ${p}`);
   return key;
@@ -27,14 +27,14 @@ function sectionOf(p: Permission): (t: T) => string {
 export function UsageView() {
   const t = useT();
   return (
-    <PageFrame breakpoint="md" title={t("Usage")} description={t("Your access, tokens and spending on Service-Arb.")} width="content">
+    <PageFrame breakpoint="md" title={t("usage.title")} description={t("usage.description")} width="content">
       <Access />
       <UsageCard />
-      <Section title={t("Integrations")}>
+      <Section title={t("account.integrations")}>
         <a className="text-sm text-ink hover:underline" href={ROUTES.alerts}>
-          {t("Alerts")}
+          {t("account.alerts")}
         </a>
-        <p className="text-sm text-ink-soft">{t("Where your alerts go: your Telegram, channels and groups.")}</p>
+        <p className="text-sm text-ink-soft">{t("account.alerts.hint")}</p>
       </Section>
     </PageFrame>
   );
@@ -63,13 +63,13 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function Access() {
   const t = useT();
   const me = useMe();
-  const sections = new Map<(t: T) => string, Permission[]>();
+  const sections = new Map<MessageKey, Permission[]>();
   for (const p of me.permissions) sections.set(sectionOf(p), [...(sections.get(sectionOf(p)) ?? []), p]);
   return (
-    <Section title={t("Access")}>
-      {sections.size === 0 && <p className="text-sm text-ink-soft">{t("No Service-Arb permissions yet.")}</p>}
+    <Section title={t("account.access")}>
+      {sections.size === 0 && <p className="text-sm text-ink-soft">{t("account.access.none")}</p>}
       {[...sections].map(([section, permissions]) => (
-        <Row key={section(t)} label={section(t)}>
+        <Row key={section} label={t(section)}>
           <span className="flex flex-wrap gap-x-3 gap-y-1">
             {permissions.map((p) => (
               <code key={p} className="text-xs">
@@ -88,11 +88,11 @@ function UsageCard() {
   const usage = useResource("account.usage", fetchUsage);
   const archive = useResource("account.archive", fetchArchive);
   return (
-    <Section title={t("Usage")}>
+    <Section title={t("account.usage")}>
       {usage.status === "loading" && <Skeleton className="h-24 w-full" />}
-      {usage.status === "error" && <p className="text-sm text-ink-soft">{t("Usage can't be shown right now.")}</p>}
+      {usage.status === "error" && <p className="text-sm text-ink-soft">{t("account.usage.unavailable")}</p>}
       {usage.status === "ok" && <UsageFigures days={usage.data} />}
-      <Row label={t("Places tracked now")}>
+      <Row label={t("account.usage.places")}>
         <span className="tabular-nums">{archive.status === "ok" && archive.data !== null ? archive.data.places_tracked : "—"}</span>
       </Row>
     </Section>

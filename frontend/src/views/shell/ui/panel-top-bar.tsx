@@ -42,7 +42,7 @@ import { PANEL } from "@config";
 
 import { safeLocalPath } from "@/shared/api";
 import { ROUTES } from "@/shared/config/routes";
-import { type Locale, chooseLocale, i18n, useLocale, useT } from "@/shared/i18n";
+import { LOCALES, type Locale, chooseLocale, useLocale, useT } from "@/shared/i18n";
 
 import { toggleSidebar, useSidebarFolded } from "../model/sidebar";
 import { type App, useApps } from "./apps";
@@ -85,13 +85,13 @@ export function PanelTopBar() {
         <>
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <Button type="button" variant="ghost" size="sm" icon className="md:hidden" aria-label={t("Menu")}>
+              <Button type="button" variant="ghost" size="sm" icon className="md:hidden" aria-label={t("nav.menu")}>
                 <Menu aria-hidden />
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-72 gap-2 p-4">
               <SheetHeader className="flex-row items-center gap-2 p-0">
-                <SheetTitle>{t("Service-Arb")}</SheetTitle>
+                <SheetTitle>{t("app.name")}</SheetTitle>
                 <DevSignInBadge />
               </SheetHeader>
               <NavMenuList groups={switcher} pathname={pathname} linkComponent={Link} onNavigate={() => setOpen(false)} className="w-auto" />
@@ -104,7 +104,7 @@ export function PanelTopBar() {
           <SidebarToggle />
           <AppSwitcher />
           <DevSignInBadge className="hidden sm:inline-flex" />
-          <NavigationMenu viewport={false} className="ml-4 hidden md:flex" aria-label={t("Main navigation")}>
+          <NavigationMenu viewport={false} className="ml-4 hidden md:flex" aria-label={t("nav.primary")}>
             <NavigationMenuList>
               {apps.map((a) => (
                 <AppItem key={a.href} app={a} menu={!a.here} />
@@ -142,7 +142,7 @@ function SidebarToggle() {
   const t = useT();
   const folded = useSidebarFolded();
   const keys = useSequences().get("sidebar");
-  useBinding({ on: { key: "s" }, run: { id: "sidebar", label: t("Sidebar: fold or unfold"), run: toggleSidebar } });
+  useBinding({ on: { key: "s" }, run: { id: "sidebar", label: t("keys.sidebar"), run: toggleSidebar } });
   const Icon = folded ? PanelLeftOpen : PanelLeftClose;
   return (
     <Button
@@ -153,8 +153,8 @@ function SidebarToggle() {
       className="hidden md:inline-flex"
       onClick={toggleSidebar}
       aria-pressed={folded}
-      aria-label={t("Sidebar: fold or unfold")}
-      title={keys === undefined ? t("Sidebar: fold or unfold") : `${t("Sidebar: fold or unfold")} · ${keys}`}
+      aria-label={t("keys.sidebar")}
+      title={keys === undefined ? t("keys.sidebar") : `${t("keys.sidebar")} · ${keys}`}
     >
       <Icon aria-hidden />
     </Button>
@@ -176,21 +176,21 @@ function useSwitcherGroups(): NavGroup[] {
   return [
     {
       id: "apps",
-      label: t("Service-Arb"),
+      label: t("app.name"),
       items: [
-        { id: "home", href: "/", label: t("Home"), icon: MapPin, description: t("Every GBP on one map"), match: "exact" },
+        { id: "home", href: "/", label: t("nav.home"), icon: MapPin, description: t("nav.home.description"), match: "exact" },
         ...apps.map((a) => ({ id: a.href, href: a.href, label: a.label, icon: a.icon, description: a.description })),
       ],
     },
     {
       id: "elsewhere",
-      label: t.ctx("apps", "Elsewhere"),
+      label: t("apps.elsewhere"),
       items: LINKS.map((l) => ({
         id: l.name,
         href: l.href,
         label: l.name,
         icon: l.icon,
-        description: l.description(t),
+        description: t(l.description),
         external: true,
         ...(l.newTab && { target: "_blank" as const, trailing: <ArrowUpRight aria-hidden className="size-4 shrink-0 text-ink-soft" /> }),
       })),
@@ -203,9 +203,9 @@ function AppSwitcher() {
   const pathname = usePathname();
   const groups = useSwitcherGroups();
   return (
-    <NavigationMenu viewport={false} aria-label={t("Switch service")}>
+    <NavigationMenu viewport={false} aria-label={t("apps.switch")}>
       <NavigationMenuList>
-        <NavMenu label={<span className="text-base font-semibold whitespace-nowrap text-ink">{t("Service-Arb")}</span>} href="/" current={pathname === "/"} linkComponent={Link} className="shrink-0 px-2">
+        <NavMenu label={<span className="text-base font-semibold whitespace-nowrap text-ink">{t("app.name")}</span>} href="/" current={pathname === "/"} linkComponent={Link} className="shrink-0 px-2">
           <NavMenuList groups={groups} pathname={pathname} linkComponent={Link} />
         </NavMenu>
       </NavigationMenuList>
@@ -219,9 +219,9 @@ function AlertsLink() {
   const alerts = useAlerts();
   return (
     <Button asChild variant="ghost" size="sm" icon className="relative">
-      <Link href={ROUTES.alerts} aria-label={t("Alerts")}>
+      <Link href={ROUTES.alerts} aria-label={t("nav.alerts")}>
         <Bell aria-hidden />
-        {alerts.status === "ok" && unreached(alerts.data) && <NavDot corner tone="warn" label={t("Connect Telegram")} />}
+        {alerts.status === "ok" && unreached(alerts.data) && <NavDot corner tone="warn" label={t("alerts.connect")} />}
       </Link>
     </Button>
   );
@@ -233,13 +233,13 @@ function LanguageMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" icon aria-label={t("Language")}>
+        <Button type="button" variant="ghost" size="sm" icon aria-label={t("nav.language")}>
           <Globe aria-hidden />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuRadioGroup value={locale} onValueChange={(l) => chooseLocale(l as Locale)}>
-          {Object.entries(i18n.labels).map(([l, name]) => (
+          {Object.entries(LOCALES).map(([l, name]) => (
             <DropdownMenuRadioItem key={l} value={l} lang={l}>
               {name}
             </DropdownMenuRadioItem>
@@ -257,11 +257,11 @@ function ScreensMenu() {
   const t = useT();
   const me = useMe();
   const pathname = usePathname();
-  const label = { sources: t("Sources"), usage: t("Usage") };
+  const label = { sources: t("nav.sources"), usage: t("usage.title") };
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" icon className="hidden md:inline-flex" aria-label={t("Menu")}>
+        <Button type="button" variant="ghost" size="sm" icon className="hidden md:inline-flex" aria-label={t("nav.menu")}>
           <Menu aria-hidden />
         </Button>
       </DropdownMenuTrigger>
@@ -287,10 +287,10 @@ function OwnScreens({ bar = false, className, onNavigate }: { bar?: boolean; cla
   const tokens = useTokens();
   const pathname = usePathname();
   const label = {
-    sources: t("Sources"),
-    usage: t("Usage"),
-    tokens: tokens.status === "ok" ? t("{n} tokens", { n: tokens.data.balance }) : t("Tokens"),
-    wallet: t("Wallet"),
+    sources: t("nav.sources"),
+    usage: t("usage.title"),
+    tokens: tokens.status === "ok" ? t("tokens.count", { n: tokens.data.balance }) : t("nav.tokens"),
+    wallet: t("nav.wallet"),
   };
   return (
     <div className={cn("flex items-center gap-1", className)}>

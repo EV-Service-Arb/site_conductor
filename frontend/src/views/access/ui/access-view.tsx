@@ -15,8 +15,8 @@ export function AccessView() {
     return (
       <Empty className="min-h-svh">
         <EmptyHeader>
-          <EmptyTitle>{t("This link is not valid")}</EmptyTitle>
-          <EmptyDescription>{t("It names no access the Service-Arb panel gives. Go back to where you came from and start again.")}</EmptyDescription>
+          <EmptyTitle>{t("access.invalid.title")}</EmptyTitle>
+          <EmptyDescription>{t("access.invalid.body")}</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );

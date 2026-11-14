@@ -4,7 +4,7 @@ import { Badge, Button, Input, Switch } from "@evinvest/uikit";
 import { RotateCcw, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import { openTrash, restoreGmail, restoreGmb, setTrashSettings, STATE_LABEL, type State, type Trash, useGmails } from "@/entities/gmb";
+import { type State, type Trash, openTrash, restoreGmail, restoreGmb, setTrashSettings, useGmails } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -30,7 +30,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
   const [busy, setBusy] = useState(false);
   const now = new Date().toISOString();
   const meta = (removed: string, purge: string | null) =>
-    [days(removed, now) === 0 ? t("removed today") : t("removed {days} d ago", { days: days(removed, now) }), purge === null ? t("kept until restored") : t("gone for good in {days} d", { days: days(now, purge) })].join(" · ");
+    [days(removed, now) === 0 ? t("trash.removed.today") : t("trash.removed", { days: days(removed, now) }), purge === null ? t("trash.kept") : t("trash.gone", { days: days(now, purge) })].join(" · ");
   const act = async (run: () => Promise<void>) => {
     setBusy(true);
     try {
@@ -55,48 +55,48 @@ export function TrashWindow({ trash }: { trash: Trash }) {
       </div>
       <Button variant="outline" size={button("sm")} disabled={busy || blocked !== null} title={blocked ?? undefined} onClick={() => act(restore)}>
         <RotateCcw aria-hidden />
-        {t("Restore")}
+        {t("trash.restore")}
       </Button>
     </li>
   );
 
   return (
-    <section aria-label={t("Trash")} className="absolute inset-y-0 right-0 left-0 flex flex-col overflow-y-auto border-l border-border bg-background md:left-36">
+    <section aria-label={t("trash.title")} className="absolute inset-y-0 right-0 left-0 flex flex-col overflow-y-auto border-l border-border bg-background md:left-36">
       <header className="flex items-start gap-3 border-b border-border px-6 pt-4 pb-3">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
             <Trash2 aria-hidden className="size-4 shrink-0 text-ink-soft" />
-            {t("Trash")}
+            {t("trash.title")}
           </h2>
-          <p className="text-sm text-ink-soft">{t("What you removed: every service stops working on it until it is restored.")}</p>
+          <p className="text-sm text-ink-soft">{t("trash.what")}</p>
         </div>
-        <Button variant="ghost" size={button("sm")} icon aria-label={t("Close the window")} title={t("Close the window")} onClick={() => openTrash(false)}>
+        <Button variant="ghost" size={button("sm")} icon aria-label={t("window.close")} title={t("window.close")} onClick={() => openTrash(false)}>
           <X aria-hidden />
         </Button>
       </header>
       <div className="flex max-w-3xl flex-col gap-6 p-6">
         <Settings trash={trash} onSet={reload} />
         {trash.gmails.length === 0 && trash.gmbs.length === 0 ? (
-          <p className="text-sm text-ink-soft">{t("Nothing removed.")}</p>
+          <p className="text-sm text-ink-soft">{t("trash.empty")}</p>
         ) : (
           <>
             {trash.gmails.length > 0 && (
               <section className={SECTION}>
                 <h3 className={SECTION_HEAD}>
-                  {t("Gmails")} <span className="font-normal tabular-nums">{trash.gmails.length}</span>
+                  {t("trash.gmails")} <span className="font-normal tabular-nums">{trash.gmails.length}</span>
                 </h3>
                 <ul className="flex flex-col">
-                  {trash.gmails.map((g) => row(`g${g.id}`, g.gmail, t("{n} GBPs with it", { n: g.gmbs }), null, undefined, g.removed_at, g.purge_at, g.blocked, () => restoreGmail(g.id)))}
+                  {trash.gmails.map((g) => row(`g${g.id}`, g.gmail, t("trash.with", { n: g.gmbs }), null, undefined, g.removed_at, g.purge_at, g.blocked, () => restoreGmail(g.id)))}
                 </ul>
               </section>
             )}
             {trash.gmbs.length > 0 && (
               <section className={SECTION}>
                 <h3 className={SECTION_HEAD}>
-                  {t("GBPs removed on their own")} <span className="font-normal tabular-nums">{trash.gmbs.length}</span>
+                  {t("trash.gmbs")} <span className="font-normal tabular-nums">{trash.gmbs.length}</span>
                 </h3>
                 <ul className="flex flex-col">
-                  {trash.gmbs.map((b) => row(`b${b.id}`, b.name, b.gmail, STATE_LABEL[b.state](t), TONE[b.state], b.removed_at, b.purge_at, b.blocked, () => restoreGmb(b.id)))}
+                  {trash.gmbs.map((b) => row(`b${b.id}`, b.name, b.gmail, t(`gmbs.state.${b.state}`), TONE[b.state], b.removed_at, b.purge_at, b.blocked, () => restoreGmb(b.id)))}
                 </ul>
               </section>
             )}
@@ -130,7 +130,7 @@ function Settings({ trash, onSet }: { trash: Trash; onSet: () => void }) {
   return (
     <section className="flex flex-col gap-2 rounded-lg border border-border p-3">
       <label className="flex items-center gap-2 text-sm text-ink">
-        {t("Keep for")}
+        {t("trash.keep.before")}
         <Input
           type="number"
           min={1}
@@ -143,16 +143,16 @@ function Settings({ trash, onSet }: { trash: Trash; onSet: () => void }) {
           onBlur={commit}
           onKeyDown={(e) => e.key === "Enter" && commit()}
         />
-        {t("days, then delete for good")}
+        {t("trash.keep.after")}
         <span className="text-xs text-ink-soft tabular-nums">1–90</span>
       </label>
       {may(me, "sa:admin:trash:keep") && (
         <label className="flex items-center gap-2 text-sm text-ink">
           <Switch checked={never_purge} onCheckedChange={(on) => void save(keep_days, on)} />
-          {t("Never delete for good")}
+          {t("trash.never")}
         </label>
       )}
-      {never_purge && <p className="text-xs text-ink-soft">{t("Nothing here is deleted for good.")}</p>}
+      {never_purge && <p className="text-xs text-ink-soft">{t("trash.never.on")}</p>}
     </section>
   );
 }

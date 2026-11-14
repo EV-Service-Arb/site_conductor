@@ -29,7 +29,7 @@ export function useKept(): string {
   const trash = useTrash();
   if (trash.status !== "ok") return "";
   const { never_purge, keep_days } = trash.data.settings;
-  return never_purge ? t(", kept until you restore it") : t(", restorable for {days} days", { days: keep_days });
+  return never_purge ? t("trash.for.ever") : t("trash.for.days", { days: keep_days });
 }
 
 export const HEADING = "flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-medium tracking-wide text-ink-soft uppercase";
@@ -67,9 +67,9 @@ export function RemoveDialog({ title, body, remove, onRemoved, onClose }: { titl
           <AlertDialogDescription>{body}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t("Cancel")}</AlertDialogCancel>
+          <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t("move.cancel")}</AlertDialogCancel>
           <AlertDialogAction className={buttonVariants({ variant: "destructive", size: button() })} onClick={() => void act()}>
-            {t("Remove")}
+            {t("gmbs.remove")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -80,7 +80,7 @@ export function RemoveDialog({ title, body, remove, onRemoved, onClose }: { titl
 export function ResetSelection() {
   const t = useT();
   return (
-    <button type="button" onClick={() => select(null)} aria-label={t("Reset selection")} title={t("Reset selection")} className="rounded p-0.5 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+    <button type="button" onClick={() => select(null)} aria-label={t("gmbs.reset")} title={t("gmbs.reset")} className="rounded p-0.5 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
       <X aria-hidden className="size-3.5" />
     </button>
   );

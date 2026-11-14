@@ -16,7 +16,7 @@ export function ClaimButton({ total, onClaimed }: { total: number; onClaimed: ()
     setBusy(true);
     try {
       await claimKickbacks();
-      toast.positive(t("{n} tokens claimed", { n: total }));
+      toast.positive(t("tokens.claimed", { n: total }));
       onClaimed();
     } catch (e) {
       notifyFailure(e, t);
@@ -26,7 +26,7 @@ export function ClaimButton({ total, onClaimed }: { total: number; onClaimed: ()
   };
   return (
     <Button size={button("sm")} disabled={busy} onClick={() => void claim()}>
-      {t("Claim")}
+      {t("tokens.claim")}
     </Button>
   );
 }

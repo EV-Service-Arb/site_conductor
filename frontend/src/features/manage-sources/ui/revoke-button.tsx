@@ -26,7 +26,7 @@ export function RevokeButton({ keyId, onRevoked }: { keyId: string; onRevoked: (
   const revoke = async () => {
     try {
       await revokeSource(keyId);
-      toast.positive(t("Source revoked"));
+      toast.positive(t("sources.revoked.toast"));
       onRevoked();
     } catch (e) {
       notifyFailure(e, t);
@@ -36,18 +36,18 @@ export function RevokeButton({ keyId, onRevoked }: { keyId: string; onRevoked: (
     <AlertDialog>
       <AlertDialogTrigger asChild>
         <Button variant="ghost" size={button("sm")}>
-          {t("Revoke")}
+          {t("sources.revoke")}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{t("Revoke {key}?", { key: keyId })}</AlertDialogTitle>
-          <AlertDialogDescription>{t("Events signed with this key will be refused from now on. This cannot be undone; a new key has to be added instead.")}</AlertDialogDescription>
+          <AlertDialogTitle>{t("sources.revoke.title", { key: keyId })}</AlertDialogTitle>
+          <AlertDialogDescription>{t("sources.revoke.body")}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t("Cancel")}</AlertDialogCancel>
+          <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t("move.cancel")}</AlertDialogCancel>
           <AlertDialogAction className={buttonVariants({ variant: "destructive", size: button() })} onClick={() => void revoke()}>
-            {t("Revoke")}
+            {t("sources.revoke.confirm")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

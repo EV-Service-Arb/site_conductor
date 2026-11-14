@@ -3,7 +3,7 @@
 import { Button, NativeSelect, NativeSelectOption, Settled, Skeleton, cn } from "@evinvest/uikit";
 import { Mail, X } from "lucide-react";
 
-import { ACCOUNT_TABS, type AccountTab, fetchConnections, type Gmail, GMAIL_ROLE_LABEL, GMAIL_ROLES, type GmailRole, openAccount, setGmailRole, useGmails } from "@/entities/gmb";
+import { ACCOUNT_TABS, type AccountTab, GMAIL_ROLES, type Gmail, type GmailRole, fetchConnections, openAccount, setGmailRole, useGmails } from "@/entities/gmb";
 import { BrowserSession } from "@/features/browser-session";
 import { ImapCard } from "@/features/connect-imap";
 import { BrowserCard } from "@/features/set-browser";
@@ -28,11 +28,11 @@ export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Account
             <span className="truncate">{gmail.gmail}</span>
           </h2>
           <p className="flex items-center gap-2 text-sm text-ink-soft tabular-nums">
-            {t("{n} GBP", { n: gbps })}
+            {t("account.gbps", { n: gbps })}
             <RoleSelect gmail={gmail} />
           </p>
         </div>
-        <Button variant="ghost" size={button("sm")} icon aria-label={t("Close the window")} title={t("Close the window")} onClick={() => openAccount(null)}>
+        <Button variant="ghost" size={button("sm")} icon aria-label={t("window.close")} title={t("window.close")} onClick={() => openAccount(null)}>
           <X aria-hidden />
         </Button>
       </header>
@@ -46,7 +46,7 @@ export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Account
             onClick={() => openAccount({ gmail: gmail.id, tab: k })}
             className={cn("-mb-px border-b-2 px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring", k === tab ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink")}
           >
-            {k === "connections" ? t("Connections") : t("Browser")}
+            {t(`account.tab.${k}`)}
           </button>
         ))}
       </nav>
@@ -89,15 +89,15 @@ function RoleSelect({ gmail }: { gmail: Gmail }) {
     <NativeSelect
       size="sm"
       wrapperClassName="w-28 shrink-0"
-      aria-label={t("Role of {gmail} on its GBPs", { gmail: gmail.gmail })}
-      title={t("optional · owners usually hold up to 3 GBPs, managers 6")}
+      aria-label={t("gmbs.gmail.role", { gmail: gmail.gmail })}
+      title={t("gmbs.gmail.role.hint")}
       value={gmail.role ?? ""}
       onChange={(e) => void pick(e.target.value === "" ? null : (e.target.value as GmailRole))}
     >
-      <NativeSelectOption value="">{t("No role")}</NativeSelectOption>
+      <NativeSelectOption value="">{t("gmbs.gmail.role.pick")}</NativeSelectOption>
       {GMAIL_ROLES.map((r) => (
         <NativeSelectOption key={r} value={r}>
-          {GMAIL_ROLE_LABEL[r](t)}
+          {t(`gmbs.gmail.role.${r}`)}
         </NativeSelectOption>
       ))}
     </NativeSelect>

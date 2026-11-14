@@ -40,14 +40,14 @@ export function Assistant() {
   const view = <ChatView id={s.current} display={shown} onOpen={openChat} onHide={fold} />;
   if (!desktop)
     return (
-      <section aria-label={t("Assistant")} onKeyDown={(e) => hideOnEscape(e, fold)} className="absolute inset-0 z-30 flex flex-col bg-card">
+      <section aria-label={t("assistant")} onKeyDown={(e) => hideOnEscape(e, fold)} className="absolute inset-0 z-30 flex flex-col bg-card">
         {view}
       </section>
     );
   if (shown === "floating")
     return (
       <section
-        aria-label={t("Assistant")}
+        aria-label={t("assistant")}
         onKeyDown={(e) => hideOnEscape(e, fold)}
         className="absolute right-3.5 bottom-3.5 z-30 flex h-125 w-112 flex-col overflow-hidden rounded-t-3xl rounded-b-4xl bg-card shadow-overlay ring-1 ring-border"
       >
@@ -86,12 +86,12 @@ export function AssistantToggle() {
       className="relative"
       onClick={() => show(shown !== null ? null : s.mode)}
       aria-pressed={shown !== null}
-      aria-label={t("Assistant: show or hide")}
-      title={keys === undefined ? t("Assistant: show or hide") : `${t("Assistant: show or hide")} · ${keys}`}
+      aria-label={t("keys.assistant")}
+      title={keys === undefined ? t("keys.assistant") : `${t("keys.assistant")} · ${keys}`}
     >
       <Sparkles aria-hidden className={cn(running && "animate-pulse")} />
       {running && <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary [animation-duration:1.4s]" />}
-      {s.unread && !running && <NavDot corner label={t("New answer")} />}
+      {s.unread && !running && <NavDot corner label={t("assistant.unread")} />}
     </Button>
   );
 }
@@ -115,11 +115,11 @@ function Dock({ width, onHide, children }: { width: number; onHide: () => void; 
   const t = useT();
   const [dragging, setDragging] = useState(false);
   return (
-    <aside aria-label={t("Assistant")} style={{ width }} onKeyDown={(e) => hideOnEscape(e, onHide)} className="relative flex shrink-0 flex-col border-l border-border bg-card">
+    <aside aria-label={t("assistant")} style={{ width }} onKeyDown={(e) => hideOnEscape(e, onHide)} className="relative flex shrink-0 flex-col border-l border-border bg-card">
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label={t("Resize the assistant")}
+        aria-label={t("assistant.resize")}
         aria-valuemin={WIDTH.min}
         aria-valuemax={WIDTH.max}
         aria-valuenow={width}

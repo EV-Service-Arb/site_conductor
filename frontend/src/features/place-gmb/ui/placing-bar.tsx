@@ -68,13 +68,13 @@ export function PlacingBar({ gmb, map, at, onMove }: { gmb: Gmb; map: google.map
 
   return (
     <div className="absolute inset-x-4 bottom-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background p-3 shadow-overlay">
-      <p className="min-w-0 flex-1 basis-60 text-sm text-ink">{t("Placing {name} · click the map or drag the pin", { name: gmb.name ?? gmb.place_id })}</p>
+      <p className="min-w-0 flex-1 basis-60 text-sm text-ink">{t("home.placing", { name: gmb.name ?? gmb.place_id })}</p>
       <div ref={search} className="min-w-0 flex-1 basis-60" />
       <Button variant="outline" size={button()} onClick={() => setOnMap({ placing: null })}>
-        {t("Cancel")}
+        {t("move.cancel")}
       </Button>
       <Button size={button()} disabled={busy} onClick={() => void set()}>
-        {t("Set here")}
+        {t("home.placing.set")}
       </Button>
     </div>
   );

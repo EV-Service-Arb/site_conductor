@@ -81,11 +81,11 @@ export function SignInOverlay() {
       {state === "dismissed" && (
         <Empty className="fixed inset-0 z-50 bg-background">
           <EmptyHeader>
-            <EmptyTitle>{t("Your session has ended")}</EmptyTitle>
-            <EmptyDescription>{t("Sign in to continue.")}</EmptyDescription>
+            <EmptyTitle>{t("signin.expired.title")}</EmptyTitle>
+            <EmptyDescription>{t("signin.expired.body")}</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button size={button()} onClick={openOverlay}>{t("Sign in")}</Button>
+            <Button size={button()} onClick={openOverlay}>{t("signin.expired.action")}</Button>
           </EmptyContent>
         </Empty>
       )}

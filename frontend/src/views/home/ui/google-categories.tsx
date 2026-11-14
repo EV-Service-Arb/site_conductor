@@ -38,20 +38,20 @@ export function GoogleCategories({ category, write }: { category: Category; writ
       <span className="flex items-center gap-2">
         <Picker country={category.country} lang={category.lang} exclude={primary === null ? new Set() : new Set([primary.id])} onPick={(g) => write({ google_primary: g, google_additional: additional.filter((a) => a.id !== g.id) })}>
           <Button variant="outline" size={button("sm")} className={cn("max-w-md min-w-0 flex-1 justify-between", primary === null && "border-accent-warn/60 text-accent-warn")}>
-            <span className="truncate">{primary === null ? t("Pick Google's primary category") : googleName(primary, locale)}</span>
+            <span className="truncate">{primary === null ? t("trades.google.pick") : googleName(primary, locale)}</span>
             <ChevronsUpDown aria-hidden className="text-ink-soft" />
           </Button>
         </Picker>
         {primary !== null && (
           <Button type="button" variant="ghost" size={button("sm")} title={googleName(primary, category.lang)} onClick={() => void navigator.clipboard.writeText(googleName(primary, category.lang))}>
             <Copy aria-hidden />
-            {t("Copy")}
+            {t("trades.google.copy")}
           </Button>
         )}
       </span>
 
       <h4 className="mt-2 flex items-baseline gap-2 text-xs font-medium text-ink-soft">
-        {t("Additional categories")}
+        {t("trades.google.additional")}
         <span className="flex-1" />
         <span className="font-mono tabular-nums">
           {additional.length} / {MAX_ADDITIONAL}
@@ -92,34 +92,34 @@ export function GoogleCategories({ category, write }: { category: Category; writ
             <GripVertical aria-hidden className="size-3 text-ink-faint" />
             <span className="font-mono text-ink-soft tabular-nums">{i + 1}</span>
             <span className="px-0.5">{googleName(g, locale)}</span>
-            <ChipButton label={t("Move {category} earlier", { category: googleName(g, locale) })} disabled={i === 0} onClick={() => move(i, i - 1)}>
+            <ChipButton label={t("trades.google.additional.earlier", { category: googleName(g, locale) })} disabled={i === 0} onClick={() => move(i, i - 1)}>
               <ChevronLeft aria-hidden className="size-3" />
             </ChipButton>
-            <ChipButton label={t("Move {category} later", { category: googleName(g, locale) })} disabled={i === additional.length - 1} onClick={() => move(i, i + 1)}>
+            <ChipButton label={t("trades.google.additional.later", { category: googleName(g, locale) })} disabled={i === additional.length - 1} onClick={() => move(i, i + 1)}>
               <ChevronRight aria-hidden className="size-3" />
             </ChipButton>
-            <ChipButton label={t("Remove {category}", { category: googleName(g, locale) })} onClick={() => write({ google_primary: primary, google_additional: additional.filter((a) => a.id !== g.id) })}>
+            <ChipButton label={t("trades.google.additional.remove", { category: googleName(g, locale) })} onClick={() => write({ google_primary: primary, google_additional: additional.filter((a) => a.id !== g.id) })}>
               <X aria-hidden className="size-3" />
             </ChipButton>
           </li>
         ))}
         <li>
           {primary === null || full ? (
-            <Button variant="ghost" size={button("sm")} disabled title={(full ? t("Google takes 9 at most") : t("Pick the primary category first"))}>
+            <Button variant="ghost" size={button("sm")} disabled title={t(full ? "trades.google.additional.full" : "trades.google.additional.needPrimary")}>
               <Plus aria-hidden />
-              {t("Add")}
+              {t("trades.google.additional.add")}
             </Button>
           ) : (
             <Picker country={category.country} lang={category.lang} exclude={taken} onPick={(g) => write({ google_primary: primary, google_additional: [...additional, g] })}>
               <Button variant="ghost" size={button("sm")}>
                 <Plus aria-hidden />
-                {t("Add")}
+                {t("trades.google.additional.add")}
               </Button>
             </Picker>
           )}
         </li>
       </ol>
-      <p className="text-xs text-ink-soft">{(primary === null ? t("Pick the primary category first") : (full ? t("Google takes 9 at most") : t("Typed into Google's form in this order after the primary, and the order matters. Drag a chip, or move it with ‹ ›.")))}</p>
+      <p className="text-xs text-ink-soft">{t(primary === null ? "trades.google.additional.needPrimary" : full ? "trades.google.additional.full" : "trades.google.additional.order")}</p>
     </>
   );
 }
@@ -197,9 +197,9 @@ function Search({ country, lang, exclude, onPick }: { country: Country; lang: st
 
   return (
     <Command shouldFilter={false} search={search} onSearchChange={setSearch}>
-      <CommandInput placeholder={t("Search Google's categories")} />
+      <CommandInput placeholder={t("trades.google.search")} />
       <CommandList>
-        {list.status === "loading" && <p className="px-3 py-2 text-sm text-ink-soft">{t("Loading…")}</p>}
+        {list.status === "loading" && <p className="px-3 py-2 text-sm text-ink-soft">{t("state.loading")}</p>}
         {list.status === "error" && <p className="px-3 py-2 text-sm text-accent-error">{failureText(list.failure, t)}</p>}
         {ranked.slice(0, SHOWN).map(({ g, shown }) => (
           <CommandItem key={g.id} value={g.id} onSelect={() => onPick(g)}>
@@ -209,8 +209,8 @@ function Search({ country, lang, exclude, onPick }: { country: Country; lang: st
             <span className="max-w-[40%] truncate font-mono text-xs text-ink-faint">{g.id.replace(/^gcid:/, "")}</span>
           </CommandItem>
         ))}
-        {ranked.length > SHOWN && <p className="px-3 py-2 text-xs text-ink-soft">{t("{n} more: keep typing", { n: ranked.length - SHOWN })}</p>}
-        <CommandEmpty>{t("Google lists no such category")}</CommandEmpty>
+        {ranked.length > SHOWN && <p className="px-3 py-2 text-xs text-ink-soft">{t("trades.google.more", { n: ranked.length - SHOWN })}</p>}
+        <CommandEmpty>{t("trades.google.nothing")}</CommandEmpty>
       </CommandList>
     </Command>
   );

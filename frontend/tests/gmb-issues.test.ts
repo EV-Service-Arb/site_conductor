@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ArchiveTag, Gmail, Gmb, GoogleCategory, SiteTag, Trade } from "@/entities/gmb/model/gmb";
 import { type Issue, type Tags, issueCounts, issueOf, issueText } from "@/entities/gmb/model/issues";
 import { readiness } from "@/entities/gmb/model/readiness";
-import { i18n } from "@/shared/i18n/registry";
+import { translator } from "@/shared/i18n/translate";
 
 const GMAIL = 1;
 const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
@@ -140,6 +140,6 @@ describe("a draft's readiness", () => {
   it("is a draft's issue, after overdue leads and before a missing point, told as its count", () => {
     const tags: Tags = { archive: null, sites: new Map([[2, site(1)]]), trades: plumbing() };
     check([draft(1, full), draft(2), gmb(3, { located: false })], tags, { 1: "draft", 2: "overdue", 3: "unlocated" });
-    expect(issueText("draft", listed(draft(1, full)), tags, i18n.translator({}, "en", () => {}))).toBe("8/9");
+    expect(issueText("draft", listed(draft(1, full)), tags, translator("en"))).toBe("8/9");
   });
 });

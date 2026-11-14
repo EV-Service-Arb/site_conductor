@@ -1,4 +1,3 @@
-import type { T } from "@/shared/i18n";
 import { type Infer, type Parser, arrayOf, bool, nullable, num, object, oneOf, recordOf, str } from "@/shared/lib/parse";
 
 import type { Candidates, Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategories, GoogleCategory, MapConfig, OnGoogle, Place, State, Suggestion, Suggestions, Trade, Trades } from "./generated";
@@ -8,12 +7,10 @@ export type { Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategory, 
 export type LatLng = { lat: number; lng: number };
 
 /** Each a key, so the compiler holds the lists to the generated unions. */
-export const STATE_LABEL = { draft: (t) => t("Draft"), verifying: (t) => t("Verifying"), verified: (t) => t("Verified"), suspended: (t) => t("Suspended") } satisfies Record<State, (t: T) => string>;
-export const STATES = Object.keys(STATE_LABEL) as State[];
+export const STATES = Object.keys({ draft: true, verifying: true, verified: true, suspended: true } satisfies Record<State, true>) as State[];
 export const ON_GOOGLE = Object.keys({ verifying: true, verified: true, suspended: true } satisfies Record<OnGoogle, true>) as OnGoogle[];
 export const COUNTRIES = Object.keys({ FR: true, US: true, CA: true, GB: true } satisfies Record<Country, true>) as Country[];
-export const GMAIL_ROLE_LABEL = { owner: (t) => t("Owner"), manager: (t) => t("Manager") } satisfies Record<GmailRole, (t: T) => string>;
-export const GMAIL_ROLES = Object.keys(GMAIL_ROLE_LABEL) as GmailRole[];
+export const GMAIL_ROLES = Object.keys({ owner: true, manager: true } satisfies Record<GmailRole, true>) as GmailRole[];
 
 export const gmbParser: Parser<Gmb> = object({
   id: num,

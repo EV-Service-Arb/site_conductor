@@ -25,17 +25,12 @@ import { MapPin, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 
-import { addGmail, addGmb, type Candidate, COUNTRIES, type Country, createGmb, resolvePlace, setOnMap, type State, STATE_LABEL, STATES, type Suggestion, suggestPlaces, TradeSelect, useGmails } from "@/entities/gmb";
-import { type T, useT } from "@/shared/i18n";
+import { COUNTRIES, type Candidate, type Country, type State, type Suggestion, TradeSelect, addGmail, addGmb, createGmb, resolvePlace, setOnMap, suggestPlaces, useGmails } from "@/entities/gmb";
+import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
-const HINT = {
-  draft: (t) => t("Not on Google yet. Everything Google's form asks is filled on its Launch tab."),
-  verifying: (t) => t("Sent to Google, not published yet, so not findable: its place comes once verified."),
-  verified: (t) => t("Public on Maps: Google has its place, its point and its country."),
-  suspended: (t) => t("Hidden from Maps, so Google won't find it: its place comes once it is reinstated."),
-} satisfies Record<State, (t: T) => string>;
+const STATES: readonly State[] = ["draft", "verifying", "verified", "suspended"];
 /** Each distinct input is a billed request: asked only once typing pauses. */
 const PAUSE_MS = 350;
 const MIN_INPUT = 3;
@@ -108,7 +103,7 @@ export function AddGmbButton({ gmailId, trade: scoped, labeled, onAdded }: { gma
     }
   };
 
-  const label = t("Add a GBP");
+  const label = t("gmbs.gmb.add");
   return (
     <>
       <Button
@@ -136,7 +131,7 @@ export function AddGmbButton({ gmailId, trade: scoped, labeled, onAdded }: { gma
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{label}</DialogTitle>
-            <DialogDescription>{HINT[state](t)}</DialogDescription>
+            <DialogDescription>{t(`add.state.${state}.hint`)}</DialogDescription>
           </DialogHeader>
           <form
             className="flex flex-col gap-4"
@@ -150,7 +145,7 @@ export function AddGmbButton({ gmailId, trade: scoped, labeled, onAdded }: { gma
               variant="outline"
               size={button("sm")}
               value={state}
-              aria-label={t("Its state on Google")}
+              aria-label={t("gmbs.gbp.state")}
               onValueChange={(v) => {
                 if (v === "") return;
                 setState(v as State);
@@ -160,68 +155,68 @@ export function AddGmbButton({ gmailId, trade: scoped, labeled, onAdded }: { gma
             >
               {STATES.map((s) => (
                 <ToggleGroupItem key={s} value={s} className="flex-1">
-                  {STATE_LABEL[s](t)}
+                  {t(`gmbs.state.${s}`)}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
             <Field className="flex flex-col gap-1">
-              <FieldLabel>{t("Trade")}</FieldLabel>
-              <TradeSelect value={trade} onPick={setTrade} label={t("Trade")} country={where} className="w-full" />
+              <FieldLabel>{t("trades.trade")}</FieldLabel>
+              <TradeSelect value={trade} onPick={setTrade} label={t("trades.trade")} country={where} className="w-full" />
             </Field>
             {verified ? (
               <Field className="flex flex-col gap-1">
-                <FieldLabel>{t("Find it on Google")}</FieldLabel>
-                <PlaceSearch key={state} gmail={gmail} placeholder={t("Its name and city, a Maps link or a place id")} picked={picked} onPick={setPicked} />
+                <FieldLabel>{t("add.find")}</FieldLabel>
+                <PlaceSearch key={state} gmail={gmail} placeholder={t("add.find.placeholder")} picked={picked} onPick={setPicked} />
               </Field>
             ) : (
               <>
                 <Field className="flex flex-col gap-1">
-                  <FieldLabel htmlFor={`${id}-name`}>{t("Name")}</FieldLabel>
+                  <FieldLabel htmlFor={`${id}-name`}>{t("gmbs.gbp.name")}</FieldLabel>
                   <Input id={`${id}-name`} size={size} value={name} onChange={(e) => setName(e.target.value)} />
                 </Field>
                 <Field className="flex flex-col gap-1">
                   <FieldLabel>
-                    {t("Where")}
-                    {draft && <span className="font-normal text-ink-faint">{t("optional for a draft")}</span>}
+                    {t("add.where")}
+                    {draft && <span className="font-normal text-ink-faint">{t("add.optional")}</span>}
                   </FieldLabel>
-                  <PlaceSearch key={state} gmail={gmail} placeholder={t("An address, a street or a business nearby")} picked={picked} onPick={setPicked} />
-                  <FieldDescription>{t("Its point on the map, and its country, which its reviews' language follows.")}</FieldDescription>
+                  <PlaceSearch key={state} gmail={gmail} placeholder={t("add.where.placeholder")} picked={picked} onPick={setPicked} />
+                  <FieldDescription>{t("add.where.hint")}</FieldDescription>
                 </Field>
               </>
             )}
             {verified && picked !== null && picked.name === null && (
               <Field className="flex flex-col gap-1">
-                <FieldLabel htmlFor={`${id}-name`}>{t("Name")}</FieldLabel>
+                <FieldLabel htmlFor={`${id}-name`}>{t("gmbs.gbp.name")}</FieldLabel>
                 <Input id={`${id}-name`} size={size} value={name} onChange={(e) => setName(e.target.value)} />
-                <FieldDescription>{t("Google gives this place no name.")}</FieldDescription>
+                <FieldDescription>{t("add.name.unnamed")}</FieldDescription>
               </Field>
             )}
             {picked !== null && picked.country === null && (verified || !draft) && (
               <Field className="flex flex-col gap-1">
-                <FieldLabel>{t("Country")}</FieldLabel>
-                <NativeSelect size={size} wrapperClassName="w-full" aria-label={t("Country")} value={country ?? ""} onChange={(e) => setCountry(e.target.value === "" ? null : (e.target.value as Country))}>
-                  <NativeSelectOption value="">{t("Pick its country")}</NativeSelectOption>
+                <FieldLabel>{t("gmbs.gbp.country")}</FieldLabel>
+                <NativeSelect size={size} wrapperClassName="w-full" aria-label={t("gmbs.gbp.country")} value={country ?? ""} onChange={(e) => setCountry(e.target.value === "" ? null : (e.target.value as Country))}>
+                  <NativeSelectOption value="">{t("add.country.pick")}</NativeSelectOption>
                   {COUNTRIES.map((c) => (
                     <NativeSelectOption key={c} value={c}>
                       {c}
                     </NativeSelectOption>
                   ))}
                 </NativeSelect>
-                <FieldDescription>{t("Google gives this place no country.")}</FieldDescription>
+                <FieldDescription>{t("add.country.none")}</FieldDescription>
               </Field>
             )}
             {gmailId === null && (
               <Field className="flex flex-col gap-1">
                 <FieldLabel>
-                  {t("Gmail")}
-                  {draft && <span className="font-normal text-ink-faint">{t("optional for a draft")}</span>}
+                  {t("gmbs.gbp.gmail")}
+                  {draft && <span className="font-normal text-ink-faint">{t("add.optional")}</span>}
                 </FieldLabel>
                 <GmailSelect value={gmail} onPick={setGmail} />
               </Field>
             )}
             <DialogFooter>
               <Button type="submit" size={button()} disabled={busy || !ready}>
-                {(draft ? t("Create the draft") : t("Add a GBP"))}
+                {t(draft ? "gmbs.gbp.create" : "gmbs.gmb.add")}
               </Button>
             </DialogFooter>
           </form>
@@ -281,10 +276,10 @@ function PlaceSearch({ gmail, placeholder, picked, onPick }: { gmail: number | n
           <span className="truncate text-sm text-ink">{picked.name ?? picked.address ?? picked.place_id}</span>
           {picked.name !== null && picked.address !== null && <span className="truncate text-xs text-ink-soft">{picked.address}</span>}
           <span className="text-xs text-ink-faint">
-            {[picked.location === null ? t("no point from Google") : `${picked.location.lat.toFixed(4)}, ${picked.location.lng.toFixed(4)}`, picked.country].filter(Boolean).join(" · ")}
+            {[picked.location === null ? t("add.picked.noPoint") : `${picked.location.lat.toFixed(4)}, ${picked.location.lng.toFixed(4)}`, picked.country].filter(Boolean).join(" · ")}
           </span>
         </span>
-        <Button type="button" variant="ghost" size={button("sm")} icon aria-label={t("Pick another")} title={t("Pick another")} onClick={() => onPick(null)}>
+        <Button type="button" variant="ghost" size={button("sm")} icon aria-label={t("add.picked.clear")} title={t("add.picked.clear")} onClick={() => onPick(null)}>
           <X aria-hidden />
         </Button>
       </div>
@@ -305,8 +300,8 @@ function PlaceSearch({ gmail, placeholder, picked, onPick }: { gmail: number | n
       />
       {(found !== null || resolving) && (
         <CommandList>
-          {resolving && <p className="px-3 py-2 text-sm text-ink-soft">{t("Loading…")}</p>}
-          {found?.length === 0 && <p className="px-3 py-2 text-sm text-ink-soft">{t("No place found.")}</p>}
+          {resolving && <p className="px-3 py-2 text-sm text-ink-soft">{t("state.loading")}</p>}
+          {found?.length === 0 && <p className="px-3 py-2 text-sm text-ink-soft">{t("gmbs.gmb.none")}</p>}
           {found?.map((s) => (
             <CommandItem key={s.place_id} value={s.place_id} onSelect={() => void resolve(s.place_id)}>
               <MapPin aria-hidden className="text-ink-soft" />
@@ -316,7 +311,7 @@ function PlaceSearch({ gmail, placeholder, picked, onPick }: { gmail: number | n
               </span>
             </CommandItem>
           ))}
-          {found !== null && found.length > 0 && <p className="border-t border-border px-3 py-1.5 text-xs text-ink-faint">{t("Google's suggestions · one request per pause in typing · paid once, then kept")}</p>}
+          {found !== null && found.length > 0 && <p className="border-t border-border px-3 py-1.5 text-xs text-ink-faint">{t("add.suggestions")}</p>}
         </CommandList>
       )}
     </Command>
@@ -357,8 +352,8 @@ function GmailSelect({ value, onPick }: { value: number | null; onPick: (gmail: 
           autoFocus
           autoCapitalize="none"
           value={typed}
-          placeholder={t("name@gmail.com")}
-          aria-label={t("New gmail…")}
+          placeholder={t("add.gmail.new.placeholder")}
+          aria-label={t("add.gmail.new")}
           onChange={(e) => setTyped(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -373,10 +368,10 @@ function GmailSelect({ value, onPick }: { value: number | null; onPick: (gmail: 
           className="min-w-0 flex-1"
         />
         <Button type="button" size={button("sm")} disabled={busy || typed.trim() === ""} onClick={() => void add()}>
-          {t("Add")}
+          {t("add.gmail.add")}
         </Button>
         <Button type="button" variant="ghost" size={button("sm")} onClick={() => setNaming(false)}>
-          {t("Cancel")}
+          {t("move.cancel")}
         </Button>
       </span>
     );
@@ -385,7 +380,7 @@ function GmailSelect({ value, onPick }: { value: number | null; onPick: (gmail: 
     <NativeSelect
       size={size}
       wrapperClassName="w-full"
-      aria-label={t("Gmail")}
+      aria-label={t("gmbs.gbp.gmail")}
       disabled={gmails.status !== "ok"}
       value={value === null ? "" : String(value)}
       onChange={(e) => {
@@ -394,14 +389,14 @@ function GmailSelect({ value, onPick }: { value: number | null; onPick: (gmail: 
         else if (v !== "") onPick(Number(v));
       }}
     >
-      {value === null && <NativeSelectOption value="">{t("Pick a gmail")}</NativeSelectOption>}
+      {value === null && <NativeSelectOption value="">{t("add.gmail.pick")}</NativeSelectOption>}
       {gmails.status === "ok" &&
         gmails.data.gmails.map((g) => (
           <NativeSelectOption key={g.id} value={String(g.id)}>
             {g.gmail}
           </NativeSelectOption>
         ))}
-      <NativeSelectOption value={NEW}>{t("New gmail…")}</NativeSelectOption>
+      <NativeSelectOption value={NEW}>{t("add.gmail.new")}</NativeSelectOption>
     </NativeSelect>
   );
 }

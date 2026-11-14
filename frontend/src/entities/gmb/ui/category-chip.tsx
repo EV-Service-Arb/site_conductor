@@ -20,16 +20,16 @@ export function CategoryChip({ gmb }: { gmb: Gmb }) {
     <button
       type="button"
       onClick={() => openTrade(placed.trade.id, country)}
-      title={t("Open its trade")}
+      title={t("window.category.open")}
       className={cn(
         "shrink-0 rounded-full border px-2 py-0.5 text-xs outline-none hover:bg-hover/50 focus-visible:ring-2 focus-visible:ring-ring",
         placed.status === "set_up" ? "border-border text-ink" : "border-accent-warn/40 text-accent-warn",
       )}
     >
       {country === undefined
-        ? t("{trade} · no country", { trade: placed.trade.name })
+        ? t("window.category.noCountry", { trade: placed.trade.name })
         : placed.status === "not_set_up"
-          ? t("{category} · not set up", { category: categoryName(placed.trade, country) })
+          ? t("window.category.notSetUp", { category: categoryName(placed.trade, country) })
           : categoryName(placed.trade, country)}
     </button>
   );

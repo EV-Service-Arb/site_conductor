@@ -7,5 +7,5 @@ import type { SourceKind } from "../model/source";
  * is also what `panel source add --kind` takes; `bot` says which bots it means.
  */
 export function sourceKindLabel(kind: SourceKind, t: T): string {
-  return kind === "bot" ? t("Bot (WhatsApp/Telegram)") : kind;
+  return kind === "bot" ? t("sources.kind.bot") : kind;
 }

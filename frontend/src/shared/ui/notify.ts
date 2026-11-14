@@ -11,5 +11,5 @@ export function notifyFailure(e: unknown, t: T): void {
     if (e.failure.kind !== "unauthenticated") toast.error(failureText(e.failure, t));
     return;
   }
-  toast.error(t("Could not load this. {detail}", { detail: e instanceof Error ? e.message : String(e) }));
+  toast.error(t("state.error", { detail: e instanceof Error ? e.message : String(e) }));
 }

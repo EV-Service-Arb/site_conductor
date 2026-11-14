@@ -33,15 +33,15 @@ export function useControls(): Controls {
 
 export function copyLink(id: string, t: T): void {
   void navigator.clipboard.writeText(chatLink(id)).then(
-    () => toast.positive(t("Link copied")),
+    () => toast.positive(t("assistant.linkCopied")),
     (e: unknown) => notifyFailure(e, t),
   );
 }
 
 const DISPLAYS = [
-  { id: "sidebar", icon: PanelRightOpen, label: (t: T) => t("Sidebar") },
-  { id: "floating", icon: PictureInPicture2, label: (t: T) => t("Floating") },
-  { id: "full", icon: Maximize, label: (t: T) => t("Full screen") },
+  { id: "sidebar", icon: PanelRightOpen },
+  { id: "floating", icon: PictureInPicture2 },
+  { id: "full", icon: Maximize },
 ] as const;
 
 /** The ⋯ menu's items, for the open chat and for a history row alike. `pinOutside`: Pin is a header button of its own. */
@@ -55,50 +55,50 @@ export function ChatActions({ chat, onRename, pinOutside = false }: { chat: Chat
     <>
       <DropdownMenuItem onClick={() => copyLink(chat.id, t)}>
         <Link aria-hidden />
-        {t("Copy link")}
+        {t("assistant.copyLink")}
         <DropdownMenuShortcut>Ctrl+Alt+L</DropdownMenuShortcut>
       </DropdownMenuItem>
       {interacts && !pinOutside && (
         <DropdownMenuItem onClick={() => write(pinChat(chat.id, chat.pinned_at === null))}>
           {chat.pinned_at === null ? <Pin aria-hidden /> : <PinOff aria-hidden />}
-          {(chat.pinned_at === null ? t("Pin") : t("Unpin"))}
+          {t(chat.pinned_at === null ? "assistant.pin" : "assistant.unpin")}
         </DropdownMenuItem>
       )}
       {interacts && (
         <DropdownMenuItem onClick={onRename}>
           <PencilLine aria-hidden />
-          {t("Rename")}
+          {t("assistant.rename")}
         </DropdownMenuItem>
       )}
       {interacts && (
         <DropdownMenuItem onClick={() => write(archiveChat(chat.id, chat.archived_at === null))}>
           {chat.archived_at === null ? <Archive aria-hidden /> : <ArchiveRestore aria-hidden />}
-          {(chat.archived_at === null ? t("Archive") : t("Unarchive"))}
+          {t(chat.archived_at === null ? "assistant.archive" : "assistant.unarchive")}
         </DropdownMenuItem>
       )}
       {chat.role === "owner" && (
         <DropdownMenuItem variant="destructive" onClick={() => onConfirm({ kind: "delete", chat })}>
           <Trash2 aria-hidden />
-          {t("Delete")}
+          {t("assistant.delete")}
         </DropdownMenuItem>
       )}
       {chat.role === "member" && (
         <DropdownMenuItem variant="destructive" onClick={() => onConfirm({ kind: "leave", chat })}>
           <LogOut aria-hidden />
-          {t("Leave")}
+          {t("assistant.leave")}
         </DropdownMenuItem>
       )}
       <DropdownMenuSeparator />
       <DropdownMenuRadioGroup value={display} onValueChange={(d) => onDisplay(chat.id, d as Display)}>
-        {DISPLAYS.map(({ id, icon: Icon, label }) => (
+        {DISPLAYS.map(({ id, icon: Icon }) => (
           <DropdownMenuRadioItem key={id} value={id}>
             <Icon aria-hidden />
-            {label(t)}
+            {t(`assistant.display.${id}`)}
           </DropdownMenuRadioItem>
         ))}
       </DropdownMenuRadioGroup>
       <DropdownMenuSeparator />
-      <p className="px-2 py-1.5 text-caption text-ink-soft">{t("Last updated {when}", { when: ago(chat.updated_at, locale) })}</p>
+      <p className="px-2 py-1.5 text-caption text-ink-soft">{t("assistant.updated", { when: ago(chat.updated_at, locale) })}</p>
     </>
   );
 }

@@ -29,13 +29,13 @@ export function useApps(onNavigate?: () => void): App[] {
       ? [
           {
             href: ROUTES.sites,
-            label: t("Sites"),
+            label: t("nav.sites"),
             icon: Globe,
-            description: t("Leads, locations, pricing, invoices"),
+            description: t("nav.sites.description"),
             here: pathname.startsWith("/sites"),
             section: {
               id: "sites",
-              label: t("Sites"),
+              label: t("nav.sites"),
               icon: Globe,
               menu: true,
               // A click on one of its links has routed (CONTRACT §9).
@@ -50,15 +50,15 @@ export function useApps(onNavigate?: () => void): App[] {
       : []),
     {
       href: ROUTES.reviewArchive,
-      label: t("Review Archive"),
+      label: t("nav.reviewArchive"),
       icon: Archive,
-      description: t("Every place's reviews and their state"),
+      description: t("nav.reviewArchive.description"),
       here: pathname.startsWith("/review_archive"),
       section: {
         id: "archive",
         items: [
-          { id: "places", href: ROUTES.reviewArchive, label: t("Places"), icon: MapPin, description: t("Each place's reviews, newest first") },
-          { id: "settings", href: ROUTES.reviewArchiveSettings, label: t("Settings"), icon: Settings, description: t("How the archive scans and keeps reviews") },
+          { id: "places", href: ROUTES.reviewArchive, label: t("reviewArchive.places"), icon: MapPin, description: t("reviewArchive.places.description") },
+          { id: "settings", href: ROUTES.reviewArchiveSettings, label: t("reviewArchive.settings"), icon: Settings, description: t("reviewArchive.settings.description") },
         ],
       },
     },

@@ -5,25 +5,25 @@ import type { T } from "@/shared/i18n";
 export function failureText(failure: ApiFailure | { kind: "invalid"; message: string }, t: T): string {
   switch (failure.kind) {
     case "csrf":
-      return t("The page is out of date. Reload it and repeat the action.");
+      return t("state.csrf");
     case "forbidden":
-      return t("Your role may not do this.");
+      return t("state.forbidden");
     case "unavailable":
-      return t("Try again in a minute. You are still signed in.");
+      return t("state.unavailable.body");
     case "no_access":
-      return t("No access to the Service-Arb panel");
+      return t("state.noAccess.title");
     case "bad_request":
     case "conflict":
       return failure.message;
     case "invalid_fields":
-      return Object.values(failure.fields).join(" · ") || t("Could not load this. {detail}", { detail: "422" });
+      return Object.values(failure.fields).join(" · ") || t("state.error", { detail: "422" });
     case "invalid_path":
       return `${failure.path}: ${failure.message}`;
     case "failed":
-      return t("Could not load this. {detail}", { detail: `HTTP ${failure.status}` });
+      return t("state.error", { detail: `HTTP ${failure.status}` });
     case "invalid":
-      return t("Could not load this. {detail}", { detail: failure.message });
+      return t("state.error", { detail: failure.message });
     default:
-      return t("Could not load this. {detail}", { detail: failure.kind });
+      return t("state.error", { detail: failure.kind });
   }
 }

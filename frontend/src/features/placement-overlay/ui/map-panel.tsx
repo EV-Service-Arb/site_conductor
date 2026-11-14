@@ -38,17 +38,17 @@ export function MapPanel() {
 
   return (
     <div className="flex max-h-[70vh] flex-col overflow-y-auto py-1 text-body-s">
-      <p className="px-3 pt-2 pb-1 text-body font-medium">{t("Map")}</p>
-      {placement.status === "loading" && <Note>{t("Loading…")}</Note>}
-      {placement.status === "unconnected" && <Note>{t("Placement not connected")}</Note>}
+      <p className="px-3 pt-2 pb-1 text-body font-medium">{t("placement.title")}</p>
+      {placement.status === "loading" && <Note>{t("state.loading")}</Note>}
+      {placement.status === "unconnected" && <Note>{t("placement.unconnected")}</Note>}
       {placement.status === "error" && <Note tone="error">{placement.message}</Note>}
       {ok && (
         <>
-          <Section title={t("Heat")}>
+          <Section title={t("placement.heat")}>
             <label className="flex h-(--control-h-sm) items-center gap-2 px-2">
               <span className="flex flex-1 items-center gap-1.5 text-ink-mid">
-                {t("Trade")}
-                {view.from !== null && <span className="rounded bg-hover px-1 text-caption text-ink-soft">{view.from === "pick" ? t("your pick") : t("scope")}</span>}
+                {t("placement.trade")}
+                {view.from !== null && <span className="rounded bg-hover px-1 text-caption text-ink-soft">{t(`placement.from.${view.from}`)}</span>}
               </span>
               <NativeSelect
                 size="sm"
@@ -59,16 +59,12 @@ export function MapPanel() {
                   setMapView({ study, ...(study !== null && view.heat === null && { heat: "demand" }) });
                 }}
               >
-                <NativeSelectOption value="">{t("pick a trade")}</NativeSelectOption>
-                {([
-                  ["scope", t("In scope")],
-                  ["category", t("Categories with a study")],
-                  ["stem", t("Studies no category links")],
-                ] as const).map(([group, label]) => {
+                <NativeSelectOption value="">{t("placement.pickTrade")}</NativeSelectOption>
+                {(["scope", "category", "stem"] as const).map((group) => {
                   const options = studies.filter((o) => o.group === group);
                   return (
                     options.length > 0 && (
-                      <NativeSelectGroup key={group} label={label}>
+                      <NativeSelectGroup key={group} label={t(`placement.studies.${group}`)}>
                         {options.map((o) => (
                           <NativeSelectOption key={o.key} value={o.key}>
                             {o.label}
@@ -80,48 +76,48 @@ export function MapPanel() {
                 })}
               </NativeSelect>
             </label>
-            {ok.inView === "zoom" && <Note>{t("Zoom in to see the grid")}</Note>}
-            {ok.inView !== "zoom" && ok.inView.length === 0 && <Note>{t("No grid here")}</Note>}
+            {ok.inView === "zoom" && <Note>{t("placement.zoomIn")}</Note>}
+            {ok.inView !== "zoom" && ok.inView.length === 0 && <Note>{t("placement.noGrid")}</Note>}
             {ok.inView !== "zoom" && ok.inView.length > 0 && (
               <>
-                {view.study === null && <Row icon={Flame} label={t("Demand")} hint={t("pick a trade")} />}
+                {view.study === null && <Row icon={Flame} label={t("placement.demand")} hint={t("placement.pickTrade")} />}
                 {featured.map(heatRow)}
                 {rest.length > 0 && (
                   <button type="button" onClick={() => setMore(!more)} className="flex h-(--control-h-sm) items-center gap-2 rounded-control px-2 text-ink-soft hover:bg-hover hover:text-ink">
                     <ChevronRight className={cn("size-4 transition-transform", more && "rotate-90")} />
-                    {t("More")}
+                    {t("placement.more")}
                   </button>
                 )}
                 {more && rest.map(heatRow)}
               </>
             )}
           </Section>
-          <Section title={t("Overlays")}>
+          <Section title={t("placement.overlays")}>
             <Row
               icon={Waves}
-              label={t("Competitor pressure")}
-              hint={view.study === null ? t("pick a trade") : undefined}
+              label={t("placement.pressure")}
+              hint={view.study === null ? t("placement.pickTrade") : undefined}
               on={view.pressure !== null}
               onToggle={view.study === null ? undefined : () => setMapView({ pressure: view.pressure === null ? {} : null })}
             />
             {view.study !== null && view.pressure !== null && ok.lambda !== null && <Radius view={view} fallback={ok.lambda} />}
             <Row
               icon={Store}
-              label={t("Competitors")}
-              hint={view.study === null ? t("pick a trade") : undefined}
+              label={t("placement.competitors")}
+              hint={view.study === null ? t("placement.pickTrade") : undefined}
               on={view.competitors}
               onToggle={view.study === null ? undefined : () => setMapView({ competitors: !view.competitors })}
             />
-            <Row icon={MapPin} label={t("Google's places")} on={places} onToggle={() => showPlaces(!places)} />
+            <Row icon={MapPin} label={t("hotbar.places")} on={places} onToggle={() => showPlaces(!places)} />
           </Section>
           {ok.notices.length > 0 && (
-            <Section title={t("Data")}>
+            <Section title={t("placement.notices")}>
               {ok.notices.map((n) => (
                 <div key={`${n.trade}×${n.location}`} className="flex flex-col gap-1 px-2 py-1">
                   <span className="text-ink-mid">{n.text}</span>
                   {n.missing !== null && may(me, "sa:placement:study:spend") && (
                     <Button size="sm" variant="secondary" disabled={ok.pulling} onClick={() => void pull()}>
-                      {t("Pull latest · {n} searches", { n: n.missing })}
+                      {t("placement.pull", { n: n.missing })}
                     </Button>
                   )}
                 </div>
@@ -131,10 +127,10 @@ export function MapPanel() {
           )}
         </>
       )}
-      <Section title={t("Base")}>
+      <Section title={t("placement.base")}>
         <ToggleGroup type="single" size="sm" value={base} onValueChange={(v) => typeof v === "string" && v !== "" && setBase(v as Base)} className="px-2">
-          <ToggleGroupItem value="schematic">{t("Schematic")}</ToggleGroupItem>
-          <ToggleGroupItem value="satellite">{t("Satellite")}</ToggleGroupItem>
+          <ToggleGroupItem value="schematic">{t("placement.base.schematic")}</ToggleGroupItem>
+          <ToggleGroupItem value="satellite">{t("placement.base.satellite")}</ToggleGroupItem>
         </ToggleGroup>
       </Section>
       {ok?.legend?.heat && <p className="px-3 pt-2 pb-1 text-caption text-ink-soft">{ok.legend.heat.note}</p>}
@@ -161,10 +157,10 @@ export function MapPreview() {
   const t = useT();
   const placement = usePlacement();
   const view = useMapView();
-  if (placement.status !== "ok") return placement.status === "unconnected" ? t("Placement not connected") : t("Map");
-  const heat = placement.layers.find((l) => l.id === view.heat)?.name ?? t("No heat");
-  const where = placement.inView === "zoom" ? t("Zoom in to see the grid") : placement.inView.length === 0 ? t("No grid here") : placement.inView.join(", ");
-  return [heat, view.study === null ? where : `${view.study} × ${where}`, view.pressure !== null && view.study !== null && t("pressure on")].filter(Boolean).join(" · ");
+  if (placement.status !== "ok") return placement.status === "unconnected" ? t("placement.unconnected") : t("placement.title");
+  const heat = placement.layers.find((l) => l.id === view.heat)?.name ?? t("placement.noHeat");
+  const where = placement.inView === "zoom" ? t("placement.zoomIn") : placement.inView.length === 0 ? t("placement.noGrid") : placement.inView.join(", ");
+  return [heat, view.study === null ? where : `${view.study} × ${where}`, view.pressure !== null && view.study !== null && t("placement.pressureOn")].filter(Boolean).join(" · ");
 }
 
 function Radius({ view, fallback }: { view: MapView; fallback: number }) {
@@ -172,7 +168,7 @@ function Radius({ view, fallback }: { view: MapView; fallback: number }) {
   const lambda = view.pressure?.lambda ?? fallback;
   return (
     <div className="flex items-center gap-2 px-2 py-1 pl-8">
-      <span className="w-24 shrink-0 text-ink-mid">{t("Radius λ {km} km", { km: (lambda / 1000).toFixed(1) })}</span>
+      <span className="w-24 shrink-0 text-ink-mid">{t("placement.radius", { km: (lambda / 1000).toFixed(1) })}</span>
       <Slider min={250} max={10000} step={250} value={lambda} onValueChange={(v) => setMapView({ pressure: { lambda: v } })} />
     </div>
   );

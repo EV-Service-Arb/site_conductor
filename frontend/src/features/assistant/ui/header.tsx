@@ -41,7 +41,7 @@ export function Header({
   const [renaming, setRenaming] = useState(false);
   const full = display === "full";
   const interacts = chat !== null && chat.role !== "viewer";
-  const title = chat?.title ?? t("New chat");
+  const title = chat?.title ?? t("assistant.newChat");
   const rename = (value: string) => {
     setRenaming(false);
     onRenamed();
@@ -49,7 +49,7 @@ export function Header({
   };
   const history = (
     <History current={chat?.id ?? null} onOpen={onOpen}>
-      <IconButton size="sm" aria-label={t("Chat history")} tooltip={t("Chat history")} className="size-6 aria-expanded:bg-active">
+      <IconButton size="sm" aria-label={t("assistant.history")} tooltip={t("assistant.history")} className="size-6 aria-expanded:bg-active">
         <ChevronDown />
       </IconButton>
     </History>
@@ -61,12 +61,12 @@ export function Header({
           <Sparkles aria-hidden className="size-3.5 text-ink-mid" />
         </span>
       )}
-      {full && <span className="mr-1.5 text-body-s text-ink-soft">{t("Assistant")} /</span>}
+      {full && <span className="mr-1.5 text-body-s text-ink-soft">{t("assistant")} /</span>}
       {renaming && chat !== null ? (
         <Input
           autoFocus
           defaultValue={chat.title ?? ""}
-          aria-label={t("Rename")}
+          aria-label={t("assistant.rename")}
           className="h-7 min-w-0 flex-1"
           onFocus={(e) => e.currentTarget.select()}
           onBlur={(e) => rename(e.currentTarget.value)}
@@ -82,7 +82,7 @@ export function Header({
         <button
           type="button"
           onClick={() => setRenaming(true)}
-          aria-label={t("Rename “{title}”", { title })}
+          aria-label={t("assistant.renameTitle", { title })}
           className="h-7 min-w-0 truncate rounded-md px-1.5 text-left text-body-s font-medium text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
         >
           {title}
@@ -94,10 +94,10 @@ export function Header({
       <span className="flex-1" />
       <IconButton
         size="sm"
-        aria-label={t("New chat")}
+        aria-label={t("assistant.new")}
         tooltip={
           <span className="flex items-center gap-2">
-            {t("New chat")}
+            {t("assistant.new")}
             <KbdGroup>
               <Kbd>Ctrl</Kbd>
               <Kbd>⇧</Kbd>
@@ -112,27 +112,27 @@ export function Header({
       </IconButton>
       {chat !== null ? (
         <Share chat={chat}>
-          <IconButton size="sm" aria-label={t("Share")} tooltip={t("Share")} className="aria-expanded:bg-active">
+          <IconButton size="sm" aria-label={t("assistant.share")} tooltip={t("assistant.share")} className="aria-expanded:bg-active">
             <ShareIcon />
           </IconButton>
         </Share>
       ) : (
-        <IconButton size="sm" aria-label={t("Share")} disabled>
+        <IconButton size="sm" aria-label={t("assistant.share")} disabled>
           <ShareIcon />
         </IconButton>
       )}
       {context === null ? (
         <Context turns={turns} />
       ) : (
-        <IconButton size="sm" aria-label={t("Context")} tooltip={t("Context")} pressed={context} onClick={onContext}>
+        <IconButton size="sm" aria-label={t("assistant.context")} tooltip={t("assistant.context")} pressed={context} onClick={onContext}>
           <PanelRight />
         </IconButton>
       )}
       {full && interacts && (
         <IconButton
           size="sm"
-          aria-label={(chat.pinned_at === null ? t("Pin") : t("Unpin"))}
-          tooltip={(chat.pinned_at === null ? t("Pin") : t("Unpin"))}
+          aria-label={t(chat.pinned_at === null ? "assistant.pin" : "assistant.unpin")}
+          tooltip={t(chat.pinned_at === null ? "assistant.pin" : "assistant.unpin")}
           pressed={chat.pinned_at !== null}
           onClick={() => void pinChat(chat.id, chat.pinned_at === null).then(onChanged, (e: unknown) => notifyFailure(e, t))}
         >
@@ -141,7 +141,7 @@ export function Header({
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <IconButton size="sm" aria-label={t("More")} tooltip={t("More")} disabled={chat === null} className="aria-expanded:bg-active">
+          <IconButton size="sm" aria-label={t("assistant.more")} tooltip={t("assistant.more")} disabled={chat === null} className="aria-expanded:bg-active">
             <Ellipsis />
           </IconButton>
         </DropdownMenuTrigger>
@@ -152,10 +152,10 @@ export function Header({
       {onHide !== null && (
         <IconButton
           size="sm"
-          aria-label={(display === "floating" ? t("Minimize") : t("Hide"))}
+          aria-label={t(display === "floating" ? "assistant.minimize" : "assistant.fold")}
           tooltip={
             <span className="flex items-center gap-2">
-              {(display === "floating" ? t("Minimize") : t("Hide"))}
+              {t(display === "floating" ? "assistant.minimize" : "assistant.fold")}
               <KbdGroup>
                 <Kbd>Ctrl</Kbd>
                 <Kbd>J</Kbd>
@@ -191,7 +191,7 @@ function Context({ turns }: { turns: readonly Turn[] }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <IconButton size="sm" aria-label={t("Context")} tooltip={t("Context")} disabled={locations.length === 0 && read.length === 0} className="aria-expanded:bg-active">
+        <IconButton size="sm" aria-label={t("assistant.context")} tooltip={t("assistant.context")} disabled={locations.length === 0 && read.length === 0} className="aria-expanded:bg-active">
           <PanelRight />
         </IconButton>
       </PopoverTrigger>
@@ -207,8 +207,8 @@ export function ContextCard({ turns }: { turns: readonly Turn[] }) {
   const t = useT();
   const { locations, read } = touched(turns);
   return (
-    <aside aria-label={t("Context")} className="flex w-64 shrink-0 flex-col gap-2 self-start rounded-xl border border-border-subtle p-1.5">
-      {locations.length === 0 && read.length === 0 ? <p className="px-2 py-1.5 text-body-s text-ink-soft">{t("Nothing named or read yet")}</p> : <Touched turns={turns} />}
+    <aside aria-label={t("assistant.context")} className="flex w-64 shrink-0 flex-col gap-2 self-start rounded-xl border border-border-subtle p-1.5">
+      {locations.length === 0 && read.length === 0 ? <p className="px-2 py-1.5 text-body-s text-ink-soft">{t("assistant.context.none")}</p> : <Touched turns={turns} />}
     </aside>
   );
 }
@@ -221,7 +221,7 @@ function Touched({ turns }: { turns: readonly Turn[] }) {
     <>
       {locations.length > 0 && (
         <section className="flex flex-col">
-          <h3 className="px-2 py-1 text-caption text-ink-soft">{t("Locations")}</h3>
+          <h3 className="px-2 py-1 text-caption text-ink-soft">{t("assistant.context.locations")}</h3>
           {locations.map((m) => (
             <Link key={m.id} href={`/?gmb=${m.id}`} className={row}>
               <MapPin aria-hidden className="size-4 shrink-0 text-ink-soft" />
@@ -232,7 +232,7 @@ function Touched({ turns }: { turns: readonly Turn[] }) {
       )}
       {read.length > 0 && (
         <section className="flex flex-col">
-          <h3 className="px-2 py-1 text-caption text-ink-soft">{t("Read")}</h3>
+          <h3 className="px-2 py-1 text-caption text-ink-soft">{t("assistant.context.read")}</h3>
           {read.map((source) =>
             source.href === null ? (
               <span key={source.label} className={cn(row, "hover:bg-transparent")}>

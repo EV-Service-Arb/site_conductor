@@ -4,7 +4,7 @@ import { Badge, Button, cn } from "@evinvest/uikit";
 import { ChevronDown, ChevronUp, Globe, Hash, Mail, MapPin, Phone, Send, Smartphone, X } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { CategoryChip, type Listed, MUST_HAVES, open, openAccount, readiness, STATE_LABEL, type Tab, TABS, useGmbTags, useSelection } from "@/entities/gmb";
+import { CategoryChip, type Listed, MUST_HAVES, TABS, type Tab, open, openAccount, readiness, useGmbTags, useSelection } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { setQuery } from "@/shared/lib/query";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -30,7 +30,7 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
     if (next !== undefined) open(next.gmb);
   };
   const ready = gmb.state === "draft" ? readiness(listed, tags).filter((r) => r.ready).length : null;
-  const point = gmb.address ?? (gmb.location && t("planned · {at}", { at: `${gmb.location.lat.toFixed(3)}, ${gmb.location.lng.toFixed(3)}` }));
+  const point = gmb.address ?? (gmb.location && t("window.planned", { at: `${gmb.location.lat.toFixed(3)}, ${gmb.location.lng.toFixed(3)}` }));
   const facts = [
     point && { icon: <MapPin aria-hidden />, text: point },
     gmb.phone && { icon: <Phone aria-hidden />, text: gmb.phone },
@@ -44,36 +44,36 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
       <header className="flex flex-col gap-1 px-6 pt-4">
         <div className="flex items-center gap-3">
           <h2 className="min-w-0 truncate text-lg font-semibold text-ink">{gmb.name}</h2>
-          <Badge>{STATE_LABEL[gmb.state](t)}</Badge>
+          <Badge>{t(`gmbs.state.${gmb.state}`)}</Badge>
           <CategoryChip gmb={gmb} />
           {ready !== null && (
             <span className="text-sm text-ink-soft">
               <span className={cn("font-mono tabular-nums", ready === MUST_HAVES.length ? "text-positive" : "text-accent-warn")}>
                 {ready}/{MUST_HAVES.length}
               </span>{" "}
-              {t("ready to submit")}
+              {t("window.readyToSubmit")}
             </span>
           )}
           <span className="flex-1" />
           {at >= 0 && order.length > 1 && (
             <span className="flex items-center gap-1 font-mono text-xs text-ink-soft tabular-nums">
               {at + 1} / {order.length}
-              <Button variant="ghost" size={button("sm")} icon aria-label={t("Previous")} title={t("Previous")} onClick={() => step(-1)}>
+              <Button variant="ghost" size={button("sm")} icon aria-label={t("window.prev")} title={t("window.prev")} onClick={() => step(-1)}>
                 <ChevronUp aria-hidden />
               </Button>
-              <Button variant="ghost" size={button("sm")} icon aria-label={t("Next")} title={t("Next")} onClick={() => step(1)}>
+              <Button variant="ghost" size={button("sm")} icon aria-label={t("window.next")} title={t("window.next")} onClick={() => step(1)}>
                 <ChevronDown aria-hidden />
               </Button>
             </span>
           )}
-          <Button variant="ghost" size={button("sm")} icon aria-label={t("Close the window")} title={t("Close the window")} onClick={() => setQuery({ tab: null })}>
+          <Button variant="ghost" size={button("sm")} icon aria-label={t("window.close")} title={t("window.close")} onClick={() => setQuery({ tab: null })}>
             <X aria-hidden />
           </Button>
         </div>
         <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-soft [&_svg]:size-3.5">
           {facts.map((f) =>
             "open" in f ? (
-              <button key={f.text} type="button" onClick={f.open} title={t("Connections of {gmail}", { gmail: f.text })} className="flex items-center gap-1.5 rounded outline-none hover:text-ink hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+              <button key={f.text} type="button" onClick={f.open} title={t("account.open", { gmail: f.text })} className="flex items-center gap-1.5 rounded outline-none hover:text-ink hover:underline focus-visible:ring-2 focus-visible:ring-ring">
                 {f.icon}
                 {f.text}
               </button>
@@ -86,7 +86,7 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
           )}
         </p>
       </header>
-      <nav role="tablist" aria-label={t("Sections")} className="flex gap-1 border-b border-border px-6 pt-3">
+      <nav role="tablist" aria-label={t("window.tabs")} className="flex gap-1 border-b border-border px-6 pt-3">
         {TABS[gmb.state].map((k) => (
           <button
             key={k}
@@ -95,7 +95,7 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
             aria-selected={k === tab}
             // a GBP's browser is its gmail's
             disabled={k === "browser" && gmail === null}
-            title={k === "browser" && gmail === null ? t("Needs a gmail") : undefined}
+            title={k === "browser" && gmail === null ? t("window.browser.needsGmail") : undefined}
             onClick={() => setQuery({ tab: k })}
             className={cn(
               "-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -103,7 +103,7 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
             )}
           >
             {ICON[k]}
-            {k === "launch" ? t("Launch") : t("Browser")}
+            {t(`window.tab.${k}`)}
           </button>
         ))}
       </nav>

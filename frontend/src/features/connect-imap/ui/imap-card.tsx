@@ -35,41 +35,41 @@ export function ImapCard({ gmail, imap, onChanged }: { gmail: Gmail; imap: Imap 
       <CardContent className="flex flex-col gap-3 px-4">
         <header className="flex items-center gap-2">
           <Mail aria-hidden className="size-4 text-ink-soft" />
-          <h3 className="flex-1 text-sm font-semibold text-ink">{t("Email · IMAP")}</h3>
-          {imap && <Badge tone={imap.checked.error === null ? "positive" : "error"}>{(imap.checked.error === null ? t("Connected") : t("Failing"))}</Badge>}
+          <h3 className="flex-1 text-sm font-semibold text-ink">{t("account.imap.title")}</h3>
+          {imap && <Badge tone={imap.checked.error === null ? "positive" : "error"}>{t(imap.checked.error === null ? "account.imap.connected" : "account.imap.failing")}</Badge>}
         </header>
         {imap && !editing ? (
           <>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-              <dt className="text-ink-soft">{t("Server")}</dt>
+              <dt className="text-ink-soft">{t("account.imap.host")}</dt>
               <dd className="text-right text-ink">{imap.host}</dd>
-              <dt className="text-ink-soft">{t("Login")}</dt>
+              <dt className="text-ink-soft">{t("account.imap.username")}</dt>
               <dd className="truncate text-right text-ink">{imap.username}</dd>
-              <dt className="text-ink-soft">{t("App password")}</dt>
-              <dd className="text-right text-ink-soft">{t("set {at}", { at: formatDateTime(imap.set_at, locale) })}</dd>
+              <dt className="text-ink-soft">{t("account.imap.password")}</dt>
+              <dd className="text-right text-ink-soft">{t("account.setAt", { at: formatDateTime(imap.set_at, locale) })}</dd>
             </dl>
             <p className="text-xs text-ink-soft">
-              {t("Checked {at}", { at: formatDateTime(imap.checked.at, locale) })}
+              {t("account.checkedAt", { at: formatDateTime(imap.checked.at, locale) })}
               {imap.checked.error !== null && <span className="block text-accent-error">{imap.checked.error}</span>}
             </p>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void act(() => testConnection(gmail.id, "imap"))}>
-                {t("Test")}
+                {t("account.test")}
               </Button>
               <Button variant="ghost" size={button("sm")} disabled={busy} onClick={() => setEditing(true)}>
-                {t("Replace")}
+                {t("account.replace")}
               </Button>
               <Button variant="ghost" size={button("sm")} disabled={busy} onClick={() =>
                   void act(() => disconnect(gmail.id, "imap"))
                 }>
-                {t("Remove")}
+                {t("account.remove")}
               </Button>
             </div>
           </>
         ) : (
           <ImapForm gmail={gmail} busy={busy} onCancel={imap ? () => setEditing(false) : undefined} onSubmit={(v) => void act(() => setImap(gmail.id, v))} />
         )}
-        <p className="text-xs text-ink-soft">{t("Inbox alerts and email automations will read it; nothing reads mail yet.")}</p>
+        <p className="text-xs text-ink-soft">{t("account.imap.why")}</p>
       </CardContent>
     </Card>
   );
@@ -104,25 +104,25 @@ function ImapForm({
       }}
     >
       <Field>
-        <FieldLabel htmlFor={`${id}-host`}>{t("Server")}</FieldLabel>
+        <FieldLabel htmlFor={`${id}-host`}>{t("account.imap.host")}</FieldLabel>
         <Input id={`${id}-host`} size={size} value={host} onChange={(e) => setHost(e.target.value)} autoComplete="off" />
       </Field>
       <Field>
-        <FieldLabel htmlFor={`${id}-user`}>{t("Login")}</FieldLabel>
+        <FieldLabel htmlFor={`${id}-user`}>{t("account.imap.username")}</FieldLabel>
         <Input id={`${id}-user`} size={size} value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />
       </Field>
       <Field>
-        <FieldLabel htmlFor={`${id}-pass`}>{t("App password")}</FieldLabel>
+        <FieldLabel htmlFor={`${id}-pass`}>{t("account.imap.appPassword")}</FieldLabel>
         <Input id={`${id}-pass`} size={size} type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
       </Field>
-      <p className="text-xs text-ink-soft">{t("Google account → Security → 2-step verification → App passwords. Checked by logging in before it is kept; never shown again.")}</p>
+      <p className="text-xs text-ink-soft">{t("account.imap.how")}</p>
       <div className="flex gap-2">
         <Button type="submit" size={button("sm")} disabled={!ready || busy}>
-          {t("Connect")}
+          {t("account.imap.connect")}
         </Button>
         {onCancel && (
           <Button type="button" variant="ghost" size={button("sm")} disabled={busy} onClick={onCancel}>
-            {t("Cancel")}
+            {t("account.cancel")}
           </Button>
         )}
       </div>

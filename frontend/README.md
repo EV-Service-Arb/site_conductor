@@ -17,7 +17,7 @@ src/views/           one slice per screen, plus shell/ (the top bar, the access 
 src/features/        account-chip · sign-out · wallet-element · sites-element · manage-sources · request-access
 src/entities/        session · source · tokens — types, response checks, requests
 src/shared/          api/ (fetch, CSRF, the gate's answers), i18n/, lib/ (live/: the socket), mfe/, ui/
-messages/            ru.auto.json (generated) and ru.json (hand overrides), keyed by the English; see below
+messages/            en.json (the source of keys) and ru.json
 scripts/dev-stub.ts  a stand-in backend for local work
 tests/               vitest, in Node: the rules the screens obey live in plain modules; e2e/: the Figma frames
 ```
@@ -45,18 +45,6 @@ for what acts on the platform session. The panel's own chip entries are the call
 stand-in, while the bundle loads or when it cannot, opens the same entries.
 
 Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
-
-## Copy
-
-English lives only where it renders: `t("Sign out")`, `t("{n} GBP", { n })`, and `t.ctx("ledger", "Added")`
-where one English means two things. Copy picked by data is a closed table
-(`{ draft: (t) => t("Draft"), … } satisfies Record<State, (t: T) => string>`). Every other language is
-`messages/<lang>.auto.json` (generated) under `messages/<lang>.json` (hand overrides, `{ "<English>": "…" }`):
-an override whose English the code no longer renders stops applying. `npm run build` runs
-`evinvest-i18n-check` first: it fails on a string with no translation, an orphaned override (naming the
-nearest new string) or a generated entry for gone English; `evinvest-i18n-extract` prunes both files. In
-`npm run dev` an untranslated string shows its English and warns once. The model:
-[`@evinvest/i18n`](https://github.com/EV-Main/web_std/tree/main/ts/i18n).
 `nix run .#figma` puts the conductor's own screens into Figma, both breakpoints, over the stub as an
 admin (`tests/e2e`; the loop is the `figma-render` skill).
 

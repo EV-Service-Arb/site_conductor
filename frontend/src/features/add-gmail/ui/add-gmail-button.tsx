@@ -39,7 +39,7 @@ export function AddGmailButton({ onAdded }: { onAdded: () => void }) {
     <>
       <Button variant="ghost" size={button("sm")} className="justify-start text-ink-soft" onClick={() => setOpen(true)}>
         <Plus aria-hidden />
-        {t("Add a managing gmail")}
+        {t("gmbs.gmail.add")}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -51,16 +51,16 @@ export function AddGmailButton({ onAdded }: { onAdded: () => void }) {
             }}
           >
             <DialogHeader>
-              <DialogTitle>{t("Add a managing gmail")}</DialogTitle>
-              <DialogDescription>{t("The Google account that manages the business profiles.")}</DialogDescription>
+              <DialogTitle>{t("gmbs.gmail.add")}</DialogTitle>
+              <DialogDescription>{t("gmbs.gmail.hint")}</DialogDescription>
             </DialogHeader>
             <Field className="flex flex-col gap-1">
-              <FieldLabel htmlFor={`${id}-gmail`}>{t("Gmail")}</FieldLabel>
+              <FieldLabel htmlFor={`${id}-gmail`}>{t("gmbs.gmail.label")}</FieldLabel>
               <Input id={`${id}-gmail`} size={size} autoCapitalize="none" value={gmail} onChange={(e) => setGmail(e.target.value)} />
             </Field>
             <DialogFooter>
               <Button type="submit" size={button()} disabled={busy || !looksLikeEmail(gmail)}>
-                {t("Add a managing gmail")}
+                {t("gmbs.gmail.add")}
               </Button>
             </DialogFooter>
           </form>

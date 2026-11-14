@@ -23,7 +23,7 @@ function CopyButton({ text, disabled = false }: { text: string; disabled?: boole
     const id = setTimeout(() => setCopied(false), 1500);
     return () => clearTimeout(id);
   }, [copied]);
-  const label = copied ? t("Copied") : t("Copy");
+  const label = copied ? t("assistant.copied") : t("assistant.copy");
   return (
     <IconButton size="sm" aria-label={label} tooltip={label} disabled={disabled} onClick={() => void navigator.clipboard.writeText(text).then(() => setCopied(true))}>
       {copied ? <Check /> : <Copy />}
@@ -79,7 +79,7 @@ export function UserTurnView({ turn, editing, onEdit, onEditing }: { turn: UserT
         <div className="flex w-full items-start justify-end gap-1">
           <div className={cn(HOVER_TOOLS, "pt-1")}>
             {onEditing !== null && (
-              <IconButton size="sm" aria-label={t("Edit message")} tooltip={t("Edit message")} onClick={() => onEditing(true)}>
+              <IconButton size="sm" aria-label={t("assistant.edit")} tooltip={t("assistant.edit")} onClick={() => onEditing(true)}>
                 <Pencil />
               </IconButton>
             )}
@@ -117,7 +117,7 @@ function EditBox({ text, onCancel, onSave }: { text: string; onCancel: () => voi
         autoFocus
         rows={1}
         value={value}
-        aria-label={t("Edit message")}
+        aria-label={t("assistant.edit")}
         onChange={(e) => setValue(e.target.value)}
         onFocus={(e) => e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length)}
         onKeyDown={(e) => {
@@ -134,10 +134,10 @@ function EditBox({ text, onCancel, onSave }: { text: string; onCancel: () => voi
       />
       <div className="flex justify-end gap-1.5">
         <Button size="sm" variant="ghost" onClick={onCancel}>
-          {t("Cancel")}
+          {t("assistant.edit.cancel")}
         </Button>
         <Button size="sm" onClick={save} disabled={value.trim() === ""}>
-          {t("Send")}
+          {t("assistant.edit.send")}
         </Button>
       </div>
     </div>
@@ -153,7 +153,7 @@ export function AssistantTurnView({ turn, last, onChange, onRetry }: { turn: Ass
     <div data-enter="rise" className="group/turn flex flex-col gap-2.5">
       <Work turn={turn} />
       {turn.text !== "" && <RichText text={turn.text} sources={turn.sources} writing={turn.state === "writing"} />}
-      {turn.state === "stopped" && <p className="text-body-s text-ink-soft italic">{t("Stopped")}</p>}
+      {turn.state === "stopped" && <p className="text-body-s text-ink-soft italic">{t("assistant.stopped")}</p>}
       {turn.actions.length > 0 && (
         <div data-enter="stagger" className="flex flex-col gap-1.5">
           {turn.actions.map((a, i) => (
@@ -165,7 +165,7 @@ export function AssistantTurnView({ turn, last, onChange, onRetry }: { turn: Ass
         <div className={cn("-ml-1.5 flex gap-0.5", !last && HOVER_TOOLS)}>
           <CopyButton text={plain(turn.text)} disabled={turn.text === ""} />
           {last && onRetry !== null && (
-            <IconButton size="sm" aria-label={t("Try again")} tooltip={t("Try again")} onClick={onRetry}>
+            <IconButton size="sm" aria-label={t("assistant.retry")} tooltip={t("assistant.retry")} onClick={onRetry}>
               <RotateCcw />
             </IconButton>
           )}
@@ -174,8 +174,8 @@ export function AssistantTurnView({ turn, last, onChange, onRetry }: { turn: Ass
               <IconButton
                 key={f}
                 size="sm"
-                aria-label={f === "up" ? t("Good answer") : t("Bad answer")}
-                tooltip={f === "up" ? t("Good answer") : t("Bad answer")}
+                aria-label={t(`assistant.feedback.${f}`)}
+                tooltip={t(`assistant.feedback.${f}`)}
                 aria-pressed={turn.feedback === f}
                 onClick={() => onChange({ ...turn, feedback: turn.feedback === f ? null : f })}
               >
@@ -201,11 +201,11 @@ function Work({ turn }: { turn: AssistantTurn }) {
     return working ? (
       <div role="status" className="flex items-center gap-2 text-body-s text-ink-soft">
         <Spinner className="size-3.5" />
-        <span className="animate-pulse">{t("Thinking…")}</span>
+        <span className="animate-pulse">{t("assistant.thinking")}</span>
       </div>
     ) : null;
   const seconds = Math.max(1, Math.round((turn.worked ?? 0) / 1000));
-  const label = working && now ? now.label : t("Worked for {time}", { time: seconds < 60 ? `${seconds}s` : `${Math.round(seconds / 60)}m` });
+  const label = working && now ? now.label : t("assistant.worked", { time: seconds < 60 ? `${seconds}s` : `${Math.round(seconds / 60)}m` });
   return (
     <div className="flex flex-col gap-1.5">
       <button
@@ -242,7 +242,7 @@ function ActionCard({ action, primary, set }: { action: Action; primary: boolean
         {set !== null && (
           <Button size="sm" variant="ghost" onClick={() => set("proposed")}>
             <Undo2 aria-hidden />
-            {t("Undo")}
+            {t("assistant.undo")}
           </Button>
         )}
       </div>

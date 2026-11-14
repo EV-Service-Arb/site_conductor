@@ -1,4 +1,4 @@
-import type { T } from "@/shared/i18n";
+import type { MessageKey } from "@/shared/i18n";
 
 // The front end's switches, compiled into the bundle: the image and `nix run .#dev` build the same one.
 
@@ -14,9 +14,9 @@ type PanelConfig = {
   /** The assistant beside every signed-in page, toggled from the top bar; a preview whose answers are canned. */
   assistant: boolean;
   /** By tag: the key under the leader whose scope an element's own keys (`ev:keymap`) sit in, and its label. An element not here has its keys refused. */
-  elementKeys: Record<string, { key: string; label: (t: T) => string }>;
+  elementKeys: Record<string, { key: string; label: MessageKey }>;
   /** The app switcher's entries under Service-Arb, in order; `icon` a monochrome mark under `public/`. */
-  links: { name: string; href: string; icon: string; description: (t: T) => string; newTab: boolean }[];
+  links: { name: string; href: string; icon: string; description: MessageKey; newTab: boolean }[];
 };
 
 export const PANEL: PanelConfig = {
@@ -25,11 +25,11 @@ export const PANEL: PanelConfig = {
   reviewArchiveUi: "grafana",
   theme: "dark",
   assistant: true,
-  elementKeys: { "mfe-sites-nav": { key: "v", label: (t) => t("Sites") } },
+  elementKeys: { "mfe-sites-nav": { key: "v", label: "nav.sites" } },
   links: [
-    { name: "Discord", href: "https://discord.gg/nGU6Fk4SAK", icon: "/links/discord.svg", description: (t) => t("Ask the other operators"), newTab: true },
-    { name: "GitHub", href: "https://github.com/EV-Service-Arb", icon: "/links/github.svg", description: (t) => t("The code behind this panel"), newTab: true },
-    { name: "EV Investment", href: "https://evinvest.ltd", icon: "/links/ev.svg", description: (t) => t("Investing with EV"), newTab: false },
-    { name: "EV Estate", href: "https://estate.evinvest.ltd", icon: "/links/ev.svg", description: (t) => t("Property with EV"), newTab: false },
+    { name: "Discord", href: "https://discord.gg/nGU6Fk4SAK", icon: "/links/discord.svg", description: "links.discord", newTab: true },
+    { name: "GitHub", href: "https://github.com/EV-Service-Arb", icon: "/links/github.svg", description: "links.github", newTab: true },
+    { name: "EV Investment", href: "https://evinvest.ltd", icon: "/links/ev.svg", description: "links.evInvestment", newTab: false },
+    { name: "EV Estate", href: "https://estate.evinvest.ltd", icon: "/links/ev.svg", description: "links.evEstate", newTab: false },
   ],
 };

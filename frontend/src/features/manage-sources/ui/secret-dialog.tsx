@@ -35,15 +35,15 @@ export function SecretDialog({ added, onClose }: { added: AddedSource | null; on
     <Dialog open={added !== null} onOpenChange={(open) => !open && close()}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>{t("Secret for {key}", { key: added?.key_id ?? "" })}</DialogTitle>
-          <DialogDescription>{t("Shown once. Put it in the source's secret store now; it cannot be shown again.")}</DialogDescription>
+          <DialogTitle>{t("sources.secret.title", { key: added?.key_id ?? "" })}</DialogTitle>
+          <DialogDescription>{t("sources.secret.body")}</DialogDescription>
         </DialogHeader>
         <code className="block break-all rounded-md border border-border bg-muted p-3 font-mono text-sm text-ink select-all">{added?.secret}</code>
         <DialogFooter>
           <Button variant="outline" size={button()} onClick={copy}>
-            {copied ? t("Copied") : t("Copy")}
+            {copied ? t("sources.secret.copied") : t("sources.secret.copy")}
           </Button>
-          <Button size={button()} onClick={close}>{t("I saved it")}</Button>
+          <Button size={button()} onClick={close}>{t("sources.secret.done")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
