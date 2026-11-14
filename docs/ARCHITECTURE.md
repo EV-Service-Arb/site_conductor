@@ -433,6 +433,7 @@ PATCH  /gmbs/{id}
 PUT    /gmbs/{id}/state
 DELETE /gmbs/{id}
 PUT    /gmbs/{enabled,trade}
+PUT    /gmbs/{id}/spots
 PUT    /gmbs/{id}/location
 DELETE /gmbs/{id}/location
 PUT    /gmbs/{id}/country
@@ -629,7 +630,7 @@ review_archive's lookups and placement's sweeps are the house's for now.
 - A transfer moves it to another gmail of its owner's. Removed is apart from the state; a
   gmail removed removes its GBPs.
 - **The trash.** A removed gmail or GBP is its owner's to restore (a gmail with the GBPs removed
-  at its `removed_at`) until purged: `keep_days` after its removal (30 unsaid, 1–90), never with
+  at its `removed_at`) until purged: `keep_days` after its removal (30 unsaid; 1, 7, 30 or 90), never with
   `never_purge` (an admin's say; unsaid, on under dev sign-in). Purged is gone for good: its
   gmail's IMAP and Maps key deleted, its row kept.
 

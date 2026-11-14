@@ -183,40 +183,6 @@ pub async fn login(State(s): State<SignIn>, Query(q): Query<Login>) -> Response 
 	to_concierge(&s, q.return_to.as_deref(), q.dev_as.as_deref(), None, q.prompt)
 }
 
-/// Sends the browser to concierge with a fresh pre-login: the callback then signs it in, or opens
-/// the session `grant` gives an MCP client.
-pub(crate) fn to_concierge(s: &SignIn, return_to: Option<&str>, dev_as: Option<&str>, grant: Option<&Grant>, prompt: Option<Prompt>) -> Response {
-	let begun = match s.panel.begin_sign_in(return_to, dev_as, grant, Timestamp::now()) {
-		Ok(b) => b,
-		Err(e) => {
-			crate::report(&e, "starting a sign-in");
-			return private(page(StatusCode::INTERNAL_SERVER_ERROR, "Sign-in failed", "Something went wrong on our side. Try again."));
-		}
-	};
-	let location = if s.concierge.is_dev() {
-		// No concierge to send the browser to: straight back to the callback, which then runs
-		// as after concierge — pre-login, state redeemed once, the code exchanged, a session.
-		format!("{}?code={DEV_CODE}&state={}", s.redirect_uri(), begun.state)
-	} else {
-		format!(
-			"{}/api/auth/authorize?client_id={CLIENT_ID}&redirect_uri={}&response_type=code&state={}&code_challenge={}&code_challenge_method=S256{}",
-			s.config.concierge_origin,
-			encode(&s.redirect_uri()),
-			begun.state,
-			begun.challenge,
-			match prompt {
-				Some(Prompt::SelectAccount) => "&prompt=select_account",
-				None => "",
-			},
-		)
-	};
-	let Ok(location) = HeaderValue::from_str(&location) else {
-		return private(page(StatusCode::INTERNAL_SERVER_ERROR, "Sign-in failed", "The sign-in is misconfigured."));
-	};
-	let prelogin = s.cookies.set(cookies::PRELOGIN, &begun.cookie, PRELOGIN_TTL.as_secs(), true);
-	private((StatusCode::FOUND, [(header::LOCATION, location), (header::SET_COOKIE, prelogin)]).into_response())
-}
-
 #[derive(Deserialize)]
 pub struct Callback {
 	code: Option<String>,
@@ -359,6 +325,40 @@ pub async fn logout(State(s): State<SignIn>, headers: HeaderMap) -> Response {
 		}
 	}
 	signed_out(&s, StatusCode::NO_CONTENT.into_response())
+}
+
+/// Sends the browser to concierge with a fresh pre-login: the callback then signs it in, or opens
+/// the session `grant` gives an MCP client.
+pub(crate) fn to_concierge(s: &SignIn, return_to: Option<&str>, dev_as: Option<&str>, grant: Option<&Grant>, prompt: Option<Prompt>) -> Response {
+	let begun = match s.panel.begin_sign_in(return_to, dev_as, grant, Timestamp::now()) {
+		Ok(b) => b,
+		Err(e) => {
+			crate::report(&e, "starting a sign-in");
+			return private(page(StatusCode::INTERNAL_SERVER_ERROR, "Sign-in failed", "Something went wrong on our side. Try again."));
+		}
+	};
+	let location = if s.concierge.is_dev() {
+		// No concierge to send the browser to: straight back to the callback, which then runs
+		// as after concierge — pre-login, state redeemed once, the code exchanged, a session.
+		format!("{}?code={DEV_CODE}&state={}", s.redirect_uri(), begun.state)
+	} else {
+		format!(
+			"{}/api/auth/authorize?client_id={CLIENT_ID}&redirect_uri={}&response_type=code&state={}&code_challenge={}&code_challenge_method=S256{}",
+			s.config.concierge_origin,
+			encode(&s.redirect_uri()),
+			begun.state,
+			begun.challenge,
+			match prompt {
+				Some(Prompt::SelectAccount) => "&prompt=select_account",
+				None => "",
+			},
+		)
+	};
+	let Ok(location) = HeaderValue::from_str(&location) else {
+		return private(page(StatusCode::INTERNAL_SERVER_ERROR, "Sign-in failed", "The sign-in is misconfigured."));
+	};
+	let prelogin = s.cookies.set(cookies::PRELOGIN, &begun.cookie, PRELOGIN_TTL.as_secs(), true);
+	private((StatusCode::FOUND, [(header::LOCATION, location), (header::SET_COOKIE, prelogin)]).into_response())
 }
 
 fn json_error(status: StatusCode, msg: &str) -> Response {

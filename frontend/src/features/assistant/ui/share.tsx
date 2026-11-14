@@ -22,7 +22,7 @@ import {
 import { Building2, Link, X } from "lucide-react";
 import { type ReactNode, useEffect, useId, useState } from "react";
 
-import { useAccess, usePeople } from "@/entities/assistant";
+import { useAccess, usePeople, assistant } from "@/entities/assistant";
 import { useMe } from "@/entities/session";
 import { api, ok } from "@/shared/api";
 import type { Access, ChatSummary, GeneralAccess, Person } from "@/shared/api/schema";
@@ -55,12 +55,12 @@ function Sharing({ chat }: { chat: ChatSummary }) {
     <>
       {chat.role !== "viewer" && access.status === "ok" && <Invite chat={chat.id} access={access.data} onInvited={changed} />}
       {access.status === "loading" && <Spinner className="size-4 self-center" />}
-      {access.status === "error" && <p className="text-body-s text-negative">{t("Who has access could not be read")}</p>}
+      {access.status === "error" && <p className="text-body-s text-negative">{t(assistant.share.failed, "Who has access could not be read")}</p>}
       {access.status === "ok" && <People chat={chat} access={access.data} onChanged={changed} />}
       <div className="-mx-4 -mb-4 flex justify-end border-t border-border-subtle px-3 py-2">
         <Button size="sm" variant="ghost" onClick={() => copyLink(chat.id, t)}>
           <Link aria-hidden />
-          {t("Copy link")}
+          {t(assistant.copyLink, "Copy link")}
         </Button>
       </div>
     </>
@@ -115,7 +115,7 @@ function Invite({ chat, access, onInvited }: { chat: string; access: Access; onI
               {p.name}
               <button
                 type="button"
-                aria-label={t("Remove {name}", { name: p.name })}
+                aria-label={t(assistant.share.unpick, "Remove {name}", { name: p.name })}
                 onClick={() => setPicked((x) => x.filter((y) => y.id !== p.id))}
                 className="rounded-sm p-0.5 text-ink-faint outline-none hover:bg-card hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
               >
@@ -128,8 +128,8 @@ function Invite({ chat, access, onInvited }: { chat: string; access: Access; onI
             role="combobox"
             aria-expanded={picking}
             aria-controls={list}
-            aria-label={t("Search by name or email")}
-            placeholder={picked.length === 0 ? t("Search by name or email") : undefined}
+            aria-label={t(assistant.share.invite, "Search by name or email")}
+            placeholder={picked.length === 0 ? t(assistant.share.invite, "Search by name or email") : undefined}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-6 min-w-24 flex-1 bg-transparent px-1 text-body-s text-ink outline-none placeholder:text-ink-faint"
@@ -138,7 +138,7 @@ function Invite({ chat, access, onInvited }: { chat: string; access: Access; onI
         {picking && (found.length > 0 || query !== "") && (
           <CommandList id={list} className="absolute inset-x-0 top-full z-10 mt-1 max-h-60 rounded-xl border border-border bg-popover p-1 shadow-overlay">
             {found.length > 0 && (
-              <CommandGroup heading={t("Select a person")}>
+              <CommandGroup heading={t(assistant.share.pick, "Select a person")}>
                 {found.map((p) => (
                 <CommandItem
                   key={p.id}
@@ -153,12 +153,12 @@ function Invite({ chat, access, onInvited }: { chat: string; access: Access; onI
                 ))}
               </CommandGroup>
             )}
-            <CommandEmpty>{(query.includes("@") ? t("Nobody with that email has signed in") : t("Type their full email"))}</CommandEmpty>
+            <CommandEmpty>{(query.includes("@") ? t(assistant.share.nobody, "Nobody with that email has signed in") : t(assistant.share.typeEmail, "Type their full email"))}</CommandEmpty>
           </CommandList>
         )}
       </Command>
       <Button size="sm" className="h-8" disabled={picked.length === 0 || sending} onClick={share}>
-        {t("Share")}
+        {t(assistant.share.send, "Share")}
       </Button>
     </div>
   );
@@ -173,15 +173,15 @@ function People({ chat, access, onChanged }: { chat: ChatSummary; access: Access
   return (
     <>
       <section className="flex flex-col gap-1.5">
-        <h3 className="text-caption font-semibold text-ink-soft">{t("People with access")}</h3>
+        <h3 className="text-caption font-semibold text-ink-soft">{t(assistant.share.people, "People with access")}</h3>
         {[access.owner, ...access.members].map((p) => (
           <div key={p.id} className="flex items-center gap-2.5">
             <PersonRow person={p} you={p.id === me.user_id} />
             {p.id === access.owner.id ? (
-              <span className="shrink-0 text-body-s text-ink-soft">{t("Owner")}</span>
+              <span className="shrink-0 text-body-s text-ink-soft">{t(assistant.share.owner, "Owner")}</span>
             ) : p.id === me.user_id ? (
               <Button size="sm" variant="ghost" onClick={() => onConfirm({ kind: "leave", chat })}>
-                {t("Leave")}
+                {t(assistant.leave, "Leave")}
               </Button>
             ) : owner ? (
               <Select value="interact" onValueChange={(v) => v === "remove" && write(ok(api.DELETE("/assistant/chats/{id}/members/{user}", { params: { path: { id: chat.id, user: p.id } } })))}>
@@ -189,35 +189,35 @@ function People({ chat, access, onChanged }: { chat: ChatSummary; access: Access
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent align="end">
-                  <SelectItem value="interact">{t("Can interact")}</SelectItem>
-                  <SelectItem value="remove">{t("Remove")}</SelectItem>
+                  <SelectItem value="interact">{t(assistant.share.interact, "Can interact")}</SelectItem>
+                  <SelectItem value="remove">{t(assistant.share.remove, "Remove")}</SelectItem>
                 </SelectContent>
               </Select>
             ) : (
-              <span className="shrink-0 text-body-s text-ink-soft">{t("Can interact")}</span>
+              <span className="shrink-0 text-body-s text-ink-soft">{t(assistant.share.interact, "Can interact")}</span>
             )}
           </div>
         ))}
       </section>
       <section className="flex flex-col gap-1.5">
-        <h3 className="text-caption font-semibold text-ink-soft">{t("General access")}</h3>
+        <h3 className="text-caption font-semibold text-ink-soft">{t(assistant.share.general, "General access")}</h3>
         <div className="flex items-center gap-2.5">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-hover">
             <Building2 aria-hidden className="size-4 text-ink-mid" />
           </span>
-          <span className="min-w-0 flex-1 truncate text-body-s text-ink">{t("Everyone in Service-Arb")}</span>
+          <span className="min-w-0 flex-1 truncate text-body-s text-ink">{t(assistant.share.everyone, "Everyone in Service-Arb")}</span>
           {owner ? (
             <Select value={access.general} onValueChange={(v) => write(ok(api.PUT("/assistant/chats/{id}/general", { params: { path: { id: chat.id } }, body: { general: v as GeneralAccess } })))}>
               <SelectTrigger size="sm" className="shrink-0 border-0 bg-transparent">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent align="end">
-                <SelectItem value="view">{t("Can view")}</SelectItem>
-                <SelectItem value="none">{t("No access")}</SelectItem>
+                <SelectItem value="view">{t(assistant.share.view, "Can view")}</SelectItem>
+                <SelectItem value="none">{t(assistant.share.none, "No access")}</SelectItem>
               </SelectContent>
             </Select>
           ) : (
-            <span className="shrink-0 text-body-s text-ink-soft">{(access.general === "view" ? t("Can view") : t("No access"))}</span>
+            <span className="shrink-0 text-body-s text-ink-soft">{(access.general === "view" ? t(assistant.share.view, "Can view") : t(assistant.share.none, "No access"))}</span>
           )}
         </div>
       </section>
@@ -241,7 +241,7 @@ function PersonRow({ person, you = false }: { person: Person; you?: boolean }) {
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-body-s text-ink">
           {person.name}
-          {you && <span className="ml-1 text-caption text-ink-soft">{t("(You)")}</span>}
+          {you && <span className="ml-1 text-caption text-ink-soft">{t(assistant.share.you, "(You)")}</span>}
         </span>
         <span className="truncate text-caption text-ink-soft">{person.email}</span>
       </span>

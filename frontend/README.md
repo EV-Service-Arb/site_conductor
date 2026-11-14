@@ -18,7 +18,9 @@ src/features/        account-chip · sign-out · wallet-element · sites-element
 src/entities/        session · source · tokens · gmb · alerts · assistant — what the screens make of the API's answers
 src/shared/          api/ (`api`: /api/v1 from openapi.json, its answers checked against it; `http`: the services' forwards;
                      CSRF, the gate's answers), i18n/, lib/ (live/: the socket), mfe/, ui/
-messages/            ru.auto.json (generated) and ru.json (hand overrides), keyed by the English; see below
+messages/            en/common.json generated from the code's t(key, "English") (`npm run i18n`); ru/common.auto.json
+                     generated, ru/common.json hand overrides, both {en, t}; `npm run build` fails on anything
+                     untranslated or stale — see @evinvest/i18n's README. Root keys live in the slice they name.
 scripts/dev-stub.ts  a stand-in backend for local work
 tests/               vitest, in Node: the rules the screens obey live in plain modules; e2e/: the Figma frames
 ```
@@ -46,18 +48,6 @@ for what acts on the platform session. The panel's own chip entries are the call
 stand-in, while the bundle loads or when it cannot, opens the same entries.
 
 Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
-
-## Copy
-
-English lives only where it renders: `t("Sign out")`, `t("{n} GBP", { n })`, and `t.ctx("ledger", "Added")`
-where one English means two things. Copy picked by data is a closed table
-(`{ draft: (t) => t("Draft"), … } satisfies Record<State, (t: T) => string>`). Every other language is
-`messages/<lang>.auto.json` (generated) under `messages/<lang>.json` (hand overrides, `{ "<English>": "…" }`):
-an override whose English the code no longer renders stops applying. `npm run build` runs
-`evinvest-i18n-check` first: it fails on a string with no translation, an orphaned override (naming the
-nearest new string) or a generated entry for gone English; `evinvest-i18n-extract` prunes both files. In
-`npm run dev` an untranslated string shows its English and warns once. The model:
-[`@evinvest/i18n`](https://github.com/EV-Main/web_std/tree/main/ts/i18n).
 `nix run .#figma` puts the conductor's own screens into Figma, both breakpoints, over the stub as an
 admin (`tests/e2e`; the loop is the `figma-render` skill).
 
@@ -99,14 +89,14 @@ elements do the same for theirs. The elements also tell the host: `sa:title-coun
 
 ## Keys
 
-Everything sits behind one leader, `Alt+S` (`⌥S` on macOS), through `@evinvest/uikit`'s
+Everything sits behind one leader, `z` (`Alt+Z` too; from a field only `Alt+Z`, as `z` types there), through `@evinvest/uikit`'s
 `KeymapProvider` in the shell; a feature contributes its keys with `useBinding` while it is
 mounted, an element with `ev:keymap` under the scope `elementKeys` (`panel.config.ts`) gives it.
-The leader opens from a field too, and the scope's next key is kept from it; besides it the page
+Once open, the scope's next key is kept from the field; besides it the page
 claims only the undo keys, which leave a field its own text undo.
 
 ```text
-Alt+S ─┬─ A   assistant: show / hide          (not on its full-screen page)
+z ─────┬─ A   assistant: show / hide          (not on its full-screen page)
        ├─ N   assistant: new chat
        ├─ L   assistant: copy the chat's link (once a chat has started)
        ├─ P   map: Google's places on / off   (only on /; the hotbar shows it)

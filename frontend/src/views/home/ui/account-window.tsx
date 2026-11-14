@@ -3,20 +3,25 @@
 import { Button, NativeSelect, NativeSelectOption, Settled, Skeleton, cn } from "@evinvest/uikit";
 import { Mail, X } from "lucide-react";
 
-import { ACCOUNT_TABS, type AccountTab, GMAIL_ROLE_LABEL, openAccount, useGmails } from "@/entities/gmb";
+import { ACCOUNT_TABS, type AccountTab, GMAIL_ROLE_NAME, openAccount, useGmails, windowKeys, gmbs } from "@/entities/gmb";
 import { BrowserSession } from "@/features/browser-session";
 import { ImapCard } from "@/features/connect-imap";
 import { BrowserCard } from "@/features/set-browser";
 import { MapsKeyCard } from "@/features/set-maps-key";
 import { api, ok } from "@/shared/api";
 import { type Gmail, type GmailRole, gmailRoleValues } from "@/shared/api/schema";
-import { useT } from "@/shared/i18n";
+import { type T, useT, account } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
 
 /** A managing gmail's own window over the map, shaped as a trade's: what it is connected to, and its browser. */
+const TAB_NAME = {
+  connections: (t) => t(account.tab.connections, "Connections"),
+  browser: (t) => t(account.tab.browser, "Browser"),
+} satisfies Record<AccountTab, (t: T) => string>;
+
 export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: AccountTab; gbps: number }) {
   const t = useT();
   const button = useButtonSize();
@@ -30,11 +35,11 @@ export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Account
             <span className="truncate">{gmail.gmail}</span>
           </h2>
           <p className="flex items-center gap-2 text-sm text-ink-soft tabular-nums">
-            {t("{n} GBP", { n: gbps })}
+            {t(account.gbps, "{n} GBP", { n: gbps })}
             <RoleSelect gmail={gmail} />
           </p>
         </div>
-        <Button variant="ghost" size={button("sm")} icon aria-label={t("Close the window")} title={t("Close the window")} onClick={() => openAccount(null)}>
+        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => openAccount(null)}>
           <X aria-hidden />
         </Button>
       </header>
@@ -48,7 +53,7 @@ export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Account
             onClick={() => openAccount({ gmail: gmail.id, tab: k })}
             className={cn("-mb-px border-b-2 px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring", k === tab ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink")}
           >
-            {k === "connections" ? t("Connections") : t("Browser")}
+            {TAB_NAME[k](t)}
           </button>
         ))}
       </nav>
@@ -91,15 +96,15 @@ function RoleSelect({ gmail }: { gmail: Gmail }) {
     <NativeSelect
       size="sm"
       wrapperClassName="w-28 shrink-0"
-      aria-label={t("Role of {gmail} on its GBPs", { gmail: gmail.gmail })}
-      title={t("optional · owners usually hold up to 3 GBPs, managers 6")}
+      aria-label={t(gmbs.gmail.role, "Role of {gmail} on its GBPs", { gmail: gmail.gmail })}
+      title={t(gmbs.gmail.role.hint, "optional · owners usually hold up to 3 GBPs, managers 6")}
       value={gmail.role ?? ""}
       onChange={(e) => void pick(e.target.value === "" ? null : (e.target.value as GmailRole))}
     >
-      <NativeSelectOption value="">{t("No role")}</NativeSelectOption>
+      <NativeSelectOption value="">{t(gmbs.gmail.role.pick, "No role")}</NativeSelectOption>
       {gmailRoleValues.map((r) => (
         <NativeSelectOption key={r} value={r}>
-          {GMAIL_ROLE_LABEL[r](t)}
+          {GMAIL_ROLE_NAME[r](t)}
         </NativeSelectOption>
       ))}
     </NativeSelect>

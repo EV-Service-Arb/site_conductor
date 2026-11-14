@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { panelGroups } from "@/features/account-chip/model/attributes";
 import { ALIASES, ownScreens, seesSites } from "@/entities/session/model/access";
 import type { Caller, Permission } from "@/shared/api/schema";
-import { i18n } from "@/shared/i18n/registry";
+import type { T } from "@/shared/i18n";
 
-const t = i18n.translator({}, "en", () => {});
+const t: T = (...args) => args[1];
 
 const holding = (...permissions: Permission[]): Caller => ({ user_id: "u", email: "e", preferred_name: "", permissions, dev_sign_in: false });
 const alias = (name: keyof typeof ALIASES): Caller => holding(...ALIASES[name]);

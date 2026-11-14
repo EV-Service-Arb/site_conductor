@@ -4,7 +4,7 @@ import { DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, Dropdo
 import { Archive, ArchiveRestore, Link, LogOut, Maximize, PanelRightOpen, PencilLine, PictureInPicture2, Pin, PinOff, Trash2 } from "lucide-react";
 import { createContext, useContext } from "react";
 
-import { chatLink } from "@/entities/assistant";
+import { chatLink, assistant } from "@/entities/assistant";
 import { api, ok } from "@/shared/api";
 import type { ChatSummary } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
@@ -35,15 +35,15 @@ export function useControls(): Controls {
 
 export function copyLink(id: string, t: T): void {
   void navigator.clipboard.writeText(chatLink(id)).then(
-    () => toast.positive(t("Link copied")),
+    () => toast.positive(t(assistant.linkCopied, "Link copied")),
     (e: unknown) => notifyFailure(e, t),
   );
 }
 
 const DISPLAYS = [
-  { id: "sidebar", icon: PanelRightOpen, label: (t: T) => t("Sidebar") },
-  { id: "floating", icon: PictureInPicture2, label: (t: T) => t("Floating") },
-  { id: "full", icon: Maximize, label: (t: T) => t("Full screen") },
+  { id: "sidebar", icon: PanelRightOpen, name: (t: T) => t(assistant.display.sidebar, "Sidebar") },
+  { id: "floating", icon: PictureInPicture2, name: (t: T) => t(assistant.display.floating, "Floating") },
+  { id: "full", icon: Maximize, name: (t: T) => t(assistant.display.full, "Full screen") },
 ] as const;
 
 /** The ⋯ menu's items, for the open chat and for a history row alike. `pinOutside`: Pin is a header button of its own. */
@@ -57,50 +57,50 @@ export function ChatActions({ chat, onRename, pinOutside = false }: { chat: Chat
     <>
       <DropdownMenuItem onClick={() => copyLink(chat.id, t)}>
         <Link aria-hidden />
-        {t("Copy link")}
+        {t(assistant.copyLink, "Copy link")}
         <DropdownMenuShortcut>Ctrl+Alt+L</DropdownMenuShortcut>
       </DropdownMenuItem>
       {interacts && !pinOutside && (
         <DropdownMenuItem onClick={() => write(ok(api.PUT("/assistant/chats/{id}/pinned", { params: { path: { id: chat.id } }, body: { on: chat.pinned_at == null } })))}>
           {chat.pinned_at == null ? <Pin aria-hidden /> : <PinOff aria-hidden />}
-          {(chat.pinned_at == null ? t("Pin") : t("Unpin"))}
+          {(chat.pinned_at == null ? t(assistant.pin, "Pin") : t(assistant.unpin, "Unpin"))}
         </DropdownMenuItem>
       )}
       {interacts && (
         <DropdownMenuItem onClick={onRename}>
           <PencilLine aria-hidden />
-          {t("Rename")}
+          {t(assistant.rename, "Rename")}
         </DropdownMenuItem>
       )}
       {interacts && (
         <DropdownMenuItem onClick={() => write(ok(api.PUT("/assistant/chats/{id}/archived", { params: { path: { id: chat.id } }, body: { on: chat.archived_at == null } })))}>
           {chat.archived_at == null ? <Archive aria-hidden /> : <ArchiveRestore aria-hidden />}
-          {(chat.archived_at == null ? t("Archive") : t("Unarchive"))}
+          {(chat.archived_at == null ? t(assistant.archive, "Archive") : t(assistant.unarchive, "Unarchive"))}
         </DropdownMenuItem>
       )}
       {chat.role === "owner" && (
         <DropdownMenuItem variant="destructive" onClick={() => onConfirm({ kind: "delete", chat })}>
           <Trash2 aria-hidden />
-          {t("Delete")}
+          {t(assistant.delete, "Delete")}
         </DropdownMenuItem>
       )}
       {chat.role === "member" && (
         <DropdownMenuItem variant="destructive" onClick={() => onConfirm({ kind: "leave", chat })}>
           <LogOut aria-hidden />
-          {t("Leave")}
+          {t(assistant.leave, "Leave")}
         </DropdownMenuItem>
       )}
       <DropdownMenuSeparator />
       <DropdownMenuRadioGroup value={display} onValueChange={(d) => onDisplay(chat.id, d as Display)}>
-        {DISPLAYS.map(({ id, icon: Icon, label }) => (
+        {DISPLAYS.map(({ id, icon: Icon, name }) => (
           <DropdownMenuRadioItem key={id} value={id}>
             <Icon aria-hidden />
-            {label(t)}
+            {name(t)}
           </DropdownMenuRadioItem>
         ))}
       </DropdownMenuRadioGroup>
       <DropdownMenuSeparator />
-      <p className="px-2 py-1.5 text-caption text-ink-soft">{t("Last updated {when}", { when: ago(chat.updated_at, locale) })}</p>
+      <p className="px-2 py-1.5 text-caption text-ink-soft">{t(assistant.updated, "Last updated {when}", { when: ago(chat.updated_at, locale) })}</p>
     </>
   );
 }

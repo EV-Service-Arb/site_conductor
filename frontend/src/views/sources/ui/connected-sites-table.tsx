@@ -7,16 +7,12 @@ import type { SourceState } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { EDGE_CELL, TABLE_HEAD } from "@/shared/ui/table";
+import { connected } from "../model/i18n";
+import { sources } from "@/entities/source";
 
 const HEAD = cn(TABLE_HEAD, EDGE_CELL);
 
-const STATE = {
-  unset: { tone: "neutral", label: (t) => t("not configured") },
-  live: { tone: "positive", label: (t) => t("live") },
-  empty: { tone: "neutral", label: (t) => t("empty") },
-  withdrawn: { tone: "neutral", label: (t) => t("withdrawn") },
-  down: { tone: "error", label: (t) => t("down") },
-} as const satisfies Record<SourceState["state"], { tone: string; label: (t: T) => string }>;
+const STATE_TONE = { unset: "neutral", live: "positive", empty: "neutral", withdrawn: "neutral", down: "error" } as const;
 
 /** Every active site key: what its landing says of itself, beside what sites saw of it. */
 export function ConnectedSitesTable({ sites }: { sites: ConnectedSite[] }) {
@@ -27,13 +23,13 @@ export function ConnectedSitesTable({ sites }: { sites: ConnectedSite[] }) {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className={HEAD}>{t("Key id")}</TableHead>
-              <TableHead className={HEAD}>{t("Brands")}</TableHead>
-              <TableHead className={HEAD}>{t("Origin")}</TableHead>
-              <TableHead className={HEAD}>{t("State")}</TableHead>
+              <TableHead className={HEAD}>{t(sources.keyId, "Key id")}</TableHead>
+              <TableHead className={HEAD}>{t(sources.brands, "Brands")}</TableHead>
+              <TableHead className={HEAD}>{t(sources.origin, "Origin")}</TableHead>
+              <TableHead className={HEAD}>{t(sources.state, "State")}</TableHead>
               <TableHead className={HEAD}>kitstart</TableHead>
-              <TableHead className={cn(HEAD, "text-right")}>{t("Last event")}</TableHead>
-              <TableHead className={cn(HEAD, "text-right")}>{t("Last data read")}</TableHead>
+              <TableHead className={cn(HEAD, "text-right")}>{t(connected.lastIngest, "Last event")}</TableHead>
+              <TableHead className={cn(HEAD, "text-right")}>{t(connected.lastRead, "Last data read")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -50,7 +46,7 @@ export function ConnectedSitesTable({ sites }: { sites: ConnectedSite[] }) {
 function Row({ site }: { site: ConnectedSite }) {
   const t = useT();
   const locale = useLocale();
-  const seen = (at: string | null | undefined) => (at === undefined ? t("unknown") : at === null ? t("never") : formatDateTime(at, locale));
+  const seen = (at: string | null | undefined) => (at === undefined ? t(connected.unknown, "unknown") : at === null ? t(connected.never, "never") : formatDateTime(at, locale));
   const readsTitle = site.reads.map((r) => `${r.brand} ${r.endpoint}: ${formatDateTime(r.at, locale)}`).join("\n");
   return (
     <TableRow>
@@ -72,11 +68,11 @@ function Row({ site }: { site: ConnectedSite }) {
 function Report({ site }: { site: ConnectedSite }) {
   const t = useT();
   const { report } = site;
-  if (report.state === "no_origin") return <Badge tone="neutral">{t("No origin set")}</Badge>;
+  if (report.state === "no_origin") return <Badge tone="neutral">{t(connected.noOrigin, "No origin set")}</Badge>;
   if (report.state === "failed")
     return (
       <Badge tone="error" title={report.detail}>
-        {t("No report")}
+        {t(connected.failed, "No report")}
       </Badge>
     );
   const { places, pricing, experiments } = report.report.sources;
@@ -85,17 +81,25 @@ function Report({ site }: { site: ConnectedSite }) {
       {Object.entries(places).map(([slug, s]) => (
         <State key={slug} label={slug} state={s} />
       ))}
-      <State label={t("pricing")} state={pricing} />
-      <State label={t("experiments")} state={experiments} />
+      <State label={t(connected.pricing, "pricing")} state={pricing} />
+      <State label={t(connected.experiments, "experiments")} state={experiments} />
     </div>
   );
 }
 
+const STATE_NAME = {
+  unset: (t) => t(connected.state.unset, "not configured"),
+  live: (t) => t(connected.state.live, "live"),
+  empty: (t) => t(connected.state.empty, "empty"),
+  withdrawn: (t) => t(connected.state.withdrawn, "withdrawn"),
+  down: (t) => t(connected.state.down, "down"),
+} satisfies Record<SourceState["state"], (t: T) => string>;
+
 function State({ label, state }: { label: string; state: SourceState }) {
   const t = useT();
   return (
-    <Badge tone={STATE[state.state].tone} title={state.state === "down" ? state.detail : undefined}>
-      {label}: {STATE[state.state].label(t)}
+    <Badge tone={STATE_TONE[state.state]} title={state.state === "down" ? state.detail : undefined}>
+      {label}: {STATE_NAME[state.state](t)}
     </Badge>
   );
 }

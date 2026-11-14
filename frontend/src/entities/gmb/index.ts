@@ -3,9 +3,9 @@ export { browsersUnconnected, uploadFilm } from "./api/connections";
 export { fetchArchive } from "./api/tags";
 export { type Placed, categoryName, categoryOf } from "./model/category";
 export { GmailsProvider, useGmails, useGmbTags, useTrades, useTrash, useUndoable } from "./model/gmails-context";
-export { GMAIL_ROLE_LABEL, STATE_LABEL, googleName } from "./model/gmb";
+export { GMAIL_ROLE_NAME, STATE_NAME, googleName } from "./model/gmb";
 export type { ArchiveTag, SiteTag, SitesPlace } from "./model/gmb";
-export { ISSUE_LABEL, ISSUES, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
+export { ISSUES, ISSUE_NAME, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
 export { type Listed, byView, narrowed, under } from "./model/narrow";
 export { MUST_HAVES, type MustHave, readiness } from "./model/readiness";
 export { ACCOUNT_TABS, type AccountTab, type OnMap, TABS, type Tab, open, openAccount, openCategories, openTrade, openTrash, peek, setOnMap, useAccountWindow, useCategoriesWindow, useOnMap, usePeeked, useTab, useTradeWindow, useTrashWindow } from "./model/on-map";
@@ -13,3 +13,5 @@ export { type Pattern, type Scope, chooseCategoryScope, chooseGmailScope, covers
 export { PublishSelection, type Selection, select, setFilter, setOnly, useSelection } from "./model/selection";
 export { TradeSelect } from "./ui/trade-select";
 export { CategoryChip } from "./ui/category-chip";
+export { LiveReviews } from "./ui/live-reviews";
+export { gmbs, trades, browser, windowKeys, scopeKeys, trash, undo, move } from "./model/i18n";

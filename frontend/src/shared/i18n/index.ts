@@ -1,3 +1,3 @@
-export { I18n, chooseLocale, useLocale, useT } from "./i18n";
-export { i18n } from "./registry";
-export type { Locale, T } from "./registry";
+export * from "./keys";
+export { LOCALES, LocaleProvider, chooseLocale, useLocale, useT } from "./use-t";
+export type { Locale, T } from "./use-t";

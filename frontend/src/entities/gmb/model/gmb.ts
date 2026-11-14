@@ -2,9 +2,19 @@ import type { GmailRole, GoogleCategory, State } from "@/shared/api/schema";
 import type { T } from "@/shared/i18n";
 import { type Infer, type Parser, arrayOf, bool, nullable, num, object, str } from "@/shared/lib/parse";
 
-/** Each a key, so the compiler holds the lists to the generated unions. */
-export const STATE_LABEL = { draft: (t) => t("Draft"), verifying: (t) => t("Verifying"), verified: (t) => t("Verified"), suspended: (t) => t("Suspended") } satisfies Record<State, (t: T) => string>;
-export const GMAIL_ROLE_LABEL = { owner: (t) => t("Owner"), manager: (t) => t("Manager") } satisfies Record<GmailRole, (t: T) => string>;
+import { gmbs } from "./i18n";
+
+export const GMAIL_ROLE_NAME = {
+  owner: (t) => t(gmbs.gmail.role.owner, "Owner"),
+  manager: (t) => t(gmbs.gmail.role.manager, "Manager"),
+} satisfies Record<GmailRole, (t: T) => string>;
+
+export const STATE_NAME = {
+  draft: (t) => t(gmbs.state.draft, "Draft"),
+  verifying: (t) => t(gmbs.state.verifying, "Verifying"),
+  verified: (t) => t(gmbs.state.verified, "Verified"),
+  suspended: (t) => t(gmbs.state.suspended, "Suspended"),
+} satisfies Record<State, (t: T) => string>;
 
 /** `g`'s name in `lang`: the reader's, or its country's, which Google's form there reads. */
 export function googleName(g: GoogleCategory, lang: string): string {
@@ -27,7 +37,13 @@ function byGmb<T>(p: Parser<T>): Parser<Map<number, T>> {
   };
 }
 
-const archiveTagParser = object({ tracked: bool, rating: nullable(num), reviews: nullable(num), suspended: num, reinstating: num, failing: bool });
+const daysParser = arrayOf(nullable(object({ live: num, lost: num })));
+const live30dParser: Parser<Infer<typeof daysParser>> = (v, path) => {
+  const days = daysParser(v, path);
+  if (days.length !== 30) throw new Error(`${path}: expected 30 days, got ${days.length}`);
+  return days;
+};
+const archiveTagParser = object({ tracked: bool, rating: nullable(num), reviews: nullable(num), suspended: num, reinstating: num, failing: bool, live_30d: live30dParser });
 export type ArchiveTag = Infer<typeof archiveTagParser>;
 export const archiveParser = object({ gmbs: byGmb(archiveTagParser), places_tracked: num });
 export type Archive = Infer<typeof archiveParser>;

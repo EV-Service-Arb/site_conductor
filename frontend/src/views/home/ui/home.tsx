@@ -9,7 +9,7 @@ import { PlacingBar } from "@/features/place-gmb";
 import { PlacementOverlay } from "@/features/placement-overlay";
 import type { LatLng, MapConfig, State } from "@/shared/api/schema";
 import { takeReturnPage } from "@/shared/api";
-import { useT } from "@/shared/i18n";
+import { useT, home } from "@/shared/i18n";
 import { setQuery, useQuery } from "@/shared/lib/query";
 import { useResource } from "@/shared/lib/use-resource";
 import { pin, useTheMap } from "@/shared/map";
@@ -42,7 +42,7 @@ export function Home() {
           <ErrorState failure={config.failure} onRetry={config.reload} />
         </div>
       )}
-      {config.status === "ok" && config.data === null && <EmptyState className="m-6" title={t("No map here")} description={t("The conductor has no Google Maps browser key (GOOGLE_MAPS_BROWSER_KEY). Your GMBs are in the list beside.")} />}
+      {config.status === "ok" && config.data === null && <EmptyState className="m-6" title={t(home.noMap, "No map here")} description={t(home.noMap.why, "The conductor has no Google Maps browser key (GOOGLE_MAPS_BROWSER_KEY). Your GMBs are in the list beside.")} />}
       {config.status === "ok" && config.data !== null && <GmbMap config={config.data} />}
     </div>
   );

@@ -2062,7 +2062,7 @@
         "tags": [
           "gmbs"
         ],
-        "summary": "Creates a GBP no place is known of: a draft, or one verifying or suspended (off Maps).",
+        "summary": "Creates a GBP no place is known of: a draft by its spots, or one verifying or suspended (off Maps) by a location.",
         "description": "409 if a live GBP has the name.",
         "operationId": "create_gmb",
         "requestBody": {
@@ -2497,6 +2497,59 @@
           },
           "204": {
             "description": "no content"
+          }
+        }
+      }
+    },
+    "/gmbs/{id}/spots": {
+      "put": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Replaces a draft's candidate spots, its location the first's. 409 not a draft.",
+        "operationId": "set_spots",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSpots"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A GBP of the caller's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gmb"
+                }
+              }
+            }
           }
         }
       }
@@ -4592,6 +4645,13 @@
               "null"
             ]
           },
+          "spots": {
+            "description": "A draft's candidate spots, in order, its location the first's; none past a draft.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Spot"
+            }
+          },
           "state": {
             "$ref": "#/components/schemas/State"
           },
@@ -4621,7 +4681,8 @@
           "film",
           "created_at",
           "enabled",
-          "location"
+          "location",
+          "spots"
         ]
       },
       "GmbEdit": {
@@ -5192,6 +5253,14 @@
           },
           "name": {
             "type": "string"
+          },
+          "spots": {
+            "description": "A draft's candidate spots, 1–20, in order: its location the first's.",
+            "type": "array",
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SpotInput"
+            }
           },
           "state": {
             "description": "Draft, verifying or suspended.",
@@ -5855,6 +5924,21 @@
         },
         "additionalProperties": false
       },
+      "SetSpots": {
+        "type": "object",
+        "properties": {
+          "spots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpotInput"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "spots"
+        ]
+      },
       "SetTrades": {
         "type": "object",
         "properties": {
@@ -5884,6 +5968,7 @@
         "type": "object",
         "properties": {
           "keep_days": {
+            "description": "1, 7, 30 or 90.",
             "type": "integer",
             "format": "int64"
           },
@@ -6169,6 +6254,68 @@
               "detail"
             ]
           }
+        ]
+      },
+      "Spot": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "description": "What it was picked by: an address, a business nearby.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lat": {
+            "type": "number",
+            "format": "double"
+          },
+          "lng": {
+            "type": "number",
+            "format": "double"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "lat",
+          "lng",
+          "label",
+          "note"
+        ]
+      },
+      "SpotInput": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "description": "What it was picked by: an address, a business nearby.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lat": {
+            "type": "number",
+            "format": "double"
+          },
+          "lng": {
+            "type": "number",
+            "format": "double"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
         ]
       },
       "StartBrowser": {
@@ -6499,7 +6646,7 @@
         "type": "object",
         "properties": {
           "keep_days": {
-            "description": "1 to 90.",
+            "description": "1, 7, 30 or 90.",
             "type": "integer",
             "format": "int64"
           },

@@ -73,6 +73,7 @@ async fn create(p: &Panel, owner: Uuid, name: &str, state: State, gmail_id: Opti
 		gmail_id,
 		country,
 		at: None,
+		spots: if state == State::Draft { vec![sa_panel::gmbs::Spot { at: sa_places::LatLng { lat: 45.76, lng: 4.84 }, label: None, note: None }] } else { Vec::new() },
 	};
 	p.create_gmb(owner, unplaced, now()).await.unwrap()
 }

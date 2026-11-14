@@ -4,7 +4,7 @@ import type { ArchiveTag, SiteTag } from "@/entities/gmb/model/gmb";
 import { type Issue, type Tags, issueCounts, issueOf, issueText } from "@/entities/gmb/model/issues";
 import { readiness } from "@/entities/gmb/model/readiness";
 import type { Gmail, Gmb, GoogleCategory, Trade } from "@/shared/api/schema";
-import { i18n } from "@/shared/i18n/registry";
+import { translator } from "@evinvest/i18n";
 
 const GMAIL = 1;
 const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
@@ -25,8 +25,9 @@ const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
   created_at: "2026-11-06T00:00:00Z",
   enabled,
   location: located ? { lat: 45.76, lng: 4.83, placed: false } : null,
+  spots: [],
 });
-const archive = (suspended: number, failing: boolean): ArchiveTag => ({ tracked: true, rating: 4.5, reviews: 10, suspended, reinstating: 0, failing });
+const archive = (suspended: number, failing: boolean): ArchiveTag => ({ tracked: true, rating: 4.5, reviews: 10, suspended, reinstating: 0, failing, live_30d: Array(30).fill(null) });
 const site = (overdue: number): SiteTag => ({ brand: "aquafix", location: "lyon-9", leads_7d: 3, overdue });
 const PLUMBING = 7;
 /** Plumbing, set up in FR with Google's primary category unless `primary` is null. */
@@ -141,6 +142,6 @@ describe("a draft's readiness", () => {
   it("is a draft's issue, after overdue leads and before a missing point, told as its count", () => {
     const tags: Tags = { archive: null, sites: new Map([[2, site(1)]]), trades: plumbing() };
     check([draft(1, full), draft(2), gmb(3, { located: false })], tags, { 1: "draft", 2: "overdue", 3: "unlocated" });
-    expect(issueText("draft", listed(draft(1, full)), tags, i18n.translator({}, "en", () => {}))).toBe("8/9");
+    expect(issueText("draft", listed(draft(1, full)), tags, translator({}, "en"))).toBe("8/9");
   });
 });

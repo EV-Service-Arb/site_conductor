@@ -20,7 +20,7 @@ import {
 } from "@evinvest/uikit";
 import { useId, useState } from "react";
 
-import { STATE_LABEL, TradeSelect, useGmails } from "@/entities/gmb";
+import { STATE_NAME, TradeSelect, useGmails, gmbs, trades } from "@/entities/gmb";
 import { api, ok } from "@/shared/api";
 import { type Country, type Gmb, type State, countryValues } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
@@ -43,7 +43,7 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
   const [place, setPlace] = useState("");
   const [busy, setBusy] = useState(false);
   const googles = gmb.country != null && !gmb.country.by_hand;
-  const title = t("Edit {name}", { name: gmb.name });
+  const title = t(gmbs.gbp.edit, "Edit {name}", { name: gmb.name });
 
   const act = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -78,7 +78,7 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            {STATE_LABEL[gmb.state](t)}
+            {STATE_NAME[gmb.state](t)}
             {gmb.address && ` · ${gmb.address}`}
           </DialogDescription>
         </DialogHeader>
@@ -91,7 +91,7 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
         >
           {gmails.status === "ok" && (
             <Field className="flex flex-col gap-1">
-              <FieldLabel htmlFor={`${id}-gmail`}>{t("Gmail")}</FieldLabel>
+              <FieldLabel htmlFor={`${id}-gmail`}>{t(gmbs.gbp.gmail, "Gmail")}</FieldLabel>
               <Select value={gmail === null ? NONE : String(gmail)} onValueChange={(v) => setGmail(v === NONE ? null : Number(v))}>
                 <SelectTrigger id={`${id}-gmail`} size={size} className="w-full">
                   <SelectValue />
@@ -107,16 +107,16 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
             </Field>
           )}
           <Field className="flex flex-col gap-1">
-            <FieldLabel>{t("Trade")}</FieldLabel>
-            <TradeSelect value={trade} onPick={setTrade} none={t("No trade")} label={t("Trade")} className="w-full" />
+            <FieldLabel>{t(trades.trade, "Trade")}</FieldLabel>
+            <TradeSelect value={trade} onPick={setTrade} none={t(trades.none, "No trade")} label={t(trades.trade, "Trade")} className="w-full" />
           </Field>
           <div className="flex gap-2">
             <Field className="flex min-w-0 flex-1 flex-col gap-1">
-              <FieldLabel htmlFor={`${id}-phone`}>{t("Phone")}</FieldLabel>
+              <FieldLabel htmlFor={`${id}-phone`}>{t(gmbs.gbp.phone, "Phone")}</FieldLabel>
               <Input id={`${id}-phone`} size={size} type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
             </Field>
             <Field className="flex min-w-0 flex-1 flex-col gap-1">
-              <FieldLabel htmlFor={`${id}-country`}>{t("Country")}</FieldLabel>
+              <FieldLabel htmlFor={`${id}-country`}>{t(gmbs.gbp.country, "Country")}</FieldLabel>
               <Select value={country ?? NONE} onValueChange={(v) => setCountryPicked(v as Country)}>
                 <SelectTrigger id={`${id}-country`} size={size} className="w-full" disabled={googles}>
                   <SelectValue />
@@ -130,28 +130,28 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
                   ))}
                 </SelectContent>
               </Select>
-              {googles && <FieldDescription>{t("Google's")}</FieldDescription>}
+              {googles && <FieldDescription>{t(gmbs.gbp.country.google, "Google's")}</FieldDescription>}
             </Field>
           </div>
           <DialogFooter>
             <Button type="submit" size={button()} disabled={busy}>
-              {t("Save")}
+              {t(gmbs.gbp.save, "Save")}
             </Button>
           </DialogFooter>
         </form>
         <div className="flex flex-col gap-2 border-t border-border pt-3">
           {gmb.place_id == null && (
             <Field className="flex flex-col gap-1">
-              <FieldLabel htmlFor={`${id}-place`}>{t("Its place on Google")}</FieldLabel>
+              <FieldLabel htmlFor={`${id}-place`}>{t(gmbs.gbp.toGoogle, "Its place on Google")}</FieldLabel>
               <Input id={`${id}-place`} size={size} autoCapitalize="none" value={place} onChange={(e) => setPlace(e.target.value)} />
-              <FieldDescription>{t("Its Maps link or place id: needed to become verified.")}</FieldDescription>
+              <FieldDescription>{t(gmbs.gbp.place.needed, "Its Maps link or place id: needed to become verified.")}</FieldDescription>
             </Field>
           )}
           <div className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
-            {t("Move to")}
+            {t(gmbs.gbp.move, "Move to")}
             {gmb.next.map((to) => (
               <Button key={to} variant="outline" size={button("sm")} disabled={busy || (to === "verified" && gmb.place_id == null && place.trim() === "")} onClick={() => void move(to)}>
-                {STATE_LABEL[to](t)}
+                {STATE_NAME[to](t)}
               </Button>
             ))}
           </div>

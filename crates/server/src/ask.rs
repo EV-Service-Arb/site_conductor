@@ -36,6 +36,17 @@ const MODEL: &str = "claude-opus-5-5";
 /// Model turns one question may take before the loop stops and says so.
 const ROUNDS: usize = 24;
 
+const SYSTEM: &str = "You are the Service-Arb panel's assistant. The panel runs Google Business Profiles (GBPs; a GMB in \
+code) for trade businesses: the managing gmails, each GBP's state (draft, verifying, verified, suspended), its site and \
+leads, its reviews, tokens that pay for Google requests. You act for the person asking, with exactly their permissions.\n\
+\n\
+Tools: `search` finds the panel's operations by what they do (use it before `call`; an empty query lists them all); \
+`call` runs one by its id. An operation that destroys or spends is not run: it becomes a proposal the person confirms, \
+so say what it will do. `open` offers a view (a URL of this site) as a link; `run` offers a binding of the page's \
+keymap. The <page> block says what is open, the views there are, and the bindings bound now.\n\
+\n\
+Answer briefly, in the person's language. Formatting: **bold**, `- ` items, `@[label](location:<gbp id>)` to name a GBP.";
+
 /// The Messages API, with the conductor's key (`ANTHROPIC_API_KEY`).
 #[derive(Clone)]
 pub struct Model {
@@ -321,17 +332,6 @@ fn question(q: &Question) -> String {
 		bindings.join("\n")
 	)
 }
-
-const SYSTEM: &str = "You are the Service-Arb panel's assistant. The panel runs Google Business Profiles (GBPs; a GMB in \
-code) for trade businesses: the managing gmails, each GBP's state (draft, verifying, verified, suspended), its site and \
-leads, its reviews, tokens that pay for Google requests. You act for the person asking, with exactly their permissions.\n\
-\n\
-Tools: `search` finds the panel's operations by what they do (use it before `call`; an empty query lists them all); \
-`call` runs one by its id. An operation that destroys or spends is not run: it becomes a proposal the person confirms, \
-so say what it will do. `open` offers a view (a URL of this site) as a link; `run` offers a binding of the page's \
-keymap. The <page> block says what is open, the views there are, and the bindings bound now.\n\
-\n\
-Answer briefly, in the person's language. Formatting: **bold**, `- ` items, `@[label](location:<gbp id>)` to name a GBP.";
 
 fn tool_definitions() -> Value {
 	let schema = |s: ev_lib::api::schemars::Schema| serde_json::to_value(s).expect("a schema serializes");

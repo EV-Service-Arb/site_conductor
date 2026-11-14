@@ -10,6 +10,7 @@ import type { Country } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
+import { trades as tradesKeys, move } from "../model/i18n";
 
 const NEW = "new";
 
@@ -45,12 +46,12 @@ export function TradeSelect({ value, onPick, none, label, country, className }: 
             .finally(() => setBusy(false));
         }}
       >
-        <Input size={size} autoFocus aria-label={t("A trade's name: Plumbing")} placeholder={t("A trade's name: Plumbing")} value={name} onChange={(e) => setName(e.target.value)} className="min-w-0 flex-1" />
+        <Input size={size} autoFocus aria-label={t(tradesKeys.new.name, "A trade's name: Plumbing")} placeholder={t(tradesKeys.new.name, "A trade's name: Plumbing")} value={name} onChange={(e) => setName(e.target.value)} className="min-w-0 flex-1" />
         <Button type="submit" size={button("sm")} disabled={busy || name.trim() === ""}>
-          {t("Add the trade")}
+          {t(tradesKeys.new.add, "Add the trade")}
         </Button>
         <Button type="button" variant="ghost" size={button("sm")} onClick={() => setNaming(false)}>
-          {t("Cancel")}
+          {t(move.cancel, "Cancel")}
         </Button>
       </form>
     );
@@ -67,17 +68,17 @@ export function TradeSelect({ value, onPick, none, label, country, className }: 
         else onPick(v === "" ? null : Number(v));
       }}
     >
-      {(value === null || none !== undefined) && <NativeSelectOption value="">{none ?? t("Pick a trade")}</NativeSelectOption>}
+      {(value === null || none !== undefined) && <NativeSelectOption value="">{none ?? t(tradesKeys.pick, "Pick a trade")}</NativeSelectOption>}
       {trades.status === "ok" &&
         trades.data.map((tr) => {
           const there = country == null ? undefined : (tr.categories.find((c) => c.country === country) ?? null);
           return (
             <NativeSelectOption key={tr.id} value={String(tr.id)}>
-              {there === undefined ? tr.name : there === null ? t("{trade} — not set up in {country}", { trade: tr.name, country: country! }) : `${tr.name} — ${there.google_primary == null ? "…" : googleName(there.google_primary, locale)}`}
+              {there === undefined ? tr.name : there === null ? t(tradesKeys.option.notSetUp, "{trade} — not set up in {country}", { trade: tr.name, country: country! }) : `${tr.name} — ${there.google_primary == null ? "…" : googleName(there.google_primary, locale)}`}
             </NativeSelectOption>
           );
         })}
-      <NativeSelectOption value={NEW}>{t("New trade…")}</NativeSelectOption>
+      <NativeSelectOption value={NEW}>{t(tradesKeys.new, "New trade…")}</NativeSelectOption>
     </NativeSelect>
   );
 }

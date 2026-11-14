@@ -17,15 +17,22 @@ import {
 } from "@evinvest/uikit";
 import { useId, useState } from "react";
 
+import { tokens } from "@/entities/tokens";
 import { api, ok } from "@/shared/api";
 import type { BalanceChange, TokenHolder } from "@/shared/api/schema";
-import { useT } from "@/shared/i18n";
+import { type T, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 type Mode = "set" | "add" | "grant";
 
 /** set ≥ 0, add ≥ 1, grant ≥ 1 with a note: a grant is owed, for them to claim. */
+const MODE_NAME = {
+  set: (t) => t(tokens.grant.mode.set, "Set to"),
+  add: (t) => t(tokens.grant.mode.add, "Add"),
+  grant: (t) => t(tokens.grant.mode.grant, "Owe back"),
+} satisfies Record<Mode, (t: T) => string>;
+
 function changeOf(mode: Mode, n: number, note: string): BalanceChange | null {
   if (!Number.isSafeInteger(n)) return null;
   const said = note.trim();
@@ -50,7 +57,7 @@ export function GrantDialog({ holder, onClose, onDone }: { holder: TokenHolder; 
     setBusy(true);
     try {
       const { balance } = await ok(api.POST("/admin/tokens/{user_id}", { params: { path: { user_id: holder.user_id } }, body: c }));
-      toast.positive(t("Now {n} tokens", { n: balance }));
+      toast.positive(t(tokens.grant.done, "Now {n} tokens", { n: balance }));
       onDone();
     } catch (e) {
       notifyFailure(e, t);
@@ -70,27 +77,27 @@ export function GrantDialog({ holder, onClose, onDone }: { holder: TokenHolder; 
           }}
         >
           <DialogHeader>
-            <DialogTitle>{t("Tokens of {who}", { who: holder.email })}</DialogTitle>
-            <DialogDescription>{t("{n} tokens", { n: holder.balance })}</DialogDescription>
+            <DialogTitle>{t(tokens.grant.title, "Tokens of {who}", { who: holder.email })}</DialogTitle>
+            <DialogDescription>{t(tokens.count, "{n} tokens", { n: holder.balance })}</DialogDescription>
           </DialogHeader>
           <ToggleGroup type="single" variant="outline" value={mode} onValueChange={(v) => v && setMode(v as Mode)}>
             {(["set", "add", "grant"] as const).map((m) => (
               <ToggleGroupItem key={m} value={m}>
-                {m === "set" ? t("Set to") : m === "add" ? t("Add") : t("Owe back")}
+                {MODE_NAME[m](t)}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
           <Field className="flex flex-col gap-1">
-            <FieldLabel htmlFor={`${id}-amount`}>{t("Tokens")}</FieldLabel>
+            <FieldLabel htmlFor={`${id}-amount`}>{t(tokens.grant.amount, "Tokens")}</FieldLabel>
             <Input id={`${id}-amount`} type="number" inputMode="numeric" size={size} value={amount} onChange={(e) => setAmount(e.target.value)} />
           </Field>
           <Field className="flex flex-col gap-1">
-            <FieldLabel htmlFor={`${id}-note`}>{(mode === "grant" ? t("What it is for") : t("Note (optional)"))}</FieldLabel>
+            <FieldLabel htmlFor={`${id}-note`}>{(mode === "grant" ? t(tokens.grant.note.required, "What it is for") : t(tokens.grant.note, "Note (optional)"))}</FieldLabel>
             <Input id={`${id}-note`} size={size} value={note} onChange={(e) => setNote(e.target.value)} />
           </Field>
           <DialogFooter>
             <Button type="submit" size={button()} disabled={busy || change === null}>
-              {t("Apply")}
+              {t(tokens.grant.submit, "Apply")}
             </Button>
           </DialogFooter>
         </form>

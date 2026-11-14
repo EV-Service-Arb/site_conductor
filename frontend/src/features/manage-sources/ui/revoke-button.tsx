@@ -15,10 +15,12 @@ import {
   toast,
 } from "@evinvest/uikit";
 
+import { sources } from "@/entities/source";
 import { api, ok } from "@/shared/api";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
+import { move } from "@/entities/gmb";
 
 export function RevokeButton({ keyId, onRevoked }: { keyId: string; onRevoked: () => void }) {
   const t = useT();
@@ -26,7 +28,7 @@ export function RevokeButton({ keyId, onRevoked }: { keyId: string; onRevoked: (
   const revoke = async () => {
     try {
       await ok(api.DELETE("/sources/{key_id}", { params: { path: { key_id: keyId } } }));
-      toast.positive(t("Source revoked"));
+      toast.positive(t(sources.revoked.toast, "Source revoked"));
       onRevoked();
     } catch (e) {
       notifyFailure(e, t);
@@ -36,18 +38,18 @@ export function RevokeButton({ keyId, onRevoked }: { keyId: string; onRevoked: (
     <AlertDialog>
       <AlertDialogTrigger asChild>
         <Button variant="ghost" size={button("sm")}>
-          {t("Revoke")}
+          {t(sources.revoke, "Revoke")}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{t("Revoke {key}?", { key: keyId })}</AlertDialogTitle>
-          <AlertDialogDescription>{t("Events signed with this key will be refused from now on. This cannot be undone; a new key has to be added instead.")}</AlertDialogDescription>
+          <AlertDialogTitle>{t(sources.revoke.title, "Revoke {key}?", { key: keyId })}</AlertDialogTitle>
+          <AlertDialogDescription>{t(sources.revoke.body, "Events signed with this key will be refused from now on. This cannot be undone; a new key has to be added instead.")}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t("Cancel")}</AlertDialogCancel>
+          <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t(move.cancel, "Cancel")}</AlertDialogCancel>
           <AlertDialogAction className={buttonVariants({ variant: "destructive", size: button() })} onClick={() => void revoke()}>
-            {t("Revoke")}
+            {t(sources.revoke.confirm, "Revoke")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

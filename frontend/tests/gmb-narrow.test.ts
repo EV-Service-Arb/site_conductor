@@ -21,6 +21,7 @@ const gmb = (id: number, name: string, address: string | null, located: boolean,
   created_at: "2026-11-05T00:00:00Z",
   enabled,
   location: located ? { lat: 45.76, lng: 4.83, placed: false } : null,
+  spots: [],
 });
 
 const gmails: Gmails = {

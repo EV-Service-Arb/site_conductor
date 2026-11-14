@@ -7,7 +7,7 @@ import { PANEL } from "@config";
 
 import { ownScreens, seesSites, useMe } from "@/entities/session";
 import { ROUTES } from "@/shared/config/routes";
-import { useT } from "@/shared/i18n";
+import { useT, keys, nav, usage } from "@/shared/i18n";
 
 /** `leader g …`: every screen the caller may open, by key. */
 export function NavKeys() {
@@ -15,20 +15,20 @@ export function NavKeys() {
   const me = useMe();
   const router = useRouter();
   const own = ownScreens(me, PANEL.walletPage);
-  const go = (key: string, label: string, href: string, may = true): KeyBinding => ({ on: { key }, id: `go:${href}`, run: { label, run: may ? () => router.push(href) : null } });
+  const go = (key: string, label: string, href: string, may = true): KeyBinding => ({ on: { key }, id: href, run: { label, run: may ? () => router.push(href) : null } });
   useBinding({
     on: { key: "g" },
-    label: t("Go to"),
+    label: t(keys.go, "Go to"),
     children: [
-      go("h", t("Home"), "/"),
-      go("s", t("Sites"), ROUTES.sites, seesSites(me)),
-      go("r", t("Review Archive"), ROUTES.reviewArchive),
-      go("c", t("Sources"), ROUTES.sources, own.includes("sources")),
-      go("t", t("Tokens"), ROUTES.tokens, own.includes("tokens")),
-      go("u", t("Usage"), ROUTES.usage, own.includes("usage")),
-      go("w", t("Wallet"), ROUTES.wallet, own.includes("wallet")),
-      go("e", t("Alerts"), ROUTES.alerts),
-      go("y", t("Profile"), ROUTES.account),
+      go("h", t(nav.home, "Home"), "/"),
+      go("s", t(nav.sites, "Sites"), ROUTES.sites, seesSites(me)),
+      go("r", t(nav.reviewArchive, "Review Archive"), ROUTES.reviewArchive),
+      go("c", t(nav.sources, "Sources"), ROUTES.sources, own.includes("sources")),
+      go("t", t(nav.tokens, "Tokens"), ROUTES.tokens, own.includes("tokens")),
+      go("u", t(usage.title, "Usage"), ROUTES.usage, own.includes("usage")),
+      go("w", t(nav.wallet, "Wallet"), ROUTES.wallet, own.includes("wallet")),
+      go("e", t(nav.alerts, "Alerts"), ROUTES.alerts),
+      go("y", t(nav.account, "Profile"), ROUTES.account),
     ],
   });
   return null;

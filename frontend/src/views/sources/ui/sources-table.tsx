@@ -2,7 +2,7 @@
 
 import { Badge, Card, CardContent, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn } from "@evinvest/uikit";
 
-import { sourceKindLabel } from "@/entities/source";
+import { sourceKindLabel, sources as sourcesKeys } from "@/entities/source";
 import type { SourceKey } from "@/shared/api/schema";
 import { RevokeButton } from "@/features/manage-sources";
 import { useLocale, useT } from "@/shared/i18n";
@@ -29,7 +29,7 @@ export function SourcesTable({ sources, onRevoked }: { sources: SourceKey[]; onR
 function State({ source, onRevoked }: { source: SourceKey; onRevoked: () => void }) {
   const t = useT();
   const locale = useLocale();
-  if (source.revoked_at) return <Badge tone="neutral">{t("Revoked {at}", { at: formatDateTime(source.revoked_at, locale) })}</Badge>;
+  if (source.revoked_at) return <Badge tone="neutral">{t(sourcesKeys.revoked, "Revoked {at}", { at: formatDateTime(source.revoked_at, locale) })}</Badge>;
   return <RevokeButton keyId={source.key_id} onRevoked={onRevoked} />;
 }
 
@@ -40,12 +40,12 @@ function Wide({ sources, onRevoked }: { sources: SourceKey[]; onRevoked: () => v
     <Table>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          <TableHead className={HEAD}>{t("Key id")}</TableHead>
-          <TableHead className={HEAD}>{t("Kind")}</TableHead>
-          <TableHead className={HEAD}>{t("Brands")}</TableHead>
-          <TableHead className={cn(HEAD, "text-right")}>{t("Added")}</TableHead>
+          <TableHead className={HEAD}>{t(sourcesKeys.keyId, "Key id")}</TableHead>
+          <TableHead className={HEAD}>{t(sourcesKeys.kind, "Kind")}</TableHead>
+          <TableHead className={HEAD}>{t(sourcesKeys.brands, "Brands")}</TableHead>
+          <TableHead className={cn(HEAD, "text-right")}>{t(sourcesKeys.created, "Added")}</TableHead>
           <TableHead className={HEAD}>
-            <span className="sr-only">{t("State")}</span>
+            <span className="sr-only">{t(sourcesKeys.state, "State")}</span>
           </TableHead>
         </TableRow>
       </TableHeader>

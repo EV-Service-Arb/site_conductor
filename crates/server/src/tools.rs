@@ -31,66 +31,6 @@ pub struct Tools {
 	/// The whole app, set once it is built: a call goes through it as a request would.
 	app: Arc<OnceLock<Router>>,
 }
-
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Search {
-	/// What the operation should do, in words: "move a GBP to verified". Empty lists every
-	/// operation by id and summary.
-	pub query: String,
-}
-
-#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Call {
-	/// An operation's id, as `search` names it.
-	pub operation: String,
-	/// The path's parameters by name: `{"id": 7}`.
-	pub path: Option<Map<String, Value>>,
-	/// The query's parameters by name.
-	pub query: Option<Map<String, Value>>,
-	/// The JSON body, for an operation that takes one.
-	pub body: Option<Value>,
-}
-
-/// An operation, as an agent needs it to call it.
-#[derive(Serialize)]
-pub struct Found {
-	pub id: String,
-	pub method: String,
-	pub path: String,
-	pub summary: Option<String>,
-	pub description: Option<String>,
-	#[serde(flatten)]
-	pub hints: Hints,
-	pub parameters: Value,
-	pub body: Option<Value>,
-}
-
-/// What an operation does to the world, from its method and what its author said of it.
-#[derive(Clone, Copy, Debug, Serialize)]
-pub struct Hints {
-	pub read_only: bool,
-	pub idempotent: bool,
-	pub destructive: bool,
-	/// Costs the caller money: a Places request, a cloud phone's minutes.
-	pub spends: bool,
-}
-
-impl Hints {
-	/// What the user confirms before it runs.
-	pub fn proposed(self) -> bool {
-		self.destructive || self.spends
-	}
-}
-
-/// What an operation answered.
-#[derive(Debug, Serialize)]
-pub struct Answer {
-	pub status: u16,
-	pub body: Value,
-}
-
 impl Tools {
 	pub(crate) fn new(catalog: Catalog) -> Self {
 		Self {
@@ -133,11 +73,10 @@ impl Tools {
 		let mut scored: Vec<(usize, Found)> = open
 			.filter_map(|(path, method, op)| {
 				let hay = format!(
-					"{} {} {} {} {}",
+					"{} {} {} {path} {}",
 					op.operation_id.as_deref().unwrap_or_default().replace('_', " "),
 					op.summary.as_deref().unwrap_or_default(),
 					op.description.as_deref().unwrap_or_default(),
-					path,
 					op.tags.join(" ")
 				)
 				.to_lowercase();
@@ -226,6 +165,65 @@ impl Tools {
 		};
 		Ok(Answer { status, body })
 	}
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Search {
+	/// What the operation should do, in words: "move a GBP to verified". Empty lists every
+	/// operation by id and summary.
+	pub query: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Call {
+	/// An operation's id, as `search` names it.
+	pub operation: String,
+	/// The path's parameters by name: `{"id": 7}`.
+	pub path: Option<Map<String, Value>>,
+	/// The query's parameters by name.
+	pub query: Option<Map<String, Value>>,
+	/// The JSON body, for an operation that takes one.
+	pub body: Option<Value>,
+}
+
+/// An operation, as an agent needs it to call it.
+#[derive(Serialize)]
+pub struct Found {
+	pub id: String,
+	pub method: String,
+	pub path: String,
+	pub summary: Option<String>,
+	pub description: Option<String>,
+	#[serde(flatten)]
+	pub hints: Hints,
+	pub parameters: Value,
+	pub body: Option<Value>,
+}
+
+/// What an operation does to the world, from its method and what its author said of it.
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct Hints {
+	pub read_only: bool,
+	pub idempotent: bool,
+	pub destructive: bool,
+	/// Costs the caller money: a Places request, a cloud phone's minutes.
+	pub spends: bool,
+}
+
+impl Hints {
+	/// What the user confirms before it runs.
+	pub fn proposed(self) -> bool {
+		self.destructive || self.spends
+	}
+}
+
+/// What an operation answered.
+#[derive(Debug, Serialize)]
+pub struct Answer {
+	pub status: u16,
+	pub body: Value,
 }
 
 fn hints(method: &str, op: &Operation) -> Hints {

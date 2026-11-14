@@ -728,7 +728,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Creates a GBP no place is known of: a draft, or one verifying or suspended (off Maps).
+         * Creates a GBP no place is known of: a draft by its spots, or one verifying or suspended (off Maps) by a location.
          * @description 409 if a live GBP has the name.
          */
         post: operations["create_gmb"];
@@ -861,6 +861,23 @@ export interface paths {
         post?: never;
         /** Takes back the point placed by hand. 409 none is. */
         delete: operations["unplace_gmb"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmbs/{id}/spots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replaces a draft's candidate spots, its location the first's. 409 not a draft. */
+        put: operations["set_spots"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1616,6 +1633,8 @@ export interface components {
             phone: string | null;
             /** @description Google's place id; `null` while a draft, and maybe while verifying or suspended: off Maps. */
             place_id: string | null;
+            /** @description A draft's candidate spots, in order, its location the first's; none past a draft. */
+            spots: components["schemas"]["Spot"][];
             state: components["schemas"]["State"];
             /**
              * Format: int64
@@ -1794,6 +1813,11 @@ export interface components {
             /** @description Placed by hand. */
             location?: components["schemas"]["LatLng"] | null;
             name: string;
+            /**
+             * @description A draft's candidate spots, 1–20, in order: its location the first's.
+             * @default []
+             */
+            spots?: components["schemas"]["SpotInput"][];
             /** @description Draft, verifying or suspended. */
             state: components["schemas"]["State"];
             /** Format: int64 */
@@ -1993,6 +2017,9 @@ export interface components {
             /** @description Required: `null` clears it. */
             role?: components["schemas"]["GmailRole"] | null;
         };
+        SetSpots: {
+            spots: components["schemas"]["SpotInput"][];
+        };
         SetTrades: {
             gmbs: number[];
             /**
@@ -2003,7 +2030,10 @@ export interface components {
         };
         /** @description `PUT /trash/settings`. */
         SetTrashSettings: {
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description 1, 7, 30 or 90.
+             */
             keep_days: number;
             /** @description Absent: left as it is. Present: `sa:admin:trash:keep` only. */
             never_purge?: boolean | null;
@@ -2083,6 +2113,24 @@ export interface components {
             detail: string;
             /** @constant */
             state: "down";
+        };
+        Spot: {
+            /** @description What it was picked by: an address, a business nearby. */
+            label: string | null;
+            /** Format: double */
+            lat: number;
+            /** Format: double */
+            lng: number;
+            note: string | null;
+        };
+        SpotInput: {
+            /** @description What it was picked by: an address, a business nearby. */
+            label?: string | null;
+            /** Format: double */
+            lat: number;
+            /** Format: double */
+            lng: number;
+            note?: string | null;
         };
         StartBrowser: {
             /**
@@ -2193,7 +2241,7 @@ export interface components {
         TrashSettings: {
             /**
              * Format: int64
-             * @description 1 to 90.
+             * @description 1, 7, 30 or 90.
              */
             keep_days: number;
             /** @description Nothing purged, ever. */
@@ -2511,6 +2559,7 @@ export type SetImap = components['schemas']['SetImap'];
 export type SetMapsKey = components['schemas']['SetMapsKey'];
 export type SetPrices = components['schemas']['SetPrices'];
 export type SetRole = components['schemas']['SetRole'];
+export type SetSpots = components['schemas']['SetSpots'];
 export type SetTrades = components['schemas']['SetTrades'];
 export type SetTrashSettings = components['schemas']['SetTrashSettings'];
 export type SetUp = components['schemas']['SetUp'];
@@ -2522,6 +2571,8 @@ export type SourceKey = components['schemas']['SourceKey'];
 export type SourceKeys = components['schemas']['SourceKeys'];
 export type SourceKind = components['schemas']['SourceKind'];
 export type SourceState = components['schemas']['SourceState'];
+export type Spot = components['schemas']['Spot'];
+export type SpotInput = components['schemas']['SpotInput'];
 export type StartBrowser = components['schemas']['StartBrowser'];
 export type State = components['schemas']['State'];
 export type Step = components['schemas']['Step'];
@@ -4395,6 +4446,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_spots: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSpots"];
+            };
+        };
+        responses: {
+            /** @description A GBP of the caller's. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gmb"];
+                };
             };
             /** @description What every failed operation answers, its status saying which failure. */
             default: {

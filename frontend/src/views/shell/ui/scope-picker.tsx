@@ -5,12 +5,12 @@ import { Check, ChevronDown, ChevronRight, ListFilter, Plug, Settings } from "lu
 import { usePathname, useRouter } from "next/navigation";
 import { type MouseEvent, useEffect, useState } from "react";
 
-import { chooseCategoryScope, chooseGmailScope, covers, GMAIL_ROLE_LABEL, inCategories, openAccount, openCategories, type Pattern, type Selection, under, useScope, useTrades } from "@/entities/gmb";
+import { chooseCategoryScope, chooseGmailScope, covers, GMAIL_ROLE_NAME, inCategories, openAccount, openCategories, type Pattern, type Selection, under, useScope, useTrades, scopeKeys, gmbs as gmbsKeys } from "@/entities/gmb";
 import { AddGmailButton } from "@/features/add-gmail";
 import { AddGmbButton } from "@/features/add-gmb";
 import { api, ok } from "@/shared/api";
 import { type Country, type Gmail, type Gmails, type Gmb, type Trade, countryValues } from "@/shared/api/schema";
-import { useT } from "@/shared/i18n";
+import { useT, account } from "@/shared/i18n";
 
 import { HEADING, ON_HOVER, ROW, Remove, ResetSelection, useKept } from "./outline-parts";
 
@@ -66,8 +66,8 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
   };
   const holding = gmails.filter((g) => under(data, g.id).some(byCategory));
   const summary = [
-    scope.categories === null ? t("All categories") : scope.categories.length === 1 ? name(scope.categories[0]!) : t("{n} categories", { n: scope.categories.length }),
-    scoped.length === 1 ? scoped[0]!.gmail : scoped.length === 0 && holding.length === 1 ? holding[0]!.gmail : t("{n} gmails", { n: scoped.length === 0 ? holding.length : scoped.length }),
+    scope.categories === null ? t(scopeKeys.categories.all, "All categories") : scope.categories.length === 1 ? name(scope.categories[0]!) : t(scopeKeys.categories.many, "{n} categories", { n: scope.categories.length }),
+    scoped.length === 1 ? scoped[0]!.gmail : scoped.length === 0 && holding.length === 1 ? holding[0]!.gmail : t(gmbsKeys.scope.many, "{n} gmails", { n: scoped.length === 0 ? holding.length : scoped.length }),
   ].join(" · ");
 
   return (
@@ -83,23 +83,23 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
       </div>
       <PopoverContent align="start" className="max-h-[80svh] w-96 overflow-y-auto p-1.5">
         <div className={HEADING}>
-          {t("Categories")}
+          {t(scopeKeys.categories, "Categories")}
           <ManageCategories onOpened={() => setOpen(false)} />
           <span className="flex-1" />
           {known !== null && (
             <span className={META}>
-              {t("{trades} trades · {countries} countries", { trades: known.length, countries: new Set(known.flatMap((tr) => tr.categories.map((c) => c.country))).size })}
+              {t(scopeKeys.categories.counts, "{trades} trades · {countries} countries", { trades: known.length, countries: new Set(known.flatMap((tr) => tr.categories.map((c) => c.country))).size })}
             </span>
           )}
         </div>
         {known !== null && <Matrix all={data.gmbs} gmbs={data.gmbs.filter(byGmail)} trades={known} picked={scope.categories} />}
-        <p className="px-2 pt-1 text-xs text-ink-soft">{t("Click scopes · Shift-click adds")}</p>
-        {data.gmbs.some((b) => b.trade_id == null) && <p className="px-2 text-xs text-ink-soft">{t("{n} GBPs have no trade → the outline's No category chip", { n: data.gmbs.filter((b) => b.trade_id == null).length })}</p>}
+        <p className="px-2 pt-1 text-xs text-ink-soft">{t(scopeKeys.matrix.how, "Click scopes · Shift-click adds")}</p>
+        {data.gmbs.some((b) => b.trade_id == null) && <p className="px-2 text-xs text-ink-soft">{t(scopeKeys.matrix.untraded, "{n} GBPs have no trade → the outline's No category chip", { n: data.gmbs.filter((b) => b.trade_id == null).length })}</p>}
         <div className={cn(HEADING, "mt-1 border-t border-border pt-2")}>
-          {t("Managing gmails")}
+          {t(scopeKeys.gmails, "Managing gmails")}
           <span className="flex-1" />
           <span className={cn(META, "tabular-nums")}>
-            {scope.categories === null ? t("{gmails} · {gmbs} GMBs", { gmails: gmails.length, gmbs: data.gmbs.length }) : t("{n} of {of} hold it", { n: holding.length, of: gmails.length })}
+            {scope.categories === null ? t(gmbsKeys.scope.counts, "{gmails} · {gmbs} GMBs", { gmails: gmails.length, gmbs: data.gmbs.length }) : t(scopeKeys.gmails.holding, "{n} of {of} hold it", { n: holding.length, of: gmails.length })}
           </span>
         </div>
         <button
@@ -108,7 +108,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
           aria-pressed={scoped.length === 0}
           className={cn(ROW, "w-full py-1.5 pl-2", scoped.length === 0 && PICKED)}
         >
-          <span className="flex-1 text-left">{t("All gmails")}</span>
+          <span className="flex-1 text-left">{t(scopeKeys.gmails.all, "All gmails")}</span>
           <span className="text-xs text-ink-soft tabular-nums">{data.gmbs.filter(byCategory).length}</span>
         </button>
         <ul className="flex flex-col">
@@ -127,7 +127,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
                     type="button"
                     onClick={() => unfold(g.id)}
                     aria-expanded={unfolded}
-                    aria-label={(unfolded ? t("Hide {gmail}'s GMBs", { gmail: g.gmail }) : t("Show {gmail}'s GMBs", { gmail: g.gmail }))}
+                    aria-label={(unfolded ? t(gmbsKeys.collapse, "Hide {gmail}'s GMBs", { gmail: g.gmail }) : t(gmbsKeys.expand, "Show {gmail}'s GMBs", { gmail: g.gmail }))}
                     className="rounded p-1 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <ChevronRight aria-hidden className={cn("size-3.5 transition-transform", unfolded && "rotate-90")} />
@@ -145,16 +145,16 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
                   <span className={cn("flex items-center", ON_HOVER)}>
                     <OpenAccount gmail={g} onOpened={() => setOpen(false)} />
                     <AddGmbButton gmailId={g.id} trade={null} onAdded={onChanged} />
-                    <Remove title={t("Remove {gmail}?", { gmail: g.gmail })} body={t("It goes to the trash with its GBPs{kept}: every service stops working on them until then.", { kept })} remove={() => ok(api.DELETE("/gmails/{id}", { params: { path: { id: g.id } } }))} onRemoved={onChanged} />
+                    <Remove title={t(gmbsKeys.gmail.remove.title, "Remove {gmail}?", { gmail: g.gmail })} body={t(gmbsKeys.gmail.remove.body, "It goes to the trash with its GBPs{kept}: every service stops working on them until then.", { kept })} remove={() => ok(api.DELETE("/gmails/{id}", { params: { path: { id: g.id } } }))} onRemoved={onChanged} />
                   </span>
-                  <span className="text-xs text-ink-soft tabular-nums" title={t("Its GBPs in the categories picked")}>
+                  <span className="text-xs text-ink-soft tabular-nums" title={t(scopeKeys.gmail.count, "Its GBPs in the categories picked")}>
                     {edited && k > 0 && !full ? `${k}/${gmbs.length}` : inScope}
                   </span>
-                  <Switch aria-label={t("{name} on or off", { name: g.gmail })} checked={on} disabled={gmbs.length === 0} onCheckedChange={(v) => void onFlip(gmbs, v)} />
+                  <Switch aria-label={t(gmbsKeys.switch, "{name} on or off", { name: g.gmail })} checked={on} disabled={gmbs.length === 0} onCheckedChange={(v) => void onFlip(gmbs, v)} />
                 </div>
                 {unfolded && (
                   <ul className="ml-4 flex flex-col border-l border-border pl-1">
-                    {gmbs.length === 0 && <li className="px-2 py-1.5 text-xs text-ink-soft">{t("No GMBs under this gmail yet.")}</li>}
+                    {gmbs.length === 0 && <li className="px-2 py-1.5 text-xs text-ink-soft">{t(gmbsKeys.gmail.empty, "No GMBs under this gmail yet.")}</li>}
                     {gmbs.map((b) => {
                       const one = chosen !== null && isSelected(b.id);
                       return (
@@ -185,7 +185,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
         </ul>
         <div className="flex items-center gap-1 border-t border-border pt-1">
           <AddGmailButton onAdded={onChanged} />
-          <span className="text-xs text-ink-soft">{t("scope applies in every app")}</span>
+          <span className="text-xs text-ink-soft">{t(scopeKeys.everyApp, "scope applies in every app")}</span>
         </div>
       </PopoverContent>
     </Popover>
@@ -199,7 +199,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
 function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[]; trades: readonly Trade[]; picked: readonly Pattern[] | null }) {
   const t = useT();
   const countries = countryValues.filter((c) => all.some((b) => b.country?.code === c) || trades.some((tr) => tr.categories.some((k) => k.country === c)));
-  if (trades.length === 0) return <p className="px-2 py-1.5 text-xs text-ink-soft">{t("No trades yet: ⚙ names one.")}</p>;
+  if (trades.length === 0) return <p className="px-2 py-1.5 text-xs text-ink-soft">{t(scopeKeys.categories.none, "No trades yet: ⚙ names one.")}</p>;
   const pick = (p: Pattern) => (e: MouseEvent) => {
     const now = picked ?? [];
     const has = now.some((q) => same(q, p));
@@ -220,7 +220,7 @@ function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[
               aria-pressed={picked === null}
               className={cn(box, "flex w-full items-center px-2 text-ink-soft", picked === null && PICKED)}
             >
-              <span className="flex-1 text-left">{t("All")}</span>
+              <span className="flex-1 text-left">{t(scopeKeys.matrix.all, "All")}</span>
               <span>{gmbs.filter((b) => b.trade_id != null).length}</span>
             </button>
           </th>
@@ -228,7 +228,7 @@ function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[
             const p: Pattern = { trade: "*", country: c };
             return (
               <th key={c} className="w-14 font-normal">
-                <button type="button" aria-pressed={state(p) !== null} title={t("Every trade in {country}", { country: c })} onClick={pick(p)} className={cn(box, "flex h-9 w-full flex-col items-center justify-center leading-tight", state(p))}>
+                <button type="button" aria-pressed={state(p) !== null} title={t(scopeKeys.matrix.country, "Every trade in {country}", { country: c })} onClick={pick(p)} className={cn(box, "flex h-9 w-full flex-col items-center justify-center leading-tight", state(p))}>
                   <span className="font-semibold text-ink">{c}</span>
                   <span className="text-ink-soft">{count("*", c)}</span>
                 </button>
@@ -247,7 +247,7 @@ function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[
                   <button
                     type="button"
                     aria-pressed={state(row) !== null}
-                    title={t("{trade} in every country", { trade: tr.name })}
+                    title={t(scopeKeys.matrix.trade, "{trade} in every country", { trade: tr.name })}
                     onClick={pick(row)}
                     className={cn(box, "flex min-w-0 flex-1 items-center gap-2 px-2 text-sm", tr.categories.length === 0 ? "text-ink-soft" : "text-ink", state(row))}
                   >
@@ -267,7 +267,7 @@ function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[
                     <button
                       type="button"
                       aria-pressed={state(p) !== null}
-                      title={setUp ? `${tr.name} · ${c}` : t("{category}: GBPs there, not set up", { category: `${tr.name} · ${c}` })}
+                      title={setUp ? `${tr.name} · ${c}` : t(scopeKeys.matrix.notSetUp, "{category}: GBPs there, not set up", { category: `${tr.name} · ${c}` })}
                       onClick={pick(p)}
                       className={cn(
                         box,
@@ -303,8 +303,8 @@ function ManageCategories({ onOpened }: { onOpened: () => void }) {
         if (pathname === "/") openCategories(true);
         else router.push("/?categories");
       }}
-      aria-label={t("Manage categories")}
-      title={t("Manage categories")}
+      aria-label={t(scopeKeys.categories.manage, "Manage categories")}
+      title={t(scopeKeys.categories.manage, "Manage categories")}
       className="rounded p-0.5 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
     >
       <Settings aria-hidden className="size-3.5" />
@@ -317,7 +317,7 @@ function OpenAccount({ gmail, onOpened }: { gmail: Gmail; onOpened: () => void }
   const t = useT();
   const router = useRouter();
   const pathname = usePathname();
-  const label = t("Connections of {gmail}", { gmail: gmail.gmail });
+  const label = t(account.open, "Connections of {gmail}", { gmail: gmail.gmail });
   return (
     <button
       type="button"
@@ -337,5 +337,5 @@ function OpenAccount({ gmail, onOpened }: { gmail: Gmail; onOpened: () => void }
 
 function Room({ gmail, n }: { gmail: Gmail; n: number }) {
   const t = useT();
-  return <span className="block truncate text-xs text-ink-soft tabular-nums">{[gmail.role && GMAIL_ROLE_LABEL[gmail.role](t), t("{n} GBP", { n })].filter(Boolean).join(" · ")}</span>;
+  return <span className="block truncate text-xs text-ink-soft tabular-nums">{[gmail.role && GMAIL_ROLE_NAME[gmail.role](t), t(account.gbps, "{n} GBP", { n })].filter(Boolean).join(" · ")}</span>;
 }

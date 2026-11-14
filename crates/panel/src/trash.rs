@@ -89,8 +89,8 @@ impl Panel {
 
 	/// `never_purge` `None`: left as it was.
 	pub async fn set_trash_settings(&self, owner: Uuid, keep_days: i64, never_purge: Option<bool>) -> eyre::Result<Result<(), Refused>> {
-		if !(1..=90).contains(&keep_days) {
-			return Ok(Err(Refused::Invalid(format!("{keep_days} days: the trash keeps 1 to 90"))));
+		if ![1, 7, 30, 90].contains(&keep_days) {
+			return Ok(Err(Refused::Invalid(format!("{keep_days} days: the trash keeps 1, 7, 30 or 90"))));
 		}
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for trash settings")?;
 		db::set_settings(&mut conn, owner, keep_days, never_purge).await?;

@@ -63,6 +63,8 @@ pub struct GmbDto {
 	/// `null`: none on Google (a service-area place, a draft) and none placed yet. `placed`: on
 	/// the map by hand.
 	pub location: Option<sa_panel::gmbs::Point>,
+	/// A draft's candidate spots, in order, its location the first's; none past a draft.
+	pub spots: Vec<sa_panel::gmbs::Spot>,
 }
 
 /// A trade of the caller's: Plumbing, set up in some countries.
@@ -206,6 +208,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::DELETE, "/gmbs/{id}", user, remove_gmb),
 		ApiRoute::new(M::PUT, "/gmbs/enabled", user, switch_gmbs),
 		ApiRoute::new(M::PUT, "/gmbs/trade", user, set_gmb_trades),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/spots", user, set_spots),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/location", user, place_gmb),
 		ApiRoute::new(M::DELETE, "/gmbs/{id}/location", user, unplace_gmb),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/country", user, set_gmb_country),
@@ -240,6 +243,7 @@ impl From<Gmb> for GmbDto {
 			created_at: b.created_at.to_string(),
 			enabled: b.enabled,
 			location: b.location,
+			spots: b.spots,
 		}
 	}
 }
@@ -410,9 +414,13 @@ pub(crate) struct NewUnplaced {
 	country: Option<Country>,
 	/// Placed by hand.
 	location: Option<sa_places::LatLng>,
+	/// A draft's candidate spots, 1–20, in order: its location the first's.
+	#[serde(default)]
+	spots: Vec<sa_panel::gmbs::Spot>,
 }
 
-/// Creates a GBP no place is known of: a draft, or one verifying or suspended (off Maps).
+/// Creates a GBP no place is known of: a draft by its spots, or one verifying or suspended (off
+/// Maps) by a location.
 ///
 /// 409 if a live GBP has the name.
 async fn create_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<NewUnplaced>) -> ApiResult<Created<GmbDto>> {
@@ -423,6 +431,7 @@ async fn create_gmb(State(panel): State<Panel>, Extension(caller): Extension<Cal
 		gmail_id: b.gmail_id,
 		country: b.country,
 		at: b.location,
+		spots: b.spots,
 	};
 	let added = panel.create_gmb(caller.user_id, unplaced, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = added.id, state = %added.state, "GBP without a place created");
@@ -567,6 +576,19 @@ async fn switch_gmbs(State(panel): State<Panel>, Extension(caller): Extension<Ca
 	panel.switch_gmbs(caller.user_id, &gmbs, enabled).await??;
 	tracing::info!(user_id = %caller.user_id, ?gmbs, enabled, "GMBs switched");
 	Ok(NoContent)
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SetSpots {
+	spots: Vec<sa_panel::gmbs::Spot>,
+}
+
+/// Replaces a draft's candidate spots, its location the first's. 409 not a draft.
+async fn set_spots(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>, Body(SetSpots { spots }): Body<SetSpots>) -> ApiResult<Json<GmbDto>> {
+	let set = panel.set_spots(caller.user_id, gmb, spots).await??;
+	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, spots = set.spots.len(), "draft's spots set");
+	Ok(Json(GmbDto::from(set)))
 }
 
 /// Places a GBP's point by hand. 409 Google has its point.

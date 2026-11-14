@@ -3,7 +3,7 @@
 import { Button, Field, FieldDescription, FieldLabel, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn } from "@evinvest/uikit";
 import { useId, useState } from "react";
 
-import { isOrigin, sourceKindLabel } from "@/entities/source";
+import { isOrigin, sourceKindLabel, sources } from "@/entities/source";
 import { api, ok } from "@/shared/api";
 import { type KeyedSourceKind, type NewSourceKey, keyedSourceKindValues } from "@/shared/api/schema";
 import { isSlug } from "@/shared/config/brands";
@@ -52,11 +52,11 @@ export function AddSourceForm({ onAdded }: { onAdded: (added: NewSourceKey) => v
       }}
     >
       <Field className="flex flex-col gap-1">
-        <FieldLabel htmlFor={`${id}-key`}>{t("Key id")}</FieldLabel>
+        <FieldLabel htmlFor={`${id}-key`}>{t(sources.keyId, "Key id")}</FieldLabel>
         <Input id={`${id}-key`} size={size} autoCapitalize="none" value={keyId} onChange={(e) => setKeyId(e.target.value.toLowerCase())} />
       </Field>
       <Field className="flex flex-col gap-1">
-        <FieldLabel htmlFor={`${id}-kind`}>{t("Kind")}</FieldLabel>
+        <FieldLabel htmlFor={`${id}-kind`}>{t(sources.kind, "Kind")}</FieldLabel>
         <Select value={kind} onValueChange={(v) => setKind(keyedSourceKindValues.find((k) => k === v) ?? "site")}>
           <SelectTrigger id={`${id}-kind`} size={size} className="w-full">
             <SelectValue />
@@ -71,19 +71,19 @@ export function AddSourceForm({ onAdded }: { onAdded: (added: NewSourceKey) => v
         </Select>
       </Field>
       <Field className="flex flex-col gap-1">
-        <FieldLabel htmlFor={`${id}-brands`}>{t("Brands")}</FieldLabel>
+        <FieldLabel htmlFor={`${id}-brands`}>{t(sources.brands, "Brands")}</FieldLabel>
         <Input id={`${id}-brands`} size={size} autoCapitalize="none" value={brandsText} onChange={(e) => setBrandsText(e.target.value)} />
-        <FieldDescription>{t("Comma-separated, e.g. aquafix, vifnet")}</FieldDescription>
+        <FieldDescription>{t(sources.brands.hint, "Comma-separated, e.g. aquafix, vifnet")}</FieldDescription>
       </Field>
       {site && (
         <Field className="flex flex-col gap-1">
-          <FieldLabel htmlFor={`${id}-origin`}>{t("Origin")}</FieldLabel>
+          <FieldLabel htmlFor={`${id}-origin`}>{t(sources.origin, "Origin")}</FieldLabel>
           <Input id={`${id}-origin`} size={size} autoCapitalize="none" inputMode="url" value={origin} onChange={(e) => setOrigin(e.target.value.trim())} />
-          <FieldDescription>{t("The site's address, e.g. https://aquafix.top")}</FieldDescription>
+          <FieldDescription>{t(sources.origin.hint, "The site's address, e.g. https://aquafix.top")}</FieldDescription>
         </Field>
       )}
       <Button type="submit" disabled={busy || !ready} size={button()} className="md:mb-6">
-        {t("Add source")}
+        {t(sources.add, "Add source")}
       </Button>
     </form>
   );

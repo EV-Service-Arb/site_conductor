@@ -25,7 +25,7 @@ use crate::{
 #[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "TrashSettings")]
 pub struct SettingsDto {
-	/// 1 to 90.
+	/// 1, 7, 30 or 90.
 	pub keep_days: i64,
 	/// Nothing purged, ever.
 	pub never_purge: bool,
@@ -76,6 +76,7 @@ pub struct TrashDto {
 #[schemars(rename = "SetTrashSettings")]
 #[serde(deny_unknown_fields)]
 pub struct SetSettingsDto {
+	/// 1, 7, 30 or 90.
 	pub keep_days: i64,
 	/// Absent: left as it is. Present: `sa:admin:trash:keep` only.
 	pub never_purge: Option<bool>,
