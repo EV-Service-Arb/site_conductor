@@ -134,10 +134,11 @@ async fn grafanas_queries_reach_the_services_as_the_viewer_who_asked() {
 		"url_options": {"method": "GET", "headers": [{"key": "x-member", "value": "3"}, {"key": VIEWER_HEADER.to_uppercase(), "value": "forged"}]},
 	});
 	let bare = json!({"datasource": {"type": "yesoreyeram-infinity-datasource", "uid": "sites"}, "url": "/leads"});
+	let own = json!({"datasource": {"type": "yesoreyeram-infinity-datasource", "uid": "conductor"}, "url": "/admin/tokens/prices"});
 	let elsewhere = json!({"datasource": {"uid": "-- Dashboard --"}, "panelId": 1});
 	let asked = {
 		let (app, mut b) = (app.clone(), Browser { jar: b.jar.clone() });
-		let body = json!({"queries": [infinity, bare, elsewhere], "from": "now-6h", "to": "now"}).to_string();
+		let body = json!({"queries": [infinity, bare, own, elsewhere], "from": "now-6h", "to": "now"}).to_string();
 		tokio::spawn(async move {
 			b.send_body(&app, Method::POST, "/grafana/api/ds/query?ds_type=x", &[("content-type", "application/json")], false, body.into())
 				.await
@@ -148,15 +149,15 @@ async fn grafanas_queries_reach_the_services_as_the_viewer_who_asked() {
 	let queries = held.body["queries"].as_array().unwrap();
 	let token = query_headers(&queries[0], VIEWER_HEADER).remove(0);
 	assert_ne!(token, "forged");
-	for q in &queries[..2] {
+	for q in &queries[..3] {
 		assert_eq!(
 			query_headers(q, VIEWER_HEADER),
 			std::slice::from_ref(&token),
-			"one token in every service's query, the browser's overwritten"
+			"one token in every service's query and the conductor's, the browser's overwritten"
 		);
 	}
 	assert_eq!(query_headers(&queries[0], "x-member"), ["3"], "the dashboard's own headers stay");
-	assert_eq!(queries[2], elsewhere, "what does not query a service is not touched");
+	assert_eq!(queries[3], elsewhere, "what does not query a service is not touched");
 
 	let fetch = |method: Method, path: &str, token: Option<&str>| {
 		let mut req = Request::builder().method(method).uri(path);
@@ -188,6 +189,19 @@ async fn grafanas_queries_reach_the_services_as_the_viewer_who_asked() {
 	] {
 		assert_eq!(fetch(method, path, token).await.unwrap().status(), StatusCode::UNAUTHORIZED, "{why}");
 	}
+	let res = fetch(Method::GET, "/api/v1/admin/tokens/prices", Some(&token)).await.unwrap();
+	assert_eq!(res.status(), StatusCode::OK, "the conductor's own reads, as the viewer");
+	for (token, why) in [(None, "no token, no one"), (Some("forged"), "a token the conductor did not mint")] {
+		assert_eq!(
+			fetch(Method::GET, "/api/v1/admin/tokens/prices", token).await.unwrap().status(),
+			StatusCode::UNAUTHORIZED,
+			"{why}"
+		);
+	}
+	assert!(
+		!fetch(Method::PUT, "/api/v1/admin/tokens/prices", Some(&token)).await.unwrap().status().is_success(),
+		"a viewer's token reads only"
+	);
 	assert_eq!(
 		fetch(Method::GET, "/api/hooks/booking/x", Some(&token)).await.unwrap().status(),
 		StatusCode::NOT_FOUND,
@@ -242,8 +256,8 @@ async fn ran<F: Future<Output = ()>>(grafana: sa_server::grafana::Grafana, dir: 
 	let ((), ()) = tokio::join!(grafana.run(&server, "https://sa.test/grafana/", stopped), test);
 }
 
-/// The files under `<dir>/grafana/dashboards` after one run with `answer` at `GET /dashboards`
-/// and `before` there already.
+/// The services' files under `<dir>/grafana/dashboards` after one run with `answer` at `GET
+/// /dashboards` and `before` there already.
 async fn pulled(answer: Router, before: &[&str]) -> BTreeSet<String> {
 	let db = TestDb::create().await;
 	let dir = tempfile::tempdir().unwrap();
@@ -259,8 +273,7 @@ async fn pulled(answer: Router, before: &[&str]) -> BTreeSet<String> {
 	let asked = seen.lock().unwrap().iter().find(|s| s.path_and_query == "/dashboards").cloned().expect("asked");
 	assert_eq!(asked.assertion(Service::ReviewArchive, None).principal, Principal::Conductor);
 	let mut files = BTreeSet::new();
-	for service in std::fs::read_dir(&dashboards).unwrap() {
-		let service = service.unwrap();
+	for service in std::fs::read_dir(&dashboards).unwrap().map(Result::unwrap).filter(|s| s.file_name() != "conductor") {
 		for file in std::fs::read_dir(service.path()).unwrap() {
 			files.insert(format!("{}/{}", service.file_name().to_str().unwrap(), file.unwrap().file_name().to_str().unwrap()));
 		}
@@ -323,16 +336,22 @@ async fn grafana_is_provisioned_with_a_datasource_per_services_api_on_its_loopba
 		let datasources = provisioned["datasources"].as_array().unwrap();
 		assert_eq!(
 			datasources.iter().map(|d| d["uid"].as_str().unwrap()).collect::<Vec<_>>(),
-			["sites", "review_archive", "placement"]
+			["sites", "review_archive", "placement", "conductor"]
 		);
 		for d in datasources {
 			let url = d["url"].as_str().unwrap();
-			assert_eq!(url, format!("{}/api/{}", url.split("/api/").next().unwrap(), d["uid"].as_str().unwrap()));
+			let api = match d["uid"].as_str().unwrap() {
+				"conductor" => "v1",
+				service => service,
+			};
+			assert_eq!(url, format!("{}/api/{api}", url.split("/api/").next().unwrap()));
 			assert_eq!(d["jsonData"]["allowedHosts"], json!([format!("{url}/")]), "no other service's path");
 			// Infinity joins the url and the dashboards' `/me/overview` as strings
-			let res = reqwest::get(format!("{url}/me/overview")).await.unwrap();
+			let res = reqwest::get(format!("{url}/me")).await.unwrap();
 			assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "the loopback listener answers, and wants a token");
 		}
+		let own = std::fs::read_dir(dir.path().join("grafana/dashboards/conductor")).unwrap().count();
+		assert!(own > 0, "the conductor's own dashboards");
 	})
 	.await;
 }

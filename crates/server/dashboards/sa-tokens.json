@@ -1,0 +1,634 @@
+{
+  "uid": "sa-tokens",
+  "title": "Tokens \u00b7 everyone",
+  "tags": [
+    "conductor"
+  ],
+  "timezone": "utc",
+  "editable": false,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "refresh": "",
+  "schemaVersion": 39,
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "In the range",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "conductor"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "conductor"
+          },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/admin/tokens/flows",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "from",
+                "value": "${__from}"
+              },
+              {
+                "key": "to",
+                "value": "${__to}"
+              }
+            ]
+          },
+          "root_selector": "{\n  \"spent\": -$sum(flows[kind = \"spend\"].tokens),\n  \"bought\": $sum(flows[kind = \"purchase\"].tokens),\n  \"granted\": $sum(flows[kind = \"granted\"].tokens),\n  \"renewed\": $sum(flows[kind = \"renewal\"].tokens),\n  \"refunded\": $sum(flows[kind = \"refund\"].tokens)\n}",
+          "columns": [
+            {
+              "selector": "spent",
+              "text": "spent",
+              "type": "number"
+            },
+            {
+              "selector": "bought",
+              "text": "bought",
+              "type": "number"
+            },
+            {
+              "selector": "granted",
+              "text": "granted",
+              "type": "number"
+            },
+            {
+              "selector": "renewed",
+              "text": "renewed",
+              "type": "number"
+            },
+            {
+              "selector": "refunded",
+              "text": "refunded",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Spent per day, by service",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "conductor"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "conductor"
+          },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/admin/tokens/flows",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "from",
+                "value": "${__from}"
+              },
+              {
+                "key": "to",
+                "value": "${__to}"
+              }
+            ]
+          },
+          "root_selector": "(\n  $rows := flows[kind in [\"spend\"]];\n  $keys := $distinct($rows.($substring(at, 0, 10) & \"|\" & service));\n  [$keys.(\n    $k := $;\n    {\"day\": $substringBefore($k, \"|\") & \"T00:00:00Z\", \"series\": $substringAfter($k, \"|\"), \"tokens\": -$sum($rows[$substring(at, 0, 10) & \"|\" & service = $k].tokens)}\n  )]\n)",
+          "columns": [
+            {
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "series",
+              "text": "series",
+              "type": "string"
+            },
+            {
+              "selector": "tokens",
+              "text": "tokens",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "transformations": [
+        {
+          "id": "prepareTimeSeries",
+          "options": {
+            "format": "multi"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisLabel": "tokens",
+            "barAlignment": 0
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Given per day: bought, granted, renewed, refunded",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "conductor"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "conductor"
+          },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/admin/tokens/flows",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "from",
+                "value": "${__from}"
+              },
+              {
+                "key": "to",
+                "value": "${__to}"
+              }
+            ]
+          },
+          "root_selector": "(\n  $rows := flows[kind in [\"purchase\", \"granted\", \"renewal\", \"refund\"]];\n  $keys := $distinct($rows.($substring(at, 0, 10) & \"|\" & kind));\n  [$keys.(\n    $k := $;\n    {\"day\": $substringBefore($k, \"|\") & \"T00:00:00Z\", \"series\": $substringAfter($k, \"|\"), \"tokens\": $sum($rows[$substring(at, 0, 10) & \"|\" & kind = $k].tokens)}\n  )]\n)",
+          "columns": [
+            {
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "series",
+              "text": "series",
+              "type": "string"
+            },
+            {
+              "selector": "tokens",
+              "text": "tokens",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "transformations": [
+        {
+          "id": "prepareTimeSeries",
+          "options": {
+            "format": "multi"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "axisLabel": "tokens",
+            "barAlignment": 0
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "bargauge",
+      "title": "Spent by person",
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "conductor"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "conductor"
+          },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/admin/tokens/flows",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "from",
+                "value": "${__from}"
+              },
+              {
+                "key": "to",
+                "value": "${__to}"
+              }
+            ]
+          },
+          "root_selector": "(\n  $rows := flows[kind = \"spend\"];\n  [$distinct($rows.email).(\n    $e := $;\n    $r := $rows[email = $e];\n    {\"who\": $r[0].name ? $r[0].name : $e, \"spent\": -$sum($r.tokens)}\n  )]^(>spent)\n)",
+          "columns": [
+            {
+              "selector": "who",
+              "text": "who",
+              "type": "string"
+            },
+            {
+              "selector": "spent",
+              "text": "spent",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "options": {
+        "displayMode": "basic",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^spent$/",
+          "values": true
+        },
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Spent on",
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "conductor"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "conductor"
+          },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/admin/tokens/flows",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "from",
+                "value": "${__from}"
+              },
+              {
+                "key": "to",
+                "value": "${__to}"
+              }
+            ]
+          },
+          "root_selector": "(\n  $rows := flows[kind = \"spend\"];\n  [$distinct($rows.(service & \"|\" & label)).(\n    $k := $;\n    $r := $rows[service & \"|\" & label = $k];\n    {\"service\": $r[0].service, \"what\": $r[0].label, \"times\": $count($r), \"tokens\": -$sum($r.tokens)}\n  )]^(>tokens)\n)",
+          "columns": [
+            {
+              "selector": "service",
+              "text": "service",
+              "type": "string"
+            },
+            {
+              "selector": "what",
+              "text": "what",
+              "type": "string"
+            },
+            {
+              "selector": "times",
+              "text": "times",
+              "type": "number"
+            },
+            {
+              "selector": "tokens",
+              "text": "tokens",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "service"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "times"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tokens"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Purchases, grants and balances set",
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 24,
+        "h": 9
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "conductor"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "conductor"
+          },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/admin/tokens/flows",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "from",
+                "value": "${__from}"
+              },
+              {
+                "key": "to",
+                "value": "${__to}"
+              }
+            ]
+          },
+          "root_selector": "[flows[kind in [\"purchase\", \"granted\", \"grant_claimed\", \"set\"]].{\n  \"at\": at, \"who\": name ? name : email, \"kind\": kind, \"tokens\": tokens, \"by\": by, \"note\": note\n}]^(>at)",
+          "columns": [
+            {
+              "selector": "at",
+              "text": "at",
+              "type": "timestamp"
+            },
+            {
+              "selector": "who",
+              "text": "who",
+              "type": "string"
+            },
+            {
+              "selector": "kind",
+              "text": "kind",
+              "type": "string"
+            },
+            {
+              "selector": "tokens",
+              "text": "tokens",
+              "type": "number"
+            },
+            {
+              "selector": "by",
+              "text": "by",
+              "type": "string"
+            },
+            {
+              "selector": "note",
+              "text": "note",
+              "type": "string"
+            }
+          ]
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "at"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kind"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tokens"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

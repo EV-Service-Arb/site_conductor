@@ -4,8 +4,11 @@
 //! ```text
 //! /grafana/*             → Grafana, `/grafana` stripped                        session (a POST is a read)
 //! /grafana/api/ds/query  → the same, a viewer token in every query on a service's datasource
+//!                           or the conductor's
 //! Grafana → 127.0.0.1:<any>/api/<service>/*, GET + the token → the forward, as that viewer
+//! Grafana → 127.0.0.1:<any>/api/v1/*, GET + the token → the conductor's own API, as that viewer
 //! the services in DASHBOARDS → GET /dashboards → <dir>/dashboards/<service>/<uid>.json
+//! the conductor's own, compiled in → <dir>/dashboards/conductor/<uid>.json
 //! ```
 
 use std::{
@@ -14,7 +17,7 @@ use std::{
 	net::SocketAddr,
 	path::{Path, PathBuf},
 	pin::Pin,
-	sync::{Arc, Mutex},
+	sync::{Arc, Mutex, OnceLock},
 	task::{Context, Poll},
 	time::Duration,
 };
@@ -24,6 +27,7 @@ use axum::{
 	body::{Body, to_bytes},
 	extract::{Request, State},
 	http::{HeaderMap, HeaderValue, Method, StatusCode, Uri, header},
+	middleware::Next,
 	response::Response,
 	routing::{any, post},
 };
@@ -38,6 +42,7 @@ use tokio::sync::watch;
 
 use crate::{
 	forward::{self, DASHBOARDS, Forward, json_error},
+	http::Section,
 	signin::{self, Caller, Denied, Freshness},
 };
 
@@ -45,6 +50,12 @@ use crate::{
 pub const VIEWER_HEADER: &str = "x-sa-viewer";
 
 const INFINITY: &str = "yesoreyeram-infinity-datasource";
+
+/// The conductor's own API as a datasource: its uid, and its dashboards' directory.
+const CONDUCTOR: &str = "conductor";
+
+/// The conductor's own dashboards, over its `/api/v1`.
+const OWN_DASHBOARDS: [(&str, &str); 1] = [("sa-tokens", include_str!("../dashboards/sa-tokens.json"))];
 
 /// How often each service is asked for its dashboards again: a conditional GET.
 const PULL_EVERY: Duration = Duration::from_secs(60);
@@ -58,6 +69,8 @@ pub struct Grafana {
 	dir: Arc<Path>,
 	client: Client<Socket, Body>,
 	viewers: Arc<Viewers>,
+	/// The conductor's own GET routes, for a viewer: set once by [`crate::http::app`].
+	own: Arc<OnceLock<Router>>,
 }
 
 impl Grafana {
@@ -69,6 +82,7 @@ impl Grafana {
 			dir: dir.into(),
 			client: Client::builder(TokioExecutor::new()).build(socket),
 			viewers: Arc::default(),
+			own: Arc::default(),
 		}
 	}
 
@@ -80,9 +94,19 @@ impl Grafana {
 			.with_state(self.clone())
 	}
 
-	/// What Grafana's datasources reach: a service's API, for the viewer a token stands for.
+	/// What Grafana's datasources reach: a service's API or the conductor's, for the viewer a
+	/// token stands for.
 	pub(crate) fn loopback(&self) -> Router {
-		Router::new().route("/api/{*rest}", any(as_viewer)).with_state(self.clone())
+		Router::new()
+			.route("/api/{*rest}", any(as_viewer))
+			.with_state(self.clone())
+			.nest("/api/v1", self.own.get().expect("http::app hands the conductor's routes over before Grafana is reached").clone())
+	}
+
+	/// The conductor's own GET routes, as a viewer reaches them: a [`Caller`] in the request's
+	/// extensions, put there by the loopback listener.
+	pub(crate) fn own(&self, routes: Router) {
+		assert!(self.own.set(routes).is_ok(), "one http::app per Grafana");
 	}
 
 	/// Grafana, until `stop`: provisioned for a loopback listener of its own, with the services'
@@ -149,14 +173,20 @@ impl Grafana {
 			std::fs::create_dir_all(root.join(section)).wrap_err_with(|| format!("creating {}", root.join(section).display()))?;
 		}
 		let datasources: Vec<Value> = forward::apis()
-			.map(|(service, prefix)| {
-				let name = forward::name(service);
+			.map(|(service, prefix)| (forward::name(service), prefix.to_owned()))
+			.chain([(CONDUCTOR.to_owned(), "/api/v1".to_owned())])
+			.map(|(name, prefix)| {
 				// Infinity joins the url and a query's url as strings: the queries' start with `/`
 				json!({"name": name, "uid": name, "type": INFINITY, "url": format!("http://{at}{prefix}"), "jsonData": {"allowedHosts": [format!("http://{at}{prefix}/")]}})
 			})
 			.collect();
 		let dashboards = self.dir.join("dashboards");
-		std::fs::create_dir_all(&dashboards).wrap_err_with(|| format!("creating {}", dashboards.display()))?;
+		let own = dashboards.join(CONDUCTOR);
+		std::fs::create_dir_all(&own).wrap_err_with(|| format!("creating {}", own.display()))?;
+		for (uid, json) in OWN_DASHBOARDS {
+			let path = own.join(format!("{uid}.json"));
+			std::fs::write(&path, json).wrap_err_with(|| format!("writing {}", path.display()))?;
+		}
 		// JSON is YAML
 		for (file, provisioned) in [
 			("datasources/services.yaml", json!({"apiVersion": 1, "prune": true, "datasources": datasources})),
@@ -341,7 +371,8 @@ async fn query(State(g): State<Grafana>, req: Request) -> Response {
 		return json_error(StatusCode::BAD_REQUEST, "a Grafana query without `queries`");
 	};
 	let viewer = g.viewers.mint(caller);
-	for t in targets.iter_mut().filter(|t| serde_json::from_value::<Service>(t["datasource"]["uid"].clone()).is_ok()) {
+	let vouched = |uid: &Value| uid == CONDUCTOR || serde_json::from_value::<Service>(uid.clone()).is_ok();
+	for t in targets.iter_mut().filter(|t| vouched(&t["datasource"]["uid"])) {
 		let headers = t
 			.as_object_mut()
 			.expect("has a datasource")
@@ -365,11 +396,29 @@ async fn query(State(g): State<Grafana>, req: Request) -> Response {
 }
 
 async fn as_viewer(State(g): State<Grafana>, req: Request) -> Response {
-	let token = req.headers().get(VIEWER_HEADER).and_then(|t| t.to_str().ok());
-	match token.and_then(|t| g.viewers.get(t)) {
-		Some(viewer) if req.method() == Method::GET => g.forward.as_viewer(viewer, req).await,
-		_ => json_error(StatusCode::UNAUTHORIZED, "a viewer's token, on a GET"),
+	match vouched(&g, &req) {
+		Some(viewer) => g.forward.as_viewer(viewer, req).await,
+		None => json_error(StatusCode::UNAUTHORIZED, "a viewer's token, on a GET"),
 	}
+}
+
+/// Who a loopback request stands for: its token's viewer, on a GET.
+fn vouched(g: &Grafana, req: &Request) -> Option<Caller> {
+	let token = req.headers().get(VIEWER_HEADER).and_then(|t| t.to_str().ok());
+	token.and_then(|t| g.viewers.get(t)).filter(|_| req.method() == Method::GET)
+}
+
+/// The gate of the conductor's own routes on the loopback listener: the token's viewer, and the
+/// route's section open to them.
+pub(crate) async fn viewer_gate(State((g, section)): State<(Grafana, Option<Section>)>, mut req: Request, next: Next) -> Response {
+	let Some(viewer) = vouched(&g, &req) else {
+		return json_error(StatusCode::UNAUTHORIZED, "a viewer's token, on a GET");
+	};
+	if section.is_some_and(|s| !s.may(&viewer.permissions)) {
+		return json_error(StatusCode::FORBIDDEN, "not allowed");
+	}
+	req.extensions_mut().insert(viewer);
+	next.run(req).await
 }
 
 /// Grafana holds no identity: each query a viewer's browser sends it has a token written into

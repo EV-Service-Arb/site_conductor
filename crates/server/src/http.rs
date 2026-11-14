@@ -159,6 +159,16 @@ pub fn app(
 		.route_layer(gate(Freshness::Cached, None))
 		.with_state(state.clone());
 	let slow = bounded(slow, 8, Duration::from_secs(600));
+	if let Some(grafana) = grafana {
+		let own = api_routes().into_iter().filter(|r| r.method == Method::GET).fold(Router::new(), |routes, r| {
+			routes.merge(
+				Router::new()
+					.route(r.path, r.handler)
+					.route_layer(middleware::from_fn_with_state((grafana.clone(), r.section), crate::grafana::viewer_gate)),
+			)
+		});
+		grafana.own(bounded(own.with_state(state.clone()), limits.api_concurrent, limits.api_timeout));
+	}
 	let api = bounded(routes.with_state(state), limits.api_concurrent, limits.api_timeout);
 	// Its own budget: the bound and the timeout cover the handshake only (the socket lives on
 	// after the 101), and a burst of reconnecting tabs must not shed the API's requests.
