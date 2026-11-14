@@ -48,14 +48,13 @@ function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Pr
         center: { lat: 0, lng: 0 },
         zoom: 2,
         disableDefaultUI: true,
-        // the bottom-right corner is the floating assistant's
-        cameraControl: true,
-        cameraControlOptions: { position: ControlPosition.RIGHT_CENTER },
+        zoomControl: true,
+        zoomControlOptions: { position: ControlPosition.RIGHT_BOTTOM },
         fullscreenControl: true,
         fullscreenControlOptions: { position: ControlPosition.RIGHT_TOP },
         // a panorama entered is a Dynamic Street View load, billed to the browser key
         streetViewControl: true,
-        streetViewControlOptions: { position: ControlPosition.RIGHT_CENTER },
+        streetViewControlOptions: { position: ControlPosition.RIGHT_BOTTOM },
         clickableIcons: false,
       }),
   );
