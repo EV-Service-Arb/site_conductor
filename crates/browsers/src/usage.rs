@@ -20,14 +20,6 @@ pub(crate) struct Usage {
 	/// Held across an append, so ids follow the file's lines.
 	inner: Mutex<Inner>,
 }
-
-struct Inner {
-	file: File,
-	/// Its whole lines' bytes: where a failed append is cut back to.
-	len: u64,
-	used: Vec<Used>,
-}
-
 impl Usage {
 	pub(crate) fn open(dir: &Path) -> eyre::Result<Self> {
 		let path = dir.join(FILE);
@@ -92,4 +84,11 @@ impl Usage {
 		let inner = self.inner.lock().expect("never held across a panic");
 		inner.used.iter().skip(after).take(limit).cloned().collect()
 	}
+}
+
+struct Inner {
+	file: File,
+	/// Its whole lines' bytes: where a failed append is cut back to.
+	len: u64,
+	used: Vec<Used>,
 }
