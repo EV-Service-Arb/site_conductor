@@ -51,16 +51,16 @@ export function KitWindow({ map, area }: { map: google.maps.Map; area: string })
   return (
     // the map stays clickable beside it and below it
     <div className="pointer-events-none absolute inset-4 flex items-start">
-    <section aria-label={t(kit.window, "Review kit")} className="pointer-events-auto flex max-h-full w-full flex-col overflow-y-auto rounded-lg border border-border bg-background shadow-overlay md:w-104">
-      <header className="flex items-center gap-2 border-b border-border px-4 py-3">
-        <QrCode aria-hidden className="size-4 text-ink-soft" />
-        <h2 className="flex-1 text-sm font-semibold text-ink">{area === "" ? t(kit.area.new, "Review kit · a new area") : t(kit.window, "Review kit")}</h2>
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => openKit(null)}>
-          <X aria-hidden />
-        </Button>
-      </header>
-      {area === "" ? <Draw map={map} /> : <Area key={area} map={map} slug={area} />}
-    </section>
+      <section aria-label={t(kit.window, "Review kit")} className="pointer-events-auto flex max-h-full w-full flex-col overflow-y-auto rounded-lg border border-border bg-background shadow-overlay md:w-104">
+        <header className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <QrCode aria-hidden className="size-4 text-ink-soft" />
+          <h2 className="flex-1 text-sm font-semibold text-ink">{area === "" ? t(kit.area.new, "Review kit · a new area") : t(kit.window, "Review kit")}</h2>
+          <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => openKit(null)}>
+            <X aria-hidden />
+          </Button>
+        </header>
+        {area === "" ? <Draw map={map} /> : <Area key={area} map={map} slug={area} />}
+      </section>
     </div>
   );
 }
