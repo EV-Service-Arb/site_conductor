@@ -382,9 +382,9 @@ function reveal(map: google.maps.Map, at: LatLng, box: HTMLElement) {
   if (dx !== 0 || dy !== 0) map.panBy(dx, dy);
 }
 
-// ours are white teardrops standing on their point, apart from the competitors' dots the placement overlay draws
 const CLOSE_ZOOM = 15;
 
+// ours are white teardrops standing on their point, apart from the competitors' dots the placement overlay draws
 const TEARDROP = `<svg viewBox="0 0 28 34" class="block h-8 w-7 overflow-visible drop-shadow-md" aria-hidden="true"><path d="M14 33s-10-11.6-10-19a10 10 0 0 1 20 0c0 7.4-10 19-10 19z" stroke-width="1.5"/><circle data-core cx="14" cy="14" r="4"/><circle data-badge cx="22" cy="5" r="4" stroke-width="1.5"/></svg>`;
 
 const CORE: Record<State, string> = {
