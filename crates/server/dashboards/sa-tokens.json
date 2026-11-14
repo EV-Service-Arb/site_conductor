@@ -712,16 +712,21 @@
               }
             ]
           },
-          "root_selector": "[\n  {\"what\": \"spent\", \"usd\": $sum($append([], days[bill = \"ours\" and $type(usd) = \"number\"].usd))},\n  {\"what\": \"actions without a cost\", \"usd\": $sum($append([], days[bill = \"ours\" and $type(usd) != \"number\"].times))}\n]",
+          "root_selector": "(\n  $rows := days[bill = \"ours\" and $type(usd) = \"number\"];\n  [$distinct($rows.(day & \"|\" & tool_title)).(\n    $k := $;\n    {\"day\": $substringBefore($k, \"|\") & \"T00:00:00Z\", \"series\": $substringAfter($k, \"|\"), \"value\": $sum($rows[day & \"|\" & tool_title = $k].usd)}\n  )]\n)",
           "columns": [
             {
-              "selector": "what",
-              "text": "what",
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "series",
+              "text": "series",
               "type": "string"
             },
             {
-              "selector": "usd",
-              "text": "usd",
+              "selector": "value",
+              "text": "value",
               "type": "number"
             }
           ]
@@ -730,13 +735,13 @@
       "options": {
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "sum"
           ],
           "fields": "",
-          "values": true
+          "values": false
         },
         "orientation": "vertical",
-        "textMode": "value_and_name",
+        "textMode": "value",
         "colorMode": "none",
         "graphMode": "none",
         "justifyMode": "center",
@@ -747,8 +752,9 @@
       },
       "fieldConfig": {
         "defaults": {
-          "displayName": "${__data.fields.what}",
-          "decimals": 2
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "noValue": "no unit costs set"
         },
         "overrides": []
       }
@@ -990,7 +996,7 @@
               }
             ]
           },
-          "root_selector": "(\n  [$distinct(days.item).(\n    $i := $;\n    $r := days[item = $i];\n    {\n      \"what\": $r[0].tool_title & \" \u00b7 \" & $r[0].title,\n      \"unit\": $r[0].unit,\n      \"ours\": $sum($append([], $r[bill = \"ours\"].units)),\n      \"their keys\": $sum($append([], $r[bill = \"theirs\"].units)),\n      \"times\": $sum($r.times),\n      \"$\": $sum($append([], $r[bill = \"ours\" and $type(usd) = \"number\"].usd)),\n      \"by\": $join($distinct($r.source), \", \")\n    }\n  )]^(>$.\"$\", >ours)\n)",
+          "root_selector": "(\n  $d := days;\n  $count($d) = 0 ? [] : [$append([], $distinct($d.item)).(\n    $i := $;\n    $r := $d[item = $i];\n    {\n      \"what\": $r[0].tool_title & \" \u00b7 \" & $r[0].title,\n      \"unit\": $r[0].unit,\n      \"ours\": $sum($append([], $r[bill = \"ours\"].units)),\n      \"their keys\": $sum($append([], $r[bill = \"theirs\"].units)),\n      \"times\": $sum($r.times),\n      \"$\": $sum($append([], $r[bill = \"ours\" and $type(usd) = \"number\"].usd)),\n      \"by\": $join($append([], $distinct($r.source)), \", \")\n    }\n  )]^(>$.\"$\", >ours)\n)",
           "columns": [
             {
               "selector": "what",
