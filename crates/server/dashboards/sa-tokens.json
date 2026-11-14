@@ -25,7 +25,7 @@
         "x": 0,
         "y": 0,
         "w": 24,
-        "h": 4
+        "h": 5
       },
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
@@ -56,31 +56,16 @@
               }
             ]
           },
-          "root_selector": "{\n  \"spent\": -$sum(flows[kind = \"spend\"].tokens),\n  \"bought\": $sum(flows[kind = \"purchase\"].tokens),\n  \"granted\": $sum(flows[kind = \"granted\"].tokens),\n  \"renewed\": $sum(flows[kind = \"renewal\"].tokens),\n  \"refunded\": $sum(flows[kind = \"refund\"].tokens)\n}",
+          "root_selector": "(\n  $rows := flows[kind in [\"spend\", \"purchase\", \"granted\", \"renewal\", \"refund\"]];\n  [$distinct($rows.kind).(\n    $k := $;\n    {\"kind\": $k, \"tokens\": $abs($sum($rows[kind = $k].tokens))}\n  )]\n)",
           "columns": [
             {
-              "selector": "spent",
-              "text": "spent",
-              "type": "number"
+              "selector": "kind",
+              "text": "kind",
+              "type": "string"
             },
             {
-              "selector": "bought",
-              "text": "bought",
-              "type": "number"
-            },
-            {
-              "selector": "granted",
-              "text": "granted",
-              "type": "number"
-            },
-            {
-              "selector": "renewed",
-              "text": "renewed",
-              "type": "number"
-            },
-            {
-              "selector": "refunded",
-              "text": "refunded",
+              "selector": "tokens",
+              "text": "tokens",
               "type": "number"
             }
           ]
@@ -92,18 +77,23 @@
             "lastNotNull"
           ],
           "fields": "",
-          "values": false
+          "values": true
         },
-        "orientation": "horizontal",
+        "orientation": "vertical",
         "textMode": "value_and_name",
         "colorMode": "none",
         "graphMode": "none",
-        "justifyMode": "auto"
+        "justifyMode": "center",
+        "text": {
+          "titleSize": 13,
+          "valueSize": 28
+        }
       },
       "fieldConfig": {
         "defaults": {
           "unit": "none",
-          "decimals": 0
+          "decimals": 0,
+          "displayName": "${__data.fields.kind}"
         },
         "overrides": []
       }
@@ -114,7 +104,7 @@
       "title": "Spent per day, by service",
       "gridPos": {
         "x": 0,
-        "y": 4,
+        "y": 5,
         "w": 12,
         "h": 9
       },
@@ -201,7 +191,8 @@
             "barAlignment": 0
           },
           "unit": "none",
-          "decimals": 0
+          "decimals": 0,
+          "displayName": "${__field.labels.series}"
         },
         "overrides": []
       }
@@ -212,7 +203,7 @@
       "title": "Given per day: bought, granted, renewed, refunded",
       "gridPos": {
         "x": 12,
-        "y": 4,
+        "y": 5,
         "w": 12,
         "h": 9
       },
@@ -299,7 +290,8 @@
             "barAlignment": 0
           },
           "unit": "none",
-          "decimals": 0
+          "decimals": 0,
+          "displayName": "${__field.labels.series}"
         },
         "overrides": []
       }
@@ -310,7 +302,7 @@
       "title": "Spent by person",
       "gridPos": {
         "x": 0,
-        "y": 13,
+        "y": 14,
         "w": 12,
         "h": 10
       },
@@ -371,7 +363,13 @@
         "showUnfilled": true,
         "valueMode": "color",
         "namePlacement": "left",
-        "sizing": "auto"
+        "sizing": "manual",
+        "minVizHeight": 16,
+        "maxVizHeight": 22,
+        "text": {
+          "titleSize": 13,
+          "valueSize": 13
+        }
       },
       "fieldConfig": {
         "defaults": {
@@ -392,7 +390,7 @@
       "title": "Spent on",
       "gridPos": {
         "x": 12,
-        "y": 13,
+        "y": 14,
         "w": 12,
         "h": 10
       },
@@ -501,7 +499,20 @@
             ]
           }
         ]
-      }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "what": 0,
+              "service": 1,
+              "times": 2,
+              "tokens": 3
+            }
+          }
+        }
+      ]
     },
     {
       "id": 6,
@@ -509,7 +520,7 @@
       "title": "Purchases, grants and balances set",
       "gridPos": {
         "x": 0,
-        "y": 23,
+        "y": 24,
         "w": 24,
         "h": 9
       },
@@ -628,7 +639,22 @@
             ]
           }
         ]
-      }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "at": 0,
+              "who": 1,
+              "kind": 2,
+              "tokens": 3,
+              "by": 4,
+              "note": 5
+            }
+          }
+        }
+      ]
     }
   ]
 }
