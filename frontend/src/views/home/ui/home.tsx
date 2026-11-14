@@ -4,36 +4,10 @@ import { Skeleton, cn } from "@evinvest/uikit";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import {
-  type LatLng,
-  type Listed,
-  type MapConfig,
-  type State,
-  TABS,
-  type Tags,
-  fetchMapConfig,
-  issueOf,
-  narrowed,
-  open,
-  openAccount,
-  peek,
-  setOnMap,
-  under,
-  useAccountWindow,
-  useCategoriesWindow,
-  useTrash,
-  useTrashWindow,
-  useGmails,
-  useGmbTags,
-  useOnMap,
-  usePeeked,
-  useSelection,
-  useTab,
-  useTradeWindow,
-  useTrades,
-} from "@/entities/gmb";
+import { type Listed, TABS, type Tags, fetchMapConfig, issueOf, narrowed, open, openAccount, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useTradeWindow, useTrades } from "@/entities/gmb";
 import { PlacingBar } from "@/features/place-gmb";
 import { PlacementOverlay } from "@/features/placement-overlay";
+import type { LatLng, MapConfig, State } from "@/shared/api/schema";
 import { takeReturnPage } from "@/shared/api";
 import { useT } from "@/shared/i18n";
 import { setQuery, useQuery } from "@/shared/lib/query";
@@ -89,7 +63,7 @@ function GmbMap({ config }: { config: MapConfig }) {
   const { tags } = useGmbTags();
   const { host, map } = useTheMap(config.key);
   const listed = selection?.selected ?? [];
-  const located = listed.filter((l) => l.gmb.location !== null);
+  const located = listed.filter((l) => l.gmb.location != null);
   const locatedRef = useRef(located);
   // first of the effects, so each one after reads this render's
   useEffect(() => {

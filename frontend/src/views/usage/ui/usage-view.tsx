@@ -2,9 +2,11 @@
 
 import { Card, CardContent, CardHeader, CardTitle, PageFrame, Skeleton } from "@evinvest/uikit";
 
-import { type Permission, useMe } from "@/entities/session";
+import { useMe } from "@/entities/session";
+import type { Permission } from "@/shared/api/schema";
 import { fetchArchive } from "@/entities/gmb";
-import { UsageFigures, fetchUsage } from "@/entities/tokens";
+import { UsageFigures } from "@/entities/tokens";
+import { api, ok } from "@/shared/api";
 import { ROUTES } from "@/shared/config/routes";
 import { type T, useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
@@ -85,7 +87,7 @@ function Access() {
 
 function UsageCard() {
   const t = useT();
-  const usage = useResource("account.usage", fetchUsage);
+  const usage = useResource("account.usage", async () => (await ok(api.GET("/tokens/usage"))).days);
   const archive = useResource("account.archive", fetchArchive);
   return (
     <Section title={t("Usage")}>

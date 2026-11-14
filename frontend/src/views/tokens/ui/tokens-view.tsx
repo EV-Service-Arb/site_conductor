@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { may, useMe } from "@/entities/session";
-import { type LedgerEntry, type LedgerKind, UsageFigures, fetchLedger, fetchUsage, useTokens } from "@/entities/tokens";
+import { UsageFigures, useTokens } from "@/entities/tokens";
+import { api, ok } from "@/shared/api";
+import type { Ledger, LedgerKind } from "@/shared/api/schema";
 import { ClaimButton } from "@/features/claim-kickbacks";
 import { ROUTES } from "@/shared/config/routes";
 import { type T, useLocale, useT } from "@/shared/i18n";
@@ -28,7 +30,7 @@ export function TokensView() {
   const t = useT();
   const me = useMe();
   const tokens = useTokens();
-  const usage = useResource("tokens.usage", fetchUsage, "tokens.usage", { focus: true });
+  const usage = useResource("tokens.usage", async () => (await ok(api.GET("/tokens/usage"))).days, "tokens.usage", { live: ["tokens"], focus: true });
   const [ledgerVersion, setLedgerVersion] = useState(0);
   const refresh = () => {
     tokens.reload();
@@ -103,8 +105,8 @@ function Ledger() {
   const t = useT();
   const locale = useLocale();
   const button = useButtonSize();
-  const first = useResource("tokens.ledger", () => fetchLedger(null, PAGE));
-  const [more, setMore] = useState<{ entries: LedgerEntry[]; next: number | null } | null>(null);
+  const first = useResource("tokens.ledger", () => ok(api.GET("/tokens/ledger", { params: { query: { limit: PAGE } } })), "tokens.ledger", { live: ["tokens"] });
+  const [more, setMore] = useState<Ledger | null>(null);
   const [busy, setBusy] = useState(false);
 
   if (first.status === "loading") return <Skeleton className="h-24 w-full" />;
@@ -115,8 +117,8 @@ function Ledger() {
   const loadMore = async (before: number) => {
     setBusy(true);
     try {
-      const page = await fetchLedger(before, PAGE);
-      setMore((m) => ({ entries: [...(m?.entries ?? []), ...page.entries], next: page.next }));
+      const page = await ok(api.GET("/tokens/ledger", { params: { query: { before, limit: PAGE } } }));
+      setMore((m) => ({ ...page, entries: [...(m?.entries ?? []), ...page.entries] }));
     } catch (e) {
       notifyFailure(e, t);
     } finally {
@@ -142,7 +144,7 @@ function Ledger() {
           </li>
         ))}
       </ul>
-      {next !== null && (
+      {next != null && (
         <div>
           <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void loadMore(next)}>
             {t("More")}

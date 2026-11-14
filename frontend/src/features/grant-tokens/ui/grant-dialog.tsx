@@ -17,7 +17,8 @@ import {
 } from "@evinvest/uikit";
 import { useId, useState } from "react";
 
-import { type Change, type Holder, changeTokens } from "@/entities/tokens";
+import { api, ok } from "@/shared/api";
+import type { BalanceChange, TokenHolder } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -25,7 +26,7 @@ import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 type Mode = "set" | "add" | "grant";
 
 /** set ≥ 0, add ≥ 1, grant ≥ 1 with a note: a grant is owed, for them to claim. */
-function changeOf(mode: Mode, n: number, note: string): Change | null {
+function changeOf(mode: Mode, n: number, note: string): BalanceChange | null {
   if (!Number.isSafeInteger(n)) return null;
   const said = note.trim();
   const noted = said ? { note: said } : {};
@@ -34,7 +35,7 @@ function changeOf(mode: Mode, n: number, note: string): Change | null {
   return n >= 1 && said ? { grant: n, note: said } : null;
 }
 
-export function GrantDialog({ holder, onClose, onDone }: { holder: Holder; onClose: () => void; onDone: () => void }) {
+export function GrantDialog({ holder, onClose, onDone }: { holder: TokenHolder; onClose: () => void; onDone: () => void }) {
   const t = useT();
   const button = useButtonSize();
   const size = useControlSize();
@@ -45,10 +46,10 @@ export function GrantDialog({ holder, onClose, onDone }: { holder: Holder; onClo
   const [busy, setBusy] = useState(false);
   const change = changeOf(mode, Number(amount), note);
 
-  const submit = async (c: Change) => {
+  const submit = async (c: BalanceChange) => {
     setBusy(true);
     try {
-      const balance = await changeTokens(holder.user_id, c);
+      const { balance } = await ok(api.POST("/admin/tokens/{user_id}", { params: { path: { user_id: holder.user_id } }, body: c }));
       toast.positive(t("Now {n} tokens", { n: balance }));
       onDone();
     } catch (e) {

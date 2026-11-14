@@ -228,6 +228,7 @@
             "GOOGLE_MAPS_KEYS"
             "GOLOGIN_TOKEN"
             "MULTILOGIN_TOKEN"
+            "ANTHROPIC_API_KEY"
           ];
           # TELEGRAM_BOT_TOKEN needs the forward (it sends sites' notes).
           optionalEnv = [
@@ -248,6 +249,8 @@
             "GOLOGIN_TOKEN"
             "MULTILOGIN_TOKEN"
             "PANEL_BROWSERS_URL"
+            # the in-page assistant's model; unset, asking it answers 503
+            "ANTHROPIC_API_KEY"
           ];
           ingress = {
             # in-cluster only, by service DNS: the landings' and bots' ingest
@@ -255,15 +258,15 @@
             excludePathPrefixes = [ "/api/ingest" ];
             # per client IP at the edge; the conductor bounds concurrency, not who calls. /api/hooks:
             # the booking providers' webhooks, forwarded to sites (public, signature-checked there).
-            # /api/queries_cache: open to everyone, so this is its only guard
-            rateLimitPathPrefixes = [ "/auth" "/api/hooks" "/api/queries_cache" ];
+            # /api/queries_cache: open to everyone, so this is its only guard. /mcp/register: open too
+            rateLimitPathPrefixes = [ "/auth" "/api/hooks" "/api/queries_cache" "/mcp/register" "/mcp/authorize" "/mcp/token" ];
           };
           egress = {
             # concierge's gRPC, at the address it names
             grpcEnv = [ "CONCIERGE_GRPC_ADDR" ];
             # the Bot API; the Places API (GOOGLE_MAPS_KEYS); GoLogin's (GOLOGIN_TOKEN) and Multilogin's
-            # (MULTILOGIN_TOKEN) APIs
-            hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" ];
+            # (MULTILOGIN_TOKEN) APIs; the Claude API (ANTHROPIC_API_KEY)
+            hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" "api.anthropic.com:443" ];
           };
         };
 

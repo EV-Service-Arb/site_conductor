@@ -196,7 +196,7 @@ impl World {
 		};
 		let browsers = Browsers::stubbed(&gologin_base, &multilogin_base, "http://ip-api.test/json/");
 		let connected = Connected::try_new(browsers, &runner_base, SEED.parse().unwrap()).unwrap();
-		let app = http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, None, Some(connected));
+		let app = http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, None, Some(connected), None);
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		Self {

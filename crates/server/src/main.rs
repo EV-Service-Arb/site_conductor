@@ -282,6 +282,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				settings.web()?,
 				settings.map(),
 				settings.browsers()?,
+				settings.model(),
 				bind,
 			)
 			.await
@@ -423,6 +424,7 @@ async fn serve(
 	files: Option<Files>,
 	map: Option<MapDto>,
 	browsers: Option<sa_server::browser::Connected>,
+	model: Option<sa_server::ask::Model>,
 	bind: SocketAddr,
 ) -> eyre::Result<()> {
 	let keep_by_default = matches!(identity, Identity::Dev(_));
@@ -514,7 +516,11 @@ async fn serve(
 	if browsers.is_none() {
 		tracing::warn!("PANEL_BROWSERS_URL unset: no browsers, their routes answer 503");
 	}
-	let app = http::app(sign_in, forward, grafana.as_ref().map(|(g, _)| g), http::Limits::default(), bot.clone(), map, browsers);
+	if model.is_none() {
+		tracing::warn!("ANTHROPIC_API_KEY unset: no assistant, asking it answers 503");
+	}
+	let catalog = forward.as_ref().map(|f| f.catalog().clone());
+	let app = http::app(sign_in, forward, grafana.as_ref().map(|(g, _)| g), http::Limits::default(), bot.clone(), map, browsers, model);
 	let app = match files {
 		Some(files) => web::serve(app, files),
 		None => {
@@ -556,7 +562,12 @@ async fn serve(
 			}
 		};
 		let purge = trash::run(purger, keep_by_default, stopped.clone());
-		tokio::join!(bot, feed, tokens, grafana, purge);
+		let catalog = async {
+			if let (Some(catalog), Some(services)) = (&catalog, &services) {
+				catalog.follow(services.clone(), stopped.clone()).await;
+			}
+		};
+		tokio::join!(bot, feed, tokens, grafana, purge, catalog);
 	};
 	let (served, ()) = tokio::join!(server, hubs);
 	served

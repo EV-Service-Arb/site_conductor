@@ -20,7 +20,9 @@ import {
 } from "@evinvest/uikit";
 import { useId, useState } from "react";
 
-import { COUNTRIES, type Country, editGmb, type Gmb, moveGmb, setCountry, type State, STATE_LABEL, TradeSelect, useGmails } from "@/entities/gmb";
+import { STATE_LABEL, TradeSelect, useGmails } from "@/entities/gmb";
+import { api, ok } from "@/shared/api";
+import { type Country, type Gmb, type State, countryValues } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -34,13 +36,13 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
   const size = useControlSize();
   const id = useId();
   const gmails = useGmails();
-  const [gmail, setGmail] = useState(gmb.gmail_id);
+  const [gmail, setGmail] = useState(gmb.gmail_id ?? null);
   const [phone, setPhone] = useState(gmb.phone ?? "");
-  const [trade, setTrade] = useState(gmb.trade_id);
+  const [trade, setTrade] = useState(gmb.trade_id ?? null);
   const [country, setCountryPicked] = useState<Country | null>(gmb.country?.code ?? null);
   const [place, setPlace] = useState("");
   const [busy, setBusy] = useState(false);
-  const googles = gmb.country !== null && !gmb.country.by_hand;
+  const googles = gmb.country != null && !gmb.country.by_hand;
   const title = t("Edit {name}", { name: gmb.name });
 
   const act = async (action: () => Promise<void>) => {
@@ -61,13 +63,13 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
       const edit = {
         ...(gmail !== null && gmail !== gmb.gmail_id && { gmail_id: gmail }),
         ...(phone.trim() !== (gmb.phone ?? "") && { phone: phone.trim() === "" ? null : phone.trim() }),
-        ...(trade !== gmb.trade_id && { trade }),
+        ...(trade !== (gmb.trade_id ?? null) && { trade }),
       };
-      if (Object.keys(edit).length > 0) await editGmb(gmb.id, edit);
-      if (country !== null && country !== gmb.country?.code) await setCountry(gmb.id, country);
+      if (Object.keys(edit).length > 0) await ok(api.PATCH("/gmbs/{id}", { params: { path: { id: gmb.id } }, body: edit }));
+      if (country !== null && country !== gmb.country?.code) await ok(api.PUT("/gmbs/{id}/country", { params: { path: { id: gmb.id } }, body: { country } }));
     });
 
-  const move = (to: State) => act(() => moveGmb(gmb.id, to, place.trim() === "" ? undefined : place.trim()).then(() => undefined));
+  const move = (to: State) => act(() => ok(api.PUT("/gmbs/{id}/state", { params: { path: { id: gmb.id } }, body: { state: to, ...(place.trim() !== "" && { place: place.trim() }) } })).then(() => undefined));
 
   if (gmb.state === "draft") throw new Error("a draft is edited on its Launch tab");
   return (
@@ -121,7 +123,7 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
                 </SelectTrigger>
                 <SelectContent>
                   {country === null && <SelectItem value={NONE}>—</SelectItem>}
-                  {COUNTRIES.map((c) => (
+                  {countryValues.map((c) => (
                     <SelectItem key={c} value={c}>
                       {c}
                     </SelectItem>
@@ -138,7 +140,7 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
           </DialogFooter>
         </form>
         <div className="flex flex-col gap-2 border-t border-border pt-3">
-          {gmb.place_id === null && (
+          {gmb.place_id == null && (
             <Field className="flex flex-col gap-1">
               <FieldLabel htmlFor={`${id}-place`}>{t("Its place on Google")}</FieldLabel>
               <Input id={`${id}-place`} size={size} autoCapitalize="none" value={place} onChange={(e) => setPlace(e.target.value)} />
@@ -148,7 +150,7 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
           <div className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
             {t("Move to")}
             {gmb.next.map((to) => (
-              <Button key={to} variant="outline" size={button("sm")} disabled={busy || (to === "verified" && gmb.place_id === null && place.trim() === "")} onClick={() => void move(to)}>
+              <Button key={to} variant="outline" size={button("sm")} disabled={busy || (to === "verified" && gmb.place_id == null && place.trim() === "")} onClick={() => void move(to)}>
                 {STATE_LABEL[to](t)}
               </Button>
             ))}

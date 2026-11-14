@@ -1,6 +1,6 @@
 import type { T } from "@/shared/i18n";
 
-import type { SourceKind } from "../model/source";
+import type { SourceKind } from "@/shared/api/schema";
 
 /**
  * A kind as an admin reads it. Most are their wire names (`site`, `gbp`), which

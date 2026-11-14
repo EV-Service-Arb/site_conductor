@@ -2,7 +2,8 @@
 
 import { Badge, Card, CardContent, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn } from "@evinvest/uikit";
 
-import type { ConnectedSite, SourceState } from "@/entities/source";
+import type { ConnectedSite } from "@/entities/source";
+import type { SourceState } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { EDGE_CELL, TABLE_HEAD } from "@/shared/ui/table";
@@ -93,7 +94,7 @@ function Report({ site }: { site: ConnectedSite }) {
 function State({ label, state }: { label: string; state: SourceState }) {
   const t = useT();
   return (
-    <Badge tone={STATE[state.state].tone} title={state.detail ?? undefined}>
+    <Badge tone={STATE[state.state].tone} title={state.state === "down" ? state.detail : undefined}>
       {label}: {STATE[state.state].label(t)}
     </Badge>
   );

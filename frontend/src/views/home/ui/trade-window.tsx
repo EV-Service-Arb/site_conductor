@@ -24,28 +24,10 @@ import {
 import { Ellipsis, ListFilter, Mail, Pencil, Plus, Tag, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import {
-  COUNTRIES,
-  type Category,
-  type Country,
-  type Gmail,
-  type Gmb,
-  type Trade,
-  chooseCategoryScope,
-  chooseGmailScope,
-  addTrade,
-  googleName,
-  deleteTrade,
-  openCategories,
-  openTrade,
-  removeCategory,
-  renameTrade,
-  setOnly,
-  setUpCategory,
-  useTrades,
-} from "@/entities/gmb";
+import { chooseCategoryScope, chooseGmailScope, googleName, openCategories, openTrade, setOnly, useTrades } from "@/entities/gmb";
 import { usePlacement } from "@/features/placement-overlay";
-import { ApiError } from "@/shared/api";
+import { type Category, type Country, type Gmail, type Gmb, type Trade, countryValues } from "@/shared/api/schema";
+import { ApiError, api, ok } from "@/shared/api";
 import { useLocale, useT } from "@/shared/i18n";
 import { setQuery } from "@/shared/lib/query";
 import { failureText } from "@/shared/ui/failure-text";
@@ -63,11 +45,11 @@ export function TradeWindow({ trade, tab, gmbs, gmails }: { trade: Trade; tab: C
   const [renaming, setRenaming] = useState(false);
   const held = gmbs.filter((b) => b.trade_id === trade.id);
   const here = tab === null ? held : held.filter((b) => b.country?.code === tab);
-  const holders = new Set(here.map((b) => b.gmail_id));
-  const tabs = COUNTRIES.filter((c) => c === tab || trade.categories.some((k) => k.country === c) || held.some((b) => b.country?.code === c));
-  const rest = COUNTRIES.filter((c) => !tabs.includes(c));
+  const holders = new Set(here.map((b) => b.gmail_id ?? null));
+  const tabs = countryValues.filter((c) => c === tab || trade.categories.some((k) => k.country === c) || held.some((b) => b.country?.code === c));
+  const rest = countryValues.filter((c) => !tabs.includes(c));
   const category = tab === null ? undefined : trade.categories.find((c) => c.country === tab);
-  const countries = new Set(held.flatMap((b) => (b.country === null ? [] : [b.country.code]))).size;
+  const countries = new Set(held.flatMap((b) => (b.country == null ? [] : [b.country.code]))).size;
 
   return (
     <section aria-label={trade.name} className="absolute inset-y-0 right-0 left-0 flex flex-col overflow-y-auto border-l border-border bg-background md:left-36">
@@ -160,9 +142,9 @@ export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; g
   const button = useButtonSize();
   const [added, setAdded] = useState<readonly Country[]>([]);
   const [renaming, setRenaming] = useState<number | null>(null);
-  const traded = gmbs.filter((b) => b.trade_id !== null);
-  const countries = COUNTRIES.filter((c) => added.includes(c) || gmbs.some((b) => b.country?.code === c) || trades.some((tr) => tr.categories.some((k) => k.country === c)));
-  const rest = COUNTRIES.filter((c) => !countries.includes(c));
+  const traded = gmbs.filter((b) => b.trade_id != null);
+  const countries = countryValues.filter((c) => added.includes(c) || gmbs.some((b) => b.country?.code === c) || trades.some((tr) => tr.categories.some((k) => k.country === c)));
+  const rest = countryValues.filter((c) => !countries.includes(c));
   const untraded = gmbs.length - traded.length;
   const cell = "flex h-14 w-full flex-col items-start justify-center gap-0.5 rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -221,7 +203,7 @@ export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; g
               <tbody>
                 {trades.map((tr) => {
                   const held = gmbs.filter((b) => b.trade_id === tr.id);
-                  const where = new Set(held.flatMap((b) => (b.country === null ? [] : [b.country.code]))).size;
+                  const where = new Set(held.flatMap((b) => (b.country == null ? [] : [b.country.code]))).size;
                   return (
                     <tr key={tr.id} className="hover:bg-hover/30 [&>*]:border-t [&>*]:border-border">
                       <th className="px-3 py-1 text-left font-normal">
@@ -250,7 +232,7 @@ export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; g
                               <button type="button" title={t("Open {category}", { category: name })} onClick={() => openTrade(tr.id, c)} className={cn(cell, "hover:bg-hover")}>
                                 <span className={cn("font-semibold tabular-nums", n === 0 ? "text-ink-soft" : "text-ink")}>{n}</span>
                                 <span className="max-w-full truncate text-xs text-ink-soft">
-                                  {[t("{n} keywords", { n: category.keywords.length }), category.google_primary === null ? t("no Google category") : googleName(category.google_primary, locale)].join(" · ")}
+                                  {[t("{n} keywords", { n: category.keywords.length }), category.google_primary == null ? t("no Google category") : googleName(category.google_primary, locale)].join(" · ")}
                                 </span>
                               </button>
                             ) : n > 0 ? (
@@ -315,7 +297,7 @@ function NewTrade() {
       onSubmit={(e) => {
         e.preventDefault();
         setBusy(true);
-        void addTrade(name.trim())
+        void ok(api.POST("/trades", { body: { name: name.trim() } }))
           .then(() => {
             setName("");
             trades.reload();
@@ -345,7 +327,7 @@ function Rename({ trade, onDone }: { trade: Trade; onDone: () => void }) {
       className="flex gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        void renameTrade(trade.id, name.trim())
+        void ok(api.PATCH("/trades/{id}", { params: { path: { id: trade.id } }, body: { name: name.trim() } }))
           .then(() => {
             onDone();
             trades.reload();
@@ -394,7 +376,7 @@ function More({ trade, tab, holders, onRename }: { trade: Trade; tab: Country | 
             {t("Rename")}
           </DropdownMenuItem>
           {tab !== null && (
-            <DropdownMenuItem onClick={() => void act(() => removeCategory(trade.id, tab), () => undefined)()}>
+            <DropdownMenuItem onClick={() => void act(() => ok(api.DELETE("/trades/{id}/{country}", { params: { path: { id: trade.id, country: tab } } })), () => undefined)()}>
               <X aria-hidden />
               {t("No longer set up {category}", { category: `${trade.name} · ${tab}` })}
             </DropdownMenuItem>
@@ -419,7 +401,7 @@ function More({ trade, tab, holders, onRename }: { trade: Trade; tab: Country | 
             <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t("Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className={buttonVariants({ variant: "destructive", size: button() })}
-              onClick={() => void act(() => deleteTrade(trade.id), () => setQuery({ trade: null, tab: null }))()}
+              onClick={() => void act(() => ok(api.DELETE("/trades/{id}", { params: { path: { id: trade.id } } })), () => setQuery({ trade: null, tab: null }))()}
             >
               {t("Remove")}
             </AlertDialogAction>
@@ -437,7 +419,7 @@ function NotSetUp({ trade, country, waiting }: { trade: Trade; country: Country;
   const name = `${trade.name} · ${country}`;
   const setUp = async () => {
     try {
-      await setUpCategory(trade.id, country, { keywords: [], google_primary: null, google_additional: [], study: null });
+      await ok(api.PUT("/trades/{id}/{country}", { params: { path: { id: trade.id, country } }, body: { keywords: [], google_primary: null, google_additional: [], study: null } }));
       trades.reload();
     } catch (e) {
       notifyFailure(e, t);
@@ -473,7 +455,7 @@ function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; categ
   const write = async (change: Partial<Pick<Category, "keywords" | "google_primary" | "google_additional" | "study">>, at: "keywords" | "google" = "keywords") => {
     const c = { ...category, ...change };
     try {
-      await setUpCategory(trade.id, category.country, { keywords: c.keywords, google_primary: c.google_primary?.id ?? null, google_additional: c.google_additional.map((g) => g.id), study: c.study });
+      await ok(api.PUT("/trades/{id}/{country}", { params: { path: { id: trade.id, country: category.country } }, body: { keywords: c.keywords, google_primary: c.google_primary?.id ?? null, google_additional: c.google_additional.map((g) => g.id), study: c.study ?? null } }));
       setFailed(null);
       trades.reload();
       return true;
@@ -484,7 +466,7 @@ function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; categ
     }
   };
   const studies = placement.status === "ok" ? placement.trades : null;
-  const held = [...new Set(here.map((b) => b.gmail_id))].map((id) => ({ id, gmail: id === null ? null : gmails.find((g) => g.id === id), n: here.filter((b) => b.gmail_id === id).length }));
+  const held = [...new Set(here.map((b) => b.gmail_id ?? null))].map((id) => ({ id, gmail: id === null ? null : gmails.find((g) => g.id === id), n: here.filter((b) => (b.gmail_id ?? null) === id).length }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -546,7 +528,7 @@ function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; categ
           onChange={(e) => void write({ study: e.target.value === "" ? null : e.target.value })}
         >
           <NativeSelectOption value="">{t("None")}</NativeSelectOption>
-          {[...new Set([...(studies ?? []), ...(category.study === null ? [] : [category.study])])].map((s) => (
+          {[...new Set([...(studies ?? []), ...(category.study == null ? [] : [category.study])])].map((s) => (
             <NativeSelectOption key={s} value={s}>
               {s}
             </NativeSelectOption>

@@ -3,14 +3,13 @@
 import { type UndoEntry, useUndo } from "@evinvest/uikit";
 import { type ReactNode, createContext, useContext } from "react";
 
+import { api, ok } from "@/shared/api";
+import type { Gmails, Trade, Trash } from "@/shared/api/schema";
 import { type Resource, useResource } from "@/shared/lib/use-resource";
 
-import { fetchGmails, fetchTrades } from "../api/gmbs";
 import { fetchArchive, fetchSiteTags } from "../api/tags";
-import { fetchTrash } from "../api/trash";
-import type { Archive, Gmails, SiteTag, Trade } from "./gmb";
+import type { Archive, SiteTag } from "./gmb";
 import type { Tags } from "./issues";
-import type { Trash } from "./trash";
 
 type Read<T> = Resource<T> & { reload: () => void };
 
@@ -26,12 +25,13 @@ const GmbsContext = createContext<Gmbs | null>(null);
 
 /** One read each of the caller's gmails, their trades and the services' tags on their GMBs, for the outline and the page beside it: a change made in one is seen by the other. */
 export function GmailsProvider({ seesSites, children }: { seesSites: boolean; children: ReactNode }) {
-  // a gmail's `browser` follows its browser's changes
-  const gmails = useResource("gmbs", fetchGmails, "gmbs", { focus: true, live: "browsers" });
-  const trades = useResource("trades", fetchTrades, "trades", { focus: true });
+  // on focus too: Google's pulls change GBPs, and are no one's write
+  const gmails = useResource("gmbs", () => ok(api.GET("/gmails")), "gmbs", { focus: true, live: ["gmails", "gmbs", "trash"] });
+  const trades = useResource("trades", async () => (await ok(api.GET("/trades"))).trades, "trades", { live: ["trades"] });
   const archive = useResource("gmbs.archive", fetchArchive, "gmbs.archive", { focus: true });
   const sites = useResource(`gmbs.sites.${seesSites}`, () => (seesSites ? fetchSiteTags() : Promise.resolve(null)), "gmbs.sites", { focus: true });
-  const trash = useResource("trash", fetchTrash, "trash", { focus: true });
+  // on focus too: the hourly purge is no one's write
+  const trash = useResource("trash", () => ok(api.GET("/trash")), "trash", { focus: true, live: ["trash", "gmails", "gmbs"] });
   // whatever changes the gmails may put something in the trash or take it out
   const both = { ...gmails, reload: () => (gmails.reload(), trash.reload()) };
   return <GmbsContext value={{ gmails: both, trades, archive, sites, trash: { ...trash, reload: both.reload } }}>{children}</GmbsContext>;

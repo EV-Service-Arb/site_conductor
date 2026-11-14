@@ -3,7 +3,9 @@
 import { Button, Field, FieldDescription, FieldLabel, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn } from "@evinvest/uikit";
 import { useId, useState } from "react";
 
-import { type AddedSource, KEYED_SOURCE_KINDS, type KeyedSourceKind, addSource, isOrigin, sourceKindLabel } from "@/entities/source";
+import { isOrigin, sourceKindLabel } from "@/entities/source";
+import { api, ok } from "@/shared/api";
+import { type KeyedSourceKind, type NewSourceKey, keyedSourceKindValues } from "@/shared/api/schema";
 import { isSlug } from "@/shared/config/brands";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -12,7 +14,7 @@ import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 import { brandsFrom } from "../model/brands";
 
 /** A new signing key: its id, the one kind it writes as, the brands it may write for, and a site's origin. */
-export function AddSourceForm({ onAdded }: { onAdded: (added: AddedSource) => void }) {
+export function AddSourceForm({ onAdded }: { onAdded: (added: NewSourceKey) => void }) {
   const t = useT();
   const button = useButtonSize();
   const id = useId();
@@ -30,7 +32,7 @@ export function AddSourceForm({ onAdded }: { onAdded: (added: AddedSource) => vo
     if (!brands) return;
     setBusy(true);
     try {
-      onAdded(await addSource({ key_id: keyId, kind, brands, origin: site ? origin : null }));
+      onAdded(await ok(api.POST("/sources", { body: { key_id: keyId, kind, brands, origin: site ? origin : null } })));
       setKeyId("");
       setBrandsText("");
       setOrigin("");
@@ -55,12 +57,12 @@ export function AddSourceForm({ onAdded }: { onAdded: (added: AddedSource) => vo
       </Field>
       <Field className="flex flex-col gap-1">
         <FieldLabel htmlFor={`${id}-kind`}>{t("Kind")}</FieldLabel>
-        <Select value={kind} onValueChange={(v) => setKind(KEYED_SOURCE_KINDS.find((k) => k === v) ?? "site")}>
+        <Select value={kind} onValueChange={(v) => setKind(keyedSourceKindValues.find((k) => k === v) ?? "site")}>
           <SelectTrigger id={`${id}-kind`} size={size} className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {KEYED_SOURCE_KINDS.map((k) => (
+            {keyedSourceKindValues.map((k) => (
               <SelectItem key={k} value={k}>
                 {sourceKindLabel(k, t)}
               </SelectItem>

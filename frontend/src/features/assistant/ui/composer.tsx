@@ -17,8 +17,8 @@ import { AtSign, ChevronDown, FileText, MapPin, Paperclip, Plus, Slash, X } from
 import Image from "next/image";
 import { type RefObject, useEffect, useImperativeHandle, useRef, useState } from "react";
 
-import type { Attachment, Mention } from "@/entities/assistant";
 import { type Listed, narrowed, useGmails } from "@/entities/gmb";
+import type { Attachment, Mention } from "@/shared/api/schema";
 import { type T, useT } from "@/shared/i18n";
 
 import { type Approval, setApproval } from "../model/chat";
@@ -58,7 +58,7 @@ const COMMANDS = [
 
 const APPROVAL = {
   ask: { label: (t) => t("Ask first"), hint: (t) => t("Proposes actions; you press to take one") },
-  act: { label: (t) => t("Act on its own"), hint: (t) => t("Takes the first action at once; you can undo it") },
+  act: { label: (t) => t("Act on its own"), hint: (t) => t("Takes the first action at once") },
 } satisfies Record<Approval, { label: (t: T) => string; hint: (t: T) => string }>;
 
 type Picking = { kind: "mention"; query: string; from: number } | { kind: "command"; query: string };
@@ -219,7 +219,7 @@ export function Composer({
               )}
               {draft.files.map((f, i) => (
                 <Chip key={i} onRemove={() => setDraft((d) => ({ ...d, files: d.files.filter((_, j) => j !== i) }))} removeLabel={t("Remove {name}", { name: f.name })}>
-                  {f.preview !== null ? <Image unoptimized src={f.preview.url} alt="" width={16} height={16} className="size-4 rounded-sm object-cover" /> : <FileText aria-hidden className="size-3.5 text-ink-soft" />}
+                  {f.preview != null ? <Image unoptimized src={f.preview.url} alt="" width={16} height={16} className="size-4 rounded-sm object-cover" /> : <FileText aria-hidden className="size-3.5 text-ink-soft" />}
                   <span className="max-w-32 truncate">{f.name}</span>
                 </Chip>
               ))}

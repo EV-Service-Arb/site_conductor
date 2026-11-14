@@ -3,7 +3,8 @@
 import { Button, Card, CardContent, Field, FieldLabel, Input, toast } from "@evinvest/uikit";
 import { useId, useState } from "react";
 
-import { type Prices, setPrices } from "@/entities/gmb";
+import { api, ok } from "@/shared/api";
+import type { Prices } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -23,7 +24,7 @@ export function PricesCard({ prices, onSaved }: { prices: Prices; onSaved: () =>
   const d = tokens(details);
   const s = tokens(search);
   const a = tokens(autocomplete);
-  const changed = d !== prices.details || s !== prices.search || a !== prices.autocomplete;
+  const changed = d !== (prices.details ?? null) || s !== (prices.search ?? null) || a !== (prices.autocomplete ?? null);
 
   return (
     <Card className="gap-3 py-4">
@@ -36,7 +37,7 @@ export function PricesCard({ prices, onSaved }: { prices: Prices; onSaved: () =>
             e.preventDefault();
             if (d === null || s === null || a === null) return;
             setBusy(true);
-            setPrices({ details: d, search: s, autocomplete: a })
+            ok(api.PUT("/admin/tokens/prices", { body: { details: d, search: s, autocomplete: a } }))
               .then(() => {
                 toast.positive(t("Prices saved"));
                 onSaved();
@@ -61,7 +62,7 @@ export function PricesCard({ prices, onSaved }: { prices: Prices; onSaved: () =>
             {t("Save")}
           </Button>
         </form>
-        {(prices.details === null || prices.search === null || prices.autocomplete === null) && <p className="text-xs text-accent-warn">{t("Not priced: requests on the shared keys are refused for everyone without a key of their own.")}</p>}
+        {(prices.details == null || prices.search == null || prices.autocomplete == null) && <p className="text-xs text-accent-warn">{t("Not priced: requests on the shared keys are refused for everyone without a key of their own.")}</p>}
       </CardContent>
     </Card>
   );

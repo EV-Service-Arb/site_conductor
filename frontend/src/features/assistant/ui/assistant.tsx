@@ -1,10 +1,11 @@
 "use client";
 
-import { Button, NavDot, cn, useSequences } from "@evinvest/uikit";
+import { Button, NavDot, cn, useKeymap as usePageKeymap } from "@evinvest/uikit";
 import { Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { type ChatSummary, useChats } from "@/entities/assistant";
+import { useChats } from "@/entities/assistant";
+import type { ChatSummary } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { useQuery } from "@/shared/lib/query";
 import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
@@ -68,7 +69,7 @@ export function AssistantToggle() {
   const shown = useQuery("assistant");
   const running = s.running !== null && (s.running.answer.state === "working" || s.running.answer.state === "writing");
   const button = useRef<HTMLButtonElement>(null);
-  const keys = useSequences().get("assistant");
+  const keys = usePageKeymap().bound.get("assistant")?.sequence;
   // Folded from inside the assistant, focus lands here; not on a page loaded folded.
   const was = useRef(shown);
   useEffect(() => {
@@ -106,7 +107,7 @@ function useNoticeShared(): void {
     const now = new Map(data.map((c) => [c.id, c.updated_at]));
     const was = last.current;
     last.current = now;
-    if (was !== null && data.some((c) => c.archived_at === null && was.get(c.id) !== c.updated_at)) notice();
+    if (was !== null && data.some((c) => c.archived_at == null && was.get(c.id) !== c.updated_at)) notice();
   }, [data]);
 }
 

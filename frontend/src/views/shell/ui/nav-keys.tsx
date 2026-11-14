@@ -15,7 +15,7 @@ export function NavKeys() {
   const me = useMe();
   const router = useRouter();
   const own = ownScreens(me, PANEL.walletPage);
-  const go = (key: string, label: string, href: string, may = true): KeyBinding => ({ on: { key }, run: { label, run: may ? () => router.push(href) : null } });
+  const go = (key: string, label: string, href: string, may = true): KeyBinding => ({ on: { key }, id: `go:${href}`, run: { label, run: may ? () => router.push(href) : null } });
   useBinding({
     on: { key: "g" },
     label: t("Go to"),

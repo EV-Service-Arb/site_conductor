@@ -1,7 +1,8 @@
+import type { Gmb, Trade } from "@/shared/api/schema";
 import type { T } from "@/shared/i18n";
 
 import { categoryOf } from "./category";
-import type { ArchiveTag, Gmb, SiteTag, Trade } from "./gmb";
+import type { ArchiveTag, SiteTag } from "./gmb";
 import type { Listed } from "./narrow";
 import { MUST_HAVES, readiness } from "./readiness";
 
@@ -36,7 +37,7 @@ export function issueOf(gmb: Gmb, tags: Tags): Issue | null {
   if (archive !== undefined && archive.suspended > 0) return "suspended";
   if (archive?.failing) return "failing";
   if (gmb.state === "draft") return "draft";
-  if (gmb.location === null) return "unlocated";
+  if (gmb.location == null) return "unlocated";
   if (tags.sites !== null && site === undefined) return "no_site";
   if (tags.trades !== null && categoryOf(gmb, tags.trades).status !== "set_up") return "no_category";
   return null;

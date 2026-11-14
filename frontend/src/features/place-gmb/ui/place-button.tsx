@@ -4,7 +4,8 @@ import { Button, DropdownMenuItem } from "@evinvest/uikit";
 import { MapPinPlus, Move } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 
-import { type Gmb, peek, setOnMap } from "@/entities/gmb";
+import { peek, setOnMap } from "@/entities/gmb";
+import type { Gmb } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
 
@@ -14,15 +15,15 @@ export function PlaceButton({ gmb, item = false, onNavigate }: { gmb: Gmb; item?
   const button = useButtonSize();
   const router = useRouter();
   const pathname = usePathname();
-  if (gmb.location !== null && !gmb.location.placed) return null;
-  const label = (gmb.location === null ? t("Set location") : t("Move location"));
+  if (gmb.location != null && !gmb.location.placed) return null;
+  const label = (gmb.location == null ? t("Set location") : t("Move location"));
   const open = () => {
     if (pathname !== "/") router.push("/");
     else peek(null);
     setOnMap({ placing: gmb.id });
     onNavigate?.();
   };
-  const icon = gmb.location === null ? <MapPinPlus aria-hidden /> : <Move aria-hidden />;
+  const icon = gmb.location == null ? <MapPinPlus aria-hidden /> : <Move aria-hidden />;
   if (item)
     return (
       <DropdownMenuItem onClick={open}>

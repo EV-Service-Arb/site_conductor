@@ -5,7 +5,7 @@ import { ACCOUNT_CHIP_TAG } from "@evinvest/concierge";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import type { Caller } from "@/entities/session";
+import type { Caller } from "@/shared/api/schema";
 import { platformMfe } from "@/shared/api";
 import { useLocale, useT } from "@/shared/i18n";
 import { useElementBundle } from "@/shared/mfe";

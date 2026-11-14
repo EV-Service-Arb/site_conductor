@@ -2,7 +2,8 @@
 
 import { Badge, Card, CardContent, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn } from "@evinvest/uikit";
 
-import { type Source, sourceKindLabel } from "@/entities/source";
+import { sourceKindLabel } from "@/entities/source";
+import type { SourceKey } from "@/shared/api/schema";
 import { RevokeButton } from "@/features/manage-sources";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
@@ -16,7 +17,7 @@ const HEAD = cn(TABLE_HEAD, EDGE_CELL);
  * sideways-scrolling table there hides the date and the revoke action, the one
  * thing an admin opens this list for.
  */
-export function SourcesTable({ sources, onRevoked }: { sources: Source[]; onRevoked: () => void }) {
+export function SourcesTable({ sources, onRevoked }: { sources: SourceKey[]; onRevoked: () => void }) {
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   return (
     <Card className="overflow-hidden py-0">
@@ -25,14 +26,14 @@ export function SourcesTable({ sources, onRevoked }: { sources: Source[]; onRevo
   );
 }
 
-function State({ source, onRevoked }: { source: Source; onRevoked: () => void }) {
+function State({ source, onRevoked }: { source: SourceKey; onRevoked: () => void }) {
   const t = useT();
   const locale = useLocale();
   if (source.revoked_at) return <Badge tone="neutral">{t("Revoked {at}", { at: formatDateTime(source.revoked_at, locale) })}</Badge>;
   return <RevokeButton keyId={source.key_id} onRevoked={onRevoked} />;
 }
 
-function Wide({ sources, onRevoked }: { sources: Source[]; onRevoked: () => void }) {
+function Wide({ sources, onRevoked }: { sources: SourceKey[]; onRevoked: () => void }) {
   const t = useT();
   const locale = useLocale();
   return (
@@ -65,7 +66,7 @@ function Wide({ sources, onRevoked }: { sources: Source[]; onRevoked: () => void
   );
 }
 
-function Narrow({ sources, onRevoked }: { sources: Source[]; onRevoked: () => void }) {
+function Narrow({ sources, onRevoked }: { sources: SourceKey[]; onRevoked: () => void }) {
   const t = useT();
   const locale = useLocale();
   return (

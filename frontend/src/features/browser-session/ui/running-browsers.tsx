@@ -3,7 +3,9 @@
 import { StatusItem } from "@evinvest/uikit";
 import Link from "next/link";
 
-import { type Gmail, fetchConnections, useGmails } from "@/entities/gmb";
+import { useGmails } from "@/entities/gmb";
+import { api, ok } from "@/shared/api";
+import type { Gmail } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 
@@ -16,7 +18,7 @@ export function RunningBrowsers() {
 
 function Running({ gmail }: { gmail: Gmail }) {
   const t = useT();
-  const connections = useResource(`connections.${gmail.id}`, () => fetchConnections(gmail.id), "connections", { live: "browsers" });
+  const connections = useResource(`connections.${gmail.id}`, () => ok(api.GET("/gmails/{id}/connections", { params: { path: { id: gmail.id } } })), "connections", { live: ["gmails"] });
   if (connections.status !== "ok" || connections.data.browser?.running == null) return null;
   return (
     <Link href={`/?account=${gmail.id}&tab=browser`} className="rounded outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">

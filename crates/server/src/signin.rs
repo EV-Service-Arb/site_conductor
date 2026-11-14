@@ -10,7 +10,8 @@
 //!                      state not redeemed before, else 400 and the code is never presented;
 //!                      ExchangeCode(code, verifier); the browser's previous session closed
 //!                      → server-side session, cookies → 303 return_to, else /
-//! /api/v1/*            CSRF on anything but GET; session (access token rotated when it is
+//! /api/v1/*            an MCP client's bearer ([`crate::oauth`]), else CSRF on anything but
+//!                      GET and the cookie; the session (access token rotated when it is
 //!                      about to expire); GetMe (≤ 60 s cache; fresh for minting or revoking
 //!                      source keys) → the caller's permissions, else 401/503
 //! POST /auth/logout    CSRF; every session of the user is closed
@@ -49,6 +50,7 @@ use jiff::Timestamp;
 use sa_auth::PermissionSet;
 use sa_panel::{
 	Panel,
+	oauth::Grant,
 	session::{PRELOGIN_TTL, SessionError, SessionKey},
 };
 use serde::{Deserialize, Serialize};
@@ -178,7 +180,13 @@ pub async fn login(State(s): State<SignIn>, Query(q): Query<Login>) -> Response 
 	if q.dev_as.as_deref().is_some_and(|e| !s.concierge.is_dev() || !dev_email(e)) {
 		return private(page(StatusCode::BAD_REQUEST, "Sign-in failed", "This sign-in link is not valid here. Start again."));
 	}
-	let begun = match s.panel.begin_sign_in(q.return_to.as_deref(), q.dev_as.as_deref(), Timestamp::now()) {
+	to_concierge(&s, q.return_to.as_deref(), q.dev_as.as_deref(), None, q.prompt)
+}
+
+/// Sends the browser to concierge with a fresh pre-login: the callback then signs it in, or opens
+/// the session `grant` gives an MCP client.
+pub(crate) fn to_concierge(s: &SignIn, return_to: Option<&str>, dev_as: Option<&str>, grant: Option<&Grant>, prompt: Option<Prompt>) -> Response {
+	let begun = match s.panel.begin_sign_in(return_to, dev_as, grant, Timestamp::now()) {
 		Ok(b) => b,
 		Err(e) => {
 			crate::report(&e, "starting a sign-in");
@@ -196,7 +204,7 @@ pub async fn login(State(s): State<SignIn>, Query(q): Query<Login>) -> Response 
 			encode(&s.redirect_uri()),
 			begun.state,
 			begun.challenge,
-			match q.prompt {
+			match prompt {
 				Some(Prompt::SelectAccount) => "&prompt=select_account",
 				None => "",
 			},
@@ -295,6 +303,9 @@ pub async fn callback(State(s): State<SignIn>, headers: HeaderMap, Query(q): Que
 			return with_clear(page(StatusCode::BAD_GATEWAY, "Sign-in failed", "Something went wrong. Try again."));
 		}
 	};
+	if let Some(grant) = pre.grant {
+		return with_clear(crate::oauth::granted(&s, &grant, issued).await);
+	}
 	// Signing in again from a browser with a session: the old one is closed, not orphaned.
 	if let Some(old) = s.cookies.get(&headers, cookies::SESSION).and_then(SessionKey::of_cookie) {
 		s.forget_me(&old);
@@ -355,7 +366,7 @@ fn json_error(status: StatusCode, msg: &str) -> Response {
 }
 
 /// A page on this origin with fixed text: nothing from the request is echoed.
-fn page(status: StatusCode, title: &str, message: &str) -> Response {
+pub(crate) fn page(status: StatusCode, title: &str, message: &str) -> Response {
 	let body = format!(
 		"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
 		 <title>{title}</title></head><body><main><h1>{title}</h1><p>{message}</p><p><a href=\"/auth/login\">Sign in again</a></p></main></body></html>"
@@ -367,7 +378,7 @@ fn page(status: StatusCode, title: &str, message: &str) -> Response {
 
 /// The sign-in's answers carry a code or a token in their URLs: kept out of caches and out
 /// of the `Referer` of whatever the page loads next.
-fn private(mut res: Response) -> Response {
+pub(crate) fn private(mut res: Response) -> Response {
 	let h = res.headers_mut();
 	h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
 	h.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
@@ -390,7 +401,7 @@ pub(crate) fn encode(value: &str) -> String {
 /// OIDC `prompt`, passed on to concierge.
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum Prompt {
+pub(crate) enum Prompt {
 	/// Google's account chooser, past the evinvest.ltd session the browser may already have.
 	SelectAccount,
 }
@@ -428,17 +439,23 @@ pub(crate) struct Gatekeeper {
 	pub gate: Gate,
 }
 
-/// The gate of `/api/v1`: CSRF for anything that is not a read, then the session and the
-/// caller's permissions, into the request's extensions as a [`Caller`]; then the route's
-/// section, else 403.
+/// The gate of `/api/v1`: a grant's bearer, or the session's cookie with CSRF for anything that
+/// is not a read; then the caller's permissions, into the request's extensions as a [`Caller`];
+/// then the route's section, else 403.
 pub(crate) async fn gate(State(g): State<Gatekeeper>, mut req: Request, next: Next) -> Response {
-	let safe = matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
-	if !safe && !g.sign_in.cookies.csrf_ok(req.headers()) {
-		return json_error(StatusCode::FORBIDDEN, "csrf");
-	}
-	let caller = match authenticate(&g.sign_in, req.headers(), g.gate.freshness).await {
+	let caller = if req.headers().contains_key(header::AUTHORIZATION) {
+		// No cookie is read: nothing a cross-site request rides on.
+		bearer(&g.sign_in, req.headers(), g.gate.freshness).await
+	} else {
+		let safe = matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
+		if !safe && !g.sign_in.cookies.csrf_ok(req.headers()) {
+			return json_error(StatusCode::FORBIDDEN, "csrf");
+		}
+		check(&g.sign_in, req.headers(), g.gate.freshness).await
+	};
+	let caller = match caller {
 		Ok(c) => c,
-		Err(res) => return *res,
+		Err(denied) => return denied.into_response(&g.sign_in),
 	};
 	if g.gate.section.is_some_and(|section| !section.may(&caller.permissions)) {
 		return ApiError::Forbidden.into_response();
@@ -484,16 +501,27 @@ impl Denied {
 	}
 }
 
-/// The refusal is boxed: a `Response` is large, and the happy path should not carry it.
-async fn authenticate(s: &SignIn, headers: &HeaderMap, freshness: Freshness) -> Result<Caller, Box<Response>> {
-	check(s, headers, freshness).await.map_err(|denied| Box::new(denied.into_response(s)))
-}
-
 /// The session behind the request's cookie and what concierge says its user may do: what
 /// [`gate`] lets through, and what a live socket asks again while it is open.
 pub(crate) async fn check(s: &SignIn, headers: &HeaderMap, freshness: Freshness) -> Result<Caller, Denied> {
 	let cookie = s.cookies.get(headers, cookies::SESSION).ok_or(Denied::Unauthenticated)?;
-	let session = match s.panel.session(cookie, Timestamp::now(), &s.concierge).await {
+	caller(s, cookie, false, freshness).await
+}
+
+/// [`check`] for the session granted an MCP client, named by `Authorization: Bearer`.
+pub(crate) async fn bearer(s: &SignIn, headers: &HeaderMap, freshness: Freshness) -> Result<Caller, Denied> {
+	let token = headers
+		.get(header::AUTHORIZATION)
+		.and_then(|v| v.to_str().ok())
+		.and_then(|v| v.strip_prefix("Bearer "))
+		.ok_or(Denied::Unauthenticated)?;
+	caller(s, token, true, freshness).await
+}
+
+async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Result<Caller, Denied> {
+	let session = match s.panel.session(id, Timestamp::now(), &s.concierge).await {
+		// A browser's id is no bearer, nor a client's a cookie.
+		Ok(session) if session.client_id.is_some() != bearer => return Err(Denied::Unauthenticated),
 		Ok(session) => session,
 		Err(SessionError::Missing | SessionError::Rejected) => return Err(Denied::Unauthenticated),
 		Err(SessionError::Unavailable) => return Err(Denied::Unavailable),

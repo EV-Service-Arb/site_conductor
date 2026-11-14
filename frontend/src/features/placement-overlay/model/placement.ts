@@ -180,7 +180,7 @@ function useScopedStudy(): string | null {
   const { categories: scope } = useScope();
   const trades = useTrades();
   if (scope === null || trades.status !== "ok") return null;
-  const studied = new Set(trades.data.flatMap((tr) => tr.categories.filter((c) => c.study !== null && scope.some((p) => covers(p, tr.id, c.country))).map((c) => c.study)));
+  const studied = new Set(trades.data.flatMap((tr) => tr.categories.filter((c) => c.study != null && scope.some((p) => covers(p, tr.id, c.country))).map((c) => c.study)));
   return studied.size === 1 ? [...studied][0]! : null;
 }
 

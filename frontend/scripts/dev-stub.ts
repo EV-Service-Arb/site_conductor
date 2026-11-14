@@ -20,8 +20,8 @@ import { randomUUID } from "node:crypto";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
 import type { Duplex } from "node:stream";
 
-import { type Alerts, RULES } from "../src/entities/alerts/model/generated.ts";
-import { ALIASES } from "../src/entities/session/model/generated.ts";
+import { ALIASES } from "../src/entities/session/model/access.ts";
+import { type Alerts, type GoogleCategory, type Trade, type Trash, ruleValues } from "../src/shared/api/schema.ts";
 import { browserOf, browserRoute, browserUpgrade } from "./stub-browser.ts";
 import { changed, closing, every, handshake, liveUpgrade } from "./stub-live.ts";
 
@@ -85,7 +85,12 @@ const gmbs: Json[] = [
   { id: 3, gmail_id: null, place_id: null, name: "Électricien Lille (stub draft)", address: null, state: "draft", next: ["verifying"], country: null, phone: null, trade_id: null, areas: [], hidden_address: null, customers_visit: null, film: null, created_at: minsAgo(60 * 24), enabled: true, location: null },
   { id: 4, gmail_id: 1, place_id: null, name: "Plombier Lyon 8 (stub draft)", address: null, state: "draft", next: ["verifying"], country: { code: "FR", by_hand: true }, phone: "+33 4 28 29 41 07", trade_id: 1, areas: ["Lyon 8e", "Vénissieux", "Bron"], hidden_address: "14 rue Laënnec, 69008 Lyon", customers_visit: false, film: null, created_at: minsAgo(60 * 5), enabled: true, location: { lat: 45.7347, lng: 4.8691, placed: true } },
 ];
-const trades = [{ id: 1, name: "Plumbing", created_at: minsAgo(60 * 24 * 7), categories: [{ country: "FR", lang: "fr", keywords: ["plombier"], google_primary: { id: "gcid:plumber", name: "Plombier" }, google_additional: [], study: null }] }];
+const googleCategories: GoogleCategory[] = [
+  { id: "gcid:plumber", names: { en: "Plumber", fr: "Plombier" } },
+  { id: "gcid:heating_contractor", names: { en: "Heating contractor", fr: "Chauffagiste" } },
+  { id: "gcid:drainage_service", names: { en: "Drainage service", fr: "Service d'évacuation des eaux" } },
+];
+const trades: Trade[] = [{ id: 1, name: "Plumbing", created_at: minsAgo(60 * 24 * 7), categories: [{ country: "FR", lang: "fr", keywords: ["plombier"], google_primary: googleCategories[0]!, google_additional: [], study: null }] }];
 const connections = (gmail: number) => ({ imap: null, maps_key: null, prices: { details: null, search: null }, browser: browserOf(gmail).browser });
 const tokens = { balance: 75, daily: 15, cap: 500, kickbacks: [{ id: 1, at: minsAgo(90), amount: 12, service: "review_archive", key: "run:42", label: "Plombier Paris 11 (stub)", by: null, note: null }] };
 const ledger = Array.from({ length: 8 }, (_, i) => ({ id: 8 - i, at: minsAgo(60 * 24 * i), delta: i % 2 ? -12 : 15, kind: i % 2 ? "charge" : "accrual", service: i % 2 ? "review_archive" : null, key: i % 2 ? `run:${40 - i}` : null, label: i % 2 ? "Plombier Paris 11 (stub)" : null, by: null, note: null }));
@@ -117,7 +122,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
     const alerts: Alerts = {
       enabled: true,
       bot: "sa_stub_bot",
-      rules: [...RULES],
+      rules: [...ruleValues],
       destinations: [{ id: 1, kind: "private", title: "Stub admin", topic_id: null, gmail_id: null, dead: null, rules: { new_lead: true, contact_overdue: true } }],
     };
     return send(res, 200, alerts);
@@ -125,7 +130,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   if (path === "/gmails" && req.method === "GET") return send(res, 200, { gmails: gmails.map((g) => ({ ...g, browser: browserOf(g.id).ready })), gmbs });
   if (path === "/trades" && req.method === "GET") return send(res, 200, { trades });
   if (path.startsWith("/google-categories/") && req.method === "GET")
-    return send(res, 200, { categories: [{ id: "gcid:plumber", name: "Plombier" }, { id: "gcid:heating_contractor", name: "Chauffagiste" }, { id: "gcid:drainage_service", name: "Service d'évacuation des eaux" }] });
+    return send(res, 200, { categories: googleCategories });
   const connected = path.match(/^\/gmails\/(\d+)\/connections$/);
   if (connected && req.method === "GET") return send(res, 200, connections(Number(connected[1])));
   if (await browserRoute(req, res, path, () => readJson(req), send, connections)) return;
@@ -144,8 +149,10 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
     if (!gmb) return send(res, 404, { error: "not found" });
     const { lat, lng } = (await readJson(req)) as { lat: number; lng: number };
     gmb.location = { lat, lng, placed: true };
+    changed("gmbs", null, String(gmb.id));
     return send(res, 204);
   }
+  if (path === "/trash" && !write) return send(res, 200, { settings: { keep_days: 30, never_purge: false }, gmails: [], gmbs: [] } satisfies Trash);
   if (path === "/tokens") return send(res, 200, tokens);
   if (path === "/tokens/ledger") return send(res, 200, { entries: ledger, next: null });
   if (path === "/tokens/usage") return send(res, 200, { days: usageDays });

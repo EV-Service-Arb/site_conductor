@@ -2,7 +2,7 @@
 
 import { useT } from "@/shared/i18n";
 
-import type { UsageDay } from "../model/tokens";
+import type { UsageDay } from "@/shared/api/schema";
 
 const total = (days: UsageDay[], key: "charges" | "tokens") => days.reduce((sum, d) => sum + d[key], 0);
 

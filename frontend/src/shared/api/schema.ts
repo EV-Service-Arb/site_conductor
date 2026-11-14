@@ -4,6 +4,919 @@
  */
 
 export interface paths {
+    "/access/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Asks the admins for a need, made now (201); the one standing (200) if asked within 24 h, nobody told again.
+         * @description 400 a need neither a permission nor an alias of the sa catalog; 409 one the caller holds already.
+         */
+        post: operations["request_access"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/access/requests/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's standing access requests; those whose need they now hold are dropped. */
+        get: operations["my_access_requests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every user's balance, renewed. */
+        get: operations["token_holders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/tokens/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tokens a Places request on the shared keys costs, per kind; null, not sold. */
+        get: operations["token_prices"];
+        /** Prices every kind of Places request on the shared keys, 0 or more tokens. */
+        put: operations["set_token_prices"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/tokens/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sets a user's balance, adds to it, or grants tokens owed until they claim them. */
+        post: operations["change_balance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's alert destinations, each with its rules, and the rules open to them. */
+        get: operations["alerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/destinations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes a destination. */
+        delete: operations["remove_destination"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/destinations/{id}/gmail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Scopes a destination's GMB rules to one of the caller's gmails. 404 not theirs. */
+        put: operations["set_destination_gmail"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/destinations/{id}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Turns rules on or off at a destination. 400 a rule not open to the caller. */
+        put: operations["set_destination_rules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/destinations/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends a test message to a destination; one that arrives revives it. 400 with what Telegram said. */
+        post: operations["test_destination"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/telegram/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adds a channel, group or forum topic the caller administers as a destination, once a test went out there.
+         * @description 400 refused (nothing stored), 409 a destination already.
+         */
+        post: operations["add_chat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/telegram/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A link that makes the caller's own Telegram chat with the bot their private destination.
+         * @description 503 without a bot.
+         */
+        post: operations["telegram_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/archived": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Deletes the caller's archived chats; one shared with them they leave. */
+        delete: operations["clear_archived_chats"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's chats, owned and joined, with their own marks, newest first. */
+        get: operations["chats"];
+        put?: never;
+        /** Creates a chat at version 1. 409 the id is taken; 413 a body past 4 MiB. */
+        post: operations["create_chat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/chats/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A chat: its turns, version and the caller's role. */
+        get: operations["chat"];
+        put?: never;
+        post?: never;
+        /** Deletes a chat, its members and marks with it: the owner's only. */
+        delete: operations["delete_chat"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/chats/{id}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Who has a chat: its owner, members and general access. */
+        get: operations["chat_access"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/chats/{id}/act": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Does an answer's proposed operation, as the caller and through the same gate as their own request; the action is marked done in the chat.
+         * @description 409 the action is not a proposed operation; the operation's own refusal answers as it refused.
+         */
+        post: operations["act"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/chats/{id}/archived": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Archives or unarchives a chat, for the caller alone. */
+        put: operations["archive_chat"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/chats/{id}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done.
+         * @description 503 without the assistant's model, or when it does not answer.
+         */
+        post: operations["ask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/chats/{id}/general": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sets who beyond its members may read a chat: the owner's. */
+        put: operations["set_chat_general"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/chats/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Makes people members of a chat. 400 an unknown user. */
+        post: operations["invite_to_chat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/chats/{id}/members/{user}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes a member from a chat: the owner anyone, a member themselves. */
+        delete: operations["remove_chat_member"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/chats/{id}/pinned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Pins or unpins a chat, for the caller alone. */
+        put: operations["pin_chat"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/chats/{id}/title": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Renames a chat. */
+        put: operations["rename_chat"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/chats/{id}/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Writes a chat's turns: those before `from` kept, the rest replaced.
+         * @description 409 `base` is not the version; 400 `from` past the end; 413 the body past 4 MiB, or the chat's
+         *     turns past 16 MiB.
+         */
+        put: operations["write_chat_turns"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whom the caller shares a chat with, by name or email, and whoever has `q` as their whole email. */
+        get: operations["chat_people"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller's gmails and their GBPs, the removed left out.
+         * @description A draft's `gmail_id` may be null; only a verified one's `place_id` is certain; a gmail's `cap`
+         *     is null while its role is unknown.
+         */
+        get: operations["gmails"];
+        put?: never;
+        /** Adds a managing gmail. 409 if the caller has it already. */
+        post: operations["add_gmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes the gmail to the trash, its GBPs with it. 409 while it has a browser. */
+        delete: operations["remove_gmail"];
+        options?: never;
+        head?: never;
+        /** Sets the gmail's role on its GBPs: owner or manager, which caps how many it holds. */
+        patch: operations["set_gmail_role"];
+        trace?: never;
+    };
+    "/gmails/{id}/browser": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Sets the gmail's browser up, kept only once its proxy comes out in the country of every GBP of the gmail; the provider and device are a fingerprint, set once, the proxy replaced under them.
+         * @description 400 refused, nothing stored; 409 another provider or device; a phone names no device.
+         */
+        put: operations["set_browser"];
+        post?: never;
+        /** Removes the gmail's browser: stopped, the provider's profile (a phone's film) and session gone. */
+        delete: operations["remove_browser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}/browser/film": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Uploads an mp4 as the camera of the browser's next launch, its sound the mic: ≤ 512 MiB; a cloud phone's ≤ 100 MiB, to Multilogin's Library.
+         * @description 409 for Multilogin's browser: its camera is the host's.
+         */
+        put: operations["set_film"];
+        post?: never;
+        /** Takes the browser's film away. */
+        delete: operations["remove_film"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}/browser/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Starts the gmail's browser, answering once it is up: at a GBP's point, its zone and its country's locale; for the gmail alone the position blocked. A cloud phone bills while it runs.
+         * @description 409 it runs for another.
+         */
+        post: operations["start_browser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}/browser/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stops the gmail's browser. */
+        post: operations["stop_browser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}/browser/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Checks the browser's proxy exit again. */
+        post: operations["test_browser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A gmail's inbox, Maps key and browser, and what Places requests cost on the shared keys: no secret, ever. */
+        get: operations["gmail_connections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}/gmbs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adds a GBP on Google already, by its place, to the gmail.
+         * @description `name` and `country` fill what Google lacks (400 when still missing); 409 the name or the place
+         *     taken.
+         */
+        post: operations["add_gmb"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}/imap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Sets the gmail's inbox, kept only once it logs in (IMAPS :993, a public address only).
+         * @description 400 refused, nothing stored.
+         */
+        put: operations["set_imap"];
+        post?: never;
+        /** Forgets the gmail's inbox. */
+        delete: operations["remove_imap"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}/imap/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Checks the gmail's inbox again, the check recorded. 404 none set. */
+        post: operations["test_imap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}/maps_key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Sets the gmail's own Maps key, kept only once Google answers for it (an unbilled id-only details); the caller's Places requests are paid with it first.
+         * @description 400 refused, nothing stored.
+         */
+        put: operations["set_maps_key"];
+        post?: never;
+        /** Forgets the gmail's Maps key. */
+        delete: operations["remove_maps_key"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}/maps_key/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Checks the gmail's Maps key again, the check recorded. 404 none set. */
+        post: operations["test_maps_key"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmbs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Creates a GBP no place is known of: a draft, or one verifying or suspended (off Maps).
+         * @description 409 if a live GBP has the name.
+         */
+        post: operations["create_gmb"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmbs/enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Switches GBPs on or off, every one or none (404 one not the caller's); review_archive inherits it. */
+        put: operations["switch_gmbs"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmbs/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The places a pasted id, Maps URL or search may mean (Google Places).
+         * @description Paid with `gmail`'s Maps key first, then the caller's others', then the shared keys their
+         *     tokens pay for. 400 one in a country not served.
+         */
+        get: operations["resolve_place"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmbs/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Places Autocomplete in the countries served, paid as `resolve`: each distinct input is a request. */
+        get: operations["suggest_places"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmbs/trade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Gives GBPs a trade, every one or none (404 one not the caller's). */
+        put: operations["set_gmb_trades"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmbs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes a GBP to the trash. */
+        delete: operations["remove_gmb"];
+        options?: never;
+        head?: never;
+        /**
+         * Edits a GBP.
+         * @description 409 a name not a draft's, a name or a phone another live GBP's.
+         */
+        patch: operations["edit_gmb"];
+        trace?: never;
+    };
+    "/gmbs/{id}/country": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sets a GBP's country by hand. 409 Google has its country. */
+        put: operations["set_gmb_country"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmbs/{id}/location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Places a GBP's point by hand. 409 Google has its point. */
+        put: operations["place_gmb"];
+        post?: never;
+        /** Takes back the point placed by hand. 409 none is. */
+        delete: operations["unplace_gmb"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmbs/{id}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Moves a GBP to another state. 400 a move its `next` lacks. */
+        put: operations["move_gmb"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/google-categories/{country}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Google's categories in a country, named in its language and the front end's. */
+        get: operations["google_categories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The browser's Maps JS key, referrer-restricted. 404 without one: there is no map. */
+        get: operations["map_key"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me": {
         parameters: {
             query?: never;
@@ -100,35 +1013,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/access/requests": {
+    "/tokens": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /**
-         * Asks the admins for a need, made now (201); the one standing (200) if asked within 24 h, nobody told again.
-         * @description 400 a need neither a permission nor an alias of the sa catalog; 409 one the caller holds already.
-         */
-        post: operations["request_access"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/access/requests/mine": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The caller's standing access requests; those whose need they now hold are dropped. */
-        get: operations["my_access_requests"];
+        /** The caller's balance, renewed a day's worth when read, and the kick-backs not claimed. */
+        get: operations["tokens"];
         put?: never;
         post?: never;
         delete?: never;
@@ -137,24 +1030,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/alerts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The caller's alert destinations, each with its rules, and the rules open to them. */
-        get: operations["alerts"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/alerts/telegram/link": {
+    "/tokens/claim": {
         parameters: {
             query?: never;
             header?: never;
@@ -163,158 +1039,23 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * A link that makes the caller's own Telegram chat with the bot their private destination.
-         * @description 503 without a bot.
-         */
-        post: operations["telegram_link"];
+        /** Claims every kick-back and grant owed to the caller into their balance. */
+        post: operations["claim_tokens"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/alerts/telegram/chats": {
+    "/tokens/ledger": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /**
-         * Adds a channel, group or forum topic the caller administers as a destination, once a test went out there.
-         * @description 400 refused (nothing stored), 409 a destination already.
-         */
-        post: operations["add_chat"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/alerts/destinations/{id}/rules": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Turns rules on or off at a destination. 400 a rule not open to the caller. */
-        put: operations["set_destination_rules"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/alerts/destinations/{id}/gmail": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Scopes a destination's GMB rules to one of the caller's gmails. 404 not theirs. */
-        put: operations["set_destination_gmail"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/alerts/destinations/{id}/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Sends a test message to a destination; one that arrives revives it. 400 with what Telegram said. */
-        post: operations["test_destination"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/alerts/destinations/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Removes a destination. */
-        delete: operations["remove_destination"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmails": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * The caller's gmails and their GBPs, the removed left out.
-         * @description A draft's `gmail_id` may be null; only a verified one's `place_id` is certain; a gmail's `cap`
-         *     is null while its role is unknown.
-         */
-        get: operations["gmails"];
-        put?: never;
-        /** Adds a managing gmail. 409 if the caller has it already. */
-        post: operations["add_gmail"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmails/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Removes the gmail to the trash, its GBPs with it. 409 while it has a browser. */
-        delete: operations["remove_gmail"];
-        options?: never;
-        head?: never;
-        /** Sets the gmail's role on its GBPs: owner or manager, which caps how many it holds. */
-        patch: operations["set_gmail_role"];
-        trace?: never;
-    };
-    "/gmbs/resolve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * The places a pasted id, Maps URL or search may mean (Google Places).
-         * @description Paid with `gmail`'s Maps key first, then the caller's others', then the shared keys their
-         *     tokens pay for. 400 one in a country not served.
-         */
-        get: operations["resolve_place"];
+        /** The caller's ledger, newest first. */
+        get: operations["ledger"];
         put?: never;
         post?: never;
         delete?: never;
@@ -323,180 +1064,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/gmbs/suggest": {
+    "/tokens/usage": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Places Autocomplete in the countries served, paid as `resolve`: each distinct input is a request. */
-        get: operations["suggest_places"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmbs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Creates a GBP no place is known of: a draft, or one verifying or suspended (off Maps).
-         * @description 409 if a live GBP has the name.
-         */
-        post: operations["create_gmb"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmails/{id}/gmbs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Adds a GBP on Google already, by its place, to the gmail.
-         * @description `name` and `country` fill what Google lacks (400 when still missing); 409 the name or the place
-         *     taken.
-         */
-        post: operations["add_gmb"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmbs/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Removes a GBP to the trash. */
-        delete: operations["remove_gmb"];
-        options?: never;
-        head?: never;
-        /**
-         * Edits a GBP.
-         * @description 409 a name not a draft's, a name or a phone another live GBP's.
-         */
-        patch: operations["edit_gmb"];
-        trace?: never;
-    };
-    "/gmbs/{id}/state": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Moves a GBP to another state. 400 a move its `next` lacks. */
-        put: operations["move_gmb"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmbs/enabled": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Switches GBPs on or off, every one or none (404 one not the caller's); review_archive inherits it. */
-        put: operations["switch_gmbs"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmbs/trade": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Gives GBPs a trade, every one or none (404 one not the caller's). */
-        put: operations["set_gmb_trades"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmbs/{id}/location": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Places a GBP's point by hand. 409 Google has its point. */
-        put: operations["place_gmb"];
-        post?: never;
-        /** Takes back the point placed by hand. 409 none is. */
-        delete: operations["unplace_gmb"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmbs/{id}/country": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Sets a GBP's country by hand. 409 Google has its country. */
-        put: operations["set_gmb_country"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/map": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The browser's Maps JS key, referrer-restricted. 404 without one: there is no map. */
-        get: operations["map_key"];
+        /** What the caller spent per UTC day over the last 30, oldest first. */
+        get: operations["token_usage"];
         put?: never;
         post?: never;
         delete?: never;
@@ -558,332 +1134,6 @@ export interface paths {
         post?: never;
         /** Takes a trade's set-up in a country away. */
         delete: operations["remove_category"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/google-categories/{country}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Google's categories in a country, named in its language and the front end's. */
-        get: operations["google_categories"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmails/{id}/connections": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** A gmail's inbox, Maps key and browser, and what Places requests cost on the shared keys: no secret, ever. */
-        get: operations["gmail_connections"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmails/{id}/imap": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Sets the gmail's inbox, kept only once it logs in (IMAPS :993, a public address only).
-         * @description 400 refused, nothing stored.
-         */
-        put: operations["set_imap"];
-        post?: never;
-        /** Forgets the gmail's inbox. */
-        delete: operations["remove_imap"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmails/{id}/maps_key": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Sets the gmail's own Maps key, kept only once Google answers for it (an unbilled id-only details); the caller's Places requests are paid with it first.
-         * @description 400 refused, nothing stored.
-         */
-        put: operations["set_maps_key"];
-        post?: never;
-        /** Forgets the gmail's Maps key. */
-        delete: operations["remove_maps_key"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmails/{id}/imap/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Checks the gmail's inbox again, the check recorded. 404 none set. */
-        post: operations["test_imap"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmails/{id}/maps_key/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Checks the gmail's Maps key again, the check recorded. 404 none set. */
-        post: operations["test_maps_key"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmails/{id}/browser": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Sets the gmail's browser up, kept only once its proxy comes out in the country of every GBP of the gmail; the provider and device are a fingerprint, set once, the proxy replaced under them.
-         * @description 400 refused, nothing stored; 409 another provider or device; a phone names no device.
-         */
-        put: operations["set_browser"];
-        post?: never;
-        /** Removes the gmail's browser: stopped, the provider's profile (a phone's film) and session gone. */
-        delete: operations["remove_browser"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmails/{id}/browser/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Checks the browser's proxy exit again. */
-        post: operations["test_browser"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmails/{id}/browser/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Starts the gmail's browser, answering once it is up: at a GBP's point, its zone and its country's locale; for the gmail alone the position blocked. A cloud phone bills while it runs.
-         * @description 409 it runs for another.
-         */
-        post: operations["start_browser"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmails/{id}/browser/stop": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Stops the gmail's browser. */
-        post: operations["stop_browser"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/gmails/{id}/browser/film": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Uploads an mp4 as the camera of the browser's next launch, its sound the mic: ≤ 512 MiB; a cloud phone's ≤ 100 MiB, to Multilogin's Library.
-         * @description 409 for Multilogin's browser: its camera is the host's.
-         */
-        put: operations["set_film"];
-        post?: never;
-        /** Takes the browser's film away. */
-        delete: operations["remove_film"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tokens": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The caller's balance, renewed a day's worth when read, and the kick-backs not claimed. */
-        get: operations["tokens"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tokens/ledger": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The caller's ledger, newest first. */
-        get: operations["ledger"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tokens/usage": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** What the caller spent per UTC day over the last 30, oldest first. */
-        get: operations["token_usage"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tokens/claim": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Claims every kick-back and grant owed to the caller into their balance. */
-        post: operations["claim_tokens"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/tokens": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Every user's balance, renewed. */
-        get: operations["token_holders"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/tokens/{user_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Sets a user's balance, adds to it, or grants tokens owed until they claim them. */
-        post: operations["change_balance"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/tokens/prices": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Tokens a Places request on the shared keys costs, per kind; null, not sold. */
-        get: operations["token_prices"];
-        /** Prices every kind of Places request on the shared keys, 0 or more tokens. */
-        put: operations["set_token_prices"];
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -966,216 +1216,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/assistant/chats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The caller's chats, owned and joined, with their own marks, newest first. */
-        get: operations["chats"];
-        put?: never;
-        /** Creates a chat at version 1. 409 the id is taken; 413 a body past 4 MiB. */
-        post: operations["create_chat"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assistant/chats/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** A chat: its turns, version and the caller's role. */
-        get: operations["chat"];
-        put?: never;
-        post?: never;
-        /** Deletes a chat, its members and marks with it: the owner's only. */
-        delete: operations["delete_chat"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assistant/chats/{id}/turns": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Writes a chat's turns: those before `from` kept, the rest replaced.
-         * @description 409 `base` is not the version; 400 `from` past the end; 413 the body past 4 MiB, or the chat's
-         *     turns past 16 MiB.
-         */
-        put: operations["write_chat_turns"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assistant/chats/{id}/title": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Renames a chat. */
-        put: operations["rename_chat"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assistant/chats/{id}/pinned": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Pins or unpins a chat, for the caller alone. */
-        put: operations["pin_chat"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assistant/chats/{id}/archived": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Archives or unarchives a chat, for the caller alone. */
-        put: operations["archive_chat"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assistant/archived": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Deletes the caller's archived chats; one shared with them they leave. */
-        delete: operations["clear_archived_chats"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assistant/chats/{id}/access": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Who has a chat: its owner, members and general access. */
-        get: operations["chat_access"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assistant/chats/{id}/members": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Makes people members of a chat. 400 an unknown user. */
-        post: operations["invite_to_chat"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assistant/chats/{id}/members/{user}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Removes a member from a chat: the owner anyone, a member themselves. */
-        delete: operations["remove_chat_member"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assistant/chats/{id}/general": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Sets who beyond its members may read a chat: the owner's. */
-        put: operations["set_chat_general"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/assistant/people": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Whom the caller shares a chat with, by name or email, and whoever has `q` as their whole email. */
-        get: operations["chat_people"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1196,15 +1236,20 @@ export interface components {
         AccessRequests: {
             requests: components["schemas"]["AccessRequest"][];
         };
+        Act: {
+            /** @description The action's id in it. */
+            action: string;
+            /** @description The answer's turn id. */
+            turn: string;
+        };
         Action: {
             detail: string;
             /** @description Said once it is done: "Appealed 4 reviews". */
             done: string;
-            /** @description Where it goes, for one that opens a page instead of doing something. */
-            href?: string | null;
             id: string;
             label: string;
             state: components["schemas"]["ActionState"];
+            target: components["schemas"]["Target"];
         };
         /** @enum {string} */
         ActionState: "proposed" | "done";
@@ -1235,7 +1280,7 @@ export interface components {
         /** @description The caller's alerts, and what every change answers. */
         Alerts: {
             /** @description The bot's `@username`, once known: what a channel adds as an admin. */
-            bot?: string | null;
+            bot: string | null;
             destinations: components["schemas"]["Destination"][];
             /** @description A bot is configured: Telegram destinations can be added. */
             enabled: boolean;
@@ -1248,6 +1293,13 @@ export interface components {
             need: components["schemas"]["Need"];
         };
         Attachment: {
+            /** Format: uint64 */
+            bytes: number;
+            name: string;
+            /** @description An image's preview, downscaled; `null` for any other file. */
+            preview: components["schemas"]["Preview"] | null;
+        };
+        AttachmentInput: {
             /** Format: uint64 */
             bytes: number;
             name: string;
@@ -1276,13 +1328,20 @@ export interface components {
             grant: number;
             note: string;
         };
+        /** @description A binding of the page's keymap, as the page has it bound now. */
+        Bound: {
+            id: string;
+            label: string;
+            /** @description Its keys, as the keycaps read. */
+            sequence: string;
+        };
         BrandReads: {
             /** Format: date-time */
-            experiments?: string | null;
+            experiments: string | null;
             /** Format: date-time */
-            locations?: string | null;
+            locations: string | null;
             /** Format: date-time */
-            pricing?: string | null;
+            pricing: string | null;
         };
         /** @description A gmail's browser, as its owner sees it: never the proxy's credentials. */
         Browser: {
@@ -1303,8 +1362,22 @@ export interface components {
              * @description What it runs for now: `gmb` null, the gmail alone; `stream` a cloud phone's own view at
              *     Multilogin; null, it does not run.
              */
-            running?: components["schemas"]["Running"] | null;
+            running: components["schemas"]["Running"] | null;
             set_at: string;
+        };
+        CallInput: {
+            /** @description The JSON body, for an operation that takes one. */
+            body?: unknown;
+            /** @description An operation's id, as `search` names it. */
+            operation: string;
+            /** @description The path's parameters by name: `{"id": 7}`. */
+            path?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description The query's parameters by name. */
+            query?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** @description The signed-in user of an `/api/v1` request, put in its extensions by the gate; `GET /me`. */
         Caller: {
@@ -1327,7 +1400,7 @@ export interface components {
             /** @description At most 9, in the order they are entered into Google's form. */
             google_additional: components["schemas"]["GoogleCategory"][];
             /** @description What Google's form is given as the category. */
-            google_primary?: components["schemas"]["GoogleCategory"] | null;
+            google_primary: components["schemas"]["GoogleCategory"] | null;
             /**
              * @description Lowercase, in the country's language, none naming a city: the terms every GBP of the
              *     category is compared on.
@@ -1336,23 +1409,23 @@ export interface components {
             /** @description The country's language, its keywords' and Google's form's: `fr`. */
             lang: string;
             /** @description Placement's trade that studies it. */
-            study?: string | null;
+            study: string | null;
         };
         /** @description A chat, whole. */
         Chat: {
             /** @description RFC 3339; the caller's own. */
-            archived_at?: string | null;
+            archived_at: string | null;
             general: components["schemas"]["GeneralAccess"];
             /** Format: uuid */
             id: string;
             owner: components["schemas"]["Person"];
             /** @description RFC 3339; the caller's own. */
-            pinned_at?: string | null;
+            pinned_at: string | null;
             role: components["schemas"]["Role"];
             /** @description It has a member, or general access. */
             shared: boolean;
             /** @description `null` until named by its first question, or renamed. */
-            title?: string | null;
+            title: string | null;
             turns: components["schemas"]["Turn"][];
             /** @description RFC 3339. */
             updated_at: string;
@@ -1365,17 +1438,17 @@ export interface components {
         /** @description A chat as a history row. */
         ChatSummary: {
             /** @description RFC 3339; the caller's own. */
-            archived_at?: string | null;
+            archived_at: string | null;
             /** Format: uuid */
             id: string;
             owner: components["schemas"]["Person"];
             /** @description RFC 3339; the caller's own. */
-            pinned_at?: string | null;
+            pinned_at: string | null;
             role: components["schemas"]["Role"];
             /** @description It has a member, or general access. */
             shared: boolean;
             /** @description `null` until named by its first question, or renamed. */
-            title?: string | null;
+            title: string | null;
             /** @description RFC 3339. */
             updated_at: string;
         };
@@ -1386,7 +1459,7 @@ export interface components {
         Checked: {
             at: string;
             /** @description `null`: it went through. */
-            error?: string | null;
+            error: string | null;
         };
         ConnectedSites: {
             internal_reads: components["schemas"]["ReadInternalReads"];
@@ -1394,9 +1467,9 @@ export interface components {
             sites: components["schemas"]["Site"][];
         };
         Connections: {
-            browser?: components["schemas"]["Browser"] | null;
-            imap?: components["schemas"]["Imap"] | null;
-            maps_key?: components["schemas"]["MapsKey"] | null;
+            browser: components["schemas"]["Browser"] | null;
+            imap: components["schemas"]["Imap"] | null;
+            maps_key: components["schemas"]["MapsKey"] | null;
             prices: components["schemas"]["Prices"];
         };
         /**
@@ -1406,12 +1479,12 @@ export interface components {
         Country: "FR" | "US" | "CA" | "GB";
         Destination: {
             /** @description Why nothing reaches it: a test that arrives clears it. */
-            dead?: string | null;
+            dead: string | null;
             /**
              * Format: int64
              * @description The GMB rules only for this gmail's GMBs.
              */
-            gmail_id?: number | null;
+            gmail_id: number | null;
             /** Format: int64 */
             id: number;
             kind: components["schemas"]["DestinationKind"];
@@ -1430,9 +1503,9 @@ export interface components {
                 source_silent?: boolean;
             };
             /** @description A private chat's account, a channel's or group's title. */
-            title?: string | null;
+            title: string | null;
             /** Format: int64 */
-            topic_id?: number | null;
+            topic_id: number | null;
         };
         /**
          * @description What a destination's chat is.
@@ -1488,7 +1561,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @description Optional, the caller's say: nothing here judges it. */
-            role?: components["schemas"]["GmailRole"] | null;
+            role: components["schemas"]["GmailRole"] | null;
         };
         GmailBody: {
             /**
@@ -1509,46 +1582,46 @@ export interface components {
         };
         /** @description A GBP of the caller's. */
         Gmb: {
-            address?: string | null;
+            address: string | null;
             /** @description Service areas, at most 20. */
             areas: string[];
             /** @description `by_hand`: set by the caller, Google having none. */
-            country?: components["schemas"]["GbpCountry"] | null;
+            country: components["schemas"]["GbpCountry"] | null;
             /** @description RFC 3339. */
             created_at: string;
             /** @description `false`: a service-area business, its address hidden; `null` undecided. */
-            customers_visit?: boolean | null;
+            customers_visit: boolean | null;
             /** @description The caller's switch; review_archive inherits it. */
             enabled: boolean;
             /** @description verif_vid's film, recorded by hand. */
-            film?: string | null;
+            film: string | null;
             /**
              * Format: int64
              * @description `null`: a draft no gmail manages yet.
              */
-            gmail_id?: number | null;
+            gmail_id: number | null;
             /** @description Where its verification film is shot. */
-            hidden_address?: string | null;
+            hidden_address: string | null;
             /** Format: int64 */
             id: number;
             /**
              * @description `null`: none on Google (a service-area place, a draft) and none placed yet. `placed`: on
              *     the map by hand.
              */
-            location?: components["schemas"]["Point"] | null;
+            location: components["schemas"]["Point"] | null;
             name: string;
             /** @description The states it may move to. */
             next: components["schemas"]["State"][];
             /** @description `+` and digits; one live GBP's. */
-            phone?: string | null;
+            phone: string | null;
             /** @description Google's place id; `null` while a draft, and maybe while verifying or suspended: off Maps. */
-            place_id?: string | null;
+            place_id: string | null;
             state: components["schemas"]["State"];
             /**
              * Format: int64
              * @description Its category is this trade in its country.
              */
-            trade_id?: number | null;
+            trade_id: number | null;
         };
         /** @description Absent fields stay; `null` clears. */
         GmbEdit: {
@@ -1620,13 +1693,13 @@ export interface components {
             /** @description RFC 3339. */
             at: string;
             /** @description The admin's email. */
-            by?: string | null;
+            by: string | null;
             /** Format: int64 */
             id: number;
-            key?: string | null;
-            label?: string | null;
-            note?: string | null;
-            service?: string | null;
+            key: string | null;
+            label: string | null;
+            note: string | null;
+            service: string | null;
         };
         LatLng: {
             /** Format: double */
@@ -1638,22 +1711,22 @@ export interface components {
         Ledger: {
             entries: components["schemas"]["LedgerEntry"][];
             /** Format: int64 */
-            next?: number | null;
+            next: number | null;
         };
         LedgerEntry: {
             /** @description RFC 3339. */
             at: string;
             /** @description The admin's email. */
-            by?: string | null;
+            by: string | null;
             /** Format: int64 */
             delta: number;
             /** Format: int64 */
             id: number;
-            key?: string | null;
+            key: string | null;
             kind: components["schemas"]["LedgerKind"];
-            label?: string | null;
-            note?: string | null;
-            service?: string | null;
+            label: string | null;
+            note: string | null;
+            service: string | null;
         };
         /**
          * @description - `accrual`: Renewal, or a first balance.
@@ -1669,7 +1742,7 @@ export interface components {
             checked: components["schemas"]["Checked"];
             last4: string;
             /** @description Why the key is passed over now, until Google takes it again. */
-            out?: string | null;
+            out: string | null;
             set_at: string;
         };
         /** @description Something a turn is about: a GMB today; other kinds (a lead, a site) join with their own picker. */
@@ -1690,7 +1763,7 @@ export interface components {
              */
             id: string;
             title?: string | null;
-            turns: components["schemas"]["Turn"][];
+            turns: components["schemas"]["TurnInput"][];
         };
         NewGmail: {
             gmail: string;
@@ -1755,13 +1828,13 @@ export interface components {
         };
         /** @description A place a pasted input may mean. */
         Place: {
-            address?: string | null;
+            address: string | null;
             /** @description `null`: none on Google, or no key. */
-            country?: components["schemas"]["Country"] | null;
+            country: components["schemas"]["Country"] | null;
             /** @description `null`: a service-area place, or no key. */
-            location?: components["schemas"]["LatLng"] | null;
+            location: components["schemas"]["LatLng"] | null;
             /** @description Named and addressed only with the conductor's Places API key. */
-            name?: string | null;
+            name: string | null;
             place_id: string;
         };
         Point: {
@@ -1783,11 +1856,11 @@ export interface components {
         /** @description Tokens a Places request on the shared keys costs; `null`, not sold yet. */
         Prices: {
             /** Format: int64 */
-            autocomplete?: number | null;
+            autocomplete: number | null;
             /** Format: int64 */
-            details?: number | null;
+            details: number | null;
             /** Format: int64 */
-            search?: number | null;
+            search: number | null;
         };
         Probe: {
             /** @constant */
@@ -1810,6 +1883,23 @@ export interface components {
          * @enum {string}
          */
         Provider: "multilogin" | "multilogin_browser" | "gologin";
+        Question: {
+            bindings: components["schemas"]["Bound"][];
+            files: components["schemas"]["AttachmentInput"][];
+            /**
+             * Format: uint
+             * @description The turns kept before it: a question asked again from an earlier one drops what followed.
+             */
+            from: number;
+            mentions: components["schemas"]["Mention"][];
+            text: string;
+            /** @description The page the question is asked on: what is open. */
+            url: string;
+            /** @description The views a person can be shown, by name: the page's route table. */
+            views: {
+                [key: string]: string;
+            };
+        };
         ReadInternalReads: {
             /** @constant */
             state: "read";
@@ -1866,8 +1956,8 @@ export interface components {
         };
         Running: {
             /** Format: int64 */
-            gmb?: number | null;
-            stream?: string | null;
+            gmb: number | null;
+            stream: string | null;
         };
         SetBrowser: {
             /** @description A browser's; a cloud phone's model is drawn. */
@@ -1931,7 +2021,7 @@ export interface components {
         Site: {
             brands: string[];
             key_id: string;
-            origin?: string | null;
+            origin: string | null;
             report: components["schemas"]["Probe"];
         };
         SiteReport: {
@@ -1942,6 +2032,11 @@ export interface components {
             sources: components["schemas"]["ReportSources"];
         };
         Source: {
+            /** @description `null`: read, but nowhere in the panel to open. */
+            href: string | null;
+            label: string;
+        };
+        SourceInput: {
             /** @description `null`: read, but nowhere in the panel to open. */
             href?: string | null;
             label: string;
@@ -1954,8 +2049,8 @@ export interface components {
             key_id: string;
             kind: components["schemas"]["SourceKind"];
             /** @description A site key's landing: `https://<domain>[:port]`. */
-            origin?: string | null;
-            revoked_at?: string | null;
+            origin: string | null;
+            revoked_at: string | null;
         };
         SourceKeys: {
             sources: components["schemas"]["SourceKey"][];
@@ -2020,7 +2115,7 @@ export interface components {
             main: string;
             place_id: string;
             /** @description The rest of its address. */
-            secondary?: string | null;
+            secondary: string | null;
         };
         /** @description `GET /gmbs/suggest`. */
         Suggestions: {
@@ -2029,6 +2124,14 @@ export interface components {
         Switch: {
             enabled: boolean;
             gmbs: number[];
+        };
+        /** @description What an action does: a view, an operation, or a binding of the page's keymap — nothing else. */
+        Target: {
+            href: string;
+        } | {
+            call: components["schemas"]["CallInput"];
+        } | {
+            binding: string;
         };
         /** @description A link to the bot whose `/start` makes the chat the caller's private destination. */
         TelegramLink: {
@@ -2099,7 +2202,7 @@ export interface components {
         /** @description A gmail in the trash. */
         TrashedGmail: {
             /** @description Why it cannot be restored now. */
-            blocked?: string | null;
+            blocked: string | null;
             gmail: string;
             /**
              * Format: uint
@@ -2109,19 +2212,19 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @description RFC 3339; `null`: kept until restored. */
-            purge_at?: string | null;
+            purge_at: string | null;
             /** @description RFC 3339. */
             removed_at: string;
         };
         /** @description A GBP in the trash on its own. */
         TrashedGmb: {
-            blocked?: string | null;
-            gmail?: string | null;
+            blocked: string | null;
+            gmail: string | null;
             /** Format: int64 */
             id: number;
             name: string;
             /** @description RFC 3339; `null`: kept until restored. */
-            purge_at?: string | null;
+            purge_at: string | null;
             /** @description RFC 3339. */
             removed_at: string;
             state: components["schemas"]["State"];
@@ -2144,12 +2247,46 @@ export interface components {
              * Format: int64
              * @description When the answer stopped growing; `null` while it runs.
              */
+            ended: number | null;
+            feedback: components["schemas"]["Feedback"] | null;
+            id: string;
+            /** @constant */
+            role: "assistant";
+            sources: components["schemas"]["Source"][];
+            state: components["schemas"]["AnswerState"];
+            steps: components["schemas"]["Step"][];
+            /** @description `**bold**`, `- ` items, `@[label](location:id)` and `[n]` for `sources[n-1]`. */
+            text: string;
+            /**
+             * Format: int64
+             * @description How long its steps took, once they are over.
+             */
+            worked: number | null;
+        };
+        /** @description A chat's turn, as its asker's browser wrote it. Times are milliseconds since the epoch. */
+        TurnInput: {
+            /** Format: int64 */
+            at: number;
+            files: components["schemas"]["AttachmentInput"][];
+            id: string;
+            mentions: components["schemas"]["Mention"][];
+            /** @constant */
+            role: "user";
+            text: string;
+        } | {
+            actions: components["schemas"]["Action"][];
+            /** Format: int64 */
+            at: number;
+            /**
+             * Format: int64
+             * @description When the answer stopped growing; `null` while it runs.
+             */
             ended?: number | null;
             feedback?: components["schemas"]["Feedback"] | null;
             id: string;
             /** @constant */
             role: "assistant";
-            sources: components["schemas"]["Source"][];
+            sources: components["schemas"]["SourceInput"][];
             state: components["schemas"]["AnswerState"];
             steps: components["schemas"]["Step"][];
             /** @description `**bold**`, `- ` items, `@[label](location:id)` and `[n]` for `sources[n-1]`. */
@@ -2171,7 +2308,7 @@ export interface components {
              * @description Turns before it are kept.
              */
             from: number;
-            turns: components["schemas"]["Turn"][];
+            turns: components["schemas"]["TurnInput"][];
         };
         /** @description `GET /tokens/usage`. */
         Usage: {
@@ -2285,6 +2422,7 @@ export interface components {
 export type Access = components['schemas']['Access'];
 export type AccessRequest = components['schemas']['AccessRequest'];
 export type AccessRequests = components['schemas']['AccessRequests'];
+export type Act = components['schemas']['Act'];
 export type Action = components['schemas']['Action'];
 export type ActionState = components['schemas']['ActionState'];
 export type AddChat = components['schemas']['AddChat'];
@@ -2294,10 +2432,13 @@ export type Alerts = components['schemas']['Alerts'];
 export type AnswerState = components['schemas']['AnswerState'];
 export type Ask = components['schemas']['Ask'];
 export type Attachment = components['schemas']['Attachment'];
+export type AttachmentInput = components['schemas']['AttachmentInput'];
 export type Balance = components['schemas']['Balance'];
 export type BalanceChange = components['schemas']['BalanceChange'];
+export type Bound = components['schemas']['Bound'];
 export type BrandReads = components['schemas']['BrandReads'];
 export type Browser = components['schemas']['Browser'];
+export type CallInput = components['schemas']['CallInput'];
 export type Caller = components['schemas']['Caller'];
 export type Candidates = components['schemas']['Candidates'];
 export type Category = components['schemas']['Category'];
@@ -2355,6 +2496,7 @@ export type Preview = components['schemas']['Preview'];
 export type Prices = components['schemas']['Prices'];
 export type Probe = components['schemas']['Probe'];
 export type Provider = components['schemas']['Provider'];
+export type Question = components['schemas']['Question'];
 export type ReadInternalReads = components['schemas']['ReadInternalReads'];
 export type ReadMapOfTimestamp = components['schemas']['ReadMap_of_Timestamp'];
 export type ReportSources = components['schemas']['ReportSources'];
@@ -2375,6 +2517,7 @@ export type SetUp = components['schemas']['SetUp'];
 export type Site = components['schemas']['Site'];
 export type SiteReport = components['schemas']['SiteReport'];
 export type Source = components['schemas']['Source'];
+export type SourceInput = components['schemas']['SourceInput'];
 export type SourceKey = components['schemas']['SourceKey'];
 export type SourceKeys = components['schemas']['SourceKeys'];
 export type SourceKind = components['schemas']['SourceKind'];
@@ -2385,6 +2528,7 @@ export type Step = components['schemas']['Step'];
 export type Suggestion = components['schemas']['Suggestion'];
 export type Suggestions = components['schemas']['Suggestions'];
 export type Switch = components['schemas']['Switch'];
+export type Target = components['schemas']['Target'];
 export type TelegramLink = components['schemas']['TelegramLink'];
 export type Title = components['schemas']['Title'];
 export type TokenHolder = components['schemas']['TokenHolder'];
@@ -2398,6 +2542,7 @@ export type TrashSettings = components['schemas']['TrashSettings'];
 export type TrashedGmail = components['schemas']['TrashedGmail'];
 export type TrashedGmb = components['schemas']['TrashedGmb'];
 export type Turn = components['schemas']['Turn'];
+export type TurnInput = components['schemas']['TurnInput'];
 export type TurnsWrite = components['schemas']['TurnsWrite'];
 export type Usage = components['schemas']['Usage'];
 export type UsageDay = components['schemas']['UsageDay'];
@@ -2407,6 +2552,1956 @@ export type Tab = components['schemas']['Tab'];
 export type TouchPhase = components['schemas']['TouchPhase'];
 export type $defs = Record<string, never>;
 export interface operations {
+    request_access: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Ask"];
+            };
+        };
+        responses: {
+            /** @description An access request of the caller's, standing. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequest"];
+                };
+            };
+            /** @description An access request of the caller's, standing. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequest"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    my_access_requests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequests"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    token_holders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /admin/tokens`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenHolders"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    token_prices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tokens a Places request on the shared keys costs; `null`, not sold yet. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Prices"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_token_prices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every request kind priced, in tokens. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPrices"];
+            };
+        };
+        responses: {
+            /** @description Tokens a Places request on the shared keys costs; `null`, not sold yet. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Prices"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    change_balance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * @description `POST /admin/tokens/{user_id}`: set to 0 or more, add 1 or more (a sale, its reference in
+         *     the note), or grant 1 or more, owed until claimed, saying what for.
+         */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BalanceChange"];
+            };
+        };
+        responses: {
+            /** @description The answer to a balance change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Balance"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    alerts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's alerts, and what every change answers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    remove_destination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_destination_gmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GmailBody"];
+            };
+        };
+        responses: {
+            /** @description The caller's alerts, and what every change answers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_destination_rules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulesBody"];
+            };
+        };
+        responses: {
+            /** @description The caller's alerts, and what every change answers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    test_destination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    add_chat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddChat"];
+            };
+        };
+        responses: {
+            /** @description The caller's alerts, and what every change answers. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    telegram_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A link to the bot whose `/start` makes the chat the caller's private destination. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramLink"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    clear_archived_chats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    chats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /assistant/chats`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chats"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    create_chat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewChat"];
+            };
+        };
+        responses: {
+            /** @description A chat, whole. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    chat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A chat, whole. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_chat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    chat_access: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /assistant/chats/{id}/access`, and what its writes answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Access"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    act: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Act"];
+            };
+        };
+        responses: {
+            /** @description A chat, whole. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    archive_chat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["On"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    ask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Question"];
+            };
+        };
+        responses: {
+            /** @description A chat, whole. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_chat_general: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetGeneral"];
+            };
+        };
+        responses: {
+            /** @description `GET /assistant/chats/{id}/access`, and what its writes answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Access"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    invite_to_chat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Invite"];
+            };
+        };
+        responses: {
+            /** @description `GET /assistant/chats/{id}/access`, and what its writes answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Access"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    remove_chat_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    pin_chat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["On"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    rename_chat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Title"];
+            };
+        };
+        responses: {
+            /** @description A chat, whole. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    write_chat_turns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TurnsWrite"];
+            };
+        };
+        responses: {
+            /** @description A chat, whole. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    chat_people: {
+        parameters: {
+            query: {
+                /** @description A name or an email's part. */
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /assistant/people?q=`: whom the caller may invite. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["People"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    gmails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /gmails`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gmails"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    add_gmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewGmail"];
+            };
+        };
+        responses: {
+            /** @description A gmail of the caller's. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gmail"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    remove_gmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_gmail_role: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRole"];
+            };
+        };
+        responses: {
+            /** @description A gmail of the caller's. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gmail"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_browser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetBrowser"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connections"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    remove_browser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_film: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "video/mp4": unknown;
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    remove_film: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    start_browser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartBrowser"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    stop_browser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    test_browser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connections"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    gmail_connections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connections"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    add_gmb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewGmb"];
+            };
+        };
+        responses: {
+            /** @description A GBP of the caller's. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gmb"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_imap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetImap"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connections"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    remove_imap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    test_imap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connections"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_maps_key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMapsKey"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connections"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    remove_maps_key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    test_maps_key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connections"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    create_gmb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewUnplaced"];
+            };
+        };
+        responses: {
+            /** @description A GBP of the caller's. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gmb"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    switch_gmbs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Switch"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    resolve_place: {
+        parameters: {
+            query: {
+                /** @description The caller's gmail whose key is tried first. */
+                gmail?: number | null;
+                /** @description A place id, a Maps URL or a search. */
+                place: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /gmbs/resolve`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Candidates"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    suggest_places: {
+        parameters: {
+            query: {
+                /** @description The caller's gmail whose key is tried first. */
+                gmail?: number | null;
+                /** @description What is typed so far. */
+                input: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /gmbs/suggest`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suggestions"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_gmb_trades: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTrades"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    remove_gmb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    edit_gmb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** @description Absent fields stay; `null` clears. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GmbEdit"];
+            };
+        };
+        responses: {
+            /** @description A GBP of the caller's. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gmb"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_gmb_country: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetCountry"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    place_gmb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LatLng"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    unplace_gmb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    move_gmb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Advance"];
+            };
+        };
+        responses: {
+            /** @description A GBP of the caller's. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gmb"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    google_categories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                country: components["schemas"]["Country"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /google-categories/{country}`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleCategories"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    map_key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /map`: the browser's Maps JS key, referrer-restricted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapConfig"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     me: {
         parameters: {
             query?: never;
@@ -2565,49 +4660,7 @@ export interface operations {
             };
         };
     };
-    request_access: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Ask"];
-            };
-        };
-        responses: {
-            /** @description An access request of the caller's, standing. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AccessRequest"];
-                };
-            };
-            /** @description An access request of the caller's, standing. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AccessRequest"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    my_access_requests: {
+    tokens: {
         parameters: {
             query?: never;
             header?: never;
@@ -2616,12 +4669,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description `GET /tokens`, `POST /tokens/claim`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AccessRequests"];
+                    "application/json": components["schemas"]["Tokens"];
                 };
             };
             /** @description What every failed operation answers, its status saying which failure. */
@@ -2635,7 +4689,7 @@ export interface operations {
             };
         };
     };
-    alerts: {
+    claim_tokens: {
         parameters: {
             query?: never;
             header?: never;
@@ -2644,13 +4698,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The caller's alerts, and what every change answers. */
+            /** @description `GET /tokens`, `POST /tokens/claim`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Alerts"];
+                    "application/json": components["schemas"]["Tokens"];
                 };
             };
             /** @description What every failed operation answers, its status saying which failure. */
@@ -2664,329 +4718,13 @@ export interface operations {
             };
         };
     };
-    telegram_link: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A link to the bot whose `/start` makes the chat the caller's private destination. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TelegramLink"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    add_chat: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AddChat"];
-            };
-        };
-        responses: {
-            /** @description The caller's alerts, and what every change answers. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Alerts"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    set_destination_rules: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RulesBody"];
-            };
-        };
-        responses: {
-            /** @description The caller's alerts, and what every change answers. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Alerts"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    set_destination_gmail: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GmailBody"];
-            };
-        };
-        responses: {
-            /** @description The caller's alerts, and what every change answers. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Alerts"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    test_destination: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    remove_destination: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    gmails: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `GET /gmails`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Gmails"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    add_gmail: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NewGmail"];
-            };
-        };
-        responses: {
-            /** @description A gmail of the caller's. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Gmail"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    remove_gmail: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    set_gmail_role: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetRole"];
-            };
-        };
-        responses: {
-            /** @description A gmail of the caller's. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Gmail"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    resolve_place: {
+    ledger: {
         parameters: {
             query: {
-                /** @description The caller's gmail whose key is tried first. */
-                gmail?: number | null;
-                /** @description A place id, a Maps URL or a search. */
-                place: string;
+                /** @description The previous page's `next`. */
+                before?: number | null;
+                /** @description 1–200. */
+                limit: number;
             };
             header?: never;
             path?: never;
@@ -2994,13 +4732,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description `GET /gmbs/resolve`. */
+            /** @description `GET /tokens/ledger`: `next` is the `before` of the next page, `null` at the end. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Candidates"];
+                    "application/json": components["schemas"]["Ledger"];
                 };
             };
             /** @description What every failed operation answers, its status saying which failure. */
@@ -3014,366 +4752,7 @@ export interface operations {
             };
         };
     };
-    suggest_places: {
-        parameters: {
-            query: {
-                /** @description The caller's gmail whose key is tried first. */
-                gmail?: number | null;
-                /** @description What is typed so far. */
-                input: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `GET /gmbs/suggest`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Suggestions"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    create_gmb: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NewUnplaced"];
-            };
-        };
-        responses: {
-            /** @description A GBP of the caller's. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Gmb"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    add_gmb: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NewGmb"];
-            };
-        };
-        responses: {
-            /** @description A GBP of the caller's. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Gmb"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    remove_gmb: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    edit_gmb: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        /** @description Absent fields stay; `null` clears. */
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GmbEdit"];
-            };
-        };
-        responses: {
-            /** @description A GBP of the caller's. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Gmb"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    move_gmb: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Advance"];
-            };
-        };
-        responses: {
-            /** @description A GBP of the caller's. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Gmb"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    switch_gmbs: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Switch"];
-            };
-        };
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    set_gmb_trades: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetTrades"];
-            };
-        };
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    place_gmb: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LatLng"];
-            };
-        };
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    unplace_gmb: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    set_gmb_country: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetCountry"];
-            };
-        };
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    map_key: {
+    token_usage: {
         parameters: {
             query?: never;
             header?: never;
@@ -3382,13 +4761,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description `GET /map`: the browser's Maps JS key, referrer-restricted. */
+            /** @description `GET /tokens/usage`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MapConfig"];
+                    "application/json": components["schemas"]["Usage"];
                 };
             };
             /** @description What every failed operation answers, its status saying which failure. */
@@ -3594,722 +4973,6 @@ export interface operations {
             };
         };
     };
-    google_categories: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                country: components["schemas"]["Country"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `GET /google-categories/{country}`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GoogleCategories"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    gmail_connections: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Connections"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    set_imap: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetImap"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Connections"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    remove_imap: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    set_maps_key: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetMapsKey"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Connections"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    remove_maps_key: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    test_imap: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Connections"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    test_maps_key: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Connections"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    set_browser: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetBrowser"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Connections"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    remove_browser: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    test_browser: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Connections"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    start_browser: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StartBrowser"];
-            };
-        };
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    stop_browser: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    set_film: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "video/mp4": unknown;
-            };
-        };
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    remove_film: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    tokens: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `GET /tokens`, `POST /tokens/claim`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Tokens"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    ledger: {
-        parameters: {
-            query: {
-                /** @description The previous page's `next`. */
-                before?: number | null;
-                /** @description 1–200. */
-                limit: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `GET /tokens/ledger`: `next` is the `before` of the next page, `null` at the end. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Ledger"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    token_usage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `GET /tokens/usage`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Usage"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    claim_tokens: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `GET /tokens`, `POST /tokens/claim`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Tokens"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    token_holders: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `GET /admin/tokens`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenHolders"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    change_balance: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * @description `POST /admin/tokens/{user_id}`: set to 0 or more, add 1 or more (a sale, its reference in
-         *     the note), or grant 1 or more, owed until claimed, saying what for.
-         */
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BalanceChange"];
-            };
-        };
-        responses: {
-            /** @description The answer to a balance change. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Balance"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    token_prices: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Tokens a Places request on the shared keys costs; `null`, not sold yet. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Prices"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    set_token_prices: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Every request kind priced, in tokens. */
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetPrices"];
-            };
-        };
-        responses: {
-            /** @description Tokens a Places request on the shared keys costs; `null`, not sold yet. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Prices"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     trash: {
         parameters: {
             query?: never;
@@ -4417,454 +5080,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    chats: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `GET /assistant/chats`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Chats"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    create_chat: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NewChat"];
-            };
-        };
-        responses: {
-            /** @description A chat, whole. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Chat"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    chat: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A chat, whole. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Chat"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    delete_chat: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    write_chat_turns: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TurnsWrite"];
-            };
-        };
-        responses: {
-            /** @description A chat, whole. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Chat"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    rename_chat: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Title"];
-            };
-        };
-        responses: {
-            /** @description A chat, whole. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Chat"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    pin_chat: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["On"];
-            };
-        };
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    archive_chat: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["On"];
-            };
-        };
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    clear_archived_chats: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    chat_access: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `GET /assistant/chats/{id}/access`, and what its writes answer. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Access"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    invite_to_chat: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Invite"];
-            };
-        };
-        responses: {
-            /** @description `GET /assistant/chats/{id}/access`, and what its writes answer. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Access"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    remove_chat_member: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                user: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    set_chat_general: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetGeneral"];
-            };
-        };
-        responses: {
-            /** @description `GET /assistant/chats/{id}/access`, and what its writes answer. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Access"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    chat_people: {
-        parameters: {
-            query: {
-                /** @description A name or an email's part. */
-                q: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `GET /assistant/people?q=`: whom the caller may invite. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["People"];
-                };
             };
             /** @description What every failed operation answers, its status saying which failure. */
             default: {

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 
-import type { Caller } from "./generated";
+import type { Caller } from "@/shared/api/schema";
 
 const MeContext = createContext<Caller | null>(null);
 

@@ -5,7 +5,8 @@ import { BookOpen, ChevronDown, ChevronsRight, Ellipsis, FileText, MapPin, Messa
 import Link from "next/link";
 import { useState } from "react";
 
-import { type ChatSummary, type Mention, type Source, type Turn, pinChat, renameChat } from "@/entities/assistant";
+import { api, ok } from "@/shared/api";
+import type { ChatSummary, Mention, Source, Turn } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 
@@ -45,7 +46,7 @@ export function Header({
   const rename = (value: string) => {
     setRenaming(false);
     onRenamed();
-    if (chat !== null && value.trim() !== (chat.title ?? "")) void renameChat(chat.id, value).then(onChanged, (e: unknown) => notifyFailure(e, t));
+    if (chat !== null && value.trim() !== (chat.title ?? "")) void ok(api.PUT("/assistant/chats/{id}/title", { params: { path: { id: chat.id } }, body: { title: value } })).then(onChanged, (e: unknown) => notifyFailure(e, t));
   };
   const history = (
     <History current={chat?.id ?? null} onOpen={onOpen}>
@@ -131,12 +132,12 @@ export function Header({
       {full && interacts && (
         <IconButton
           size="sm"
-          aria-label={(chat.pinned_at === null ? t("Pin") : t("Unpin"))}
-          tooltip={(chat.pinned_at === null ? t("Pin") : t("Unpin"))}
-          pressed={chat.pinned_at !== null}
-          onClick={() => void pinChat(chat.id, chat.pinned_at === null).then(onChanged, (e: unknown) => notifyFailure(e, t))}
+          aria-label={(chat.pinned_at == null ? t("Pin") : t("Unpin"))}
+          tooltip={(chat.pinned_at == null ? t("Pin") : t("Unpin"))}
+          pressed={chat.pinned_at != null}
+          onClick={() => void ok(api.PUT("/assistant/chats/{id}/pinned", { params: { path: { id: chat.id } }, body: { on: chat.pinned_at == null } })).then(onChanged, (e: unknown) => notifyFailure(e, t))}
         >
-          {chat.pinned_at === null ? <Pin /> : <PinOff />}
+          {chat.pinned_at == null ? <Pin /> : <PinOff />}
         </IconButton>
       )}
       <DropdownMenu>
@@ -234,7 +235,7 @@ function Touched({ turns }: { turns: readonly Turn[] }) {
         <section className="flex flex-col">
           <h3 className="px-2 py-1 text-caption text-ink-soft">{t("Read")}</h3>
           {read.map((source) =>
-            source.href === null ? (
+            source.href == null ? (
               <span key={source.label} className={cn(row, "hover:bg-transparent")}>
                 <BookOpen aria-hidden className="size-4 shrink-0 text-ink-soft" />
                 <span className="truncate">{source.label}</span>

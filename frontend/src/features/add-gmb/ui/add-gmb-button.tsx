@@ -25,7 +25,9 @@ import { MapPin, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 
-import { addGmail, addGmb, type Candidate, COUNTRIES, type Country, createGmb, resolvePlace, setOnMap, type State, STATE_LABEL, STATES, type Suggestion, suggestPlaces, TradeSelect, useGmails } from "@/entities/gmb";
+import { setOnMap, STATE_LABEL, TradeSelect, useGmails } from "@/entities/gmb";
+import { api, ok } from "@/shared/api";
+import { type Place, type Country, type State, type Suggestion, countryValues, stateValues } from "@/shared/api/schema";
 import { type T, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -57,7 +59,7 @@ export function AddGmbButton({ gmailId, trade: scoped, labeled, onAdded }: { gma
   const [trade, setTrade] = useState<number | null>(scoped);
   const [name, setName] = useState("");
   const [gmail, setGmail] = useState<number | null>(gmailId);
-  const [picked, setPicked] = useState<Candidate | null>(null);
+  const [picked, setPicked] = useState<Place | null>(null);
   const [country, setCountry] = useState<Country | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -85,19 +87,21 @@ export function AddGmbButton({ gmailId, trade: scoped, labeled, onAdded }: { gma
     setBusy(true);
     try {
       const added = verified
-        ? await addGmb(gmail!, { place_id: picked!.place_id, state, trade, ...(picked!.name === null && { name: name.trim() }), ...(picked!.country === null && country !== null && { country }) })
-        : await createGmb({
-            name: name.trim(),
-            trade,
-            state,
-            ...(gmail !== null && { gmail_id: gmail }),
-            ...(where !== null && { country: where }),
-            ...(picked?.location != null && { location: picked.location }),
-          });
+        ? await ok(api.POST("/gmails/{id}/gmbs", { params: { path: { id: gmail! } }, body: { place_id: picked!.place_id, state, trade, ...(picked!.name == null && { name: name.trim() }), ...(picked!.country == null && country !== null && { country }) } }))
+        : await ok(api.POST("/gmbs", {
+            body: {
+              name: name.trim(),
+              trade,
+              state,
+              ...(gmail !== null && { gmail_id: gmail }),
+              ...(where !== null && { country: where }),
+              ...(picked?.location != null && { location: picked.location }),
+            },
+          }));
       setOpen(false);
       reset();
       onAdded();
-      if (added.location === null) {
+      if (added.location == null) {
         router.push("/");
         setOnMap({ placing: added.id });
       }
@@ -158,7 +162,7 @@ export function AddGmbButton({ gmailId, trade: scoped, labeled, onAdded }: { gma
               }}
               className="w-full"
             >
-              {STATES.map((s) => (
+              {stateValues.map((s) => (
                 <ToggleGroupItem key={s} value={s} className="flex-1">
                   {STATE_LABEL[s](t)}
                 </ToggleGroupItem>
@@ -189,19 +193,19 @@ export function AddGmbButton({ gmailId, trade: scoped, labeled, onAdded }: { gma
                 </Field>
               </>
             )}
-            {verified && picked !== null && picked.name === null && (
+            {verified && picked !== null && picked.name == null && (
               <Field className="flex flex-col gap-1">
                 <FieldLabel htmlFor={`${id}-name`}>{t("Name")}</FieldLabel>
                 <Input id={`${id}-name`} size={size} value={name} onChange={(e) => setName(e.target.value)} />
                 <FieldDescription>{t("Google gives this place no name.")}</FieldDescription>
               </Field>
             )}
-            {picked !== null && picked.country === null && (verified || !draft) && (
+            {picked !== null && picked.country == null && (verified || !draft) && (
               <Field className="flex flex-col gap-1">
                 <FieldLabel>{t("Country")}</FieldLabel>
                 <NativeSelect size={size} wrapperClassName="w-full" aria-label={t("Country")} value={country ?? ""} onChange={(e) => setCountry(e.target.value === "" ? null : (e.target.value as Country))}>
                   <NativeSelectOption value="">{t("Pick its country")}</NativeSelectOption>
-                  {COUNTRIES.map((c) => (
+                  {countryValues.map((c) => (
                     <NativeSelectOption key={c} value={c}>
                       {c}
                     </NativeSelectOption>
@@ -232,7 +236,7 @@ export function AddGmbButton({ gmailId, trade: scoped, labeled, onAdded }: { gma
 }
 
 /** Google's suggestions as one types, as Maps' own box: a pick is resolved to its place (point, address, country); Enter on nothing picked resolves what was typed, so a Maps link or a place id works too. */
-function PlaceSearch({ gmail, placeholder, picked, onPick }: { gmail: number | null; placeholder: string; picked: Candidate | null; onPick: (c: Candidate | null) => void }) {
+function PlaceSearch({ gmail, placeholder, picked, onPick }: { gmail: number | null; placeholder: string; picked: Place | null; onPick: (c: Place | null) => void }) {
   const t = useT();
   const button = useButtonSize();
   const [input, setInput] = useState("");
@@ -245,8 +249,8 @@ function PlaceSearch({ gmail, placeholder, picked, onPick }: { gmail: number | n
     if (q.length < MIN_INPUT) return;
     let live = true;
     const timer = setTimeout(() => {
-      suggestPlaces(q, gmail).then(
-        (found) => live && setAnswered({ q, found }),
+      ok(api.GET("/gmbs/suggest", { params: { query: { input: q, gmail } } })).then(
+        ({ suggestions: found }) => live && setAnswered({ q, found }),
         (e: unknown) => live && notifyFailure(e, t),
       );
     }, PAUSE_MS);
@@ -259,9 +263,9 @@ function PlaceSearch({ gmail, placeholder, picked, onPick }: { gmail: number | n
   const resolve = async (place: string) => {
     setResolving(true);
     try {
-      const [first, ...rest] = await resolvePlace(place, gmail);
+      const [first, ...rest] = (await ok(api.GET("/gmbs/resolve", { params: { query: { place, gmail } } }))).candidates;
       if (first === undefined || rest.length > 0) {
-        setAnswered({ q, found: [first, ...rest].filter((c) => c !== undefined).map((c) => ({ place_id: c.place_id, main: c.name ?? c.place_id, secondary: c.address })) });
+        setAnswered({ q, found: [first, ...rest].filter((c) => c !== undefined).map((c) => ({ place_id: c.place_id, main: c.name ?? c.place_id, secondary: c.address ?? null })) });
         return;
       }
       onPick(first);
@@ -279,9 +283,9 @@ function PlaceSearch({ gmail, placeholder, picked, onPick }: { gmail: number | n
         <MapPin aria-hidden className="size-4 shrink-0 text-ink-soft" />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-sm text-ink">{picked.name ?? picked.address ?? picked.place_id}</span>
-          {picked.name !== null && picked.address !== null && <span className="truncate text-xs text-ink-soft">{picked.address}</span>}
+          {picked.name != null && picked.address != null && <span className="truncate text-xs text-ink-soft">{picked.address}</span>}
           <span className="text-xs text-ink-faint">
-            {[picked.location === null ? t("no point from Google") : `${picked.location.lat.toFixed(4)}, ${picked.location.lng.toFixed(4)}`, picked.country].filter(Boolean).join(" · ")}
+            {[picked.location == null ? t("no point from Google") : `${picked.location.lat.toFixed(4)}, ${picked.location.lng.toFixed(4)}`, picked.country].filter(Boolean).join(" · ")}
           </span>
         </span>
         <Button type="button" variant="ghost" size={button("sm")} icon aria-label={t("Pick another")} title={t("Pick another")} onClick={() => onPick(null)}>
@@ -312,7 +316,7 @@ function PlaceSearch({ gmail, placeholder, picked, onPick }: { gmail: number | n
               <MapPin aria-hidden className="text-ink-soft" />
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-sm text-ink">{s.main}</span>
-                {s.secondary !== null && <span className="truncate text-xs text-ink-soft">{s.secondary}</span>}
+                {s.secondary != null && <span className="truncate text-xs text-ink-soft">{s.secondary}</span>}
               </span>
             </CommandItem>
           ))}
@@ -336,7 +340,7 @@ function GmailSelect({ value, onPick }: { value: number | null; onPick: (gmail: 
   const add = async () => {
     setBusy(true);
     try {
-      const made = await addGmail(typed.trim());
+      const made = await ok(api.POST("/gmails", { body: { gmail: typed.trim() } }));
       gmails.reload();
       onPick(made.id);
       setNaming(false);

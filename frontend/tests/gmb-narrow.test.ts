@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { Gmails, Gmb } from "@/entities/gmb/model/gmb";
+import type { Gmails, Gmb } from "@/shared/api/schema";
 import { byView, narrowed } from "@/entities/gmb/model/narrow";
 
 const gmb = (id: number, name: string, address: string | null, located: boolean, enabled = true, gmail: number | null = Math.floor(id / 10)): Gmb => ({

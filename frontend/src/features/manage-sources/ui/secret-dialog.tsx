@@ -3,7 +3,7 @@
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@evinvest/uikit";
 import { useState } from "react";
 
-import type { AddedSource } from "@/entities/source";
+import type { NewSourceKey } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
 
@@ -11,7 +11,7 @@ import { useButtonSize } from "@/shared/ui/touch";
  * The new key's secret, once: the backend keeps it sealed and never returns it
  * again. Closing is an explicit "I saved it", not a click outside.
  */
-export function SecretDialog({ added, onClose }: { added: AddedSource | null; onClose: () => void }) {
+export function SecretDialog({ added, onClose }: { added: NewSourceKey | null; onClose: () => void }) {
   const t = useT();
   const button = useButtonSize();
   const [copied, setCopied] = useState(false);

@@ -2,10 +2,10 @@
 
 import { useEffect } from "react";
 
+import type { Gmail } from "@/shared/api/schema";
 import { setQuery, useQuery } from "@/shared/lib/query";
 
 import { useGmails, useGmbTags } from "./gmails-context";
-import type { Gmail } from "./gmb";
 import { ISSUES, type Issue, issueOf } from "./issues";
 import { type Listed, narrowed } from "./narrow";
 import { type Pattern, useScope } from "./scope";

@@ -1,4 +1,4 @@
-import type { BrowserIn, BrowserOut } from "@/entities/gmb";
+import type { BrowserIn, BrowserOut } from "@/shared/api/schema";
 import { type Parser, arrayOf, nullable, num, object, oneOf, parse, str } from "@/shared/lib/parse";
 
 /** The server's close codes for the viewer's socket. */

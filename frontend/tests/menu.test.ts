@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { panelGroups } from "@/features/account-chip/model/attributes";
-import { ownScreens, seesSites } from "@/entities/session/model/access";
-import { type Caller, type Permission, ALIASES } from "@/entities/session/model/generated";
+import { ALIASES, ownScreens, seesSites } from "@/entities/session/model/access";
+import type { Caller, Permission } from "@/shared/api/schema";
 import { i18n } from "@/shared/i18n/registry";
 
 const t = i18n.translator({}, "en", () => {});

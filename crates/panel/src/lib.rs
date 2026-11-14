@@ -9,7 +9,8 @@
 //! [`tokens`] their balances and review_archive's charges, and [`import`] both from there;
 //! [`alerts`] the hub: users' destinations and rules, the feeds fanned out to them; [`telegram`]
 //! the method that reaches them; [`live`] the bus that tells the server's sockets what changed;
-//! [`assistant`] the assistant's chats; [`trash`] what was removed, until it is purged.
+//! [`assistant`] the assistant's chats; [`trash`] what was removed, until it is purged; [`oauth`]
+//! the MCP clients and the sessions granted them.
 
 pub mod access;
 pub mod alerts;
@@ -21,6 +22,7 @@ mod google_categories;
 mod imap;
 pub mod import;
 pub mod live;
+pub mod oauth;
 pub mod seal;
 pub mod session;
 pub mod store;

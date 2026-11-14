@@ -1,0 +1,207 @@
+//! One catalog of every operation behind the origin: the conductor's own `/api/v1` (its table,
+//! `http::api_routes`) and each service's document, pulled as the dashboards are (`GET` under a
+//! Conductor assertion, every 60 s, conditional; a failed pull reported, the last kept), its paths
+//! under its forward prefix, its ids and schemas named `<service>.<name>`. What a caller is shown
+//! is narrowed to their permissions — context, not authority: each service authorizes the call.
+
+use std::{
+	collections::BTreeMap,
+	sync::{Arc, Mutex, RwLock},
+	time::Duration,
+};
+
+use axum::{
+	body::{Body, to_bytes},
+	http::{HeaderMap, HeaderValue, Method, StatusCode, header},
+};
+use ev_lib::api::{
+	OpenApi,
+	openapi::{Info, Paths, ReferenceOr, Server},
+};
+use eyre::WrapErr;
+use sa_auth::{PermissionSet, Principal, Service};
+use serde_json::Value;
+use tokio::sync::watch;
+
+use crate::forward::{self, Services};
+
+/// The services that serve their document, and where (docs/ARCHITECTURE.md, The catalog).
+const DOCUMENTS: [(Service, &str); 2] = [(Service::Sites, "/api/v1/openapi.json"), (Service::ReviewArchive, "/openapi.json")];
+const PULL_EVERY: Duration = Duration::from_secs(60);
+const PULL_TIMEOUT: Duration = Duration::from_secs(10);
+const DOCUMENT_ANSWER: usize = 16 * 1024 * 1024;
+
+#[derive(Clone)]
+pub struct Catalog {
+	/// The conductor's own, under `/api/v1`.
+	own: Arc<OpenApi>,
+	/// Each service's, as last pulled, its prefix applied.
+	services: Arc<RwLock<BTreeMap<String, OpenApi>>>,
+	/// `own` and `services` merged, absolute paths: rebuilt on a pull that changed something.
+	merged: Arc<RwLock<Arc<OpenApi>>>,
+}
+
+impl Catalog {
+	pub(crate) fn new(own: OpenApi) -> Self {
+		let own = Arc::new(own);
+		let merged = Arc::new(RwLock::new(Arc::new(merge(&own, &BTreeMap::new()))));
+		Self {
+			own,
+			services: Arc::default(),
+			merged,
+		}
+	}
+
+	/// The conductor's own operations, relative to `/api/v1`: what the front end's client is
+	/// generated from.
+	pub fn own(&self) -> &OpenApi {
+		&self.own
+	}
+
+	/// Every operation, its path absolute.
+	pub fn document(&self) -> Arc<OpenApi> {
+		self.merged.read().expect("never held across a panic").clone()
+	}
+
+	/// Only the operations `permissions` open.
+	pub(crate) fn opened(&self, permissions: &PermissionSet) -> OpenApi {
+		let mut doc = (*self.document()).clone();
+		for item in doc.paths.iter_mut().flat_map(|p| p.paths.values_mut()) {
+			let ReferenceOr::Item(item) = item else { unreachable!("the document holds items only") };
+			for op in [&mut item.get, &mut item.post, &mut item.put, &mut item.patch, &mut item.delete] {
+				if op
+					.as_ref()
+					.and_then(|o| o.extensions.get("x-permission"))
+					.is_some_and(|p| !permissions.iter().any(|held| p == held))
+				{
+					*op = None;
+				}
+			}
+		}
+		doc
+	}
+
+	/// Pulls each service's document until `stop`.
+	pub async fn follow(&self, services: Services, stop: watch::Receiver<bool>) {
+		let etags = Mutex::default();
+		self.pull(&services, &etags).await;
+		crate::every(PULL_EVERY, stop, "pulling the services' documents", || async {
+			self.pull(&services, &etags).await;
+			Ok(())
+		})
+		.await;
+	}
+
+	async fn pull(&self, services: &Services, etags: &Mutex<BTreeMap<String, HeaderValue>>) {
+		for (service, path) in DOCUMENTS {
+			let name = forward::name(service);
+			match self.pull_one(services, service, path, etags).await {
+				Ok(None) => {}
+				Ok(Some(doc)) => {
+					let mut held = self.services.write().expect("never held across a panic");
+					held.insert(name, doc);
+					*self.merged.write().expect("never held across a panic") = Arc::new(merge(&self.own, &held));
+				}
+				Err(e) => crate::report(&e.wrap_err(format!("{name}'s operations kept as they were")), "pulling the services' documents"),
+			}
+		}
+	}
+
+	/// The service's document, prefixed and named; `None` when it has not changed.
+	async fn pull_one(&self, services: &Services, service: Service, path: &str, etags: &Mutex<BTreeMap<String, HeaderValue>>) -> eyre::Result<Option<OpenApi>> {
+		let name = forward::name(service);
+		let mut headers = HeaderMap::new();
+		if let Some(etag) = etags.lock().expect("held for a lookup only").get(&name) {
+			headers.insert(header::IF_NONE_MATCH, etag.clone());
+		}
+		let call = services.send(service, Method::GET, path, headers, Some(Principal::Conductor), Body::empty());
+		let res = tokio::time::timeout(PULL_TIMEOUT, call)
+			.await
+			.map_err(|_| eyre::eyre!("{name} did not answer GET {path} in time"))??;
+		match res.status() {
+			StatusCode::NOT_MODIFIED => return Ok(None),
+			StatusCode::OK => {}
+			s => eyre::bail!("{name} answered GET {path} with {s}"),
+		}
+		let etag = res.headers().get(header::ETAG).cloned();
+		let body = to_bytes(res.into_body(), DOCUMENT_ANSWER).await.map_err(|e| eyre::eyre!("reading {name}'s document: {e}"))?;
+		let doc: Value = serde_json::from_slice(&body).wrap_err_with(|| format!("{name}'s document"))?;
+		let doc = prefixed(&name, service, doc)?;
+		if let Some(etag) = etag {
+			etags.lock().expect("held for a lookup only").insert(name, etag);
+		}
+		Ok(Some(doc))
+	}
+}
+
+/// A service's document under its forward prefix, its ids and schemas named `<service>.<name>`.
+fn prefixed(name: &str, service: Service, mut doc: Value) -> eyre::Result<OpenApi> {
+	let base = doc["servers"][0]["url"].as_str().ok_or_else(|| eyre::eyre!("{name}'s document names no server"))?;
+	let prefix = forward::prefix(service, base.trim_end_matches('/')).ok_or_else(|| eyre::eyre!("{name}'s document is served under {base}, which nothing forwards"))?;
+	rename(&mut doc, name);
+	if let Some(schemas) = doc["components"]["schemas"].as_object_mut() {
+		*schemas = std::mem::take(schemas).into_iter().map(|(k, v)| (format!("{name}.{k}"), v)).collect();
+	}
+	let paths = doc["paths"].as_object_mut().ok_or_else(|| eyre::eyre!("{name}'s document has no paths"))?;
+	*paths = std::mem::take(paths).into_iter().map(|(p, v)| (format!("{prefix}{p}"), v)).collect();
+	for item in paths.values_mut().filter_map(Value::as_object_mut) {
+		for op in item.values_mut().filter_map(Value::as_object_mut) {
+			let id = op.get("operationId").and_then(Value::as_str).ok_or_else(|| eyre::eyre!("an operation of {name}'s has no id"))?;
+			op.insert("operationId".into(), Value::String(format!("{name}.{id}")));
+			op.insert("tags".into(), Value::Array(vec![Value::String(name.to_owned())]));
+		}
+	}
+	// aide borrows the document's version string, which one read at runtime cannot lend: what the
+	// catalog takes of it is read part by part.
+	fn part<T: serde::de::DeserializeOwned>(doc: &mut Value, name: &str, key: &str) -> eyre::Result<T> {
+		serde_json::from_value(doc[key].take()).wrap_err_with(|| format!("{name}'s document: its {key}"))
+	}
+	Ok(OpenApi {
+		info: part(&mut doc, name, "info")?,
+		paths: part(&mut doc, name, "paths")?,
+		components: part(&mut doc, name, "components")?,
+		..OpenApi::default()
+	})
+}
+
+/// Every `$ref` to a schema of `name`'s.
+fn rename(v: &mut Value, name: &str) {
+	match v {
+		Value::Object(o) => {
+			if let Some(Value::String(r)) = o.get_mut("$ref")
+				&& let Some(schema) = r.strip_prefix("#/components/schemas/")
+			{
+				*r = format!("#/components/schemas/{name}.{schema}");
+			}
+			o.values_mut().for_each(|v| rename(v, name));
+		}
+		Value::Array(a) => a.iter_mut().for_each(|v| rename(v, name)),
+		_ => {}
+	}
+}
+
+fn merge(own: &OpenApi, services: &BTreeMap<String, OpenApi>) -> OpenApi {
+	let base = own.servers.first().expect("the conductor's document names its server").url.clone();
+	let mut paths = Paths::default();
+	let mut doc = own.clone();
+	for (p, item) in own.paths.iter().flat_map(|p| p.paths.iter()) {
+		paths.paths.insert(format!("{base}{p}"), item.clone());
+	}
+	let schemas = &mut doc.components.as_mut().expect("the conductor's document has components").schemas;
+	for theirs in services.values() {
+		paths.paths.extend(theirs.paths.iter().flat_map(|p| p.paths.clone()));
+		schemas.extend(theirs.components.iter().flat_map(|c| c.schemas.clone()));
+	}
+	OpenApi {
+		info: Info {
+			title: "Service-Arb".into(),
+			..own.info.clone()
+		},
+		servers: vec![Server {
+			url: "/".into(),
+			..Server::default()
+		}],
+		paths: Some(paths),
+		..doc
+	}
+}

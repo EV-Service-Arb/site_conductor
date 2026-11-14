@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { ArchiveTag, Gmail, Gmb, GoogleCategory, SiteTag, Trade } from "@/entities/gmb/model/gmb";
+import type { ArchiveTag, SiteTag } from "@/entities/gmb/model/gmb";
 import { type Issue, type Tags, issueCounts, issueOf, issueText } from "@/entities/gmb/model/issues";
 import { readiness } from "@/entities/gmb/model/readiness";
+import type { Gmail, Gmb, GoogleCategory, Trade } from "@/shared/api/schema";
 import { i18n } from "@/shared/i18n/registry";
 
 const GMAIL = 1;
@@ -98,7 +99,7 @@ const full: Partial<Gmb> = {
 /** The draft as listed: under a gmail whose browser is `browser`, when it has one. */
 const listed = (g: Gmb, browser = true): { gmb: Gmb; gmail: Gmail | null } => ({
   gmb: g,
-  gmail: g.gmail_id === null ? null : { id: g.gmail_id, gmail: "ops@example.test", role: "manager", created_at: "2026-11-06T00:00:00Z", browser },
+  gmail: g.gmail_id == null ? null : { id: g.gmail_id, gmail: "ops@example.test", role: "manager", created_at: "2026-11-06T00:00:00Z", browser },
 });
 
 describe("a draft's readiness", () => {

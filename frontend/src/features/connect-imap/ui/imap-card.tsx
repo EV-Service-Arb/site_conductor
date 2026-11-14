@@ -4,7 +4,8 @@ import { Badge, Button, Card, CardContent, Field, FieldLabel, Input } from "@evi
 import { Mail } from "lucide-react";
 import { useId, useState } from "react";
 
-import { type Gmail, type Imap, disconnect, setImap, testConnection } from "@/entities/gmb";
+import { api, ok } from "@/shared/api";
+import type { Gmail, Imap } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -36,7 +37,7 @@ export function ImapCard({ gmail, imap, onChanged }: { gmail: Gmail; imap: Imap 
         <header className="flex items-center gap-2">
           <Mail aria-hidden className="size-4 text-ink-soft" />
           <h3 className="flex-1 text-sm font-semibold text-ink">{t("Email · IMAP")}</h3>
-          {imap && <Badge tone={imap.checked.error === null ? "positive" : "error"}>{(imap.checked.error === null ? t("Connected") : t("Failing"))}</Badge>}
+          {imap && <Badge tone={imap.checked.error == null ? "positive" : "error"}>{(imap.checked.error == null ? t("Connected") : t("Failing"))}</Badge>}
         </header>
         {imap && !editing ? (
           <>
@@ -50,24 +51,24 @@ export function ImapCard({ gmail, imap, onChanged }: { gmail: Gmail; imap: Imap 
             </dl>
             <p className="text-xs text-ink-soft">
               {t("Checked {at}", { at: formatDateTime(imap.checked.at, locale) })}
-              {imap.checked.error !== null && <span className="block text-accent-error">{imap.checked.error}</span>}
+              {imap.checked.error != null && <span className="block text-accent-error">{imap.checked.error}</span>}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void act(() => testConnection(gmail.id, "imap"))}>
+              <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void act(() => ok(api.POST("/gmails/{id}/imap/test", { params: { path: { id: gmail.id } } })))}>
                 {t("Test")}
               </Button>
               <Button variant="ghost" size={button("sm")} disabled={busy} onClick={() => setEditing(true)}>
                 {t("Replace")}
               </Button>
               <Button variant="ghost" size={button("sm")} disabled={busy} onClick={() =>
-                  void act(() => disconnect(gmail.id, "imap"))
+                  void act(() => ok(api.DELETE("/gmails/{id}/imap", { params: { path: { id: gmail.id } } })))
                 }>
                 {t("Remove")}
               </Button>
             </div>
           </>
         ) : (
-          <ImapForm gmail={gmail} busy={busy} onCancel={imap ? () => setEditing(false) : undefined} onSubmit={(v) => void act(() => setImap(gmail.id, v))} />
+          <ImapForm gmail={gmail} busy={busy} onCancel={imap ? () => setEditing(false) : undefined} onSubmit={(v) => void act(() => ok(api.PUT("/gmails/{id}/imap", { params: { path: { id: gmail.id } }, body: v })))} />
         )}
         <p className="text-xs text-ink-soft">{t("Inbox alerts and email automations will read it; nothing reads mail yet.")}</p>
       </CardContent>

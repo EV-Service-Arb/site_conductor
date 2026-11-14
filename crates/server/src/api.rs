@@ -44,6 +44,13 @@ pub enum ApiError {
 	Internal(eyre::Report),
 }
 
+/// What every failed operation answers, its status saying which failure.
+#[derive(JsonSchema, Serialize)]
+#[schemars(rename = "Error")]
+pub struct ErrorDto {
+	error: String,
+}
+
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
 	let admin = Gate::section(Section::Admin);
@@ -56,13 +63,6 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::POST, "/sources", admin.fresh(), add_source),
 		ApiRoute::new(M::DELETE, "/sources/{key_id}", admin.fresh(), revoke_source),
 	]
-}
-
-/// What every failed operation answers, its status saying which failure.
-#[derive(JsonSchema, Serialize)]
-#[schemars(rename = "Error")]
-pub struct ErrorDto {
-	error: String,
 }
 
 impl IntoResponse for ApiError {

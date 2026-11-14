@@ -4,7 +4,8 @@ import { Toaster } from "@evinvest/uikit";
 import { usePathname, useSearchParams } from "next/navigation";
 import { type ReactNode, Suspense, useEffect, useState } from "react";
 
-import { MeProvider, fetchMe } from "@/entities/session";
+import { MeProvider } from "@/entities/session";
+import { api, ok } from "@/shared/api";
 import { syncQuery } from "@/shared/lib/query";
 import { useResource } from "@/shared/lib/use-resource";
 import { ErrorState } from "@/shared/ui/error-state";
@@ -45,7 +46,7 @@ function RoutedElements() {
 }
 
 function PanelBody({ children }: { children: ReactNode }) {
-  const me = useResource("me", fetchMe);
+  const me = useResource("me", () => ok(api.GET("/me")));
   const [accessLost, setAccessLost] = useState(false);
 
   if (accessLost) return <NoAccessScreen />;

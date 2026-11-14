@@ -1,14 +1,15 @@
 "use client";
 
 import { Button, IconButton, Spinner, Textarea, cn } from "@evinvest/uikit";
-import { Check, ChevronRight, Copy, CornerDownRight, FileText, MapPin, Pencil, RotateCcw, ThumbsDown, ThumbsUp, Undo2 } from "lucide-react";
+import { Check, ChevronRight, Copy, CornerDownRight, FileText, MapPin, Pencil, RotateCcw, ThumbsDown, ThumbsUp } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import type { Action } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 
-import type { Action, AssistantTurn, UserTurn } from "@/entities/assistant";
+import { type AssistantTurn, type UserTurn } from "@/entities/assistant";
 
 import { LocationToken, RichText } from "./rich-text";
 
@@ -50,7 +51,7 @@ export function UserTurnView({ turn, editing, onEdit, onEditing }: { turn: UserT
       {turn.files.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1.5">
           {turn.files.map((f, i) =>
-            f.preview !== null ? (
+            f.preview != null ? (
               <a key={i} href={f.preview.url} target="_blank" rel="noreferrer" title={f.name} className="overflow-hidden rounded-lg border border-border">
                 <Image unoptimized src={f.preview.url} alt={f.name} width={f.preview.width} height={f.preview.height} className="max-h-40 w-auto max-w-60 object-cover" />
               </a>
@@ -145,8 +146,20 @@ function EditBox({ text, onCancel, onSave }: { text: string; onCancel: () => voi
 }
 
 /** An answer: what it did to get there, what it says, what it proposes, and the reader's tools under it. */
-/** `onChange` and `onRetry`: `null` for a reader who cannot interact. */
-export function AssistantTurnView({ turn, last, onChange, onRetry }: { turn: AssistantTurn; last: boolean; onChange: ((turn: AssistantTurn) => void) | null; onRetry: (() => void) | null }) {
+/** `onChange`, `onAct` and `onRetry`: `null` for a reader who cannot interact. */
+export function AssistantTurnView({
+  turn,
+  last,
+  onChange,
+  onAct,
+  onRetry,
+}: {
+  turn: AssistantTurn;
+  last: boolean;
+  onChange: ((turn: AssistantTurn) => void) | null;
+  onAct: ((action: Action) => void) | null;
+  onRetry: (() => void) | null;
+}) {
   const t = useT();
   const running = turn.state === "working" || turn.state === "writing";
   return (
@@ -157,7 +170,7 @@ export function AssistantTurnView({ turn, last, onChange, onRetry }: { turn: Ass
       {turn.actions.length > 0 && (
         <div data-enter="stagger" className="flex flex-col gap-1.5">
           {turn.actions.map((a, i) => (
-            <ActionCard key={a.id} action={a} primary={i === 0} set={onChange && ((state) => onChange({ ...turn, actions: turn.actions.map((y) => (y.id === a.id ? { ...y, state } : y)) }))} />
+            <ActionCard key={a.id} action={a} primary={i === 0} onAct={onAct} />
           ))}
         </div>
       )}
@@ -232,19 +245,12 @@ function Work({ turn }: { turn: AssistantTurn }) {
   );
 }
 
-function ActionCard({ action, primary, set }: { action: Action; primary: boolean; set: ((state: Action["state"]) => void) | null }) {
-  const t = useT();
+function ActionCard({ action, primary, onAct }: { action: Action; primary: boolean; onAct: ((action: Action) => void) | null }) {
   if (action.state === "done")
     return (
       <div className="flex items-center gap-2.5 rounded-xl border border-tint-positive-edge bg-tint-positive-wash px-3.5 py-2">
         <Check aria-hidden className="size-4 shrink-0 text-positive" />
-        <span className="min-w-0 flex-1 text-body-s text-ink">{action.done}</span>
-        {set !== null && (
-          <Button size="sm" variant="ghost" onClick={() => set("proposed")}>
-            <Undo2 aria-hidden />
-            {t("Undo")}
-          </Button>
-        )}
+        <span className="min-w-0 flex-1 text-body-s text-ink">{action.done === "" ? action.label : action.done}</span>
       </div>
     );
   const look = cn(
@@ -260,12 +266,12 @@ function ActionCard({ action, primary, set }: { action: Action; primary: boolean
       <CornerDownRight aria-hidden className="size-4 shrink-0 text-ink-faint opacity-0 transition-opacity group-hover/action:opacity-100" />
     </>
   );
-  return action.href !== null ? (
-    <Link href={action.href} className={look}>
+  return "href" in action.target ? (
+    <Link href={action.target.href} className={look}>
       {body}
     </Link>
   ) : (
-    <button type="button" className={look} disabled={set === null} onClick={() => set?.("done")}>
+    <button type="button" className={look} disabled={onAct === null} onClick={() => onAct?.(action)}>
       {body}
     </button>
   );

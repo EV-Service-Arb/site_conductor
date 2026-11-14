@@ -51,7 +51,8 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          GoLogin, a launch),
                          `tokens` (the ledger, review_archive's charges, the snapshot), `import`
                          (review_archive's, once), `assistant` (the assistant's chats), `trash`
-                         (what was removed, restored until purged)
+                         (what was removed, restored until purged), `oauth` (MCP clients, the
+                         sessions granted them)
 crates/alerts/           no I/O: the alert rules, and the notes a service publishes to the
                          conductor and their check; sites and review_archive take it too
 crates/auth/             the `sa` permissions (concierge_iam derives), the aliases `sa:operator` /
@@ -70,6 +71,8 @@ crates/ui/               Dioxus components the services' front ends share
 crates/contracts/        concierge's gRPC contract (tonic, from contracts/proto)
 crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/signin.rs          /auth/login, /auth/callback, /auth/logout; the /api/v1 gate
+  src/oauth.rs           /mcp/{register,authorize,token} and their metadata: OAuth 2.1 for MCP clients
+  src/mcp.rs             POST /mcp: `search` and `call` to an MCP client
   src/concierge.rs       concierge over gRPC: ExchangeCode, RefreshClientToken, GetMe,
                          PublishCatalog; its development stand-in (PANEL_DEV_SIGN_IN)
   src/cookies.rs         __Host- cookies, the double-submit CSRF check
@@ -91,6 +94,13 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
   src/trash.rs           /api/v1/trash; the hourly purge
   src/assistant.rs       /api/v1/assistant; the turns' shape
+  src/catalog.rs         every operation behind the origin: the conductor's own and the services'
+                         documents, pulled and merged under their forward prefixes
+  src/tools.rs           an agent's `search` and `call` over the catalog: a call runs through the app
+                         with the caller's credentials, as their own request would
+  src/ask.rs             the in-page assistant's loop (`POST /assistant/chats/{id}/ask`): Claude with
+                         `search`/`call`, `open` (a view) and `run` (a binding); what destroys or
+                         spends is proposed, the user confirms it
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
                          work in `serve`
   src/telegram.rs        the Bot API, its long poll
@@ -120,7 +130,8 @@ GET /auth/callback   state = the cookie's (constant time), and not redeemed befo
                      previous session, if any, closed → a session row (tokens sealed under
                      PANEL_DATA_KEY, keyed by the hash of a random id) → sa_session (HttpOnly)
                      + sa_csrf → 303 return_to, else /
-/api/v1/*            not GET: x-sa-csrf must equal sa_csrf; the session (access token rotated
+/api/v1/*            Authorization: Bearer, an MCP client's session (Agents over MCP); else, not
+                     GET: x-sa-csrf must equal sa_csrf; the session (access token rotated
                      when within 30 s of expiry, see below); GetMe (cached ≤ 60 s per session,
                      asked afresh for POST/DELETE /sources, the Telegram link and a chat added,
                      one retry when concierge does not answer) → the caller's permissions, else 401 (cookies
@@ -169,7 +180,7 @@ service, both ways (hyper-util, no buffering), one table for all of it — the f
 reserved paths (`web.rs`) are derived from it.
 
 ```text
-/api/sites/*                     → sites /api/v1/*              session + User; CSRF on writes
+/api/sites/*                     → sites /api/v1/*              session + User; CSRF on writes (a bearer: none)
 /api/hooks/booking/*             → sites (same path)            open: the providers' webhooks
 /sites/mfe/*                     → sites /mfe/*                 open: the sites page's bundle
 /api/review_archive/*            → review_archive /*            session + User; CSRF on writes
@@ -188,10 +199,10 @@ reserved paths (`web.rs`) are derived from it.
   `key_id`, kind, brands, and the SHA-256 of the body its MAC covered), or the **Conductor**
   itself (its hubs). The services verify it with the public half (`PANEL_ASSERTION_KEYS`,
   several while a key rotates) and trust nothing else.
-- **Hygiene:** the browser's `Cookie`, any inbound `x-sa-assertion` and `x-sa-csrf`, and
-  hop-by-hop headers (`Upgrade` included: nothing is upgraded through the forward) never go up;
-  `Set-Cookie` never comes down. Everything else passes (`Idempotency-Key`, `X-Member`, a
-  client's `Authorization`).
+- **Hygiene:** the browser's `Cookie`, any inbound `x-sa-assertion` and `x-sa-csrf`, an MCP
+  client's bearer, and hop-by-hop headers (`Upgrade` included: nothing is upgraded through the
+  forward) never go up; `Set-Cookie` never comes down. Everything else passes (`Idempotency-Key`,
+  `X-Member`, playbook's clients' `Authorization`).
 - **Gates:** a gated read takes the cached `GetMe`, a gated write asks concierge afresh. A write
   under `/api/sites` and `/api/review_archive` needs the conductor's CSRF header. playbook's
   consent form at `/playbook_mcp/authorize` posts without it: the `SameSite=Lax` session and
@@ -383,6 +394,13 @@ an agent's tools read it. Below, the overview (a test holds it to the table); wh
 is in the document. Slow: 8 at once, 10 min each, not the bounds above. The browser viewer's
 socket (`GET /gmails/{id}/browser`) is outside the gate, as `/live` is.
 
+**The catalog** (`catalog.rs`): sites (`/api/v1/openapi.json`) and review_archive (`/openapi.json`)
+derive theirs the same way; the conductor pulls each as it pulls `/dashboards` (Conductor, every
+60 s, conditional; a failed pull reported, the last kept), puts its paths under its forward
+prefix and its ids and schemas under `<service>.`, and merges them with its own. `GET
+/openapi.json` and an agent's `search` show a caller only what their permissions open: context,
+not authority — each service still authorizes the call, which goes through the forward as a User.
+
 ```text
 GET    /me
 GET    /openapi.json
@@ -447,9 +465,16 @@ GET    /assistant/chats/{id}/access
 POST   /assistant/chats/{id}/members
 DELETE /assistant/chats/{id}/members/{user}
 GET    /assistant/people
+POST   /assistant/chats/{id}/ask            slow
+POST   /assistant/chats/{id}/act
 ```
 
 An id in a path that is not the caller's is a 404.
+**The assistant** answers on the conductor (`ask.rs`, the model's key from the environment): its
+calls take the `/api/v1` gate on the asker's own session, never a side door to `Panel`. An
+answer's action is a view (`href`), an operation of the catalog (`call`: its id and arguments, run
+when the person confirms it) or a binding of the page's keymap (`binding`), nothing else; the page
+tells it what is open, its views (`ROUTES`) and the bindings bound now.
 **The assistant's chats** are the conductor's own; nothing forwards them, no service stores their
 ids, so they are deleted, with their members and marks. Owner and members write (turns, a title,
 invites; a member leaves); `general: view` lets anyone holding a `sa` permission read one, 403 on
@@ -474,6 +499,31 @@ report and sites' view of it, all asked together (joined, nothing spawned):
 The page `/access?need=&continue=` (outside the shell) is where a service sends a signed-in user
 lacking `need`: it asks, then reads `/me` every 30 s and goes on to `continue` (a path, the
 `return_to` rule) once held.
+
+## Agents over MCP
+
+`<origin>/mcp` serves MCP (Streamable HTTP, JSON answers, no MCP session) as the signed-in user:
+two tools over the catalog, `search` and `call` (`tools.rs`). A call runs as their own request
+would, through the gate or the forward; one whose hints say destructive or spends answers what it
+would do until it comes with `confirmed: true`, which the client sets once its user agreed.
+
+```text
+POST /mcp/register    open (RFC 7591): redirect_uris (https, or http on loopback, any port), a name
+GET  /mcp/authorize   client + redirect_uri registered, PKCE S256, else a 400 page; signed out →
+                      /auth/login?return_to= and back; the consent page, its form carrying sa_csrf
+POST /mcp/authorize   the form's CSRF, the session → concierge's sign-in again, the grant sealed in
+                      sa_prelogin → /auth/callback: a session of the client's (sessions.client_id),
+                      the same user's or refused → redirect_uri?code&state
+POST /mcp/token       code (60 s, once; its hash, the bearer sealed) + verifier → {access_token}
+POST /mcp             Bearer, else 401 with WWW-Authenticate's resource_metadata
+/.well-known/oauth-{protected-resource,authorization-server}/mcp   RFC 9728, 8414
+```
+
+- **A grant is a session**, its id the bearer: rotated, refused and closed as a browser's, so a
+  family revoked at concierge or a sign-out (every session of the user) ends it, and it lives as
+  long as the session does: no refresh token. A browser's id is no bearer, nor a client's a cookie.
+- **Bounded:** the OAuth routes as `/auth/*`; `/mcp` 32 at once, 10 min each (a call waits on its
+  operation).
 
 ## Live updates, `/api/v1/live`
 
@@ -724,7 +774,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   listener, on GETs, for that query's life. The public listener never takes a token.
 - **A source is only ever revoked.** `sources` refuses DELETE and any UPDATE but of `revoked_at`
   and a site's `origin` set once from NULL (only a `site` has one); a key id is never reused.
-- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, queued Telegram
+- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, an MCP code's bearer, queued Telegram
   texts and a gmail's IMAP password, Maps key and proxy are sealed (XChaCha20-Poly1305, what they belong
   to as associated data) under `PANEL_DATA_KEY`, whose fingerprint is stored beside each. A
   person's are never read back out: the browser sees a key's last four.
@@ -756,7 +806,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   enforced, timestamps INTEGER microseconds since the epoch, UUIDs 16-byte blobs.
 - **The conductor's secrets come from the environment only** (`PANEL_DATA_KEY`, `SENTRY_DSN`,
   `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOOGLE_MAPS_KEYS`, `GOLOGIN_TOKEN`,
-  `MULTILOGIN_TOKEN`), through
+  `MULTILOGIN_TOKEN`, `ANTHROPIC_API_KEY`), through
   `ev_lib::settings`; a person's (a gmail's IMAP password, its Maps key, its proxy) through the API, sealed at
   once; with `APP_ENV=production` the database, the data key, the four sign-in
   variables, the forward's four and `TOKENS_START_CAP_MULTIPLE` are required at boot
@@ -765,7 +815,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 ## Deploy requirements
 
 - **One image, one origin.** The image carries the binary and the front end's static export,
-  and sets `PANEL_WEB_DIR` to it; `serve` answers `/api`, `/auth` and `/health` first, then the
+  and sets `PANEL_WEB_DIR` to it; `serve` answers `/api`, `/auth`, `/mcp` (and its `/.well-known/oauth-*/mcp`) and `/health` first, then the
   forward's prefixes, then the files (a directory by its `index.html`, anything else `404.html`
   with a 404). `/cabinet` is held, and `/grafana` without Grafana: JSON 404s. `/_next/static/*` is `immutable`
   for a year, everything else `no-cache`; every page carries a CSP of `frame-ancestors 'none';
@@ -823,7 +873,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **`/api/v1/live` through the public IngressRoute, as a WebSocket.** Nothing in front may buffer
   the response or strip `Upgrade` / `Connection` / `Origin`, and an idle timeout on the way must
   be longer than the 25 s ping.
-- **Rate-limit `/auth`, `/api/hooks` and `/api/queries_cache` per client IP at Traefik**; the
+- **Rate-limit `/auth`, `/api/hooks`, `/api/queries_cache` and `/mcp/{register,authorize,token}` per client IP at Traefik**; the
   conductor bounds how many run at once, not who starts them. `/api/queries_cache` is public and
   open: laptops buy through it, and this is its one guard.
 - **One pod, a volume, litestream.** One writer: one replica, rolled out with `Recreate`. No

@@ -24,7 +24,7 @@ import {
   cn,
   navigationMenuTriggerStyle,
   useBinding,
-  useSequences,
+  useKeymap,
 } from "@evinvest/uikit";
 import { ArrowUpRight, Bell, Globe, MapPin, Menu, PanelLeftClose, PanelLeftOpen, Wallet } from "lucide-react";
 import Link from "next/link";
@@ -141,8 +141,8 @@ function AppItem({ app, menu }: { app: App; menu: boolean }) {
 function SidebarToggle() {
   const t = useT();
   const folded = useSidebarFolded();
-  const keys = useSequences().get("sidebar");
-  useBinding({ on: { key: "s" }, run: { id: "sidebar", label: t("Sidebar: fold or unfold"), run: toggleSidebar } });
+  const keys = useKeymap().bound.get("sidebar")?.sequence;
+  useBinding({ on: { key: "s" }, id: "sidebar", run: { label: t("Sidebar: fold or unfold"), run: toggleSidebar } });
   const Icon = folded ? PanelLeftOpen : PanelLeftClose;
   return (
     <Button

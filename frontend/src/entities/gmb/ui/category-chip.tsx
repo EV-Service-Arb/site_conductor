@@ -2,10 +2,10 @@
 
 import { cn } from "@evinvest/uikit";
 
+import type { Gmb } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 
 import { categoryName, categoryOf } from "../model/category";
-import type { Gmb } from "../model/gmb";
 import { useGmbTags } from "../model/gmails-context";
 import { openTrade } from "../model/on-map";
 

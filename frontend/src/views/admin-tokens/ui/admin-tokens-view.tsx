@@ -3,9 +3,9 @@
 import { Button, Card, CardContent, PageFrame, Settled, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn } from "@evinvest/uikit";
 import { useState } from "react";
 
-import { fetchPrices } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
-import { type Holder, fetchHolders } from "@/entities/tokens";
+import { api, ok } from "@/shared/api";
+import type { TokenHolder } from "@/shared/api/schema";
 import { GrantDialog } from "@/features/grant-tokens";
 import { PricesCard } from "@/features/price-places";
 import { useT } from "@/shared/i18n";
@@ -22,9 +22,9 @@ export function AdminTokensView() {
   const t = useT();
   const me = useMe();
   const button = useButtonSize();
-  const holders = useResource("admin.tokens", fetchHolders);
-  const prices = useResource("admin.prices", fetchPrices);
-  const [changing, setChanging] = useState<Holder | null>(null);
+  const holders = useResource("admin.tokens", async () => (await ok(api.GET("/admin/tokens"))).users, "admin.tokens", { live: ["admin"] });
+  const prices = useResource("admin.prices", () => ok(api.GET("/admin/tokens/prices")), "admin.prices", { live: ["admin"] });
+  const [changing, setChanging] = useState<TokenHolder | null>(null);
 
   if (!may(me, "sa:admin:tokens:grant")) {
     return (

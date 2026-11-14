@@ -5,9 +5,11 @@ import { Check, ChevronDown, ChevronRight, ListFilter, Plug, Settings } from "lu
 import { usePathname, useRouter } from "next/navigation";
 import { type MouseEvent, useEffect, useState } from "react";
 
-import { chooseCategoryScope, chooseGmailScope, COUNTRIES, type Country, covers, type Gmail, GMAIL_ROLE_LABEL, type Gmails, type Gmb, inCategories, openAccount, openCategories, type Pattern, removeGmail, type Selection, type Trade, under, useScope, useTrades } from "@/entities/gmb";
+import { chooseCategoryScope, chooseGmailScope, covers, GMAIL_ROLE_LABEL, inCategories, openAccount, openCategories, type Pattern, type Selection, under, useScope, useTrades } from "@/entities/gmb";
 import { AddGmailButton } from "@/features/add-gmail";
 import { AddGmbButton } from "@/features/add-gmb";
+import { api, ok } from "@/shared/api";
+import { type Country, type Gmail, type Gmails, type Gmb, type Trade, countryValues } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 
 import { HEADING, ON_HOVER, ROW, Remove, ResetSelection, useKept } from "./outline-parts";
@@ -41,7 +43,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
       chooseCategoryScope(scope.categories.filter((p) => p.trade === "*" || known.some((k) => k.id === p.trade)));
   }, [known, scope.categories]);
 
-  const byGmail = (b: Gmb) => scope.gmails === null || (b.gmail_id !== null && scope.gmails.has(b.gmail_id));
+  const byGmail = (b: Gmb) => scope.gmails === null || (b.gmail_id != null && scope.gmails.has(b.gmail_id));
   const byCategory = (b: Gmb) => scope.categories === null || inCategories(b, scope.categories);
   const covered = (gmbs: Gmb[]) => gmbs.filter((b) => isSelected(b.id)).length;
   const pickGmail = (g: Gmail) => {
@@ -92,7 +94,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
         </div>
         {known !== null && <Matrix all={data.gmbs} gmbs={data.gmbs.filter(byGmail)} trades={known} picked={scope.categories} />}
         <p className="px-2 pt-1 text-xs text-ink-soft">{t("Click scopes · Shift-click adds")}</p>
-        {data.gmbs.some((b) => b.trade_id === null) && <p className="px-2 text-xs text-ink-soft">{t("{n} GBPs have no trade → the outline's No category chip", { n: data.gmbs.filter((b) => b.trade_id === null).length })}</p>}
+        {data.gmbs.some((b) => b.trade_id == null) && <p className="px-2 text-xs text-ink-soft">{t("{n} GBPs have no trade → the outline's No category chip", { n: data.gmbs.filter((b) => b.trade_id == null).length })}</p>}
         <div className={cn(HEADING, "mt-1 border-t border-border pt-2")}>
           {t("Managing gmails")}
           <span className="flex-1" />
@@ -143,7 +145,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
                   <span className={cn("flex items-center", ON_HOVER)}>
                     <OpenAccount gmail={g} onOpened={() => setOpen(false)} />
                     <AddGmbButton gmailId={g.id} trade={null} onAdded={onChanged} />
-                    <Remove title={t("Remove {gmail}?", { gmail: g.gmail })} body={t("It goes to the trash with its GBPs{kept}: every service stops working on them until then.", { kept })} remove={() => removeGmail(g.id)} onRemoved={onChanged} />
+                    <Remove title={t("Remove {gmail}?", { gmail: g.gmail })} body={t("It goes to the trash with its GBPs{kept}: every service stops working on them until then.", { kept })} remove={() => ok(api.DELETE("/gmails/{id}", { params: { path: { id: g.id } } }))} onRemoved={onChanged} />
                   </span>
                   <span className="text-xs text-ink-soft tabular-nums" title={t("Its GBPs in the categories picked")}>
                     {edited && k > 0 && !full ? `${k}/${gmbs.length}` : inScope}
@@ -196,7 +198,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
  */
 function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[]; trades: readonly Trade[]; picked: readonly Pattern[] | null }) {
   const t = useT();
-  const countries = COUNTRIES.filter((c) => all.some((b) => b.country?.code === c) || trades.some((tr) => tr.categories.some((k) => k.country === c)));
+  const countries = countryValues.filter((c) => all.some((b) => b.country?.code === c) || trades.some((tr) => tr.categories.some((k) => k.country === c)));
   if (trades.length === 0) return <p className="px-2 py-1.5 text-xs text-ink-soft">{t("No trades yet: ⚙ names one.")}</p>;
   const pick = (p: Pattern) => (e: MouseEvent) => {
     const now = picked ?? [];
@@ -219,7 +221,7 @@ function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[
               className={cn(box, "flex w-full items-center px-2 text-ink-soft", picked === null && PICKED)}
             >
               <span className="flex-1 text-left">{t("All")}</span>
-              <span>{gmbs.filter((b) => b.trade_id !== null).length}</span>
+              <span>{gmbs.filter((b) => b.trade_id != null).length}</span>
             </button>
           </th>
           {countries.map((c) => {

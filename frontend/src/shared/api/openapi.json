@@ -10,6 +10,2624 @@
     }
   ],
   "paths": {
+    "/access/requests": {
+      "post": {
+        "tags": [
+          "access"
+        ],
+        "summary": "Asks the admins for a need, made now (201); the one standing (200) if asked within 24 h, nobody told again.",
+        "description": "400 a need neither a permission nor an alias of the sa catalog; 409 one the caller holds already.",
+        "operationId": "request_access",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Ask"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "An access request of the caller's, standing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequest"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "An access request of the caller's, standing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/access/requests/mine": {
+      "get": {
+        "tags": [
+          "access"
+        ],
+        "summary": "The caller's standing access requests; those whose need they now hold are dropped.",
+        "operationId": "my_access_requests",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequests"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/tokens": {
+      "get": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Every user's balance, renewed.",
+        "operationId": "token_holders",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /admin/tokens`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenHolders"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "sa:admin:tokens:grant"
+      }
+    },
+    "/admin/tokens/prices": {
+      "get": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Tokens a Places request on the shared keys costs, per kind; null, not sold.",
+        "operationId": "token_prices",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Tokens a Places request on the shared keys costs; `null`, not sold yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Prices"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "sa:admin:tokens:grant"
+      },
+      "put": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Prices every kind of Places request on the shared keys, 0 or more tokens.",
+        "operationId": "set_token_prices",
+        "requestBody": {
+          "description": "Every request kind priced, in tokens.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPrices"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Tokens a Places request on the shared keys costs; `null`, not sold yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Prices"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "sa:admin:tokens:grant"
+      }
+    },
+    "/admin/tokens/{user_id}": {
+      "post": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Sets a user's balance, adds to it, or grants tokens owed until they claim them.",
+        "operationId": "change_balance",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "description": "`POST /admin/tokens/{user_id}`: set to 0 or more, add 1 or more (a sale, its reference in\nthe note), or grant 1 or more, owed until claimed, saying what for.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BalanceChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The answer to a balance change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Balance"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "sa:admin:tokens:grant"
+      }
+    },
+    "/alerts": {
+      "get": {
+        "summary": "The caller's alert destinations, each with its rules, and the rules open to them.",
+        "operationId": "alerts",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The caller's alerts, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/alerts/destinations/{id}": {
+      "delete": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Removes a destination.",
+        "operationId": "remove_destination",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/alerts/destinations/{id}/gmail": {
+      "put": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Scopes a destination's GMB rules to one of the caller's gmails. 404 not theirs.",
+        "operationId": "set_destination_gmail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GmailBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The caller's alerts, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/alerts/destinations/{id}/rules": {
+      "put": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Turns rules on or off at a destination. 400 a rule not open to the caller.",
+        "operationId": "set_destination_rules",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RulesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The caller's alerts, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/alerts/destinations/{id}/test": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Sends a test message to a destination; one that arrives revives it. 400 with what Telegram said.",
+        "operationId": "test_destination",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/alerts/telegram/chats": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Adds a channel, group or forum topic the caller administers as a destination, once a test went out there.",
+        "description": "400 refused (nothing stored), 409 a destination already.",
+        "operationId": "add_chat",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddChat"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The caller's alerts, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/alerts/telegram/link": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "A link that makes the caller's own Telegram chat with the bot their private destination.",
+        "description": "503 without a bot.",
+        "operationId": "telegram_link",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A link to the bot whose `/start` makes the chat the caller's private destination.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramLink"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/archived": {
+      "delete": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Deletes the caller's archived chats; one shared with them they leave.",
+        "operationId": "clear_archived_chats",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/assistant/chats": {
+      "get": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "The caller's chats, owned and joined, with their own marks, newest first.",
+        "operationId": "chats",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /assistant/chats`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chats"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Creates a chat at version 1. 409 the id is taken; 413 a body past 4 MiB.",
+        "operationId": "create_chat",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewChat"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A chat, whole.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chat"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/chats/{id}": {
+      "get": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "A chat: its turns, version and the caller's role.",
+        "operationId": "chat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A chat, whole.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chat"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Deletes a chat, its members and marks with it: the owner's only.",
+        "operationId": "delete_chat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/assistant/chats/{id}/access": {
+      "get": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Who has a chat: its owner, members and general access.",
+        "operationId": "chat_access",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /assistant/chats/{id}/access`, and what its writes answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Access"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/chats/{id}/act": {
+      "post": {
+        "tags": [
+          "ask"
+        ],
+        "summary": "Does an answer's proposed operation, as the caller and through the same gate as their own request; the action is marked done in the chat.",
+        "description": "409 the action is not a proposed operation; the operation's own refusal answers as it refused.",
+        "operationId": "act",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Act"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A chat, whole.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chat"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/chats/{id}/archived": {
+      "put": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Archives or unarchives a chat, for the caller alone.",
+        "operationId": "archive_chat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/On"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/assistant/chats/{id}/ask": {
+      "post": {
+        "summary": "Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done.",
+        "description": "503 without the assistant's model, or when it does not answer.",
+        "operationId": "ask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Question"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A chat, whole.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chat"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/chats/{id}/general": {
+      "put": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Sets who beyond its members may read a chat: the owner's.",
+        "operationId": "set_chat_general",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetGeneral"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /assistant/chats/{id}/access`, and what its writes answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Access"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/chats/{id}/members": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Makes people members of a chat. 400 an unknown user.",
+        "operationId": "invite_to_chat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Invite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /assistant/chats/{id}/access`, and what its writes answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Access"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/chats/{id}/members/{user}": {
+      "delete": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Removes a member from a chat: the owner anyone, a member themselves.",
+        "operationId": "remove_chat_member",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "user",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/assistant/chats/{id}/pinned": {
+      "put": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Pins or unpins a chat, for the caller alone.",
+        "operationId": "pin_chat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/On"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/assistant/chats/{id}/title": {
+      "put": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Renames a chat.",
+        "operationId": "rename_chat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Title"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A chat, whole.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chat"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/chats/{id}/turns": {
+      "put": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Writes a chat's turns: those before `from` kept, the rest replaced.",
+        "description": "409 `base` is not the version; 400 `from` past the end; 413 the body past 4 MiB, or the chat's\nturns past 16 MiB.",
+        "operationId": "write_chat_turns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TurnsWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A chat, whole.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chat"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/people": {
+      "get": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Whom the caller shares a chat with, by name or email, and whoever has `q` as their whole email.",
+        "operationId": "chat_people",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "description": "A name or an email's part.",
+            "required": true,
+            "schema": {
+              "description": "A name or an email's part.",
+              "type": "string"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /assistant/people?q=`: whom the caller may invite.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/People"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gmails": {
+      "get": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "The caller's gmails and their GBPs, the removed left out.",
+        "description": "A draft's `gmail_id` may be null; only a verified one's `place_id` is certain; a gmail's `cap`\nis null while its role is unknown.",
+        "operationId": "gmails",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /gmails`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gmails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Adds a managing gmail. 409 if the caller has it already.",
+        "operationId": "add_gmail",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewGmail"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A gmail of the caller's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gmail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gmails/{id}": {
+      "delete": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Removes the gmail to the trash, its GBPs with it. 409 while it has a browser.",
+        "operationId": "remove_gmail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Sets the gmail's role on its GBPs: owner or manager, which caps how many it holds.",
+        "operationId": "set_gmail_role",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRole"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A gmail of the caller's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gmail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gmails/{id}/browser": {
+      "put": {
+        "tags": [
+          "browser"
+        ],
+        "summary": "Sets the gmail's browser up, kept only once its proxy comes out in the country of every GBP of the gmail; the provider and device are a fingerprint, set once, the proxy replaced under them.",
+        "description": "400 refused, nothing stored; 409 another provider or device; a phone names no device.",
+        "operationId": "set_browser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetBrowser"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connections"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "browser"
+        ],
+        "summary": "Removes the gmail's browser: stopped, the provider's profile (a phone's film) and session gone.",
+        "operationId": "remove_browser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/gmails/{id}/browser/film": {
+      "put": {
+        "tags": [
+          "browser"
+        ],
+        "summary": "Uploads an mp4 as the camera of the browser's next launch, its sound the mic: ≤ 512 MiB; a cloud phone's ≤ 100 MiB, to Multilogin's Library.",
+        "description": "409 for Multilogin's browser: its camera is the host's.",
+        "operationId": "set_film",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "video/mp4": {}
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "browser"
+        ],
+        "summary": "Takes the browser's film away.",
+        "operationId": "remove_film",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/gmails/{id}/browser/start": {
+      "post": {
+        "tags": [
+          "browser"
+        ],
+        "summary": "Starts the gmail's browser, answering once it is up: at a GBP's point, its zone and its country's locale; for the gmail alone the position blocked. A cloud phone bills while it runs.",
+        "description": "409 it runs for another.",
+        "operationId": "start_browser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartBrowser"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        },
+        "x-spends": true
+      }
+    },
+    "/gmails/{id}/browser/stop": {
+      "post": {
+        "tags": [
+          "browser"
+        ],
+        "summary": "Stops the gmail's browser.",
+        "operationId": "stop_browser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/gmails/{id}/browser/test": {
+      "post": {
+        "tags": [
+          "browser"
+        ],
+        "summary": "Checks the browser's proxy exit again.",
+        "operationId": "test_browser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connections"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gmails/{id}/connections": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "A gmail's inbox, Maps key and browser, and what Places requests cost on the shared keys: no secret, ever.",
+        "operationId": "gmail_connections",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connections"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gmails/{id}/gmbs": {
+      "post": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Adds a GBP on Google already, by its place, to the gmail.",
+        "description": "`name` and `country` fill what Google lacks (400 when still missing); 409 the name or the place\ntaken.",
+        "operationId": "add_gmb",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewGmb"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A GBP of the caller's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gmb"
+                }
+              }
+            }
+          }
+        },
+        "x-spends": true
+      }
+    },
+    "/gmails/{id}/imap": {
+      "put": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "Sets the gmail's inbox, kept only once it logs in (IMAPS :993, a public address only).",
+        "description": "400 refused, nothing stored.",
+        "operationId": "set_imap",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetImap"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connections"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "Forgets the gmail's inbox.",
+        "operationId": "remove_imap",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/gmails/{id}/imap/test": {
+      "post": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "Checks the gmail's inbox again, the check recorded. 404 none set.",
+        "operationId": "test_imap",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connections"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gmails/{id}/maps_key": {
+      "put": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "Sets the gmail's own Maps key, kept only once Google answers for it (an unbilled id-only details); the caller's Places requests are paid with it first.",
+        "description": "400 refused, nothing stored.",
+        "operationId": "set_maps_key",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetMapsKey"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connections"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "Forgets the gmail's Maps key.",
+        "operationId": "remove_maps_key",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/gmails/{id}/maps_key/test": {
+      "post": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "Checks the gmail's Maps key again, the check recorded. 404 none set.",
+        "operationId": "test_maps_key",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connections"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gmbs": {
+      "post": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Creates a GBP no place is known of: a draft, or one verifying or suspended (off Maps).",
+        "description": "409 if a live GBP has the name.",
+        "operationId": "create_gmb",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewUnplaced"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A GBP of the caller's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gmb"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gmbs/enabled": {
+      "put": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Switches GBPs on or off, every one or none (404 one not the caller's); review_archive inherits it.",
+        "operationId": "switch_gmbs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Switch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/gmbs/resolve": {
+      "get": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "The places a pasted id, Maps URL or search may mean (Google Places).",
+        "description": "Paid with `gmail`'s Maps key first, then the caller's others', then the shared keys their\ntokens pay for. 400 one in a country not served.",
+        "operationId": "resolve_place",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "gmail",
+            "description": "The caller's gmail whose key is tried first.",
+            "schema": {
+              "description": "The caller's gmail whose key is tried first.",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "place",
+            "description": "A place id, a Maps URL or a search.",
+            "required": true,
+            "schema": {
+              "description": "A place id, a Maps URL or a search.",
+              "type": "string"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /gmbs/resolve`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Candidates"
+                }
+              }
+            }
+          }
+        },
+        "x-spends": true
+      }
+    },
+    "/gmbs/suggest": {
+      "get": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Places Autocomplete in the countries served, paid as `resolve`: each distinct input is a request.",
+        "operationId": "suggest_places",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "gmail",
+            "description": "The caller's gmail whose key is tried first.",
+            "schema": {
+              "description": "The caller's gmail whose key is tried first.",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "input",
+            "description": "What is typed so far.",
+            "required": true,
+            "schema": {
+              "description": "What is typed so far.",
+              "type": "string"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /gmbs/suggest`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Suggestions"
+                }
+              }
+            }
+          }
+        },
+        "x-spends": true
+      }
+    },
+    "/gmbs/trade": {
+      "put": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Gives GBPs a trade, every one or none (404 one not the caller's).",
+        "operationId": "set_gmb_trades",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTrades"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/gmbs/{id}": {
+      "delete": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Removes a GBP to the trash.",
+        "operationId": "remove_gmb",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Edits a GBP.",
+        "description": "409 a name not a draft's, a name or a phone another live GBP's.",
+        "operationId": "edit_gmb",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "description": "Absent fields stay; `null` clears.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GmbEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A GBP of the caller's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gmb"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gmbs/{id}/country": {
+      "put": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Sets a GBP's country by hand. 409 Google has its country.",
+        "operationId": "set_gmb_country",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCountry"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/gmbs/{id}/location": {
+      "put": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Places a GBP's point by hand. 409 Google has its point.",
+        "operationId": "place_gmb",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LatLng"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Takes back the point placed by hand. 409 none is.",
+        "operationId": "unplace_gmb",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
+    "/gmbs/{id}/state": {
+      "put": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Moves a GBP to another state. 400 a move its `next` lacks.",
+        "operationId": "move_gmb",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Advance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A GBP of the caller's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gmb"
+                }
+              }
+            }
+          }
+        },
+        "x-spends": true
+      }
+    },
+    "/google-categories/{country}": {
+      "get": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Google's categories in a country, named in its language and the front end's.",
+        "operationId": "google_categories",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /google-categories/{country}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleCategories"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/map": {
+      "get": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "The browser's Maps JS key, referrer-restricted. 404 without one: there is no map.",
+        "operationId": "map_key",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /map`: the browser's Maps JS key, referrer-restricted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapConfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/me": {
       "get": {
         "tags": [
@@ -195,24 +2813,10 @@
         "x-permission": "sa:admin:sources:manage"
       }
     },
-    "/access/requests": {
-      "post": {
-        "tags": [
-          "access"
-        ],
-        "summary": "Asks the admins for a need, made now (201); the one standing (200) if asked within 24 h, nobody told again.",
-        "description": "400 a need neither a permission nor an alias of the sa catalog; 409 one the caller holds already.",
-        "operationId": "request_access",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Ask"
-              }
-            }
-          },
-          "required": true
-        },
+    "/tokens": {
+      "get": {
+        "summary": "The caller's balance, renewed a day's worth when read, and the kick-backs not claimed.",
+        "operationId": "tokens",
         "responses": {
           "default": {
             "description": "What every failed operation answers, its status saying which failure.",
@@ -224,22 +2828,12 @@
               }
             }
           },
-          "201": {
-            "description": "An access request of the caller's, standing.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccessRequest"
-                }
-              }
-            }
-          },
           "200": {
-            "description": "An access request of the caller's, standing.",
+            "description": "`GET /tokens`, `POST /tokens/claim`.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccessRequest"
+                  "$ref": "#/components/schemas/Tokens"
                 }
               }
             }
@@ -247,490 +2841,51 @@
         }
       }
     },
-    "/access/requests/mine": {
+    "/tokens/claim": {
+      "post": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Claims every kick-back and grant owed to the caller into their balance.",
+        "operationId": "claim_tokens",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /tokens`, `POST /tokens/claim`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tokens"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tokens/ledger": {
       "get": {
         "tags": [
-          "access"
+          "tokens"
         ],
-        "summary": "The caller's standing access requests; those whose need they now hold are dropped.",
-        "operationId": "my_access_requests",
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccessRequests"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/alerts": {
-      "get": {
-        "summary": "The caller's alert destinations, each with its rules, and the rules open to them.",
-        "operationId": "alerts",
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "The caller's alerts, and what every change answers.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Alerts"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/alerts/telegram/link": {
-      "post": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "A link that makes the caller's own Telegram chat with the bot their private destination.",
-        "description": "503 without a bot.",
-        "operationId": "telegram_link",
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "A link to the bot whose `/start` makes the chat the caller's private destination.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TelegramLink"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/alerts/telegram/chats": {
-      "post": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Adds a channel, group or forum topic the caller administers as a destination, once a test went out there.",
-        "description": "400 refused (nothing stored), 409 a destination already.",
-        "operationId": "add_chat",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddChat"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "The caller's alerts, and what every change answers.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Alerts"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/alerts/destinations/{id}/rules": {
-      "put": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Turns rules on or off at a destination. 400 a rule not open to the caller.",
-        "operationId": "set_destination_rules",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RulesBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "The caller's alerts, and what every change answers.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Alerts"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/alerts/destinations/{id}/gmail": {
-      "put": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Scopes a destination's GMB rules to one of the caller's gmails. 404 not theirs.",
-        "operationId": "set_destination_gmail",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GmailBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "The caller's alerts, and what every change answers.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Alerts"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/alerts/destinations/{id}/test": {
-      "post": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Sends a test message to a destination; one that arrives revives it. 400 with what Telegram said.",
-        "operationId": "test_destination",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/alerts/destinations/{id}": {
-      "delete": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Removes a destination.",
-        "operationId": "remove_destination",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/gmails": {
-      "get": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "The caller's gmails and their GBPs, the removed left out.",
-        "description": "A draft's `gmail_id` may be null; only a verified one's `place_id` is certain; a gmail's `cap`\nis null while its role is unknown.",
-        "operationId": "gmails",
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "`GET /gmails`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Gmails"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Adds a managing gmail. 409 if the caller has it already.",
-        "operationId": "add_gmail",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewGmail"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "A gmail of the caller's.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Gmail"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/gmails/{id}": {
-      "delete": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Removes the gmail to the trash, its GBPs with it. 409 while it has a browser.",
-        "operationId": "remove_gmail",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Sets the gmail's role on its GBPs: owner or manager, which caps how many it holds.",
-        "operationId": "set_gmail_role",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetRole"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "A gmail of the caller's.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Gmail"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/gmbs/resolve": {
-      "get": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "The places a pasted id, Maps URL or search may mean (Google Places).",
-        "description": "Paid with `gmail`'s Maps key first, then the caller's others', then the shared keys their\ntokens pay for. 400 one in a country not served.",
-        "operationId": "resolve_place",
+        "summary": "The caller's ledger, newest first.",
+        "operationId": "ledger",
         "parameters": [
           {
             "in": "query",
-            "name": "gmail",
-            "description": "The caller's gmail whose key is tried first.",
+            "name": "before",
+            "description": "The previous page's `next`.",
             "schema": {
-              "description": "The caller's gmail whose key is tried first.",
+              "description": "The previous page's `next`.",
               "type": [
                 "integer",
                 "null"
@@ -741,12 +2896,13 @@
           },
           {
             "in": "query",
-            "name": "place",
-            "description": "A place id, a Maps URL or a search.",
+            "name": "limit",
+            "description": "1–200.",
             "required": true,
             "schema": {
-              "description": "A place id, a Maps URL or a search.",
-              "type": "string"
+              "description": "1–200.",
+              "type": "integer",
+              "format": "int64"
             },
             "style": "form"
           }
@@ -763,53 +2919,25 @@
             }
           },
           "200": {
-            "description": "`GET /gmbs/resolve`.",
+            "description": "`GET /tokens/ledger`: `next` is the `before` of the next page, `null` at the end.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Candidates"
+                  "$ref": "#/components/schemas/Ledger"
                 }
               }
             }
           }
-        },
-        "x-spends": true
+        }
       }
     },
-    "/gmbs/suggest": {
+    "/tokens/usage": {
       "get": {
         "tags": [
-          "gmbs"
+          "tokens"
         ],
-        "summary": "Places Autocomplete in the countries served, paid as `resolve`: each distinct input is a request.",
-        "operationId": "suggest_places",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "gmail",
-            "description": "The caller's gmail whose key is tried first.",
-            "schema": {
-              "description": "The caller's gmail whose key is tried first.",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "int64"
-            },
-            "style": "form"
-          },
-          {
-            "in": "query",
-            "name": "input",
-            "description": "What is typed so far.",
-            "required": true,
-            "schema": {
-              "description": "What is typed so far.",
-              "type": "string"
-            },
-            "style": "form"
-          }
-        ],
+        "summary": "What the caller spent per UTC day over the last 30, oldest first.",
+        "operationId": "token_usage",
         "responses": {
           "default": {
             "description": "What every failed operation answers, its status saying which failure.",
@@ -822,477 +2950,11 @@
             }
           },
           "200": {
-            "description": "`GET /gmbs/suggest`.",
+            "description": "`GET /tokens/usage`.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Suggestions"
-                }
-              }
-            }
-          }
-        },
-        "x-spends": true
-      }
-    },
-    "/gmbs": {
-      "post": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Creates a GBP no place is known of: a draft, or one verifying or suspended (off Maps).",
-        "description": "409 if a live GBP has the name.",
-        "operationId": "create_gmb",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewUnplaced"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "A GBP of the caller's.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Gmb"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/gmails/{id}/gmbs": {
-      "post": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Adds a GBP on Google already, by its place, to the gmail.",
-        "description": "`name` and `country` fill what Google lacks (400 when still missing); 409 the name or the place\ntaken.",
-        "operationId": "add_gmb",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewGmb"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "A GBP of the caller's.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Gmb"
-                }
-              }
-            }
-          }
-        },
-        "x-spends": true
-      }
-    },
-    "/gmbs/{id}": {
-      "delete": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Removes a GBP to the trash.",
-        "operationId": "remove_gmb",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Edits a GBP.",
-        "description": "409 a name not a draft's, a name or a phone another live GBP's.",
-        "operationId": "edit_gmb",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "description": "Absent fields stay; `null` clears.",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GmbEdit"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "A GBP of the caller's.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Gmb"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/gmbs/{id}/state": {
-      "put": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Moves a GBP to another state. 400 a move its `next` lacks.",
-        "operationId": "move_gmb",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Advance"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "A GBP of the caller's.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Gmb"
-                }
-              }
-            }
-          }
-        },
-        "x-spends": true
-      }
-    },
-    "/gmbs/enabled": {
-      "put": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Switches GBPs on or off, every one or none (404 one not the caller's); review_archive inherits it.",
-        "operationId": "switch_gmbs",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Switch"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/gmbs/trade": {
-      "put": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Gives GBPs a trade, every one or none (404 one not the caller's).",
-        "operationId": "set_gmb_trades",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetTrades"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/gmbs/{id}/location": {
-      "put": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Places a GBP's point by hand. 409 Google has its point.",
-        "operationId": "place_gmb",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LatLng"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Takes back the point placed by hand. 409 none is.",
-        "operationId": "unplace_gmb",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/gmbs/{id}/country": {
-      "put": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Sets a GBP's country by hand. 409 Google has its country.",
-        "operationId": "set_gmb_country",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetCountry"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/map": {
-      "get": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "The browser's Maps JS key, referrer-restricted. 404 without one: there is no map.",
-        "operationId": "map_key",
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "`GET /map`: the browser's Maps JS key, referrer-restricted.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MapConfig"
+                  "$ref": "#/components/schemas/Usage"
                 }
               }
             }
@@ -1563,954 +3225,6 @@
         }
       }
     },
-    "/google-categories/{country}": {
-      "get": {
-        "tags": [
-          "gmbs"
-        ],
-        "summary": "Google's categories in a country, named in its language and the front end's.",
-        "operationId": "google_categories",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "country",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Country"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "`GET /google-categories/{country}`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GoogleCategories"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/gmails/{id}/connections": {
-      "get": {
-        "tags": [
-          "connections"
-        ],
-        "summary": "A gmail's inbox, Maps key and browser, and what Places requests cost on the shared keys: no secret, ever.",
-        "operationId": "gmail_connections",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Connections"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/gmails/{id}/imap": {
-      "put": {
-        "tags": [
-          "connections"
-        ],
-        "summary": "Sets the gmail's inbox, kept only once it logs in (IMAPS :993, a public address only).",
-        "description": "400 refused, nothing stored.",
-        "operationId": "set_imap",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetImap"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Connections"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "connections"
-        ],
-        "summary": "Forgets the gmail's inbox.",
-        "operationId": "remove_imap",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/gmails/{id}/maps_key": {
-      "put": {
-        "tags": [
-          "connections"
-        ],
-        "summary": "Sets the gmail's own Maps key, kept only once Google answers for it (an unbilled id-only details); the caller's Places requests are paid with it first.",
-        "description": "400 refused, nothing stored.",
-        "operationId": "set_maps_key",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetMapsKey"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Connections"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "connections"
-        ],
-        "summary": "Forgets the gmail's Maps key.",
-        "operationId": "remove_maps_key",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/gmails/{id}/imap/test": {
-      "post": {
-        "tags": [
-          "connections"
-        ],
-        "summary": "Checks the gmail's inbox again, the check recorded. 404 none set.",
-        "operationId": "test_imap",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Connections"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/gmails/{id}/maps_key/test": {
-      "post": {
-        "tags": [
-          "connections"
-        ],
-        "summary": "Checks the gmail's Maps key again, the check recorded. 404 none set.",
-        "operationId": "test_maps_key",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Connections"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/gmails/{id}/browser": {
-      "put": {
-        "tags": [
-          "browser"
-        ],
-        "summary": "Sets the gmail's browser up, kept only once its proxy comes out in the country of every GBP of the gmail; the provider and device are a fingerprint, set once, the proxy replaced under them.",
-        "description": "400 refused, nothing stored; 409 another provider or device; a phone names no device.",
-        "operationId": "set_browser",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetBrowser"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Connections"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "browser"
-        ],
-        "summary": "Removes the gmail's browser: stopped, the provider's profile (a phone's film) and session gone.",
-        "operationId": "remove_browser",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/gmails/{id}/browser/test": {
-      "post": {
-        "tags": [
-          "browser"
-        ],
-        "summary": "Checks the browser's proxy exit again.",
-        "operationId": "test_browser",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Connections"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/gmails/{id}/browser/start": {
-      "post": {
-        "tags": [
-          "browser"
-        ],
-        "summary": "Starts the gmail's browser, answering once it is up: at a GBP's point, its zone and its country's locale; for the gmail alone the position blocked. A cloud phone bills while it runs.",
-        "description": "409 it runs for another.",
-        "operationId": "start_browser",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StartBrowser"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        },
-        "x-spends": true
-      }
-    },
-    "/gmails/{id}/browser/stop": {
-      "post": {
-        "tags": [
-          "browser"
-        ],
-        "summary": "Stops the gmail's browser.",
-        "operationId": "stop_browser",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/gmails/{id}/browser/film": {
-      "put": {
-        "tags": [
-          "browser"
-        ],
-        "summary": "Uploads an mp4 as the camera of the browser's next launch, its sound the mic: ≤ 512 MiB; a cloud phone's ≤ 100 MiB, to Multilogin's Library.",
-        "description": "409 for Multilogin's browser: its camera is the host's.",
-        "operationId": "set_film",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "video/mp4": {}
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "browser"
-        ],
-        "summary": "Takes the browser's film away.",
-        "operationId": "remove_film",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/tokens": {
-      "get": {
-        "summary": "The caller's balance, renewed a day's worth when read, and the kick-backs not claimed.",
-        "operationId": "tokens",
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "`GET /tokens`, `POST /tokens/claim`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Tokens"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/tokens/ledger": {
-      "get": {
-        "tags": [
-          "tokens"
-        ],
-        "summary": "The caller's ledger, newest first.",
-        "operationId": "ledger",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "before",
-            "description": "The previous page's `next`.",
-            "schema": {
-              "description": "The previous page's `next`.",
-              "type": [
-                "integer",
-                "null"
-              ],
-              "format": "int64"
-            },
-            "style": "form"
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "description": "1–200.",
-            "required": true,
-            "schema": {
-              "description": "1–200.",
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "form"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "`GET /tokens/ledger`: `next` is the `before` of the next page, `null` at the end.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Ledger"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/tokens/usage": {
-      "get": {
-        "tags": [
-          "tokens"
-        ],
-        "summary": "What the caller spent per UTC day over the last 30, oldest first.",
-        "operationId": "token_usage",
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "`GET /tokens/usage`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Usage"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/tokens/claim": {
-      "post": {
-        "tags": [
-          "tokens"
-        ],
-        "summary": "Claims every kick-back and grant owed to the caller into their balance.",
-        "operationId": "claim_tokens",
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "`GET /tokens`, `POST /tokens/claim`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Tokens"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/admin/tokens": {
-      "get": {
-        "tags": [
-          "tokens"
-        ],
-        "summary": "Every user's balance, renewed.",
-        "operationId": "token_holders",
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "`GET /admin/tokens`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenHolders"
-                }
-              }
-            }
-          }
-        },
-        "x-permission": "sa:admin:tokens:grant"
-      }
-    },
-    "/admin/tokens/{user_id}": {
-      "post": {
-        "tags": [
-          "tokens"
-        ],
-        "summary": "Sets a user's balance, adds to it, or grants tokens owed until they claim them.",
-        "operationId": "change_balance",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "user_id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "description": "`POST /admin/tokens/{user_id}`: set to 0 or more, add 1 or more (a sale, its reference in\nthe note), or grant 1 or more, owed until claimed, saying what for.",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BalanceChange"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "The answer to a balance change.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Balance"
-                }
-              }
-            }
-          }
-        },
-        "x-permission": "sa:admin:tokens:grant"
-      }
-    },
-    "/admin/tokens/prices": {
-      "get": {
-        "tags": [
-          "tokens"
-        ],
-        "summary": "Tokens a Places request on the shared keys costs, per kind; null, not sold.",
-        "operationId": "token_prices",
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "Tokens a Places request on the shared keys costs; `null`, not sold yet.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Prices"
-                }
-              }
-            }
-          }
-        },
-        "x-permission": "sa:admin:tokens:grant"
-      },
-      "put": {
-        "tags": [
-          "tokens"
-        ],
-        "summary": "Prices every kind of Places request on the shared keys, 0 or more tokens.",
-        "operationId": "set_token_prices",
-        "requestBody": {
-          "description": "Every request kind priced, in tokens.",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetPrices"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "Tokens a Places request on the shared keys costs; `null`, not sold yet.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Prices"
-                }
-              }
-            }
-          }
-        },
-        "x-permission": "sa:admin:tokens:grant"
-      }
-    },
     "/trash": {
       "get": {
         "summary": "The caller's trash: what they removed, restorable until purged `keep_days` after its removal.",
@@ -2648,615 +3362,6 @@
           }
         }
       }
-    },
-    "/assistant/chats": {
-      "get": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "The caller's chats, owned and joined, with their own marks, newest first.",
-        "operationId": "chats",
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "`GET /assistant/chats`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Chats"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "Creates a chat at version 1. 409 the id is taken; 413 a body past 4 MiB.",
-        "operationId": "create_chat",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewChat"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "A chat, whole.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Chat"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/assistant/chats/{id}": {
-      "get": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "A chat: its turns, version and the caller's role.",
-        "operationId": "chat",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "A chat, whole.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Chat"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "Deletes a chat, its members and marks with it: the owner's only.",
-        "operationId": "delete_chat",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/assistant/chats/{id}/turns": {
-      "put": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "Writes a chat's turns: those before `from` kept, the rest replaced.",
-        "description": "409 `base` is not the version; 400 `from` past the end; 413 the body past 4 MiB, or the chat's\nturns past 16 MiB.",
-        "operationId": "write_chat_turns",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TurnsWrite"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "A chat, whole.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Chat"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/assistant/chats/{id}/title": {
-      "put": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "Renames a chat.",
-        "operationId": "rename_chat",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Title"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "A chat, whole.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Chat"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/assistant/chats/{id}/pinned": {
-      "put": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "Pins or unpins a chat, for the caller alone.",
-        "operationId": "pin_chat",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/On"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/assistant/chats/{id}/archived": {
-      "put": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "Archives or unarchives a chat, for the caller alone.",
-        "operationId": "archive_chat",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/On"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/assistant/archived": {
-      "delete": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "Deletes the caller's archived chats; one shared with them they leave.",
-        "operationId": "clear_archived_chats",
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/assistant/chats/{id}/access": {
-      "get": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "Who has a chat: its owner, members and general access.",
-        "operationId": "chat_access",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "`GET /assistant/chats/{id}/access`, and what its writes answer.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Access"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/assistant/chats/{id}/members": {
-      "post": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "Makes people members of a chat. 400 an unknown user.",
-        "operationId": "invite_to_chat",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Invite"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "`GET /assistant/chats/{id}/access`, and what its writes answer.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Access"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/assistant/chats/{id}/members/{user}": {
-      "delete": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "Removes a member from a chat: the owner anyone, a member themselves.",
-        "operationId": "remove_chat_member",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "style": "simple"
-          },
-          {
-            "in": "path",
-            "name": "user",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "204": {
-            "description": "no content"
-          }
-        }
-      }
-    },
-    "/assistant/chats/{id}/general": {
-      "put": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "Sets who beyond its members may read a chat: the owner's.",
-        "operationId": "set_chat_general",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetGeneral"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "`GET /assistant/chats/{id}/access`, and what its writes answer.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Access"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/assistant/people": {
-      "get": {
-        "tags": [
-          "assistant"
-        ],
-        "summary": "Whom the caller shares a chat with, by name or email, and whoever has `q` as their whole email.",
-        "operationId": "chat_people",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "q",
-            "description": "A name or an email's part.",
-            "required": true,
-            "schema": {
-              "description": "A name or an email's part.",
-              "type": "string"
-            },
-            "style": "form"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "`GET /assistant/people?q=`: whom the caller may invite.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/People"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
@@ -3316,6 +3421,24 @@
           "requests"
         ]
       },
+      "Act": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "description": "The action's id in it.",
+            "type": "string"
+          },
+          "turn": {
+            "description": "The answer's turn id.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "turn",
+          "action"
+        ]
+      },
       "Action": {
         "type": "object",
         "properties": {
@@ -3326,13 +3449,6 @@
             "description": "Said once it is done: \"Appealed 4 reviews\".",
             "type": "string"
           },
-          "href": {
-            "description": "Where it goes, for one that opens a page instead of doing something.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "id": {
             "type": "string"
           },
@@ -3341,6 +3457,9 @@
           },
           "state": {
             "$ref": "#/components/schemas/ActionState"
+          },
+          "target": {
+            "$ref": "#/components/schemas/Target"
           }
         },
         "additionalProperties": false,
@@ -3348,6 +3467,7 @@
           "id",
           "label",
           "detail",
+          "target",
           "done",
           "state"
         ]
@@ -3467,6 +3587,7 @@
         },
         "required": [
           "enabled",
+          "bot",
           "rules",
           "destinations"
         ]
@@ -3492,6 +3613,36 @@
         ]
       },
       "Attachment": {
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "preview": {
+            "description": "An image's preview, downscaled; `null` for any other file.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Preview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "preview",
+          "bytes"
+        ]
+      },
+      "AttachmentInput": {
         "type": "object",
         "properties": {
           "bytes": {
@@ -3593,6 +3744,28 @@
           }
         ]
       },
+      "Bound": {
+        "description": "A binding of the page's keymap, as the page has it bound now.",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "sequence": {
+            "description": "Its keys, as the keycaps read.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "sequence"
+        ]
+      },
       "BrandReads": {
         "type": "object",
         "properties": {
@@ -3617,7 +3790,12 @@
             ],
             "format": "date-time"
           }
-        }
+        },
+        "required": [
+          "locations",
+          "pricing",
+          "experiments"
+        ]
       },
       "Browser": {
         "description": "A gmail's browser, as its owner sees it: never the proxy's credentials.",
@@ -3671,7 +3849,40 @@
           "exit",
           "set_at",
           "checked",
+          "running",
           "film"
+        ]
+      },
+      "CallInput": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "description": "The JSON body, for an operation that takes one."
+          },
+          "operation": {
+            "description": "An operation's id, as `search` names it.",
+            "type": "string"
+          },
+          "path": {
+            "description": "The path's parameters by name: `{\"id\": 7}`.",
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "query": {
+            "description": "The query's parameters by name.",
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "operation"
         ]
       },
       "Caller": {
@@ -3771,7 +3982,9 @@
           "country",
           "lang",
           "keywords",
-          "google_additional"
+          "google_primary",
+          "google_additional",
+          "study"
         ]
       },
       "Chat": {
@@ -3834,9 +4047,12 @@
         },
         "required": [
           "id",
+          "title",
           "owner",
           "role",
           "shared",
+          "pinned_at",
+          "archived_at",
           "updated_at",
           "general",
           "version",
@@ -3889,9 +4105,12 @@
         },
         "required": [
           "id",
+          "title",
           "owner",
           "role",
           "shared",
+          "pinned_at",
+          "archived_at",
           "updated_at"
         ]
       },
@@ -3925,7 +4144,8 @@
           }
         },
         "required": [
-          "at"
+          "at",
+          "error"
         ]
       },
       "ConnectedSites": {
@@ -3988,7 +4208,10 @@
           }
         },
         "required": [
-          "prices"
+          "imap",
+          "maps_key",
+          "prices",
+          "browser"
         ]
       },
       "Country": {
@@ -4084,6 +4307,10 @@
         "required": [
           "id",
           "kind",
+          "title",
+          "topic_id",
+          "gmail_id",
+          "dead",
           "rules"
         ]
       },
@@ -4212,6 +4439,7 @@
         "required": [
           "id",
           "gmail",
+          "role",
           "created_at",
           "browser"
         ]
@@ -4378,12 +4606,22 @@
         },
         "required": [
           "id",
+          "gmail_id",
+          "place_id",
           "name",
+          "address",
           "state",
           "next",
+          "country",
+          "phone",
+          "trade_id",
           "areas",
+          "hidden_address",
+          "customers_visit",
+          "film",
           "created_at",
-          "enabled"
+          "enabled",
+          "location"
         ]
       },
       "GmbEdit": {
@@ -4613,7 +4851,12 @@
         "required": [
           "id",
           "at",
-          "amount"
+          "amount",
+          "service",
+          "key",
+          "label",
+          "by",
+          "note"
         ]
       },
       "LatLng": {
@@ -4652,7 +4895,8 @@
           }
         },
         "required": [
-          "entries"
+          "entries",
+          "next"
         ]
       },
       "LedgerEntry": {
@@ -4709,7 +4953,12 @@
           "id",
           "at",
           "delta",
-          "kind"
+          "kind",
+          "service",
+          "key",
+          "label",
+          "by",
+          "note"
         ]
       },
       "LedgerKind": {
@@ -4758,7 +5007,8 @@
         "required": [
           "last4",
           "set_at",
-          "checked"
+          "checked",
+          "out"
         ]
       },
       "Mention": {
@@ -4830,7 +5080,7 @@
           "turns": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Turn"
+              "$ref": "#/components/schemas/TurnInput"
             }
           }
         },
@@ -5089,7 +5339,11 @@
           }
         },
         "required": [
-          "place_id"
+          "place_id",
+          "name",
+          "address",
+          "location",
+          "country"
         ]
       },
       "Point": {
@@ -5165,7 +5419,12 @@
             "format": "int64"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "required": [
+          "details",
+          "search",
+          "autocomplete"
+        ]
       },
       "Probe": {
         "oneOf": [
@@ -5222,6 +5481,59 @@
           "multilogin",
           "multilogin_browser",
           "gologin"
+        ]
+      },
+      "Question": {
+        "type": "object",
+        "properties": {
+          "bindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Bound"
+            }
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttachmentInput"
+            }
+          },
+          "from": {
+            "description": "The turns kept before it: a question asked again from an earlier one drops what followed.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Mention"
+            }
+          },
+          "text": {
+            "type": "string"
+          },
+          "url": {
+            "description": "The page the question is asked on: what is open.",
+            "type": "string"
+          },
+          "views": {
+            "description": "The views a person can be shown, by name: the page's route table.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "text",
+          "mentions",
+          "files",
+          "url",
+          "views",
+          "bindings"
         ]
       },
       "ReadInternalReads": {
@@ -5412,7 +5724,11 @@
               "null"
             ]
           }
-        }
+        },
+        "required": [
+          "gmb",
+          "stream"
+        ]
       },
       "SetBrowser": {
         "type": "object",
@@ -5647,6 +5963,7 @@
         "required": [
           "key_id",
           "brands",
+          "origin",
           "report"
         ]
       },
@@ -5675,6 +5992,26 @@
         ]
       },
       "Source": {
+        "type": "object",
+        "properties": {
+          "href": {
+            "description": "`null`: read, but nowhere in the panel to open.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "href"
+        ]
+      },
+      "SourceInput": {
         "type": "object",
         "properties": {
           "href": {
@@ -5731,7 +6068,9 @@
           "key_id",
           "kind",
           "brands",
-          "created_at"
+          "created_at",
+          "revoked_at",
+          "origin"
         ]
       },
       "SourceKeys": {
@@ -5893,7 +6232,8 @@
         },
         "required": [
           "place_id",
-          "main"
+          "main",
+          "secondary"
         ]
       },
       "Suggestions": {
@@ -5929,6 +6269,50 @@
         "required": [
           "gmbs",
           "enabled"
+        ]
+      },
+      "Target": {
+        "description": "What an action does: a view, an operation, or a binding of the page's keymap — nothing else.",
+        "oneOf": [
+          {
+            "description": "A view, by its URL on this origin.",
+            "type": "object",
+            "properties": {
+              "href": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "href"
+            ]
+          },
+          {
+            "description": "An operation of `/api/v1/openapi.json`, by its id, with its arguments.",
+            "type": "object",
+            "properties": {
+              "call": {
+                "$ref": "#/components/schemas/CallInput"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "call"
+            ]
+          },
+          {
+            "description": "A binding of the page's keymap, by its id.",
+            "type": "object",
+            "properties": {
+              "binding": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "binding"
+            ]
+          }
         ]
       },
       "TelegramLink": {
@@ -6169,7 +6553,9 @@
           "id",
           "gmail",
           "removed_at",
-          "gmbs"
+          "purge_at",
+          "gmbs",
+          "blocked"
         ]
       },
       "TrashedGmb": {
@@ -6214,7 +6600,10 @@
           "id",
           "name",
           "state",
-          "removed_at"
+          "gmail",
+          "removed_at",
+          "purge_at",
+          "blocked"
         ]
       },
       "Turn": {
@@ -6331,6 +6720,132 @@
               "role",
               "id",
               "at",
+              "ended",
+              "worked",
+              "steps",
+              "text",
+              "sources",
+              "actions",
+              "state",
+              "feedback"
+            ]
+          }
+        ]
+      },
+      "TurnInput": {
+        "description": "A chat's turn, as its asker's browser wrote it. Times are milliseconds since the epoch.",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AttachmentInput"
+                }
+              },
+              "id": {
+                "type": "string"
+              },
+              "mentions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Mention"
+                }
+              },
+              "role": {
+                "type": "string",
+                "const": "user"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "id",
+              "at",
+              "text",
+              "mentions",
+              "files"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "actions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Action"
+                }
+              },
+              "at": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "ended": {
+                "description": "When the answer stopped growing; `null` while it runs.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "feedback": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Feedback"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string",
+                "const": "assistant"
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SourceInput"
+                }
+              },
+              "state": {
+                "$ref": "#/components/schemas/AnswerState"
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Step"
+                }
+              },
+              "text": {
+                "description": "`**bold**`, `- ` items, `@[label](location:id)` and `[n]` for `sources[n-1]`.",
+                "type": "string"
+              },
+              "worked": {
+                "description": "How long its steps took, once they are over.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "id",
+              "at",
               "steps",
               "text",
               "sources",
@@ -6357,7 +6872,7 @@
           "turns": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Turn"
+              "$ref": "#/components/schemas/TurnInput"
             }
           }
         },

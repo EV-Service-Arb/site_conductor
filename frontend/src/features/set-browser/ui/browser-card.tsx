@@ -24,7 +24,9 @@ import {
 import { Camera, Fingerprint } from "lucide-react";
 import { useId, useRef, useState } from "react";
 
-import { type Browser, DEVICES, type Device, PROVIDERS, type Provider, browsersUnconnected, disconnect, removeFilm, setBrowser, testConnection, uploadFilm } from "@/entities/gmb";
+import { browsersUnconnected, uploadFilm } from "@/entities/gmb";
+import { api, ok } from "@/shared/api";
+import { type Browser, type Device, type Provider, deviceValues, providerValues } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -52,7 +54,7 @@ export function BrowserCard({ gmail, browser, onChanged }: { gmail: number; brow
       setBusy(false);
     }
   };
-  const failing = browser !== null && browser.checked.error !== null;
+  const failing = browser !== null && browser.checked.error != null;
 
   return (
     <Card className="gap-3 py-4">
@@ -80,10 +82,10 @@ export function BrowserCard({ gmail, browser, onChanged }: { gmail: number; brow
             </dl>
             <p className="text-xs text-ink-soft">
               {t("Checked {at}", { at: formatDateTime(browser.checked.at, locale) })}
-              {browser.checked.error !== null && <span className="block text-accent-error">{browser.checked.error}</span>}
+              {browser.checked.error != null && <span className="block text-accent-error">{browser.checked.error}</span>}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void act(() => testConnection(gmail, "browser"))}>
+              <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void act(() => ok(api.POST("/gmails/{id}/browser/test", { params: { path: { id: gmail } } })))}>
                 {t("Test")}
               </Button>
               <Button variant="ghost" size={button("sm")} disabled={busy} onClick={() => setEditing(true)}>
@@ -100,7 +102,7 @@ export function BrowserCard({ gmail, browser, onChanged }: { gmail: number; brow
             set={browser}
             busy={busy}
             onCancel={browser ? () => setEditing(false) : undefined}
-            onSubmit={(v) => void act(() => setBrowser(gmail, v))}
+            onSubmit={(v) => void act(() => ok(api.PUT("/gmails/{id}/browser", { params: { path: { id: gmail } }, body: v })))}
           />
         )}
         {unconnected && <p className="text-xs text-accent-warn">{t("Browsers not connected")}</p>}
@@ -114,7 +116,7 @@ export function BrowserCard({ gmail, browser, onChanged }: { gmail: number; brow
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t("Cancel")}</AlertDialogCancel>
-            <AlertDialogAction className={buttonVariants({ variant: "destructive", size: button() })} onClick={() => void act(() => disconnect(gmail, "browser"))}>
+            <AlertDialogAction className={buttonVariants({ variant: "destructive", size: button() })} onClick={() => void act(() => ok(api.DELETE("/gmails/{id}/browser", { params: { path: { id: gmail } } })))}>
               {t("Remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -145,7 +147,7 @@ function Film({ gmail, browser, onChanged }: { gmail: number; browser: Browser; 
   const picker = useRef<HTMLInputElement>(null);
   const [sent, setSent] = useState<number | null>(null);
   const phone = browser.provider === "multilogin";
-  const running = !phone && browser.running !== null;
+  const running = !phone && browser.running != null;
   const act = async (run: () => Promise<unknown>) => {
     setSent(0);
     try {
@@ -179,7 +181,7 @@ function Film({ gmail, browser, onChanged }: { gmail: number; browser: Browser; 
             {(browser.film ? t("Replace") : t("Upload an mp4"))}
           </Button>
           {browser.film && (
-            <Button variant="ghost" size={button("sm")} disabled={running} onClick={() => void act(() => removeFilm(gmail))}>
+            <Button variant="ghost" size={button("sm")} disabled={running} onClick={() => void act(() => ok(api.DELETE("/gmails/{id}/browser/film", { params: { path: { id: gmail } } })))}>
               {t("Remove")}
             </Button>
           )}
@@ -236,7 +238,7 @@ function BrowserForm({
           <FieldLabel htmlFor={`${id}-provider`}>{t("Provider")}</FieldLabel>
           <NativeSelect id={`${id}-provider`} size={size} disabled={set !== null} value={provider} onChange={(e) => setProvider(e.target.value as Provider)}>
             {provider === "" && <NativeSelectOption value="">—</NativeSelectOption>}
-            {PROVIDERS.map((p) => (
+            {providerValues.map((p) => (
               <NativeSelectOption key={p} value={p}>
                 {PROVIDER[p](t)}
               </NativeSelectOption>
@@ -250,7 +252,7 @@ function BrowserForm({
             <FieldLabel htmlFor={`${id}-device`}>{t("Device")}</FieldLabel>
             <NativeSelect id={`${id}-device`} size={size} disabled={set !== null} value={device} onChange={(e) => setDevice(e.target.value as Device)}>
               {device === "" && <NativeSelectOption value="">—</NativeSelectOption>}
-              {DEVICES.map((d) => (
+              {deviceValues.map((d) => (
                 <NativeSelectOption key={d} value={d}>
                   {DEVICE[d](t)}
                 </NativeSelectOption>

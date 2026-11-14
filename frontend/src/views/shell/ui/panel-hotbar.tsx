@@ -28,8 +28,8 @@ export function PanelHotbar({ live }: { live: LiveStatus }) {
   const satellite = useBase() === "satellite";
   const togglePlaces = () => showPlaces(!places);
   const toggleBase = () => setBase(satellite ? "schematic" : "satellite");
-  useBinding({ on: { key: "p" }, run: { id: "places", label: t("Google's places"), run: onMap ? togglePlaces : null } });
-  useBinding({ on: { key: "b" }, run: { id: "base", label: t("Satellite"), run: onMap ? toggleBase : null } });
+  useBinding({ on: { key: "p" }, id: "places", run: { label: t("Google's places"), run: onMap ? togglePlaces : null } });
+  useBinding({ on: { key: "b" }, id: "base", run: { label: t("Satellite"), run: onMap ? toggleBase : null } });
   const actions: HotbarAction[] = onMap
     ? [
         { id: "map", label: t("Map"), icon: Layers, panel: <MapPanel />, preview: <MapPreview /> },

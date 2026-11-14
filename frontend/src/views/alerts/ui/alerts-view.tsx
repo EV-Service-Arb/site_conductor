@@ -21,19 +21,9 @@ import {
 } from "@evinvest/uikit";
 import { useId, useState } from "react";
 
-import {
-  type Alerts,
-  type Destination,
-  RULES,
-  addChat,
-  linkTelegram,
-  removeDestination,
-  setGmail,
-  setRules,
-  testDestination,
-  useAlerts,
-} from "@/entities/alerts";
-import { type Gmail, fetchGmails } from "@/entities/gmb";
+import { useAlerts } from "@/entities/alerts";
+import { api, ok } from "@/shared/api";
+import { type Alerts, type Destination, type Gmail, type Rule, ruleValues } from "@/shared/api/schema";
 import { type T, useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { ErrorState } from "@/shared/ui/error-state";
@@ -44,7 +34,7 @@ import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 export function AlertsView() {
   const t = useT();
   const alerts = useAlerts();
-  const gmails = useResource("gmbs", fetchGmails, "gmbs", { focus: true });
+  const gmails = useResource("gmbs", () => ok(api.GET("/gmails")), "gmbs", { live: ["gmails"] });
   const [busy, setBusy] = useState(false);
   const act = async (write: () => Promise<unknown>) => {
     setBusy(true);
@@ -88,7 +78,7 @@ const RULE = {
   review_gone: (t) => t("Removed reviews"),
   review_reappeared: (t) => t("Reviews back"),
   scan_failed: (t) => t("Failed scans"),
-} satisfies Record<(typeof RULES)[number], (t: T) => string>;
+} satisfies Record<Rule, (t: T) => string>;
 
 function Page({ alerts, gmails, busy, act }: { alerts: Alerts; gmails: Gmail[]; busy: boolean; act: Act }) {
   const t = useT();
@@ -99,7 +89,7 @@ function Page({ alerts, gmails, busy, act }: { alerts: Alerts; gmails: Gmail[]; 
     const tab = window.open("about:blank", "_blank");
     void act(async () => {
       try {
-        const url = await linkTelegram();
+        const { url } = await ok(api.POST("/alerts/telegram/link"));
         if (tab === null) window.location.assign(url);
         else tab.location.href = url;
       } catch (e) {
@@ -130,7 +120,7 @@ function Page({ alerts, gmails, busy, act }: { alerts: Alerts; gmails: Gmail[]; 
         {own === undefined ? (
           <p className="text-sm text-ink-soft">{t("Connect your own Telegram first: the bot checks with it that you run the channel.")}</p>
         ) : (
-          <AddChat bot={alerts.bot} gmails={gmails} busy={busy} act={act} />
+          <AddChat bot={alerts.bot ?? null} gmails={gmails} busy={busy} act={act} />
         )}
       </Section>
     </>
@@ -170,19 +160,19 @@ function DestinationCard({
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="text-ink">
           {name}
-          {d.topic_id !== null && <span className="text-ink-soft"> · {t("topic {topic}", { topic: d.topic_id })}</span>}
+          {d.topic_id != null && <span className="text-ink-soft"> · {t("topic {topic}", { topic: d.topic_id })}</span>}
           {d.kind !== "private" && <span className="text-ink-soft"> · {KIND[d.kind](t)}</span>}
         </span>
         <span className="flex gap-1">
-          <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void act(() => testDestination(d.id))}>
+          <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void act(() => ok(api.POST("/alerts/destinations/{id}/test", { params: { path: { id: d.id } } })))}>
             {t("Test")}
           </Button>
-          <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void act(() => removeDestination(d.id))}>
+          <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void act(() => ok(api.DELETE("/alerts/destinations/{id}", { params: { path: { id: d.id } } })))}>
             {t("Remove")}
           </Button>
         </span>
       </div>
-      {d.dead !== null && (
+      {d.dead != null && (
         <div className="space-y-1">
           <p className="text-sm text-accent-warn">{t("Nothing reaches it: {why}. Fix it, then Test.", { why: d.dead })}</p>
           {onReconnect !== undefined && (
@@ -194,9 +184,9 @@ function DestinationCard({
       )}
       {d.kind !== "private" && <p className="text-xs text-ink-soft">{t("Without contact details or buttons: whoever is in the chat reads it.")}</p>}
       {gmails.length > 0 && (
-        <GmailScope value={d.gmail_id} gmails={gmails} busy={busy} onChange={(gmail) => void act(() => setGmail(d.id, gmail))} />
+        <GmailScope value={d.gmail_id ?? null} gmails={gmails} busy={busy} onChange={(gmail) => void act(() => ok(api.PUT("/alerts/destinations/{id}/gmail", { params: { path: { id: d.id } }, body: { gmail_id: gmail } })))} />
       )}
-      <Rules alerts={alerts} destination={d} busy={busy} onToggle={(rule, on) => void act(() => setRules(d.id, { [rule]: on }))} />
+      <Rules alerts={alerts} destination={d} busy={busy} onToggle={(rule, on) => void act(() => ok(api.PUT("/alerts/destinations/{id}/rules", { params: { path: { id: d.id } }, body: { rules: { [rule]: on } } })))} />
     </div>
   );
 }
@@ -227,12 +217,12 @@ function GmailScope({ value, gmails, busy, onChange }: { value: number | null; g
   );
 }
 
-function Rules({ alerts, destination, busy, onToggle }: { alerts: Alerts; destination: Destination; busy: boolean; onToggle: (rule: (typeof RULES)[number], on: boolean) => void }) {
+function Rules({ alerts, destination, busy, onToggle }: { alerts: Alerts; destination: Destination; busy: boolean; onToggle: (rule: Rule, on: boolean) => void }) {
   const t = useT();
   if (alerts.rules.length === 0) return <p className="text-sm text-ink-soft">{t("Your access has nothing to alert you of.")}</p>;
   return (
     <div className="space-y-2 border-t border-border pt-2">
-      {RULES.filter((rule) => alerts.rules.includes(rule)).map((rule) => (
+      {ruleValues.filter((rule) => alerts.rules.includes(rule)).map((rule) => (
         <label key={rule} className="flex items-center justify-between gap-2 text-sm text-ink">
           {RULE[rule](t)}
           <Switch checked={destination.rules[rule] === true} disabled={busy} onCheckedChange={(next) => onToggle(rule, next)} />
@@ -256,7 +246,7 @@ function AddChat({ bot, gmails, busy, act }: { bot: string | null; gmails: Gmail
       onSubmit={(e) => {
         e.preventDefault();
         if (ready) void act(async () => {
-          await addChat(chat.trim(), gmail);
+          await ok(api.POST("/alerts/telegram/chats", { body: { chat: chat.trim(), gmail_id: gmail } }));
           setChat("");
         });
       }}

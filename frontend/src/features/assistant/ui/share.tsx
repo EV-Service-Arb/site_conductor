@@ -22,8 +22,10 @@ import {
 import { Building2, Link, X } from "lucide-react";
 import { type ReactNode, useEffect, useId, useState } from "react";
 
-import { type Access, type ChatSummary, type GeneralAccess, type Person, invite, removeMember, setGeneral, useAccess, usePeople } from "@/entities/assistant";
+import { useAccess, usePeople } from "@/entities/assistant";
 import { useMe } from "@/entities/session";
+import { api, ok } from "@/shared/api";
+import type { Access, ChatSummary, GeneralAccess, Person } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 
@@ -82,10 +84,7 @@ function Invite({ chat, access, onInvited }: { chat: string; access: Access; onI
   const found = people.status === "ok" ? people.data.filter((p) => !taken.has(p.id)) : [];
   const share = () => {
     setSending(true);
-    void invite(
-      chat,
-      picked.map((p) => p.id),
-    )
+    void ok(api.POST("/assistant/chats/{id}/members", { params: { path: { id: chat } }, body: { users: picked.map((p) => p.id) } }))
       .then(() => {
         setPicked([]);
         onInvited();
@@ -185,7 +184,7 @@ function People({ chat, access, onChanged }: { chat: ChatSummary; access: Access
                 {t("Leave")}
               </Button>
             ) : owner ? (
-              <Select value="interact" onValueChange={(v) => v === "remove" && write(removeMember(chat.id, p.id))}>
+              <Select value="interact" onValueChange={(v) => v === "remove" && write(ok(api.DELETE("/assistant/chats/{id}/members/{user}", { params: { path: { id: chat.id, user: p.id } } })))}>
                 <SelectTrigger size="sm" className="shrink-0 border-0 bg-transparent">
                   <SelectValue />
                 </SelectTrigger>
@@ -208,7 +207,7 @@ function People({ chat, access, onChanged }: { chat: ChatSummary; access: Access
           </span>
           <span className="min-w-0 flex-1 truncate text-body-s text-ink">{t("Everyone in Service-Arb")}</span>
           {owner ? (
-            <Select value={access.general} onValueChange={(v) => write(setGeneral(chat.id, v as GeneralAccess))}>
+            <Select value={access.general} onValueChange={(v) => write(ok(api.PUT("/assistant/chats/{id}/general", { params: { path: { id: chat.id } }, body: { general: v as GeneralAccess } })))}>
               <SelectTrigger size="sm" className="shrink-0 border-0 bg-transparent">
                 <SelectValue />
               </SelectTrigger>

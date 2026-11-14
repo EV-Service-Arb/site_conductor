@@ -81,7 +81,7 @@ async function errorBody(res: Response): Promise<ErrorBody> {
   }
 }
 
-async function failureOf(res: Response): Promise<ApiFailure> {
+export async function failureOf(res: Response): Promise<ApiFailure> {
   const { message, fields, path, body } = await errorBody(res);
   switch (res.status) {
     case 401:

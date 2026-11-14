@@ -33,6 +33,7 @@ use sa_auth::{Assertion, Principal, Service, Signer, User};
 use serde_json::json;
 
 use crate::{
+	catalog::Catalog,
 	cookies,
 	signin::{self, Caller, Denied, Freshness, SignIn},
 };
@@ -237,10 +238,20 @@ impl Services {
 pub struct Forward {
 	sign_in: SignIn,
 	services: Services,
+	catalog: Catalog,
 }
 impl Forward {
 	pub fn new(sign_in: SignIn, services: Services) -> Self {
-		Self { sign_in, services }
+		Self {
+			sign_in,
+			services,
+			catalog: Catalog::new(crate::http::document()),
+		}
+	}
+
+	/// The conductor's operations and the services' behind it.
+	pub fn catalog(&self) -> &Catalog {
+		&self.catalog
 	}
 
 	pub fn routes(self) -> Router {
@@ -336,6 +347,14 @@ fn api_prefix(service: Service) -> String {
 }
 
 /// The service's serde name: its API's path segment, its Grafana datasource's uid.
+/// Where `service`'s API under `upstream` is on this origin.
+pub(crate) fn prefix(service: Service, upstream: &str) -> Option<&'static str> {
+	ROUTES
+		.iter()
+		.find(|r| r.service == service && r.upstream == upstream && matches!(r.gate, Gate::Session(Writes::Csrf)))
+		.map(|r| r.prefix)
+}
+
 pub(crate) fn name(service: Service) -> String {
 	serde_json::to_value(service)
 		.expect("a unit variant serializes")
@@ -348,18 +367,26 @@ pub(crate) fn json_error(status: StatusCode, msg: &str) -> Response {
 	(status, Json(json!({ "error": msg }))).into_response()
 }
 
-async fn forward(State(f): State<Forward>, req: Request) -> Response {
+async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 	let route = ROUTES.iter().find(|r| under(req.uri().path(), r.prefix)).expect("mounted under one of ROUTES");
 	let principal = match route.gate {
 		Gate::Open => None,
 		Gate::Session(writes) => {
 			let write = !matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
-			if write && writes == Writes::Csrf && !f.sign_in.cookies().csrf_ok(req.headers()) {
-				return json_error(StatusCode::FORBIDDEN, "csrf");
-			}
 			// a write must not outlive a revoked grant by even the cached GetMe's minute
 			let freshness = if write { Freshness::Fresh } else { Freshness::Cached };
-			match signin::check(&f.sign_in, req.headers(), freshness).await {
+			// an MCP client's bearer: no cookie for a cross-site request to ride on, and ours, so it never goes up
+			let caller = if writes == Writes::Csrf && req.headers().contains_key(header::AUTHORIZATION) {
+				let caller = signin::bearer(&f.sign_in, req.headers(), freshness).await;
+				req.headers_mut().remove(header::AUTHORIZATION);
+				caller
+			} else {
+				if write && writes == Writes::Csrf && !f.sign_in.cookies().csrf_ok(req.headers()) {
+					return json_error(StatusCode::FORBIDDEN, "csrf");
+				}
+				signin::check(&f.sign_in, req.headers(), freshness).await
+			};
+			match caller {
 				Ok(caller) => Some(Principal::User(user(caller, route.service))),
 				// a page the browser navigated to goes to sign in and comes back; a call is told
 				Err(Denied::Unauthenticated) if route.service == Service::Playbook && *req.method() == Method::GET => {

@@ -3,11 +3,13 @@
 import { Button, NativeSelect, NativeSelectOption, Settled, Skeleton, cn } from "@evinvest/uikit";
 import { Mail, X } from "lucide-react";
 
-import { ACCOUNT_TABS, type AccountTab, fetchConnections, type Gmail, GMAIL_ROLE_LABEL, GMAIL_ROLES, type GmailRole, openAccount, setGmailRole, useGmails } from "@/entities/gmb";
+import { ACCOUNT_TABS, type AccountTab, GMAIL_ROLE_LABEL, openAccount, useGmails } from "@/entities/gmb";
 import { BrowserSession } from "@/features/browser-session";
 import { ImapCard } from "@/features/connect-imap";
 import { BrowserCard } from "@/features/set-browser";
 import { MapsKeyCard } from "@/features/set-maps-key";
+import { api, ok } from "@/shared/api";
+import { type Gmail, type GmailRole, gmailRoleValues } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { ErrorState } from "@/shared/ui/error-state";
@@ -59,15 +61,15 @@ export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Account
 }
 
 function Connections({ gmail }: { gmail: Gmail }) {
-  const connections = useResource(`connections.${gmail.id}`, () => fetchConnections(gmail.id), "connections", { live: "browsers" });
+  const connections = useResource(`connections.${gmail.id}`, () => ok(api.GET("/gmails/{id}/connections", { params: { path: { id: gmail.id } } })), "connections", { live: ["gmails"] });
   return (
     <Settled loading={connections.status === "loading"} skeleton={<Skeleton className="h-64 w-full" />}>
       {connections.status === "error" && <ErrorState failure={connections.failure} onRetry={connections.reload} />}
       {connections.status === "ok" && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <ImapCard gmail={gmail} imap={connections.data.imap} onChanged={connections.reload} />
-          <MapsKeyCard gmail={gmail.id} mapsKey={connections.data.maps_key} prices={connections.data.prices} onChanged={connections.reload} />
-          <BrowserCard gmail={gmail.id} browser={connections.data.browser} onChanged={connections.reload} />
+          <ImapCard gmail={gmail} imap={connections.data.imap ?? null} onChanged={connections.reload} />
+          <MapsKeyCard gmail={gmail.id} mapsKey={connections.data.maps_key ?? null} prices={connections.data.prices} onChanged={connections.reload} />
+          <BrowserCard gmail={gmail.id} browser={connections.data.browser ?? null} onChanged={connections.reload} />
         </div>
       )}
     </Settled>
@@ -79,7 +81,7 @@ function RoleSelect({ gmail }: { gmail: Gmail }) {
   const { reload } = useGmails();
   const pick = async (role: GmailRole | null) => {
     try {
-      await setGmailRole(gmail.id, role);
+      await ok(api.PATCH("/gmails/{id}", { params: { path: { id: gmail.id } }, body: { role } }));
       reload();
     } catch (e) {
       notifyFailure(e, t);
@@ -95,7 +97,7 @@ function RoleSelect({ gmail }: { gmail: Gmail }) {
       onChange={(e) => void pick(e.target.value === "" ? null : (e.target.value as GmailRole))}
     >
       <NativeSelectOption value="">{t("No role")}</NativeSelectOption>
-      {GMAIL_ROLES.map((r) => (
+      {gmailRoleValues.map((r) => (
         <NativeSelectOption key={r} value={r}>
           {GMAIL_ROLE_LABEL[r](t)}
         </NativeSelectOption>

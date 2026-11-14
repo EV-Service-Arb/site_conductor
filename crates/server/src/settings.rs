@@ -89,6 +89,11 @@ ev_lib::settings! {
 		google_maps_keys: Option<String>,
 		/// The key the browser loads Maps JS with: referrer-restricted, public by nature. Unset: no map.
 		google_maps_browser_key: Option<String>,
+		/// The in-page assistant's model (the Claude API). Unset: asking the assistant answers 503.
+		#[secret]
+		anthropic_api_key: Option<String>,
+		/// Where the Claude API is.
+		anthropic_base_url: String = "https://api.anthropic.com",
 		/// GoLogin's API token (app.gologin.com → Settings → API; a paid plan): its browsers'
 		/// profiles. It or MULTILOGIN_TOKEN with PANEL_BROWSERS_URL; none of the three: no browsers.
 		#[secret]
@@ -152,6 +157,12 @@ impl Settings {
 	pub fn map(&self) -> Option<MapDto> {
 		let key = self.google_maps_browser_key.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
 		Some(MapDto { key: key.to_owned() })
+	}
+
+	/// The assistant's model.
+	pub fn model(&self) -> Option<sa_server::ask::Model> {
+		let key = self.anthropic_api_key.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
+		Some(sa_server::ask::Model::new(self.anthropic_base_url.clone(), key.to_owned()))
 	}
 
 	/// The front end's files, when `PANEL_WEB_DIR` names them.
@@ -459,6 +470,8 @@ mod tests {
 				"TOKENS_START_CAP_MULTIPLE",
 				"GOOGLE_MAPS_KEYS",
 				"GOOGLE_MAPS_BROWSER_KEY",
+				"ANTHROPIC_API_KEY",
+				"ANTHROPIC_BASE_URL",
 				"GOLOGIN_TOKEN",
 				"MULTILOGIN_TOKEN",
 				"PANEL_BROWSERS_URL",

@@ -2,8 +2,9 @@
 
 import { useSyncExternalStore } from "react";
 
-import { type AssistantTurn, type Chat, type Turn, type UserTurn, createChat, fetchChat, putTurns } from "@/entities/assistant";
-import { ApiError } from "@/shared/api";
+import type { AssistantTurn, UserTurn } from "@/entities/assistant";
+import type { Chat, Question, Turn } from "@/shared/api/schema";
+import { api, ok } from "@/shared/api";
 import { setQuery } from "@/shared/lib/query";
 
 /** `ask`: actions wait for a press; `act`: the first is taken at once, and can be undone. */
@@ -19,7 +20,7 @@ export interface Running {
   from: number;
   asked: UserTurn;
   answer: AssistantTurn;
-  /** The chat's version once the settled answer is written: the server's copy shows it from then. */
+  /** The chat's version that holds the question: the server's copy shows from then. */
   written: number | null;
 }
 
@@ -114,76 +115,60 @@ function updateRunning(change: (r: Running) => Running): void {
 }
 
 let stopping: AbortController | null = null;
-/** The last answer's write: a question asked meanwhile is written after it, on the version it left. */
-let settling: Promise<{ chat: string; version: number } | null> = Promise.resolve(null);
 
+/** The answer this tab waits for stops: written as stopped where the conductor left it. */
 export function stop(): void {
   stopping?.abort();
 }
 
+/** What the page tells the assistant: what is open, the views there are, the bindings bound now. */
+export type Page = Pick<Question, "url" | "views" | "bindings">;
+
 /**
- * `asked` put at turn `from` of `chat` (a new chat for `null`), everything after it dropped, and answered by `play`
- * through `put`. Answers the chat's id at once, and `written`: whether the question reached the server. Once settled
- * the answer is written after it; `failed` hears why it was not (a conflict: someone wrote in the chat after the
- * question). One answer runs at a time, across chats; it goes on while the assistant is folded or another chat is open.
+ * `asked` put at turn `from` of `chat` (a new chat for `null`), everything after it dropped, and answered by the
+ * conductor, which writes the answer into the chat as it grows. Answers the chat's id at once; `answered` settles
+ * with the chat once the answer is done, and rejects with why it was not.
  */
-export function ask(
-  chat: Chat | null,
-  from: number,
-  asked: Omit<UserTurn, "role" | "id" | "at">,
-  play: (put: (change: (t: AssistantTurn) => AssistantTurn) => void, signal: AbortSignal) => Promise<void>,
-  failed: (e: unknown) => void,
-): { id: string; written: Promise<void> } {
+export function ask(chat: Chat | null, from: number, asked: Omit<UserTurn, "role" | "id" | "at">, page: Page): { id: string; answered: Promise<Chat> } {
   stopping?.abort();
   const id = chat?.id ?? newId();
   const at = Date.now();
   const question: UserTurn = { role: "user", id: newId(), at, ...asked };
-  let answer: AssistantTurn = { role: "assistant", id: newId(), at, ended: null, worked: null, steps: [], text: "", sources: [], actions: [], state: "working", feedback: null };
+  const answer: AssistantTurn = { role: "assistant", id: newId(), at, ended: null, worked: null, steps: [], text: "", sources: [], actions: [], state: "working", feedback: null };
   const mine = (r: Running | null) => r?.answer.id === answer.id;
-  const put = (change: (t: AssistantTurn) => AssistantTurn) => {
-    answer = change(answer);
-    updateRunning((r) => (mine(r) ? { ...r, answer } : r));
-  };
   set((s) => ({ ...s, running: { chat: id, from, asked: question, answer, written: null } }));
   const run = new AbortController();
   stopping = run;
-  const wrote = settling.then((last) =>
-    chat === null ? createChat(id, titleOf(question.text), [question]) : putTurns(id, last?.chat === id ? Math.max(last.version, chat.version) : chat.version, from, [question]),
-  );
-  const written = wrote.then(
-    () => undefined,
-    (e: unknown) => {
-      run.abort();
-      set((s) => ({ ...s, running: mine(s.running) ? null : s.running }));
-      throw e;
-    },
-  );
-  settling = (async () => {
-    const base = await wrote.then(
-      (c) => c.version,
-      // The question's own failure is `written`'s to tell.
-      () => null,
+  const made = chat === null ? ok(api.POST("/assistant/chats", { body: { id, title: titleOf(question.text), turns: [] } })) : Promise.resolve(chat);
+  const answered = made
+    .then((c) => {
+      // The conductor's first write holds the question and the answer begun: the chat shows its own from then.
+      updateRunning((r) => (mine(r) ? { ...r, written: c.version + 1 } : r));
+      return ok(api.POST("/assistant/chats/{id}/ask", { params: { path: { id } }, body: { from, ...asked, ...page }, signal: run.signal }));
+    })
+    .then(
+      (done) => {
+        set((s) => ({ ...s, running: mine(s.running) ? null : s.running }));
+        notice();
+        return done;
+      },
+      async (e: unknown) => {
+        set((s) => ({ ...s, running: mine(s.running) ? null : s.running }));
+        if (run.signal.aborted) return stopped(id);
+        throw e;
+      },
     );
-    await play(put, run.signal);
-    if (stopping === run) stopping = null;
-    if (base === null) return null;
-    try {
-      const saved = await putTurns(id, base, from + 1, [answer]).catch(async (e: unknown) => {
-        if (!(e instanceof ApiError && e.failure.kind === "conflict")) throw e;
-        const now = await fetchChat(id);
-        if (now === null || now.turns.length !== from + 1 || now.turns[from]?.id !== question.id) throw e;
-        return putTurns(id, now.version, from + 1, [answer]);
-      });
-      updateRunning((r) => (mine(r) ? { ...r, written: saved.version } : r));
-      if (answer.state === "done") notice();
-      return { chat: id, version: saved.version };
-    } catch (e) {
-      set((s) => ({ ...s, running: mine(s.running) ? null : s.running }));
-      failed(e);
-      return null;
-    }
-  })();
-  return { id, written };
+  return { id, answered };
+}
+
+/** The chat's last answer, cut off where it stood. */
+async function stopped(id: string): Promise<Chat> {
+  const now = await ok(api.GET("/assistant/chats/{id}", { params: { path: { id } } }));
+  const last = now.turns.length - 1;
+  const turn = now.turns[last];
+  if (turn?.role !== "assistant" || (turn.state !== "working" && turn.state !== "writing")) return now;
+  const cut: AssistantTurn = { ...turn, state: "stopped", ended: Date.now(), worked: Date.now() - turn.at, steps: turn.steps.map((x) => ({ ...x, done: true })) };
+  return ok(api.PUT("/assistant/chats/{id}/turns", { params: { path: { id } }, body: { base: now.version, from: last, turns: [cut] } }));
 }
 
 function titleOf(text: string): string {

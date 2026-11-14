@@ -4,7 +4,8 @@ import { Badge, Button, Card, CardContent, Field, FieldLabel, Input } from "@evi
 import { KeyRound } from "lucide-react";
 import { useId, useState } from "react";
 
-import { type MapsKey, type Prices, disconnect, setMapsKey, testConnection } from "@/entities/gmb";
+import { api, ok } from "@/shared/api";
+import type { MapsKey, Prices } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -33,9 +34,9 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
       setBusy(false);
     }
   };
-  const failing = mapsKey !== null && (mapsKey.checked.error !== null || mapsKey.out !== null);
+  const failing = mapsKey !== null && (mapsKey.checked.error != null || mapsKey.out != null);
   const cost =
-    prices.details === null || prices.search === null || prices.autocomplete === null
+    prices.details == null || prices.search == null || prices.autocomplete == null
       ? t("The shared keys are not priced yet: without a key of your own, Google lookups are refused.")
       : t("On the shared keys: {details} tokens a lookup, {search} a search, {autocomplete} a suggestion.", { details: prices.details, search: prices.search, autocomplete: prices.autocomplete });
 
@@ -57,11 +58,11 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
             </dl>
             <p className="text-xs text-ink-soft">
               {t("Checked {at}", { at: formatDateTime(mapsKey.checked.at, locale) })}
-              {mapsKey.checked.error !== null && <span className="block text-accent-error">{mapsKey.checked.error}</span>}
-              {mapsKey.out !== null && <span className="block text-accent-warn">{t("Passed over now: {why}", { why: mapsKey.out })}</span>}
+              {mapsKey.checked.error != null && <span className="block text-accent-error">{mapsKey.checked.error}</span>}
+              {mapsKey.out != null && <span className="block text-accent-warn">{t("Passed over now: {why}", { why: mapsKey.out })}</span>}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void act(() => testConnection(gmail, "maps_key"))}>
+              <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void act(() => ok(api.POST("/gmails/{id}/maps_key/test", { params: { path: { id: gmail } } })))}>
                 {t("Test")}
               </Button>
               <Button variant="ghost" size={button("sm")} disabled={busy} onClick={() => setEditing(true)}>
@@ -72,7 +73,7 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
                 size={button("sm")}
                 disabled={busy}
                 onClick={() =>
-                  void act(() => disconnect(gmail, "maps_key"))
+                  void act(() => ok(api.DELETE("/gmails/{id}/maps_key", { params: { path: { id: gmail } } })))
                 }
               >
                 {t("Remove")}
@@ -84,7 +85,7 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
             className="flex flex-col gap-3"
             onSubmit={(e) => {
               e.preventDefault();
-              if (key.trim() !== "") void act(() => setMapsKey(gmail, key.trim()));
+              if (key.trim() !== "") void act(() => ok(api.PUT("/gmails/{id}/maps_key", { params: { path: { id: gmail } }, body: { key: key.trim() } })));
             }}
           >
             <Field>

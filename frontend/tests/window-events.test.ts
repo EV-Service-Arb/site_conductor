@@ -47,7 +47,7 @@ describe("the live socket on window (CONTRACT §9)", () => {
     const target = new EventTarget();
     const relay = relayLive(target);
     let reads = 0;
-    const stop = followLive(target, "sources", () => (reads += 1));
+    const stop = followLive(target, ["sources"], () => (reads += 1));
     const step = (s: LiveStatus) => relay.status(s);
     step("connecting");
     step("live");

@@ -15,8 +15,9 @@ phone: [☰] [Service-Arb⌄] … [(V)⌄]   ☰ → Sheet: Sites, Review Archiv
 app/                 routes: (panel)/ is everything behind sign-in, access/ is not
 src/views/           one slice per screen, plus shell/ (the top bar, the access states, the window events)
 src/features/        account-chip · sign-out · wallet-element · sites-element · manage-sources · request-access
-src/entities/        session · source · tokens — types, response checks, requests
-src/shared/          api/ (fetch, CSRF, the gate's answers), i18n/, lib/ (live/: the socket), mfe/, ui/
+src/entities/        session · source · tokens · gmb · alerts · assistant — what the screens make of the API's answers
+src/shared/          api/ (`api`: /api/v1 from openapi.json, its answers checked against it; `http`: the services' forwards;
+                     CSRF, the gate's answers), i18n/, lib/ (live/: the socket), mfe/, ui/
 messages/            ru.auto.json (generated) and ru.json (hand overrides), keyed by the English; see below
 scripts/dev-stub.ts  a stand-in backend for local work
 tests/               vitest, in Node: the rules the screens obey live in plain modules; e2e/: the Figma frames

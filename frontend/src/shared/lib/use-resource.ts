@@ -17,8 +17,8 @@ function failureOf(e: unknown) {
 }
 
 export interface ResourceOptions {
-  /** The live topic this read follows; a resync and a reconnect re-read it too. */
-  live?: LiveTopic;
+  /** The live topics this read follows; a resync and a reconnect re-read it too. */
+  live?: readonly LiveTopic[];
   /** Re-read when the window regains focus: for what has no live topic. */
   focus?: boolean;
 }
@@ -75,7 +75,7 @@ export function useResource<T>(
     quiet.current = true;
     setTick((n) => n + 1);
   }, []);
-  useLiveSignal(options.live, refresh);
+  useLiveSignal(options.live ?? [], refresh);
   useEffect(() => {
     if (!options.focus) return;
     window.addEventListener("focus", refresh);

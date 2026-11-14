@@ -25,6 +25,7 @@ use zeroize::Zeroizing;
 use crate::{
 	Panel,
 	live::{Ended, Signal},
+	oauth::Grant,
 	store::sessions::{self, SealedTokens, SessionRow},
 };
 
@@ -132,7 +133,7 @@ impl SessionKey {
 		Some(Self(h.finalize().into()))
 	}
 
-	fn as_bytes(&self) -> &[u8] {
+	pub(crate) fn as_bytes(&self) -> &[u8] {
 		&self.0
 	}
 }
@@ -141,6 +142,8 @@ impl SessionKey {
 pub struct Session {
 	pub key: SessionKey,
 	pub user_id: Uuid,
+	/// The MCP client it was granted to; `None`: a browser's.
+	pub client_id: Option<String>,
 	pub access: Zeroizing<String>,
 	pub access_expires_at: Timestamp,
 }
@@ -180,6 +183,8 @@ pub struct PreLogin {
 	pub return_to: Option<String>,
 	/// Dev sign-in's `?as=`: the email to sign in as, checked there.
 	pub dev_as: Option<String>,
+	/// The MCP client the user consented to: the session this sign-in opens is its.
+	pub grant: Option<Grant>,
 }
 
 /// 256 random bits as 64 hex characters: states, verifiers, session ids, CSRF tokens.
@@ -200,6 +205,7 @@ struct PreLoginPlain {
 	verifier: String,
 	return_to: Option<String>,
 	dev_as: Option<String>,
+	grant: Option<Grant>,
 	issued_at: i64,
 }
 
@@ -221,9 +227,9 @@ fn token_aad(which: Which, key: &SessionKey) -> Vec<u8> {
 }
 
 impl Panel {
-	/// A fresh state and PKCE verifier, and the cookie that carries them, `return_to` and
-	/// `dev_as` to the callback.
-	pub fn begin_sign_in(&self, return_to: Option<&str>, dev_as: Option<&str>, now: Timestamp) -> eyre::Result<Begun> {
+	/// A fresh state and PKCE verifier, and the cookie that carries them, `return_to`, `dev_as`
+	/// and `grant` to the callback.
+	pub fn begin_sign_in(&self, return_to: Option<&str>, dev_as: Option<&str>, grant: Option<&Grant>, now: Timestamp) -> eyre::Result<Begun> {
 		let state = random_token()?;
 		// 64 hex characters: inside PKCE's 43–128 unreserved characters.
 		let verifier = Zeroizing::new(random_token()?);
@@ -233,6 +239,7 @@ impl Panel {
 				verifier: verifier.to_string(),
 				return_to: return_to.map(str::to_owned),
 				dev_as: dev_as.map(str::to_owned),
+				grant: grant.cloned(),
 				issued_at: now.as_second(),
 			})
 			.wrap_err("serializing a pre-login")?,
@@ -264,12 +271,17 @@ impl Panel {
 			verifier,
 			return_to: pre.return_to,
 			dev_as: pre.dev_as,
+			grant: pre.grant,
 		})
 	}
 
 	/// Opens a session for a user concierge has just issued tokens for. Sessions past their
 	/// deadline are dropped on the way.
 	pub async fn open_session(&self, user_id: Uuid, tokens: &Tokens, now: Timestamp) -> eyre::Result<Opened> {
+		Ok(self.open(user_id, None, tokens, now).await?.1)
+	}
+
+	pub(crate) async fn open(&self, user_id: Uuid, client_id: Option<&str>, tokens: &Tokens, now: Timestamp) -> eyre::Result<(SessionKey, Opened)> {
 		let cookie = Zeroizing::new(random_token()?);
 		let key = SessionKey::of_cookie(&cookie).ok_or_else(|| eyre::eyre!("a fresh session id is not one"))?;
 		let (access, refresh) = self.seal_tokens(&key, tokens)?;
@@ -278,11 +290,14 @@ impl Panel {
 		if pruned > 0 {
 			tracing::debug!(pruned, "dropped expired sessions");
 		}
-		sessions::insert(&mut conn, key.as_bytes(), user_id, &self.sealed(&access, &refresh, tokens), now).await?;
-		Ok(Opened {
-			cookie,
-			expires_at: tokens.refresh_expires_at,
-		})
+		sessions::insert(&mut conn, key.as_bytes(), user_id, client_id, &self.sealed(&access, &refresh, tokens), now).await?;
+		Ok((
+			key,
+			Opened {
+				cookie,
+				expires_at: tokens.refresh_expires_at,
+			},
+		))
 	}
 
 	/// The session a cookie names, its access token rotated first when it is about to expire.
@@ -376,6 +391,7 @@ impl Panel {
 				Ok(Session {
 					key,
 					user_id: row.user_id,
+					client_id: row.client_id,
 					access: tokens.access,
 					access_expires_at: tokens.access_expires_at,
 				})
@@ -440,6 +456,7 @@ impl Panel {
 		Ok(Session {
 			key,
 			user_id: row.user_id,
+			client_id: row.client_id.clone(),
 			access: self.open_token(Which::Access, &key, row)?,
 			access_expires_at: row.access_expires_at,
 		})

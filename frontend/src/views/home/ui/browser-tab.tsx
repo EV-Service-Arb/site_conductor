@@ -3,8 +3,9 @@
 import { Button } from "@evinvest/uikit";
 import { Copy, Keyboard } from "lucide-react";
 
-import { type Gmb, type Listed, categoryOf, googleName, useGmbTags } from "@/entities/gmb";
+import { type Listed, categoryOf, googleName, useGmbTags } from "@/entities/gmb";
 import { BrowserSession, type TypeIn } from "@/features/browser-session";
+import type { Gmb } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -29,18 +30,18 @@ function FormValues({ gmb, type }: { gmb: Gmb; type: TypeIn }) {
       </header>
       <ol className="flex flex-col gap-3">
         <Value label={t("Name")} value={gmb.name} type={type} />
-        <Value label={t("Category")} value={placed?.status === "set_up" && placed.category.google_primary !== null ? googleName(placed.category.google_primary, placed.category.lang) : null} type={type} />
+        <Value label={t("Category")} value={placed?.status === "set_up" && placed.category.google_primary != null ? googleName(placed.category.google_primary, placed.category.lang) : null} type={type} />
         <li className="flex flex-col gap-0.5 text-sm">
           <span className="text-xs text-ink-soft">{t("Customers visit?")}</span>
-          {gmb.customers_visit === null ? <span className="text-accent-warn">{t("not set")}</span> : <span className="text-ink">{(gmb.customers_visit ? t("Customers visit") : t("Customers don't visit"))}</span>}
+          {gmb.customers_visit == null ? <span className="text-accent-warn">{t("not set")}</span> : <span className="text-ink">{(gmb.customers_visit ? t("Customers visit") : t("Customers don't visit"))}</span>}
         </li>
         {gmb.areas.length === 0 ? (
           <Value label={t("Areas")} value={null} type={type} />
         ) : (
           gmb.areas.map((a, i) => <Value key={a} label={`${t("Areas")} · ${i + 1}/${gmb.areas.length}`} value={a} type={type} />)
         )}
-        <Value label={t("Phone")} value={gmb.phone} type={type} />
-        <Value label={t("Address")} value={gmb.hidden_address} type={type} />
+        <Value label={t("Phone")} value={gmb.phone ?? null} type={type} />
+        <Value label={t("Address")} value={gmb.hidden_address ?? null} type={type} />
       </ol>
     </aside>
   );

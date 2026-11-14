@@ -68,8 +68,7 @@ pub fn split<W: Clone>(cost: i64, payers: &[(W, i64)]) -> Vec<(W, i64)> {
 }
 
 /// What a walk cost, for the conductor to charge.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Charge {
 	/// Ascending, never reused.
@@ -85,13 +84,11 @@ pub struct Charge {
 	/// The place, as the ledger names it.
 	pub label: String,
 	/// When the run ended.
-	#[cfg_attr(feature = "utoipa", schema(value_type = String, format = DateTime))]
 	pub at: Timestamp,
 }
 
 /// A page of the charge feed.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ChargePage {
 	/// Ascending by id.

@@ -4,7 +4,9 @@ import { Button, Command, CommandEmpty, CommandInput, CommandItem, CommandList, 
 import { ChevronLeft, ChevronRight, ChevronsUpDown, Copy, GripVertical, Plus, X } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
-import { type Category, type Country, type GoogleCategory, fetchGoogleCategories, googleName } from "@/entities/gmb";
+import { googleName } from "@/entities/gmb";
+import { api, ok } from "@/shared/api";
+import type { Category, Country, GoogleCategory } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { failureText } from "@/shared/ui/failure-text";
@@ -22,7 +24,8 @@ export function GoogleCategories({ category, write }: { category: Category; writ
   const t = useT();
   const locale = useLocale();
   const button = useButtonSize();
-  const { google_primary: primary, google_additional: additional } = category;
+  const { google_primary, google_additional: additional } = category;
+  const primary = google_primary ?? null;
   const [dragged, setDragged] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
   const move = (from: number, to: number) => {
@@ -168,7 +171,7 @@ const WORD = /[^\p{L}\p{N}]+/u;
 function Search({ country, lang, exclude, onPick }: { country: Country; lang: string; exclude: ReadonlySet<string>; onPick: (g: GoogleCategory) => void }) {
   const t = useT();
   const locale = useLocale();
-  const list = useResource(`google-categories.${country}`, () => fetchGoogleCategories(country));
+  const list = useResource(`google-categories.${country}`, async () => (await ok(api.GET("/google-categories/{country}", { params: { path: { country } } }))).categories);
   const [search, setSearch] = useState("");
   const data = list.status === "ok" ? list.data : null;
   const indexed = useMemo(() => {

@@ -7,9 +7,9 @@ import { useT } from "@/shared/i18n";
 /** Its leaves under the shell's leader; `null` leaves one unbound. One surface holds them at a time. */
 export function useKeymap(keys: { toggle: (() => void) | null; newChat: () => void; copyLink: (() => void) | null }): void {
   const t = useT();
-  useBinding({ on: { key: "a" }, run: { id: "assistant", label: t("Assistant: show or hide"), run: keys.toggle } });
-  useBinding({ on: { key: "n" }, run: { label: t("New chat"), run: keys.newChat } });
-  useBinding({ on: { key: "l" }, run: { label: t("Copy link"), run: keys.copyLink } });
+  useBinding({ on: { key: "a" }, id: "assistant", run: { label: t("Assistant: show or hide"), run: keys.toggle } });
+  useBinding({ on: { key: "n" }, id: "assistant.new-chat", run: { label: t("New chat"), run: keys.newChat } });
+  useBinding({ on: { key: "l" }, id: "assistant.copy-link", run: { label: t("Copy link"), run: keys.copyLink } });
 }
 
 /** Escape inside the sidebar or the floating window hides it, unless a menu, the picker or an edit box took it first. */

@@ -4,11 +4,12 @@ import { Button, Input, NativeSelect, NativeSelectOption, ToggleGroup, ToggleGro
 import { Check, Copy, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { CategoryChip, categoryName, categoryOf, COUNTRIES, type Country, editGmb, GMAIL_ROLE_LABEL, type Gmb, type GmbEdit, type GoogleCategory, googleName, type Listed, moveGmb, MUST_HAVES, type MustHave, openAccount, openTrade, type Placed, readiness, setCountry, TradeSelect, under, useGmails, useGmbTags } from "@/entities/gmb";
+import { CategoryChip, categoryName, categoryOf, GMAIL_ROLE_LABEL, googleName, type Listed, MUST_HAVES, type MustHave, openAccount, openTrade, type Placed, readiness, TradeSelect, under, useGmails, useGmbTags } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { LinkPlaceButton } from "@/features/link-gmb-place";
 import { PlaceButton } from "@/features/place-gmb";
-import { ApiError } from "@/shared/api";
+import { type Country, type Gmb, type GmbEdit, type GoogleCategory, countryValues } from "@/shared/api/schema";
+import { ApiError, api, ok } from "@/shared/api";
 import { type T, useLocale, useT } from "@/shared/i18n";
 import { failureText } from "@/shared/ui/failure-text";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -43,7 +44,7 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
 
   const save = (must: MustHave) => async (edit: GmbEdit) => {
     try {
-      await editGmb(gmb.id, edit);
+      await ok(api.PATCH("/gmbs/{id}", { params: { path: { id: gmb.id } }, body: edit }));
       setFailed(null);
       gmails.reload();
     } catch (e) {
@@ -69,7 +70,7 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
       value: placed?.status === "set_up" && [categoryName(placed.trade, placed.category.country), placed.category.google_primary && googleName(placed.category.google_primary, locale)].filter(Boolean).join(" · "),
       editor: (
         <span className="flex flex-col gap-2">
-          <TradeSelect value={gmb.trade_id} country={gmb.country?.code ?? null} className="w-80 max-w-full" label={t("Category")} onPick={(trade) => void save("category")({ trade })} />
+          <TradeSelect value={gmb.trade_id ?? null} country={gmb.country?.code ?? null} className="w-80 max-w-full" label={t("Category")} onPick={(trade) => void save("category")({ trade })} />
           {placed !== null && <CategoryFix placed={placed} gmb={gmb} onSet={gmails.reload} />}
         </span>
       ),
@@ -77,7 +78,7 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
       why: placed === null || placed.status === "no_trade" ? t("its trade, set up in its country with Google's category") : null,
     },
     areas: { value: gmb.areas.join(" · "), editor: <AreasEditor areas={gmb.areas} onSave={(areas) => save("areas")({ areas })} />, why: t("up to 20 · they cover where the film is shot") },
-    phone: { value: gmb.phone, editor: text("phone", gmb.phone, (phone) => ({ phone }), "tel"), why: t("routes to the closers · on no other GBP") },
+    phone: { value: gmb.phone, editor: text("phone", gmb.phone ?? null, (phone) => ({ phone }), "tel"), why: t("routes to the closers · on no other GBP") },
     site: {
       value: tags.sites?.get(gmb.id) && `${tags.sites.get(gmb.id)!.brand}/${tags.sites.get(gmb.id)!.location}`,
       editor: linked ? (
@@ -95,28 +96,28 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
           <ToggleGroup
             type="single"
             size="sm"
-            value={gmb.customers_visit === null ? "" : String(gmb.customers_visit)}
+            value={gmb.customers_visit == null ? "" : String(gmb.customers_visit)}
             onValueChange={(v) => typeof v === "string" && v !== "" && void save("hidden_address")({ customers_visit: v === "true" })}
           >
             <ToggleGroupItem value="false">{t("Customers don't visit")}</ToggleGroupItem>
             <ToggleGroupItem value="true">{t("Customers visit")}</ToggleGroupItem>
           </ToggleGroup>
-          <TextEditor value={gmb.hidden_address} onSave={(v) => save("hidden_address")({ hidden_address: v })} />
+          <TextEditor value={gmb.hidden_address ?? null} onSave={(v) => save("hidden_address")({ hidden_address: v })} />
         </span>
       ),
       why: t("customers don't visit → service area; the address is where the film is shot"),
     },
-    film: { value: gmb.film, editor: text("film", gmb.film, (film) => ({ film })), why: t("the verification film from the kit (verif_vid)") },
+    film: { value: gmb.film, editor: text("film", gmb.film ?? null, (film) => ({ film })), why: t("the verification film from the kit (verif_vid)") },
     gmail: {
       value: gmail && `${gmail.gmail} · ${room(gmail.id)}`,
       editor: (
         <NativeSelect
           size="sm"
           wrapperClassName="w-80 max-w-full"
-          value={gmb.gmail_id === null ? "" : String(gmb.gmail_id)}
+          value={gmb.gmail_id == null ? "" : String(gmb.gmail_id)}
           onChange={(e) => e.target.value !== "" && void save("gmail")({ gmail_id: Number(e.target.value) })}
         >
-          {gmb.gmail_id === null && <NativeSelectOption value="">{t("No gmail yet")}</NativeSelectOption>}
+          {gmb.gmail_id == null && <NativeSelectOption value="">{t("No gmail yet")}</NativeSelectOption>}
           {gmailList.map((g) => (
             <NativeSelectOption key={g.id} value={String(g.id)}>
               {g.gmail} · {room(g.id)}
@@ -290,7 +291,7 @@ function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: 
   const lacking =
     placed.status === "not_set_up"
       ? t("{category} not set up: no Google category to type", { category: name })
-      : placed.category.google_primary === null
+      : placed.category.google_primary == null
         ? t("{category} has no primary Google category yet", { category: name })
         : null;
   return (
@@ -308,7 +309,7 @@ function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: 
         <span className="text-xs text-accent-warn">{lacking}</span>
       ) : (
         placed.status === "set_up" &&
-        placed.category.google_primary !== null && (
+        placed.category.google_primary != null && (
           <>
             <TypeIn category={placed.category.google_primary} lang={placed.category.lang} />
             {placed.category.google_additional.length > 0 && (
@@ -362,7 +363,7 @@ function CountrySelect({ gmb, value, disabled, onSet }: { gmb: number; value: Co
   const t = useT();
   const pick = async (c: Country) => {
     try {
-      await setCountry(gmb, c);
+      await ok(api.PUT("/gmbs/{id}/country", { params: { path: { id: gmb } }, body: { country: c } }));
       onSet();
     } catch (e) {
       notifyFailure(e, t);
@@ -371,7 +372,7 @@ function CountrySelect({ gmb, value, disabled, onSet }: { gmb: number; value: Co
   return (
     <NativeSelect size="sm" wrapperClassName="w-32" disabled={disabled ?? false} aria-label={t("Country")} value={value ?? ""} onChange={(e) => e.target.value !== "" && void pick(e.target.value as Country)}>
       {value === null && <NativeSelectOption value="">—</NativeSelectOption>}
-      {COUNTRIES.map((c) => (
+      {countryValues.map((c) => (
         <NativeSelectOption key={c} value={c}>
           {c}
         </NativeSelectOption>
@@ -384,7 +385,7 @@ function CountrySelect({ gmb, value, disabled, onSet }: { gmb: number; value: Co
 function Behind({ listed: { gmb } }: { listed: Listed }) {
   const t = useT();
   const gmails = useGmails();
-  const googles = gmb.country !== null && !gmb.country.by_hand;
+  const googles = gmb.country != null && !gmb.country.by_hand;
   return (
     <section className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3 text-sm">
       <h3 className="font-medium text-ink">{t("Behind it")}</h3>
@@ -413,7 +414,7 @@ function OntoGoogle({ gmbId, onMoved }: { gmbId: number; onMoved: () => void }) 
   const move = async () => {
     setBusy(true);
     try {
-      await moveGmb(gmbId, "verifying", place.trim() === "" ? undefined : place.trim());
+      await ok(api.PUT("/gmbs/{id}/state", { params: { path: { id: gmbId } }, body: { state: "verifying", ...(place.trim() !== "" && { place: place.trim() }) } }));
       onMoved();
     } catch (e) {
       if (!(e instanceof ApiError)) throw e;

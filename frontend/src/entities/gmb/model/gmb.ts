@@ -1,46 +1,10 @@
+import type { GmailRole, GoogleCategory, State } from "@/shared/api/schema";
 import type { T } from "@/shared/i18n";
-import { type Infer, type Parser, arrayOf, bool, nullable, num, object, oneOf, recordOf, str } from "@/shared/lib/parse";
-
-import type { Candidates, Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategories, GoogleCategory, MapConfig, OnGoogle, Place, State, Suggestion, Suggestions, Trade, Trades } from "./generated";
-
-export type { Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategory, MapConfig, OnGoogle, Place as Candidate, State, Suggestion, Trade, Trades } from "./generated";
-
-export type LatLng = { lat: number; lng: number };
+import { type Infer, type Parser, arrayOf, bool, nullable, num, object, str } from "@/shared/lib/parse";
 
 /** Each a key, so the compiler holds the lists to the generated unions. */
 export const STATE_LABEL = { draft: (t) => t("Draft"), verifying: (t) => t("Verifying"), verified: (t) => t("Verified"), suspended: (t) => t("Suspended") } satisfies Record<State, (t: T) => string>;
-export const STATES = Object.keys(STATE_LABEL) as State[];
-export const ON_GOOGLE = Object.keys({ verifying: true, verified: true, suspended: true } satisfies Record<OnGoogle, true>) as OnGoogle[];
-export const COUNTRIES = Object.keys({ FR: true, US: true, CA: true, GB: true } satisfies Record<Country, true>) as Country[];
 export const GMAIL_ROLE_LABEL = { owner: (t) => t("Owner"), manager: (t) => t("Manager") } satisfies Record<GmailRole, (t: T) => string>;
-export const GMAIL_ROLES = Object.keys(GMAIL_ROLE_LABEL) as GmailRole[];
-
-export const gmbParser: Parser<Gmb> = object({
-  id: num,
-  gmail_id: nullable(num),
-  place_id: nullable(str),
-  name: str,
-  address: nullable(str),
-  state: oneOf(STATES),
-  next: arrayOf(oneOf(STATES)),
-  country: nullable(object({ code: oneOf(COUNTRIES), by_hand: bool })),
-  phone: nullable(str),
-  trade_id: nullable(num),
-  areas: arrayOf(str),
-  hidden_address: nullable(str),
-  customers_visit: nullable(bool),
-  film: nullable(str),
-  created_at: str,
-  enabled: bool,
-  location: nullable(object({ lat: num, lng: num, placed: bool })),
-});
-
-export const mapConfigParser: Parser<MapConfig> = object({ key: str });
-
-export const gmailParser: Parser<Gmail> = object({ id: num, gmail: str, role: nullable(oneOf(GMAIL_ROLES)), created_at: str, browser: bool });
-export const gmailsParser: Parser<Gmails> = object({ gmails: arrayOf(gmailParser), gmbs: arrayOf(gmbParser) });
-
-const googleCategoryParser: Parser<GoogleCategory> = object({ id: str, names: recordOf(str) });
 
 /** `g`'s name in `lang`: the reader's, or its country's, which Google's form there reads. */
 export function googleName(g: GoogleCategory, lang: string): string {
@@ -48,28 +12,6 @@ export function googleName(g: GoogleCategory, lang: string): string {
   if (name === undefined) throw new Error(`${g.id} has no name in ${lang}`);
   return name;
 }
-export const googleCategoriesParser: Parser<GoogleCategories> = object({ categories: arrayOf(googleCategoryParser) });
-const categoryParser: Parser<Category> = object({
-  country: oneOf(COUNTRIES),
-  lang: str,
-  keywords: arrayOf(str),
-  google_primary: nullable(googleCategoryParser),
-  google_additional: arrayOf(googleCategoryParser),
-  study: nullable(str),
-});
-export const tradeParser: Parser<Trade> = object({ id: num, name: str, created_at: str, categories: arrayOf(categoryParser) });
-export const tradesParser: Parser<Trades> = object({ trades: arrayOf(tradeParser) });
-
-const candidateParser: Parser<Place> = object({
-  place_id: str,
-  name: nullable(str),
-  address: nullable(str),
-  location: nullable(object({ lat: num, lng: num })),
-  country: nullable(oneOf(COUNTRIES)),
-});
-export const candidatesParser: Parser<Candidates> = object({ candidates: arrayOf(candidateParser) });
-const suggestionParser: Parser<Suggestion> = object({ place_id: str, main: str, secondary: nullable(str) });
-export const suggestionsParser: Parser<Suggestions> = object({ suggestions: arrayOf(suggestionParser) });
 
 /** A JSON object keyed by GMB id, each value checked. */
 function byGmb<T>(p: Parser<T>): Parser<Map<number, T>> {

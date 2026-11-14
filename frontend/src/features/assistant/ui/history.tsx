@@ -4,7 +4,9 @@ import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconBut
 import { Archive, ArchiveRestore, ArrowLeft, Ellipsis, MessageCircle, Search, Users } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
 
-import { type ChatSummary, archiveChat, renameChat, useChats } from "@/entities/assistant";
+import { useChats } from "@/entities/assistant";
+import { api, ok } from "@/shared/api";
+import type { ChatSummary } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 
@@ -16,9 +18,9 @@ const DAY = 24 * 60 * 60 * 1000;
 function groupsOf(chats: ChatSummary[]): { label: (t: T) => string; chats: ChatSummary[] }[] {
   const midnight = new Date().setHours(0, 0, 0, 0);
   const since = (c: ChatSummary) => Date.parse(c.updated_at);
-  const unpinned = chats.filter((c) => c.pinned_at === null);
+  const unpinned = chats.filter((c) => c.pinned_at == null);
   return [
-    { label: (t: T) => t("Pinned"), chats: chats.filter((c) => c.pinned_at !== null).sort((a, b) => b.pinned_at!.localeCompare(a.pinned_at!)) },
+    { label: (t: T) => t("Pinned"), chats: chats.filter((c) => c.pinned_at != null).sort((a, b) => b.pinned_at!.localeCompare(a.pinned_at!)) },
     { label: (t: T) => t("Today"), chats: unpinned.filter((c) => since(c) >= midnight) },
     { label: (t: T) => t("Past 7 days"), chats: unpinned.filter((c) => since(c) < midnight && since(c) >= midnight - 6 * DAY) },
     { label: (t: T) => t("Past 30 days"), chats: unpinned.filter((c) => since(c) < midnight - 6 * DAY && since(c) >= midnight - 29 * DAY) },
@@ -56,7 +58,7 @@ function Chats({ current, onOpen }: { current: string | null; onOpen: (id: strin
   const search = useRef<HTMLInputElement>(null);
   const needle = filter.trim().toLowerCase();
   const all = list.status === "ok" ? list.data : [];
-  const found = all.filter((c) => (c.archived_at !== null) === archived && (needle === "" || (c.title ?? t("New chat")).toLowerCase().includes(needle)));
+  const found = all.filter((c) => (c.archived_at != null) === archived && (needle === "" || (c.title ?? t("New chat")).toLowerCase().includes(needle)));
   const groups = archived ? [{ label: (t: T) => t("Archived chats"), chats: found }] : groupsOf(found);
   const flat = groups.flatMap((g) => g.chats);
   // A row's menu or a whole view going away would leave focus nowhere: it comes back to the search.
@@ -73,7 +75,7 @@ function Chats({ current, onOpen }: { current: string | null; onOpen: (id: strin
   };
   const rename = (c: ChatSummary, title: string) => {
     setRenaming(null);
-    if (title.trim() !== (c.title ?? "")) void renameChat(c.id, title).then(changed, (e: unknown) => notifyFailure(e, t));
+    if (title.trim() !== (c.title ?? "")) void ok(api.PUT("/assistant/chats/{id}/title", { params: { path: { id: c.id } }, body: { title } })).then(changed, (e: unknown) => notifyFailure(e, t));
   };
 
   return (
@@ -95,7 +97,7 @@ function Chats({ current, onOpen }: { current: string | null; onOpen: (id: strin
             <ArrowLeft />
           </IconButton>
           <h3 className="flex-1 text-body-s font-medium text-ink">{t("Archived chats")}</h3>
-          <Button size="sm" variant="ghost" disabled={!all.some((c) => c.archived_at !== null)} onClick={() => controls.onConfirm({ kind: "clear" })}>
+          <Button size="sm" variant="ghost" disabled={!all.some((c) => c.archived_at != null)} onClick={() => controls.onConfirm({ kind: "clear" })}>
             {t("Clear")}
           </Button>
         </div>
@@ -172,7 +174,7 @@ function Chats({ current, onOpen }: { current: string | null; onOpen: (id: strin
                       className="size-6"
                       onClick={(e) => {
                         e.stopPropagation();
-                        void archiveChat(c.id, false).then(changed, (err: unknown) => notifyFailure(err, t));
+                        void ok(api.PUT("/assistant/chats/{id}/archived", { params: { path: { id: c.id } }, body: { on: false } })).then(changed, (err: unknown) => notifyFailure(err, t));
                       }}
                     >
                       <ArchiveRestore />

@@ -2,9 +2,8 @@
 
 import { useSyncExternalStore } from "react";
 
+import { type Country, type Gmb, type State, countryValues } from "@/shared/api/schema";
 import { setQuery, useQuery } from "@/shared/lib/query";
-
-import { COUNTRIES, type Country, type Gmb, type State } from "./gmb";
 
 /** What the map and the outline beside it share about the GMBs. */
 export interface OnMap {
@@ -76,7 +75,7 @@ export function useTradeWindow(): { trade: number; tab: Country | null } | null 
   if (raw === null) return null;
   const trade = Number(raw);
   if (!Number.isSafeInteger(trade)) throw new Error(`?trade=${raw}: not a trade id`);
-  if (tab !== null && !(COUNTRIES as string[]).includes(tab)) throw new Error(`?tab=${tab}: not a country of trade ${trade}`);
+  if (tab !== null && !(countryValues as readonly string[]).includes(tab)) throw new Error(`?tab=${tab}: not a country of trade ${trade}`);
   return { trade, tab: tab as Country | null };
 }
 

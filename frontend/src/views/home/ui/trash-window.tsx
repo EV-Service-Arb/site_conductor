@@ -4,8 +4,10 @@ import { Badge, Button, Input, Switch } from "@evinvest/uikit";
 import { RotateCcw, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import { openTrash, restoreGmail, restoreGmb, setTrashSettings, STATE_LABEL, type State, type Trash, useGmails } from "@/entities/gmb";
+import { openTrash, STATE_LABEL, useGmails } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
+import { api, ok } from "@/shared/api";
+import type { State, Trash } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -86,7 +88,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
                   {t("Gmails")} <span className="font-normal tabular-nums">{trash.gmails.length}</span>
                 </h3>
                 <ul className="flex flex-col">
-                  {trash.gmails.map((g) => row(`g${g.id}`, g.gmail, t("{n} GBPs with it", { n: g.gmbs }), null, undefined, g.removed_at, g.purge_at, g.blocked, () => restoreGmail(g.id)))}
+                  {trash.gmails.map((g) => row(`g${g.id}`, g.gmail, t("{n} GBPs with it", { n: g.gmbs }), null, undefined, g.removed_at, g.purge_at ?? null, g.blocked ?? null, () => ok(api.POST("/trash/gmails/{id}/restore", { params: { path: { id: g.id } } }))))}
                 </ul>
               </section>
             )}
@@ -96,7 +98,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
                   {t("GBPs removed on their own")} <span className="font-normal tabular-nums">{trash.gmbs.length}</span>
                 </h3>
                 <ul className="flex flex-col">
-                  {trash.gmbs.map((b) => row(`b${b.id}`, b.name, b.gmail, STATE_LABEL[b.state](t), TONE[b.state], b.removed_at, b.purge_at, b.blocked, () => restoreGmb(b.id)))}
+                  {trash.gmbs.map((b) => row(`b${b.id}`, b.name, b.gmail ?? null, STATE_LABEL[b.state](t), TONE[b.state], b.removed_at, b.purge_at ?? null, b.blocked ?? null, () => ok(api.POST("/trash/gmbs/{id}/restore", { params: { path: { id: b.id } } }))))}
                 </ul>
               </section>
             )}
@@ -116,7 +118,7 @@ function Settings({ trash, onSet }: { trash: Trash; onSet: () => void }) {
   const [typed, setTyped] = useState(String(keep_days));
   const save = async (keep: number, never?: boolean) => {
     try {
-      await setTrashSettings(keep, never);
+      await ok(api.PUT("/trash/settings", { body: never === undefined ? { keep_days: keep } : { keep_days: keep, never_purge: never } }));
     } catch (e) {
       notifyFailure(e, t);
     }

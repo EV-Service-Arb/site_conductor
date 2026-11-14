@@ -15,7 +15,7 @@ import {
   toast,
 } from "@evinvest/uikit";
 
-import { revokeSource } from "@/entities/source";
+import { api, ok } from "@/shared/api";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -25,7 +25,7 @@ export function RevokeButton({ keyId, onRevoked }: { keyId: string; onRevoked: (
   const button = useButtonSize();
   const revoke = async () => {
     try {
-      await revokeSource(keyId);
+      await ok(api.DELETE("/sources/{key_id}", { params: { path: { key_id: keyId } } }));
       toast.positive(t("Source revoked"));
       onRevoked();
     } catch (e) {

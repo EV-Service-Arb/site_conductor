@@ -1,4 +1,5 @@
-import { type Caller, may } from "@/entities/session";
+import { may } from "@/entities/session";
+import type { Caller } from "@/shared/api/schema";
 import { switchAccountPath } from "@/shared/api";
 import { ROUTES } from "@/shared/config/routes";
 import type { T } from "@/shared/i18n";

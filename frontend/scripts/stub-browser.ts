@@ -5,7 +5,7 @@
  * A film under 1 KiB is refused as ffmpeg would a silent one. A Multilogin cloud phone draws its
  * model, has no tabs, its frames in screen px, its film in "the Library" whether it runs or not,
  * and a stream link; Multilogin's browser takes no film. Every change is told on the live socket
- * as `browsers`.
+ * as `gmails`, as the conductor tells a write under `/gmails`.
  *
  *   STUB_BROWSERS=off   every browser route answers 503 "browsers not connected"
  */
@@ -13,7 +13,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Duplex } from "node:stream";
 import { crc32, deflateSync } from "node:zlib";
 
-import { DEVICES, PROVIDERS, type Browser, type BrowserIn, type BrowserOut, type Tab } from "../src/entities/gmb/model/generated.ts";
+import { type Browser, type BrowserIn, type BrowserOut, type Tab, deviceValues, providerValues } from "../src/shared/api/schema.ts";
 import { changed, closing, frame, handshake, text } from "./stub-live.ts";
 
 const CONNECTED = process.env.STUB_BROWSERS !== "off";
@@ -46,7 +46,7 @@ export async function browserRoute(req: IncomingMessage, res: ServerResponse, pa
   if (!m) return false;
   const gmail = Number(m[1]);
   const answer = (status: number, out?: unknown) => {
-    if (status < 300 && req.method !== "GET") changed("browsers", null, String(gmail));
+    if (status < 300 && req.method !== "GET") changed("gmails", null, String(gmail));
     send(res, status, out);
     return true;
   };
@@ -56,8 +56,8 @@ export async function browserRoute(req: IncomingMessage, res: ServerResponse, pa
   if (action === null && req.method === "PUT") {
     const { provider, device, proxy } = (await body()) as { provider: string; device: string | null; proxy: string };
     const phone = provider === "multilogin";
-    if (!(PROVIDERS as readonly string[]).includes(provider)) return answer(400, { error: "unknown provider" });
-    if (phone ? device !== null : !(DEVICES as readonly string[]).includes(device ?? "")) return answer(400, { error: phone ? "a cloud phone's model is drawn: send no device" : "unknown device" });
+    if (!(providerValues as readonly string[]).includes(provider)) return answer(400, { error: "unknown provider" });
+    if (phone ? device !== null : !(deviceValues as readonly string[]).includes(device ?? "")) return answer(400, { error: phone ? "a cloud phone's model is drawn: send no device" : "unknown device" });
     const set = browsers.get(gmail);
     if (set && (set.provider !== provider || (!phone && set.device !== device))) return answer(409, { error: "the provider and device are set once: remove the browser first" });
     const url = /^(socks5|http):\/\/[^@\s]+@([^:/\s]+):(\d+)$/.exec(proxy);

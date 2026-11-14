@@ -1,20 +1,21 @@
 "use client";
 
-import { ChatPanel, ConfirmDialog, Kbd, Spinner, toast } from "@evinvest/uikit";
+import { ChatPanel, ConfirmDialog, Kbd, Spinner, toast, useKeymap as usePageKeymap } from "@evinvest/uikit";
 import { CornerDownRight, Eye, Lock, Sparkles, Upload } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { type AssistantTurn, type Mention, type Turn, clearArchived, deleteChat, putTurns, removeMember, useChat } from "@/entities/assistant";
+import { type AssistantTurn, useChat } from "@/entities/assistant";
 import { type Listed, narrowed, useGmails, useGmbTags, usePeeked } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
-import { ApiError } from "@/shared/api";
+import type { Action, Turn } from "@/shared/api/schema";
+import { ApiError, api, ok } from "@/shared/api";
 import { ROUTES } from "@/shared/config/routes";
 import { type T, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 
-import { asMentions, play, script, suggestions } from "../model/canned";
-import { type Display, ask, openChat, overlaid, shown, stop, useAssistant } from "../model/chat";
+import { type Display, type Page, ask, openChat, overlaid, shown, stop, useAssistant } from "../model/chat";
+import { asMentions, suggestions } from "../model/prompts";
 import { type Confirm, type Controls, ControlsContext } from "./chat-actions";
 import { Composer, type ComposerHandle, type Draft, keepDraft } from "./composer";
 import { ContextCard, Header } from "./header";
@@ -39,11 +40,11 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
   const router = useRouter();
   const pathname = usePathname();
   const s = useAssistant();
+  const keymap = usePageKeymap();
   const read = useChat(id);
   const chat = read.status === "ok" ? read.data : null;
   const turns = shown(chat, id, s.running);
   const gmails = useGmails();
-  const { tags } = useGmbTags();
   const all = gmails.status === "ok" ? narrowed(gmails.data, null, "") : [];
   const subject = useSubject(all);
   const composer = useRef<ComposerHandle>(null);
@@ -78,21 +79,31 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
     else notifyFailure(e, t);
     reload();
   };
-  const resolve = (mentions: readonly Mention[]): Listed[] => mentions.flatMap((m) => all.filter((l) => l.gmb.id === m.id));
+  const act = (at: number, turn: AssistantTurn, action: Action) => {
+    if ("call" in action.target) return void ok(api.POST("/assistant/chats/{id}/act", { params: { path: { id: id! } }, body: { turn: turn.id, action: action.id } })).then(reload, failed);
+    if ("binding" in action.target) keymap.run(action.target.binding);
+    change(at, { ...turn, actions: turn.actions.map((y) => (y.id === action.id ? { ...y, state: "done" } : y)) });
+  };
   const send = (draft: Draft, from = turns.length) => {
     const named = [...(subject && !draft.subjectOff ? asMentions([subject]) : []), ...draft.mentions].filter((m, i, xs) => xs.findIndex((x) => x.id === m.id) === i);
-    const answer = script(draft.text, resolve(named), all, tags, t);
-    const asked = ask(chat, from, { text: draft.text, mentions: named, files: draft.files }, (put, signal) => play(answer, s.approval, put, signal), (e) => {
-      if (e instanceof ApiError && e.failure.kind === "conflict") toast.error(t("Someone wrote in this chat meanwhile: the answer was not saved"));
-      else notifyFailure(e, t);
-    });
+    const page: Page = { url: `${window.location.pathname}${window.location.search}`, views: ROUTES, bindings: [...keymap.bound.values()] };
+    const asked = ask(chat, from, { text: draft.text, mentions: named, files: draft.files }, page);
     if (asked.id !== id) onOpen(asked.id);
-    asked.written.then(reload, (e: unknown) => {
-      keepDraft(id, draft);
-      if (asked.id !== id) onOpen(id);
-      setComposed((n) => n + 1);
-      failed(e);
-    });
+    asked.answered.then(
+      (done) => {
+        reload();
+        const answer = done.turns.at(-1);
+        const first = answer?.role === "assistant" ? answer.actions.find((a) => a.state === "proposed" && "call" in a.target) : undefined;
+        if (s.approval === "act" && answer?.role === "assistant" && first !== undefined)
+          void ok(api.POST("/assistant/chats/{id}/act", { params: { path: { id: asked.id } }, body: { turn: answer.id, action: first.id } })).then(reload, failed);
+      },
+      (e: unknown) => {
+        keepDraft(id, draft);
+        if (asked.id !== id) onOpen(id);
+        setComposed((n) => n + 1);
+        failed(e);
+      },
+    );
   };
   const again = (at: number, text: string) => {
     const asked = turns[at];
@@ -103,7 +114,7 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
   };
   const change = (at: number, turn: AssistantTurn) => {
     if (chat === null) throw new Error("only a chat read is changed");
-    void putTurns(chat.id, chat.version, at, [turn, ...chat.turns.slice(at + 1)]).then(reload, failed);
+    void ok(api.PUT("/assistant/chats/{id}/turns", { params: { path: { id: chat.id } }, body: { base: chat.version, from: at, turns: [turn, ...chat.turns.slice(at + 1)] } })).then(reload, failed);
   };
 
   const controls: Controls = {
@@ -129,10 +140,10 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
     onChanged: reload,
   };
   const confirmed = async (c: Confirm) => {
-    if (c.kind === "clear") await clearArchived();
-    else if (c.kind === "delete") await deleteChat(c.chat.id);
-    else await removeMember(c.chat.id, me.user_id);
-    if (c.kind === "clear" ? chat !== null && chat.archived_at !== null : c.chat.id === id) onOpen(null);
+    if (c.kind === "clear") await ok(api.DELETE("/assistant/archived"));
+    else if (c.kind === "delete") await ok(api.DELETE("/assistant/chats/{id}", { params: { path: { id: c.chat.id } } }));
+    else await ok(api.DELETE("/assistant/chats/{id}/members/{user}", { params: { path: { id: c.chat.id, user: me.user_id } } }));
+    if (c.kind === "clear" ? chat !== null && chat.archived_at != null : c.chat.id === id) onOpen(null);
     reload();
   };
 
@@ -200,6 +211,7 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
             turn={turn}
             last={i === turns.length - 1}
             onChange={interacts && !(runningHere && i >= s.running!.from) ? (next) => change(i, next) : null}
+            onAct={interacts && !(runningHere && i >= s.running!.from) && turn.role === "assistant" ? (a) => act(i, turn, a) : null}
             onRetry={interacts ? () => again(i - 1, (turns[i - 1] as { text: string }).text) : null}
           />
         ),
@@ -285,7 +297,7 @@ function Empty({ subject, onAsk }: { subject: Listed | null; onAsk: (text: strin
         </span>
         <h2 className="text-body-l font-semibold text-ink">{name ? t("What about {name}?", { name }) : t("What do you want to know?")}</h2>
         <p className="text-body-s text-ink-soft">
-          {t("Preview: answers are canned, nothing is sent. Name a location with ")}
+          {t("Name a location with ")}
           <Kbd>@</Kbd>
           {t(", pick a command with ")}
           <Kbd>/</Kbd>

@@ -46,7 +46,7 @@ const HASHED: &str = "/_next/static/";
 /// one is a JSON 404, never the front end's page. `/grafana` is Grafana's, run or not;
 /// `/cabinet` once served the cabinet's account chip here, and a tab still on an earlier
 /// build may ask for `/cabinet/mfe/*`: a script request must get a 404, not the panel's HTML.
-const RESERVED: [&str; 5] = ["/api", "/auth", "/health", "/grafana", "/cabinet"];
+const RESERVED: [&str; 6] = ["/api", "/auth", "/mcp", "/health", "/grafana", "/cabinet"];
 
 /// The pages a mounted element routes inside of: a link to one of its views loads its page.
 const ELEMENT_PAGES: [&str; 2] = ["/review_archive", "/sites"];

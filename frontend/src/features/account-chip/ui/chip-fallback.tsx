@@ -4,7 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import Link from "next/link";
 import { Fragment } from "react";
 
-import type { Caller } from "@/entities/session";
+import type { Caller } from "@/shared/api/schema";
 import { ROUTES } from "@/shared/config/routes";
 import { useT } from "@/shared/i18n";
 

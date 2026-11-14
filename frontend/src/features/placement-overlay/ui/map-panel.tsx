@@ -148,7 +148,7 @@ function useStudies(stems: readonly string[]): { key: string; label: string; stu
   const { categories: scope } = useScope();
   const linked = (trades.status === "ok" ? trades.data : []).flatMap((tr) =>
     tr.categories.flatMap((c) =>
-      c.study !== null && stems.includes(c.study)
+      c.study != null && stems.includes(c.study)
         ? [{ key: `${tr.id}.${c.country}`, label: `${tr.name} · ${c.country}`, study: c.study, group: scope !== null && scope.some((p) => covers(p, tr.id, c.country)) ? ("scope" as const) : ("category" as const) }]
         : [],
     ),

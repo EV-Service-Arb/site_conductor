@@ -214,11 +214,22 @@ pub struct Action {
 	pub id: String,
 	pub label: String,
 	pub detail: String,
-	/// Where it goes, for one that opens a page instead of doing something.
-	pub href: Option<String>,
+	pub target: Target,
 	/// Said once it is done: "Appealed 4 reviews".
 	pub done: String,
 	pub state: ActionState,
+}
+
+/// What an action does: a view, an operation, or a binding of the page's keymap — nothing else.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum Target {
+	/// A view, by its URL on this origin.
+	Href(String),
+	/// An operation of `/api/v1/openapi.json`, by its id, with its arguments.
+	Call(crate::tools::Call),
+	/// A binding of the page's keymap, by its id.
+	Binding(String),
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
@@ -247,6 +258,9 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::DELETE, "/assistant/chats/{id}/members/{user}", user, remove_chat_member),
 		ApiRoute::new(M::PUT, "/assistant/chats/{id}/general", user, set_chat_general),
 		ApiRoute::new(M::GET, "/assistant/people", user, chat_people),
+		// The answer takes the model's turns and the operations it calls.
+		ApiRoute::new(M::POST, "/assistant/chats/{id}/ask", user.slow(), crate::ask::ask),
+		ApiRoute::new(M::POST, "/assistant/chats/{id}/act", user, crate::ask::act),
 	]
 }
 

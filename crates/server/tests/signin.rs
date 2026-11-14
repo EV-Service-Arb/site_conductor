@@ -2,7 +2,7 @@
 //! fake concierge speaking the vendored gRPC contract on a local port.
 
 use std::{
-	collections::HashMap,
+	collections::{BTreeSet, HashMap},
 	sync::{Arc, Mutex},
 };
 
@@ -364,6 +364,7 @@ async fn setup_with(db: &TestDb, limits: http::Limits) -> (Router, FakeConcierge
 		None,
 		None,
 		None,
+		None,
 	);
 	(app, fake, panel)
 }
@@ -537,6 +538,7 @@ async fn concierge_down_is_a_503_not_a_sign_out() {
 		None,
 		None,
 		http::Limits::default(),
+		None,
 		None,
 		None,
 		None,
@@ -745,8 +747,8 @@ async fn the_alerts_page_links_telegram_and_chooses_rules() {
 		},
 		name: BotName::new(Some("@evinvest_sa_bot".into())),
 	};
-	let app = http::app(sign_in.clone(), None, None, http::Limits::default(), Some(telegram), None, None);
-	let off = http::app(sign_in, None, None, http::Limits::default(), None, None, None);
+	let app = http::app(sign_in.clone(), None, None, http::Limits::default(), Some(telegram), None, None, None);
+	let off = http::app(sign_in, None, None, http::Limits::default(), None, None, None, None);
 	user(&fake, OPERATOR, "investor", SA_OPERATOR.members);
 	// A private chat whose user's access was last confirmed long ago, and denied: the gate's GetMe
 	// renews it.
@@ -846,15 +848,23 @@ async fn no_permission_opens_no_section() {
 			panel_origin: PANEL.to_owned(),
 			concierge_origin: PANEL.to_owned(),
 		};
-		http::app(SignIn::new(panel.clone(), Concierge::dev(who), config), None, None, http::Limits::default(), None, None, None)
+		http::app(
+			SignIn::new(panel.clone(), Concierge::dev(who), config),
+			None,
+			None,
+			http::Limits::default(),
+			None,
+			None,
+			None,
+			None,
+		)
 	};
-	let catalog = http::Catalog::new();
-	let routes: Vec<(Method, &str, bool)> = catalog
-		.document()
+	let document = http::document();
+	let routes: Vec<(Method, &str, bool)> = document
 		.operations()
 		.map(|(path, method, op)| (method.to_uppercase().parse().unwrap(), path, op.extensions.contains_key("x-permission")))
 		.collect();
-	let open: std::collections::BTreeSet<&str> = routes.iter().filter(|r| !r.2).map(|r| r.1).collect();
+	let open: BTreeSet<&str> = routes.iter().filter(|r| !r.2).map(|r| r.1).collect();
 	assert_eq!(
 		open,
 		std::collections::BTreeSet::from([
@@ -927,7 +937,9 @@ async fn no_permission_opens_no_section() {
 			"/assistant/chats/{id}/members",
 			"/assistant/chats/{id}/members/{user}",
 			"/assistant/chats/{id}/general",
-			"/assistant/people"
+			"/assistant/people",
+			"/assistant/chats/{id}/ask",
+			"/assistant/chats/{id}/act"
 		]),
 		"every other route sits under a section"
 	);
@@ -981,6 +993,7 @@ async fn every_write_is_told() {
 		None,
 		None,
 		http::Limits::default(),
+		None,
 		None,
 		None,
 		None,

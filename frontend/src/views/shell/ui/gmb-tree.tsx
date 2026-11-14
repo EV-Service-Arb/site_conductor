@@ -6,12 +6,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 
-import { byView, chooseGmailScope, COUNTRIES, type Gmb, ISSUE_LABEL, issueCounts, issueOf, ISSUES, issueText, type Listed, MUST_HAVES, open, openTrash, readiness, removeGmb, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, type State, STATE_LABEL, switchGmbs, TABS, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable } from "@/entities/gmb";
+import { byView, chooseGmailScope, ISSUE_LABEL, issueCounts, issueOf, ISSUES, issueText, type Listed, MUST_HAVES, open, openTrash, readiness, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_LABEL, switchGmbs, TABS, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { AddGmbButton } from "@/features/add-gmb";
 import { EditGbp } from "@/features/edit-gbp";
 import { LinkPlace } from "@/features/link-gmb-place";
 import { PlaceButton } from "@/features/place-gmb";
+import { api, ok } from "@/shared/api";
+import { type Gmb, type State, countryValues } from "@/shared/api/schema";
 import { ROUTES } from "@/shared/config/routes";
 import { useT } from "@/shared/i18n";
 import { ErrorState } from "@/shared/ui/error-state";
@@ -289,9 +291,9 @@ function SetTrade({ gmbs, onSet }: { gmbs: Gmb[]; onSet: () => void }) {
       notifyFailure(e, t);
     }
   };
-  const byCountry = COUNTRIES.map((c) => [c, gmbs.filter((b) => b.country?.code === c).length] as const).filter(([, n]) => n > 0);
-  const nowhere = gmbs.filter((b) => b.country === null).length;
-  const untraded = gmbs.every((b) => b.trade_id === null);
+  const byCountry = countryValues.map((c) => [c, gmbs.filter((b) => b.country?.code === c).length] as const).filter(([, n]) => n > 0);
+  const nowhere = gmbs.filter((b) => b.country == null).length;
+  const untraded = gmbs.every((b) => b.trade_id == null);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex items-center gap-0.5 rounded px-1 text-xs font-normal tracking-normal normal-case outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
@@ -424,7 +426,7 @@ function GmbRow({
       <DropdownMenu>
         <DropdownMenuTrigger aria-label={t("{name}: actions", { name })} title={STATE_LABEL[gmb.state](t)} className="flex w-4 shrink-0 flex-col items-center justify-center gap-0.5 self-stretch rounded-sm outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-hover">
           {[0, 1, 2].map((i) => (
-            <span key={i} aria-hidden className={cn("size-1.5 rounded-full", DOT[gmb.state], !gmb.enabled && "border-ink-soft bg-ink-soft", gmb.location === null && "opacity-40")} />
+            <span key={i} aria-hidden className={cn("size-1.5 rounded-full", DOT[gmb.state], !gmb.enabled && "border-ink-soft bg-ink-soft", gmb.location == null && "opacity-40")} />
           ))}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-48">
@@ -454,7 +456,7 @@ function GmbRow({
       </DropdownMenu>
       {dialog === "edit" && <EditGbp gmb={gmb} onClose={() => setDialog(null)} onChanged={onChanged} />}
       {dialog === "link" && linked && <LinkPlace gmbId={gmb.id} linked={linked} onClose={() => setDialog(null)} onDone={onChanged} />}
-      {dialog === "remove" && <RemoveDialog title={t("Remove {name}?", { name })} body={t("It goes to the trash{kept}: every service stops working on it until then; its history stays.", { kept })} remove={() => removeGmb(gmb.id)} onRemoved={onChanged} onClose={() => setDialog(null)} />}
+      {dialog === "remove" && <RemoveDialog title={t("Remove {name}?", { name })} body={t("It goes to the trash{kept}: every service stops working on it until then; its history stays.", { kept })} remove={() => ok(api.DELETE("/gmbs/{id}", { params: { path: { id: gmb.id } } }))} onRemoved={onChanged} onClose={() => setDialog(null)} />}
       {onMap ? (
         <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => open(gmb)}>
           {label}

@@ -1,10 +1,8 @@
-import { ALIASES, type AccessRequest, PERMISSIONS, type Permission } from "@/entities/session";
+import { ALIASES } from "@/entities/session";
 import { safeLocalPath } from "@/shared/api";
+import { type Need, type Permission, needValues } from "@/shared/api/schema";
 
-/** What can be asked for: a permission, or an alias of them. */
-export type Need = AccessRequest["need"];
-
-export const NEEDS: readonly Need[] = [...PERMISSIONS, ...(Object.keys(ALIASES) as (keyof typeof ALIASES)[])];
+export const NEEDS = needValues;
 
 export const PLAYBOOK_NEED: Need = "sa:playbook:mcp:use";
 

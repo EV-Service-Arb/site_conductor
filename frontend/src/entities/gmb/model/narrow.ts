@@ -1,4 +1,5 @@
-import type { Gmail, Gmails, Gmb } from "./gmb";
+import type { Gmail, Gmails, Gmb } from "@/shared/api/schema";
+
 import { type Scope, inScope } from "./scope";
 
 export interface Listed {
@@ -14,7 +15,7 @@ export function narrowed(data: Gmails, scope: Scope | null, filter: string): Lis
   return data.gmbs
     .filter((gmb) => scope === null || inScope(gmb, scope))
     .map((gmb) => {
-      const gmail = gmb.gmail_id === null ? null : gmails.get(gmb.gmail_id);
+      const gmail = gmb.gmail_id == null ? null : gmails.get(gmb.gmail_id);
       if (gmail === undefined) throw new Error(`GBP ${gmb.id} is under gmail ${gmb.gmail_id}, which is not listed`);
       return { gmb, gmail };
     })

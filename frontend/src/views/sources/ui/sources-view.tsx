@@ -4,8 +4,10 @@ import { PageFrame, Settled, Skeleton } from "@evinvest/uikit";
 import { useState } from "react";
 
 import { may, useMe } from "@/entities/session";
-import { type AddedSource, fetchConnectedSites, fetchSources } from "@/entities/source";
+import { joinConnectedSites } from "@/entities/source";
 import { AddSourceForm, SecretDialog } from "@/features/manage-sources";
+import { api, ok } from "@/shared/api";
+import type { NewSourceKey } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -18,9 +20,9 @@ import { SourcesTable } from "./sources-table";
 export function SourcesView() {
   const t = useT();
   const me = useMe();
-  const sources = useResource("sources", fetchSources, "sources", { live: "sources" });
-  const connected = useResource("connected-sites", fetchConnectedSites, "connected-sites", { live: "sources" });
-  const [added, setAdded] = useState<AddedSource | null>(null);
+  const sources = useResource("sources", async () => (await ok(api.GET("/sources"))).sources, "sources", { live: ["sources"] });
+  const connected = useResource("connected-sites", async () => joinConnectedSites(await ok(api.GET("/sources/sites"))), "connected-sites", { live: ["sources"] });
+  const [added, setAdded] = useState<NewSourceKey | null>(null);
 
   if (!may(me, "sa:admin:sources:manage")) {
     return (

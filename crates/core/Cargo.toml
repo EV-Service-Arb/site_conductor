@@ -8,10 +8,6 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 
-[features]
-# `utoipa::ToSchema` on the gbp wire types, for review_archive's OpenAPI document.
-utoipa = ["dep:utoipa"]
-
 [dependencies]
 hex.workspace = true
 hmac.workspace = true
@@ -26,7 +22,6 @@ strum.workspace = true
 subtle.workspace = true
 thiserror.workspace = true
 url.workspace = true
-utoipa = { workspace = true, optional = true, features = ["uuid"] }
 uuid = { workspace = true, features = ["serde"] }
 
 [lints]

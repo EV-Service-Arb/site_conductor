@@ -8,8 +8,10 @@
 pub mod access;
 pub mod alerts;
 pub mod api;
+pub mod ask;
 pub mod assistant;
 pub mod browser;
+pub mod catalog;
 pub mod concierge;
 mod connected;
 pub mod connections;
@@ -20,12 +22,15 @@ pub mod grafana;
 pub mod http;
 mod ingest;
 pub mod live;
+mod mcp;
+mod oauth;
 mod queries_cache;
 pub mod signin;
 pub mod telegram;
 #[cfg(feature = "testing")]
 pub mod testing;
 pub mod tokens;
+pub mod tools;
 pub mod trash;
 pub mod web;
 

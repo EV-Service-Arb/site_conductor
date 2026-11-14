@@ -4,7 +4,9 @@ import { DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, Dropdo
 import { Archive, ArchiveRestore, Link, LogOut, Maximize, PanelRightOpen, PencilLine, PictureInPicture2, Pin, PinOff, Trash2 } from "lucide-react";
 import { createContext, useContext } from "react";
 
-import { type ChatSummary, archiveChat, chatLink, pinChat } from "@/entities/assistant";
+import { chatLink } from "@/entities/assistant";
+import { api, ok } from "@/shared/api";
+import type { ChatSummary } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 
@@ -59,9 +61,9 @@ export function ChatActions({ chat, onRename, pinOutside = false }: { chat: Chat
         <DropdownMenuShortcut>Ctrl+Alt+L</DropdownMenuShortcut>
       </DropdownMenuItem>
       {interacts && !pinOutside && (
-        <DropdownMenuItem onClick={() => write(pinChat(chat.id, chat.pinned_at === null))}>
-          {chat.pinned_at === null ? <Pin aria-hidden /> : <PinOff aria-hidden />}
-          {(chat.pinned_at === null ? t("Pin") : t("Unpin"))}
+        <DropdownMenuItem onClick={() => write(ok(api.PUT("/assistant/chats/{id}/pinned", { params: { path: { id: chat.id } }, body: { on: chat.pinned_at == null } })))}>
+          {chat.pinned_at == null ? <Pin aria-hidden /> : <PinOff aria-hidden />}
+          {(chat.pinned_at == null ? t("Pin") : t("Unpin"))}
         </DropdownMenuItem>
       )}
       {interacts && (
@@ -71,9 +73,9 @@ export function ChatActions({ chat, onRename, pinOutside = false }: { chat: Chat
         </DropdownMenuItem>
       )}
       {interacts && (
-        <DropdownMenuItem onClick={() => write(archiveChat(chat.id, chat.archived_at === null))}>
-          {chat.archived_at === null ? <Archive aria-hidden /> : <ArchiveRestore aria-hidden />}
-          {(chat.archived_at === null ? t("Archive") : t("Unarchive"))}
+        <DropdownMenuItem onClick={() => write(ok(api.PUT("/assistant/chats/{id}/archived", { params: { path: { id: chat.id } }, body: { on: chat.archived_at == null } })))}>
+          {chat.archived_at == null ? <Archive aria-hidden /> : <ArchiveRestore aria-hidden />}
+          {(chat.archived_at == null ? t("Archive") : t("Unarchive"))}
         </DropdownMenuItem>
       )}
       {chat.role === "owner" && (

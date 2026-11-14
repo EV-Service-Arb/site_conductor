@@ -1,4 +1,5 @@
 export { ApiError, SIGN_IN_PATH, createHttp, goToSignIn, http, ignoreBody, redirectToSignIn, switchAccountPath } from "./http";
+export { api, ok } from "./client";
 export { dismissOverlay, openOverlay, overlayState, registerOverlayHost, safeLocalPath, subscribeOverlay, takeReturnPage } from "./signin-overlay";
 export type { ApiFailure } from "./http";
 export { csrfCookieName, readCsrf } from "./csrf";

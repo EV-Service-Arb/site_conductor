@@ -1,10 +1,9 @@
 "use client";
 
+import { api, ok } from "@/shared/api";
 import { useResource } from "@/shared/lib/use-resource";
 
-import { fetchTokens } from "../api/tokens";
-
-/** The caller's tokens, read on mount and again on focus: no live topic tells of a charge. */
+/** The caller's tokens; on focus too: a charge is no write of theirs, so no topic tells of it. */
 export function useTokens() {
-  return useResource("tokens", fetchTokens, "tokens", { focus: true });
+  return useResource("tokens", () => ok(api.GET("/tokens")), "tokens", { live: ["tokens"], focus: true });
 }

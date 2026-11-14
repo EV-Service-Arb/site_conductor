@@ -17,6 +17,8 @@ pub struct SessionRow {
 	pub refresh_sealed: Vec<u8>,
 	pub data_key_fp: Vec<u8>,
 	pub expires_at: Timestamp,
+	/// The MCP client it was granted to; `None`: a browser's.
+	pub client_id: Option<String>,
 }
 
 /// The sealed tokens of a session, as written.
@@ -28,13 +30,14 @@ pub struct SealedTokens<'a> {
 	pub expires_at: Timestamp,
 }
 
-pub async fn insert(conn: &mut SqliteConnection, id_hash: &[u8], user_id: Uuid, t: &SealedTokens<'_>, now: Timestamp) -> eyre::Result<()> {
+pub async fn insert(conn: &mut SqliteConnection, id_hash: &[u8], user_id: Uuid, client_id: Option<&str>, t: &SealedTokens<'_>, now: Timestamp) -> eyre::Result<()> {
 	sqlx::query(
-		"INSERT INTO sessions (id_hash, user_id, access_sealed, access_expires_at, refresh_sealed, data_key_fp, expires_at, last_seen_at) \
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+		"INSERT INTO sessions (id_hash, user_id, client_id, access_sealed, access_expires_at, refresh_sealed, data_key_fp, expires_at, last_seen_at) \
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
 	)
 	.bind(id_hash)
 	.bind(user_id)
+	.bind(client_id)
 	.bind(t.access)
 	.bind(to_db(t.access_expires_at))
 	.bind(t.refresh)
@@ -49,7 +52,7 @@ pub async fn insert(conn: &mut SqliteConnection, id_hash: &[u8], user_id: Uuid, 
 
 macro_rules! columns {
 	() => {
-		"user_id, access_sealed, access_expires_at, refresh_sealed, data_key_fp, expires_at"
+		"user_id, access_sealed, access_expires_at, refresh_sealed, data_key_fp, expires_at, client_id"
 	};
 }
 
@@ -211,6 +214,7 @@ struct Row {
 	refresh_sealed: Vec<u8>,
 	data_key_fp: Vec<u8>,
 	expires_at: i64,
+	client_id: Option<String>,
 }
 
 impl TryFrom<Row> for SessionRow {
@@ -224,6 +228,7 @@ impl TryFrom<Row> for SessionRow {
 			refresh_sealed: r.refresh_sealed,
 			data_key_fp: r.data_key_fp,
 			expires_at: from_db(r.expires_at)?,
+			client_id: r.client_id,
 		})
 	}
 }

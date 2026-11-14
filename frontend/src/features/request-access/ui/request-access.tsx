@@ -4,16 +4,15 @@ import { Avatar, AvatarFallback, Button, Card, CardContent, CardDescription, Car
 import { Check } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
-import { type AccessRequest, type Caller, fetchMe } from "@/entities/session";
-import { ApiError, switchAccountPath } from "@/shared/api";
+import { ApiError, api, ok, switchAccountPath } from "@/shared/api";
+import type { AccessRequest, Caller, Need } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { ErrorState } from "@/shared/ui/error-state";
 import { failureText } from "@/shared/ui/failure-text";
 import { useButtonSize } from "@/shared/ui/touch";
 
-import { fetchMyRequests, requestAccess } from "../api/requests";
-import { type Need, PLAYBOOK_NEED, holds } from "../model/access";
+import { PLAYBOOK_NEED, holds } from "../model/access";
 
 const RECHECK_MS = 30_000;
 
@@ -22,8 +21,8 @@ const RECHECK_MS = 30_000;
  * `continueTo` (a path already checked by `safeContinue`), or "you're in" without one.
  */
 export function RequestAccess({ need, continueTo }: { need: Need; continueTo: string | null }) {
-  const me = useResource("me", fetchMe);
-  const mine = useResource("access.mine", fetchMyRequests);
+  const me = useResource("me", () => ok(api.GET("/me")));
+  const mine = useResource("access.mine", async () => (await ok(api.GET("/access/requests/mine"))).requests);
   const [sent, setSent] = useState<AccessRequest | null>(null);
   const held = me.status === "ok" && holds(me.data.permissions, need);
   const pending = sent ?? (mine.status === "ok" ? (mine.data.find((r) => r.need === need) ?? null) : null);
@@ -105,7 +104,7 @@ function Asking({
   const ask = () => {
     setBusy(true);
     setFailure(null);
-    requestAccess(need).then(
+    ok(api.POST("/access/requests", { body: { need } })).then(
       (r) => {
         setBusy(false);
         onSent(r);

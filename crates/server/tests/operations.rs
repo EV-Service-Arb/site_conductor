@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use sa_server::http::Catalog;
+use sa_server::http;
 
 /// `{a,b}` in a path is two paths; `{id}` is a parameter.
 fn expand(path: &str) -> Vec<String> {
@@ -34,7 +34,7 @@ fn the_overview_names_every_operation_and_no_other() {
 			expand(words.next().expect("a path")).into_iter().map(move |p| (method.clone(), p))
 		})
 		.collect();
-	let catalog = Catalog::new();
-	let table: BTreeSet<(String, String)> = catalog.document().operations().map(|(path, method, _)| (method.to_uppercase(), path.to_owned())).collect();
+	let document = http::document();
+	let table: BTreeSet<(String, String)> = document.operations().map(|(path, method, _)| (method.to_uppercase(), path.to_owned())).collect();
 	assert_eq!(overview, table);
 }

@@ -9,7 +9,7 @@ use sa_browsers::view::{In as ViewerIn, Out as ViewerOut};
 
 fn main() {
 	let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../frontend/src/shared/api/openapi.json");
-	let mut doc = sa_server::http::Catalog::new().document().clone();
+	let mut doc = sa_server::http::document();
 	// The browser viewer's socket is outside the operations; its frames are wire types all the same.
 	let mut frames = SchemaSettings::draft07().with(|s| s.definitions_path = "#/components/schemas/".into()).into_generator();
 	frames.subschema_for::<ViewerIn>();

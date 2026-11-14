@@ -4,7 +4,7 @@ import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogH
 import { Plus } from "lucide-react";
 import { useId, useState } from "react";
 
-import { addGmail } from "@/entities/gmb";
+import { api, ok } from "@/shared/api";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -24,7 +24,7 @@ export function AddGmailButton({ onAdded }: { onAdded: () => void }) {
   const submit = async () => {
     setBusy(true);
     try {
-      await addGmail(gmail.trim());
+      await ok(api.POST("/gmails", { body: { gmail: gmail.trim() } }));
       setOpen(false);
       setGmail("");
       onAdded();

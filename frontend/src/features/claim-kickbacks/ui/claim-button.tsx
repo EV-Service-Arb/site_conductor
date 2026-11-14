@@ -3,7 +3,7 @@
 import { Button, toast } from "@evinvest/uikit";
 import { useState } from "react";
 
-import { claimKickbacks } from "@/entities/tokens";
+import { api, ok } from "@/shared/api";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -15,7 +15,7 @@ export function ClaimButton({ total, onClaimed }: { total: number; onClaimed: ()
   const claim = async () => {
     setBusy(true);
     try {
-      await claimKickbacks();
+      await ok(api.POST("/tokens/claim"));
       toast.positive(t("{n} tokens claimed", { n: total }));
       onClaimed();
     } catch (e) {

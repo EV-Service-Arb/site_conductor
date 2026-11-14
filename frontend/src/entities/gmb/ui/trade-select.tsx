@@ -3,9 +3,10 @@
 import { Button, Input, NativeSelect, NativeSelectOption } from "@evinvest/uikit";
 import { useState } from "react";
 
-import { addTrade } from "../api/gmbs";
 import { useTrades } from "../model/gmails-context";
-import { type Country, googleName } from "../model/gmb";
+import { googleName } from "../model/gmb";
+import { api, ok } from "@/shared/api";
+import type { Country } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -33,7 +34,7 @@ export function TradeSelect({ value, onPick, none, label, country, className }: 
         onSubmit={(e) => {
           e.preventDefault();
           setBusy(true);
-          void addTrade(name.trim())
+          void ok(api.POST("/trades", { body: { name: name.trim() } }))
             .then((made) => {
               trades.reload();
               setNaming(false);
@@ -72,7 +73,7 @@ export function TradeSelect({ value, onPick, none, label, country, className }: 
           const there = country == null ? undefined : (tr.categories.find((c) => c.country === country) ?? null);
           return (
             <NativeSelectOption key={tr.id} value={String(tr.id)}>
-              {there === undefined ? tr.name : there === null ? t("{trade} — not set up in {country}", { trade: tr.name, country: country! }) : `${tr.name} — ${there.google_primary === null ? "…" : googleName(there.google_primary, locale)}`}
+              {there === undefined ? tr.name : there === null ? t("{trade} — not set up in {country}", { trade: tr.name, country: country! }) : `${tr.name} — ${there.google_primary == null ? "…" : googleName(there.google_primary, locale)}`}
             </NativeSelectOption>
           );
         })}

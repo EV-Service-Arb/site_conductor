@@ -4,8 +4,9 @@ import { Button, Input, Settled, Skeleton, StatusDot, buttonVariants, cn, toast 
 import { ArrowLeft, ArrowRight, Hand, Plus, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
-import { type Browser, type BrowserIn, type BrowserOut, type Gmail, browsersUnconnected, fetchConnections, openAccount, startBrowser, stopBrowser, useGmails } from "@/entities/gmb";
-import { ApiError } from "@/shared/api";
+import { browsersUnconnected, openAccount, useGmails } from "@/entities/gmb";
+import type { Browser, BrowserIn, BrowserOut, Gmail } from "@/shared/api/schema";
+import { ApiError, api, ok } from "@/shared/api";
 import { type T, useT } from "@/shared/i18n";
 import { backoffDelay } from "@/shared/lib/live";
 import { useResource } from "@/shared/lib/use-resource";
@@ -27,12 +28,12 @@ export type TypeIn = ((text: string) => void) | null;
 export function BrowserSession({ gmail, gmb, aside }: { gmail: Gmail; gmb: number | null; aside?: (type: TypeIn) => ReactNode }) {
   const t = useT();
   const button = useButtonSize();
-  const connections = useResource(`connections.${gmail.id}`, () => fetchConnections(gmail.id), "connections", { live: "browsers" });
+  const connections = useResource(`connections.${gmail.id}`, () => ok(api.GET("/gmails/{id}/connections", { params: { path: { id: gmail.id } } })), "connections", { live: ["gmails"] });
   return (
     <Settled loading={connections.status === "loading"} skeleton={<Skeleton className="h-96 w-full" />}>
       {connections.status === "error" && <ErrorState failure={connections.failure} onRetry={connections.reload} />}
       {connections.status === "ok" &&
-        (connections.data.browser === null ? (
+        (connections.data.browser == null ? (
           <EmptyState title={t("No browser for this gmail yet")} description={t("Set up {gmail}'s antidetect environment on its Connections tab.", { gmail: gmail.gmail })}>
             <Button size={button("sm")} onClick={() => openAccount({ gmail: gmail.id, tab: "connections" })}>
               {t("Set it up")}
@@ -68,7 +69,7 @@ const BLANK: Page = { frame: null, tabs: [], active: null, dialog: null };
 function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: number | null; browser: Browser; reload: () => void; aside: ((type: TypeIn) => ReactNode) | undefined }) {
   const t = useT();
   const button = useButtonSize();
-  const runs: Runs = browser.running === null ? "no" : browser.running.gmb === gmb ? "here" : "elsewhere";
+  const runs: Runs = browser.running == null ? "no" : (browser.running.gmb ?? null) === gmb ? "here" : "elsewhere";
   const [phase, setPhase] = useState<Phase>(runs === "here" ? "connecting" : runs === "no" ? "off" : "elsewhere");
   const [link, setLink] = useState<{ n: number; delay: number } | null>(runs === "here" ? { n: 0, delay: 0 } : null);
   const [page, setPage] = useState<Page>(BLANK);
@@ -147,10 +148,10 @@ function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: nu
     let stopped = !restart;
     try {
       if (restart) {
-        await stopBrowser(gmail.id);
+        await ok(api.POST("/gmails/{id}/browser/stop", { params: { path: { id: gmail.id } } }));
         stopped = true;
       }
-      await startBrowser(gmail.id, gmb);
+      await ok(api.POST("/gmails/{id}/browser/start", { params: { path: { id: gmail.id } }, body: { gmb } }));
     } catch (e) {
       setPhase(stopped ? "off" : "elsewhere");
       if (!(e instanceof ApiError)) throw e;
@@ -165,7 +166,7 @@ function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: nu
   };
   const stop = async () => {
     try {
-      await stopBrowser(gmail.id);
+      await ok(api.POST("/gmails/{id}/browser/stop", { params: { path: { id: gmail.id } } }));
     } catch (e) {
       notifyFailure(e, t);
       return;
@@ -221,9 +222,9 @@ function apply(page: Page, out: Exclude<BrowserOut, { type: "error" }>): Page {
     case "frame":
       return { ...page, frame: { src: `data:image/jpeg;base64,${out.data}`, width: out.width, height: out.height } };
     case "tabs":
-      return { ...page, tabs: out.tabs, active: out.active };
+      return { ...page, tabs: out.tabs, active: out.active ?? null };
     case "dialog":
-      return { ...page, dialog: { kind: out.kind, message: out.message, default: out.default } };
+      return { ...page, dialog: { kind: out.kind, message: out.message, default: out.default ?? null } };
     case "dialog_closed":
       return { ...page, dialog: null };
   }
@@ -257,7 +258,7 @@ function Idle({ phase, browser, failure, onStart, onConnect }: { phase: Phase; b
           <Button size={button("sm")} disabled={phase === "starting"} onClick={() => onStart(false)}>
             {(phase === "starting" ? t("Starting…") : t("Start"))}
           </Button>
-          {browser.checked.error !== null && <p className="text-xs text-accent-warn">{t("Its last check failed: {error}", { error: browser.checked.error })}</p>}
+          {browser.checked.error != null && <p className="text-xs text-accent-warn">{t("Its last check failed: {error}", { error: browser.checked.error })}</p>}
         </>
       ) : phase === "taken" ? (
         <>

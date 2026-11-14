@@ -4,7 +4,8 @@ import { Button } from "@evinvest/uikit";
 import { importLibrary } from "@googlemaps/js-api-loader";
 import { useEffect, useRef, useState } from "react";
 
-import { type Gmb, type LatLng, peek, placeGmb, setOnMap, useGmails, useUndoable } from "@/entities/gmb";
+import { peek, placeGmb, setOnMap, useGmails, useUndoable } from "@/entities/gmb";
+import type { Gmb, LatLng } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";

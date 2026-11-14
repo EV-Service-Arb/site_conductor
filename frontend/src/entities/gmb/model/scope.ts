@@ -1,8 +1,7 @@
 "use client";
 
+import { type Country, type Gmb, countryValues } from "@/shared/api/schema";
 import { setQuery, useQuery } from "@/shared/lib/query";
-
-import { COUNTRIES, type Country, type Gmb } from "./gmb";
 
 /** A category pattern, `<trade>.<country>`, either side `*`: `1.FR` a category, `2.*` a trade in every country, `*.US` a country across trades. */
 export interface Pattern {
@@ -20,7 +19,7 @@ function parsePattern(raw: string): Pattern {
   const [trade, country, ...rest] = raw.split(".");
   const id = Number(trade);
   if (rest.length > 0 || trade === undefined || country === undefined || (trade !== "*" && !Number.isSafeInteger(id))) throw new Error(`?category=${raw}: not <trade>.<country>`);
-  if (country !== "*" && !(COUNTRIES as string[]).includes(country)) throw new Error(`?category=${raw}: ${country} is not one of ${COUNTRIES.join(", ")}`);
+  if (country !== "*" && !(countryValues as readonly string[]).includes(country)) throw new Error(`?category=${raw}: ${country} is not one of ${countryValues.join(", ")}`);
   if (trade === "*" && country === "*") throw new Error(`?category=${raw}: a pattern names a trade or a country`);
   return { trade: trade === "*" ? "*" : id, country: country as Country | "*" };
 }
@@ -53,11 +52,11 @@ export function covers(p: Pattern, trade: number, country: Country | null): bool
 /** Whether the GBP is under any of `patterns`: one with no trade is under none. */
 export function inCategories(gmb: Gmb, patterns: readonly Pattern[]): boolean {
   const trade = gmb.trade_id;
-  return trade !== null && patterns.some((p) => covers(p, trade, gmb.country?.code ?? null));
+  return trade != null && patterns.some((p) => covers(p, trade, gmb.country?.code ?? null));
 }
 
 export function inScope(gmb: Gmb, scope: Scope): boolean {
-  return (scope.gmails === null || (gmb.gmail_id !== null && scope.gmails.has(gmb.gmail_id))) && (scope.categories === null || inCategories(gmb, scope.categories));
+  return (scope.gmails === null || (gmb.gmail_id != null && scope.gmails.has(gmb.gmail_id))) && (scope.categories === null || inCategories(gmb, scope.categories));
 }
 
 export function chooseGmailScope(gmails: Iterable<number> | null): void {
