@@ -299,7 +299,7 @@ impl Panel {
 	/// if removed.
 	pub async fn add_photo(&self, owner: Uuid, trade: i64, country: Country, upload: Vec<u8>, now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
 		if upload.len() > PHOTO_MAX {
-			return Ok(Err(Refused::TooLarge(format!("a photo is at most {} MiB", PHOTO_MAX / 1024 / 1024))));
+			return Ok(Err(Refused::TooLarge(format!("a photo is at most {} MiB", PHOTO_MAX >> 20))));
 		}
 		let sha256: [u8; 32] = Sha256::digest(&upload).into();
 		let encoded = tokio::task::spawn_blocking(move || reencode(&upload)).await.wrap_err("re-encoding a photo")?;
