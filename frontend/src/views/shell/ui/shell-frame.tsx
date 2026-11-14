@@ -22,7 +22,7 @@ import { Outline } from "./outline";
 import { PanelHotbar } from "./panel-hotbar";
 import { PanelTopBar } from "./panel-top-bar";
 
-/** Bare `z`: Alt chords get eaten by key remappers (keyd's Alt layer); in a field it types. */
+/** Bare `z` (Alt+Z too, and only that from a field): Alt+S got eaten by key remappers (keyd's Alt layer). */
 const LEADER = { key: "z" };
 
 /** CONTRACT §9: an element's API answered 401. */

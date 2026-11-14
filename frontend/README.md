@@ -86,14 +86,14 @@ elements do the same for theirs. The elements also tell the host: `sa:title-coun
 
 ## Keys
 
-Everything sits behind one leader, `Alt+S` (`⌥S` on macOS), through `@evinvest/uikit`'s
+Everything sits behind one leader, `z` (`Alt+Z` too; from a field only `Alt+Z`, as `z` types there), through `@evinvest/uikit`'s
 `KeymapProvider` in the shell; a feature contributes its keys with `useBinding` while it is
 mounted, an element with `ev:keymap` under the scope `elementKeys` (`panel.config.ts`) gives it.
-The leader opens from a field too, and the scope's next key is kept from it; besides it the page
+Once open, the scope's next key is kept from the field; besides it the page
 claims only the undo keys, which leave a field its own text undo.
 
 ```text
-Alt+S ─┬─ A   assistant: show / hide          (not on its full-screen page)
+z ─────┬─ A   assistant: show / hide          (not on its full-screen page)
        ├─ N   assistant: new chat
        ├─ L   assistant: copy the chat's link (once a chat has started)
        ├─ P   map: Google's places on / off   (only on /; the hotbar shows it)
