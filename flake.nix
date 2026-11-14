@@ -65,6 +65,14 @@
                 pass_filenames = false;
                 require_serial = true;
               };
+              # English from the code, stale and orphaned translations dropped: nothing in messages/ is edited but ru overrides.
+              i18n = {
+                enable = true;
+                name = "regenerate i18n catalogues";
+                entry = "bash -c 'npm --prefix frontend run --silent i18n && git add -A frontend/messages'";
+                pass_filenames = false;
+                require_serial = true;
+              };
             };
           }
         );
@@ -139,8 +147,10 @@
           # PostCSS worker never hands back); webpack makes the same export.
           npmBuildFlags = [ "--" "--webpack" ];
           # next writes its cache under HOME, which the sandbox does not have
+          # the image is the release: every key translated, as committed
           preBuild = ''
             export HOME="$TMPDIR"
+            npm run i18n:release
           '';
           installPhase = ''
             runHook preInstall
