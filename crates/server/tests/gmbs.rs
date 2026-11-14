@@ -712,9 +712,11 @@ async fn a_removed_gmail_is_restored_from_the_trash_and_only_an_admin_keeps_it_f
 	assert_eq!(trash["settings"], json!({ "keep_days": 30, "never_purge": true }), "dev sign-in keeps everything: {trash}");
 	assert_eq!((&trash["gmails"][0]["gmail"], &trash["gmails"][0]["purge_at"]), (&json!("a@gmail.com"), &Value::Null));
 
-	let (status, _) = call(&mut b, &app, Method::PUT, "/api/v1/trash/settings", Some(json!({ "keep_days": 10, "never_purge": false }))).await;
+	let (status, _) = call(&mut b, &app, Method::PUT, "/api/v1/trash/settings", Some(json!({ "keep_days": 7, "never_purge": false }))).await;
 	assert_eq!(status, StatusCode::FORBIDDEN, "an operator holds no sa:admin:trash:keep");
 	let (status, _) = call(&mut b, &app, Method::PUT, "/api/v1/trash/settings", Some(json!({ "keep_days": 10 }))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "only 1, 7, 30 or 90 days");
+	let (status, _) = call(&mut b, &app, Method::PUT, "/api/v1/trash/settings", Some(json!({ "keep_days": 7 }))).await;
 	assert_eq!(status, StatusCode::NO_CONTENT);
 
 	let (status, _) = call(&mut b, &app, Method::POST, &format!("/api/v1/trash/gmails/{}/restore", gmail["id"]), None).await;

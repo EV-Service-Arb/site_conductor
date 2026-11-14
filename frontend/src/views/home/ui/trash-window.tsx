@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Input, Switch } from "@evinvest/uikit";
+import { Badge, Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch } from "@evinvest/uikit";
 import { RotateCcw, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
@@ -11,6 +11,7 @@ import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 const DAY_MS = 86_400_000;
+const KEEP_DAYS = [1, 7, 30, 90] as const; // as the server accepts
 /** As the outline colours the states. */
 const TONE: Partial<Record<State, string>> = { verifying: "text-accent-warn", suspended: "text-accent-error" };
 const SECTION = "flex flex-col gap-2";
@@ -113,7 +114,6 @@ function Settings({ trash, onSet }: { trash: Trash; onSet: () => void }) {
   const size = useControlSize();
   const me = useMe();
   const { keep_days, never_purge } = trash.settings;
-  const [typed, setTyped] = useState(String(keep_days));
   const save = async (keep: number, never?: boolean) => {
     try {
       await setTrashSettings(keep, never);
@@ -122,30 +122,24 @@ function Settings({ trash, onSet }: { trash: Trash; onSet: () => void }) {
     }
     onSet();
   };
-  const commit = () => {
-    const n = Number(typed);
-    if (!Number.isInteger(n) || n < 1 || n > 90) return setTyped(String(keep_days));
-    if (n !== keep_days) void save(n);
-  };
   return (
     <section className="flex flex-col gap-2 rounded-lg border border-border p-3">
-      <label className="flex items-center gap-2 text-sm text-ink">
+      <div className="flex items-center gap-2 text-sm text-ink">
         {t("trash.keep.before")}
-        <Input
-          type="number"
-          min={1}
-          max={90}
-          size={size}
-          className="w-20 tabular-nums"
-          disabled={never_purge}
-          value={typed}
-          onChange={(e) => setTyped(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => e.key === "Enter" && commit()}
-        />
+        <Select value={String(keep_days)} onValueChange={(v) => void save(Number(v))}>
+          <SelectTrigger size={size} className="w-24 tabular-nums" disabled={never_purge}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {KEEP_DAYS.map((d) => (
+              <SelectItem key={d} value={String(d)}>
+                {t("trash.keep.days", { days: d })}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {t("trash.keep.after")}
-        <span className="text-xs text-ink-soft tabular-nums">1–90</span>
-      </label>
+      </div>
       {may(me, "sa:admin:trash:keep") && (
         <label className="flex items-center gap-2 text-sm text-ink">
           <Switch checked={never_purge} onCheckedChange={(on) => void save(keep_days, on)} />
