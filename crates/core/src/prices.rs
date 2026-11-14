@@ -110,6 +110,9 @@ pub enum AdsRequest {
 	/// `generateKeywordIdeas`: a keyword group's monthly search volumes there.
 	#[strum(message = "Search volumes")]
 	KeywordIdeas,
+	/// `generateKeywordHistoricalMetrics`: a category's keywords' volumes, which weigh its terms.
+	#[strum(message = "Keyword volumes")]
+	HistoricalMetrics,
 }
 
 /// What a study buys of DataForSEO, by the task.
@@ -119,6 +122,9 @@ pub enum DataForSeoTask {
 	/// `keywords_for_keywords/live`: keyword ideas and their volumes from Google Ads' data.
 	#[strum(message = "Keywords for keywords")]
 	KeywordsForKeywords,
+	/// `search_volume/live`: a category's keywords' volumes, which weigh its terms.
+	#[strum(message = "Search volume")]
+	SearchVolume,
 }
 
 /// What a walk down a place's reviews does in its browser, each time it does it.
