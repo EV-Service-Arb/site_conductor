@@ -1,1 +1,358 @@
-{}
+{
+  "account.mapsKey.cost": {
+    "en": "On the shared keys: {details} tokens a lookup, {search} a search, {autocomplete} a suggestion, {geocode} a town found by a point.",
+    "t": "На общих ключах: {details} токенов за запрос места, {search} за поиск, {autocomplete} за подсказку, {geocode} за город по точке."
+  },
+  "kit.area.another": {
+    "en": "Another area",
+    "t": "Другая зона"
+  },
+  "kit.area.badSlug": {
+    "en": "Lowercase letters, digits, - and _; up to 64.",
+    "t": "Строчные латинские буквы, цифры, - и _; до 64."
+  },
+  "kit.area.circle": {
+    "en": "A circle around the point",
+    "t": "Круг вокруг точки"
+  },
+  "kit.area.copied": {
+    "en": "Link copied",
+    "t": "Ссылка скопирована"
+  },
+  "kit.area.copy": {
+    "en": "Copy link",
+    "t": "Копировать ссылку"
+  },
+  "kit.area.inIt": {
+    "en": "In it",
+    "t": "В ней"
+  },
+  "kit.area.isCircle": {
+    "en": "a circle of {radius}",
+    "t": "круг {radius}"
+  },
+  "kit.area.isCity": {
+    "en": "the city",
+    "t": "город"
+  },
+  "kit.area.itsCity": {
+    "en": "Its city · {name}",
+    "t": "Её город · {name}"
+  },
+  "kit.area.kit": {
+    "en": "Review kit · {n} places",
+    "t": "Набор для отзывов · мест: {n}"
+  },
+  "kit.area.link": {
+    "en": "its link",
+    "t": "ссылка"
+  },
+  "kit.area.margin": {
+    "en": "and next to it, within",
+    "t": "и рядом, в пределах"
+  },
+  "kit.area.name": {
+    "en": "its name",
+    "t": "название"
+  },
+  "kit.area.namePlaceholder": {
+    "en": "Chassieu",
+    "t": "Chassieu"
+  },
+  "kit.area.new": {
+    "en": "Review kit · a new area",
+    "t": "Набор для отзывов · новая зона"
+  },
+  "kit.area.nextToIt": {
+    "en": "Next to it",
+    "t": "Рядом"
+  },
+  "kit.area.noCity": {
+    "en": "No city there: a circle around the point.",
+    "t": "Там нет города: круг вокруг точки."
+  },
+  "kit.area.noGbps": {
+    "en": "None of your GBPs with a point is in it or next to it.",
+    "t": "Ни один ваш GBP с точкой не в ней и не рядом."
+  },
+  "kit.area.noneFound": {
+    "en": "No city found.",
+    "t": "Город не найден."
+  },
+  "kit.area.notFound": {
+    "en": "No area is at /{slug}/.",
+    "t": "По адресу /{slug}/ зоны нет."
+  },
+  "kit.area.open": {
+    "en": "Open /{slug}/",
+    "t": "Открыть /{slug}/"
+  },
+  "kit.area.orClick": {
+    "en": "or click the map: its city, else a circle around the point",
+    "t": "или щёлкните по карте: её город, иначе круг вокруг точки"
+  },
+  "kit.area.picked": {
+    "en": "Picked on the map",
+    "t": "Выбрано на карте"
+  },
+  "kit.area.radius": {
+    "en": "radius",
+    "t": "радиус"
+  },
+  "kit.area.radiusKm": {
+    "en": "Radius, km",
+    "t": "Радиус, км"
+  },
+  "kit.area.save": {
+    "en": "Save the area",
+    "t": "Сохранить зону"
+  },
+  "kit.area.scan": {
+    "en": "Scan with your phone to take it out; signed-in only.",
+    "t": "Отсканируйте телефоном, чтобы взять с собой; только после входа."
+  },
+  "kit.area.search": {
+    "en": "City or town",
+    "t": "Город"
+  },
+  "kit.area.summary": {
+    "en": "{shape}, and {margin} around it",
+    "t": "{shape} и {margin} вокруг"
+  },
+  "kit.areas": {
+    "en": "Areas",
+    "t": "Зоны"
+  },
+  "kit.drafts": {
+    "en": "Drafts",
+    "t": "Черновики"
+  },
+  "kit.drafts.add": {
+    "en": "Add a draft",
+    "t": "Добавить черновик"
+  },
+  "kit.drafts.edit": {
+    "en": "Edit the draft",
+    "t": "Изменить черновик"
+  },
+  "kit.drafts.none": {
+    "en": "No drafts yet: a reviewer's page offers Google's form alone.",
+    "t": "Черновиков пока нет: страница рецензента предлагает только форму Google."
+  },
+  "kit.drafts.noneLeft": {
+    "en": "None left to offer here: its page answers with Google's form.",
+    "t": "Здесь предлагать больше нечего: страница отвечает формой Google."
+  },
+  "kit.drafts.offerOrder": {
+    "en": "in the offer's order · the pool is the trade's",
+    "t": "в порядке предложения · пул принадлежит направлению"
+  },
+  "kit.drafts.order": {
+    "en": "least used first · a GBP gets each at most once",
+    "t": "сначала наименее использованные · каждый GBP получает каждый не больше раза"
+  },
+  "kit.drafts.photos": {
+    "en": "Its photos",
+    "t": "Его фото"
+  },
+  "kit.drafts.placeholder": {
+    "en": "A review as a customer would write it, in the country's language",
+    "t": "Отзыв, как его написал бы клиент, на языке страны"
+  },
+  "kit.drafts.remove": {
+    "en": "Remove the draft",
+    "t": "Удалить черновик"
+  },
+  "kit.drafts.text": {
+    "en": "The draft's text",
+    "t": "Текст черновика"
+  },
+  "kit.funnel": {
+    "en": "Last 30 days",
+    "t": "Последние 30 дней"
+  },
+  "kit.funnel.copied": {
+    "en": "copied",
+    "t": "скопировано"
+  },
+  "kit.funnel.opened": {
+    "en": "opened",
+    "t": "открыто"
+  },
+  "kit.funnel.photosSaved": {
+    "en": "photos saved",
+    "t": "фото сохранено"
+  },
+  "kit.funnel.scanned": {
+    "en": "scanned",
+    "t": "отсканировано"
+  },
+  "kit.funnel.shown": {
+    "en": "shown",
+    "t": "показано"
+  },
+  "kit.held": {
+    "en": "held by an open page",
+    "t": "занят открытой страницей"
+  },
+  "kit.off": {
+    "en": "kit off",
+    "t": "набор выключен"
+  },
+  "kit.offered": {
+    "en": "offered now",
+    "t": "предлагается сейчас"
+  },
+  "kit.open": {
+    "en": "Review kit",
+    "t": "QR для отзывов"
+  },
+  "kit.page.find": {
+    "en": "A place, or what it does",
+    "t": "Место или чем оно занимается"
+  },
+  "kit.page.lead.drafts": {
+    "en": "a drafted review to start from, then Google",
+    "t": "готовый отзыв для начала, затем Google"
+  },
+  "kit.page.lead.google": {
+    "en": "Google's review form",
+    "t": "форма отзыва Google"
+  },
+  "kit.page.lead.oneTap": {
+    "en": "one tap copies a drafted review, then Google",
+    "t": "одно касание копирует готовый отзыв, затем Google"
+  },
+  "kit.page.nearest": {
+    "en": "Nearest first",
+    "t": "Сначала ближайшие"
+  },
+  "kit.page.next": {
+    "en": "Next",
+    "t": "Следующее"
+  },
+  "kit.page.noArea": {
+    "en": "No area named",
+    "t": "Зона не указана"
+  },
+  "kit.page.noArea.why": {
+    "en": "An area's kit is at its own link, /<area>/: draw one from the map's Review kit.",
+    "t": "У набора зоны своя ссылка, /<зона>/: нарисуйте её в «Наборе для отзывов» на карте."
+  },
+  "kit.page.off": {
+    "en": "Its kit is off: pick where its QR leads below.",
+    "t": "Набор выключен: выберите ниже, куда ведёт QR."
+  },
+  "kit.page.prev": {
+    "en": "Previous",
+    "t": "Предыдущее"
+  },
+  "kit.page.scan": {
+    "en": "Scan to leave a review",
+    "t": "Отсканируйте, чтобы оставить отзыв"
+  },
+  "kit.page.shownToday": {
+    "en": "shown today",
+    "t": "показано сегодня"
+  },
+  "kit.page.tap": {
+    "en": "Tap a place: its QR fills the screen, for them to scan",
+    "t": "Коснитесь места: его QR займёт экран, чтобы его отсканировали"
+  },
+  "kit.pane.category": {
+    "en": "Keywords · category · study",
+    "t": "Ключевые слова · категория · исследование"
+  },
+  "kit.pane.kit": {
+    "en": "Drafts · Photos",
+    "t": "Черновики · Фото"
+  },
+  "kit.pane.kitCounted": {
+    "en": "Drafts {drafts} · Photos {photos}",
+    "t": "Черновики {drafts} · Фото {photos}"
+  },
+  "kit.photos": {
+    "en": "Photos",
+    "t": "Фото"
+  },
+  "kit.photos.order": {
+    "en": "least used first · a GBP gets each at most once · a draft selects its own",
+    "t": "сначала наименее использованные · каждый GBP получает каждое не больше раза · черновик выбирает свои"
+  },
+  "kit.photos.remove": {
+    "en": "Remove the photo",
+    "t": "Удалить фото"
+  },
+  "kit.photos.tooLarge": {
+    "en": "{name}: a photo is 10 MiB at most",
+    "t": "{name}: фото не больше 10 МиБ"
+  },
+  "kit.photos.upload": {
+    "en": "Upload",
+    "t": "Загрузить"
+  },
+  "kit.photos.wentHere": {
+    "en": "saved here already",
+    "t": "уже сохранено здесь"
+  },
+  "kit.qrOpens": {
+    "en": "The QR opens",
+    "t": "QR открывает"
+  },
+  "kit.remove": {
+    "en": "Remove",
+    "t": "Удалить"
+  },
+  "kit.remove.body": {
+    "en": "Out of every offer from now on. The GBPs it went to keep it as used.",
+    "t": "Больше не предлагается нигде. GBP, куда он ушёл, считают его использованным."
+  },
+  "kit.save": {
+    "en": "Save",
+    "t": "Сохранить"
+  },
+  "kit.target.drafts": {
+    "en": "Drafts page",
+    "t": "Страница черновиков"
+  },
+  "kit.target.google": {
+    "en": "Google's form",
+    "t": "Форма Google"
+  },
+  "kit.target.noPage": {
+    "en": "No landing page of its: only Google's form",
+    "t": "Нет своей посадочной страницы: только форма Google"
+  },
+  "kit.target.off": {
+    "en": "Off",
+    "t": "Выкл."
+  },
+  "kit.target.oneTap": {
+    "en": "One tap",
+    "t": "Одно касание"
+  },
+  "kit.uses": {
+    "en": "{n} uses",
+    "t": "использований: {n}"
+  },
+  "kit.wentHere": {
+    "en": "Went here",
+    "t": "Ушли сюда"
+  },
+  "kit.wentHere.why": {
+    "en": "copied on this GBP: never offered here again",
+    "t": "скопированы на этом GBP: здесь больше не предлагаются"
+  },
+  "kit.window": {
+    "en": "Review kit",
+    "t": "Набор для отзывов"
+  },
+  "prices.geocode": {
+    "en": "Town by a point",
+    "t": "Город по точке"
+  },
+  "window.tab.kit": {
+    "en": "Review kit",
+    "t": "Набор для отзывов"
+  }
+}

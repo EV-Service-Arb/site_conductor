@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge, Button, cn } from "@evinvest/uikit";
-import { ChevronDown, ChevronUp, Globe, Hash, Mail, MapPin, Phone, Send, Smartphone, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Globe, Hash, Mail, MapPin, Phone, QrCode, Send, Smartphone, X } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { CategoryChip, type Listed, MUST_HAVES, TABS, type Tab, open, openAccount, readiness, useGmbTags, useSelection, windowKeys, STATE_NAME } from "@/entities/gmb";
@@ -10,14 +10,16 @@ import { setQuery } from "@/shared/lib/query";
 import { useButtonSize } from "@/shared/ui/touch";
 
 import { BrowserTab } from "./browser-tab";
+import { KitTab } from "./kit-tab";
 import { Launch } from "./launch";
 
 const TAB_NAME = {
   launch: (t) => t(windowKeys.tab.launch, "Launch"),
   browser: (t) => t(windowKeys.tab.browser, "Browser"),
+  kit: (t) => t(windowKeys.tab.kit, "Review kit"),
 } satisfies Record<Tab, (t: T) => string>;
 
-const ICON: Record<Tab, ReactNode> = { launch: <Send aria-hidden className="size-4" />, browser: <Smartphone aria-hidden className="size-4" /> };
+const ICON: Record<Tab, ReactNode> = { launch: <Send aria-hidden className="size-4" />, browser: <Smartphone aria-hidden className="size-4" />, kit: <QrCode aria-hidden className="size-4" /> };
 
 /** A GBP's window over the map, beside the outline: its header, and the tabs its state has. */
 export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
@@ -115,6 +117,7 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
       <div role="tabpanel" className="p-6">
         {tab === "launch" && <Launch listed={listed} />}
         {tab === "browser" && <BrowserTab listed={listed} />}
+        {tab === "kit" && <KitTab listed={listed} />}
       </div>
     </section>
   );

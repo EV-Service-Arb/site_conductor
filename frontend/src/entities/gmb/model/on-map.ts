@@ -54,10 +54,10 @@ export function peek(gmb: number | null): void {
   setQuery({ gmb: gmb === null ? null : String(gmb) });
 }
 
-export type Tab = "launch" | "browser";
+export type Tab = "launch" | "browser" | "kit";
 
 /** The location window's tabs by state, in order; a GBP whose state has none opens as its card only. */
-export const TABS: Record<State, readonly Tab[]> = { draft: ["launch", "browser"], verifying: ["browser"], verified: [], suspended: [] };
+export const TABS: Record<State, readonly Tab[]> = { draft: ["launch", "browser"], verifying: ["browser"], verified: ["kit"], suspended: [] };
 
 /** The tab the GBP's window is open on; `null`: no window, the card only, or the trade's or a gmail's window holds `?tab`. */
 export function useTab(): Tab | null {
@@ -70,9 +70,9 @@ export function useTab(): Tab | null {
 }
 
 /** The GBP's window, on the open tab while its state has it, else on its state's first; its card alone where it has none. */
-export function open(gmb: Gmb): void {
+export function open(gmb: Pick<Gmb, "id" | "state">): void {
   const tabs = TABS[gmb.state];
-  setQuery((now) => ({ gmb: String(gmb.id), trade: null, categories: null, account: null, trash: null, add: null, tab: now.trade === null && tabs.includes(now.tab as Tab) ? now.tab : (tabs[0] ?? null) }));
+  setQuery((now) => ({ gmb: String(gmb.id), trade: null, categories: null, account: null, trash: null, add: null, kit: null, tab: now.trade === null && tabs.includes(now.tab as Tab) ? now.tab : (tabs[0] ?? null) }));
 }
 
 /** A GBP clicked on the map or in the outline beside it: the first click opens it, the next goes to it on the map, out of its window. */
@@ -94,7 +94,7 @@ export function useTradeWindow(): { trade: number; tab: Country | null } | null 
 }
 
 export function openTrade(trade: number | null, tab?: Country): void {
-  setQuery({ trade: trade === null ? null : String(trade), tab: tab ?? null, categories: null, gmb: null, account: null, trash: null, add: null });
+  setQuery({ trade: trade === null ? null : String(trade), tab: tab ?? null, categories: null, gmb: null, account: null, trash: null, add: null, kit: null });
 }
 
 /** Every trade by country, the level a trade's window sits under (`?categories`). */
@@ -103,7 +103,7 @@ export function useCategoriesWindow(): boolean {
 }
 
 export function openCategories(on: boolean): void {
-  setQuery({ categories: on ? "" : null, trade: null, tab: null, gmb: null, account: null, trash: null, add: null });
+  setQuery({ categories: on ? "" : null, trade: null, tab: null, gmb: null, account: null, trash: null, add: null, kit: null });
 }
 
 export const ACCOUNT_TABS = ["connections", "browser"] as const;
@@ -121,7 +121,7 @@ export function useAccountWindow(): { gmail: number; tab: AccountTab } | null {
 }
 
 export function openAccount(at: { gmail: number; tab: AccountTab } | null): void {
-  setQuery({ account: at === null ? null : String(at.gmail), tab: at?.tab ?? null, gmb: null, trade: null, categories: null, trash: null, add: null });
+  setQuery({ account: at === null ? null : String(at.gmail), tab: at?.tab ?? null, gmb: null, trade: null, categories: null, trash: null, add: null, kit: null });
 }
 
 /** What the caller removed (`?trash`), restorable until purged. */
@@ -130,7 +130,16 @@ export function useTrashWindow(): boolean {
 }
 
 export function openTrash(on: boolean): void {
-  setQuery({ trash: on ? "" : null, add: null, trade: null, tab: null, gmb: null, account: null, categories: null });
+  setQuery({ trash: on ? "" : null, add: null, kit: null, trade: null, tab: null, gmb: null, account: null, categories: null });
+}
+
+/** The review kit's area window (`?kit`): `""` draws a new area, a slug shows that one. */
+export function useKitWindow(): string | null {
+  return useQuery("kit");
+}
+
+export function openKit(area: string | null): void {
+  setQuery({ kit: area, add: null, trade: null, tab: null, gmb: null, account: null, categories: null, trash: null });
 }
 
 /** What the Add a GBP panel opens with: the outline's gmail and trade, when it is scoped to one. */
@@ -154,7 +163,7 @@ export function useAddWindow(): { raw: string; adding: Adding } | null {
 }
 
 export function openAdd(at: Adding | null): void {
-  setQuery({ add: at === null ? null : addValue(at), gmb: null, trade: null, tab: null, categories: null, account: null, trash: null });
+  setQuery({ add: at === null ? null : addValue(at), kit: null, gmb: null, trade: null, tab: null, categories: null, account: null, trash: null });
 }
 
 /** The home page with the panel open, from another page. */

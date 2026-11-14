@@ -32,6 +32,7 @@ import {
   usePeeked,
   useSelection,
   useTab,
+  useKitWindow,
   useTradeWindow,
   useTrades,
 } from "@/entities/gmb";
@@ -50,6 +51,7 @@ import { ErrorState } from "@/shared/ui/error-state";
 import { AccountWindow } from "./account-window";
 import { Peek } from "./peek";
 import { CategoriesWindow, TradeWindow } from "./trade-window";
+import { KitWindow } from "./kit-window";
 import { TrashWindow } from "./trash-window";
 import { LocationWindow } from "./window";
 
@@ -226,6 +228,7 @@ function GmbMap({ config }: { config: MapConfig }) {
   const trashWindow = useTrashWindow();
   const trash = useTrash();
   const accountWindow = useAccountWindow();
+  const kitWindow = useKitWindow();
   const account = accountWindow !== null && gmails.status === "ok" ? gmails.data.gmails.find((g) => g.id === accountWindow.gmail) : undefined;
   // a gmail removed, here or in another tab: its window closes
   const accountGone = accountWindow !== null && gmails.status === "ok" && account === undefined;
@@ -315,6 +318,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       {categoriesWindow && trades.status === "ok" && gmails.status === "ok" && windows && <CategoriesWindow trades={trades.data} gmbs={gmails.data.gmbs} />}
       {trashWindow && trash.status === "ok" && windows && <TrashWindow trash={trash.data} />}
       {account && accountWindow && gmails.status === "ok" && windows && <AccountWindow gmail={account} tab={accountWindow.tab} gbps={under(gmails.data, account.id).length} />}
+      {kitWindow !== null && map.status === "ok" && windows && <KitWindow map={map.map} area={kitWindow} />}
       {add && placed === undefined && <AddPanel key={add.raw} {...add.adding} />}
       {picking !== null && (
         <div className="absolute bottom-4 left-4 flex items-center gap-3 rounded-lg border border-border bg-background py-2 pr-2 pl-4 shadow-overlay">

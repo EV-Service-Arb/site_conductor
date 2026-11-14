@@ -77,6 +77,7 @@ prices: Array<Price>, browser: Browser | null, };
  * ISO 3166-1 alpha-2, of the countries GBPs are in.
  */
 export type Country = "FR" | "US" | "CA" | "GB";
+export type EditKitDraft = { text?: string, photos?: number[], };
 /**
  * Where a gmail's proxy comes out, at its last check.
  */
@@ -180,6 +181,26 @@ location: { lat: number, lng: number, placed: boolean } | null,
  */
 spots: { lat: number, lng: number, label: string | null, note: string | null }[], };
 /**
+ * A GBP's kit.
+ */
+export type GmbKit = { 
+/**
+ * `null`: off.
+ */
+target: KitTarget | null, 
+/**
+ * What its QR encodes; `null` while off.
+ */
+url: string | null, 
+/**
+ * Its page on its landing: `null` without one, and then only `google` is open to it.
+ */
+page: string | null, 
+/**
+ * Its category's drafts in the offer's order.
+ */
+drafts: Array<KitRanked>, funnel: KitFunnel, };
+/**
  * `GET /google-categories/{country}`.
  */
 export type GoogleCategories = { categories: Array<GoogleCategory>, };
@@ -196,6 +217,66 @@ id: string,
  */
 names: { [key in string]: string }, };
 export type Imap = { host: string, username: string, set_at: string, checked: Checked, };
+export type KitArea = { slug: string, name: string, center: { lat: number, lng: number }, shape: KitShape, margin_m: number, };
+export type KitAreaGmbs = { area: KitArea, gmbs: Array<KitNearby>, };
+export type KitAreas = { areas: Array<KitArea>, };
+export type KitDraft = { id: number, text: string, photos: number[], 
+/**
+ * Copies, every GBP.
+ */
+uses: number, created_at: string, };
+/**
+ * The last 30 days.
+ */
+export type KitFunnel = { shown: number, scanned: number, opened: number, copied: number, photos_saved: number, };
+/**
+ * One of the caller's GBPs by an area.
+ */
+export type KitNearby = { id: number, name: string, state: State, address: string | null, location: { lat: number, lng: number }, distance_m: number, 
+/**
+ * `false`: within the margin outside it.
+ */
+inside: boolean, target: KitTarget | null, last_shown: string | null, };
+export type KitPhoto = { id: number, width: number, height: number, 
+/**
+ * Saved, every GBP.
+ */
+uses: number, created_at: string, };
+/**
+ * A category's drafts and photos.
+ */
+export type KitPool = { drafts: Array<KitDraft>, 
+/**
+ * Newest first.
+ */
+photos: Array<KitPhoto>, };
+/**
+ * A draft as the offer weighs it for one GBP.
+ */
+export type KitRanked = { id: number, text: string, uses: number, 
+/**
+ * Copied on this GBP.
+ */
+went_here: boolean, 
+/**
+ * Held by a reviewer's page open now.
+ */
+held: boolean, 
+/**
+ * Among what a reviewer is offered now.
+ */
+offered: boolean, photos: Array<KitRankedPhoto>, };
+export type KitRankedPhoto = { id: number, width: number, height: number, uses: number, 
+/**
+ * Saved on this GBP: never offered here again.
+ */
+went_here: boolean, };
+export type KitShape = { "kind": "city", place_id: string, viewport: Viewport, } | { "kind": "circle", radius_m: number, };
+/**
+ * Where a GBP's QR leads.
+ */
+export type KitTarget = "google" | "drafts" | "one_tap";
+export type Locality = { place_id: string, name: string, location: { lat: number, lng: number }, viewport: Viewport, };
 /**
  * `GET /map`: the browser's Maps JS key, referrer-restricted.
  */
@@ -205,6 +286,7 @@ export type MapsKey = { last4: string, set_at: string, checked: Checked,
  * Why the key is passed over now, until Google takes it again.
  */
 out: string | null, };
+export type NewKitDraft = { text: string, photos: number[], };
 /**
  * A [`State`] on Google: every one but a draft.
  */
@@ -237,6 +319,7 @@ set_by: string | null,
  * RFC 3339.
  */
 set_at: string | null, };
+export type PutKitArea = { "kind": "city", place_id: string, margin_m: number, } | { "kind": "circle", name: string, lat: number, lng: number, radius_m: number, margin_m: number, };
 export type SetBrowser = { provider: Provider, 
 /**
  * A browser's; a cloud phone's model is drawn.
@@ -246,6 +329,7 @@ device: Device | null,
  * `socks5://` or `http://`, `user:pass@host:port`.
  */
 proxy: string, };
+export type SetKit = { target: KitTarget | null, };
 /**
  * `PUT /trash/settings`.
  */
@@ -346,6 +430,7 @@ removed_at: string,
  * RFC 3339; `null`: kept until restored.
  */
 purge_at: string | null, blocked: string | null, };
+export type Viewport = { south: number, west: number, north: number, east: number, };
 
 export const DEVICES = ["pixel_7", "galaxy_s23", "redmi_note_14"] as const;
 export type Device = (typeof DEVICES)[number];
@@ -353,7 +438,7 @@ export type Device = (typeof DEVICES)[number];
 export const PROVIDERS = ["multilogin", "multilogin_browser", "gologin"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
-export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "street_view.panorama", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step"] as const;
+export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step"] as const;
 export type PricedItem = (typeof PRICED_ITEMS)[number];
 
 export const SCOPES = ["conductor", "review_archive"] as const;

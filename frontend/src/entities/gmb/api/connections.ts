@@ -56,7 +56,7 @@ export async function stopBrowser(gmail: number): Promise<void> {
 
 /** Played as the back camera by the browser's next launch; refused while it runs, or when ffmpeg cannot cut it. */
 export function uploadFilm(gmail: number, film: Blob, onProgress: (sent: number) => void): Promise<void> {
-  return http.upload(`/api/v1/gmails/${gmail}/browser/film`, film, "video/mp4", onProgress);
+  return http.upload("PUT", `/api/v1/gmails/${gmail}/browser/film`, film, "video/mp4", onProgress);
 }
 
 export async function removeFilm(gmail: number): Promise<void> {

@@ -18,6 +18,8 @@ import {
   Input,
   NativeSelect,
   NativeSelectOption,
+  ToggleGroup,
+  ToggleGroupItem,
   buttonVariants,
   cn,
 } from "@evinvest/uikit";
@@ -34,6 +36,8 @@ import {
   chooseCategoryScope,
   chooseGmailScope,
   addTrade,
+  fetchPool,
+  kit,
   googleName,
   deleteTrade,
   openCategories,
@@ -53,11 +57,13 @@ import { usePlacement } from "@/features/placement-overlay";
 import { ApiError } from "@/shared/api";
 import { useLocale, useT, state, placement as placementKeys } from "@/shared/i18n";
 import { setQuery } from "@/shared/lib/query";
+import { useResource } from "@/shared/lib/use-resource";
 import { failureText } from "@/shared/ui/failure-text";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 import { GoogleCategories } from "./google-categories";
+import { KitPoolPane } from "./kit-pool";
 import { categories } from "../model/i18n";
 
 const MAX_KEYWORDS = 50;
@@ -152,7 +158,7 @@ export function TradeWindow({ trade, tab, gmbs, gmails }: { trade: Trade; tab: C
         ) : category === undefined ? (
           <NotSetUp trade={trade} country={tab} waiting={here.length} />
         ) : (
-          <CategoryEditor key={`${trade.id}.${tab}`} trade={trade} category={category} here={here} gmails={gmails} />
+          <CategoryTab key={`${trade.id}.${tab}`} trade={trade} category={category} here={here} gmails={gmails} />
         )}
       </div>
     </section>
@@ -463,6 +469,26 @@ function NotSetUp({ trade, country, waiting }: { trade: Trade; country: Country;
 
 const SECTION = "flex flex-col gap-2";
 const SECTION_HEAD = "flex items-baseline gap-2 text-xs font-semibold tracking-wide text-ink-soft uppercase";
+
+/** A set-up category: what its GBPs rank on and are filed under, or its review kit. */
+function CategoryTab({ trade, category, here, gmails }: { trade: Trade; category: Category; here: readonly Gmb[]; gmails: readonly Gmail[] }) {
+  const t = useT();
+  const [pane, setPane] = useState<"category" | "kit">("category");
+  const pool = useResource(`kit.pool.${trade.id}.${category.country}`, () => fetchPool(trade.id, category.country));
+  return (
+    <div className="flex flex-col gap-6">
+      <ToggleGroup type="single" variant="outline" size="sm" className="w-full" value={pane} onValueChange={(v) => (v === "category" || v === "kit") && setPane(v)}>
+        <ToggleGroupItem value="category" className="flex-1">
+          {t(kit.pane.category, "Keywords · category · study")}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="kit" className="flex-1 tabular-nums">
+          {pool.status === "ok" ? t(kit.pane.kitCounted, "Drafts {drafts} · Photos {photos}", { drafts: pool.data.drafts.length, photos: pool.data.photos.length }) : t(kit.pane.kit, "Drafts · Photos")}
+        </ToggleGroupItem>
+      </ToggleGroup>
+      {pane === "category" ? <CategoryEditor trade={trade} category={category} here={here} gmails={gmails} /> : <KitPoolPane trade={trade.id} country={category.country} pool={pool} />}
+    </div>
+  );
+}
 
 /** A category's keywords, Google's categories and placement's study, and the gmails holding it; each change writes the whole category. */
 function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; category: Category; here: readonly Gmb[]; gmails: readonly Gmail[] }) {
