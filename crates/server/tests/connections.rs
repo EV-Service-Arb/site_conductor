@@ -108,7 +108,7 @@ impl World {
 			panel_origin: ORIGIN.to_owned(),
 			concierge_origin: ORIGIN.to_owned(),
 		};
-		let app = http::app(SignIn::new(panel.clone(), Concierge::dev(who), config), None, None, Default::default(), None, None, None);
+		let app = http::app(SignIn::new(panel.clone(), Concierge::dev(who), config), None, None, Default::default(), None, None, None, None);
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		Self { stub, panel, app, b, db }

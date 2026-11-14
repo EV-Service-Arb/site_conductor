@@ -114,7 +114,7 @@ fn app(panel: Panel, map: Option<MapDto>) -> Router {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: ORIGIN.to_owned(),
 	};
-	http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, map, None)
+	http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, map, None, None)
 }
 
 async fn call(b: &mut Browser, app: &Router, method: Method, uri: &str, body: Option<Value>) -> (StatusCode, Value) {

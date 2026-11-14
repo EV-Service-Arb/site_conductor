@@ -54,7 +54,16 @@ impl World {
 			concierge_origin: ORIGIN.to_owned(),
 		};
 		let map = MapDto { key: "browser-key".to_owned() };
-		let app = http::app(SignIn::new(panel.clone(), Concierge::dev(who), config), None, None, Default::default(), None, Some(map), None);
+		let app = http::app(
+			SignIn::new(panel.clone(), Concierge::dev(who), config),
+			None,
+			None,
+			Default::default(),
+			None,
+			Some(map),
+			None,
+			None,
+		);
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		Self { panel, app, b, db }

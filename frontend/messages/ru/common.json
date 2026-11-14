@@ -1,8 +1,4 @@
 {
-  "account.mapsKey.cost": {
-    "en": "On the shared keys: {details} tokens a lookup, {search} a search, {autocomplete} a suggestion, {geocode} a town found by a point.",
-    "t": "На общих ключах: {details} токенов за запрос места, {search} за поиск, {autocomplete} за подсказку, {geocode} за город по точке."
-  },
   "kit.area.another": {
     "en": "Another area",
     "t": "Другая зона"
@@ -346,10 +342,6 @@
   "kit.window": {
     "en": "Review kit",
     "t": "Набор для отзывов"
-  },
-  "prices.geocode": {
-    "en": "Town by a point",
-    "t": "Город по точке"
   },
   "window.tab.kit": {
     "en": "Review kit",
