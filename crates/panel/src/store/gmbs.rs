@@ -14,7 +14,8 @@ use super::{from_db, to_db};
 use crate::google_categories::GoogleCategory;
 
 const GMB: &str = "SELECT b.id, b.gmail_id, b.place_id, b.name, b.address, b.state, b.country, b.country_by IS NOT NULL AS country_by_hand, b.phone, \
-	b.trade_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, NOT EXISTS (SELECT 1 FROM gmbs_off o WHERE o.gmb_id = b.id) AS enabled FROM gmbs b";
+	b.trade_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, NOT EXISTS (SELECT 1 FROM gmbs_off o WHERE o.gmb_id = b.id) AS enabled, \
+	(SELECT json_group_array(json_object('lat', s.lat, 'lng', s.lng, 'label', s.label, 'note', s.note)) FROM (SELECT * FROM gmb_spots s WHERE s.gmb_id = b.id ORDER BY s.pos) s) AS spots FROM gmbs b";
 
 /// Whether the gmail's browser's last check went through.
 const BROWSER: &str = "EXISTS (SELECT 1 FROM gmail_browsers w WHERE w.gmail_id = gmails.id AND w.check_error IS NULL)";
@@ -61,6 +62,17 @@ pub struct Gmb {
 	/// `None`: none on Google (a service-area place, a draft) and none placed yet, or not located
 	/// since it was added without a Places key.
 	pub location: Option<Point>,
+	/// A draft's candidate spots, its point the first; none past a draft.
+	pub spots: Vec<Spot>,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct Spot {
+	#[serde(flatten)]
+	pub at: LatLng,
+	/// What it was picked by: an address, a business nearby.
+	pub label: Option<String>,
+	pub note: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
@@ -296,7 +308,8 @@ pub async fn set_fields(conn: &mut SqliteConnection, id: i64, e: &crate::gmbs::E
 	Ok(())
 }
 
-/// GBP `id` in `to`; the schema checks the move against [`State::next`] again.
+/// GBP `id` in `to`; the schema checks the move against [`State::next`] again. Out of a draft,
+/// its first spot stays its point, the others go.
 pub async fn set_state(conn: &mut SqliteConnection, id: i64, to: State) -> eyre::Result<()> {
 	sqlx::query("UPDATE gmbs SET state = $2 WHERE id = $1")
 		.bind(id)
@@ -304,6 +317,42 @@ pub async fn set_state(conn: &mut SqliteConnection, id: i64, to: State) -> eyre:
 		.execute(&mut *conn)
 		.await
 		.wrap_err("moving a GMB's state")?;
+	sqlx::query("DELETE FROM gmb_spots WHERE gmb_id = $1")
+		.bind(id)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("dropping a draft's spots")?;
+	Ok(())
+}
+
+/// Draft `id`'s spots, in order, `by` its owner: the first its point, placed by hand.
+pub async fn set_spots(conn: &mut SqliteConnection, by: Uuid, id: i64, spots: &[Spot]) -> eyre::Result<()> {
+	sqlx::query("DELETE FROM gmb_spots WHERE gmb_id = $1")
+		.bind(id)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("clearing a draft's spots")?;
+	for (pos, s) in spots.iter().enumerate() {
+		sqlx::query("INSERT INTO gmb_spots (gmb_id, pos, lat, lng, label, note) VALUES ($1, $2, $3, $4, $5, $6)")
+			.bind(id)
+			.bind(i64::try_from(pos).expect("a few spots"))
+			.bind(s.at.lat)
+			.bind(s.at.lng)
+			.bind(s.label.as_deref())
+			.bind(s.note.as_deref())
+			.execute(&mut *conn)
+			.await
+			.wrap_err("adding a draft's spot")?;
+	}
+	let first = spots.first().map(|s| s.at);
+	sqlx::query("UPDATE gmbs SET lat = $2, lng = $3, placed_by = CASE WHEN $2 IS NULL THEN NULL ELSE $4 END WHERE id = $1")
+		.bind(id)
+		.bind(first.map(|a| a.lat))
+		.bind(first.map(|a| a.lng))
+		.bind(by)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("placing a draft at its first spot")?;
 	Ok(())
 }
 
@@ -325,6 +374,11 @@ pub async fn place_on_google(conn: &mut SqliteConnection, id: i64, place_id: &st
 		.execute(&mut *conn)
 		.await
 		.wrap_err("placing a GBP on Google")?;
+	sqlx::query("DELETE FROM gmb_spots WHERE gmb_id = $1")
+		.bind(id)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("dropping a draft's spots")?;
 	Ok(())
 }
 
@@ -350,6 +404,15 @@ pub async fn place(conn: &mut SqliteConnection, owner: Uuid, gmb_id: i64, at: La
 	if gbp.location.is_some_and(|p| !p.placed) {
 		return Ok(Err(crate::Refused::Conflict(format!("Google places GBP {gmb_id} itself"))));
 	}
+	if gbp.state == State::Draft {
+		let mut spots = gbp.spots;
+		match spots.first_mut() {
+			Some(first) => first.at = at,
+			None => spots.push(Spot { at, label: None, note: None }),
+		}
+		set_spots(conn, owner, gmb_id, &spots).await?;
+		return Ok(Ok(()));
+	}
 	sqlx::query("UPDATE gmbs SET lat = $2, lng = $3, placed_by = $4 WHERE id = $1")
 		.bind(gmb_id)
 		.bind(at.lat)
@@ -369,6 +432,10 @@ pub async fn unplace(conn: &mut SqliteConnection, owner: Uuid, gmb_id: i64) -> e
 	};
 	if !gbp.location.is_some_and(|p| p.placed) {
 		return Ok(Err(crate::Refused::Conflict(format!("GBP {gmb_id} has no point placed by hand"))));
+	}
+	if gbp.state == State::Draft {
+		set_spots(conn, owner, gmb_id, &gbp.spots[1..]).await?;
+		return Ok(Ok(()));
 	}
 	sqlx::query("UPDATE gmbs SET lat = NULL, lng = NULL, placed_by = NULL WHERE id = $1")
 		.bind(gmb_id)
@@ -705,6 +772,7 @@ struct GmbRow {
 	placed: bool,
 	created_at: i64,
 	enabled: bool,
+	spots: String,
 }
 
 fn gmail((id, owner, gmail, role, created_at, browser): GmailRow) -> eyre::Result<Gmail> {
@@ -750,5 +818,6 @@ fn gmb(r: GmbRow) -> eyre::Result<Gmb> {
 		created_at: from_db(r.created_at)?,
 		enabled: r.enabled,
 		location,
+		spots: serde_json::from_str(&r.spots).wrap_err_with(|| format!("GMB {}'s spots", r.id))?,
 	})
 }

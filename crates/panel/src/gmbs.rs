@@ -20,7 +20,7 @@ use crate::{
 };
 pub use crate::{
 	google_categories::GoogleCategory,
-	store::gmbs::{Category, GbpCountry, Gmail, Gmb, Point, Trade},
+	store::gmbs::{Category, GbpCountry, Gmail, Gmb, Point, Spot, Trade},
 };
 
 /// What [`Panel::locate`] did.
@@ -62,8 +62,10 @@ pub struct Unplaced {
 	pub gmail_id: Option<i64>,
 	/// Set by hand; past a draft, required.
 	pub country: Option<Country>,
-	/// Placed by hand.
+	/// Placed by hand; past a draft only.
 	pub at: Option<LatLng>,
+	/// A draft's, at least one.
+	pub spots: Vec<Spot>,
 }
 
 /// What changes of a GBP; each absent is left, `Some(None)` clears it.
@@ -170,6 +172,30 @@ fn on_earth(at: LatLng) -> Result<(), Refused> {
 		false => Err(Refused::Invalid(format!("({}, {}) is no point on Earth", at.lat, at.lng))),
 	}
 }
+
+/// A draft's spots: 1 to 20, each on Earth, its texts trimmed and not empty.
+fn spots(spots: Vec<Spot>) -> Result<Vec<Spot>, Refused> {
+	if !(1..=MAX_SPOTS).contains(&spots.len()) {
+		return Err(Refused::Invalid(format!("a draft has 1 to {MAX_SPOTS} spots, not {}", spots.len())));
+	}
+	let text = |t: Option<String>| match t.as_deref().map(str::trim) {
+		Some("") => Err(Refused::Invalid("a spot's label and note are not empty: null for none".to_owned())),
+		trimmed => Ok(trimmed.map(str::to_owned)),
+	};
+	spots
+		.into_iter()
+		.map(|s| {
+			on_earth(s.at)?;
+			Ok(Spot {
+				at: s.at,
+				label: text(s.label)?,
+				note: text(s.note)?,
+			})
+		})
+		.collect()
+}
+
+const MAX_SPOTS: usize = 20;
 
 /// Google's country of `place`: one it puts in a country not served is refused.
 fn google_country(place: Option<&Place>) -> Result<Option<Country>, Refused> {
@@ -283,10 +309,16 @@ impl Panel {
 			if u.state != State::Draft && (u.gmail_id.is_none() || u.country.is_none()) {
 				return Err(Refused::Invalid(format!("a {} GBP is on Google under a gmail, in a country: give both", u.state)));
 			}
+			let spots = match u.state {
+				State::Draft if u.at.is_some() => return Err(Refused::Invalid("a draft is where its first spot is: give spots, not a location".to_owned())),
+				State::Draft => spots(u.spots)?,
+				_ if !u.spots.is_empty() => return Err(Refused::Invalid(format!("spots are a draft's: a {} GBP has a location", u.state))),
+				_ => Vec::new(),
+			};
 			u.at.map(on_earth).transpose()?;
-			Ok(n)
+			Ok((n, spots))
 		});
-		let name = match checked {
+		let (name, spots) = match checked {
 			Ok(n) => n,
 			Err(r) => return Ok(Err(r)),
 		};
@@ -327,7 +359,11 @@ impl Panel {
 			at_by_hand: u.at.is_some(),
 			trade_id: Some(u.trade),
 		};
-		let added = db::add_gmb(&mut tx, None, &new, now).await?;
+		let mut added = db::add_gmb(&mut tx, None, &new, now).await?;
+		if !spots.is_empty() {
+			db::set_spots(&mut tx, owner, added.id, &spots).await?;
+			added = db::gmb_of(&mut tx, None, added.id).await?.expect("added in this transaction");
+		}
 		tx.commit().await.wrap_err("committing a GBP without a place")?;
 		self.snapshot_due.notify_one();
 		Ok(Ok(added))
@@ -595,6 +631,28 @@ impl Panel {
 		}
 		tx.commit().await.wrap_err("committing a placed point")?;
 		Ok(Ok(()))
+	}
+
+	/// Draft `id`'s spots, in order: the first its point.
+	pub async fn set_spots(&self, owner: Uuid, id: i64, given: Vec<Spot>) -> eyre::Result<Result<Gmb, Refused>> {
+		let given = match spots(given) {
+			Ok(s) => s,
+			Err(r) => return Ok(Err(r)),
+		};
+		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		let Some(gbp) = db::gmb_of(&mut tx, Some(owner), id).await? else {
+			return Ok(Err(Refused::NotFound));
+		};
+		if gbp.state != State::Draft {
+			return Ok(Err(Refused::Conflict(format!("GBP {id} is {}: spots are a draft's", gbp.state))));
+		}
+		db::set_spots(&mut tx, owner, id, &given).await?;
+		let set = db::gmb_of(&mut tx, Some(owner), id).await?.expect("read in this transaction");
+		tx.commit().await.wrap_err("committing a draft's spots")?;
+		Ok(Ok(set))
 	}
 
 	/// The point the owner placed on GBP `id` taken back.

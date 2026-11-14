@@ -10,8 +10,9 @@
 //!                                     before their others', then the shared ones they pay for
 //! GET    /api/v1/gmbs/suggest?input=&gmail=  Suggestions: Places Autocomplete in the countries
 //!                                     served, paid for as resolve
-//! POST   /api/v1/gmbs {name, trade, state, gmail_id?, country?, location?}  → 201 Gmb, no place
-//!                                     known (not verified); 409 the name taken
+//! POST   /api/v1/gmbs {name, trade, state, gmail_id?, country?, location?, spots?}  → 201 Gmb, no
+//!                                     place known (not verified): a draft by its spots, the others
+//!                                     by a location; 409 the name taken
 //! POST   /api/v1/gmails/{id}/gmbs {place_id, state, name?, country?, trade}  → 201 Gmb, on
 //!                                     Google already; 409 the name or the place taken
 //! PATCH  /api/v1/gmbs/{id} {name?, gmail_id?, phone?, trade?, areas?, hidden_address?,
@@ -29,6 +30,7 @@
 //!                                     → 200 Trade; the gcids Google's in that country
 //! DELETE /api/v1/trades/{id}/{country}  → 204
 //! GET    /api/v1/google-categories/{country}  GoogleCategories: Google's list there
+//! PUT    /api/v1/gmbs/{id}/spots {spots}  → 200 Gmb; 409 not a draft
 //! PUT    /api/v1/gmbs/{id}/location {lat, lng}  → 204; 409 Google has its point
 //! DELETE /api/v1/gmbs/{id}/location   → 204; 409 no point placed by hand
 //! PUT    /api/v1/gmbs/{id}/country {country}   → 204; 409 Google has its country
@@ -109,6 +111,9 @@ pub struct GmbDto {
 	/// the map by hand.
 	#[ts(type = "{ lat: number, lng: number, placed: boolean } | null")]
 	pub location: Option<sa_panel::gmbs::Point>,
+	/// A draft's candidate spots, in order, its location the first's; none past a draft.
+	#[ts(type = "{ lat: number, lng: number, label: string | null, note: string | null }[]")]
+	pub spots: Vec<sa_panel::gmbs::Spot>,
 }
 
 /// A trade of the caller's: Plumbing, set up in some countries.
@@ -255,6 +260,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::DELETE, "/gmbs/{id}", None, Cached, remove_gmb),
 		ApiRoute::new(M::PUT, "/gmbs/enabled", None, Cached, switch),
 		ApiRoute::new(M::PUT, "/gmbs/trade", None, Cached, set_trades),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/spots", None, Cached, set_spots),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/location", None, Cached, place),
 		ApiRoute::new(M::DELETE, "/gmbs/{id}/location", None, Cached, unplace),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/country", None, Cached, set_country),
@@ -289,6 +295,7 @@ impl From<Gmb> for GmbDto {
 			created_at: b.created_at.to_string(),
 			enabled: b.enabled,
 			location: b.location,
+			spots: b.spots,
 		}
 	}
 }
@@ -435,6 +442,8 @@ struct NewUnplaced {
 	gmail_id: Option<i64>,
 	country: Option<String>,
 	location: Option<sa_places::LatLng>,
+	#[serde(default)]
+	spots: Vec<sa_panel::gmbs::Spot>,
 }
 
 async fn create_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller>, b: Result<Json<NewUnplaced>, JsonRejection>) -> ApiResult<Response> {
@@ -445,6 +454,7 @@ async fn create_gmb(State(panel): State<Panel>, Extension(caller): Extension<Cal
 		gmail_id,
 		country,
 		location,
+		spots,
 	} = body(b)?;
 	let unplaced = Unplaced {
 		name,
@@ -453,6 +463,7 @@ async fn create_gmb(State(panel): State<Panel>, Extension(caller): Extension<Cal
 		gmail_id,
 		country: country.as_deref().map(str::parse).transpose()?,
 		at: location,
+		spots,
 	};
 	let added = panel.create_gmb(caller.user_id, unplaced, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = added.id, state = %added.state, "GBP without a place created");
@@ -580,6 +591,20 @@ async fn switch(State(panel): State<Panel>, Extension(caller): Extension<Caller>
 	panel.switch_gmbs(caller.user_id, &gmbs, enabled).await??;
 	tracing::info!(user_id = %caller.user_id, ?gmbs, enabled, "GMBs switched");
 	Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SetSpots {
+	spots: Vec<sa_panel::gmbs::Spot>,
+}
+
+async fn set_spots(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<SetSpots>, JsonRejection>) -> ApiResult<Json<GmbDto>> {
+	let gmb = id(&raw)?;
+	let SetSpots { spots } = body(b)?;
+	let set = panel.set_spots(caller.user_id, gmb, spots).await??;
+	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, spots = set.spots.len(), "draft's spots set");
+	Ok(Json(GmbDto::from(set)))
 }
 
 async fn place(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<sa_places::LatLng>, JsonRejection>) -> ApiResult<StatusCode> {

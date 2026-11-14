@@ -326,7 +326,7 @@ async fn a_draft_goes_onto_google_and_is_verified() {
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
 
 	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
-	let new = json!({ "name": "Café de Flore", "trade": trade["id"], "state": "draft" });
+	let new = json!({ "name": "Café de Flore", "trade": trade["id"], "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] });
 	let (status, draft) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(new.clone())).await;
 	assert_eq!(
 		(status, &draft["state"], &draft["gmail_id"], &draft["place_id"]),
@@ -335,6 +335,21 @@ async fn a_draft_goes_onto_google_and_is_verified() {
 	let gbp = format!("/api/v1/gmbs/{}", draft["id"]);
 	let (status, _) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(new)).await;
 	assert_eq!(status, StatusCode::CONFLICT);
+	let (status, body) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Nowhere", "trade": trade["id"], "state": "draft" }))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "a draft is somewhere: {body}");
+
+	let spots = json!([
+		{ "lat": 48.85, "lng": 2.33, "label": "Saint-Germain", "note": "near the café" },
+		{ "lat": 45.76, "lng": 4.84, "label": null, "note": null }
+	]);
+	let (status, set) = call(&mut b, &app, Method::PUT, &format!("{gbp}/spots"), Some(json!({ "spots": spots }))).await;
+	assert_eq!(
+		(status, &set["spots"], &set["location"]),
+		(StatusCode::OK, &spots, &json!({ "lat": 48.85, "lng": 2.33, "placed": true })),
+		"a draft is where its first spot is"
+	);
+	let (status, _) = call(&mut b, &app, Method::PUT, &format!("{gbp}/spots"), Some(json!({ "spots": [] }))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST);
 	let (_, listed) = call(&mut b, &app, Method::GET, "/api/v1/gmails", None).await;
 	assert_eq!(listed["gmbs"][0]["id"], draft["id"], "a draft is listed with no gmail: {listed}");
 
@@ -353,6 +368,7 @@ async fn a_draft_goes_onto_google_and_is_verified() {
 		"{verifying}"
 	);
 	assert_eq!(verifying["country"], json!({ "code": "FR", "by_hand": false }), "Google's");
+	assert_eq!(verifying["spots"], json!([]), "spots are a draft's");
 	let (status, _) = call(&mut b, &app, Method::PATCH, &gbp, Some(json!({ "name": "Flore" }))).await;
 	assert_eq!(status, StatusCode::CONFLICT, "its name is Google's now");
 	let (status, verified) = call(&mut b, &app, Method::PUT, &format!("{gbp}/state"), Some(json!({ "state": "verified" }))).await;
@@ -444,7 +460,7 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 		&app,
 		Method::POST,
 		"/api/v1/gmbs",
-		Some(json!({ "name": "Lyon 7", "trade": heating["id"], "state": "draft" })),
+		Some(json!({ "name": "Lyon 7", "trade": heating["id"], "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] })),
 	)
 	.await;
 	let (_, second) = call(
@@ -452,7 +468,7 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 		&app,
 		Method::POST,
 		"/api/v1/gmbs",
-		Some(json!({ "name": "Lyon 8", "trade": heating["id"], "state": "draft" })),
+		Some(json!({ "name": "Lyon 8", "trade": heating["id"], "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] })),
 	)
 	.await;
 	let first = format!("/api/v1/gmbs/{}", first["id"]);
@@ -524,6 +540,7 @@ async fn beside_another(db: &TestDb) -> (Router, Browser, i64, i64) {
 		gmail_id: None,
 		country: None,
 		at: None,
+		spots: vec![sa_panel::gmbs::Spot { at: sa_places::LatLng { lat: 45.76, lng: 4.84 }, label: None, note: None }],
 	};
 	let gbp = p.create_gmb(other, unplaced, jiff::Timestamp::now()).await.unwrap().unwrap();
 	let app = app(p, None);
@@ -543,13 +560,13 @@ async fn a_trade_is_its_owners() {
 		&app,
 		Method::POST,
 		"/api/v1/gmbs",
-		Some(json!({ "name": "Lyon 7", "trade": plumbing["id"], "state": "draft" })),
+		Some(json!({ "name": "Lyon 7", "trade": plumbing["id"], "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] })),
 	)
 	.await;
 	let set_up = json!({ "keywords": [], "google_primary": null, "google_additional": [], "study": null });
 	for (method, uri, body) in [
 		(Method::PATCH, format!("/api/v1/gmbs/{}", mine["id"]), Some(json!({ "trade": theirs }))),
-		(Method::POST, "/api/v1/gmbs".to_owned(), Some(json!({ "name": "Lyon 8", "trade": theirs, "state": "draft" }))),
+		(Method::POST, "/api/v1/gmbs".to_owned(), Some(json!({ "name": "Lyon 8", "trade": theirs, "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] }))),
 		(Method::PATCH, format!("/api/v1/trades/{theirs}"), Some(json!({ "name": "Mine" }))),
 		(Method::PUT, format!("/api/v1/trades/{theirs}/FR"), Some(set_up)),
 		(Method::DELETE, format!("/api/v1/trades/{theirs}"), None),
@@ -575,7 +592,7 @@ async fn a_trade_a_live_gbp_holds_is_not_deleted() {
 		&app,
 		Method::POST,
 		"/api/v1/gmbs",
-		Some(json!({ "name": "Lyon 7", "trade": trade["id"], "state": "draft" })),
+		Some(json!({ "name": "Lyon 7", "trade": trade["id"], "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] })),
 	)
 	.await;
 	assert_eq!(gbp["trade_id"], trade["id"], "{gbp}");
@@ -679,7 +696,7 @@ async fn gbps_are_given_a_trade_every_one_or_none() {
 			&app,
 			Method::POST,
 			"/api/v1/gmbs",
-			Some(json!({ "name": name, "trade": heating["id"], "state": "draft" })),
+			Some(json!({ "name": name, "trade": heating["id"], "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] })),
 		)
 		.await;
 		mine.push(gbp["id"].as_i64().unwrap());
