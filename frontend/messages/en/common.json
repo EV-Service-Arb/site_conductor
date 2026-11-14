@@ -636,6 +636,8 @@
   "tokens.grant.amount": "Tokens",
   "tokens.grant.done": "Now {n} tokens",
   "tokens.grant.mode.add": "Add",
+  "streetView": "Street View: where it is; drag onto the map to open it",
+  "streetView.none": "No Street View here",
   "tokens.grant.mode.grant": "Owe back",
   "tokens.grant.mode.set": "Set to",
   "tokens.grant.note": "Note (optional)",

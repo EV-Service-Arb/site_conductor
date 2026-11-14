@@ -40,6 +40,16 @@ pub enum PlacesRequest {
 	Autocomplete,
 }
 
+/// What Street View on the browser's Maps key loads: Google bills each panorama opened (Dynamic
+/// Street View), past its free ones a month.
+#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum StreetViewLoad {
+	/// The pegman dropped on the map: one panorama opened, walked around in for free.
+	#[strum(message = "Panorama")]
+	Panorama,
+}
+
 /// What a walk down a place's reviews does in its browser, each time it does it.
 #[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
@@ -112,6 +122,7 @@ macro_rules! priced {
 
 priced! {
 	Places(PlacesRequest) = "places", Conductor, "Google Places on the shared keys";
+	StreetView(StreetViewLoad) = "street_view", Conductor, "Google Street View on the map";
 	Walk(WalkStep) = "walk", ReviewArchive, "A walk down a place's reviews";
 }
 
@@ -169,6 +180,6 @@ mod tests {
 			assert!(!item.description().is_empty(), "{item}");
 			assert_eq!(item.to_string().parse::<Item>(), Ok(item));
 		}
-		assert_eq!(Item::all().count(), PlacesRequest::VARIANTS.len() + WalkStep::VARIANTS.len());
+		assert_eq!(Item::all().count(), PlacesRequest::VARIANTS.len() + StreetViewLoad::VARIANTS.len() + WalkStep::VARIANTS.len());
 	}
 }

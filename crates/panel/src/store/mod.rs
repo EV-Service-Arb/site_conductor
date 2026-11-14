@@ -19,6 +19,7 @@ pub mod sessions;
 pub mod sources;
 pub mod telegram;
 pub mod tokens;
+pub(crate) mod street_view;
 pub(crate) mod trash;
 pub mod users;
 

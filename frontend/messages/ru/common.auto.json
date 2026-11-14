@@ -2547,6 +2547,14 @@
     "en": "Add",
     "t": "Добавить"
   },
+  "streetView": {
+    "en": "Street View: where it is; drag onto the map to open it",
+    "t": "Просмотр улиц: где он есть; перетащите на карту, чтобы открыть"
+  },
+  "streetView.none": {
+    "en": "No Street View here",
+    "t": "Здесь нет просмотра улиц"
+  },
   "tokens.grant.mode.grant": {
     "en": "Owe back",
     "t": "Вернуть"

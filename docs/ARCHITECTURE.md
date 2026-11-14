@@ -50,7 +50,8 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          `connections` (a gmail's inbox and Maps key; who pays a Places request),
                          `browsers` (a gmail's browser: its proxy checked and sealed, Multilogin and
                          GoLogin, a launch),
-                         `tokens` (the ledger, review_archive's charges, the snapshot), `import`
+                         `tokens` (the ledger, review_archive's charges, the snapshot), `street_view`
+                         (a panorama bought, the month's free ones counted), `import`
                          (review_archive's, once), `assistant` (the assistant's chats), `trash`
                          (what was removed, restored until purged)
 crates/alerts/           no I/O: the alert rules, and the notes a service publishes to the
@@ -477,6 +478,9 @@ GET    /map                                 {key}: the browser's Maps JS key; 40
 GET    /trades                              {trades: [{id, name, created_at, categories: [{country, lang,
                                             keywords, google_primary: {id, name} | null,
                                             google_additional: [{id, name}], study}]}]}
+POST   /map/street_view                     {lat, lng} → 200 {balance}: a panorama there bought; 409
+                                            unpriced, above the balance, or the month's free ones used;
+                                            404 without GOOGLE_MAPS_BROWSER_KEY
 POST   /trades                              {name} → 201 the trade; 409 the caller's already, any case
 PATCH  /trades/{id}                         {name} → 200 the trade; 409
 DELETE /trades/{id}                         204, its categories with it; 409 while a live GBP holds it
@@ -623,6 +627,13 @@ without a price is not sold: a Places request is refused, a walk step not walked
 **A GBP's life** (`sa_core::gbp::State::nexts`; the schema checks each move again):
 
 ```text
+**Street View is bought before it opens.** Google bills each panorama opened on the browser's key
+(Dynamic Street View) past 5 000 free a month. The map has no Google pegman: its own shows the
+coverage (a press toggles it, a drag shows it while held), and dropped on a panorama Street View
+finds (free) asks `POST /map/street_view`, which records it and charges `street_view.panorama` in
+one write, and refuses whoever asks once the month's free ones are recorded (counted from the
+1st at 00:00 UTC−7). Only then does the browser open it.
+
              name (unique)    + gmail, country     + place, if none yet   walked
  ┌───────┐  ─────────────▶ ┌───────────┐ ─────────▶ ┌──────────┐ ◀────────▶ ┌───────────┐
  │ Draft │                 │ Verifying │            │ Verified │            │ Suspended │
@@ -819,9 +830,11 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   person's are never read back out: the browser sees a key's last four.
 - **No price beside its use.** What a person is charged is an item of `sa_core::prices` at the
   admin's price; no cost is written where it is spent.
-- **No buy on credit.** A Places request on the shared keys for a person is charged at its price,
-  and refused before it is sent when their balance is below it; their own keys and the queries
-  cache cost nothing.
+- **No buy on credit.** A Places request on the shared keys or a Street View panorama for a person
+  is charged at its price, and refused before it is sent when their balance is below it; their own
+  keys and the queries cache cost nothing.
+- **No Street View past the free ones.** No panorama opens on the browser's key but one
+  `POST /map/street_view` bought, and none is bought once the month's 5 000 are recorded.
 - **Alerts are the conductor's.** A service publishes notes and never reaches a person itself;
   who is told, where and how is decided here.
 - **A note is in the outbox before the cursor passes it**: the page and the cursor move in one

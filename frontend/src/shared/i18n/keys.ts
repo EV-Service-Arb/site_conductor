@@ -9,6 +9,7 @@ export const hotbar = scope("hotbar");
 export const keys = scope("keys");
 export const wallet = scope("wallet");
 export const placement = scope("placement");
+export const streetView = scope("streetView");
 export const usage = scope("usage");
 export const reviewArchive = scope("reviewArchive");
 export const links = scope("links");

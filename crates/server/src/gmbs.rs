@@ -35,6 +35,8 @@
 //! DELETE /api/v1/gmbs/{id}/location   → 204; 409 no point placed by hand
 //! PUT    /api/v1/gmbs/{id}/country {country}   → 204; 409 Google has its country
 //! GET    /api/v1/map                  Map: what the browser loads Maps JS with; 404 without it
+//! POST   /api/v1/map/street_view {lat, lng}  → 200 Balance: a panorama there bought; 409 not
+//!                                     priced, past the balance, or the month's free ones used
 //! ```
 //!
 //! Before the import from review_archive, the writes answer 503.
@@ -63,6 +65,7 @@ use crate::{
 	api::{ApiError, ApiResult, body},
 	http::{ApiRoute, ApiState},
 	signin::{Caller, Freshness},
+	tokens::BalanceDto,
 };
 
 /// `GET /map`: the browser's Maps JS key, referrer-restricted.
@@ -265,6 +268,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::DELETE, "/gmbs/{id}/location", None, Cached, unplace),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/country", None, Cached, set_country),
 		ApiRoute::new(M::GET, "/map", None, Cached, map),
+		ApiRoute::new(M::POST, "/map/street_view", None, Cached, street_view),
 		ApiRoute::new(M::GET, "/trades", None, Cached, trades),
 		ApiRoute::new(M::POST, "/trades", None, Cached, add_trade),
 		ApiRoute::new(M::PATCH, "/trades/{id}", None, Cached, rename_trade),
@@ -431,6 +435,15 @@ async fn suggest(State(panel): State<Panel>, Extension(caller): Extension<Caller
 
 async fn map(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
 	s.map.map(Json).ok_or(ApiError::NotFound)
+}
+
+async fn street_view(State(s): State<ApiState>, Extension(caller): Extension<Caller>, b: Result<Json<sa_places::LatLng>, JsonRejection>) -> ApiResult<Json<BalanceDto>> {
+	if s.map.is_none() {
+		return Err(ApiError::NotFound);
+	}
+	let at = body(b)?;
+	let balance = s.panel.open_street_view(caller.user_id, at.lat, at.lng, Timestamp::now()).await??;
+	Ok(Json(BalanceDto { balance }))
 }
 
 #[derive(Deserialize)]

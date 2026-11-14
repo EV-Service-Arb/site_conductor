@@ -39,7 +39,7 @@ import { takeReturnPage } from "@/shared/api";
 import { useT, home } from "@/shared/i18n";
 import { setQuery, useQuery } from "@/shared/lib/query";
 import { useResource } from "@/shared/lib/use-resource";
-import { pin, useTheMap } from "@/shared/map";
+import { StreetView, pin, useTheMap } from "@/shared/map";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorState } from "@/shared/ui/error-state";
 
@@ -298,6 +298,7 @@ function reveal(map: google.maps.Map, at: LatLng, box: HTMLElement) {
   const centre = map.getCenter();
   const zoom = map.getZoom();
   if (projection === undefined || centre === undefined || zoom === undefined) throw new Error("the map drew a pin before it had a camera");
+      {map.status === "ok" && <StreetView map={map.map} />}
   const p = projection.fromLatLngToPoint(at);
   const c = projection.fromLatLngToPoint(centre);
   if (p === null || c === null) throw new Error("a point off the map's projection");

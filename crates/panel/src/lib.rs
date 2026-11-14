@@ -24,6 +24,7 @@ pub mod live;
 pub mod seal;
 pub mod session;
 pub mod store;
+pub mod street_view;
 pub mod telegram;
 #[cfg(feature = "testing")]
 pub mod testing;

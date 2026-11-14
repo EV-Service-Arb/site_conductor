@@ -94,7 +94,7 @@ export type UsageDay = {
  */
 day: string, charges: number, tokens: number, };
 
-export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step"] as const;
+export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "street_view.panorama", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step"] as const;
 export type PricedItem = (typeof PRICED_ITEMS)[number];
 
 export const SCOPES = ["conductor", "review_archive"] as const;
