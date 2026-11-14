@@ -9,15 +9,20 @@ use std::{sync::Arc, time::Duration};
 use axum::{
 	Json, Router,
 	error_handling::HandleErrorLayer,
-	extract::{DefaultBodyLimit, FromRef},
-	handler::Handler,
+	extract::{FromRef, RawPathParams, Request, State},
 	http::{HeaderValue, Method, StatusCode, header},
 	middleware,
+	middleware::Next,
 	response::{IntoResponse, Response},
-	routing::{MethodFilter, MethodRouter, get, on, post, put},
+	routing::{get, post},
 };
+use ev_lib::api::{Guard, OpenApi, Route, document, openapi::ReferenceOr};
+use jiff::Timestamp;
 use sa_auth::{PermissionSet, Sources, Tokens};
-use sa_panel::Panel;
+use sa_panel::{
+	Panel,
+	live::{Audience, Change},
+};
 use serde_json::json;
 use tower::{BoxError, ServiceBuilder, limit::GlobalConcurrencyLimitLayer};
 use tower_http::timeout::TimeoutLayer;
@@ -32,7 +37,7 @@ use crate::{
 	ingest,
 	live::{self, Live, LiveLimits},
 	queries_cache,
-	signin::{self, Freshness, Gate, SignIn},
+	signin::{self, Caller, Freshness, Gatekeeper, SignIn},
 	tokens, trash,
 };
 
@@ -52,33 +57,101 @@ impl Section {
 			Self::Tokens => permissions.may(Tokens::Grant),
 		}
 	}
-}
 
-/// One `/api/v1` route, and who passes its gate.
-pub struct ApiRoute {
-	pub method: Method,
-	/// Under `/api/v1`.
-	pub path: &'static str,
-	/// `None`: every signed-in user.
-	pub section: Option<Section>,
-	freshness: Freshness,
-	handler: MethodRouter<ApiState>,
-}
-impl ApiRoute {
-	pub(crate) fn new<H: Handler<T, ApiState>, T: 'static>(method: Method, path: &'static str, section: Option<Section>, freshness: Freshness, handler: H) -> Self {
-		let filter = MethodFilter::try_from(method.clone()).expect("the routes name standard methods");
-		Self {
-			method,
-			path,
-			section,
-			freshness,
-			handler: on(filter, handler),
+	fn permission(self) -> &'static str {
+		match self {
+			Self::Admin => Sources::Manage.as_str(),
+			Self::Tokens => Tokens::Grant.as_str(),
 		}
 	}
 }
 
+/// Who passes an `/api/v1` route's gate, and its budget.
+#[derive(Clone, Copy, Debug)]
+pub struct Gate {
+	/// `None`: every signed-in user.
+	pub section: Option<Section>,
+	pub(crate) freshness: Freshness,
+	/// Waits on a browser or takes a film's bytes: 8 at once, 10 min each, not the API's bounds.
+	pub(crate) slow: bool,
+}
+
+impl Gate {
+	pub(crate) const USER: Self = Self {
+		section: None,
+		freshness: Freshness::Cached,
+		slow: false,
+	};
+
+	pub(crate) const fn section(section: Section) -> Self {
+		Self {
+			section: Some(section),
+			..Self::USER
+		}
+	}
+
+	/// Asks concierge afresh: for what must not outlive a revoked permission by a minute.
+	pub(crate) const fn fresh(self) -> Self {
+		Self {
+			freshness: Freshness::Fresh,
+			..self
+		}
+	}
+
+	pub(crate) const fn slow(self) -> Self {
+		Self { slow: true, ..self }
+	}
+}
+
+impl Guard for Gate {
+	fn permission(&self) -> Option<String> {
+		self.section.map(|s| s.permission().to_owned())
+	}
+}
+
+/// One `/api/v1` operation.
+pub(crate) type ApiRoute = Route<ApiState, Gate>;
+
+/// The `/api/v1` document: what `/openapi.json` narrows to its caller.
+#[derive(Clone)]
+pub struct Catalog(Arc<OpenApi>);
+
+impl Catalog {
+	pub fn new() -> Self {
+		Self(Arc::new(document(
+			"Service-Arb conductor",
+			env!("CARGO_PKG_VERSION"),
+			"/api/v1",
+			&api_routes(),
+			ev_lib::api_docs!(),
+		)))
+	}
+
+	pub fn document(&self) -> &OpenApi {
+		&self.0
+	}
+
+	/// Only the operations `permissions` open.
+	pub(crate) fn opened(&self, permissions: &PermissionSet) -> OpenApi {
+		let mut doc = (*self.0).clone();
+		for item in doc.paths.iter_mut().flat_map(|p| p.paths.values_mut()) {
+			let ReferenceOr::Item(item) = item else { unreachable!("the document holds items only") };
+			for op in [&mut item.get, &mut item.post, &mut item.put, &mut item.patch, &mut item.delete] {
+				let closed = op
+					.as_ref()
+					.and_then(|o| o.extensions.get("x-permission"))
+					.is_some_and(|p| !permissions.iter().any(|held| p == held));
+				if closed {
+					*op = None;
+				}
+			}
+		}
+		doc
+	}
+}
+
 /// Every `/api/v1` route on `ApiState`.
-pub fn api_routes() -> Vec<ApiRoute> {
+pub(crate) fn api_routes() -> Vec<ApiRoute> {
 	[
 		api::routes(),
 		access::routes(),
@@ -93,6 +166,44 @@ pub fn api_routes() -> Vec<ApiRoute> {
 	.into_iter()
 	.flatten()
 	.collect()
+}
+
+/// Who is told of a route's writes, over `/api/v1/live`.
+#[derive(Clone)]
+struct Told {
+	panel: Panel,
+	/// The path's first segment: `gmails` for `/gmails/{id}/imap`.
+	topic: &'static str,
+	/// The section's: else the caller, whose own resource it is.
+	holders: Option<&'static str>,
+}
+
+impl Told {
+	fn of(r: &ApiRoute, panel: Panel) -> Self {
+		Self {
+			panel,
+			topic: r.path.split('/').nth(1).expect("an operation's path starts with /"),
+			holders: r.guard.section.map(Section::permission),
+		}
+	}
+}
+
+/// Every write that succeeds is told as `changed`, its topic the path's first segment and its id
+/// the path's first parameter: a screen re-reads what it follows, whoever wrote it.
+async fn tell(State(t): State<Told>, params: RawPathParams, req: Request, next: Next) -> Response {
+	let caller = req.extensions().get::<Caller>().expect("the gate lets no request through without its caller").user_id;
+	let id = params.iter().next().map(|(_, v)| v.to_owned());
+	let res = next.run(req).await;
+	if res.status().is_success() {
+		t.panel.bus().changed(Change {
+			topic: t.topic.to_owned(),
+			brand: None,
+			id,
+			at: Timestamp::now(),
+			audience: t.holders.map_or(Audience::User(caller), |p| Audience::Holders(p.to_owned())),
+		});
+	}
+	res
 }
 
 /// What a request may cost.
@@ -132,18 +243,24 @@ pub fn app(
 		.route("/auth/callback", get(signin::callback))
 		.route("/auth/logout", post(signin::logout));
 	let auth = bounded(auth, limits.auth_concurrent, limits.auth_timeout).with_state(sign_in.clone());
-	let gate = |freshness, section| {
-		let gate = Gate {
-			sign_in: sign_in.clone(),
-			freshness,
-			section,
-		};
-		middleware::from_fn_with_state(gate, signin::gate)
+	let gate = |gate| {
+		let keeper = Gatekeeper { sign_in: sign_in.clone(), gate };
+		middleware::from_fn_with_state(keeper, signin::gate)
 	};
-	let routes = api_routes().into_iter().fold(Router::new(), |routes, r| {
-		routes.merge(Router::new().route(r.path, r.handler).route_layer(gate(r.freshness, r.section)))
-	});
+	let (slow, routes): (Vec<_>, Vec<_>) = api_routes().into_iter().partition(|r| r.guard.slow);
+	let panel = sign_in.panel.clone();
+	let mount = |routes: Vec<ApiRoute>| {
+		routes.into_iter().fold(Router::new(), |routes, r| {
+			let route = Router::new().route(r.path, r.handler());
+			let route = match r.method {
+				Method::GET => route,
+				_ => route.route_layer(middleware::from_fn_with_state(Told::of(&r, panel.clone()), tell)),
+			};
+			routes.merge(route.route_layer(gate(r.guard)))
+		})
+	};
 	let state = ApiState {
+		catalog: Catalog::new(),
 		panel: sign_in.panel.clone(),
 		sites: forward.as_ref().map(|f| f.services().clone()),
 		probe: connected::probe_client(),
@@ -151,15 +268,8 @@ pub fn app(
 		map,
 		browsers: browsers.clone(),
 	};
-	// A launch waits on GoLogin and on the browser's devtools, a film's upload on its bytes: longer
-	// than an API request may.
-	let slow = Router::new()
-		.route(browser::FILM, put(browser::set_film).layer(DefaultBodyLimit::max(browser::FILM_MAX)))
-		.route(browser::START, post(browser::start))
-		.route_layer(gate(Freshness::Cached, None))
-		.with_state(state.clone());
-	let slow = bounded(slow, 8, Duration::from_secs(600));
-	let api = bounded(routes.with_state(state), limits.api_concurrent, limits.api_timeout);
+	let slow = bounded(mount(slow).with_state(state.clone()), 8, Duration::from_secs(600));
+	let api = bounded(mount(routes).with_state(state), limits.api_concurrent, limits.api_timeout);
 	// Its own budget: the bound and the timeout cover the handshake only (the socket lives on
 	// after the 101), and a burst of reconnecting tabs must not shed the API's requests.
 	let live = Router::new().route("/api/v1/live", get(live::upgrade)).with_state(Live::new(sign_in.clone(), limits.live));
@@ -170,7 +280,7 @@ pub fn app(
 		.merge(auth)
 		.merge(live)
 		.merge(viewer)
-		.merge(slow)
+		.nest("/api/v1", slow)
 		.merge(queries_cache::routes(sign_in.panel.clone(), &limits))
 		.nest("/api/v1", api);
 	let app = match forward {
@@ -187,6 +297,7 @@ pub fn app(
 /// What the `/api/v1` routes are served on.
 #[derive(Clone)]
 pub(crate) struct ApiState {
+	pub(crate) catalog: Catalog,
 	pub(crate) panel: Panel,
 	/// With the forward configured.
 	pub(crate) sites: Option<Services>,

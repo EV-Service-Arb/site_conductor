@@ -11,13 +11,15 @@ const COLUMNS: &str = "provider, device, endpoint, provider_profile, noise_canva
 	exit_ip, exit_country, exit_city, exit_zone, exit_mobile, set_at, checked_at, check_error, proxy_sealed, data_key_fp";
 
 /// Who runs a gmail's browser.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::Display, strum::EnumString, strum::IntoStaticStr, strum::VariantArray)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, strum::Display, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema, serde::Serialize, strum::VariantArray)]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum Provider {
 	/// A cloud phone: real Android.
 	Multilogin,
 	/// Mimic posing as Android.
 	MultiloginBrowser,
+	/// Orbita posing as a measured phone.
 	Gologin,
 }
 

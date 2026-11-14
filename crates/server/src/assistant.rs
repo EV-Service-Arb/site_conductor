@@ -1,58 +1,37 @@
 //! The assistant's chats (`sa_panel::assistant`): the conductor's own state, shared with people
 //! by their owner. Whoever may not read a chat is answered 404, as if it did not exist.
 //!
-//! ```text
-//! GET    /api/v1/assistant/chats                 Chats: owned and joined, with the caller's marks
-//! POST   /api/v1/assistant/chats {id, title, turns}            → 201 Chat; 409 the id is taken
-//! GET    /api/v1/assistant/chats/{id}            Chat
-//! PUT    /api/v1/assistant/chats/{id}/turns {base, from, turns} → 200 Chat; 409 `base` is not the version
-//! PUT    /api/v1/assistant/chats/{id}/title {title}            → 200 Chat
-//! PUT    /api/v1/assistant/chats/{id}/pinned {on}              → 204, the caller's own
-//! PUT    /api/v1/assistant/chats/{id}/archived {on}            → 204, the caller's own
-//! DELETE /api/v1/assistant/chats/{id}            → 204; the owner only
-//! DELETE /api/v1/assistant/archived              → 204: the caller's archived chats deleted, left if shared with them
-//! GET    /api/v1/assistant/chats/{id}/access     Access
-//! POST   /api/v1/assistant/chats/{id}/members {users}          → 200 Access
-//! DELETE /api/v1/assistant/chats/{id}/members/{user}           → 204; the owner anyone, a member themselves
-//! PUT    /api/v1/assistant/chats/{id}/general {general}        → 200 Access; the owner only
-//! GET    /api/v1/assistant/people?q=             People
-//! ```
-//!
 //! A viewer (general access, a signed-in holder of any `sa` permission) is 403 on every write, a
 //! member on the owner's. A turns write past `from` turns is 400; a create or turns body past
 //! 4 MiB, or a chat's turns past [`sa_panel::assistant::MAX_TURNS_BYTES`], 413.
 
 use axum::{
 	Extension, Json,
-	extract::{
-		DefaultBodyLimit, Path, Query, State,
-		rejection::{JsonRejection, QueryRejection},
-	},
-	handler::Handler,
-	http::{Method, StatusCode},
-	response::{IntoResponse, Response},
+	extract::{DefaultBodyLimit, State},
+	http::Method,
+	response::NoContent,
 };
+use ev_lib::api::{Created, JsonSchema};
 use jiff::Timestamp;
 use sa_panel::{
 	Panel,
 	assistant::{Access, Chat, General, Mark, Person, Reader, Role, Summary},
 };
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::{
-	api::{ApiError, ApiResult, body},
-	http::ApiRoute,
-	signin::{Caller, Freshness},
+	api::{ApiResult, Body, Id, Ids, Params},
+	http::{ApiRoute, Gate},
+	signin::Caller,
 };
 
 /// A create or turns write: images ride in as data URLs.
 const MAX_BODY: usize = 4 << 20;
 
 /// Someone a chat names: its owner, a member, one to invite.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Person")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Person")]
 pub struct PersonDto {
 	pub id: Uuid,
 	pub name: String,
@@ -60,9 +39,9 @@ pub struct PersonDto {
 }
 
 /// What the caller may do with a chat.
-#[derive(Clone, Copy, Debug, Serialize, TS)]
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
 #[serde(rename_all = "snake_case")]
-#[ts(rename = "Role")]
+#[schemars(rename = "Role")]
 pub enum RoleDto {
 	/// Everything.
 	Owner,
@@ -73,9 +52,9 @@ pub enum RoleDto {
 }
 
 /// Who beyond the owner and members may read a chat by its link.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, TS)]
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(rename_all = "snake_case")]
-#[ts(rename = "GeneralAccess")]
+#[schemars(rename = "GeneralAccess")]
 pub enum GeneralAccessDto {
 	None,
 	/// Everyone in Service-Arb: a signed-in holder of any `sa` permission.
@@ -83,8 +62,8 @@ pub enum GeneralAccessDto {
 }
 
 /// A chat as a history row.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "ChatSummary")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "ChatSummary")]
 pub struct ChatSummaryDto {
 	pub id: Uuid,
 	/// `null` until named by its first question, or renamed.
@@ -102,29 +81,27 @@ pub struct ChatSummaryDto {
 }
 
 /// `GET /assistant/chats`.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Chats")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Chats")]
 pub struct ChatsDto {
 	pub chats: Vec<ChatSummaryDto>,
 }
 
 /// A chat, whole.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Chat")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Chat")]
 pub struct ChatDto {
 	#[serde(flatten)]
-	#[ts(flatten)]
 	pub summary: ChatSummaryDto,
 	pub general: GeneralAccessDto,
 	/// 1 when created; moves with every turns write: what the next one names as its `base`.
-	#[ts(type = "number")]
 	pub version: i64,
 	pub turns: Vec<Turn>,
 }
 
 /// `GET /assistant/chats/{id}/access`, and what its writes answer.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Access")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Access")]
 pub struct AccessDto {
 	pub owner: PersonDto,
 	/// Each can interact.
@@ -133,19 +110,18 @@ pub struct AccessDto {
 }
 
 /// `GET /assistant/people?q=`: whom the caller may invite.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "People")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "People")]
 pub struct PeopleDto {
 	pub people: Vec<PersonDto>,
 }
 
 /// A chat's turn, as its asker's browser wrote it. Times are milliseconds since the epoch.
-#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(tag = "role", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Turn {
 	User {
 		id: String,
-		#[ts(type = "number")]
 		at: i64,
 		text: String,
 		mentions: Vec<Mention>,
@@ -153,13 +129,10 @@ pub enum Turn {
 	},
 	Assistant {
 		id: String,
-		#[ts(type = "number")]
 		at: i64,
 		/// When the answer stopped growing; `null` while it runs.
-		#[ts(type = "number | null")]
 		ended: Option<i64>,
 		/// How long its steps took, once they are over.
-		#[ts(type = "number | null")]
 		worked: Option<i64>,
 		steps: Vec<Step>,
 		/// `**bold**`, `- ` items, `@[label](location:id)` and `[n]` for `sources[n-1]`.
@@ -171,7 +144,7 @@ pub enum Turn {
 	},
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, TS)]
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AnswerState {
 	Working,
@@ -180,7 +153,7 @@ pub enum AnswerState {
 	Stopped,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, TS)]
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Feedback {
 	Up,
@@ -188,32 +161,30 @@ pub enum Feedback {
 }
 
 /// Something a turn is about: a GMB today; other kinds (a lead, a site) join with their own picker.
-#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Mention {
 	pub kind: MentionKind,
-	#[ts(type = "number")]
 	pub id: i64,
 	pub label: String,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, TS)]
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MentionKind {
 	Location,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Attachment {
 	pub name: String,
 	/// An image's preview, downscaled; `null` for any other file.
 	pub preview: Option<Preview>,
-	#[ts(type = "number")]
 	pub bytes: u64,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Preview {
 	/// A `data:image/…` URL.
@@ -222,14 +193,14 @@ pub struct Preview {
 	pub height: u32,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Step {
 	pub label: String,
 	pub done: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Source {
 	pub label: String,
@@ -237,7 +208,7 @@ pub struct Source {
 	pub href: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Action {
 	pub id: String,
@@ -250,7 +221,7 @@ pub struct Action {
 	pub state: ActionState,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, TS)]
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActionState {
 	Proposed,
@@ -258,25 +229,32 @@ pub enum ActionState {
 }
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
-	use Freshness::Cached;
 	use Method as M;
-	let big = DefaultBodyLimit::max(MAX_BODY);
+	let user = Gate::USER;
+	let big = |h: axum::routing::MethodRouter<_>| h.layer(DefaultBodyLimit::max(MAX_BODY));
 	vec![
-		ApiRoute::new(M::GET, "/assistant/chats", None, Cached, chats),
-		ApiRoute::new(M::POST, "/assistant/chats", None, Cached, create.layer(big)),
-		ApiRoute::new(M::GET, "/assistant/chats/{id}", None, Cached, chat),
-		ApiRoute::new(M::PUT, "/assistant/chats/{id}/turns", None, Cached, write_turns.layer(big)),
-		ApiRoute::new(M::PUT, "/assistant/chats/{id}/title", None, Cached, rename),
-		ApiRoute::new(M::PUT, "/assistant/chats/{id}/pinned", None, Cached, pin),
-		ApiRoute::new(M::PUT, "/assistant/chats/{id}/archived", None, Cached, archive),
-		ApiRoute::new(M::DELETE, "/assistant/chats/{id}", None, Cached, delete),
-		ApiRoute::new(M::DELETE, "/assistant/archived", None, Cached, clear_archived),
-		ApiRoute::new(M::GET, "/assistant/chats/{id}/access", None, Cached, access),
-		ApiRoute::new(M::POST, "/assistant/chats/{id}/members", None, Cached, invite),
-		ApiRoute::new(M::DELETE, "/assistant/chats/{id}/members/{user}", None, Cached, remove_member),
-		ApiRoute::new(M::PUT, "/assistant/chats/{id}/general", None, Cached, set_general),
-		ApiRoute::new(M::GET, "/assistant/people", None, Cached, people),
+		ApiRoute::new(M::GET, "/assistant/chats", user, chats),
+		ApiRoute::new(M::POST, "/assistant/chats", user, create_chat).layer(big),
+		ApiRoute::new(M::GET, "/assistant/chats/{id}", user, chat),
+		ApiRoute::new(M::PUT, "/assistant/chats/{id}/turns", user, write_chat_turns).layer(big),
+		ApiRoute::new(M::PUT, "/assistant/chats/{id}/title", user, rename_chat),
+		ApiRoute::new(M::PUT, "/assistant/chats/{id}/pinned", user, pin_chat),
+		ApiRoute::new(M::PUT, "/assistant/chats/{id}/archived", user, archive_chat),
+		ApiRoute::new(M::DELETE, "/assistant/chats/{id}", user, delete_chat),
+		ApiRoute::new(M::DELETE, "/assistant/archived", user, clear_archived_chats),
+		ApiRoute::new(M::GET, "/assistant/chats/{id}/access", user, chat_access),
+		ApiRoute::new(M::POST, "/assistant/chats/{id}/members", user, invite_to_chat),
+		ApiRoute::new(M::DELETE, "/assistant/chats/{id}/members/{user}", user, remove_chat_member),
+		ApiRoute::new(M::PUT, "/assistant/chats/{id}/general", user, set_chat_general),
+		ApiRoute::new(M::GET, "/assistant/people", user, chat_people),
 	]
+}
+
+/// A path's chat and one of its people.
+#[derive(Deserialize, JsonSchema)]
+pub(crate) struct Member {
+	id: Uuid,
+	user: Uuid,
 }
 
 impl From<Person> for PersonDto {
@@ -362,11 +340,7 @@ impl From<&Caller> for Reader {
 	}
 }
 
-/// A path's id: one that is no UUID is no chat of anyone's.
-fn id(raw: &str) -> ApiResult<Uuid> {
-	raw.parse().map_err(|_| ApiError::NotFound)
-}
-
+/// The caller's chats, owned and joined, with their own marks, newest first.
 async fn chats(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<ChatsDto>> {
 	let chats = panel.assistant_chats(caller.user_id).await?;
 	Ok(Json(ChatsDto {
@@ -374,138 +348,150 @@ async fn chats(State(panel): State<Panel>, Extension(caller): Extension<Caller>)
 	}))
 }
 
-async fn chat(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<Json<ChatDto>> {
-	let chat = panel.assistant_chat::<Turn>((&caller).into(), id(&raw)?).await??;
+/// A chat: its turns, version and the caller's role.
+async fn chat(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<Uuid>>) -> ApiResult<Json<ChatDto>> {
+	let chat = panel.assistant_chat::<Turn>((&caller).into(), id).await??;
 	Ok(Json(chat.into()))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct NewChat {
+pub(crate) struct NewChat {
+	/// Made by the client.
 	id: Uuid,
 	title: Option<String>,
 	turns: Vec<Turn>,
 }
 
-async fn create(State(panel): State<Panel>, Extension(caller): Extension<Caller>, b: Result<Json<NewChat>, JsonRejection>) -> ApiResult<Response> {
-	let NewChat { id, title, turns } = body(b)?;
+/// Creates a chat at version 1. 409 the id is taken; 413 a body past 4 MiB.
+async fn create_chat(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<NewChat>) -> ApiResult<Created<ChatDto>> {
+	let NewChat { id, title, turns } = b;
 	let chat = panel.assistant_create(caller.user_id, id, title.as_deref(), turns, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, chat = %id, "chat created");
-	Ok((StatusCode::CREATED, Json(ChatDto::from(chat))).into_response())
+	Ok(Created(ChatDto::from(chat)))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct TurnsWrite {
+pub(crate) struct TurnsWrite {
+	/// The version read.
 	base: i64,
+	/// Turns before it are kept.
 	from: usize,
 	turns: Vec<Turn>,
 }
 
-async fn write_turns(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<TurnsWrite>, JsonRejection>) -> ApiResult<Json<ChatDto>> {
-	let chat = id(&raw)?;
-	let TurnsWrite { base, from, turns } = body(b)?;
+/// Writes a chat's turns: those before `from` kept, the rest replaced.
+///
+/// 409 `base` is not the version; 400 `from` past the end; 413 the body past 4 MiB, or the chat's
+/// turns past 16 MiB.
+async fn write_chat_turns(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: chat }): Ids<Id<Uuid>>, Body(b): Body<TurnsWrite>) -> ApiResult<Json<ChatDto>> {
+	let TurnsWrite { base, from, turns } = b;
 	let written = panel.assistant_turns((&caller).into(), chat, base, from, turns, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, %chat, base, from, "chat's turns written");
 	Ok(Json(written.into()))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct Title {
+pub(crate) struct Title {
+	/// Empty or null unnames it.
 	title: Option<String>,
 }
 
-async fn rename(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<Title>, JsonRejection>) -> ApiResult<Json<ChatDto>> {
-	let chat = id(&raw)?;
-	let renamed = panel.assistant_rename::<Turn>((&caller).into(), chat, body(b)?.title.as_deref()).await??;
+/// Renames a chat.
+async fn rename_chat(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: chat }): Ids<Id<Uuid>>, Body(b): Body<Title>) -> ApiResult<Json<ChatDto>> {
+	let renamed = panel.assistant_rename::<Turn>((&caller).into(), chat, b.title.as_deref()).await??;
 	tracing::info!(user_id = %caller.user_id, %chat, "chat renamed");
 	Ok(Json(renamed.into()))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct On {
+pub(crate) struct On {
 	on: bool,
 }
 
-async fn mark(panel: Panel, caller: Caller, raw: String, mark: Mark, b: Result<Json<On>, JsonRejection>) -> ApiResult<StatusCode> {
-	let chat = id(&raw)?;
-	let on = body(b)?.on;
+async fn mark(panel: Panel, caller: Caller, chat: Uuid, mark: Mark, on: bool) -> ApiResult<NoContent> {
 	panel.assistant_mark((&caller).into(), chat, mark, on, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, %chat, ?mark, on, "chat marked");
-	Ok(StatusCode::NO_CONTENT)
+	Ok(NoContent)
 }
 
-async fn pin(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<On>, JsonRejection>) -> ApiResult<StatusCode> {
-	mark(panel, caller, raw, Mark::Pinned, b).await
+/// Pins or unpins a chat, for the caller alone.
+async fn pin_chat(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<Uuid>>, Body(b): Body<On>) -> ApiResult<NoContent> {
+	mark(panel, caller, id, Mark::Pinned, b.on).await
 }
 
-async fn archive(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<On>, JsonRejection>) -> ApiResult<StatusCode> {
-	mark(panel, caller, raw, Mark::Archived, b).await
+/// Archives or unarchives a chat, for the caller alone.
+async fn archive_chat(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<Uuid>>, Body(b): Body<On>) -> ApiResult<NoContent> {
+	mark(panel, caller, id, Mark::Archived, b.on).await
 }
 
-async fn delete(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<StatusCode> {
-	let chat = id(&raw)?;
+/// Deletes a chat, its members and marks with it: the owner's only.
+async fn delete_chat(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: chat }): Ids<Id<Uuid>>) -> ApiResult<NoContent> {
 	panel.assistant_delete((&caller).into(), chat).await??;
 	tracing::info!(user_id = %caller.user_id, %chat, "chat deleted");
-	Ok(StatusCode::NO_CONTENT)
+	Ok(NoContent)
 }
 
-async fn clear_archived(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<StatusCode> {
+/// Deletes the caller's archived chats; one shared with them they leave.
+async fn clear_archived_chats(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<NoContent> {
 	panel.assistant_clear_archived(caller.user_id).await?;
 	tracing::info!(user_id = %caller.user_id, "archived chats cleared");
-	Ok(StatusCode::NO_CONTENT)
+	Ok(NoContent)
 }
 
-async fn access(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<Json<AccessDto>> {
-	let access = panel.assistant_access((&caller).into(), id(&raw)?).await??;
+/// Who has a chat: its owner, members and general access.
+async fn chat_access(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<Uuid>>) -> ApiResult<Json<AccessDto>> {
+	let access = panel.assistant_access((&caller).into(), id).await??;
 	Ok(Json(access.into()))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct Invite {
+pub(crate) struct Invite {
 	users: Vec<Uuid>,
 }
 
-async fn invite(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<Invite>, JsonRejection>) -> ApiResult<Json<AccessDto>> {
-	let chat = id(&raw)?;
-	let users = body(b)?.users;
+/// Makes people members of a chat. 400 an unknown user.
+async fn invite_to_chat(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: chat }): Ids<Id<Uuid>>, Body(b): Body<Invite>) -> ApiResult<Json<AccessDto>> {
+	let users = b.users;
 	let access = panel.assistant_invite((&caller).into(), chat, &users, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, %chat, ?users, "chat's members invited");
 	Ok(Json(access.into()))
 }
 
-async fn remove_member(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path((raw, user)): Path<(String, String)>) -> ApiResult<StatusCode> {
-	let (chat, member) = (id(&raw)?, id(&user)?);
+/// Removes a member from a chat: the owner anyone, a member themselves.
+async fn remove_chat_member(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Member { id: chat, user: member }): Ids<Member>) -> ApiResult<NoContent> {
 	panel.assistant_remove_member((&caller).into(), chat, member).await??;
 	tracing::info!(user_id = %caller.user_id, %chat, %member, "chat's member removed");
-	Ok(StatusCode::NO_CONTENT)
+	Ok(NoContent)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct SetGeneral {
+pub(crate) struct SetGeneral {
 	general: GeneralAccessDto,
 }
 
-async fn set_general(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<SetGeneral>, JsonRejection>) -> ApiResult<Json<AccessDto>> {
-	let chat = id(&raw)?;
-	let general = body(b)?.general;
+/// Sets who beyond its members may read a chat: the owner's.
+async fn set_chat_general(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: chat }): Ids<Id<Uuid>>, Body(b): Body<SetGeneral>) -> ApiResult<Json<AccessDto>> {
+	let general = b.general;
 	let access = panel.assistant_set_general((&caller).into(), chat, general.into()).await??;
 	tracing::info!(user_id = %caller.user_id, %chat, ?general, "chat's general access set");
 	Ok(Json(access.into()))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct PeopleQuery {
+pub(crate) struct PeopleQuery {
+	/// A name or an email's part.
 	q: String,
 }
 
-async fn people(State(panel): State<Panel>, Extension(caller): Extension<Caller>, q: Result<Query<PeopleQuery>, QueryRejection>) -> ApiResult<Json<PeopleDto>> {
-	let Query(q) = q.map_err(|e| ApiError::BadRequest(e.body_text()))?;
+/// Whom the caller shares a chat with, by name or email, and whoever has `q` as their whole email.
+async fn chat_people(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(q): Params<PeopleQuery>) -> ApiResult<Json<PeopleDto>> {
 	let people = panel.assistant_people(caller.user_id, &q.q).await?;
 	Ok(Json(PeopleDto {
 		people: people.into_iter().map(PersonDto::from).collect(),

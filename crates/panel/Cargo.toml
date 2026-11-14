@@ -28,8 +28,9 @@ rustls-platform-verifier.workspace = true
 sa_alerts.workspace = true
 sa_auth.workspace = true
 sa_browsers.workspace = true
-sa_core = { workspace = true, features = ["ts"] }
+sa_core.workspace = true
 sa_places.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -41,7 +42,6 @@ thiserror.workspace = true
 tokio.workspace = true
 tokio-rustls.workspace = true
 tracing.workspace = true
-ts-rs.workspace = true
 tzf-rs.workspace = true
 url.workspace = true
 uuid = { workspace = true, features = ["serde", "v7"] }

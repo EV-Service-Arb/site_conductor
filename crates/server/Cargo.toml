@@ -24,7 +24,7 @@ testing = ["sa_panel/testing", "tower/util"]
 axum = { workspace = true, features = ["ws"] }
 clap.workspace = true
 color-eyre.workspace = true
-ev_lib = { workspace = true, features = ["settings", "error_monitoring"] }
+ev_lib = { workspace = true, features = ["settings", "error_monitoring", "api"] }
 eyre.workspace = true
 futures.workspace = true
 getrandom.workspace = true
@@ -37,9 +37,10 @@ sa_alerts.workspace = true
 sa_auth = { workspace = true, features = ["catalog"] }
 sa_browsers.workspace = true
 sa_contracts.workspace = true
-sa_core = { workspace = true, features = ["ts"] }
+sa_core.workspace = true
 sa_panel.workspace = true
 sa_places.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -52,10 +53,12 @@ tower = { workspace = true, features = ["limit", "load-shed"] }
 tower-http = { workspace = true, features = ["fs", "timeout"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
-ts-rs.workspace = true
 url.workspace = true
 uuid = { workspace = true, features = ["serde"] }
 zeroize.workspace = true
+
+[build-dependencies]
+ev_lib = { workspace = true, features = ["api_docs"] }
 
 [dev-dependencies]
 axum = { workspace = true, features = ["multipart"] }

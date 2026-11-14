@@ -12,7 +12,9 @@ use super::{from_db, to_db};
 /// The service whose charges the ledger follows, as its rows name it.
 pub const REVIEW_ARCHIVE: &str = "review_archive";
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, schemars::JsonSchema, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+#[schemars(rename = "LedgerKind")]
 pub enum Kind {
 	/// Renewal, or a first balance.
 	Accrual,

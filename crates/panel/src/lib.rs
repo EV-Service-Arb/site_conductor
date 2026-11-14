@@ -34,7 +34,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_auth::{SourceKind, Sources};
+use sa_auth::SourceKind;
 use sa_core::{
 	ids::{BrandId, SiteOrigin},
 	signature::{self, SignatureError},
@@ -165,26 +165,18 @@ impl Panel {
 			brands,
 		};
 		let added = self.store.insert_source(&grant, origin.as_ref(), &sealed, &self.key.fingerprint()).await?;
-		if added {
-			self.live.changed(sources_changed());
-		}
 		Ok(added.then(|| NewSource { key_id: key_id.to_owned(), secret }))
 	}
 
 	/// Gives a site key issued before origins its origin, once; the same origin again is no change.
 	pub async fn set_site_origin(&self, key_id: &str, origin: &SiteOrigin) -> eyre::Result<()> {
 		eyre::ensure!(self.store.set_site_origin(key_id, origin).await?, "no active site key {key_id} without another origin");
-		self.live.changed(sources_changed());
 		Ok(())
 	}
 
 	/// Revokes a source's key; `false` when there was no such key, or it was revoked already.
 	pub async fn revoke_source(&self, key_id: &str) -> eyre::Result<bool> {
-		let revoked = self.store.revoke_source(key_id).await?;
-		if revoked {
-			self.live.changed(sources_changed());
-		}
-		Ok(revoked)
+		self.store.revoke_source(key_id).await
 	}
 
 	/// Who signed a request: the window, the key (active), and the MAC over `request.body`.
@@ -221,16 +213,5 @@ impl Panel {
 			refuse(e)
 		})?;
 		Ok(source.grant)
-	}
-}
-
-/// The sources' keys changed: no brand, no single subject a screen would refetch by.
-fn sources_changed() -> live::Change {
-	live::Change {
-		topic: "sources".into(),
-		brand: None,
-		id: None,
-		at: Timestamp::now(),
-		audience: live::Audience::Holders(Sources::Manage.as_str().into()),
 	}
 }

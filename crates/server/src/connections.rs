@@ -1,21 +1,8 @@
 //! A gmail's connections (`sa_panel::connections`), its owner's only: its inbox and its own Maps
 //! key, checked before they are stored and never answered back; its browser is [`crate::browser`]'s.
-//!
-//! ```text
-//! GET    /api/v1/gmails/{id}/connections     Connections
-//! PUT    /api/v1/gmails/{id}/imap {host, username, password}  → Connections; 400 refused, nothing stored
-//! PUT    /api/v1/gmails/{id}/maps_key {key}  → Connections; 400 Google refuses it, nothing stored
-//! POST   /api/v1/gmails/{id}/imap/test       → Connections, the check recorded; 404 none set
-//! POST   /api/v1/gmails/{id}/maps_key/test   (the same)
-//! DELETE /api/v1/gmails/{id}/imap            → 204
-//! DELETE /api/v1/gmails/{id}/maps_key        → 204
-//! ```
 
-use axum::{
-	Extension, Json,
-	extract::{Path, State, rejection::JsonRejection},
-	http::{Method, StatusCode},
-};
+use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
+use ev_lib::api::JsonSchema;
 use jiff::Timestamp;
 use sa_panel::{
 	Panel,
@@ -24,26 +11,25 @@ use sa_panel::{
 };
 use sa_places::Sku;
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 use zeroize::Zeroizing;
 
 use crate::{
-	api::{ApiError, ApiResult, body},
+	api::{ApiResult, Body, Id, Ids},
 	browser::{BrowserDto, ExitDto},
-	http::{ApiRoute, ApiState},
-	signin::{Caller, Freshness},
+	http::{ApiRoute, ApiState, Gate},
+	signin::Caller,
 };
 
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Checked")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Checked")]
 pub struct CheckedDto {
 	pub at: String,
 	/// `null`: it went through.
 	pub error: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Imap")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Imap")]
 pub struct ImapDto {
 	pub host: String,
 	pub username: String,
@@ -51,8 +37,8 @@ pub struct ImapDto {
 	pub checked: CheckedDto,
 }
 
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "MapsKey")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "MapsKey")]
 pub struct MapsKeyDto {
 	pub last4: String,
 	pub set_at: String,
@@ -62,20 +48,17 @@ pub struct MapsKeyDto {
 }
 
 /// Tokens a Places request on the shared keys costs; `null`, not sold yet.
-#[derive(Clone, Debug, Deserialize, Serialize, TS)]
-#[ts(rename = "Prices")]
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[schemars(rename = "Prices")]
 #[serde(deny_unknown_fields)]
 pub struct PricesDto {
-	#[ts(type = "number | null")]
 	pub details: Option<i64>,
-	#[ts(type = "number | null")]
 	pub search: Option<i64>,
-	#[ts(type = "number | null")]
 	pub autocomplete: Option<i64>,
 }
 
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Connections")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Connections")]
 pub struct ConnectionsDto {
 	pub imap: Option<ImapDto>,
 	pub maps_key: Option<MapsKeyDto>,
@@ -99,7 +82,7 @@ impl ConnectionsDto {
 			}),
 			prices: c.prices.into(),
 			browser: c.browser.map(|b| BrowserDto {
-				provider: b.provider.to_string(),
+				provider: b.provider,
 				device: b.device.to_string(),
 				endpoint: b.endpoint,
 				exit: ExitDto {
@@ -118,52 +101,38 @@ impl ConnectionsDto {
 	}
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct SetImap {
+pub(crate) struct SetImap {
 	host: String,
 	username: String,
 	password: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct SetMapsKey {
+pub(crate) struct SetMapsKey {
 	key: String,
 }
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
-	use Freshness::Cached;
 	use Method as M;
+	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::GET, "/gmails/{id}/connections", None, Cached, connections),
-		ApiRoute::new(M::PUT, "/gmails/{id}/imap", None, Cached, set_imap),
-		ApiRoute::new(M::PUT, "/gmails/{id}/maps_key", None, Cached, set_maps_key),
-		ApiRoute::new(M::POST, "/gmails/{id}/imap/test", None, Cached, |s: State<ApiState>, c: Extension<Caller>, p: Path<String>| {
-			check(s, c, p, Connection::Imap)
-		}),
-		ApiRoute::new(
-			M::POST,
-			"/gmails/{id}/maps_key/test",
-			None,
-			Cached,
-			|s: State<ApiState>, c: Extension<Caller>, p: Path<String>| check(s, c, p, Connection::MapsKey),
-		),
-		ApiRoute::new(M::DELETE, "/gmails/{id}/imap", None, Cached, |s: State<Panel>, c: Extension<Caller>, p: Path<String>| {
-			disconnect(s, c, p, Connection::Imap)
-		}),
-		ApiRoute::new(M::DELETE, "/gmails/{id}/maps_key", None, Cached, |s: State<Panel>, c: Extension<Caller>, p: Path<String>| {
-			disconnect(s, c, p, Connection::MapsKey)
-		}),
+		ApiRoute::new(M::GET, "/gmails/{id}/connections", user, gmail_connections),
+		ApiRoute::new(M::PUT, "/gmails/{id}/imap", user, set_imap),
+		ApiRoute::new(M::PUT, "/gmails/{id}/maps_key", user, set_maps_key),
+		ApiRoute::new(M::POST, "/gmails/{id}/imap/test", user, test_imap),
+		ApiRoute::new(M::POST, "/gmails/{id}/maps_key/test", user, test_maps_key),
+		ApiRoute::new(M::DELETE, "/gmails/{id}/imap", user, remove_imap),
+		ApiRoute::new(M::DELETE, "/gmails/{id}/maps_key", user, remove_maps_key),
 	]
 }
 
-fn id(raw: &str) -> ApiResult<i64> {
-	raw.parse().map_err(|_| ApiError::NotFound)
-}
-
-async fn connections(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<Json<ConnectionsDto>> {
-	answer(&state, caller.user_id, id(&raw)?).await.map(Json)
+/// A gmail's inbox, Maps key and browser, and what Places requests cost on the shared keys: no
+/// secret, ever.
+async fn gmail_connections(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>) -> ApiResult<Json<ConnectionsDto>> {
+	answer(&state, caller.user_id, id).await.map(Json)
 }
 
 /// The gmail's connections, its browser's running asked of the runner.
@@ -186,9 +155,10 @@ pub(crate) async fn answer(state: &ApiState, owner: uuid::Uuid, gmail: i64) -> A
 	Ok(ConnectionsDto::of(c, running, film))
 }
 
-async fn set_imap(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<SetImap>, JsonRejection>) -> ApiResult<Json<ConnectionsDto>> {
-	let gmail = id(&raw)?;
-	let b = body(b)?;
+/// Sets the gmail's inbox, kept only once it logs in (IMAPS :993, a public address only).
+///
+/// 400 refused, nothing stored.
+async fn set_imap(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>, Body(b): Body<SetImap>) -> ApiResult<Json<ConnectionsDto>> {
 	let new = NewImap {
 		host: b.host,
 		username: b.username,
@@ -199,29 +169,50 @@ async fn set_imap(State(state): State<ApiState>, Extension(caller): Extension<Ca
 	answer(&state, caller.user_id, gmail).await.map(Json)
 }
 
+/// Sets the gmail's own Maps key, kept only once Google answers for it (an unbilled id-only
+/// details); the caller's Places requests are paid with it first.
+///
+/// 400 refused, nothing stored.
 async fn set_maps_key(
 	State(state): State<ApiState>,
 	Extension(caller): Extension<Caller>,
-	Path(raw): Path<String>,
-	b: Result<Json<SetMapsKey>, JsonRejection>,
+	Ids(Id { id: gmail }): Ids<Id<i64>>,
+	Body(b): Body<SetMapsKey>,
 ) -> ApiResult<Json<ConnectionsDto>> {
-	let gmail = id(&raw)?;
-	state.panel.set_maps_key(caller.user_id, gmail, Zeroizing::new(body(b)?.key), Timestamp::now()).await??;
+	state.panel.set_maps_key(caller.user_id, gmail, Zeroizing::new(b.key), Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail's Maps key set");
 	answer(&state, caller.user_id, gmail).await.map(Json)
 }
 
-async fn check(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, which: Connection) -> ApiResult<Json<ConnectionsDto>> {
-	let gmail = id(&raw)?;
-	state.panel.check(caller.user_id, gmail, which, Timestamp::now()).await??;
-	answer(&state, caller.user_id, gmail).await.map(Json)
+/// Checks the gmail's inbox again, the check recorded. 404 none set.
+async fn test_imap(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>) -> ApiResult<Json<ConnectionsDto>> {
+	check(&state, &caller, id, Connection::Imap).await
 }
 
-async fn disconnect(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, which: Connection) -> ApiResult<StatusCode> {
-	let gmail = id(&raw)?;
+/// Checks the gmail's Maps key again, the check recorded. 404 none set.
+async fn test_maps_key(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>) -> ApiResult<Json<ConnectionsDto>> {
+	check(&state, &caller, id, Connection::MapsKey).await
+}
+
+/// Forgets the gmail's inbox.
+async fn remove_imap(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>) -> ApiResult<NoContent> {
+	disconnect(&panel, &caller, id, Connection::Imap).await
+}
+
+/// Forgets the gmail's Maps key.
+async fn remove_maps_key(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>) -> ApiResult<NoContent> {
+	disconnect(&panel, &caller, id, Connection::MapsKey).await
+}
+
+async fn check(state: &ApiState, caller: &Caller, gmail: i64, which: Connection) -> ApiResult<Json<ConnectionsDto>> {
+	state.panel.check(caller.user_id, gmail, which, Timestamp::now()).await??;
+	answer(state, caller.user_id, gmail).await.map(Json)
+}
+
+async fn disconnect(panel: &Panel, caller: &Caller, gmail: i64, which: Connection) -> ApiResult<NoContent> {
 	panel.disconnect(caller.user_id, gmail, which).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, %which, "gmail's connection removed");
-	Ok(StatusCode::NO_CONTENT)
+	Ok(NoContent)
 }
 
 impl From<Checked> for CheckedDto {

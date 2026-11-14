@@ -73,8 +73,10 @@ pub async fn redeem_link_token(conn: &mut SqliteConnection, hash: &[u8], now: Ti
 // ── chats ───────────────────────────────────────────────────────────────────────────────
 
 /// What a destination's chat is.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::AsRefStr, strum::EnumString)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::AsRefStr, strum::EnumString, schemars::JsonSchema, serde::Serialize)]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+#[schemars(rename = "DestinationKind")]
 pub enum Kind {
 	/// The user's own chat with the bot: the only one PII and buttons go to.
 	Private,

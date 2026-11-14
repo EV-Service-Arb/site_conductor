@@ -34,13 +34,16 @@ use std::{
 use axum::{
 	Extension, Json, Router,
 	extract::{
-		Path, State,
-		rejection::JsonRejection,
+		DefaultBodyLimit, FromRequest, Path, State,
 		ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade, rejection::WebSocketUpgradeRejection},
 	},
 	http::{HeaderMap, Method, StatusCode, header},
-	response::{IntoResponse, Response},
+	response::{IntoResponse, NoContent, Response},
 	routing::get,
+};
+use ev_lib::api::{
+	GenContext, JsonSchema, OperationInput,
+	openapi::{MediaType, Operation, ReferenceOr, RequestBody},
 };
 use eyre::WrapErr;
 use futures::{SinkExt, StreamExt};
@@ -60,14 +63,13 @@ use serde_json::{Value, json};
 use tokio::sync::{broadcast::error::RecvError, oneshot};
 use tokio_tungstenite::tungstenite::{self, client::IntoClientRequest};
 use tracing::Instrument;
-use ts_rs::TS;
 use zeroize::Zeroizing;
 
 use crate::{
-	api::{ApiError, ApiResult, body},
+	api::{ApiError, ApiResult, Body, Id, Ids},
 	connections::{self, CheckedDto, ConnectionsDto},
 	cookies,
-	http::{ApiRoute, ApiState},
+	http::{ApiRoute, ApiState, Gate},
 	live,
 	signin::{self, Caller, Denied, Freshness, SignIn},
 };
@@ -90,19 +92,15 @@ const RECHECK: Duration = Duration::from_secs(60);
 
 /// How long one frame may take to go out before the viewer is dropped.
 const SEND_WITHIN: Duration = Duration::from_secs(10);
-/// Under the gate, outside the API's bounds (`http::app`).
-pub(crate) const FILM: &str = "/api/v1/gmails/{id}/browser/film";
-pub(crate) const START: &str = "/api/v1/gmails/{id}/browser/start";
-
 /// A film at most.
-pub(crate) const FILM_MAX: usize = 512 << 20;
+const FILM_MAX: usize = 512 << 20;
 type Devtools = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 type Held = (u64, oneshot::Sender<()>);
 
 /// Where a gmail's proxy comes out, at its last check.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Exit")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Exit")]
 pub struct ExitDto {
 	pub ip: String,
 	/// ISO 3166-1 alpha-2.
@@ -114,11 +112,10 @@ pub struct ExitDto {
 }
 
 /// A gmail's browser, as its owner sees it: never the proxy's credentials.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Browser")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Browser")]
 pub struct BrowserDto {
-	#[ts(type = "Provider")]
-	pub provider: String,
+	pub provider: Provider,
 	/// A `Device`; a cloud phone's, its model.
 	pub device: String,
 	/// The proxy's host:port.
@@ -129,38 +126,33 @@ pub struct BrowserDto {
 	pub checked: CheckedDto,
 	/// What it runs for now: `gmb` null, the gmail alone; `stream` a cloud phone's own view at
 	/// Multilogin; null, it does not run.
-	#[ts(type = "{ gmb: number | null, stream: string | null } | null")]
 	pub running: Option<RunningDto>,
 	/// Its next launch plays the film uploaded as its back camera; a phone's is in Multilogin's
 	/// Library.
 	pub film: bool,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Running")]
 pub struct RunningDto {
 	pub gmb: Option<i64>,
 	pub stream: Option<String>,
 }
 
-#[derive(Deserialize, TS)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-#[ts(rename = "SetBrowser")]
 pub struct SetBrowser {
-	#[ts(type = "Provider")]
-	pub provider: String,
+	pub provider: Provider,
 	/// A browser's; a cloud phone's model is drawn.
-	#[ts(type = "Device | null")]
 	pub device: Option<sa_browsers::Device>,
 	/// `socks5://` or `http://`, `user:pass@host:port`.
 	pub proxy: String,
 }
 
-#[derive(Deserialize, TS)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-#[ts(rename = "StartBrowser")]
 pub struct StartBrowser {
 	/// At this GBP's point; none, the position blocked.
-	#[ts(type = "number | null")]
 	pub gmb: Option<i64>,
 }
 
@@ -265,79 +257,84 @@ impl Runner {
 }
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
-	use Freshness::Cached;
 	use Method as M;
+	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::PUT, "/gmails/{id}/browser", None, Cached, set),
-		ApiRoute::new(M::POST, "/gmails/{id}/browser/test", None, Cached, test),
-		ApiRoute::new(M::DELETE, "/gmails/{id}/browser", None, Cached, remove),
-		ApiRoute::new(M::POST, "/gmails/{id}/browser/stop", None, Cached, stop),
-		ApiRoute::new(M::DELETE, "/gmails/{id}/browser/film", None, Cached, remove_film),
+		ApiRoute::new(M::PUT, "/gmails/{id}/browser", user, set_browser),
+		ApiRoute::new(M::POST, "/gmails/{id}/browser/test", user, test_browser),
+		ApiRoute::new(M::DELETE, "/gmails/{id}/browser", user, remove_browser),
+		// A launch waits on the provider and the browser's devtools, a film's upload on its bytes.
+		ApiRoute::new(M::POST, "/gmails/{id}/browser/start", user.slow(), start_browser).spends(),
+		ApiRoute::new(M::POST, "/gmails/{id}/browser/stop", user, stop_browser),
+		ApiRoute::new(M::PUT, "/gmails/{id}/browser/film", user.slow(), set_film).layer(|h| h.layer(DefaultBodyLimit::max(FILM_MAX))),
+		ApiRoute::new(M::DELETE, "/gmails/{id}/browser/film", user, remove_film),
 	]
 }
 
-/// The owner's screens read the gmail's browser again: set, checked, started, stopped, its film.
-fn changed(state: &ApiState, owner: uuid::Uuid, gmail: i64) {
-	state.panel.bus().changed(sa_panel::live::Change {
-		topic: "browsers".into(),
-		brand: None,
-		id: Some(gmail.to_string()),
-		at: Timestamp::now(),
-		audience: sa_panel::live::Audience::User(owner),
-	});
+/// An mp4, as it streams in.
+pub(crate) struct Mp4(axum::body::Body);
+
+impl<S: Send + Sync> FromRequest<S> for Mp4 {
+	type Rejection = std::convert::Infallible;
+
+	async fn from_request(req: axum::extract::Request, _: &S) -> Result<Self, Self::Rejection> {
+		Ok(Self(req.into_body()))
+	}
+}
+
+impl OperationInput for Mp4 {
+	fn operation_input(_: &mut GenContext, op: &mut Operation) {
+		op.request_body = Some(ReferenceOr::Item(RequestBody {
+			content: [("video/mp4".into(), MediaType::default())].into_iter().collect(),
+			required: true,
+			..RequestBody::default()
+		}));
+	}
 }
 
 fn connected(state: &ApiState) -> ApiResult<&Connected> {
 	state.browsers.as_ref().ok_or_else(|| ApiError::Unavailable(NOT_CONNECTED.to_owned()))
 }
 
-fn id(raw: &str) -> ApiResult<i64> {
-	raw.parse().map_err(|_| ApiError::NotFound)
-}
-
-async fn set(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<SetBrowser>, JsonRejection>) -> ApiResult<Json<ConnectionsDto>> {
-	let gmail = id(&raw)?;
+/// Sets the gmail's browser up, kept only once its proxy comes out in the country of every GBP of
+/// the gmail; the provider and device are a fingerprint, set once, the proxy replaced under them.
+///
+/// 400 refused, nothing stored; 409 another provider or device; a phone names no device.
+async fn set_browser(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>, Body(b): Body<SetBrowser>) -> ApiResult<Json<ConnectionsDto>> {
 	let c = connected(&state)?;
-	let b = body(b)?;
-	let provider: Provider = b.provider.parse().map_err(|_| ApiError::BadRequest(format!("no provider {:?}", b.provider)))?;
 	let new = NewBrowser {
-		provider,
+		provider: b.provider,
 		device: b.device,
 		proxy: Zeroizing::new(b.proxy),
 	};
 	state.panel.set_browser(&c.browsers, caller.user_id, gmail, new, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail's browser set");
-	changed(&state, caller.user_id, gmail);
 	connections::answer(&state, caller.user_id, gmail).await.map(Json)
 }
 
-async fn test(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<Json<ConnectionsDto>> {
-	let gmail = id(&raw)?;
+/// Checks the browser's proxy exit again.
+async fn test_browser(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>) -> ApiResult<Json<ConnectionsDto>> {
 	state.panel.check_browser(&connected(&state)?.browsers, caller.user_id, gmail, Timestamp::now()).await??;
-	changed(&state, caller.user_id, gmail);
 	connections::answer(&state, caller.user_id, gmail).await.map(Json)
 }
 
-async fn remove(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<StatusCode> {
-	let gmail = id(&raw)?;
+/// Removes the gmail's browser: stopped, the provider's profile (a phone's film) and session gone.
+async fn remove_browser(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>) -> ApiResult<NoContent> {
 	let c = connected(&state)?;
 	state.panel.browser_of(caller.user_id, gmail).await??;
 	c.runner.expect_done(Method::DELETE, &format!("/profiles/{gmail}"), None).await?;
 	state.panel.delete_browser(&c.browsers, caller.user_id, gmail).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail's browser removed");
-	changed(&state, caller.user_id, gmail);
-	Ok(StatusCode::NO_CONTENT)
+	Ok(NoContent)
 }
 
-pub(crate) async fn start(
-	State(state): State<ApiState>,
-	Extension(caller): Extension<Caller>,
-	Path(raw): Path<String>,
-	b: Result<Json<StartBrowser>, JsonRejection>,
-) -> ApiResult<StatusCode> {
-	let gmail = id(&raw)?;
+/// Starts the gmail's browser, answering once it is up: at a GBP's point, its zone and its
+/// country's locale; for the gmail alone the position blocked. A cloud phone bills while it runs.
+///
+/// 409 it runs for another.
+async fn start_browser(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>, Body(b): Body<StartBrowser>) -> ApiResult<NoContent> {
 	let c = connected(&state)?;
-	let launch = state.panel.launch(&c.browsers, caller.user_id, gmail, body(b)?.gmb, Timestamp::now()).await??;
+	let launch = state.panel.launch(&c.browsers, caller.user_id, gmail, b.gmb, Timestamp::now()).await??;
 	c.runner
 		.expect_done(Method::POST, &format!("/profiles/{gmail}/launch"), Some(&launch))
 		.await
@@ -345,35 +342,33 @@ pub(crate) async fn start(
 			ApiError::Conflict(_) => ApiError::Conflict("it runs for another GBP, or for the gmail alone: stop it first".to_owned()),
 			e => e,
 		})?;
-	changed(&state, caller.user_id, gmail);
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, run = launch.run, "gmail's browser up");
-	Ok(StatusCode::NO_CONTENT)
+	Ok(NoContent)
 }
 
-async fn stop(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<StatusCode> {
-	let gmail = id(&raw)?;
+/// Stops the gmail's browser.
+async fn stop_browser(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>) -> ApiResult<NoContent> {
 	let c = connected(&state)?;
 	state.panel.browser_of(caller.user_id, gmail).await??;
 	c.runner.expect_done(Method::POST, &format!("/profiles/{gmail}/stop"), None).await?;
-	changed(&state, caller.user_id, gmail);
-	Ok(StatusCode::NO_CONTENT)
+	Ok(NoContent)
 }
 
-async fn remove_film(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<StatusCode> {
-	let gmail = id(&raw)?;
+/// Takes the browser's film away.
+async fn remove_film(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>) -> ApiResult<NoContent> {
 	let c = connected(&state)?;
 	match state.panel.browser_of(caller.user_id, gmail).await??.provider {
 		Provider::Multilogin => state.panel.remove_phone_film(&c.browsers, caller.user_id, gmail).await??,
 		Provider::MultiloginBrowser | Provider::Gologin => c.runner.expect_done(Method::DELETE, &format!("/profiles/{gmail}/film"), None).await?,
 	}
-	changed(&state, caller.user_id, gmail);
-	Ok(StatusCode::NO_CONTENT)
+	Ok(NoContent)
 }
 
-/// `PUT` an mp4, streamed to the runner: the camera of the gmail's next launch, its sound the mic.
-/// A cloud phone's into Multilogin's Library instead.
-pub(crate) async fn set_film(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, film: axum::body::Body) -> ApiResult<StatusCode> {
-	let gmail = id(&raw)?;
+/// Uploads an mp4 as the camera of the browser's next launch, its sound the mic: ≤ 512 MiB; a
+/// cloud phone's ≤ 100 MiB, to Multilogin's Library.
+///
+/// 409 for Multilogin's browser: its camera is the host's.
+async fn set_film(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>, Mp4(film): Mp4) -> ApiResult<NoContent> {
 	let c = connected(&state)?;
 	match state.panel.browser_of(caller.user_id, gmail).await??.provider {
 		Provider::Gologin => {}
@@ -384,8 +379,7 @@ pub(crate) async fn set_film(State(state): State<ApiState>, Extension(caller): E
 				.map_err(|_| ApiError::TooLarge(format!("a phone's film is {} MiB at most", LIBRARY_MAX >> 20)))?;
 			state.panel.set_phone_film(&c.browsers, caller.user_id, gmail, mp4.to_vec()).await??;
 			tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "phone's film in Multilogin's Library");
-			changed(&state, caller.user_id, gmail);
-			return Ok(StatusCode::NO_CONTENT);
+			return Ok(NoContent);
 		}
 	}
 	let path = format!("/profiles/{gmail}/film");
@@ -404,8 +398,7 @@ pub(crate) async fn set_film(State(state): State<ApiState>, Extension(caller): E
 	match status {
 		StatusCode::NO_CONTENT => {
 			tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail's film set");
-			changed(&state, caller.user_id, gmail);
-			Ok(StatusCode::NO_CONTENT)
+			Ok(NoContent)
 		}
 		StatusCode::BAD_REQUEST => Err(ApiError::BadRequest(text)),
 		StatusCode::CONFLICT => Err(ApiError::Conflict(text)),

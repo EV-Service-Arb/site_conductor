@@ -5,6 +5,7 @@
 use std::{collections::BTreeMap, time::Duration};
 
 use axum::{Json, extract::State};
+use ev_lib::api::JsonSchema;
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_auth::SourceKind;
@@ -30,7 +31,7 @@ pub(crate) fn probe_client() -> reqwest::Client {
 }
 
 /// One source of a landing's, as it measured it (kitstart's `siteReportRoute`).
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 enum SourceState {
 	Unset,
@@ -40,14 +41,14 @@ enum SourceState {
 	Down { detail: String },
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 struct ReportSources {
 	places: BTreeMap<String, SourceState>,
 	pricing: SourceState,
 	experiments: SourceState,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 struct SiteReport {
 	brand: String,
 	kitstart: String,
@@ -55,7 +56,7 @@ struct SiteReport {
 	sources: ReportSources,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, JsonSchema, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 enum Probe {
 	NoOrigin,
@@ -63,7 +64,7 @@ enum Probe {
 	Failed { detail: String },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, JsonSchema, Serialize)]
 struct Site {
 	key_id: String,
 	brands: Vec<String>,
@@ -72,33 +73,38 @@ struct Site {
 }
 
 /// sites' `/api/conductor/internal-reads`: an endpoint is absent when not read since `since`.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 struct InternalReads {
 	since: Timestamp,
 	reads: BTreeMap<String, BrandReads>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, JsonSchema, Serialize)]
 struct BrandReads {
 	locations: Option<Timestamp>,
 	pricing: Option<Timestamp>,
 	experiments: Option<Timestamp>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, JsonSchema, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
+#[schemars(rename = "Read{T}")]
 enum Read<T> {
 	Read { value: T },
 	Failed { detail: String },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, JsonSchema, Serialize)]
 pub(crate) struct ConnectedSites {
 	sites: Vec<Site>,
 	received: Read<BTreeMap<String, Timestamp>>,
 	internal_reads: Read<InternalReads>,
 }
 
+/// Every active site key's landing report (`<origin>/.well-known/sa-site`, no redirect, 5 s) beside
+/// what sites saw of it: its last ingest per key, its last internal read per brand.
+///
+/// All asked at once; whatever fails is a value in its place.
 pub(crate) async fn sites(State(s): State<ApiState>) -> ApiResult<Json<ConnectedSites>> {
 	let keys: Vec<SourceRow> = s
 		.panel

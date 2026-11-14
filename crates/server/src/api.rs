@@ -1,14 +1,19 @@
 //! The conductor's own `/api/v1`: `/me`, the source keys and the connected sites
-//! (`connected`). JSON in and out; every request has
-//! passed the sign-in gate (`signin::gate`), so a [`Caller`] is in its extensions.
+//! (`connected`), and what every module's operations take and answer. JSON in and out; every
+//! request has passed the sign-in gate (`signin::gate`), so a [`Caller`] is in its extensions.
 
-use std::collections::BTreeSet;
+use std::{borrow::Cow, collections::BTreeSet};
 
 use axum::{
 	Extension, Json,
-	extract::{Path, State, rejection::JsonRejection},
-	http::{HeaderValue, Method, StatusCode, header},
-	response::{IntoResponse, Response},
+	extract::{FromRequest, FromRequestParts, Path, Query, Request, State, rejection::JsonRejection},
+	http::{Method, StatusCode, request::Parts},
+	response::{IntoResponse, NoContent, Response},
+};
+use ev_lib::api::{
+	Created, GenContext, JsonSchema, OpenApi, OperationInput, OperationOutput,
+	openapi::{Operation, Response as Answer, StatusCode as Status},
+	schemars::{Schema, SchemaGenerator, json_schema},
 };
 use sa_auth::SourceKind;
 use sa_core::{
@@ -17,12 +22,11 @@ use sa_core::{
 };
 use sa_panel::{Panel, Refused};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use serde_json::{Value, json};
 
 use crate::{
 	connected,
-	http::{ApiRoute, Section},
-	signin::{Caller, Freshness},
+	http::{ApiRoute, ApiState, Gate, Section},
+	signin::Caller,
 };
 
 pub(crate) type ApiResult<T> = Result<T, ApiError>;
@@ -41,17 +45,24 @@ pub enum ApiError {
 }
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
-	use Freshness::{Cached, Fresh};
 	use Method as M;
-	let admin = Some(Section::Admin);
+	let admin = Gate::section(Section::Admin);
 	vec![
-		ApiRoute::new(M::GET, "/me", None, Cached, me),
-		ApiRoute::new(M::GET, "/sources", admin, Cached, sources),
-		ApiRoute::new(M::GET, "/sources/sites", admin, Cached, connected::sites),
+		ApiRoute::new(M::GET, "/me", Gate::USER, me),
+		ApiRoute::new(M::GET, "/openapi.json", Gate::USER, openapi),
+		ApiRoute::new(M::GET, "/sources", admin, list_sources),
+		ApiRoute::new(M::GET, "/sources/sites", admin, connected::sites),
 		// A key must not be minted or revoked on a permission revoked a moment ago.
-		ApiRoute::new(M::POST, "/sources", admin, Fresh, add_source),
-		ApiRoute::new(M::DELETE, "/sources/{key_id}", admin, Fresh, revoke_source),
+		ApiRoute::new(M::POST, "/sources", admin.fresh(), add_source),
+		ApiRoute::new(M::DELETE, "/sources/{key_id}", admin.fresh(), revoke_source),
 	]
+}
+
+/// What every failed operation answers, its status saying which failure.
+#[derive(JsonSchema, Serialize)]
+#[schemars(rename = "Error")]
+pub struct ErrorDto {
+	error: String,
 }
 
 impl IntoResponse for ApiError {
@@ -68,7 +79,19 @@ impl IntoResponse for ApiError {
 				(StatusCode::INTERNAL_SERVER_ERROR, "internal error".to_owned())
 			}
 		};
-		(status, Json(json!({ "error": msg }))).into_response()
+		(status, Json(ErrorDto { error: msg })).into_response()
+	}
+}
+
+impl OperationOutput for ApiError {
+	type Inner = ErrorDto;
+
+	fn operation_response(ctx: &mut GenContext, op: &mut Operation) -> Option<Answer> {
+		Json::<ErrorDto>::operation_response(ctx, op)
+	}
+
+	fn inferred_responses(ctx: &mut GenContext, op: &mut Operation) -> Vec<(Option<Status>, Answer)> {
+		Self::operation_response(ctx, op).map(|r| (None, r)).into_iter().collect()
 	}
 }
 
@@ -98,31 +121,120 @@ impl From<Invalid> for ApiError {
 	}
 }
 
-/// A JSON body, its rejection turned into our error shape.
-pub(crate) fn body<T: DeserializeOwned>(b: Result<Json<T>, JsonRejection>) -> ApiResult<T> {
-	b.map(|Json(v)| v).map_err(|e| match e.status() {
-		StatusCode::PAYLOAD_TOO_LARGE => ApiError::TooLarge(e.body_text()),
-		_ => ApiError::BadRequest(e.body_text()),
-	})
+/// A JSON body, refused in the shape every failure has.
+pub(crate) struct Body<T>(pub T);
+
+impl<T: DeserializeOwned, S: Send + Sync> FromRequest<S> for Body<T> {
+	type Rejection = ApiError;
+
+	async fn from_request(req: Request, state: &S) -> Result<Self, ApiError> {
+		Json::<T>::from_request(req, state).await.map(|Json(v)| Self(v)).map_err(|e: JsonRejection| match e.status() {
+			StatusCode::PAYLOAD_TOO_LARGE => ApiError::TooLarge(e.body_text()),
+			_ => ApiError::BadRequest(e.body_text()),
+		})
+	}
 }
 
+impl<T: JsonSchema> OperationInput for Body<T> {
+	fn operation_input(ctx: &mut GenContext, op: &mut Operation) {
+		Json::<T>::operation_input(ctx, op);
+	}
+}
+
+/// A query string, refused in the shape every failure has.
+pub(crate) struct Params<T>(pub T);
+
+impl<T: DeserializeOwned, S: Send + Sync> FromRequestParts<S> for Params<T> {
+	type Rejection = ApiError;
+
+	async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, ApiError> {
+		Query::<T>::from_request_parts(parts, state)
+			.await
+			.map(|Query(v)| Self(v))
+			.map_err(|e| ApiError::BadRequest(e.body_text()))
+	}
+}
+
+impl<T: JsonSchema> OperationInput for Params<T> {
+	fn operation_input(ctx: &mut GenContext, op: &mut Operation) {
+		Query::<T>::operation_input(ctx, op);
+	}
+}
+
+/// The ids in a path, by their names in it; one not the caller's, or not an id at all, is a 404.
+pub(crate) struct Ids<T>(pub T);
+
+impl<T: DeserializeOwned + Send, S: Send + Sync> FromRequestParts<S> for Ids<T> {
+	type Rejection = ApiError;
+
+	async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, ApiError> {
+		Path::<T>::from_request_parts(parts, state).await.map(|Path(v)| Self(v)).map_err(|_| ApiError::NotFound)
+	}
+}
+
+impl<T: JsonSchema> OperationInput for Ids<T> {
+	fn operation_input(ctx: &mut GenContext, op: &mut Operation) {
+		Path::<T>::operation_input(ctx, op);
+	}
+}
+
+/// A path's one `{id}`.
+#[derive(Deserialize, JsonSchema)]
+pub(crate) struct Id<T> {
+	pub id: T,
+}
+
+/// The caller: who they are and every `sa` permission they hold, every service's.
 async fn me(Extension(caller): Extension<Caller>) -> Json<Caller> {
 	Json(caller)
 }
 
+/// The operations the caller's permissions open, as an OpenAPI document.
+///
+/// Context, not authority: each operation is judged again when it is called.
+async fn openapi(State(state): State<ApiState>, Extension(caller): Extension<Caller>) -> Json<Document> {
+	Json(Document(state.catalog.opened(&caller.permissions)))
+}
+
+/// An OpenAPI 3.1 document.
+#[derive(Serialize)]
+#[serde(transparent)]
+pub(crate) struct Document(OpenApi);
+
+impl JsonSchema for Document {
+	fn schema_name() -> Cow<'static, str> {
+		"OpenApi".into()
+	}
+
+	fn json_schema(_: &mut SchemaGenerator) -> Schema {
+		json_schema!({ "type": "object", "description": "An OpenAPI 3.1 document." })
+	}
+}
+
 // ── sources (admin) ─────────────────────────────────────────────────────────────────────
 
-#[derive(Serialize)]
-struct SourceDto {
+/// A signing key, never its secret.
+#[derive(JsonSchema, Serialize)]
+#[schemars(rename = "SourceKey")]
+pub(crate) struct SourceDto {
 	key_id: String,
-	kind: &'static str,
+	kind: SourceKind,
 	brands: Vec<String>,
+	/// RFC 3339.
 	created_at: String,
 	revoked_at: Option<String>,
+	/// A site key's landing: `https://<domain>[:port]`.
 	origin: Option<String>,
 }
 
-async fn sources(State(panel): State<Panel>) -> ApiResult<Json<Value>> {
+#[derive(JsonSchema, Serialize)]
+#[schemars(rename = "SourceKeys")]
+pub(crate) struct SourcesDto {
+	sources: Vec<SourceDto>,
+}
+
+/// Every source key, revoked ones too.
+async fn list_sources(State(panel): State<Panel>) -> ApiResult<Json<SourcesDto>> {
 	let sources: Vec<SourceDto> = panel
 		.store()
 		.sources()
@@ -130,28 +242,56 @@ async fn sources(State(panel): State<Panel>) -> ApiResult<Json<Value>> {
 		.into_iter()
 		.map(|s| SourceDto {
 			key_id: s.grant.key_id,
-			kind: s.grant.kind.as_str(),
+			kind: s.grant.kind,
 			brands: s.grant.brands.iter().map(|b| b.as_str().to_owned()).collect(),
 			created_at: s.created_at.to_string(),
 			revoked_at: s.revoked_at.map(|t| t.to_string()),
 			origin: s.origin.map(|o| o.to_string()),
 		})
 		.collect();
-	Ok(Json(json!({ "sources": sources })))
+	Ok(Json(SourcesDto { sources }))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct AddSource {
+pub(crate) struct AddSource {
+	/// A lowercase slug of 1–64 of `[a-z0-9_-]`, never reused.
 	key_id: String,
-	kind: String,
+	#[schemars(with = "KeyedSourceKind")]
+	kind: SourceKind,
+	/// At least one.
 	brands: Vec<String>,
+	/// A `site` key's landing, `https://<domain>[:port]`; no other kind has one.
 	origin: Option<String>,
 }
 
-async fn add_source(State(panel): State<Panel>, Extension(caller): Extension<Caller>, b: Result<Json<AddSource>, JsonRejection>) -> ApiResult<Response> {
-	let b = body(b)?;
-	let kind: SourceKind = b.kind.parse().map_err(Invalid::from)?;
+/// A kind a key is issued for: not `panel` nor `booking`, which sites writes itself.
+struct KeyedSourceKind;
+
+impl JsonSchema for KeyedSourceKind {
+	fn schema_name() -> Cow<'static, str> {
+		"KeyedSourceKind".into()
+	}
+
+	fn json_schema(_: &mut SchemaGenerator) -> Schema {
+		json_schema!({ "type": "string", "enum": SourceKind::ALL.into_iter().filter(|k| k.keyed()).map(SourceKind::as_str).collect::<Vec<_>>() })
+	}
+}
+
+/// The key and its secret, shown this once.
+#[derive(JsonSchema, Serialize)]
+#[schemars(rename = "NewSourceKey")]
+pub(crate) struct NewSourceDto {
+	key_id: String,
+	secret: String,
+}
+
+/// Issues a signing key; its secret is in this answer only.
+///
+/// 409 if the key id is taken; 400 for kind `panel` or `booking`, a `site` without an origin or
+/// another kind with one.
+async fn add_source(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<AddSource>) -> ApiResult<Created<NewSourceDto>> {
+	let kind = b.kind;
 	// A key of kind panel would only let something outside pass its writes off as typed in by hand.
 	if !kind.keyed() {
 		return Err(ApiError::BadRequest(format!("a key of kind {kind} is not issued: it is written without one")));
@@ -171,16 +311,22 @@ async fn add_source(State(panel): State<Panel>, Extension(caller): Extension<Cal
 		return Err(ApiError::Conflict(format!("a source {} exists already", b.key_id)));
 	};
 	tracing::info!(user_id = %caller.user_id, key_id = added.key_id, kind = %kind, "source added from the panel");
-	// Shown once: the answer is the only place the secret ever is.
-	let mut res = (StatusCode::CREATED, Json(json!({ "key_id": added.key_id, "secret": added.secret.as_str() }))).into_response();
-	res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-	Ok(res)
+	Ok(Created(NewSourceDto {
+		secret: added.secret.as_str().to_owned(),
+		key_id: added.key_id,
+	}))
 }
 
-async fn revoke_source(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(key_id): Path<String>) -> ApiResult<StatusCode> {
+#[derive(Deserialize, JsonSchema)]
+pub(crate) struct KeyId {
+	key_id: String,
+}
+
+/// Revokes a source key for good: its id is never issued again.
+async fn revoke_source(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(KeyId { key_id }): Ids<KeyId>) -> ApiResult<NoContent> {
 	if !panel.revoke_source(&key_id).await? {
 		return Err(ApiError::NotFound);
 	}
 	tracing::info!(user_id = %caller.user_id, key_id, "source revoked from the panel");
-	Ok(StatusCode::NO_CONTENT)
+	Ok(NoContent)
 }

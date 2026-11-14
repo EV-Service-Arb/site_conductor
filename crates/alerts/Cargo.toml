@@ -10,6 +10,7 @@ readme.workspace = true
 [dependencies]
 jiff = { workspace = true, features = ["serde"] }
 sa_auth.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

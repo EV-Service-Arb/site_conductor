@@ -96,10 +96,9 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/telegram.rs        the Bot API, its long poll
   src/web.rs             the front end's static export (PANEL_WEB_DIR), behind every other route
   src/settings.rs        the environment (ev_lib `settings!`)
-crates/gen/              `nix run .#gen`: the front end's mirror of Rust types (ev_lib `ts_gen`),
-                         into frontend/src/entities/{session,source,gmb,tokens,alerts,assistant}/model/generated.ts,
-                         committed;
-                         the pre-commit hook re-runs it
+crates/gen/              `nix run .#gen`: the `/api/v1` document into frontend/src/shared/api/openapi.json,
+                         and the front end's client types from it (schema.ts), committed; the
+                         pre-commit hook re-runs it
 contracts/proto/concierge/v1/  concierge's auth and directory protos, vendored at the commit in
                                REV (`sync.sh` refreshes them)
 ```
@@ -135,7 +134,6 @@ POST /auth/logout    CSRF; every session of the user is closed
   (`sa:admin:sources:manage`), Tokens (`sa:admin:tokens:grant`) — or none (`/me`,
   `/access/requests*`, `/alerts*`, `/assistant*`, the caller's own gmails, GMBs, trades and tokens). Each fresh
   `GetMe` upserts the user (`users`: id, email, name), whom tokens and gmails belong to.
-  `http::api_routes` is the table the router is built from and the tests walk.
 - **The catalog.** `serve` publishes `Catalog::collect("sa", PANEL_BUILD_EPOCH)` — the whole `sa`
   namespace, every service's permissions — with `PublishCatalog` before it serves (the image
   sets `PANEL_BUILD_EPOCH` to the commit's unix seconds, so an older replica never supersedes a
@@ -376,150 +374,79 @@ PUT    /api/queries_cache/{scheme}/{key}         {answer, request} → 204; 400 
 
 JSON; timestamps RFC 3339; errors `{"error": "…"}` with 400 / 403 / 404 / 409 / 413 / 503.
 
+**One table, everything derived** (ev_lib `api`): `http::api_routes` is what the router is built
+from; each operation's request and answer are its handler's signature, its description the
+handler's `///`, its id the handler's name, its permission its section, and whether it spends
+said by hand. `GET /openapi.json` is that document, narrowed to the operations the caller's
+permissions open; the front end's client and types are generated from it (`nix run .#gen`), and
+an agent's tools read it. Below, the overview (a test holds it to the table); what each answers
+is in the document. Slow: 8 at once, 10 min each, not the bounds above. The browser viewer's
+socket (`GET /gmails/{id}/browser`) is outside the gate, as `/live` is.
+
 ```text
-GET    /me                                  {user_id, email, preferred_name, permissions,
-                                            dev_sign_in}: every sa permission, every service's
-GET    /sources              Admin          {sources: [{key_id, kind, brands, created_at, revoked_at,
-                                            origin}]}
-POST   /sources              Admin, fresh   {key_id, kind, brands, origin} → 201 {key_id, secret}
-                                            (shown once), 409 if taken; kind panel or booking, a
-                                            site without an origin or another kind with one → 400
-GET    /sources/sites        Admin          the Connected sites table, below
-DELETE /sources/{key_id}     Admin, fresh   204, 404
-POST   /access/requests                     {need} → 201 {need, requested_at}, made now; 200 the one
-                                            standing (made within 24 h: nobody told again);
-                                            400 a need neither a permission nor an alias of the
-                                            sa catalog; 409 a need held already
-GET    /access/requests/mine                {requests: [{need, requested_at}]}; a need is held
-                                            when every permission it stands for is, and both
-                                            routes drop the caller's requests held
-GET    /alerts                              {enabled, bot, rules, destinations: [{id, kind, title,
-                                            topic_id, gmail_id, dead, rules: {rule: bool}}]} (the
-                                            rules open to the caller)
-POST   /alerts/telegram/link fresh          → 201 {url: "https://t.me/<bot>?start=<token>"};
-                                            503 without a bot
-POST   /alerts/telegram/chats fresh         {chat, gmail_id} → 201 as GET; 400 refused (nothing
-                                            stored), 409 a destination already
-PUT    /alerts/destinations/{id}/rules      {rules: {new_lead: false, …}} → 200 as GET; 400 for a
-                                            rule not open to them
-PUT    /alerts/destinations/{id}/gmail      {gmail_id} → 200 as GET; 404 not theirs
-POST   /alerts/destinations/{id}/test       204; 400 with what Telegram said
-DELETE /alerts/destinations/{id}            204, 404
-GET    /gmails                              {gmails: [{id, gmail, role, cap, created_at, browser}], gmbs: [{id,
-                                            gmail_id, place_id, name, address, state, next (the
-                                            states it may move to), country: {code, by_hand} | null,
-                                            phone, trade_id, areas, hidden_address, customers_visit,
-                                            film, created_at, enabled, location: {lat, lng,
-                                            placed} | null}]} the caller's, removed ones left out; a
-                                            draft's gmail_id may be null, place_id a verified one's
-                                            only is certain; cap null while the role is unknown
-POST   /gmails                              {gmail} → 201 the gmail; 409 held already
-PATCH  /gmails/{id}                         {role: owner|manager} → 200 the gmail
-DELETE /gmails/{id}                         204: to the trash, its GBPs with it; 409 while it has a
-                                            browser
-GET    /gmails/{id}/connections             {imap: {host, username, set_at, checked: {at, error}} | null,
-                                            maps_key: {last4, set_at, checked, out} | null, prices:
-                                            {details, search, autocomplete}, browser: {provider, device, endpoint,
-                                            exit, set_at, checked, running: {gmb} | null, film} | null}:
-                                            no secret, ever
-PUT    /gmails/{id}/imap                    {host, username, password} → 200 as GET, once it logs in
-                                            (IMAPS :993, a public address only); 400 refused, nothing
-                                            stored
-PUT    /gmails/{id}/maps_key                {key} → 200 as GET, once Google answers for it (an
-                                            unbilled id-only details); 400 refused, nothing stored
-POST   /gmails/{id}/{imap,maps_key}/test    200 as GET, the check recorded; 404 none set
-DELETE /gmails/{id}/{imap,maps_key}         204
-PUT    /gmails/{id}/browser                 {provider, device?, proxy} → 200 as connections, once the proxy
-                                            comes out in the GBPs' country (Browsers); 400 refused,
-                                            nothing stored; 409 another provider or device; a phone
-                                            names no device
-POST   /gmails/{id}/browser/test            200 as connections, the exit checked again
-DELETE /gmails/{id}/browser                 204: stopped, the provider's profile (a phone's film) and session gone
-POST   /gmails/{id}/browser/{start,stop}    {gmb?} → 204 once up; 409 it runs for another
-PUT    /gmails/{id}/browser/film            an mp4 ≤ 512 MiB → 204; a phone's ≤ 100 MiB, to the Library;
-                                            Mimic's 409
-                                            (start and film: 8 at once, 10 min each, not the bounds above)
-DELETE /gmails/{id}/browser/film            204
-GET    /gmails/{id}/browser                 the viewer's WebSocket: outside the gate, as /live
-GET    /gmbs/resolve?place=&gmail=          {candidates: [{place_id, name, address, location: {lat, lng}
-                                            | null, country | null}]} (sa_places; `gmail`'s key
-                                            first); 400 one in a country not served
-GET    /gmbs/suggest?input=&gmail=          {suggestions: [{place_id, main, secondary | null}]}: Places
-                                            Autocomplete in the countries served, paid as resolve
-POST   /gmbs                                {name, trade, state, gmail_id?, country?, location?} → 201 a
-                                            GBP no place is known of: draft, verifying or suspended;
-                                            past a draft gmail_id and country (by hand) required;
-                                            location placed by hand; 409 the name a live GBP's
-POST   /gmails/{id}/gmbs                    {place_id, state, name?, country?, trade} → 201 a GBP on Google
-                                            already (state not draft; name and country fill what
-                                            Google lacks, else 400); 409 the name or place taken
-PATCH  /gmbs/{id}                           {name?, gmail_id?, phone?, trade?, areas?,
-                                            hidden_address?, customers_visit?, film?} →
-                                            200 the GBP: name a draft's only (409), gmail_id another
-                                            of the caller's (a transfer), null clears the rest; 409
-                                            a name or a phone another live GBP's
-PUT    /gmbs/{id}/state                     {state, place?} → 200 the GBP; 400 a move the drawing
-                                            below lacks; `place` taken while it has none, needed to
-                                            become verified
-DELETE /gmbs/{id}                           204: to the trash
-PUT    /gmbs/enabled                        {gmbs: [id], enabled} → 204: every one switched, or none
-                                            (404 one not the caller's)
-PUT    /gmbs/trade                          {gmbs: [id], trade: id | null} → 204: every one, or none
-PUT    /gmbs/{id}/location                  {lat, lng} → 204, placed by hand; 409 Google has its point
-DELETE /gmbs/{id}/location                  → 204, the point placed by hand taken back; 409 none is
-PUT    /gmbs/{id}/country                   {country} → 204, set by hand; 409 Google has its country
-GET    /map                                 {key}: the browser's Maps JS key; 404 without
-                                            GOOGLE_MAPS_BROWSER_KEY
-GET    /trades                              {trades: [{id, name, created_at, categories: [{country, lang,
-                                            keywords, google_primary: {id, name} | null,
-                                            google_additional: [{id, name}], study}]}]}
-POST   /trades                              {name} → 201 the trade; 409 the caller's already, any case
-PATCH  /trades/{id}                         {name} → 200 the trade; 409
-DELETE /trades/{id}                         204, its categories with it; 409 while a live GBP holds it
-PUT    /trades/{id}/{country}               {keywords, google_primary: gcid | null, google_additional:
-                                            [gcid], study} → 200 the trade: set up there, or edited;
-                                            400 a keyword twice once normalized, a gcid not Google's
-                                            there or twice, additional ones past 9 or without a primary
-DELETE /trades/{id}/{country}               204
-GET    /google-categories/{country}         {categories: [{id, name}]}: Google's list there
-GET    /trash                               {settings: {keep_days, never_purge}, gmails: [{id, gmail,
-                                            removed_at, purge_at, gmbs, blocked}], gmbs: [{id, name,
-                                            state, gmail, removed_at, purge_at, blocked}]}: gmbs those
-                                            removed on their own; blocked why a restore is refused
-POST   /trash/{gmails,gmbs}/{id}/restore    204, a gmail with the GBPs removed with it; 409 blocked: a
-                                            GBP's gmail in the trash, a live gmail's address, a live
-                                            GBP's name, place or phone
-PUT    /trash/settings                      {keep_days: 1–90, never_purge?} → 204; never_purge needs
-                                            sa:admin:trash:keep (403)
-GET    /tokens                              {balance, daily, cap, kickbacks}: renewed, the
-                                            kick-backs not claimed
-GET    /tokens/ledger?before=&limit=        {entries, next}: newest first, limit 1–200
-GET    /tokens/usage                        {days: [{day, charges, tokens}]}: 30 UTC days
-POST   /tokens/claim                        → 200 as GET /tokens
-GET    /admin/tokens         Tokens         {users: [{user_id, email, name, balance}]}
-POST   /admin/tokens/{user}  Tokens, fresh  {set: n, note?} | {add: n, note?} | {grant: n, note}
-                                            → 200 {balance}; a grant is owed until claimed
-GET    /admin/tokens/prices  Tokens         {details, search, autocomplete}: tokens a Places request
-                                            on the shared keys costs; null, not sold
-PUT    /admin/tokens/prices  Tokens, fresh  {details, search, autocomplete} (0 or more) → 200 as GET
-GET    /assistant/chats                     {chats}: owned and joined, the caller's marks, newest
-                                            first
-POST   /assistant/chats                     {id, title, turns} → 201 the chat (version 1); 409 the
-                                            id taken
-GET    /assistant/chats/{id}                the chat: its turns, version, the caller's role
-PUT    /assistant/chats/{id}/turns          {base, from, turns} → 200 the chat: turns[..from] kept,
-                                            the rest replaced; 409 `base` not the version, 400
-                                            `from` past the end
-PUT    /assistant/chats/{id}/title          {title} → 200 the chat; empty unnames it
-PUT    /assistant/chats/{id}/{pinned,archived}  {on} → 204, the caller's own
-DELETE /assistant/chats/{id}                204; the owner's
-DELETE /assistant/archived                  204: the caller's archived chats deleted, or left
-GET    /assistant/chats/{id}/access         {owner, members, general}
-POST   /assistant/chats/{id}/members        {users} → 200 as access; 400 an unknown user
-DELETE /assistant/chats/{id}/members/{user} 204; the owner anyone, a member themselves
-PUT    /assistant/chats/{id}/general        {general: none|view} → 200 as access; the owner's
-GET    /assistant/people?q=                 {people}: whom the caller shares a chat with, by name
-                                            or email, and whoever has `q` as their whole email
+GET    /me
+GET    /openapi.json
+GET    /sources                             Admin
+POST   /sources                             Admin, fresh
+GET    /sources/sites                       Admin
+DELETE /sources/{key_id}                    Admin, fresh
+POST   /access/requests
+GET    /access/requests/mine
+GET    /alerts
+POST   /alerts/telegram/{link,chats}        fresh
+PUT    /alerts/destinations/{id}/{rules,gmail}
+POST   /alerts/destinations/{id}/test
+DELETE /alerts/destinations/{id}
+GET    /gmails
+POST   /gmails
+PATCH  /gmails/{id}
+DELETE /gmails/{id}
+GET    /gmails/{id}/connections
+PUT    /gmails/{id}/{imap,maps_key,browser}
+POST   /gmails/{id}/{imap,maps_key,browser}/test
+DELETE /gmails/{id}/{imap,maps_key,browser}
+POST   /gmails/{id}/browser/{start,stop}    start: slow
+PUT    /gmails/{id}/browser/film            slow
+DELETE /gmails/{id}/browser/film
+GET    /gmbs/{resolve,suggest}
+POST   /gmbs
+POST   /gmails/{id}/gmbs
+PATCH  /gmbs/{id}
+PUT    /gmbs/{id}/state
+DELETE /gmbs/{id}
+PUT    /gmbs/{enabled,trade}
+PUT    /gmbs/{id}/location
+DELETE /gmbs/{id}/location
+PUT    /gmbs/{id}/country
+GET    /map
+GET    /trades
+POST   /trades
+PATCH  /trades/{id}
+DELETE /trades/{id}
+PUT    /trades/{id}/{country}
+DELETE /trades/{id}/{country}
+GET    /google-categories/{country}
+GET    /trash
+POST   /trash/{gmails,gmbs}/{id}/restore
+PUT    /trash/settings
+GET    /tokens
+GET    /tokens/ledger
+GET    /tokens/usage
+POST   /tokens/claim
+GET    /admin/tokens                        Tokens
+POST   /admin/tokens/{user_id}              Tokens, fresh
+GET    /admin/tokens/prices                 Tokens
+PUT    /admin/tokens/prices                 Tokens, fresh
+GET    /assistant/chats
+POST   /assistant/chats
+GET    /assistant/chats/{id}
+PUT    /assistant/chats/{id}/{turns,title,pinned,archived,general}
+DELETE /assistant/chats/{id}
+DELETE /assistant/archived
+GET    /assistant/chats/{id}/access
+POST   /assistant/chats/{id}/members
+DELETE /assistant/chats/{id}/members/{user}
+GET    /assistant/people
 ```
 
 An id in a path that is not the caller's is a 404.
@@ -571,11 +498,11 @@ closes              4401 the session ended   1001 the server is stopping
   first on every connection and a `ping` every 25 s; a feed that ends, fails, or says nothing
   for 60 s is followed again after 1 s, doubling to 30 s, so what was missed meanwhile is read
   again.
-- **The conductor's own topics:** `sources` (a key minted or revoked; holders of
-  `sa:admin:sources:manage`), `alerts` (the user's destinations added, removed, found dead
-  or revived; their rules; that user only), `browsers` (`id` a gmail: its browser set, checked,
-  started, stopped, its film; its owner) and `assistant` (`id` a chat: any change, to its owner
-  and members, those it removed too; a pin or archive to whose it is; viewers are not told).
+- **The conductor's own writes:** every write through `/api/v1` that succeeds is told as
+  `changed`, its topic the path's first segment (`gmails` for `/gmails/{id}/browser/start`), its
+  id the path's first parameter; to the holders of the route's section, else to the caller, whose
+  own resource it is (`http::tell`). A shared chat's other people are told by the engine. What the
+  bot changes on its own (a chat linked by `/start`, `/stop`, one found dead) is told as `alerts`.
 - **The shell relays.** The front end holds the one socket and re-dispatches on `window`, as
   `CustomEvent`s: `sa:live` (each server message as is, and a `{type:"resync"}` after the shell
   reconnects), `sa:live-status` (`{status}`; answered to an element's

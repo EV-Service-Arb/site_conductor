@@ -224,7 +224,7 @@ impl Source {
 }
 
 /// Where an event comes from: what a signing key is registered as, and the panel's own kinds.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceKind {
 	Site,

@@ -25,7 +25,7 @@ pub const CHROME: &str = "151";
 
 /// A phone a browser poses as, from emulate_phone_cam's measured devices: a fingerprint is
 /// measured, never written.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, strum::EnumString, strum::IntoStaticStr, strum::VariantArray)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema, strum::VariantArray)]
 pub enum Device {
 	#[serde(rename = "pixel_7")]
 	#[strum(serialize = "pixel_7")]

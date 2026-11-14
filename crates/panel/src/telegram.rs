@@ -315,7 +315,6 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 		hub_db::access_seen(&mut tx, user, permissions, display, now).await?;
 		tx.commit().await.wrap_err("committing a chat")?;
 		tracing::info!(user_id = %user, destination, "telegram: a chat added");
-		self.panel.live.changed(alerts_changed(user));
 		Ok(Ok(destination))
 	}
 
@@ -349,7 +348,6 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 			db::describe(&mut conn, destination, kind, info.title.as_deref()).await?;
 		}
 		db::revive(&mut conn, destination).await?;
-		self.panel.live.changed(alerts_changed(user));
 		Ok(Ok(()))
 	}
 

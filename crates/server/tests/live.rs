@@ -11,9 +11,7 @@ use axum::{
 	routing::get,
 };
 use jiff::Timestamp;
-use sa_alerts::Rule;
-use sa_auth::{PermissionSet, SourceKind};
-use sa_core::ids::BrandId;
+use sa_auth::PermissionSet;
 use sa_panel::{
 	Panel,
 	live::{Audience, Bus, Change, Signal},
@@ -103,14 +101,22 @@ struct Browser {
 
 impl Browser {
 	async fn send(&mut self, app: &Router, method: Method, uri: &str) -> (StatusCode, Option<String>) {
+		self.send_body(app, method, uri, None).await
+	}
+
+	async fn send_body(&mut self, app: &Router, method: Method, uri: &str, json: Option<serde_json::Value>) -> (StatusCode, Option<String>) {
 		let mut req = Request::builder().method(method).uri(uri);
+		if json.is_some() {
+			req = req.header(header::CONTENT_TYPE, "application/json");
+		}
 		if let Some(cookie) = self.cookie() {
 			req = req.header(header::COOKIE, cookie);
 		}
 		if let Some(t) = self.jar.get("sa_csrf") {
 			req = req.header("x-sa-csrf", t);
 		}
-		let res = app.clone().oneshot(req.body(Body::empty()).unwrap()).await.unwrap();
+		let body = json.map_or_else(Body::empty, |j| Body::from(j.to_string()));
+		let res = app.clone().oneshot(req.body(body).unwrap()).await.unwrap();
 		for c in res.headers().get_all(header::SET_COOKIE) {
 			let c = c.to_str().unwrap();
 			let (pair, attrs) = c.split_once(';').unwrap_or((c, ""));
@@ -280,27 +286,21 @@ async fn refused_before_the_upgrade_and_open_to_anyone_signed_in() {
 	hello["at"].as_str().unwrap().parse::<Timestamp>().expect("RFC 3339");
 }
 
-/// The conductor's own topics: the keys to whoever manages them, a user's alerts to that user.
+/// The conductor's own writes: the keys to whoever manages them, a user's alerts to that user.
 #[tokio::test]
 async fn the_conductors_own_changes_go_to_who_may_read_them() {
 	let db = TestDb::create().await;
 	let panel = panel(&db).await;
 	let (admin_app, admin_addr) = alone(panel.clone(), admin(), Limits::default()).await;
 	let (op_app, op_addr) = alone(panel.clone(), operator(), Limits::default()).await;
-	let mut admin_ws = open(admin_addr, &signed_in(&admin_app).await).await;
-	let mut op = open(op_addr, &signed_in(&op_app).await).await;
+	let mut admin_b = signed_in(&admin_app).await;
+	let mut op_b = signed_in(&op_app).await;
+	let mut admin_ws = open(admin_addr, &admin_b).await;
+	let mut op = open(op_addr, &op_b).await;
 
-	panel
-		.add_source(
-			"vifnet-site",
-			SourceKind::Site,
-			[BrandId::parse("vifnet").unwrap()].into(),
-			Some(sa_core::ids::SiteOrigin::parse("https://vifnet.site").unwrap()),
-		)
-		.await
-		.unwrap()
-		.unwrap();
-	for (permissions, chat, rule) in [(admin(), 1, Rule::PaymentReceived), (operator(), 2, Rule::NewLead)] {
+	let key = json!({"key_id": "vifnet-site", "kind": "site", "brands": ["vifnet"], "origin": "https://vifnet.site"});
+	assert_eq!(admin_b.send_body(&admin_app, Method::POST, "/api/v1/sources", Some(key)).await.0, StatusCode::CREATED);
+	for (permissions, chat, rule, app, b) in [(admin(), 1, "payment_received", &admin_app, &mut admin_b), (operator(), 2, "new_lead", &op_app, &mut op_b)] {
 		let user = user_id(&permissions);
 		let destination: i64 = sqlx::query_scalar("INSERT INTO alert_destinations (user_id, method, created_at) VALUES ($1, 'telegram', 0) RETURNING id")
 			.bind(user)
@@ -313,7 +313,11 @@ async fn the_conductors_own_changes_go_to_who_may_read_them() {
 			.execute(panel.store().pool())
 			.await
 			.unwrap();
-		panel.alerts_set_rules(user, &permissions, destination, &[(rule, true)]).await.unwrap().unwrap();
+		let rules = json!({"rules": {rule: true}});
+		assert_eq!(
+			b.send_body(app, Method::PUT, &format!("/api/v1/alerts/destinations/{destination}/rules"), Some(rules)).await.0,
+			StatusCode::OK
+		);
 	}
 
 	let admin_saw: Vec<String> = [admin_ws.text().await, admin_ws.text().await].iter().map(|f| f["topic"].as_str().unwrap().to_owned()).collect();

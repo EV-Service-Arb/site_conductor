@@ -5,8 +5,8 @@
 use serde::{Deserialize, Serialize};
 
 /// A frame to the viewer.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "BrowserOut"))]
+#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[schemars(rename = "BrowserOut")]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Out {
 	/// The screen: an image, base64, of `width` × `height`, the space the viewer's points are in
@@ -34,8 +34,7 @@ pub enum Out {
 	},
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct Tab {
 	pub id: String,
 	pub title: String,
@@ -43,8 +42,8 @@ pub struct Tab {
 }
 
 /// A frame from the viewer; at most 4 KiB. Points are in the last frame's space.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "BrowserIn"))]
+#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[schemars(rename = "BrowserIn")]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum In {
 	/// A finger: the browser is a phone.
@@ -91,8 +90,7 @@ pub enum In {
 	},
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TouchPhase {
 	Start,

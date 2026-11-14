@@ -1,6 +1,6 @@
 [package]
 name = "sa_gen"
-description = "Generates the front end's mirror of the Rust types and tables it reads (Rust is the source of truth)"
+description = "Writes the conductor's OpenAPI document, which the front end's client and types are generated from"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -10,14 +10,10 @@ repository.workspace = true
 readme.workspace = true
 
 [dependencies]
-ev_lib = { workspace = true, features = ["ts_gen"] }
-sa_alerts.workspace = true
-sa_auth = { workspace = true, features = ["ts"] }
-sa_browsers = { workspace = true, features = ["ts"] }
-sa_core = { workspace = true, features = ["ts"] }
-sa_panel.workspace = true
+ev_lib = { workspace = true, features = ["api"] }
+sa_browsers.workspace = true
 sa_server.workspace = true
-strum.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

@@ -42,13 +42,15 @@
           BROWSERS_BIND = "127.0.0.1:${local 5}"; # sa_browsers' runner
         };
 
-        # `nix run .#gen`: the front end's mirror of the Rust (crates/gen), committed.
+        # `nix run .#gen`: the conductor's OpenAPI document (crates/gen) and the front end's client
+        # types generated from it, committed.
         gen = pkgs.writeShellApplication {
           name = "gen";
-          runtimeInputs = [ rust pkgs.git ];
+          runtimeInputs = [ rust pkgs.git pkgs.nodejs ];
           text = ''
             cd "$(git rev-parse --show-toplevel)"
-            exec cargo run -q -p sa_gen "$@"
+            cargo run -q -p sa_gen "$@"
+            cd frontend && npm run -s gen:api
           '';
         };
 
@@ -61,7 +63,7 @@
               generated = {
                 enable = true;
                 name = "regenerate derived files";
-                entry = "bash -c '${gen}/bin/gen && git add -A frontend/src/entities/session/model/generated.ts frontend/src/entities/source/model/generated.ts frontend/src/entities/gmb/model/generated.ts frontend/src/entities/tokens/model/generated.ts frontend/src/entities/alerts/model/generated.ts frontend/src/entities/assistant/model/generated.ts'";
+                entry = "bash -c '${gen}/bin/gen && git add -A frontend/src/shared/api/openapi.json frontend/src/shared/api/schema.ts'";
                 pass_filenames = false;
                 require_serial = true;
               };
@@ -71,7 +73,7 @@
         rs = v_flakes.rs {
           inherit pkgs rust;
           build.workspace = {
-            "./crates/server" = [ "git_version" "log_directives" ];
+            "./crates/server" = [ "git_version" "log_directives" "api_docs" ];
           };
         };
         github = v_flakes.github {
@@ -390,7 +392,7 @@
               + "  panel --help                    the CLI itself";
           };
           publish = v_flakes.utils.publish pkgs;
-          gen = { type = "app"; program = lib.getExe gen; meta.description = "the front end's mirror of the Rust types (pre-commit runs it too)"; };
+          gen = { type = "app"; program = lib.getExe gen; meta.description = "the OpenAPI document and the front end's client types from it (pre-commit runs it too)"; };
           dev = { type = "app"; program = lib.getExe dev; meta.description = "the conductor and its peers under watch: a conductor already serving is replaced, a peer used (docs/LOCAL.md)"; };
           e2e = { type = "app"; program = lib.getExe e2e; meta.description = "the front end's behaviour over the stub (frontend/tests/e2e, the renders aside); args go to `playwright test`"; };
           figma = { type = "app"; program = lib.getExe figma; meta.description = "the front end's screens into Figma over the stub, gridded on a new page of figmaFile; `-- frames` lists them"; };

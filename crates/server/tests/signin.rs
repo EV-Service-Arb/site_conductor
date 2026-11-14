@@ -848,12 +848,18 @@ async fn no_permission_opens_no_section() {
 		};
 		http::app(SignIn::new(panel.clone(), Concierge::dev(who), config), None, None, http::Limits::default(), None, None, None)
 	};
-	let routes = http::api_routes();
-	let open: Vec<&str> = routes.iter().filter(|r| r.section.is_none()).map(|r| r.path).collect();
+	let catalog = http::Catalog::new();
+	let routes: Vec<(Method, &str, bool)> = catalog
+		.document()
+		.operations()
+		.map(|(path, method, op)| (method.to_uppercase().parse().unwrap(), path, op.extensions.contains_key("x-permission")))
+		.collect();
+	let open: std::collections::BTreeSet<&str> = routes.iter().filter(|r| !r.2).map(|r| r.1).collect();
 	assert_eq!(
 		open,
-		[
+		std::collections::BTreeSet::from([
 			"/me",
+			"/openapi.json",
 			"/access/requests",
 			"/access/requests/mine",
 			"/alerts",
@@ -897,6 +903,7 @@ async fn no_permission_opens_no_section() {
 			"/gmails/{id}/browser",
 			"/gmails/{id}/browser/test",
 			"/gmails/{id}/browser",
+			"/gmails/{id}/browser/start",
 			"/gmails/{id}/browser/stop",
 			"/gmails/{id}/browser/film",
 			"/tokens",
@@ -921,7 +928,7 @@ async fn no_permission_opens_no_section() {
 			"/assistant/chats/{id}/members/{user}",
 			"/assistant/chats/{id}/general",
 			"/assistant/people"
-		],
+		]),
 		"every other route sits under a section"
 	);
 	for (permissions, email, holds) in [(PermissionSet::from_iter(Vec::<String>::new()), "nobody", false), (admin(), "admin", true)] {
@@ -930,15 +937,15 @@ async fn no_permission_opens_no_section() {
 		let login = b.get(&app, "/auth/login").await;
 		let callback = login.headers[header::LOCATION].to_str().unwrap().strip_prefix(PANEL).unwrap().to_owned();
 		assert_eq!(b.get(&app, &callback).await.status, StatusCode::SEE_OTHER);
-		for r in &routes {
-			let path: Vec<String> = r.path.split('/').map(|seg| if seg.starts_with('{') { "x".to_owned() } else { seg.to_owned() }).collect();
+		for (method, path, gated) in &routes {
+			let path: Vec<String> = path.split('/').map(|seg| if seg.starts_with('{') { "x".to_owned() } else { seg.to_owned() }).collect();
 			let uri = format!("/api/v1{}", path.join("/"));
-			let got = b.send(&app, r.method.clone(), &uri, Some(json!({})), true).await;
+			let got = b.send(&app, method.clone(), &uri, Some(json!({})), true).await;
 			let forbidden = got.status == StatusCode::FORBIDDEN;
-			match (r.section, holds) {
-				(None, _) => assert!(!forbidden, "{} {uri}: {}", r.method, got.body),
-				(Some(_), false) => assert!(forbidden, "{} {uri}: {} {}", r.method, got.status, got.body),
-				(Some(_), true) => assert!(!forbidden, "{} {uri}: {}", r.method, got.body),
+			match (gated, holds) {
+				(false, _) => assert!(!forbidden, "{method} {uri}: {}", got.body),
+				(true, false) => assert!(forbidden, "{method} {uri}: {} {}", got.status, got.body),
+				(true, true) => assert!(!forbidden, "{method} {uri}: {}", got.body),
 			}
 		}
 		assert_eq!(b.get(&app, "/api/v1/alerts").await.status, StatusCode::OK, "alerts are everyone's");
@@ -951,6 +958,74 @@ async fn no_permission_opens_no_section() {
 		let live = app.clone().oneshot(live).await.unwrap().status();
 		assert_ne!(live, StatusCode::FORBIDDEN, "the live socket");
 	}
+}
+
+/// Every write through `/api/v1` that succeeds is told on the bus: its topic the path's first
+/// segment, its id the path's first parameter, its audience the section's holders or else the
+/// caller. A refused write tells nothing.
+#[tokio::test]
+async fn every_write_is_told() {
+	let db = TestDb::create().await;
+	let panel = panel(&db).await;
+	let who = sa_server::concierge::DevIdentity {
+		user_id: sa_server::concierge::DevIdentity::named("admin@localhost"),
+		permissions: admin(),
+		email: "admin@localhost".to_owned(),
+	};
+	let config = SignInConfig {
+		panel_origin: PANEL.to_owned(),
+		concierge_origin: PANEL.to_owned(),
+	};
+	let app = http::app(
+		SignIn::new(panel.clone(), Concierge::dev(who.clone()), config),
+		None,
+		None,
+		http::Limits::default(),
+		None,
+		None,
+		None,
+	);
+	let mut b = Browser::default();
+	let login = b.get(&app, "/auth/login").await;
+	let callback = login.headers[header::LOCATION].to_str().unwrap().strip_prefix(PANEL).unwrap().to_owned();
+	assert_eq!(b.get(&app, &callback).await.status, StatusCode::SEE_OTHER);
+	let mut rx = panel.bus().subscribe();
+	let mut told = || {
+		let mut changes = Vec::new();
+		while let Ok(signal) = rx.try_recv() {
+			if let sa_panel::live::Signal::Changed(c) = signal {
+				changes.push((c.topic, c.id, c.audience));
+			}
+		}
+		changes
+	};
+	let me = sa_panel::live::Audience::User(who.user_id);
+	let chat = uuid::Uuid::now_v7();
+	let made = b
+		.send(&app, Method::POST, "/api/v1/assistant/chats", Some(json!({"id": chat, "title": null, "turns": []})), true)
+		.await;
+	assert_eq!(made.status, StatusCode::CREATED, "{}", made.body);
+	assert_eq!(told(), [("assistant".to_owned(), None, me.clone())]);
+	let renamed = b
+		.send(&app, Method::PUT, &format!("/api/v1/assistant/chats/{chat}/title"), Some(json!({"title": "x"})), true)
+		.await;
+	assert_eq!(renamed.status, StatusCode::OK, "{}", renamed.body);
+	assert_eq!(told(), [("assistant".to_owned(), Some(chat.to_string()), me)]);
+	let refused = b
+		.send(&app, Method::POST, "/api/v1/assistant/chats", Some(json!({"id": chat, "title": null, "turns": []})), true)
+		.await;
+	assert_eq!(refused.status, StatusCode::CONFLICT);
+	assert_eq!(told(), [], "a refused write");
+	let key = b
+		.send(&app, Method::POST, "/api/v1/sources", Some(json!({"key_id": "told", "kind": "sheet", "brands": ["fr"]})), true)
+		.await;
+	assert_eq!(key.status, StatusCode::CREATED, "{}", key.body);
+	assert_eq!(
+		told(),
+		[("sources".to_owned(), None, sa_panel::live::Audience::Holders(sa_auth::Sources::Manage.as_str().to_owned()))]
+	);
+	assert_eq!(b.get(&app, "/api/v1/sources").await.status, StatusCode::OK);
+	assert_eq!(told(), [], "a read");
 }
 
 /// `/auth/login?return_to=` lands the browser back on a path of this origin, and refuses

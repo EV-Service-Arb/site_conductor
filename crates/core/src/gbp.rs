@@ -11,8 +11,7 @@ use uuid::Uuid;
 use crate::Invalid;
 
 /// ISO 3166-1 alpha-2, of the countries GBPs are in.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, strum::VariantArray)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, strum::VariantArray, schemars::JsonSchema)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub enum Country {
 	FR,
@@ -102,8 +101,7 @@ pub fn keywords(raw: &[String]) -> Result<Vec<String>, Invalid> {
 }
 
 /// What a gmail is on the GBPs it manages.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum GmailRole {
 	Owner,
@@ -136,8 +134,7 @@ impl FromStr for GmailRole {
 ///             ▲ └──────────┘          │
 ///             └───────────────────────┘
 /// ```
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum State {
 	/// Not on Google yet: no place.
@@ -200,8 +197,7 @@ impl fmt::Display for State {
 }
 
 /// A [`State`] on Google: every one but a draft.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum OnGoogle {

@@ -99,7 +99,7 @@ pub struct Suggestion {
 	pub secondary: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, schemars::JsonSchema)]
 pub struct LatLng {
 	pub lat: f64,
 	pub lng: f64,

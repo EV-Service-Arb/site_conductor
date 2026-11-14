@@ -97,9 +97,10 @@ fn is_email(q: &str) -> bool {
 }
 
 impl Panel {
-	fn tell(&self, chat: Uuid, users: impl IntoIterator<Item = Uuid>) {
+	/// A chat's people besides `writer`, whom the route that wrote tells.
+	fn tell(&self, chat: Uuid, writer: Uuid, users: impl IntoIterator<Item = Uuid>) {
 		let at = Timestamp::now();
-		for user in users {
+		for user in users.into_iter().filter(|u| *u != writer) {
 			self.live.changed(live::Change {
 				topic: "assistant".into(),
 				brand: None,
@@ -138,7 +139,7 @@ impl Panel {
 		}
 		let summary = db::chat(&mut tx, id, user, false).await?.expect("created just now, by them");
 		tx.commit().await.wrap_err("committing a chat")?;
-		self.tell(id, [user]);
+
 		Ok(Ok(Chat { summary, turns }))
 	}
 
@@ -174,7 +175,7 @@ impl Panel {
 		let summary = db::chat(&mut tx, id, r.user, r.in_sa).await?.expect("theirs to write, a moment ago");
 		let audience = db::audience(&mut tx, id).await?;
 		tx.commit().await.wrap_err("committing turns")?;
-		self.tell(id, audience);
+		self.tell(id, r.user, audience);
 		Ok(Ok(Chat { summary, turns: all }))
 	}
 
@@ -189,7 +190,7 @@ impl Panel {
 		let turns = parse(id, &db::turns(&mut tx, id).await?)?;
 		let audience = db::audience(&mut tx, id).await?;
 		tx.commit().await.wrap_err("committing a title")?;
-		self.tell(id, audience);
+		self.tell(id, r.user, audience);
 		Ok(Ok(Chat { summary, turns }))
 	}
 
@@ -201,7 +202,7 @@ impl Panel {
 		}
 		db::mark(&mut tx, id, r.user, mark, on, now).await?;
 		tx.commit().await.wrap_err("committing a mark")?;
-		self.tell(id, [r.user]);
+
 		Ok(Ok(()))
 	}
 
@@ -214,7 +215,7 @@ impl Panel {
 		let audience = db::audience(&mut tx, id).await?;
 		db::delete(&mut tx, id).await?;
 		tx.commit().await.wrap_err("committing a chat's deletion")?;
-		self.tell(id, audience);
+		self.tell(id, r.user, audience);
 		Ok(Ok(()))
 	}
 
@@ -231,7 +232,7 @@ impl Panel {
 		}
 		tx.commit().await.wrap_err("committing the archived chats' clearing")?;
 		for (id, audience) in told {
-			self.tell(id, audience);
+			self.tell(id, user, audience);
 		}
 		Ok(())
 	}
@@ -262,7 +263,7 @@ impl Panel {
 		let access = access(&mut tx, chat).await?;
 		tx.commit().await.wrap_err("committing members")?;
 		if added {
-			self.tell(id, audience);
+			self.tell(id, r.user, audience);
 		}
 		Ok(Ok(access))
 	}
@@ -282,7 +283,7 @@ impl Panel {
 			return Ok(Err(Refused::NotFound));
 		}
 		tx.commit().await.wrap_err("committing a member's removal")?;
-		self.tell(id, audience);
+		self.tell(id, r.user, audience);
 		Ok(Ok(()))
 	}
 
@@ -297,7 +298,7 @@ impl Panel {
 		let audience = db::audience(&mut tx, id).await?;
 		let access = access(&mut tx, chat).await?;
 		tx.commit().await.wrap_err("committing general access")?;
-		self.tell(id, audience);
+		self.tell(id, r.user, audience);
 		Ok(Ok(access))
 	}
 

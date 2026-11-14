@@ -1190,8 +1190,8 @@ async fn access_is_asked_again_when_a_message_is_sent() {
 	assert_eq!(outbox_errors(&s).await, [not_confirmed.clone(), not_confirmed]);
 }
 
-/// Each change of a user's destinations tells their live sockets, and nobody else's: linked,
-/// `/stop`, removed from the page, and found blocked.
+/// Each change of a user's destinations the bot makes tells their live sockets, and nobody else's:
+/// linked, `/stop`, and found blocked.
 #[tokio::test]
 async fn a_destination_changing_tells_its_user() {
 	let s = setup().await;
@@ -1219,7 +1219,7 @@ async fn a_destination_changing_tells_its_user() {
 	assert_eq!(told(), [], "nothing was linked");
 	s.link(user, aliases::operator(), 1, t0()).await;
 	assert!(s.unlink(user).await);
-	assert_eq!(told(), [mine.clone(), mine.clone()], "linked, removed from the page");
+	assert_eq!(told(), std::slice::from_ref(&mine), "linked; a removal from the page is its route's to tell");
 
 	s.link(user, aliases::operator(), 1, t0()).await;
 	s.lead("L-1", t0());

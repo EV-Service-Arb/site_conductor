@@ -281,7 +281,6 @@ impl Panel {
 			db::set_rule(&mut tx, destination, *rule, *on).await?;
 		}
 		tx.commit().await.wrap_err("committing a rules change")?;
-		self.live.changed(alerts_changed(user));
 		Ok(Ok(()))
 	}
 
@@ -291,7 +290,6 @@ impl Panel {
 		if !db::set_gmail(&mut conn, user, destination, gmail).await? {
 			return Ok(Err(Refused::NotFound));
 		}
-		self.live.changed(alerts_changed(user));
 		Ok(Ok(()))
 	}
 
@@ -299,11 +297,7 @@ impl Panel {
 	/// theirs.
 	pub async fn alerts_remove(&self, user: Uuid, destination: i64) -> eyre::Result<bool> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection to remove a destination")?;
-		let gone = db::remove(&mut conn, user, destination).await?;
-		if gone {
-			self.live.changed(alerts_changed(user));
-		}
-		Ok(gone)
+		db::remove(&mut conn, user, destination).await
 	}
 
 	/// What concierge just told the `/api/v1` gate of a user: their permissions and name.

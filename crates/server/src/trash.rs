@@ -1,22 +1,12 @@
 //! The caller's trash (`sa_panel::trash`): what they removed, restorable until it is purged.
 //! Under dev sign-in a person who has not said keeps everything.
 //!
-//! ```text
-//! GET  /api/v1/trash                        Trash
-//! POST /api/v1/trash/gmails/{id}/restore    → 204, its GBPs removed with it back too; 409 blocked
-//! POST /api/v1/trash/gmbs/{id}/restore      → 204; 409 blocked
-//! PUT  /api/v1/trash/settings {keep_days, never_purge?}  → 204; never_purge needs sa:admin:trash:keep
-//! ```
-//!
 //! `serve` purges everyone's trash hourly ([`run`]).
 
 use std::time::Duration;
 
-use axum::{
-	Extension, Json,
-	extract::{Path, State, rejection::JsonRejection},
-	http::{Method, StatusCode},
-};
+use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
+use ev_lib::api::JsonSchema;
 use jiff::Timestamp;
 use sa_auth::Trash as TrashPermission;
 use sa_core::gbp::State as GbpState;
@@ -25,30 +15,26 @@ use sa_panel::{
 	trash::{Settings, Trash, TrashedGmail, TrashedGmb},
 };
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 use crate::{
-	api::{ApiError, ApiResult, body},
-	gmbs::id,
-	http::ApiRoute,
-	signin::{Caller, Freshness},
+	api::{ApiError, ApiResult, Body, Id, Ids},
+	http::{ApiRoute, Gate},
+	signin::Caller,
 };
 
-#[derive(Clone, Copy, Debug, Serialize, TS)]
-#[ts(rename = "TrashSettings")]
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "TrashSettings")]
 pub struct SettingsDto {
 	/// 1 to 90.
-	#[ts(type = "number")]
 	pub keep_days: i64,
 	/// Nothing purged, ever.
 	pub never_purge: bool,
 }
 
 /// A gmail in the trash.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "TrashedGmail")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "TrashedGmail")]
 pub struct TrashedGmailDto {
-	#[ts(type = "number")]
 	pub id: i64,
 	pub gmail: String,
 	/// RFC 3339.
@@ -56,17 +42,15 @@ pub struct TrashedGmailDto {
 	/// RFC 3339; `null`: kept until restored.
 	pub purge_at: Option<String>,
 	/// Its GBPs removed with it, which come back with it.
-	#[ts(type = "number")]
 	pub gmbs: usize,
 	/// Why it cannot be restored now.
 	pub blocked: Option<String>,
 }
 
 /// A GBP in the trash on its own.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "TrashedGmb")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "TrashedGmb")]
 pub struct TrashedGmbDto {
-	#[ts(type = "number")]
 	pub id: i64,
 	pub name: String,
 	pub state: GbpState,
@@ -79,8 +63,8 @@ pub struct TrashedGmbDto {
 }
 
 /// `GET /trash`.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Trash")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Trash")]
 pub struct TrashDto {
 	pub settings: SettingsDto,
 	pub gmails: Vec<TrashedGmailDto>,
@@ -88,14 +72,12 @@ pub struct TrashDto {
 }
 
 /// `PUT /trash/settings`.
-#[derive(Clone, Copy, Debug, Deserialize, TS)]
-#[ts(rename = "SetTrashSettings")]
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema)]
+#[schemars(rename = "SetTrashSettings")]
 #[serde(deny_unknown_fields)]
 pub struct SetSettingsDto {
-	#[ts(type = "number")]
 	pub keep_days: i64,
 	/// Absent: left as it is. Present: `sa:admin:trash:keep` only.
-	#[ts(optional)]
 	pub never_purge: Option<bool>,
 }
 
@@ -155,39 +137,47 @@ pub async fn run(panel: Panel, keep_by_default: bool, shutdown: tokio::sync::wat
 }
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
-	use Freshness::Cached;
 	use Method as M;
+	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::GET, "/trash", None, Cached, trash),
-		ApiRoute::new(M::POST, "/trash/gmails/{id}/restore", None, Cached, restore_gmail),
-		ApiRoute::new(M::POST, "/trash/gmbs/{id}/restore", None, Cached, restore_gmb),
-		ApiRoute::new(M::PUT, "/trash/settings", None, Cached, set_settings),
+		ApiRoute::new(M::GET, "/trash", user, trash),
+		ApiRoute::new(M::POST, "/trash/gmails/{id}/restore", user, restore_gmail),
+		ApiRoute::new(M::POST, "/trash/gmbs/{id}/restore", user, restore_gmb),
+		ApiRoute::new(M::PUT, "/trash/settings", user, set_trash_settings),
 	]
 }
 
+/// The caller's trash: what they removed, restorable until purged `keep_days` after its removal.
+///
+/// `gmbs` are those removed on their own; `blocked` says why a restore is refused.
 async fn trash(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<TrashDto>> {
 	Ok(Json(panel.trash(caller.user_id, caller.dev_sign_in).await?.into()))
 }
 
-async fn restore_gmail(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<StatusCode> {
-	let gmail = id(&raw)?;
+/// Restores a gmail, with the GBPs removed with it.
+///
+/// 409 blocked: a live gmail's address, a live GBP's name, place or phone.
+async fn restore_gmail(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>) -> ApiResult<NoContent> {
 	panel.restore_gmail(caller.user_id, gmail).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail restored");
-	Ok(StatusCode::NO_CONTENT)
+	Ok(NoContent)
 }
 
-async fn restore_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>) -> ApiResult<StatusCode> {
-	let gmb = id(&raw)?;
+/// Restores a GBP.
+///
+/// 409 blocked: its gmail in the trash, a live GBP's name, place or phone.
+async fn restore_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>) -> ApiResult<NoContent> {
 	panel.restore_gmb(caller.user_id, gmb).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, "GBP restored");
-	Ok(StatusCode::NO_CONTENT)
+	Ok(NoContent)
 }
 
-async fn set_settings(State(panel): State<Panel>, Extension(caller): Extension<Caller>, b: Result<Json<SetSettingsDto>, JsonRejection>) -> ApiResult<StatusCode> {
-	let set = body(b)?;
+/// Sets how long the caller's trash keeps what they removed. `never_purge` needs
+/// `sa:admin:trash:keep` (403).
+async fn set_trash_settings(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(set): Body<SetSettingsDto>) -> ApiResult<NoContent> {
 	if set.never_purge.is_some() && !caller.permissions.may(TrashPermission::Keep) {
 		return Err(ApiError::Forbidden);
 	}
 	panel.set_trash_settings(caller.user_id, set.keep_days, set.never_purge).await??;
-	Ok(StatusCode::NO_CONTENT)
+	Ok(NoContent)
 }

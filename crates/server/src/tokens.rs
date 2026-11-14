@@ -2,49 +2,35 @@
 //! `/api/v1/admin/tokens` (`sa:admin:tokens:grant`), and what `serve` does with review_archive —
 //! follows its charges and pushes it the snapshot, under a Conductor assertion.
 //!
-//! ```text
-//! GET  /api/v1/tokens                  Tokens: the balance, renewed, and the kick-backs not claimed
-//! GET  /api/v1/tokens/ledger?before=&limit=  Ledger: newest first, limit 1–200
-//! GET  /api/v1/tokens/usage            Usage: 30 UTC days, oldest first
-//! POST /api/v1/tokens/claim            → Tokens
-//! GET  /api/v1/admin/tokens            TokenHolders
-//! POST /api/v1/admin/tokens/{user_id}  BalanceChange (fresh) → Balance
-//! GET  /api/v1/admin/tokens/prices     Prices: of a Places request on the shared keys
-//! PUT  /api/v1/admin/tokens/prices {details, search}  (fresh) → Prices
-//! ```
-//!
 //! Before the import from review_archive, every one of them answers 503, and `serve` waits.
 
 use std::time::Duration;
 
 use axum::{
 	Extension, Json,
-	body::{Body, to_bytes},
-	extract::{
-		Path, Query, State,
-		rejection::{JsonRejection, QueryRejection},
-	},
+	body::{Body as RawBody, to_bytes},
+	extract::State,
 	http::{HeaderMap, HeaderValue, Method, StatusCode, header},
 };
+use ev_lib::api::JsonSchema;
 use jiff::Timestamp;
 use sa_auth::{Principal, Service};
 use sa_core::tokens::ChargePage;
 use sa_panel::{
 	Panel,
-	tokens::{Change, Entry, Kickback, Owed},
+	tokens::{Change, Entry, Kickback, Kind, Owed},
 };
 use sa_places::Sku;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
-use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::{
-	api::{ApiError, ApiResult, body},
+	api::{ApiError, ApiResult, Body, Ids, Params},
 	connections::PricesDto,
 	forward::Services,
-	http::{ApiRoute, Section},
-	signin::{Caller, Freshness},
+	http::{ApiRoute, Gate, Section},
+	signin::Caller,
 };
 
 /// The most entries a page of the ledger holds.
@@ -67,14 +53,12 @@ const CALL_TIMEOUT: Duration = Duration::from_secs(10);
 const ANSWER: usize = 16 * 1024 * 1024;
 /// What the caller is owed until they claim it: a charge kicked back (`service`, `key`,
 /// `label`), or an admin's grant (`by`, `note`).
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Kickback")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Kickback")]
 pub struct KickbackDto {
-	#[ts(type = "number")]
 	pub id: i64,
 	/// RFC 3339.
 	pub at: String,
-	#[ts(type = "number")]
 	pub amount: i64,
 	pub service: Option<String>,
 	pub key: Option<String>,
@@ -85,30 +69,24 @@ pub struct KickbackDto {
 }
 
 /// `GET /tokens`, `POST /tokens/claim`.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Tokens")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Tokens")]
 pub struct TokensDto {
-	#[ts(type = "number")]
 	pub balance: i64,
 	/// Renewal: added per day while under `cap`.
-	#[ts(type = "number")]
 	pub daily: i64,
-	#[ts(type = "number")]
 	pub cap: i64,
 	pub kickbacks: Vec<KickbackDto>,
 }
 
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "LedgerEntry")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "LedgerEntry")]
 pub struct LedgerEntryDto {
-	#[ts(type = "number")]
 	pub id: i64,
 	/// RFC 3339.
 	pub at: String,
-	#[ts(type = "number")]
 	pub delta: i64,
-	#[ts(type = "LedgerKind")]
-	pub kind: &'static str,
+	pub kind: Kind,
 	pub service: Option<String>,
 	pub key: Option<String>,
 	pub label: Option<String>,
@@ -118,79 +96,60 @@ pub struct LedgerEntryDto {
 }
 
 /// `GET /tokens/ledger`: `next` is the `before` of the next page, `null` at the end.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Ledger")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Ledger")]
 pub struct LedgerDto {
 	pub entries: Vec<LedgerEntryDto>,
-	#[ts(type = "number | null")]
 	pub next: Option<i64>,
 }
 
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "UsageDay")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "UsageDay")]
 pub struct UsageDayDto {
 	/// `YYYY-MM-DD`, UTC.
 	pub day: String,
-	#[ts(type = "number")]
 	pub charges: i64,
-	#[ts(type = "number")]
 	pub tokens: i64,
 }
 
 /// `GET /tokens/usage`.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Usage")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Usage")]
 pub struct UsageDto {
 	pub days: Vec<UsageDayDto>,
 }
 
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "TokenHolder")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "TokenHolder")]
 pub struct TokenHolderDto {
 	pub user_id: Uuid,
 	pub email: String,
 	pub name: String,
-	#[ts(type = "number")]
 	pub balance: i64,
 }
 
 /// `GET /admin/tokens`.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "TokenHolders")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "TokenHolders")]
 pub struct TokenHoldersDto {
 	pub users: Vec<TokenHolderDto>,
 }
 
 /// `POST /admin/tokens/{user_id}`: set to 0 or more, add 1 or more (a sale, its reference in
 /// the note), or grant 1 or more, owed until claimed, saying what for.
-#[derive(Clone, Debug, Deserialize, TS)]
+#[derive(Clone, Debug, Deserialize, JsonSchema)]
 #[serde(untagged, deny_unknown_fields)]
-#[ts(rename = "BalanceChange")]
+#[schemars(rename = "BalanceChange")]
 pub enum BalanceChangeDto {
-	Set {
-		#[ts(type = "number")]
-		set: i64,
-		#[ts(optional)]
-		note: Option<String>,
-	},
-	Add {
-		#[ts(type = "number")]
-		add: i64,
-		#[ts(optional)]
-		note: Option<String>,
-	},
-	Grant {
-		#[ts(type = "number")]
-		grant: i64,
-		note: String,
-	},
+	Set { set: i64, note: Option<String> },
+	Add { add: i64, note: Option<String> },
+	Grant { grant: i64, note: String },
 }
 
 /// The answer to a balance change.
-#[derive(Clone, Debug, Serialize, TS)]
-#[ts(rename = "Balance")]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Balance")]
 pub struct BalanceDto {
-	#[ts(type = "number")]
 	pub balance: i64,
 }
 
@@ -228,34 +187,37 @@ pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<boo
 }
 
 /// Every request kind priced, in tokens.
-#[derive(Deserialize, TS)]
-#[ts(rename = "SetPrices")]
+#[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "SetPrices")]
 #[serde(deny_unknown_fields)]
 pub struct SetPricesDto {
-	#[ts(type = "number")]
 	pub details: i64,
-	#[ts(type = "number")]
 	pub search: i64,
-	#[ts(type = "number")]
 	pub autocomplete: i64,
 }
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
-	use Freshness::{Cached, Fresh};
 	use Method as M;
-	let admin = Some(Section::Tokens);
+	let user = Gate::USER;
+	let admin = Gate::section(Section::Tokens);
 	vec![
-		ApiRoute::new(M::GET, "/tokens", None, Cached, tokens),
-		ApiRoute::new(M::GET, "/tokens/ledger", None, Cached, ledger),
-		ApiRoute::new(M::GET, "/tokens/usage", None, Cached, usage),
-		ApiRoute::new(M::POST, "/tokens/claim", None, Cached, claim),
-		ApiRoute::new(M::GET, "/admin/tokens", admin, Cached, holders),
+		ApiRoute::new(M::GET, "/tokens", user, tokens),
+		ApiRoute::new(M::GET, "/tokens/ledger", user, ledger),
+		ApiRoute::new(M::GET, "/tokens/usage", user, token_usage),
+		ApiRoute::new(M::POST, "/tokens/claim", user, claim_tokens),
+		ApiRoute::new(M::GET, "/admin/tokens", admin, token_holders),
 		// Tokens must not be handed out on a permission revoked a moment ago.
-		ApiRoute::new(M::POST, "/admin/tokens/{user_id}", admin, Fresh, change),
-		ApiRoute::new(M::GET, "/admin/tokens/prices", admin, Cached, prices),
+		ApiRoute::new(M::POST, "/admin/tokens/{user_id}", admin.fresh(), change_balance),
+		ApiRoute::new(M::GET, "/admin/tokens/prices", admin, token_prices),
 		// A price is what every request on the shared keys charges.
-		ApiRoute::new(M::PUT, "/admin/tokens/prices", admin, Fresh, set_prices),
+		ApiRoute::new(M::PUT, "/admin/tokens/prices", admin.fresh(), set_token_prices),
 	]
+}
+
+/// A path's user.
+#[derive(Deserialize, JsonSchema)]
+pub(crate) struct UserIn {
+	user_id: Uuid,
 }
 
 impl From<Kickback> for KickbackDto {
@@ -287,7 +249,7 @@ impl From<(i64, Entry)> for LedgerEntryDto {
 			id,
 			at: e.at.to_string(),
 			delta: e.delta,
-			kind: e.kind.as_str(),
+			kind: e.kind,
 			service,
 			key,
 			label,
@@ -316,26 +278,30 @@ fn tokens_dto(panel: &Panel, (balance, kickbacks): (i64, Vec<Kickback>)) -> Toke
 	}
 }
 
+/// The caller's balance, renewed a day's worth when read, and the kick-backs not claimed.
 async fn tokens(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<TokensDto>> {
 	let held = panel.tokens(caller.user_id, Timestamp::now()).await??;
 	Ok(Json(tokens_dto(&panel, held)))
 }
 
-async fn claim(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<TokensDto>> {
+/// Claims every kick-back and grant owed to the caller into their balance.
+async fn claim_tokens(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<TokensDto>> {
 	let held = panel.claim(caller.user_id, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, balance = held.0, "kick-backs claimed");
 	Ok(Json(tokens_dto(&panel, held)))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct LedgerQuery {
+pub(crate) struct LedgerQuery {
+	/// The previous page's `next`.
 	before: Option<i64>,
+	/// 1–200.
 	limit: i64,
 }
 
-async fn ledger(State(panel): State<Panel>, Extension(caller): Extension<Caller>, q: Result<Query<LedgerQuery>, QueryRejection>) -> ApiResult<Json<LedgerDto>> {
-	let Query(q) = q.map_err(|e| ApiError::BadRequest(e.body_text()))?;
+/// The caller's ledger, newest first.
+async fn ledger(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(q): Params<LedgerQuery>) -> ApiResult<Json<LedgerDto>> {
 	if !(1..=LEDGER_PAGE).contains(&q.limit) {
 		return Err(ApiError::BadRequest(format!("limit is 1 to {LEDGER_PAGE}")));
 	}
@@ -347,7 +313,8 @@ async fn ledger(State(panel): State<Panel>, Extension(caller): Extension<Caller>
 	}))
 }
 
-async fn usage(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<UsageDto>> {
+/// What the caller spent per UTC day over the last 30, oldest first.
+async fn token_usage(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<UsageDto>> {
 	let days = panel.usage(caller.user_id, Timestamp::now()).await??;
 	Ok(Json(UsageDto {
 		days: days
@@ -361,7 +328,8 @@ async fn usage(State(panel): State<Panel>, Extension(caller): Extension<Caller>)
 	}))
 }
 
-async fn holders(State(panel): State<Panel>) -> ApiResult<Json<TokenHoldersDto>> {
+/// Every user's balance, renewed.
+async fn token_holders(State(panel): State<Panel>) -> ApiResult<Json<TokenHoldersDto>> {
 	let holders = panel.holders(Timestamp::now()).await??;
 	Ok(Json(TokenHoldersDto {
 		users: holders
@@ -376,18 +344,24 @@ async fn holders(State(panel): State<Panel>) -> ApiResult<Json<TokenHoldersDto>>
 	}))
 }
 
-async fn change(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Path(raw): Path<String>, b: Result<Json<BalanceChangeDto>, JsonRejection>) -> ApiResult<Json<BalanceDto>> {
-	let user: Uuid = raw.parse().map_err(|_| ApiError::NotFound)?;
-	let balance = panel.change_balance(user, body(b)?.into(), &caller.email, Timestamp::now()).await??;
+/// Sets a user's balance, adds to it, or grants tokens owed until they claim them.
+async fn change_balance(
+	State(panel): State<Panel>,
+	Extension(caller): Extension<Caller>,
+	Ids(UserIn { user_id: user }): Ids<UserIn>,
+	Body(b): Body<BalanceChangeDto>,
+) -> ApiResult<Json<BalanceDto>> {
+	let balance = panel.change_balance(user, b.into(), &caller.email, Timestamp::now()).await??;
 	Ok(Json(BalanceDto { balance }))
 }
 
-async fn prices(State(panel): State<Panel>) -> ApiResult<Json<PricesDto>> {
+/// Tokens a Places request on the shared keys costs, per kind; null, not sold.
+async fn token_prices(State(panel): State<Panel>) -> ApiResult<Json<PricesDto>> {
 	Ok(Json(panel.prices().await?.into()))
 }
 
-async fn set_prices(State(panel): State<Panel>, Extension(caller): Extension<Caller>, b: Result<Json<SetPricesDto>, JsonRejection>) -> ApiResult<Json<PricesDto>> {
-	let b = body(b)?;
+/// Prices every kind of Places request on the shared keys, 0 or more tokens.
+async fn set_token_prices(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<SetPricesDto>) -> ApiResult<Json<PricesDto>> {
 	panel
 		.set_prices(
 			&[(Sku::Details, b.details), (Sku::Search, b.search), (Sku::Autocomplete, b.autocomplete)],
@@ -464,9 +438,9 @@ async fn call(services: &Services, method: Method, path: &str, json: Option<Vec<
 	let body = match json {
 		Some(json) => {
 			headers.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
-			Body::from(json)
+			RawBody::from(json)
 		}
-		None => Body::empty(),
+		None => RawBody::empty(),
 	};
 	let sent = services.send(Service::ReviewArchive, method, path, headers, Some(Principal::Conductor), body);
 	let res = tokio::time::timeout(CALL_TIMEOUT, sent)

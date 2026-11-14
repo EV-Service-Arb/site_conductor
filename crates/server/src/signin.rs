@@ -44,6 +44,7 @@ use axum::{
 	middleware::Next,
 	response::{Html, IntoResponse, Response},
 };
+use ev_lib::api::JsonSchema;
 use jiff::Timestamp;
 use sa_auth::PermissionSet;
 use sa_panel::{
@@ -52,14 +53,14 @@ use sa_panel::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::{
+	access::PermissionName,
 	api::ApiError,
 	concierge::{CLIENT_ID, Concierge, ConciergeError, DEV_CODE, DevIdentity, Me},
 	cookies::{self, Cookies},
-	http::Section,
+	http::Gate,
 };
 
 /// How long `GetMe` is trusted for a session: a grant revoked at concierge shuts the panel
@@ -147,16 +148,15 @@ impl SignIn {
 }
 
 /// The signed-in user of an `/api/v1` request, put in its extensions by the gate; `GET /me`.
-#[derive(Clone, Debug, Serialize, TS)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 pub struct Caller {
 	pub user_id: Uuid,
 	pub email: String,
 	#[serde(skip)]
-	#[ts(skip)]
 	pub email_verified: bool,
 	pub preferred_name: String,
 	/// Concrete `sa` permissions, as concierge resolved them.
-	#[ts(type = "Array<Permission>")]
+	#[schemars(with = "Vec<PermissionName>")]
 	pub permissions: PermissionSet,
 	/// Signed in by `PANEL_DEV_SIGN_IN`, not concierge: `/me` says so, for the UI to show.
 	pub dev_sign_in: bool,
@@ -423,26 +423,24 @@ pub(crate) enum Freshness {
 
 /// What [`gate`] asks of a route's caller.
 #[derive(Clone, Debug)]
-pub(crate) struct Gate {
+pub(crate) struct Gatekeeper {
 	pub sign_in: SignIn,
-	pub freshness: Freshness,
-	/// `None`: every signed-in user.
-	pub section: Option<Section>,
+	pub gate: Gate,
 }
 
 /// The gate of `/api/v1`: CSRF for anything that is not a read, then the session and the
 /// caller's permissions, into the request's extensions as a [`Caller`]; then the route's
 /// section, else 403.
-pub(crate) async fn gate(State(g): State<Gate>, mut req: Request, next: Next) -> Response {
+pub(crate) async fn gate(State(g): State<Gatekeeper>, mut req: Request, next: Next) -> Response {
 	let safe = matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
 	if !safe && !g.sign_in.cookies.csrf_ok(req.headers()) {
 		return json_error(StatusCode::FORBIDDEN, "csrf");
 	}
-	let caller = match authenticate(&g.sign_in, req.headers(), g.freshness).await {
+	let caller = match authenticate(&g.sign_in, req.headers(), g.gate.freshness).await {
 		Ok(c) => c,
 		Err(res) => return *res,
 	};
-	if g.section.is_some_and(|section| !section.may(&caller.permissions)) {
+	if g.gate.section.is_some_and(|section| !section.may(&caller.permissions)) {
 		return ApiError::Forbidden.into_response();
 	}
 	req.extensions_mut().insert(caller);

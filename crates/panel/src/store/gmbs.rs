@@ -63,7 +63,7 @@ pub struct Gmb {
 	pub location: Option<Point>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, schemars::JsonSchema, serde::Serialize)]
 pub struct Point {
 	#[serde(flatten)]
 	pub at: LatLng,
@@ -71,7 +71,7 @@ pub struct Point {
 	pub placed: bool,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, ts_rs::TS)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, schemars::JsonSchema, serde::Serialize)]
 pub struct GbpCountry {
 	pub code: Country,
 	/// Set by hand, Google having none.
