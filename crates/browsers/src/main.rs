@@ -8,6 +8,7 @@ mod film;
 mod mimic;
 mod phone;
 mod profile;
+mod usage;
 
 use std::{
 	collections::HashMap,
@@ -20,7 +21,7 @@ use std::{
 use axum::{
 	Json, Router,
 	extract::{
-		DefaultBodyLimit, Path, Request, State, WebSocketUpgrade,
+		DefaultBodyLimit, Path, Query, Request, State, WebSocketUpgrade,
 		ws::{self, rejection::WebSocketUpgradeRejection},
 	},
 	http::StatusCode,
@@ -109,6 +110,7 @@ async fn main() -> eyre::Result<()> {
 	let (starts, mut started) = mpsc::channel(16);
 	let http = reqwest::Client::builder().timeout(Duration::from_secs(30)).build().wrap_err("the runner's client")?;
 	let runner = Runner(Arc::new(Inner {
+		usage: usage::Usage::open(&dir)?,
 		dir,
 		max,
 		orbita,
@@ -189,6 +191,7 @@ struct Inner {
 	minutes: phone::MobileMinutes,
 	/// Held across a read and write of the phones' records.
 	records: Mutex<()>,
+	usage: usage::Usage,
 	keys: Keys,
 	profiles: Mutex<HashMap<i64, profile::Slot>>,
 	starts: mpsc::Sender<profile::Start>,
@@ -202,6 +205,7 @@ fn routes(runner: Runner) -> Router {
 		.route("/profiles/{gmail}", delete(remove))
 		.route("/profiles/{gmail}/cdp", get(cdp))
 		.route("/profiles/{gmail}/view", get(view))
+		.route("/usage", get(used))
 		.route("/profiles/{gmail}/film", put(set_film).delete(remove_film).layer(DefaultBodyLimit::max(FILM_MAX)))
 		.layer(middleware::from_fn_with_state(runner.clone(), conductor_only))
 		.with_state(runner)
@@ -219,6 +223,21 @@ async fn conductor_only(State(runner): State<Runner>, req: Request, next: Next) 
 			(StatusCode::UNAUTHORIZED, "the conductor's assertion only").into_response()
 		}
 	}
+}
+
+#[derive(serde::Deserialize)]
+struct After {
+	after: i64,
+	limit: usize,
+}
+
+async fn used(State(runner): State<Runner>, Query(After { after, limit }): Query<After>) -> Response {
+	let Ok(from) = usize::try_from(after) else {
+		return (StatusCode::BAD_REQUEST, "after is an id: 0 or more").into_response();
+	};
+	let used = runner.0.usage.page(from, limit);
+	let next = used.last().map_or(after, |u| u.id);
+	Json(sa_core::usage::UsagePage { used, next }).into_response()
 }
 
 async fn list(State(runner): State<Runner>) -> Response {

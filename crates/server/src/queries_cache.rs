@@ -75,7 +75,7 @@ async fn query(State(panel): State<Panel>, Path((scheme, key)): Path<(String, St
 				return error(StatusCode::BAD_REQUEST, "the key is not the SHA-256 of the request");
 			}
 			store
-				.keep_query(scheme, key, &put.answer.to_string(), Some(&put.request), Timestamp::now())
+				.keep_query(scheme, key, &put.answer.to_string(), Some(&put.request), put.bought.map(|b| (b, scheme.as_str())), Timestamp::now())
 				.await
 				.map(|()| StatusCode::NO_CONTENT.into_response())
 		}

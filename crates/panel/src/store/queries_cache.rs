@@ -3,9 +3,15 @@
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::queries_cache::{Claim, Key, LEASE, Put, Scheme, Stored};
+use sa_core::{
+	queries_cache::{Claim, Key, LEASE, Put, Scheme, Stored},
+	usage::Billed,
+};
 
-use super::{Store, from_db, to_db};
+use super::{
+	Store, from_db, to_db,
+	usage::{self, CONDUCTOR, Use},
+};
 
 impl Store {
 	pub async fn cached_query(&self, scheme: Scheme, key: Key) -> eyre::Result<Option<Stored>> {
@@ -68,8 +74,21 @@ impl Store {
 
 	/// Keeps `answer` (JSON text) unless a newer one is kept already; any claim on the key ends.
 	/// `request` is `None` only for an answer that never kept it.
-	pub async fn keep_query(&self, scheme: Scheme, key: Key, answer: &str, request: Option<&str>, fetched_at: Timestamp) -> eyre::Result<()> {
+	/// `bought`, it is counted as `source`'s use in the same write.
+	pub async fn keep_query(&self, scheme: Scheme, key: Key, answer: &str, request: Option<&str>, bought: Option<(Billed, &str)>, fetched_at: Timestamp) -> eyre::Result<()> {
 		let mut tx = self.begin_write().await?;
+		if let Some((Billed { item, bill }, source)) = bought {
+			let used = Use {
+				at: fetched_at,
+				item,
+				units: 1,
+				bill,
+				source: source.to_owned(),
+				user: None,
+				key: None,
+			};
+			usage::record(&mut tx, &used).await?;
+		}
 		sqlx::query(
 			"INSERT INTO queries_cache (scheme, key, answer, request, fetched_at) VALUES ($1, $2, $3, $4, $5) \
 			 ON CONFLICT (scheme, key) DO UPDATE SET answer = excluded.answer, request = excluded.request, fetched_at = excluded.fetched_at \
@@ -111,7 +130,7 @@ impl sa_places::QueriesCache for Store {
 
 	fn put(&self, key: Key, put: Put) -> sa_places::Pending<'_, ()> {
 		Box::pin(async move {
-			self.keep_query(Scheme::Places, key, &put.answer.to_string(), Some(&put.request), Timestamp::now())
+			self.keep_query(Scheme::Places, key, &put.answer.to_string(), Some(&put.request), put.bought.map(|b| (b, CONDUCTOR)), Timestamp::now())
 				.await
 				.map_err(store_error)
 		})

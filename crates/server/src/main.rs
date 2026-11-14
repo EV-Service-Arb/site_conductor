@@ -365,7 +365,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				let text = std::fs::read_to_string(&path).wrap_err_with(|| format!("reading {}", path.display()))?;
 				serde_json::from_str::<serde_json::Value>(&text).wrap_err_with(|| format!("{} is not JSON", path.display()))?;
 				let written = std::fs::metadata(&path)?.modified()?;
-				store.keep_query(scheme, key, &text, None, Timestamp::try_from(written)?).await?;
+				store.keep_query(scheme, key, &text, None, None, Timestamp::try_from(written)?).await?;
 				kept += 1;
 			}
 			println!("{kept} answers cached under {scheme}; {skipped} other files left");
@@ -521,6 +521,7 @@ async fn serve(
 	}
 	let catalog = forward.as_ref().map(|f| f.catalog().clone());
 	let panel_for_pages = sign_in.panel.clone();
+	let browsers_followed = browsers.clone();
 	let app = http::app(
 		sign_in,
 		forward,
@@ -562,6 +563,7 @@ async fn serve(
 				live::follow(services.clone(), bus.clone(), stopped.clone()).await;
 			}
 		};
+		let usage = sa_server::usage::run(engine.clone(), services.clone(), browsers_followed, stopped.clone());
 		let tokens = async {
 			if let Some(services) = &services {
 				tokens::run(engine, services.clone(), stopped.clone()).await;
@@ -578,7 +580,7 @@ async fn serve(
 				catalog.follow(services.clone(), stopped.clone()).await;
 			}
 		};
-		tokio::join!(bot, feed, tokens, grafana, purge, catalog);
+		tokio::join!(bot, feed, usage, tokens, grafana, purge, catalog);
 	};
 	let (served, ()) = tokio::join!(server, hubs);
 	served

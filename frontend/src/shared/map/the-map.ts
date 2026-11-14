@@ -7,6 +7,7 @@
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { type RefObject, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import { api, ok } from "@/shared/api";
 import { setQuery, useQuery } from "@/shared/lib/query";
 
 const PLACES_KEY = "sa:map-places";
@@ -57,6 +58,8 @@ function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Pr
         clickableIcons: false,
       }),
   );
+  // counted once built: each is a load Google bills; a failed count is only lost from the tally
+  void map.then(() => ok(api.POST("/map/loaded"))).catch((e: unknown) => console.warn("a map load went uncounted", e));
   kept.saMap = { key, element, map };
   return kept.saMap;
 }

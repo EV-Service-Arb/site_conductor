@@ -84,6 +84,7 @@ async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
 	// what a point costs is tests/connections.rs's
 	p.set_prices(
 		&[PlacesRequest::Details, PlacesRequest::Search, PlacesRequest::Autocomplete].map(|r| (Item::Places(r), Some(0))),
+		&[],
 		"admin@localhost",
 		jiff::Timestamp::now(),
 	)

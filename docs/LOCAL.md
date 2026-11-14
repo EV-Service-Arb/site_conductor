@@ -204,12 +204,13 @@ and data key) asks for their points once.
 ## Google
 
 The conductor names, addresses and locates GMBs with `gmaps_optimal_placement`'s keys, in the
-order `~/.config/gmaps_optimal_placement.nix` lists them, and the map loads with the first:
+order `~/.config/gmaps_optimal_placement.nix` lists them, then admin@evinvest.ltd's (the billing
+account whose export the meters read), and the map loads with evinvest's browser key:
 
 | Variable | Value, unless the shell sets it |
 | --- | --- |
-| `GOOGLE_MAPS_KEYS` | `$GOOGLE_MAPS_KEY,$GOOGLE_MAPS_KEY_ICOS1` |
-| `GOOGLE_MAPS_BROWSER_KEY` | `$GOOGLE_MAPS_KEY` |
+| `GOOGLE_MAPS_KEYS` | `$GOOGLE_MAPS_KEY,$GOOGLE_MAPS_KEY_ICOS1,$GOOGLE_MAPS_KEY_EVINVEST` |
+| `GOOGLE_MAPS_BROWSER_KEY` | `$GOOGLE_MAPS_BROWSER_KEY_EVINVEST`, else `$GOOGLE_MAPS_KEY` |
 
 Without `GOOGLE_MAPS_KEY` in the shell, a GMB is added by its place id alone and `/` has no map.
 Answers are kept in the conductor's queries cache, `.local/panel.db`: `--reset` pays for them again.

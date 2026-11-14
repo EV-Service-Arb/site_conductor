@@ -72,8 +72,8 @@ async fn a_claim_holds_until_its_lease_lapses_and_the_newest_answer_stays() {
 	let lapsed = t0 + queries_cache::LEASE + SignedDuration::from_secs(1);
 	assert!(matches!(store.claim_query(scheme, k, None, lapsed).await.unwrap(), Claim::Granted { .. }), "its holder died");
 
-	store.keep_query(scheme, k, r#"{"v":2}"#, None, t0).await.unwrap();
-	store.keep_query(scheme, k, r#"{"v":1}"#, None, t0 - SignedDuration::from_secs(60)).await.unwrap();
+	store.keep_query(scheme, k, r#"{"v":2}"#, None, None, t0).await.unwrap();
+	store.keep_query(scheme, k, r#"{"v":1}"#, None, None, t0 - SignedDuration::from_secs(60)).await.unwrap();
 	let Claim::Stored(kept) = store.claim_query(scheme, k, None, lapsed).await.unwrap() else {
 		panic!("an answer is kept")
 	};
@@ -96,6 +96,7 @@ async fn a_write_is_kept_only_under_its_querys_digest() {
 	let put = Put {
 		answer: json!({}),
 		request: "GET x".into(),
+		bought: None,
 	};
 	let mismatched = cache.put(Key([0; 32]), put.clone()).await.unwrap_err();
 	assert!(mismatched.to_string().contains("400"), "{mismatched:#}");

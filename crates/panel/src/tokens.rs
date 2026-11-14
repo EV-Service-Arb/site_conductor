@@ -18,7 +18,7 @@ use eyre::WrapErr;
 use jiff::{Timestamp, civil::Date, tz::TimeZone};
 use sa_core::{
 	gbp::Snapshot,
-	prices::Item,
+	prices::{Item, Sale},
 	tokens::{ChargePage, Renewal, split},
 };
 use sqlx::SqliteConnection;
@@ -26,6 +26,7 @@ use uuid::Uuid;
 
 pub use crate::store::{
 	tokens::{Charged, Entry, Flow, FlowKind, Kickback, Kind, Owed, Price},
+	usage::Cost,
 	users::User,
 };
 use crate::{
@@ -33,12 +34,21 @@ use crate::{
 	store::{
 		gmbs as gmbs_db,
 		tokens::{self as db, REVIEW_ARCHIVE},
+		usage,
 		users,
 	},
 };
 
 /// How many days `usage` reads, today's included.
 pub const USAGE_DAYS: i64 = 30;
+
+/// A catalog item, the admin's price of it and what a unit costs us.
+#[derive(Clone, Debug)]
+pub struct Priced {
+	pub item: Item,
+	pub price: Option<Price>,
+	pub cost: Option<Cost>,
+}
 
 /// An admin's change to a balance.
 #[derive(Clone, Debug)]
@@ -218,24 +228,37 @@ impl Panel {
 	}
 
 	/// Every priced item, in the catalog's order, and its price if it has one.
-	pub async fn prices(&self) -> eyre::Result<Vec<(Item, Option<Price>)>> {
+	pub async fn prices(&self) -> eyre::Result<Vec<Priced>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the prices")?;
-		let mut priced = db::prices(&mut conn).await?;
-		Ok(Item::all().map(|i| (i, priced.remove(&i))).collect())
+		let (mut prices, mut costs) = (db::prices(&mut conn).await?, usage::costs(&mut conn).await?);
+		Ok(Item::all()
+			.map(|item| Priced {
+				item,
+				price: prices.remove(&item),
+				cost: costs.remove(&item),
+			})
+			.collect())
 	}
 
 	/// An admin (`by`, their email) prices each item given at 0 tokens or more, `None` taking it
-	/// off sale: every one, or none.
-	pub async fn set_prices(&self, prices: &[(Item, Option<i64>)], by: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
-		if prices.iter().any(|(_, n)| n.is_some_and(|n| n < 0)) {
-			return Ok(Err(Refused::Invalid("a price is 0 tokens or more".to_owned())));
+	/// off sale, and costs each at 0 µ$ or more, `None` unknown: every one, or none. Only a sold
+	/// item has a price.
+	pub async fn set_prices(&self, prices: &[(Item, Option<i64>)], costs: &[(Item, Option<i64>)], by: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+		if let Some((item, _)) = prices.iter().find(|(i, _)| i.sale() == Sale::Metered) {
+			return Ok(Err(Refused::Invalid(format!("{item} is metered: nobody is charged for it"))));
+		}
+		if prices.iter().chain(costs).any(|(_, n)| n.is_some_and(|n| n < 0)) {
+			return Ok(Err(Refused::Invalid("a price and a cost are 0 or more".to_owned())));
 		}
 		let mut tx = self.store.begin_write().await?;
 		for (item, n) in prices {
 			db::set_price(&mut tx, *item, *n, by, now).await?;
 		}
+		for (item, n) in costs {
+			usage::set_cost(&mut tx, *item, *n, by, now).await?;
+		}
 		tx.commit().await.wrap_err("committing the prices")?;
-		tracing::info!(by, ?prices, "prices set");
+		tracing::info!(by, ?prices, ?costs, "prices set");
 		self.snapshot_due.notify_one();
 		Ok(Ok(()))
 	}

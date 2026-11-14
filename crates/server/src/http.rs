@@ -44,7 +44,7 @@ use crate::{
 	signin::{self, Caller, Freshness, Gatekeeper, SignIn},
 	tokens,
 	tools::Tools,
-	trash,
+	trash, usage,
 };
 
 /// One `/api/v1` operation.
@@ -256,6 +256,7 @@ pub(crate) fn api_routes() -> Vec<ApiRoute> {
 		browser::routes(),
 		tokens::routes(),
 		trash::routes(),
+		usage::routes(),
 		assistant::routes(),
 		kit::routes(),
 	]

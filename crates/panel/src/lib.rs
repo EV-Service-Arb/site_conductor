@@ -33,6 +33,7 @@ pub mod telegram;
 pub mod testing;
 pub mod tokens;
 pub mod trash;
+pub mod usage;
 
 use std::{collections::BTreeSet, sync::Arc};
 

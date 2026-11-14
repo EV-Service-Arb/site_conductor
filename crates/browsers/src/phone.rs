@@ -4,7 +4,7 @@
 //! ```text
 //! recorded ─▶ phone/start ─▶ started ─▶ adb + glogin ─▶ geo, zone, exit from inside ─▶ Up ─▶ ends
 //!    │             └──────────────── any step failing ───────────────────┐                 │
-//!    └── forgotten ◀── statuses reads stopped ◀── phone/stop ◀────────────┴─────────────────┘
+//!    └── forgotten ◀── counted ◀── reads stopped ◀── phone/stop ◀────────┴─────────────────┘
 //! ```
 //! Ends: told to, the gmail removed, [`IDLE`] without a viewer, [`CAP`] since its start, the
 //! runner stopping. A stop is retried every [`RETRY`] until it is confirmed.
@@ -12,6 +12,8 @@
 use std::{path::Path, sync::Arc, time::Duration};
 
 use eyre::WrapErr;
+use jiff::Timestamp;
+use sa_core::prices::{Item, PhoneTime};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -61,6 +63,8 @@ struct Record {
 	phone: String,
 	/// What stops it: a run token, 3 h.
 	token: String,
+	/// Just before `phone/start`: its minutes are counted from here.
+	since: Timestamp,
 }
 
 // r[impl browsers.phone-stops]
@@ -68,23 +72,39 @@ pub(crate) async fn life(runner: &Runner, gmail: i64, run: Run, ends: &mut Ends<
 	let record = Record {
 		phone: run.phone.clone(),
 		token: run.token.clone(),
+		since: Timestamp::now(),
 	};
 	remember(runner, &record)?;
-	let ran = started(runner, gmail, &run, ends).await;
+	let start = runner.0.multilogin.start(&run.token, &run.phone, &runner.0.minutes).await;
+	let billed = start.is_ok();
+	let ran = match start {
+		Ok(start) => started(runner, gmail, &run, &start, ends).await,
+		Err(e) => Err(e),
+	};
 	if let Err(e) = &ran {
 		tracing::error!(gmail, phone = run.phone, error = format!("{e:#}"), "phone failed: stopping it");
 	}
-	stop(runner, &record).await;
+	// a refused start reads stopped: it never ran
+	if stop(runner, &record).await || billed {
+		counted(runner, &record)?;
+	}
 	forget(runner, &record.phone)?;
 	ran
 }
 
-async fn started(runner: &Runner, gmail: i64, run: &Run, ends: &mut Ends<'_>) -> eyre::Result<()> {
+/// Its minutes since its start, a started one whole, at now: its stop.
+fn counted(runner: &Runner, r: &Record) -> eyre::Result<()> {
+	let at = Timestamp::now();
+	// a clock stepped back since its start still leaves the minute it started
+	let secs = at.duration_since(r.since).as_secs().max(1);
+	runner.0.usage.record(Item::Phone(PhoneTime::Running), (secs as u64).div_ceil(60) as i64, at)
+}
+
+async fn started(runner: &Runner, gmail: i64, run: &Run, start: &Value, ends: &mut Ends<'_>) -> eyre::Result<()> {
 	let api = &runner.0.multilogin;
 	let at = tokio::time::Instant::now();
-	let start = api.start(&run.token, &run.phone, &runner.0.minutes).await?;
 	// shortcut: the stream URL's shape is unmeasured until M1; the first `url` in the answer
-	let stream = first_url(&start);
+	let stream = first_url(start);
 	until(&format!("{} to start", run.phone), STARTED_WITHIN, || async {
 		match api.status(&run.token, &run.phone).await? {
 			EXPIRED => eyre::bail!("{} is expired", run.phone),
@@ -165,15 +185,17 @@ async fn placed(runner: &Runner, phone: &adb::Phone, run: &Run) -> eyre::Result<
 	Ok(())
 }
 
-/// Stopped, and read so: retried every [`RETRY`] until it is, however long.
-async fn stop(runner: &Runner, r: &Record) {
+/// Stopped, and read so: retried every [`RETRY`] until it is, however long. Whether it was read
+/// running.
+async fn stop(runner: &Runner, r: &Record) -> bool {
 	let api = &runner.0.multilogin;
+	let mut running = false;
 	//LOOP: until the phone reads stopped; each failure reported
 	loop {
 		let tried = async {
 			match api.status(&r.token, &r.phone).await? {
 				SHUT_DOWN | EXPIRED => return Ok(()),
-				_ => {}
+				_ => running = true,
 			}
 			api.call(&r.token, reqwest::Method::POST, "/mobile_profiles/phone/stop", json!({ "ids": [r.phone] })).await?;
 			until(&format!("{} to stop", r.phone), STOPPED_WITHIN, || async {
@@ -184,7 +206,7 @@ async fn stop(runner: &Runner, r: &Record) {
 		match tried.await {
 			Ok(()) => {
 				tracing::info!(phone = r.phone, "phone stopped");
-				return;
+				return running;
 			}
 			Err(e) => tracing::error!(
 				phone = r.phone,
@@ -212,7 +234,10 @@ pub(crate) async fn reconcile(runner: &Runner) -> eyre::Result<()> {
 		if !matches!(status, SHUT_DOWN | EXPIRED) {
 			tracing::warn!(phone = r.phone, status, "a phone left running: stopping it");
 		}
-		stop(runner, &r).await;
+		// one read stopped was counted at its stop, or never started
+		if stop(runner, &r).await {
+			counted(runner, &r)?;
+		}
 		forget(runner, &r.phone)?;
 	}
 	Ok(())

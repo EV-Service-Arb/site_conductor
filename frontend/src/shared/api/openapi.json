@@ -218,10 +218,11 @@
         "tags": [
           "tokens"
         ],
-        "summary": "Prices the items given, 0 or more tokens or `null` off sale; the others stay. 400 an item not priced.",
+        "summary": "Prices the items given, 0 or more tokens or `null` off sale, and costs them, 0 µ$ a unit or more or `null` unknown; the others stay.",
+        "description": "400 an item not in the catalog, or a metered one priced.",
         "operationId": "set_token_prices",
         "requestBody": {
-          "description": "The items given, each priced at 0 or more or `null` off sale; the others stay.",
+          "description": "The items given, each priced at 0 tokens or more or `null` off sale, each costed at 0 µ$ a unit\nor more or `null` unknown; the others stay.",
           "content": {
             "application/json": {
               "schema": {
@@ -303,6 +304,64 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Balance"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "sa:admin:tokens:grant"
+      }
+    },
+    "/admin/usage": {
+      "get": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "What our tools spent on vendors per UTC day, item, bill and source, in units and at today's cost of a unit: what Grafana's sa-tokens dashboard reads.",
+        "operationId": "spend",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "description": "Unix milliseconds.",
+            "required": true,
+            "schema": {
+              "description": "Unix milliseconds.",
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "description": "Unix milliseconds, at most 400 days after `from`.",
+            "required": true,
+            "schema": {
+              "description": "Unix milliseconds, at most 400 days after `from`.",
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Everyone's usage by day, oldest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Spend"
                 }
               }
             }
@@ -3180,6 +3239,30 @@
         }
       }
     },
+    "/map/loaded": {
+      "post": {
+        "tags": [
+          "usage"
+        ],
+        "summary": "Records that the caller's browser built a Google map: a billed load of ours.",
+        "operationId": "map_loaded",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        }
+      }
+    },
     "/map/street_view": {
       "post": {
         "tags": [
@@ -4749,6 +4832,14 @@
               "note"
             ]
           }
+        ]
+      },
+      "Bill": {
+        "description": "Whose bill it lands on.\n\n- `ours`: Our keys, accounts and machines.\n- `theirs`: A person's own key.",
+        "type": "string",
+        "enum": [
+          "ours",
+          "theirs"
         ]
       },
       "Bound": {
@@ -6989,59 +7080,66 @@
         ]
       },
       "Price": {
-        "description": "A priced item, and its price: `tokens` null, not sold.",
+        "description": "A catalog item, its price (`null`: not sold, or metered) and what a unit costs us (`null`: unknown).",
         "type": "object",
         "properties": {
+          "cost": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnitCost"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "description": {
             "type": "string"
           },
           "item": {
             "$ref": "#/components/schemas/PricedItem"
           },
+          "price": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TokenPrice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sale": {
+            "$ref": "#/components/schemas/Sale"
+          },
           "scope": {
             "$ref": "#/components/schemas/Scope"
           },
-          "set_at": {
-            "description": "RFC 3339.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "set_by": {
-            "description": "The admin's email.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "title": {
             "type": "string"
-          },
-          "tokens": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
           },
           "tool": {
             "type": "string"
           },
           "tool_title": {
             "type": "string"
+          },
+          "unit": {
+            "description": "What one is counted in.",
+            "type": "string"
           }
         },
         "required": [
           "item",
           "scope",
+          "sale",
+          "unit",
           "tool",
           "tool_title",
           "title",
           "description",
-          "tokens",
-          "set_by",
-          "set_at"
+          "price",
+          "cost"
         ]
       },
       "PricedItem": {
@@ -7052,11 +7150,18 @@
           "places.autocomplete",
           "places.geocode",
           "street_view.panorama",
+          "map.map",
           "walk.open",
           "walk.reviews",
           "walk.sort",
           "walk.sort_retry",
-          "walk.step"
+          "walk.step",
+          "phone.running",
+          "ads.location",
+          "ads.keyword_ideas",
+          "dataforseo.keywords_for_keywords",
+          "browser.gologin",
+          "browser.mimic"
         ]
       },
       "Prices": {
@@ -7441,12 +7546,22 @@
           "stream"
         ]
       },
+      "Sale": {
+        "description": "Whether a person pays tokens for it.\n\n- `sold`: At the admin's price; unpriced, refused.\n- `metered`: Counted and costed; nobody is charged.",
+        "type": "string",
+        "enum": [
+          "sold",
+          "metered"
+        ]
+      },
       "Scope": {
-        "description": "Who charges.\n\n- `conductor`: At the buy, before Google is asked.\n- `review_archive`: After the fact, through its charge feed.",
+        "description": "Where it happens: who counts it, and charges for it if it is sold.\n\n- `conductor`: At the buy, before Google is asked.\n- `review_archive`: After the fact, through its charge feed.\n- `browsers`: sa_browsers' runner: nobody is charged.\n- `placement`: gmaps_optimal_placement's studies: the house's for now.",
         "type": "string",
         "enum": [
           "conductor",
-          "review_archive"
+          "review_archive",
+          "browsers",
+          "placement"
         ]
       },
       "SetBrowser": {
@@ -7550,12 +7665,186 @@
         ]
       },
       "SetPrices": {
-        "description": "The items given, each priced at 0 or more or `null` off sale; the others stay.",
+        "description": "The items given, each priced at 0 tokens or more or `null` off sale, each costed at 0 µ$ a unit\nor more or `null` unknown; the others stay.",
         "type": "object",
         "properties": {
+          "costs": {
+            "type": "object",
+            "properties": {
+              "ads.keyword_ideas": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "ads.location": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "browser.gologin": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "browser.mimic": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "dataforseo.keywords_for_keywords": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "map.map": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "phone.running": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "places.autocomplete": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "places.details": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "places.geocode": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "places.search": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "street_view.panorama": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "walk.open": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "walk.reviews": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "walk.sort": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "walk.sort_retry": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "walk.step": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              }
+            },
+            "additionalProperties": false
+          },
           "prices": {
             "type": "object",
             "properties": {
+              "ads.keyword_ideas": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "ads.location": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "browser.gologin": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "browser.mimic": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "dataforseo.keywords_for_keywords": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "map.map": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "phone.running": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
               "places.autocomplete": {
                 "type": [
                   "integer",
@@ -7632,7 +7921,8 @@
         },
         "additionalProperties": false,
         "required": [
-          "prices"
+          "prices",
+          "costs"
         ]
       },
       "SetRole": {
@@ -7984,6 +8274,81 @@
           }
         ]
       },
+      "Spend": {
+        "description": "Everyone's usage by day, oldest first.",
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpendDay"
+            }
+          }
+        },
+        "required": [
+          "days"
+        ]
+      },
+      "SpendDay": {
+        "description": "A UTC day's units of one item, by whose bill and who told; `usd` at today's cost of a unit,\n`null` while it is unknown.",
+        "type": "object",
+        "properties": {
+          "bill": {
+            "$ref": "#/components/schemas/Bill"
+          },
+          "day": {
+            "description": "`YYYY-MM-DD`.",
+            "type": "string"
+          },
+          "item": {
+            "$ref": "#/components/schemas/PricedItem"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "source": {
+            "type": "string"
+          },
+          "times": {
+            "description": "How many times it was recorded: a phone's run is one time of many minutes.",
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "tool_title": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "units": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        },
+        "required": [
+          "day",
+          "item",
+          "scope",
+          "tool_title",
+          "title",
+          "unit",
+          "bill",
+          "source",
+          "units",
+          "times",
+          "usd"
+        ]
+      },
       "Spot": {
         "type": "object",
         "properties": {
@@ -8254,6 +8619,28 @@
         },
         "required": [
           "users"
+        ]
+      },
+      "TokenPrice": {
+        "type": "object",
+        "properties": {
+          "set_at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
+          "set_by": {
+            "description": "The admin's email.",
+            "type": "string"
+          },
+          "tokens": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "tokens",
+          "set_by",
+          "set_at"
         ]
       },
       "Tokens": {
@@ -8756,6 +9143,29 @@
           "base",
           "from",
           "turns"
+        ]
+      },
+      "UnitCost": {
+        "type": "object",
+        "properties": {
+          "set_at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
+          "set_by": {
+            "description": "The admin's email.",
+            "type": "string"
+          },
+          "usd_micros": {
+            "description": "Millionths of a dollar a unit.",
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "usd_micros",
+          "set_by",
+          "set_at"
         ]
       },
       "Usage": {

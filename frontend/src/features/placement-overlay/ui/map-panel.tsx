@@ -1,15 +1,23 @@
 "use client";
 
 import { Button, NativeSelect, NativeSelectGroup, NativeSelectOption, Slider, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
-import { Car, ChevronRight, Crosshair, Eye, EyeOff, Flame, Grid3x3, MapPin, Store, Users, Wallet, Waves } from "lucide-react";
+import { Car, ChevronRight, Crosshair, Eye, EyeOff, Flame, Grid3x3, MapPin, Settings2, Store, TriangleAlert, Users, Wallet, Waves } from "lucide-react";
 import { type ComponentType, type ReactNode, useState } from "react";
 
-import { covers, useScope, useTrades } from "@/entities/gmb";
+import { PANEL } from "@config";
+
+import { covers, openCategories, openTrade, useScope, useTrades } from "@/entities/gmb";
+import type { Country } from "@/shared/api/schema";
 import { may, useMe } from "@/entities/session";
 import { type T, useT, placement as placementKeys, state, hotbar } from "@/shared/i18n";
 import { type Base, setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
 
 import { type Layer, type MapView, pull, setMapView, useMapView, usePlacement } from "../model/placement";
+
+const LAYOUT = {
+  column: "flex w-80 flex-col",
+  columns: "grid w-160 grid-cols-2 gap-x-2",
+} satisfies Record<typeof PANEL.mapPanel, string>;
 
 /** The leading trade layers (Demand, Underserved) and location layers (Population, income, cars) a row each; the rest under More. */
 const FEATURED = { trade: 2, location: 3 };
@@ -43,124 +51,151 @@ export function MapPanel() {
   const location = layers.filter((l) => !l.trade);
   const featured = [...trade.slice(0, FEATURED.trade), ...location.slice(0, FEATURED.location)];
   const rest = [...trade.slice(FEATURED.trade), ...location.slice(FEATURED.location)];
+  // what every trade overlay draws here: nothing, while no study's grid is in view
+  const blank = ok === null ? null : ok.inView === "zoom" ? t(placementKeys.zoomIn, "Zoom in to see the grid") : ok.inView.length === 0 ? t(placementKeys.noGrid, "No grid here") : null;
   const heatRow = (l: Layer) => (
     <Row key={l.id} icon={ICONS[l.id] ?? Grid3x3} label={l.name} on={view.heat === l.id} onToggle={() => setMapView({ heat: view.heat === l.id ? null : l.id })} />
   );
 
   return (
     <div className="flex max-h-[70vh] flex-col overflow-y-auto py-1 text-body-s">
-      <p className="px-3 pt-2 pb-1 text-body font-medium">{t(placementKeys.title, "Map")}</p>
       {placement.status === "loading" && <Note>{t(state.loading, "Loading…")}</Note>}
       {placement.status === "unconnected" && <Note>{t(placementKeys.unconnected, "Placement not connected")}</Note>}
       {placement.status === "error" && <Note tone="error">{placement.message}</Note>}
-      {ok && (
-        <>
-          <Section title={t(placementKeys.heat, "Heat")}>
-            <label className="flex h-(--control-h-sm) items-center gap-2 px-2">
-              <span className="flex flex-1 items-center gap-1.5 text-ink-mid">
-                {t(placementKeys.trade, "Trade")}
-                {view.from !== null && <span className="rounded bg-hover px-1 text-caption text-ink-soft">{FROM_NAME[view.from](t)}</span>}
-              </span>
-              <NativeSelect
-                size="sm"
-                wrapperClassName="w-48"
-                value={studies.find((o) => o.study === view.study)?.key ?? ""}
-                onChange={(e) => {
-                  const study = studies.find((o) => o.key === e.currentTarget.value)?.study ?? null;
-                  setMapView({ study, ...(study !== null && view.heat === null && { heat: "demand" }) });
-                }}
-              >
-                <NativeSelectOption value="">{t(placementKeys.pickTrade, "pick a trade")}</NativeSelectOption>
-                {(["scope", "category", "stem"] as const).map((group) => {
-                  const options = studies.filter((o) => o.group === group);
-                  return (
-                    options.length > 0 && (
-                      <NativeSelectGroup key={group} label={STUDIES_NAME[group](t)}>
-                        {options.map((o) => (
-                          <NativeSelectOption key={o.key} value={o.key}>
-                            {o.label}
-                          </NativeSelectOption>
-                        ))}
-                      </NativeSelectGroup>
-                    )
-                  );
-                })}
-              </NativeSelect>
-            </label>
-            {ok.inView === "zoom" && <Note>{t(placementKeys.zoomIn, "Zoom in to see the grid")}</Note>}
-            {ok.inView !== "zoom" && ok.inView.length === 0 && <Note>{t(placementKeys.noGrid, "No grid here")}</Note>}
-            {ok.inView !== "zoom" && ok.inView.length > 0 && (
-              <>
-                {view.study === null && <Row icon={Flame} label={t(placementKeys.demand, "Demand")} hint={t(placementKeys.pickTrade, "pick a trade")} />}
-                {featured.map(heatRow)}
-                {rest.length > 0 && (
-                  <button type="button" onClick={() => setMore(!more)} className="flex h-(--control-h-sm) items-center gap-2 rounded-control px-2 text-ink-soft hover:bg-hover hover:text-ink">
-                    <ChevronRight className={cn("size-4 transition-transform", more && "rotate-90")} />
-                    {t(placementKeys.more, "More")}
-                  </button>
+      <div className={LAYOUT[PANEL.mapPanel]}>
+        <div className="flex flex-col">
+          {ok && (
+            <>
+              <Section title={t(placementKeys.heat, "Heat")}>
+                <label className="flex h-(--control-h-sm) items-center gap-2 px-2">
+                  <span className="flex flex-1 items-center gap-1.5 text-ink-mid">
+                    {t(placementKeys.trade, "Trade")}
+                    {view.from !== null && <span className="rounded bg-hover px-1 text-caption text-ink-soft">{FROM_NAME[view.from](t)}</span>}
+                  </span>
+                  <NativeSelect
+                    size="sm"
+                    wrapperClassName="w-40"
+                    value={studies.find((o) => o.study === view.study)?.key ?? ""}
+                    onChange={(e) => {
+                      const study = studies.find((o) => o.key === e.currentTarget.value)?.study ?? null;
+                      setMapView({ study, ...(study !== null && view.heat === null && { heat: "demand" }) });
+                    }}
+                  >
+                    <NativeSelectOption value="">{t(placementKeys.pickTrade, "pick a trade")}</NativeSelectOption>
+                    {(["scope", "category", "stem"] as const).map((group) => {
+                      const options = studies.filter((o) => o.group === group);
+                      return (
+                        options.length > 0 && (
+                          <NativeSelectGroup key={group} label={STUDIES_NAME[group](t)}>
+                            {options.map((o) => (
+                              <NativeSelectOption key={o.key} value={o.key}>
+                                {o.label}
+                              </NativeSelectOption>
+                            ))}
+                          </NativeSelectGroup>
+                        )
+                      );
+                    })}
+                  </NativeSelect>
+                  <CategoryButton picked={studies.find((o) => o.study === view.study) ?? null} />
+                </label>
+                {blank !== null && <Note tone="warn">{blank}</Note>}
+                {ok.inView !== "zoom" && ok.inView.length > 0 && (
+                  <>
+                    {view.study === null && <Row icon={Flame} label={t(placementKeys.demand, "Demand")} hint={t(placementKeys.pickTrade, "pick a trade")} />}
+                    {featured.map(heatRow)}
+                    {rest.length > 0 && (
+                      <button type="button" onClick={() => setMore(!more)} className="flex h-(--control-h-sm) items-center gap-2 rounded-control px-2 text-ink-soft hover:bg-hover hover:text-ink">
+                        <ChevronRight className={cn("size-4 transition-transform", more && "rotate-90")} />
+                        {t(placementKeys.more, "More")}
+                      </button>
+                    )}
+                    {more && rest.map(heatRow)}
+                  </>
                 )}
-                {more && rest.map(heatRow)}
-              </>
-            )}
-          </Section>
-          <Section title={t(placementKeys.overlays, "Overlays")}>
-            <Row
-              icon={Waves}
-              label={t(placementKeys.pressure, "Competitor pressure")}
-              hint={view.study === null ? t(placementKeys.pickTrade, "pick a trade") : undefined}
-              on={view.pressure !== null}
-              onToggle={view.study === null ? undefined : () => setMapView({ pressure: view.pressure === null ? {} : null })}
-            />
-            {view.study !== null && view.pressure !== null && ok.lambda !== null && <Radius view={view} fallback={ok.lambda} />}
-            <Row
-              icon={Store}
-              label={t(placementKeys.competitors, "Competitors")}
-              hint={view.study === null ? t(placementKeys.pickTrade, "pick a trade") : undefined}
-              on={view.competitors}
-              onToggle={view.study === null ? undefined : () => setMapView({ competitors: !view.competitors })}
-            />
-            <Row icon={MapPin} label={t(hotbar.places, "Google's places")} on={places} onToggle={() => showPlaces(!places)} />
-          </Section>
-          {ok.notices.length > 0 && (
-            <Section title={t(placementKeys.notices, "Data")}>
-              {ok.notices.map((n) => (
-                <div key={`${n.trade}×${n.location}`} className="flex flex-col gap-1 px-2 py-1">
-                  <span className="text-ink-mid">{n.text}</span>
-                  {n.missing !== null && may(me, "sa:placement:study:spend") && (
-                    <Button size="sm" variant="secondary" disabled={ok.pulling} onClick={() => void pull()}>
-                      {t(placementKeys.pull, "Pull latest · {n} searches", { n: n.missing })}
-                    </Button>
-                  )}
-                </div>
-              ))}
-              {ok.pullFailed !== null && <Note tone="error">{ok.pullFailed}</Note>}
-            </Section>
+              </Section>
+            </>
           )}
-        </>
-      )}
-      <Section title={t(placementKeys.base, "Base")}>
-        <ToggleGroup type="single" size="sm" value={base} onValueChange={(v) => typeof v === "string" && v !== "" && setBase(v as Base)} className="px-2">
-          <ToggleGroupItem value="schematic">{t(placementKeys.base.schematic, "Schematic")}</ToggleGroupItem>
-          <ToggleGroupItem value="satellite">{t(placementKeys.base.satellite, "Satellite")}</ToggleGroupItem>
-        </ToggleGroup>
-      </Section>
-      {ok?.legend?.heat && <p className="px-3 pt-2 pb-1 text-caption text-ink-soft">{ok.legend.heat.note}</p>}
+        </div>
+        <div className="flex flex-col">
+          {ok && (
+            <>
+              <Section title={t(placementKeys.overlays, "Overlays")}>
+                <Row
+                  icon={Waves}
+                  label={t(placementKeys.pressure, "Competitor pressure")}
+                  hint={view.study === null ? t(placementKeys.pickTrade, "pick a trade") : undefined}
+                  warn={view.study === null ? undefined : (blank ?? undefined)}
+                  on={view.pressure !== null}
+                  onToggle={view.study === null ? undefined : () => setMapView({ pressure: view.pressure === null ? {} : null })}
+                />
+                {view.study !== null && view.pressure !== null && ok.lambda !== null && <Radius view={view} fallback={ok.lambda} />}
+                <Row
+                  icon={Store}
+                  label={t(placementKeys.competitors, "Competitors")}
+                  hint={view.study === null ? t(placementKeys.pickTrade, "pick a trade") : undefined}
+                  warn={view.study === null ? undefined : (blank ?? undefined)}
+                  on={view.competitors}
+                  onToggle={view.study === null ? undefined : () => setMapView({ competitors: !view.competitors })}
+                />
+                <Row icon={MapPin} label={t(hotbar.places, "Google's places")} on={places} onToggle={() => showPlaces(!places)} />
+              </Section>
+              {ok.notices.length > 0 && (
+                <Section title={t(placementKeys.notices, "Data")}>
+                  {ok.notices.map((n) => (
+                    <div key={`${n.trade}×${n.location}`} className="flex flex-col gap-1 px-2 py-1">
+                      <span className="text-ink-mid">{n.text}</span>
+                      {n.missing !== null && may(me, "sa:placement:study:spend") && (
+                        <Button size="sm" variant="secondary" disabled={ok.pulling} onClick={() => void pull()}>
+                          {t(placementKeys.pull, "Pull latest · {n} searches", { n: n.missing })}
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  {ok.pullFailed !== null && <Note tone="error">{ok.pullFailed}</Note>}
+                </Section>
+              )}
+            </>
+          )}
+          <Section title={t(placementKeys.base, "Base")}>
+            <ToggleGroup type="single" size="sm" value={base} onValueChange={(v) => typeof v === "string" && v !== "" && setBase(v as Base)} className="px-2">
+              <ToggleGroupItem value="schematic">{t(placementKeys.base.schematic, "Schematic")}</ToggleGroupItem>
+              <ToggleGroupItem value="satellite">{t(placementKeys.base.satellite, "Satellite")}</ToggleGroupItem>
+            </ToggleGroup>
+          </Section>
+          {ok?.legend?.heat && <p className="px-3 pt-2 pb-1 text-caption text-ink-soft">{ok.legend.heat.note}</p>}
+        </div>
+      </div>
     </div>
   );
 }
 
+type Study = { key: string; label: string; study: string; category: { trade: number; country: Country } | null; group: "scope" | "category" | "stem" };
+
+/** Where a study is defined: the picked one's category (its keywords, Google's categories, its study), else every category. */
+function CategoryButton({ picked }: { picked: Study | null }) {
+  const t = useT();
+  const category = picked?.category ?? null;
+  const label = category === null ? t(placementKeys.categories, "Categories: where a study is linked") : t(placementKeys.category, "{category}: keywords, Google's categories, study", { category: picked!.label });
+  return (
+    <Button variant="ghost" size="sm" icon aria-label={label} title={label} onClick={() => (category === null ? openCategories(true) : openTrade(category.trade, category.country))}>
+      <Settings2 aria-hidden />
+    </Button>
+  );
+}
+
 /** Placement's trades as the picker lists them: by the categories that study them, those in the outline's scope first, then a trade no category links under its own name. */
-function useStudies(stems: readonly string[]): { key: string; label: string; study: string; group: "scope" | "category" | "stem" }[] {
+function useStudies(stems: readonly string[]): Study[] {
   const trades = useTrades();
   const { categories: scope } = useScope();
   const linked = (trades.status === "ok" ? trades.data : []).flatMap((tr) =>
     tr.categories.flatMap((c) =>
       c.study != null && stems.includes(c.study)
-        ? [{ key: `${tr.id}.${c.country}`, label: `${tr.name} · ${c.country}`, study: c.study, group: scope !== null && scope.some((p) => covers(p, tr.id, c.country)) ? ("scope" as const) : ("category" as const) }]
+        ? [{ key: `${tr.id}.${c.country}`, label: `${tr.name} · ${c.country}`, study: c.study, category: { trade: tr.id, country: c.country }, group: scope !== null && scope.some((p) => covers(p, tr.id, c.country)) ? ("scope" as const) : ("category" as const) }]
         : [],
     ),
   );
-  return [...linked, ...stems.filter((s) => !linked.some((l) => l.study === s)).map((s) => ({ key: `study:${s}`, label: s, study: s, group: "stem" as const }))];
+  return [...linked, ...stems.filter((s) => !linked.some((l) => l.study === s)).map((s) => ({ key: `study:${s}`, label: s, study: s, category: null, group: "stem" as const }))];
 }
 
 /** One line on the hotbar item: what the map is drawing. */
@@ -194,7 +229,22 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Row({ icon: Icon, label, hint, on, onToggle }: { icon: ComponentType<{ className?: string }>; label: string; hint?: string | undefined; on?: boolean; onToggle?: (() => void) | undefined }) {
+/** `warn`: on or off, it draws nothing here, and why. */
+function Row({
+  icon: Icon,
+  label,
+  hint,
+  warn,
+  on,
+  onToggle,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  hint?: string | undefined;
+  warn?: string | undefined;
+  on?: boolean;
+  onToggle?: (() => void) | undefined;
+}) {
   const Shown = on ? Eye : EyeOff;
   return (
     <button
@@ -202,16 +252,22 @@ function Row({ icon: Icon, label, hint, on, onToggle }: { icon: ComponentType<{ 
       disabled={onToggle === undefined}
       aria-pressed={on}
       onClick={onToggle}
-      className={cn("flex h-(--control-h-sm) items-center gap-2 rounded-control px-2 text-left text-ink-mid enabled:hover:bg-hover enabled:hover:text-ink disabled:opacity-60", on && "text-ink")}
+      title={warn}
+      className={cn(
+        "flex h-(--control-h-sm) items-center gap-2 rounded-control px-2 text-left text-ink-mid enabled:hover:bg-hover enabled:hover:text-ink disabled:opacity-60",
+        on && "text-ink",
+        warn !== undefined && "text-accent-warn enabled:hover:text-accent-warn",
+      )}
     >
-      <Icon className="size-4 shrink-0" />
+      {warn === undefined ? <Icon className="size-4 shrink-0" /> : <TriangleAlert className="size-4 shrink-0" />}
       <span className="flex-1 truncate">{label}</span>
       {hint !== undefined && <span className="text-caption text-ink-soft">{hint}</span>}
+      {warn !== undefined && <span className="max-w-28 truncate text-caption">{warn}</span>}
       {onToggle !== undefined && <Shown className={cn("size-4 shrink-0", !on && "text-ink-soft")} />}
     </button>
   );
 }
 
-function Note({ children, tone }: { children: ReactNode; tone?: "error" }) {
-  return <p className={cn("px-3 py-1.5 text-ink-soft", tone === "error" && "text-accent-error")}>{children}</p>;
+function Note({ children, tone }: { children: ReactNode; tone?: "warn" | "error" }) {
+  return <p className={cn("px-3 py-1.5 text-ink-soft", tone === "warn" && "text-accent-warn", tone === "error" && "text-accent-error")}>{children}</p>;
 }

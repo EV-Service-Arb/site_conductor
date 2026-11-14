@@ -11,14 +11,17 @@ use jiff::{
 	Timestamp,
 	tz::{TimeZone, offset},
 };
-use sa_core::prices::{Item, StreetViewLoad};
+use sa_core::{
+	prices::{Item, StreetViewLoad},
+	usage::Bill,
+};
 use uuid::Uuid;
 
 use crate::{
 	Panel, Refused,
 	store::{
-		street_view as db,
 		tokens::{self as ledger, Charged, Entry, Kind},
+		usage::{self, CONDUCTOR, Use},
 	},
 	tokens::is_open,
 };
@@ -42,12 +45,12 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
-		if db::opened_since(&mut tx, month_start(now)?).await? >= FREE {
+		let item = Item::from(StreetViewLoad::Panorama);
+		if usage::units_since(&mut tx, item, month_start(now)?).await? >= FREE {
 			return Ok(Err(Refused::Conflict(format!(
 				"Street View's free {FREE} this month are used: the map shows where it is, until the month is out"
 			))));
 		}
-		let item = Item::from(StreetViewLoad::Panorama);
 		let Some(price) = ledger::price(&mut tx, item).await? else {
 			return Ok(Err(Refused::Conflict("Street View is not priced yet: ask an admin to price it".to_owned())));
 		};
@@ -55,7 +58,17 @@ impl Panel {
 		if balance < price {
 			return Ok(Err(Refused::Conflict(format!("Street View costs {price} tokens, and you hold {balance}"))));
 		}
-		db::opened(&mut tx, user, now, lat, lng).await?;
+		let key = format!("{lat:.6},{lng:.6}");
+		let opened = Use {
+			at: now,
+			item,
+			units: 1,
+			bill: Bill::Ours,
+			source: CONDUCTOR.to_owned(),
+			user: Some(user),
+			key: Some(key.clone()),
+		};
+		usage::record(&mut tx, &opened).await?;
 		if price > 0 {
 			let entry = Entry {
 				at: now,
@@ -63,7 +76,7 @@ impl Panel {
 				kind: Kind::Charge,
 				charged: Some(Charged {
 					service: item.tool().to_owned(),
-					key: format!("{lat:.6},{lng:.6}"),
+					key,
 					label: Some(format!("Street View · {lat:.5}, {lng:.5}")),
 				}),
 				by: None,

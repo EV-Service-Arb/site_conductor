@@ -4128,6 +4128,7 @@ dependencies = [
  "reqwest",
  "rustix",
  "sa_auth",
+ "sa_core",
  "schemars",
  "serde",
  "serde_json",

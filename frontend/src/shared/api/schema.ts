@@ -84,7 +84,10 @@ export interface paths {
         };
         /** Every item of the price catalog (`sa_core::prices`): Places requests, Street View, review_archive's walk steps; each priced in tokens or not sold. */
         get: operations["token_prices"];
-        /** Prices the items given, 0 or more tokens or `null` off sale; the others stay. 400 an item not priced. */
+        /**
+         * Prices the items given, 0 or more tokens or `null` off sale, and costs them, 0 µ$ a unit or more or `null` unknown; the others stay.
+         * @description 400 an item not in the catalog, or a metered one priced.
+         */
         put: operations["set_token_prices"];
         post?: never;
         delete?: never;
@@ -104,6 +107,23 @@ export interface paths {
         put?: never;
         /** Sets a user's balance, adds to it, or grants tokens owed until they claim them. */
         post: operations["change_balance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What our tools spent on vendors per UTC day, item, bill and source, in units and at today's cost of a unit: what Grafana's sa-tokens dashboard reads. */
+        get: operations["spend"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1095,6 +1115,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/map/loaded": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records that the caller's browser built a Google map: a billed load of ours. */
+        post: operations["map_loaded"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/map/street_view": {
         parameters: {
             query?: never;
@@ -1616,6 +1653,14 @@ export interface components {
             grant: number;
             note: string;
         };
+        /**
+         * @description Whose bill it lands on.
+         *
+         *     - `ours`: Our keys, accounts and machines.
+         *     - `theirs`: A person's own key.
+         * @enum {string}
+         */
+        Bill: "ours" | "theirs";
         /** @description A binding of the page's keymap, as the page has it bound now. */
         Bound: {
             id: string;
@@ -2324,23 +2369,22 @@ export interface components {
             /** Format: uint32 */
             width: number;
         };
-        /** @description A priced item, and its price: `tokens` null, not sold. */
+        /** @description A catalog item, its price (`null`: not sold, or metered) and what a unit costs us (`null`: unknown). */
         Price: {
+            cost: components["schemas"]["UnitCost"] | null;
             description: string;
             item: components["schemas"]["PricedItem"];
+            price: components["schemas"]["TokenPrice"] | null;
+            sale: components["schemas"]["Sale"];
             scope: components["schemas"]["Scope"];
-            /** @description RFC 3339. */
-            set_at: string | null;
-            /** @description The admin's email. */
-            set_by: string | null;
             title: string;
-            /** Format: int64 */
-            tokens: number | null;
             tool: string;
             tool_title: string;
+            /** @description What one is counted in. */
+            unit: string;
         };
         /** @enum {string} */
-        PricedItem: "places.details" | "places.search" | "places.autocomplete" | "places.geocode" | "street_view.panorama" | "walk.open" | "walk.reviews" | "walk.sort" | "walk.sort_retry" | "walk.step";
+        PricedItem: "places.details" | "places.search" | "places.autocomplete" | "places.geocode" | "street_view.panorama" | "map.map" | "walk.open" | "walk.reviews" | "walk.sort" | "walk.sort_retry" | "walk.step" | "phone.running" | "ads.location" | "ads.keyword_ideas" | "dataforseo.keywords_for_keywords" | "browser.gologin" | "browser.mimic";
         /** @description Every item, in the catalog's order. */
         Prices: {
             prices: components["schemas"]["Price"][];
@@ -2462,13 +2506,23 @@ export interface components {
             stream: string | null;
         };
         /**
-         * @description Who charges.
+         * @description Whether a person pays tokens for it.
+         *
+         *     - `sold`: At the admin's price; unpriced, refused.
+         *     - `metered`: Counted and costed; nobody is charged.
+         * @enum {string}
+         */
+        Sale: "sold" | "metered";
+        /**
+         * @description Where it happens: who counts it, and charges for it if it is sold.
          *
          *     - `conductor`: At the buy, before Google is asked.
          *     - `review_archive`: After the fact, through its charge feed.
+         *     - `browsers`: sa_browsers' runner: nobody is charged.
+         *     - `placement`: gmaps_optimal_placement's studies: the house's for now.
          * @enum {string}
          */
-        Scope: "conductor" | "review_archive";
+        Scope: "conductor" | "review_archive" | "browsers" | "placement";
         SetBrowser: {
             /** @description A browser's; a cloud phone's model is drawn. */
             device?: components["schemas"]["Device"] | null;
@@ -2493,9 +2547,62 @@ export interface components {
         SetMapsKey: {
             key: string;
         };
-        /** @description The items given, each priced at 0 or more or `null` off sale; the others stay. */
+        /**
+         * @description The items given, each priced at 0 tokens or more or `null` off sale, each costed at 0 µ$ a unit
+         *     or more or `null` unknown; the others stay.
+         */
         SetPrices: {
+            costs: {
+                /** Format: int64 */
+                "ads.keyword_ideas"?: number | null;
+                /** Format: int64 */
+                "ads.location"?: number | null;
+                /** Format: int64 */
+                "browser.gologin"?: number | null;
+                /** Format: int64 */
+                "browser.mimic"?: number | null;
+                /** Format: int64 */
+                "dataforseo.keywords_for_keywords"?: number | null;
+                /** Format: int64 */
+                "map.map"?: number | null;
+                /** Format: int64 */
+                "phone.running"?: number | null;
+                /** Format: int64 */
+                "places.autocomplete"?: number | null;
+                /** Format: int64 */
+                "places.details"?: number | null;
+                /** Format: int64 */
+                "places.geocode"?: number | null;
+                /** Format: int64 */
+                "places.search"?: number | null;
+                /** Format: int64 */
+                "street_view.panorama"?: number | null;
+                /** Format: int64 */
+                "walk.open"?: number | null;
+                /** Format: int64 */
+                "walk.reviews"?: number | null;
+                /** Format: int64 */
+                "walk.sort"?: number | null;
+                /** Format: int64 */
+                "walk.sort_retry"?: number | null;
+                /** Format: int64 */
+                "walk.step"?: number | null;
+            };
             prices: {
+                /** Format: int64 */
+                "ads.keyword_ideas"?: number | null;
+                /** Format: int64 */
+                "ads.location"?: number | null;
+                /** Format: int64 */
+                "browser.gologin"?: number | null;
+                /** Format: int64 */
+                "browser.mimic"?: number | null;
+                /** Format: int64 */
+                "dataforseo.keywords_for_keywords"?: number | null;
+                /** Format: int64 */
+                "map.map"?: number | null;
+                /** Format: int64 */
+                "phone.running"?: number | null;
                 /** Format: int64 */
                 "places.autocomplete"?: number | null;
                 /** Format: int64 */
@@ -2619,6 +2726,34 @@ export interface components {
             /** @constant */
             state: "down";
         };
+        /** @description Everyone's usage by day, oldest first. */
+        Spend: {
+            days: components["schemas"]["SpendDay"][];
+        };
+        /**
+         * @description A UTC day's units of one item, by whose bill and who told; `usd` at today's cost of a unit,
+         *     `null` while it is unknown.
+         */
+        SpendDay: {
+            bill: components["schemas"]["Bill"];
+            /** @description `YYYY-MM-DD`. */
+            day: string;
+            item: components["schemas"]["PricedItem"];
+            scope: components["schemas"]["Scope"];
+            source: string;
+            /**
+             * Format: int64
+             * @description How many times it was recorded: a phone's run is one time of many minutes.
+             */
+            times: number;
+            title: string;
+            tool_title: string;
+            unit: string;
+            /** Format: int64 */
+            units: number;
+            /** Format: double */
+            usd: number | null;
+        };
         Spot: {
             /** @description What it was picked by: an address, a business nearby. */
             label: string | null;
@@ -2706,6 +2841,14 @@ export interface components {
         /** @description `GET /admin/tokens`. */
         TokenHolders: {
             users: components["schemas"]["TokenHolder"][];
+        };
+        TokenPrice: {
+            /** @description RFC 3339. */
+            set_at: string;
+            /** @description The admin's email. */
+            set_by: string;
+            /** Format: int64 */
+            tokens: number;
         };
         /** @description `GET /tokens`, `POST /tokens/claim`. */
         Tokens: {
@@ -2863,6 +3006,17 @@ export interface components {
             from: number;
             turns: components["schemas"]["TurnInput"][];
         };
+        UnitCost: {
+            /** @description RFC 3339. */
+            set_at: string;
+            /** @description The admin's email. */
+            set_by: string;
+            /**
+             * Format: int64
+             * @description Millionths of a dollar a unit.
+             */
+            usd_micros: number;
+        };
         /** @description `GET /tokens/usage`. */
         Usage: {
             days: components["schemas"]["UsageDay"][];
@@ -2998,6 +3152,7 @@ export type Attachment = components['schemas']['Attachment'];
 export type AttachmentInput = components['schemas']['AttachmentInput'];
 export type Balance = components['schemas']['Balance'];
 export type BalanceChange = components['schemas']['BalanceChange'];
+export type Bill = components['schemas']['Bill'];
 export type Bound = components['schemas']['Bound'];
 export type BrandReads = components['schemas']['BrandReads'];
 export type Browser = components['schemas']['Browser'];
@@ -3089,6 +3244,7 @@ export type Role = components['schemas']['Role'];
 export type Rule = components['schemas']['Rule'];
 export type RulesBody = components['schemas']['RulesBody'];
 export type Running = components['schemas']['Running'];
+export type Sale = components['schemas']['Sale'];
 export type Scope = components['schemas']['Scope'];
 export type SetBrowser = components['schemas']['SetBrowser'];
 export type SetCountry = components['schemas']['SetCountry'];
@@ -3110,6 +3266,8 @@ export type SourceKey = components['schemas']['SourceKey'];
 export type SourceKeys = components['schemas']['SourceKeys'];
 export type SourceKind = components['schemas']['SourceKind'];
 export type SourceState = components['schemas']['SourceState'];
+export type Spend = components['schemas']['Spend'];
+export type SpendDay = components['schemas']['SpendDay'];
 export type Spot = components['schemas']['Spot'];
 export type SpotInput = components['schemas']['SpotInput'];
 export type StartBrowser = components['schemas']['StartBrowser'];
@@ -3123,6 +3281,7 @@ export type TelegramLink = components['schemas']['TelegramLink'];
 export type Title = components['schemas']['Title'];
 export type TokenHolder = components['schemas']['TokenHolder'];
 export type TokenHolders = components['schemas']['TokenHolders'];
+export type TokenPrice = components['schemas']['TokenPrice'];
 export type Tokens = components['schemas']['Tokens'];
 export type Trade = components['schemas']['Trade'];
 export type TradeName = components['schemas']['TradeName'];
@@ -3134,6 +3293,7 @@ export type TrashedGmb = components['schemas']['TrashedGmb'];
 export type Turn = components['schemas']['Turn'];
 export type TurnInput = components['schemas']['TurnInput'];
 export type TurnsWrite = components['schemas']['TurnsWrite'];
+export type UnitCost = components['schemas']['UnitCost'];
 export type Usage = components['schemas']['Usage'];
 export type UsageDay = components['schemas']['UsageDay'];
 export type Viewport = components['schemas']['Viewport'];
@@ -3312,7 +3472,10 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        /** @description The items given, each priced at 0 or more or `null` off sale; the others stay. */
+        /**
+         * @description The items given, each priced at 0 tokens or more or `null` off sale, each costed at 0 µ$ a unit
+         *     or more or `null` unknown; the others stay.
+         */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SetPrices"];
@@ -3365,6 +3528,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Balance"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    spend: {
+        parameters: {
+            query: {
+                /** @description Unix milliseconds. */
+                from: number;
+                /** @description Unix milliseconds, at most 400 days after `from`. */
+                to: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Everyone's usage by day, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Spend"];
                 };
             };
             /** @description What every failed operation answers, its status saying which failure. */
@@ -5472,6 +5669,33 @@ export interface operations {
             };
         };
     };
+    map_loaded: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     street_view: {
         parameters: {
             query?: never;
@@ -6345,6 +6569,7 @@ type ReadonlyArray<T> = [
 ] ? Readonly<Exclude<T, undefined>> : Readonly<Exclude<T, undefined>[]>;
 export const actionStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ActionState"]> = ["proposed", "done"];
 export const answerStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["AnswerState"]> = ["working", "writing", "done", "stopped"];
+export const billValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Bill"]> = ["ours", "theirs"];
 export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Country"]> = ["FR", "US", "CA", "GB"];
 export const destinationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DestinationKind"]> = ["channel", "private", "group"];
 export const deviceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Device"]> = ["pixel_7", "galaxy_s23", "redmi_note_14"];
@@ -6359,11 +6584,12 @@ export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>[
 export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
 export const onGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OnGoogle"]> = ["verifying", "verified", "suspended"];
 export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Permission"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
-export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step"];
+export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "ads.location", "ads.keyword_ideas", "dataforseo.keywords_for_keywords", "browser.gologin", "browser.mimic"];
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
 export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "payment_received", "source_silent", "booked", "access_requested", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed"];
-export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scope"]> = ["conductor", "review_archive"];
+export const saleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Sale"]> = ["sold", "metered"];
+export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scope"]> = ["conductor", "review_archive", "browsers", "placement"];
 export const sourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "panel", "booking", "bot"];
 export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["State"]> = ["draft", "verifying", "verified", "suspended"];
 export const touchPhaseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["TouchPhase"]> = ["start", "move", "end"];

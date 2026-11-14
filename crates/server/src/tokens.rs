@@ -16,12 +16,12 @@ use ev_lib::api::JsonSchema;
 use jiff::Timestamp;
 use sa_auth::{Principal, Service};
 use sa_core::{
-	prices::{Item, Scope},
+	prices::{Item, Sale, Scope},
 	tokens::ChargePage,
 };
 use sa_panel::{
 	Panel,
-	tokens::{Change, Entry, Flow, FlowKind, Kickback, Kind, Owed, Price},
+	tokens::{Change, Entry, Flow, FlowKind, Kickback, Kind, Owed, Priced},
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
@@ -190,21 +190,42 @@ pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<boo
 	tokio::join!(follow, push);
 }
 
-/// A priced item, and its price: `tokens` null, not sold.
+/// A catalog item, its price (`null`: not sold, or metered) and what a unit costs us (`null`: unknown).
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Price")]
 pub struct PriceDto {
 	pub item: Item,
 	pub scope: Scope,
+	pub sale: Sale,
+	/// What one is counted in.
+	pub unit: &'static str,
 	pub tool: &'static str,
 	pub tool_title: &'static str,
 	pub title: &'static str,
 	pub description: &'static str,
-	pub tokens: Option<i64>,
+	pub price: Option<TokenPriceDto>,
+	pub cost: Option<UnitCostDto>,
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "TokenPrice")]
+pub struct TokenPriceDto {
+	pub tokens: i64,
 	/// The admin's email.
-	pub set_by: Option<String>,
+	pub set_by: String,
 	/// RFC 3339.
-	pub set_at: Option<String>,
+	pub set_at: String,
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "UnitCost")]
+pub struct UnitCostDto {
+	/// Millionths of a dollar a unit.
+	pub usd_micros: i64,
+	/// The admin's email.
+	pub set_by: String,
+	/// RFC 3339.
+	pub set_at: String,
 }
 
 /// Every item, in the catalog's order.
@@ -214,12 +235,14 @@ pub struct PricesDto {
 	pub prices: Vec<PriceDto>,
 }
 
-/// The items given, each priced at 0 or more or `null` off sale; the others stay.
+/// The items given, each priced at 0 tokens or more or `null` off sale, each costed at 0 µ$ a unit
+/// or more or `null` unknown; the others stay.
 #[derive(Deserialize, JsonSchema)]
 #[schemars(rename = "SetPrices")]
 #[serde(deny_unknown_fields)]
 pub struct SetPricesDto {
 	pub prices: BTreeMap<Item, Option<i64>>,
+	pub costs: BTreeMap<Item, Option<i64>>,
 }
 
 /// What moved a balance, as Grafana reads it.
@@ -421,18 +444,27 @@ async fn change_balance(
 	Ok(Json(BalanceDto { balance }))
 }
 
-impl From<(Item, Option<Price>)> for PriceDto {
-	fn from((item, price): (Item, Option<Price>)) -> Self {
+impl From<Priced> for PriceDto {
+	fn from(Priced { item, price, cost }: Priced) -> Self {
 		Self {
 			item,
 			scope: item.scope(),
+			sale: item.sale(),
+			unit: item.unit(),
 			tool: item.tool(),
 			tool_title: item.tool_title(),
 			title: item.title(),
 			description: item.description(),
-			tokens: price.as_ref().map(|p| p.tokens),
-			set_by: price.as_ref().map(|p| p.set_by.clone()),
-			set_at: price.map(|p| p.set_at.to_string()),
+			price: price.map(|p| TokenPriceDto {
+				tokens: p.tokens,
+				set_by: p.set_by,
+				set_at: p.set_at.to_string(),
+			}),
+			cost: cost.map(|c| UnitCostDto {
+				usd_micros: c.usd_micros,
+				set_by: c.set_by,
+				set_at: c.set_at.to_string(),
+			}),
 		}
 	}
 }
@@ -445,10 +477,13 @@ async fn token_prices(State(panel): State<Panel>) -> ApiResult<Json<PricesDto>> 
 	}))
 }
 
-/// Prices the items given, 0 or more tokens or `null` off sale; the others stay. 400 an item not
-/// priced.
+/// Prices the items given, 0 or more tokens or `null` off sale, and costs them, 0 µ$ a unit or
+/// more or `null` unknown; the others stay.
+///
+/// 400 an item not in the catalog, or a metered one priced.
 async fn set_token_prices(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<SetPricesDto>) -> ApiResult<Json<PricesDto>> {
-	panel.set_prices(&b.prices.into_iter().collect::<Vec<_>>(), &caller.email, Timestamp::now()).await??;
+	let (priced, costs) = (b.prices.into_iter().collect::<Vec<_>>(), b.costs.into_iter().collect::<Vec<_>>());
+	panel.set_prices(&priced, &costs, &caller.email, Timestamp::now()).await??;
 	token_prices(State(panel)).await
 }
 

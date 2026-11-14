@@ -17,6 +17,7 @@ pub use queries_cache::{Pending, QueriesCache, Remote};
 use sa_core::{
 	prices::PlacesRequest,
 	queries_cache::{Claim, Put},
+	usage::{Bill, Billed},
 };
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
@@ -433,6 +434,7 @@ impl Google {
 						Put {
 							answer: raw.clone(),
 							request: req.preimage(),
+							bought: None,
 						},
 					)
 					.await?;
@@ -479,13 +481,18 @@ impl Google {
 			// the buy's error is the one to tell; the claim lapses with its lease anyway
 			tracing::warn!(error = %e, "releasing a claim after a failed buy");
 		}
-		let (answer, hold) = bought?;
+		let (answer, hold, tier) = bought?;
+		let bill = match tier {
+			Tier::Own => Bill::Theirs,
+			Tier::Rotation => Bill::Ours,
+		};
 		self.cache
 			.put(
 				key,
 				Put {
 					answer: answer.clone(),
 					request: req.preimage(),
+					bought: Some(Billed { item: req.sku.into(), bill }),
 				},
 			)
 			.await?;
@@ -504,7 +511,7 @@ impl Google {
 	/// `req` asked of Google with the first key not sitting out: the payer's own, then the
 	/// rotation's, held in their purse before the first of those is asked; the hold, to be paid
 	/// once the answer is kept.
-	async fn buy(&self, req: &Request<'_>, payer: &Payer<'_>) -> Result<(serde_json::Value, Option<Box<dyn Hold>>), Error> {
+	async fn buy(&self, req: &Request<'_>, payer: &Payer<'_>) -> Result<(serde_json::Value, Option<Box<dyn Hold>>, Tier), Error> {
 		let mut tried = Vec::new();
 		let mut hold: Option<Box<dyn Hold>> = None;
 		loop {
@@ -530,7 +537,7 @@ impl Google {
 					status: 200,
 					body: format!("not JSON ({e}), paid for and not kept: {text}"),
 				})?;
-				return Ok((answer, hold));
+				return Ok((answer, hold, tier));
 			}
 			match (Spent::of(&text), tier) {
 				(Some(why), _) => {

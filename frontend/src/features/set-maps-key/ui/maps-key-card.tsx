@@ -36,7 +36,7 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
   };
   const failing = mapsKey !== null && (mapsKey.checked.error != null || mapsKey.out != null);
   const cost = t(account.mapsKey.cost, "On the shared keys, in tokens: {list}.", {
-    list: prices.map((p) => `${p.title} ${p.tokens ?? t(account.mapsKey.unsold, "not sold")}`).join(" · "),
+    list: prices.map((p) => `${p.title} ${p.price?.tokens ?? t(account.mapsKey.unsold, "not sold")}`).join(" · "),
   });
 
   return (

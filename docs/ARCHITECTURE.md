@@ -40,7 +40,8 @@ crates/core/             no I/O: the queries cache's wire, a GBP's states and mo
                          conductor's own alert messages, the buttons' signed data, retry and
                          pacing, tokens' renewal and a charge's split, the charge feed's
                          page (`tokens::ChargePage`; review_archive takes it too), and what
-                         costs tokens (`prices`: every tool that charges, its items)
+                         costs (`prices`: every tool a vendor bills us or we bill a person for, its
+                         items) and a service's feed of what it spent (`usage`)
 crates/panel/            the engine: `Panel` (sources and their authentication, sessions, access
                          requests, the hubs' state), `seal` (XChaCha20-Poly1305 at rest), `store`
                          (SQLite, migrations/ applied on open, writes BEGIN IMMEDIATE; the queries
@@ -98,6 +99,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
                          socket, the relay between it and a browser's devtools, a phone's passed through
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
   src/trash.rs           /api/v1/trash; the hourly purge
+  src/usage.rs           /api/v1/map/loaded, /api/v1/admin/usage; the services' usage feeds followed
   src/assistant.rs       /api/v1/assistant; the turns' shape
   src/kit.rs             the review kit: its /api/v1 routes, the landings' /api/kit/v1
   src/catalog.rs         every operation behind the origin: the conductor's own and the services'
@@ -291,6 +293,10 @@ conductor ── POST /profiles/{gmail}/launch {Launch}, Conductor ──▶ sa_
   the time it should take, stop, removal, idle, the cap, SIGTERM), the stop retried until `statuses` reads it stopped, and a recorded one
   stopped before the runner serves again. The launch brings a 3-hour token, past the 180 billed
   minutes Multilogin caps a session at: the runner holds no long-lived one.
+- **What it spent, the runner tells** (`GET /usage`, `sa_core::usage`): a phone's run at its stop,
+  its minutes from just before `phone/start` (on disk with its record), a started one whole; it is
+  counted if its start was answered or it was read running at the stop, so one stopped already
+  when a restarted runner reads it is not counted twice. A browser's start, once up.
 - **The relay** never sends `Runtime.enable` (what pages detect devtools by): `Target.*`, `Page.*`
   (the screencast, navigation, dialogs) and `Input.*`, a finger's touches for the pointer. A phone is
   not devtools: the runner speaks the viewer's frames itself (screencap, `input`, ADBKeyBoard's
@@ -376,13 +382,16 @@ GET    /api/queries_cache/{scheme}/{key}         200 {answer, fetched_at} | 404
 POST   /api/queries_cache/{scheme}/{key}/claim   {fresh_since?} → 200 {state: stored, answer, fetched_at}
                                                  | {state: granted, until} | {state: held, until}
 DELETE /api/queries_cache/{scheme}/{key}/claim   204: the buy failed
-PUT    /api/queries_cache/{scheme}/{key}         {answer, request} → 204; 400 unless key = SHA-256(request)
+PUT    /api/queries_cache/{scheme}/{key}         {answer, request, bought: {item, bill: ours|theirs} | null}
+                                                 → 204; 400 unless key = SHA-256(request)
 ```
 
 - **A key is its query's SHA-256**, under its client's scheme: `places` (sa_places: method,
   URL, field mask, body) and `gop` (placement: URL, body). The cache derives none.
 - **Buying is claim, buy, PUT.** A claim holds the key 30 s; whoever else asks waits on it and is
   served what was bought. A failed buy gives the claim up; a holder that dies lets it lapse.
+- **A PUT says what it bought** (`bought`: the catalog item and whose key, null for an answer kept
+  from another bought): counted as a use in the write that keeps it.
 - **The latest answer per key stays**; an older PUT changes nothing, and nothing expires:
   `fresh_since` is a reader's age limit, or its re-ask.
 - **Open to everyone**, reads and writes: bounded as ingest, a body ≤ 8 MiB, and rate-limited per
@@ -448,6 +457,7 @@ DELETE /gmbs/{id}/location
 PUT    /gmbs/{id}/country
 GET    /map
 POST   /map/street_view
+POST   /map/loaded
 GET    /trades
 POST   /trades
 PATCH  /trades/{id}
@@ -484,6 +494,7 @@ POST   /admin/tokens/{user_id}              Tokens, fresh
 GET    /admin/tokens/prices                 Tokens
 PUT    /admin/tokens/prices                 Tokens, fresh
 GET    /admin/tokens/flows                  Tokens
+GET    /admin/usage                         Tokens
 GET    /assistant/chats
 POST   /assistant/chats
 GET    /assistant/chats/{id}
@@ -611,10 +622,22 @@ request below the price, or unpriced, is refused before Google is asked. A cache
 nothing. The operator's commands (`gmb add`, `locate`) try the gmail's keys, then the house pays.
 review_archive's lookups and placement's sweeps are the house's for now.
 
-**Prices are the admin's.** Whatever charges tokens charges items of `sa_core::prices`: each tool
-that charges declares its items there once (an enum, a variant's message its name and its doc
-what it is), and the admin's page, `token_prices` and the snapshot are walked from it. An item
-without a price is not sold: a Places request is refused, a walk step not walked.
+**Prices are the admin's.** Every costly action is an item of `sa_core::prices`: each tool declares
+its items there once (an enum, a variant's message its name and its doc what it is) with where it
+happens, its unit, and whether it is sold (a person pays tokens for it) or metered (counted only).
+The admin's page, `token_prices`, `unit_costs` and the snapshot are walked from it. A sold item
+without a price is not sold: a Places request is refused, a walk step not walked. A unit's cost to
+us is the admin's too, unknown until set.
+
+**Usage is what vendors bill us.** Each use is a row of `usage` (append-only: item, units, whose
+bill, who told), counted where it happens:
+
+```text
+a Google answer bought, any service ─ PUT /api/queries_cache, `bought` ─ in the write keeping it
+a map built in a browser ─ POST /map/loaded        a panorama ─ POST /map/street_view
+review_archive's walk steps ─ GET /api/conductor/usage ┐ followed every 10 s, a page and its
+the runner's phone minutes, browser starts ─ GET /usage ┘ cursor in one write (`sa_core::usage`)
+```
 
 **Street View is bought before it opens.** Google bills each panorama opened on the browser's key
 (Dynamic Street View) past 5 000 free a month. The map has no Google pegman: its own shows the
@@ -869,6 +892,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   person's are never read back out: the browser sees a key's last four.
 - **No price beside its use.** What a person is charged is an item of `sa_core::prices` at the
   admin's price; no cost is written where it is spent.
+- **A use is counted once, where it happens**: a Google answer bought in the write that keeps it, a
+  service's through its feed, taken only from where its cursor stands.
 - **No buy on credit.** A Places request on the shared keys or a Street View panorama for a person
   is charged at its price, and refused before it is sent when their balance is below it; their own
   keys and the queries cache cost nothing.
@@ -952,7 +977,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   server's keys never reach it.
 - **Browsers.** sa_browsers is its own pod (`PANEL_BROWSERS_URL`, in-cluster only): `BROWSERS_DIR` on
   a volume of its own (the gmails' sessions: signed-in Google lives there; `phones.json`, the phones it
-  may have started) and `HOME` on it too (the Multilogin app's `~/mlx`, Mimic's profiles),
+  may have started; `usage.jsonl`, the feed, a line an id) and `HOME` on it too (the Multilogin app's `~/mlx`, Mimic's profiles),
   `BROWSERS_MAX`, the conductor's public keys (`PANEL_ASSERTION_KEYS`), Orbita (`.#orbita`), ffmpeg,
   the Multilogin app under Xvfb (`.#mlx`, `BROWSERS_MLX`; its launcher `launcher.mlx.yt:45001`, a
   public name for 127.0.0.1), `BROWSERS_MULTILOGIN_API`, and a phone's tools (`.#phone-tools`: adb,

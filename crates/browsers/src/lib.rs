@@ -12,6 +12,7 @@
 //! PUT    /profiles/{gmail}/film    an mp4 → 204: the camera of its next launch; 400 ffmpeg refused it,
 //!                                  409 while it runs
 //! DELETE /profiles/{gmail}/film    → 204
+//! GET    /usage?after=&limit=      sa_core::usage::UsagePage: a phone's minutes, a browser's start
 //! ```
 //! Every request carries the conductor's assertion (`sa_auth`, audience `browsers`).
 

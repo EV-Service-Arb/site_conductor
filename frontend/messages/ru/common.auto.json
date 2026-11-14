@@ -2255,6 +2255,22 @@
     "en": "Zoom in to see the grid",
     "t": "Приблизьте, чтобы увидеть сетку"
   },
+  "prices.cost.label": {
+    "en": "{item}: dollars a {unit}",
+    "t": "{item}: долларов за {unit}"
+  },
+  "prices.cost.unknown": {
+    "en": "unknown",
+    "t": "неизвестно"
+  },
+  "prices.metered": {
+    "en": "nobody charged",
+    "t": "без оплаты"
+  },
+  "prices.per": {
+    "en": "a {unit}",
+    "t": "за {unit}"
+  },
   "prices.reset": {
     "en": "Undo changes",
     "t": "Отменить изменения"
@@ -2271,17 +2287,33 @@
     "en": "Prices saved",
     "t": "Цены сохранены"
   },
+  "prices.scope.browsers": {
+    "en": "Antidetect browsers and phones",
+    "t": "Антидетект-браузеры и телефоны"
+  },
   "prices.scope.conductor": {
     "en": "GBPs and the map",
     "t": "GBP и карта"
   },
-  "prices.setBy": {
-    "en": "{by}, {at}",
-    "t": "{by}, {at}"
+  "prices.scope.placement": {
+    "en": "Placement studies",
+    "t": "Исследования размещения"
   },
   "prices.title": {
     "en": "Prices",
     "t": "Цены"
+  },
+  "prices.tokens": {
+    "en": "tokens",
+    "t": "токенов"
+  },
+  "prices.tokens.label": {
+    "en": "{item}: tokens a {unit}",
+    "t": "{item}: токенов за {unit}"
+  },
+  "prices.uncosted.count": {
+    "en": "{n} without a cost",
+    "t": "Без стоимости: {n}"
   },
   "prices.unsold": {
     "en": "not sold",
@@ -2292,8 +2324,8 @@
     "t": "Не продаётся: {n}"
   },
   "prices.why": {
-    "en": "Tokens each thing costs a person. Empty is not sold: a Places request is refused, a walk step not walked. Cached answers and a person's own Maps keys cost nothing.",
-    "t": "Сколько токенов стоит каждая вещь. Пусто — не продаётся: запрос к Places отклоняется, шаг обхода не выполняется. Кэшированные ответы и собственные ключи Maps ничего не стоят."
+    "en": "Tokens: what each thing costs a person; empty is not sold, so a Places request is refused and a walk step not walked. Cached answers and a person's own Maps keys cost nothing. $: what one unit costs us, for the spending below.",
+    "t": "Токены: сколько стоит каждая вещь человеку; пусто — не продаётся: запрос к Places отклоняется, шаг обхода не выполняется. Кэшированные ответы и собственные ключи Maps ничего не стоят. $: сколько нам стоит одна единица — для расходов ниже."
   },
   "reviewArchive.loading": {
     "en": "Loading the review archive…",

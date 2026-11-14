@@ -72,7 +72,7 @@ impl World {
 
 	async fn price(&self, tokens: Option<i64>) {
 		self.panel
-			.set_prices(&[(Item::from(StreetViewLoad::Panorama), tokens)], "admin@localhost", jiff::Timestamp::now())
+			.set_prices(&[(Item::from(StreetViewLoad::Panorama), tokens)], &[], "admin@localhost", jiff::Timestamp::now())
 			.await
 			.unwrap()
 			.unwrap();
@@ -108,7 +108,7 @@ impl World {
 	async fn opened(&mut self, n: i64) {
 		self.balance().await; // the caller is a user once their first call is seen
 		let at = jiff::Timestamp::now().as_microsecond();
-		let done = sqlx::query("WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < $1) INSERT INTO street_views (user_id, at, lat, lng) SELECT u.user_id, $3, 0, 0 FROM k, users u WHERE u.email = $2")
+		let done = sqlx::query("WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < $1) INSERT INTO usage (at, item, units, bill, source, user_id) SELECT $3, 'street_view.panorama', 1, 'ours', 'conductor', u.user_id FROM k, users u WHERE u.email = $2")
 			.bind(n)
 			.bind(EMAIL)
 			.bind(at)

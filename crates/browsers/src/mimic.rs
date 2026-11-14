@@ -5,6 +5,7 @@
 use std::time::Duration;
 
 use eyre::WrapErr;
+use sa_core::prices::{BrowserStart, Item};
 use serde_json::Value;
 
 use crate::{
@@ -50,6 +51,7 @@ pub(crate) async fn life(runner: &Runner, gmail: i64, token: &str, folder: &str,
 			.ok_or_else(|| eyre::eyre!("Mimic's /json/version names no socket: {version}"))?
 			.to_owned();
 		up(runner, gmail, Up::Devtools(devtools));
+		runner.0.usage.record(Item::Browser(BrowserStart::Mimic), 1, jiff::Timestamp::now())?;
 		let gone = async {
 			//LOOP: until its devtools stop answering
 			loop {

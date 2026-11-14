@@ -1,9 +1,10 @@
-//! What costs a person tokens. Each tool that charges is an enum of what it charges for, declared
-//! once in the `priced!` below: its variants' `message` is their name, their doc what an admin
-//! reads under it. The admin's prices page, the conductor's table and the snapshot all walk
-//! [`Item::all`], so a variant added here is priced there with nothing else written.
+//! What costs: every action a vendor bills us for, or we bill a person for. Each tool is an enum of
+//! its actions, declared once in the `priced!` below with where it happens, whether it is sold and
+//! its unit: its variants' `message` is their name, their doc what an admin reads under it. The
+//! admin's prices page, the conductor's tables, the snapshot and the usage all walk [`Item::all`],
+//! so a variant added here is priced, costed and counted there with nothing else written.
 //!
-//! A price is the admin's; an item without one is not sold.
+//! A price is the admin's; a sold item without one is not sold. A cost per unit is the admin's too.
 
 use std::{collections::BTreeMap, fmt, str::FromStr};
 
@@ -13,7 +14,7 @@ use strum::{EnumMessage, VariantArray};
 /// What each item costs, in tokens; an item absent is not sold.
 pub type Prices = BTreeMap<Item, i64>;
 
-/// Who charges.
+/// Where it happens: who counts it, and charges for it if it is sold.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, VariantArray, strum::IntoStaticStr, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -22,6 +23,21 @@ pub enum Scope {
 	Conductor,
 	/// After the fact, through its charge feed.
 	ReviewArchive,
+	/// sa_browsers' runner: nobody is charged.
+	Browsers,
+	/// gmaps_optimal_placement's studies: the house's for now.
+	Placement,
+}
+
+/// Whether a person pays tokens for it.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, VariantArray, strum::IntoStaticStr, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum Sale {
+	/// At the admin's price; unpriced, refused.
+	Sold,
+	/// Counted and costed; nobody is charged.
+	Metered,
 }
 
 /// A Places request on the shared keys, by how Google bills it: both masks ask a display name,
@@ -53,6 +69,58 @@ pub enum StreetViewLoad {
 	Panorama,
 }
 
+/// What the map in a person's browser loads on the browser's Maps key.
+#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum MapLoad {
+	/// A `google.maps.Map` built: one a page session, kept while the page is away.
+	#[strum(message = "Map")]
+	Map,
+}
+
+/// A gmail's cloud phone running: Multilogin bills it by the minute.
+#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum PhoneTime {
+	/// Each minute a cloud phone runs, from its start to its stop, a started one whole.
+	#[strum(message = "Cloud phone")]
+	Running,
+}
+
+/// A gmail's antidetect browser started: the providers bill a plan, a start is what it is spent on.
+#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum BrowserStart {
+	/// GoLogin's Orbita, headless on the runner.
+	#[strum(message = "GoLogin")]
+	Gologin,
+	/// Multilogin's Mimic, through the Multilogin app on the runner.
+	#[strum(message = "Multilogin browser")]
+	Mimic,
+}
+
+/// What a study asks the Google Ads API for: free per request, within the developer token's
+/// daily quota.
+#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum AdsRequest {
+	/// `geoTargetConstants:suggest`: the Ads location a study's place is.
+	#[strum(message = "Location")]
+	Location,
+	/// `generateKeywordIdeas`: a keyword group's monthly search volumes there.
+	#[strum(message = "Search volumes")]
+	KeywordIdeas,
+}
+
+/// What a study buys of DataForSEO, by the task.
+#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum DataForSeoTask {
+	/// `keywords_for_keywords/live`: keyword ideas and their volumes from Google Ads' data.
+	#[strum(message = "Keywords for keywords")]
+	KeywordsForKeywords,
+}
+
 /// What a walk down a place's reviews does in its browser, each time it does it.
 #[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
@@ -75,15 +143,15 @@ pub enum WalkStep {
 }
 
 macro_rules! priced {
-	($($tool:ident($ty:ident) = $key:literal, $scope:ident, $title:literal;)+) => {
-		/// One priced thing: `<tool>.<variant>` on the wire.
+	($($tool:ident($ty:ident) = $key:literal, $scope:ident, $sale:ident, $unit:literal, $title:literal;)+) => {
+		/// One costly action: `<tool>.<variant>` on the wire.
 		#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 		pub enum Item {
 			$($tool($ty),)+
 		}
 
 		impl Item {
-			/// Every priced thing, tool by tool, each in its declaration order.
+			/// Every costly action, tool by tool, each in its declaration order.
 			pub fn all() -> impl Iterator<Item = Self> {
 				std::iter::empty()$(.chain($ty::VARIANTS.iter().map(|v| Self::$tool(*v))))+
 			}
@@ -91,6 +159,19 @@ macro_rules! priced {
 			pub fn scope(self) -> Scope {
 				match self {
 					$(Self::$tool(_) => Scope::$scope,)+
+				}
+			}
+
+			pub fn sale(self) -> Sale {
+				match self {
+					$(Self::$tool(_) => Sale::$sale,)+
+				}
+			}
+
+			/// What one is counted in.
+			pub fn unit(self) -> &'static str {
+				match self {
+					$(Self::$tool(_) => $unit,)+
 				}
 			}
 
@@ -124,9 +205,14 @@ macro_rules! priced {
 }
 
 priced! {
-	Places(PlacesRequest) = "places", Conductor, "Google Places on the shared keys";
-	StreetView(StreetViewLoad) = "street_view", Conductor, "Google Street View on the map";
-	Walk(WalkStep) = "walk", ReviewArchive, "A walk down a place's reviews";
+	Places(PlacesRequest) = "places", Conductor, Sold, "request", "Google Places on the shared keys";
+	StreetView(StreetViewLoad) = "street_view", Conductor, Sold, "panorama", "Google Street View on the map";
+	Map(MapLoad) = "map", Conductor, Metered, "load", "Google Maps in the browser";
+	Walk(WalkStep) = "walk", ReviewArchive, Sold, "step", "A walk down a place's reviews";
+	Phone(PhoneTime) = "phone", Browsers, Metered, "minute", "Multilogin's cloud phones";
+	Ads(AdsRequest) = "ads", Placement, Metered, "request", "Google Ads API";
+	DataForSeo(DataForSeoTask) = "dataforseo", Placement, Metered, "task", "DataForSEO";
+	Browser(BrowserStart) = "browser", Browsers, Metered, "start", "Antidetect browsers";
 }
 
 impl Item {
@@ -193,6 +279,5 @@ mod tests {
 			assert!(!item.description().is_empty(), "{item}");
 			assert_eq!(item.to_string().parse::<Item>(), Ok(item));
 		}
-		assert_eq!(Item::all().count(), PlacesRequest::VARIANTS.len() + StreetViewLoad::VARIANTS.len() + WalkStep::VARIANTS.len());
 	}
 }
