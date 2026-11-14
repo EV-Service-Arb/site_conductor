@@ -13,6 +13,8 @@ type PanelConfig = {
   theme: "dark" | "oldschool";
   /** The assistant beside every signed-in page, toggled from the top bar; a preview whose answers are canned. */
   assistant: boolean;
+  /** The hotbar's Map panel: one 20rem column, or the heat beside the overlays and data in 40rem. Either pops out into its own window. */
+  mapPanel: "column" | "columns";
   /** By tag: the key under the leader whose scope an element's own keys (`ev:keymap`) sit in, and its label. An element not here has its keys refused. */
   elementKeys: Record<string, { key: string; label: (t: T) => string }>;
   /** The app switcher's entries under Service-Arb, in order; `icon` a monochrome mark under `public/`. */
@@ -25,6 +27,7 @@ export const PANEL: PanelConfig = {
   reviewArchiveUi: "grafana",
   theme: "dark",
   assistant: true,
+  mapPanel: "columns",
   elementKeys: { "mfe-sites-nav": { key: "v", label: (t) => t(nav.sites, "Sites") } },
   links: [
     { name: "Discord", href: "https://discord.gg/nGU6Fk4SAK", icon: "/links/discord.svg", description: (t) => t(links.discord, "Ask the other operators"), newTab: true },
