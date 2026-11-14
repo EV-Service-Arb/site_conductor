@@ -63,11 +63,11 @@ fn header<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
 }
 
 /// The signature's three headers, when all are there.
-fn signed(headers: &HeaderMap) -> Option<(&str, &str, &str)> {
+pub(crate) fn signed(headers: &HeaderMap) -> Option<(&str, &str, &str)> {
 	Some((header(headers, "x-sa-key-id")?, header(headers, "x-sa-timestamp")?, header(headers, "x-sa-signature")?))
 }
 
-fn unsigned() -> Response {
+pub(crate) fn unsigned() -> Response {
 	error(StatusCode::UNAUTHORIZED, "x-sa-key-id, x-sa-timestamp and x-sa-signature are required")
 }
 
@@ -87,7 +87,7 @@ pub(crate) fn body_error(e: axum::Error, limit: usize) -> Response {
 	error(StatusCode::BAD_REQUEST, "the body could not be read")
 }
 
-fn refused(e: IngestError) -> Response {
+pub(crate) fn refused(e: IngestError) -> Response {
 	match e {
 		IngestError::Unauthorized(why) => error(StatusCode::UNAUTHORIZED, if why == sa_panel::STALE { STALE_MESSAGE } else { REFUSED_MESSAGE }),
 		IngestError::Internal(e) => {

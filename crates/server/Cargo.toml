@@ -62,6 +62,7 @@ axum = { workspace = true, features = ["multipart"] }
 base64.workspace = true
 hex.workspace = true
 hmac.workspace = true
+image.workspace = true
 sa_panel = { workspace = true, features = ["testing"] }
 sa_server = { workspace = true, features = ["testing"] }
 sqlx.workspace = true

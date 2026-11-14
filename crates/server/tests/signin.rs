@@ -364,6 +364,7 @@ async fn setup_with(db: &TestDb, limits: http::Limits) -> (Router, FakeConcierge
 		None,
 		None,
 		None,
+		None,
 	);
 	(app, fake, panel)
 }
@@ -537,6 +538,7 @@ async fn concierge_down_is_a_503_not_a_sign_out() {
 		None,
 		None,
 		http::Limits::default(),
+		None,
 		None,
 		None,
 		None,
@@ -745,8 +747,8 @@ async fn the_alerts_page_links_telegram_and_chooses_rules() {
 		},
 		name: BotName::new(Some("@evinvest_sa_bot".into())),
 	};
-	let app = http::app(sign_in.clone(), None, None, http::Limits::default(), Some(telegram), None, None);
-	let off = http::app(sign_in, None, None, http::Limits::default(), None, None, None);
+	let app = http::app(sign_in.clone(), None, None, http::Limits::default(), Some(telegram), None, None, None);
+	let off = http::app(sign_in, None, None, http::Limits::default(), None, None, None, None);
 	user(&fake, OPERATOR, "investor", SA_OPERATOR.members);
 	// A private chat whose user's access was last confirmed long ago, and denied: the gate's GetMe
 	// renews it.
@@ -846,7 +848,16 @@ async fn no_permission_opens_no_section() {
 			panel_origin: PANEL.to_owned(),
 			concierge_origin: PANEL.to_owned(),
 		};
-		http::app(SignIn::new(panel.clone(), Concierge::dev(who), config), None, None, http::Limits::default(), None, None, None)
+		http::app(
+			SignIn::new(panel.clone(), Concierge::dev(who), config),
+			None,
+			None,
+			http::Limits::default(),
+			None,
+			None,
+			None,
+			None,
+		)
 	};
 	let routes = http::api_routes();
 	let open: Vec<&str> = routes.iter().filter(|r| r.section.is_none()).map(|r| r.path).collect();
@@ -920,7 +931,23 @@ async fn no_permission_opens_no_section() {
 			"/assistant/chats/{id}/members",
 			"/assistant/chats/{id}/members/{user}",
 			"/assistant/chats/{id}/general",
-			"/assistant/people"
+			"/assistant/people",
+			"/trades/{id}/{country}/kit",
+			"/trades/{id}/{country}/kit/drafts",
+			"/trades/{id}/{country}/kit/drafts/{draft}",
+			"/trades/{id}/{country}/kit/drafts/{draft}",
+			"/trades/{id}/{country}/kit/photos/{file}",
+			"/trades/{id}/{country}/kit/photos/{file}",
+			"/gmbs/{id}/kit",
+			"/gmbs/{id}/kit",
+			"/gmbs/{id}/kit/shown",
+			"/kit/areas",
+			"/kit/areas/{slug}",
+			"/kit/areas/{slug}",
+			"/kit/areas/{slug}/gmbs",
+			"/kit/cities",
+			"/kit/cities/{place_id}",
+			"/kit/locality"
 		],
 		"every other route sits under a section"
 	);

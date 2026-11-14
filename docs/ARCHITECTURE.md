@@ -19,8 +19,9 @@ one, a GBP on one.
 browser ─session──▶ conductor ─x-sa-assertion (User)──────────────▶ sites /api/v1, review_archive, playbook,
                                                                      placement
 landings/bots ─HMAC▶ conductor ─x-sa-assertion (Source) + raw body ▶ sites /api/ingest/v1
+landings ─HMAC▶ conductor /api/kit/v1: the review kit, answered here
 conductor ◀── pulls (Conductor) ── sites /api/conductor/{changes, notifications, sources/received,
-                                                          internal-reads}
+                                                          internal-reads, places}
 conductor ◀── pulls (Conductor) ── review_archive /api/conductor/{charges, notifications,
                                                                    captures/<sha>.png}
 conductor ─── pushes (Conductor) ─▶ review_archive /api/conductor/gmbs   GMBs, balances, the cursor
@@ -53,7 +54,8 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          `tokens` (the ledger, review_archive's charges, the snapshot), `street_view`
                          (a panorama bought, the month's free ones counted), `import`
                          (review_archive's, once), `assistant` (the assistant's chats), `trash`
-                         (what was removed, restored until purged)
+                         (what was removed, restored until purged), `kit` (the review kit: a
+                         category's drafts and photos, the offer, the areas)
 crates/alerts/           no I/O: the alert rules, and the notes a service publishes to the
                          conductor and their check; sites and review_archive take it too
 crates/auth/             the `sa` permissions (concierge_iam derives), the aliases `sa:operator` /
@@ -65,7 +67,8 @@ crates/browsers/         sa_browsers: the devices a browser poses as, a launch's
                          alone, a film made the camera; a cloud phone's life and its viewer over adb
 crates/places/           Google Places: a place from what a person pastes (an id, a Maps URL, a
                          search), its point; suggestions as one types (Autocomplete, no session
-                         token); every request through the queries cache (in process,
+                         token); a locality's viewport, the one around a point (Geocoding), a
+                         place's review link; every request through the queries cache (in process,
                          or `Remote` over /api/queries_cache), then the payer's own keys, then the
                          rotation its purse pays for; review_archive takes it too
 crates/ui/               Dioxus components the services' front ends share
@@ -93,6 +96,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
   src/trash.rs           /api/v1/trash; the hourly purge
   src/assistant.rs       /api/v1/assistant; the turns' shape
+  src/kit.rs             the review kit: its /api/v1 routes, the landings' /api/kit/v1
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
                          work in `serve`
   src/telegram.rs        the Bot API, its long poll
@@ -135,7 +139,7 @@ POST /auth/logout    CSRF; every session of the user is closed
   concrete `sa` permissions the user holds (no alias, no wildcard; anything outside `sa` is a
   failed answer). Every `/api/v1` route sits under one section — Admin
   (`sa:admin:sources:manage`), Tokens (`sa:admin:tokens:grant`) — or none (`/me`,
-  `/access/requests*`, `/alerts*`, `/assistant*`, the caller's own gmails, GMBs, trades and tokens). Each fresh
+  `/access/requests*`, `/alerts*`, `/assistant*`, the caller's own gmails, GMBs, trades, tokens and review kit, the kit's areas). Each fresh
   `GetMe` upserts the user (`users`: id, email, name), whom tokens and gmails belong to.
   `http::api_routes` is the table the router is built from and the tests walk.
 - **The catalog.** `serve` publishes `Catalog::collect("sa", PANEL_BUILD_EPOCH)` — the whole `sa`
@@ -486,12 +490,36 @@ GET    /trades                              {trades: [{id, name, created_at, cat
                                             google_additional: [{id, name}], study}]}]}
 POST   /trades                              {name} → 201 the trade; 409 the caller's already, any case
 PATCH  /trades/{id}                         {name} → 200 the trade; 409
-DELETE /trades/{id}                         204, its categories with it; 409 while a live GBP holds it
+DELETE /trades/{id}                         204, its categories with it; 409 while a live GBP holds it,
+                                            or a category of it has kit drafts or photos
 PUT    /trades/{id}/{country}               {keywords, google_primary: gcid | null, google_additional:
                                             [gcid], study} → 200 the trade: set up there, or edited;
                                             400 a keyword twice once normalized, a gcid not Google's
                                             there or twice, additional ones past 9 or without a primary
-DELETE /trades/{id}/{country}               204
+DELETE /trades/{id}/{country}               204; 409 while it has kit drafts or photos (their uses
+                                            are kept)
+GET    /trades/{id}/{country}/kit           {drafts: [{id, text, photos, uses, created_at}], photos: [{id,
+                                            width, height, uses, created_at}]}: not removed
+POST   /trades/{id}/{country}/kit/drafts    {text, photos} → 201 as GET
+PATCH  /trades/{id}/{country}/kit/drafts/{d} {text?, photos?} → 200 as GET; 409 the text of a copied one
+POST   /trades/{id}/{country}/kit/photos    an image ≤ 10 MiB → 201 as GET: a JPEG, ≤ 2048 px, no EXIF
+GET    /trades/{id}/{country}/kit/photos/{p}.jpg
+DELETE /trades/{id}/{country}/kit/{drafts,photos}/{x}  204: out of every offer, its uses kept
+GET    /gmbs/{id}/kit                       {target, url, page, drafts (the offer's order, went_here,
+                                            held, offered), funnel (30 d)}
+PUT    /gmbs/{id}/kit                       {target: google|drafts|one_tap | null} → 200 as GET; 409 no
+                                            place, or a page target without a landing page
+POST   /gmbs/{id}/kit/shown                 204
+GET    /kit/areas                           {areas}
+GET    /kit/areas/{slug}                    {slug, name, center, shape: {kind: city, place_id, viewport}
+                                            | {kind: circle, radius_m}, margin_m}
+PUT    /kit/areas/{slug}                    {kind: city, place_id, margin_m} | {kind: circle, name, lat,
+                                            lng, radius_m, margin_m} → 200 as GET; 400 a path of the
+                                            conductor's own; 409 someone else's
+GET    /kit/areas/{slug}/gmbs               {area, gmbs}: the caller's in it or next to it, nearest first
+GET    /kit/cities?input=                   {suggestions}: cities and towns, paid as /gmbs/suggest
+GET    /kit/cities/{place_id}               {place_id, name, location, viewport}
+GET    /kit/locality?lat=&lng=              the same, the locality the point is in (Geocoding); 404 none
 GET    /google-categories/{country}         {categories: [{id, name}]}: Google's list there
 GET    /trash                               {settings: {keep_days, never_purge}, gmails: [{id, gmail,
                                             removed_at, purge_at, gmbs, blocked}], gmbs: [{id, name,
@@ -721,10 +749,55 @@ push (a change, a page, 60 s)
   it; a GBP added without a key, or imported, has none until `panel gmb locate` asks for the
   missing ones and lists those Google gives no point: a command, so the spend is explicit; run
   after a deploy that brings points, and after `local-stack --from-prod`.
+- **The review kit** is below.
 - **A GBP's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
   language table) follows the point's rule: Google's (its address), else set by hand
   (`PUT /gmbs/{id}/country`, `panel gmb country`); `locate` asks for the missing ones too and
   lists those Google gives none.
+
+## Review kit
+
+The operator shows a GBP's QR on their phone; the reviewer scans it and lands on the GBP's page on
+its landing, which offers drafts to copy into Google's form (what that form takes, per OS:
+docs/review_kit.typ). Drafts and photos are a category's: its owner's, per trade and country.
+
+```text
+operator phone (conductor, signed in)          reviewer phone (landing, public)
+/<area>/ ──▶ a GBP ──▶ QR ──────────scan──────▶ <site key origin>/avis/<slug>?qr
+   │ POST /gmbs/{id}/kit/shown                     │ the landing's route handlers, HMAC (its site key)
+   ▼                                               ▼
+conductor /api/v1 (session)                conductor /api/kit/v1 (in-cluster, as ingest)
+  drafts, photos, target, areas              offer: a view, ≤ 6 drafts leased to it
+                                             copied / saved → a use
+              └──────────── kit_* tables ─────────────┘
+conductor ── GET /api/conductor/places (Conductor), kept 60 s ──▶ sites: GBP ↔ (brand, slug)
+```
+
+```text
+offer, per view of GBP g:
+  the drafts of g's category, not removed
+    − copied on g                 − offered to another view of g whose 15-min lease runs
+  order: copies ↑, then saves of its photos not saved on g ↑, then the oldest
+  take 6 (one_tap: 1), lease them to this view; each its photos not saved on g, saves ↑
+copy tap      → a use (draft, g), once     the reviewer's tap, before Google's form opens
+photos saved  → a use (photo, g), once
+```
+
+- **A use is the copy**, not the post: a copy never posted still keeps the draft off g.
+- **The target**: `google` (no draft, the page redirects), `drafts`, `one_tap`; none is the kit
+  off. A GBP with no landing page has only `google`, and its QR is Google's review link itself
+  (Places' `writeAReviewUri`, asked when the target is set).
+- **The QR's URL** is `<origin>/avis/<slug>?qr`: the origin of the one active site key holding the
+  GBP's brand (two origins: 409), the slug sites' page of it.
+- **The landings' calls** are signed as ingest's (a GET over `GET <path?query>`); the key's brands
+  must hold the place's brand. A view's photos are fetched through the landing, same-origin, so a
+  download works.
+- **Photos** are re-encoded on the way in (JPEG, ≤ 2048 px, upright, no EXIF): what a reviewer
+  saves carries nothing of where it was taken.
+- **Areas** are geography, everyone's: a city (Google's locality: inside its viewport is in) or a
+  circle, and a margin around it that is "next to it". `/<slug>/` is the kit's page when the slug is
+  an area's; a slug never takes a path of the conductor's own (the front end's directories, the
+  reserved and forwarded prefixes).
 
 ## Alerts
 
@@ -888,15 +961,15 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   must not publish or must rate-limit, and the egress. `checks.contract-env` fails the flake
   when its required variables and the binary's `--print-required-vars` disagree.
 - **What it provides and consumes, by contract name.** `provides.ingest` is
-  `/api/ingest/v1/events`, `provides.queries_cache` `/api/queries_cache`; `consumes` names the peers behind `PANEL_SITES_URL` (`sites_panel`),
+  `/api/ingest/v1/events`, `provides.kit` `/api/kit/v1`, `provides.queries_cache` `/api/queries_cache`; `consumes` names the peers behind `PANEL_SITES_URL` (`sites_panel`),
   `PANEL_REVIEW_ARCHIVE_URL` (`review_archive`) and `PANEL_PLAYBOOK_URL` (`playbook_web`), whose
   URLs and egress devops derives. `checks.provided-paths` fails the flake when `provides` and the
   binary's `--print-provided-paths` (the constants its router mounts) disagree.
 - **The landings, outbound on :443.** The Connected sites page asks each site key's origin; the
   origins are data, so the egress is public :443, not a host list.
-- **Ingest stays inside the cluster.** Its sources reach it by service DNS; the IngressRoute that
-  publishes `sa.evinvest.ltd` must not route `/api/ingest`, and the NetworkPolicy lets in only
-  the pods that send.
+- **Ingest and the kit stay inside the cluster.** Their sources reach them by service DNS; the
+  IngressRoute that publishes `sa.evinvest.ltd` must not route `/api/ingest` nor `/api/kit`, and
+  the NetworkPolicy lets in only the pods that send.
 - **sites_panel within reach, and only through here.** The conductor calls `PANEL_SITES_URL` for
   everything it forwards and for its hubs; sites has no public route of its own (the landings
   reach its `/api/internal` in-cluster).
@@ -904,7 +977,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   sign-in, rotation and `GetMe`. concierge must register client `sa` with redirect URI
   `<PANEL_PUBLIC_ORIGIN>/auth/callback` exactly and hold the hash of `RP_CLIENT_SECRET_SA`.
 - **Places, outbound.** With `GOOGLE_MAPS_KEYS` the pods need egress to
-  `places.googleapis.com:443` (a pasted URL without a place id, a GMB's name, address and point).
+  `places.googleapis.com:443` and `geocode.googleapis.com:443` (the keys need the Geocoding API
+  on) (a pasted URL without a place id, a GMB's name, address and point).
   A person's own keys go first (Who pays, above), then these in their order, free ones first;
   one Google says is spent for a quota window sits out until the window resets, one whose billing
   is off until restart (a person's, until it answers a test). Every answer is kept in the queries

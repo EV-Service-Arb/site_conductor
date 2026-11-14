@@ -14,6 +14,7 @@ pub mod assistant;
 pub mod browsers;
 pub mod connections;
 pub mod gmbs;
+pub mod kit;
 mod queries_cache;
 pub mod sessions;
 pub mod sources;

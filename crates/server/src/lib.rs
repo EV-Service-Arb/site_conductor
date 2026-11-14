@@ -19,6 +19,7 @@ pub mod gmbs;
 pub mod grafana;
 pub mod http;
 mod ingest;
+pub mod kit;
 pub mod live;
 mod queries_cache;
 pub mod signin;
@@ -30,7 +31,7 @@ pub mod trash;
 pub mod web;
 
 /// What the contract's `provides` names, as the router mounts it (`--print-provided-paths`).
-pub const PROVIDED_PATHS: [&str; 2] = [ingest::EVENTS, sa_core::queries_cache::PREFIX];
+pub const PROVIDED_PATHS: [&str; 3] = [ingest::EVENTS, kit::LANDING, sa_core::queries_cache::PREFIX];
 
 /// Reports an error to Sentry and logs it — as a warning: the tracing layer would send an
 /// error-level event to Sentry a second time.

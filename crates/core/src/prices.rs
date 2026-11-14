@@ -38,6 +38,9 @@ pub enum PlacesRequest {
 	/// Autocomplete, per request (no session token): suggestions while an address is typed.
 	#[strum(message = "Suggestions (as typed)")]
 	Autocomplete,
+	/// Geocoding: the town a point on the map lies in, when a review kit's area is drawn.
+	#[strum(message = "Town by a point")]
+	Geocode,
 }
 
 /// What Street View on the browser's Maps key loads: Google bills each panorama opened (Dynamic

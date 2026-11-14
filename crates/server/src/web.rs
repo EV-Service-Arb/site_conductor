@@ -10,6 +10,7 @@
 //! a directory                      its index.html (the export writes leads/index.html);
 //!                                  /leads is redirected to /leads/ first
 //! a file                           itself
+//! /<area>/, a kit area's slug      kit/index.html; /<area>/<file.txt> kit's <file.txt>
 //! anything else                    404.html, status 404
 //! ```
 //!
@@ -19,7 +20,10 @@
 //! Headers: `/_next/static/*` is content-hashed, so `immutable` for a year; everything else
 //! `no-cache`, and every HTML page a CSP.
 
-use std::{io, path::Path};
+use std::{
+	io,
+	path::{Path, PathBuf},
+};
 
 use axum::{
 	Json, Router,
@@ -28,6 +32,7 @@ use axum::{
 	http::{HeaderValue, StatusCode, header},
 	response::{IntoResponse, Response},
 };
+use sa_panel::Panel;
 use serde_json::json;
 use tower_http::{
 	services::{ServeDir, ServeFile},
@@ -55,6 +60,7 @@ const ELEMENT_PAGES: [&str; 2] = ["/review_archive", "/sites"];
 #[derive(Clone, Debug)]
 pub struct Files {
 	dir: ServeDir<SetStatus<ServeFile>>,
+	root: PathBuf,
 }
 
 impl Files {
@@ -65,18 +71,41 @@ impl Files {
 			let path = dir.join(page);
 			eyre::ensure!(path.is_file(), "PANEL_WEB_DIR {} has no {page}: not a build of frontend/", dir.display());
 		}
+		let root = dir.to_owned();
 		let dir = ServeDir::new(dir).append_index_html_on_directories(true).not_found_service(ServeFile::new(dir.join("404.html")));
-		Ok(Self { dir })
+		Ok(Self { dir, root })
 	}
 }
 
-/// `app`, with the front end answering whatever none of its routes does.
-pub fn serve(app: Router, files: Files) -> Router {
-	app.fallback(move |req: Request| page(files.clone(), req))
+/// `app`, with the front end answering whatever none of its routes does; a kit area of `panel`'s
+/// by its slug.
+pub fn serve(app: Router, files: Files, panel: Panel) -> Router {
+	app.fallback(move |req: Request| page(files.clone(), panel.clone(), req))
 }
 
 fn reserved(path: &str) -> bool {
 	RESERVED.iter().copied().chain(crate::forward::prefixes()).any(|r| crate::forward::under(path, r))
+}
+
+/// Whether `/<slug>` is one of the conductor's own paths or pages, which no kit area may take.
+pub(crate) fn taken(slug: &str, files: Option<&Files>) -> bool {
+	let path = format!("/{slug}");
+	reserved(&path) || ELEMENT_PAGES.contains(&path.as_str()) || files.is_some_and(|f| f.root.join(slug).exists())
+}
+
+/// The kit's page, or its file, that `/<slug>/[<file.txt>]` asks for, if `slug` is an area's.
+async fn area_page(panel: &Panel, path: &str) -> eyre::Result<Option<String>> {
+	let mut parts = path.trim_start_matches('/').splitn(2, '/');
+	let slug = parts.next().expect("splitn yields one at least");
+	let file = match parts.next() {
+		None | Some("") => "",
+		Some(f) if f.contains('.') && !f.contains('/') => f,
+		Some(_) => return Ok(None),
+	};
+	if !sa_core::ids::is_slug(slug) || panel.kit_area(slug).await?.is_none() {
+		return Ok(None);
+	}
+	Ok(Some(format!("/kit/{file}")))
 }
 
 /// What a path below an element's page is served from: a view (no dot in its last segment) is
@@ -93,7 +122,7 @@ fn element_page(path: &str) -> Option<String> {
 	})
 }
 
-async fn page(mut files: Files, mut req: Request) -> Response {
+async fn page(mut files: Files, panel: Panel, mut req: Request) -> Response {
 	if reserved(req.uri().path()) {
 		return dressed((StatusCode::NOT_FOUND, Json(json!({ "error": "not found" }))).into_response(), false);
 	}
@@ -109,10 +138,28 @@ async fn page(mut files: Files, mut req: Request) -> Response {
 	for h in [header::IF_MODIFIED_SINCE, header::IF_UNMODIFIED_SINCE] {
 		req.headers_mut().remove(h);
 	}
-	let res = match files.dir.try_call(req).await {
+	let area_req = Request::builder().uri(req.uri().clone()).body(Body::empty()).expect("a URI that arrived stays one");
+	let mut res = match files.dir.try_call(req).await {
 		Ok(res) => res.map(Body::new),
 		Err(e) => return failed(&e),
 	};
+	if res.status() == StatusCode::NOT_FOUND {
+		match area_page(&panel, area_req.uri().path()).await {
+			Ok(None) => {}
+			Ok(Some(kit)) => {
+				let mut kit_req = area_req;
+				*kit_req.uri_mut() = kit.parse().expect("a slug and a file name make a path");
+				res = match files.dir.try_call(kit_req).await {
+					Ok(res) => res.map(Body::new),
+					Err(e) => return failed(&e),
+				};
+			}
+			Err(e) => {
+				crate::report(&e, "looking a kit area up");
+				return dressed(StatusCode::INTERNAL_SERVER_ERROR.into_response(), false);
+			}
+		}
+	}
 	dressed(res, hashed)
 }
 

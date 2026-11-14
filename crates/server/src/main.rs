@@ -514,9 +514,19 @@ async fn serve(
 	if browsers.is_none() {
 		tracing::warn!("PANEL_BROWSERS_URL unset: no browsers, their routes answer 503");
 	}
-	let app = http::app(sign_in, forward, grafana.as_ref().map(|(g, _)| g), http::Limits::default(), bot.clone(), map, browsers);
+	let panel_for_pages = sign_in.panel.clone();
+	let app = http::app(
+		sign_in,
+		forward,
+		grafana.as_ref().map(|(g, _)| g),
+		http::Limits::default(),
+		bot.clone(),
+		map,
+		browsers,
+		files.as_ref(),
+	);
 	let app = match files {
-		Some(files) => web::serve(app, files),
+		Some(files) => web::serve(app, files, panel_for_pages),
 		None => {
 			tracing::warn!("PANEL_WEB_DIR unset: serving the API alone, no front end");
 			app

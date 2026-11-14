@@ -1,0 +1,10 @@
+DROP TABLE kit_areas;
+DROP TABLE kit_shown;
+DROP TABLE kit_photo_uses;
+DROP TABLE kit_uses;
+DROP TABLE kit_offered;
+DROP TABLE kit_views;
+DROP TABLE kit_targets;
+DROP TABLE kit_draft_photos;
+DROP TABLE kit_photos;
+DROP TABLE kit_drafts;

@@ -259,9 +259,9 @@
             "PANEL_BROWSERS_URL"
           ];
           ingress = {
-            # in-cluster only, by service DNS: the landings' and bots' ingest
+            # in-cluster only, by service DNS: the landings' and bots' ingest, the landings' review kit
             # (docs/ARCHITECTURE.md, Deploy requirements)
-            excludePathPrefixes = [ "/api/ingest" ];
+            excludePathPrefixes = [ "/api/ingest" "/api/kit" ];
             # per client IP at the edge; the conductor bounds concurrency, not who calls. /api/hooks:
             # the booking providers' webhooks, forwarded to sites (public, signature-checked there).
             # /api/queries_cache: open to everyone, so this is its only guard
@@ -272,7 +272,7 @@
             grpcEnv = [ "CONCIERGE_GRPC_ADDR" ];
             # the Bot API; the Places API (GOOGLE_MAPS_KEYS); GoLogin's (GOLOGIN_TOKEN) and Multilogin's
             # (MULTILOGIN_TOKEN) APIs
-            hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" ];
+            hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "geocode.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" ];
           };
         };
 
@@ -280,6 +280,8 @@
         # `checks.provided-paths` holds it to the routes the binary mounts.
         provides = {
           ingest = "/api/ingest/v1/events";
+          # the landings' review kit pages (docs/ARCHITECTURE.md, Review kit)
+          kit = "/api/kit/v1";
           # the queries cache (docs/ARCHITECTURE.md, Queries cache): review_archive's and placement's
           queries_cache = "/api/queries_cache";
         };

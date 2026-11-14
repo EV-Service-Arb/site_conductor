@@ -29,7 +29,7 @@ use crate::{
 	forward::{Forward, Services},
 	gmbs,
 	grafana::Grafana,
-	ingest,
+	ingest, kit,
 	live::{self, Live, LiveLimits},
 	queries_cache,
 	signin::{self, Freshness, Gate, SignIn},
@@ -89,6 +89,7 @@ pub fn api_routes() -> Vec<ApiRoute> {
 		tokens::routes(),
 		trash::routes(),
 		assistant::routes(),
+		kit::routes(),
 	]
 	.into_iter()
 	.flatten()
@@ -116,8 +117,10 @@ pub struct Limits {
 	pub live: LiveLimits,
 }
 
-/// Everything the conductor answers but the front end's files; ingest and the forward only with
-/// `forward`, `/grafana/` only with `grafana`.
+/// Everything the conductor answers but the front end's files; ingest, the forward and the
+/// landings' kit only with `forward`, `/grafana/` only with `grafana`. `web`: the front end's
+/// files, whose directories no kit area may take.
+#[expect(clippy::too_many_arguments, reason = "each is one optional part of the deployment")]
 pub fn app(
 	sign_in: SignIn,
 	forward: Option<Forward>,
@@ -126,6 +129,7 @@ pub fn app(
 	telegram: Option<Telegram>,
 	map: Option<gmbs::MapDto>,
 	browsers: Option<browser::Connected>,
+	web: Option<&crate::web::Files>,
 ) -> Router {
 	let auth = Router::new()
 		.route("/auth/login", get(signin::login))
@@ -143,9 +147,12 @@ pub fn app(
 	let routes = api_routes().into_iter().fold(Router::new(), |routes, r| {
 		routes.merge(Router::new().route(r.path, r.handler).route_layer(gate(r.freshness, r.section)))
 	});
+	let pages = forward.as_ref().map(|f| kit::Pages::new(f.services().clone()));
 	let state = ApiState {
 		panel: sign_in.panel.clone(),
 		sites: forward.as_ref().map(|f| f.services().clone()),
+		pages: pages.clone(),
+		web: web.cloned(),
 		probe: connected::probe_client(),
 		telegram,
 		map,
@@ -156,6 +163,7 @@ pub fn app(
 	let slow = Router::new()
 		.route(browser::FILM, put(browser::set_film).layer(DefaultBodyLimit::max(browser::FILM_MAX)))
 		.route(browser::START, post(browser::start))
+		.route(kit::PHOTOS, post(kit::add_photo).layer(DefaultBodyLimit::max(sa_panel::kit::PHOTO_MAX)))
 		.route_layer(gate(Freshness::Cached, None))
 		.with_state(state.clone());
 	let slow = bounded(slow, 8, Duration::from_secs(600));
@@ -184,7 +192,10 @@ pub fn app(
 		.merge(queries_cache::routes(sign_in.panel.clone(), &limits))
 		.nest("/api/v1", api);
 	let app = match forward {
-		Some(forward) => app.merge(ingest::routes(forward.clone(), &limits)).merge(forward.routes()),
+		Some(forward) => app
+			.merge(ingest::routes(forward.clone(), &limits))
+			.merge(kit::landing_routes(sign_in.panel.clone(), pages.expect("made with the forward"), &limits))
+			.merge(forward.routes()),
 		None => app,
 	};
 	let app = match grafana {
@@ -208,6 +219,10 @@ pub(crate) struct ApiState {
 	pub(crate) map: Option<gmbs::MapDto>,
 	/// With GOLOGIN_TOKEN and PANEL_BROWSERS_URL.
 	pub(crate) browsers: Option<browser::Connected>,
+	/// With the forward: which landing page is which GBP.
+	pub(crate) pages: Option<kit::Pages>,
+	/// PANEL_WEB_DIR's.
+	pub(crate) web: Option<crate::web::Files>,
 }
 
 impl FromRef<ApiState> for Panel {
