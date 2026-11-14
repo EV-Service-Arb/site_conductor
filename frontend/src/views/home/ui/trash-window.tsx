@@ -4,13 +4,15 @@ import { Badge, Button, Input, Switch } from "@evinvest/uikit";
 import { RotateCcw, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import { type Trash, openTrash, restoreGmail, restoreGmb, setTrashSettings, useGmails } from "@/entities/gmb";
+import { type State, type Trash, openTrash, restoreGmail, restoreGmb, setTrashSettings, useGmails } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 const DAY_MS = 86_400_000;
+/** As the outline colours the states. */
+const TONE: Partial<Record<State, string>> = { verifying: "text-accent-warn", suspended: "text-accent-error" };
 const SECTION = "flex flex-col gap-2";
 const SECTION_HEAD = "flex items-baseline gap-2 text-xs font-semibold tracking-wide text-ink-soft uppercase";
 
@@ -40,13 +42,13 @@ export function TrashWindow({ trash }: { trash: Trash }) {
       reload();
     }
   };
-  const row = (key: string, primary: string, secondary: string | null, badge: string | null, removed: string, purge: string | null, blocked: string | null, restore: () => Promise<void>) => (
+  const row = (key: string, primary: string, secondary: string | null, badge: string | null, badgeTone: string | undefined, removed: string, purge: string | null, blocked: string | null, restore: () => Promise<void>) => (
     <li key={key} className="flex items-start gap-3 rounded-md px-2 py-2 hover:bg-hover/50">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <p className="flex items-center gap-2 text-sm">
           <span className="truncate font-medium text-ink">{primary}</span>
           {secondary !== null && <span className="truncate text-ink-soft">{secondary}</span>}
-          {badge !== null && <Badge>{badge}</Badge>}
+          {badge !== null && <Badge className={badgeTone}>{badge}</Badge>}
         </p>
         <p className="text-xs text-ink-soft tabular-nums">{meta(removed, purge)}</p>
         {blocked !== null && <p className="text-xs text-accent-warn">{blocked}</p>}
@@ -84,7 +86,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
                   {t("trash.gmails")} <span className="font-normal tabular-nums">{trash.gmails.length}</span>
                 </h3>
                 <ul className="flex flex-col">
-                  {trash.gmails.map((g) => row(`g${g.id}`, g.gmail, t("trash.with", { n: g.gmbs }), null, g.removed_at, g.purge_at, g.blocked, () => restoreGmail(g.id)))}
+                  {trash.gmails.map((g) => row(`g${g.id}`, g.gmail, t("trash.with", { n: g.gmbs }), null, undefined, g.removed_at, g.purge_at, g.blocked, () => restoreGmail(g.id)))}
                 </ul>
               </section>
             )}
@@ -94,7 +96,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
                   {t("trash.gmbs")} <span className="font-normal tabular-nums">{trash.gmbs.length}</span>
                 </h3>
                 <ul className="flex flex-col">
-                  {trash.gmbs.map((b) => row(`b${b.id}`, b.name, b.gmail, t(`gmbs.state.${b.state}`), b.removed_at, b.purge_at, b.blocked, () => restoreGmb(b.id)))}
+                  {trash.gmbs.map((b) => row(`b${b.id}`, b.name, b.gmail, t(`gmbs.state.${b.state}`), TONE[b.state], b.removed_at, b.purge_at, b.blocked, () => restoreGmb(b.id)))}
                 </ul>
               </section>
             )}
@@ -142,6 +144,7 @@ function Settings({ trash, onSet }: { trash: Trash; onSet: () => void }) {
           onKeyDown={(e) => e.key === "Enter" && commit()}
         />
         {t("trash.keep.after")}
+        <span className="text-xs text-ink-soft tabular-nums">1–90</span>
       </label>
       {may(me, "sa:admin:trash:keep") && (
         <label className="flex items-center gap-2 text-sm text-ink">
