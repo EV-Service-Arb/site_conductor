@@ -1,8 +1,7 @@
-import { ApiError, http, ignoreBody } from "@/shared/api";
+import { http, ignoreBody } from "@/shared/api";
 
-import type { Country, LatLng, Suggestion } from "../model/gmb";
-import { suggestionsParser } from "../model/gmb";
-import { type GmbKit, type KitArea, type KitAreaGmbs, type KitPool, type KitTarget, type Locality, type PutKitArea, areaGmbsParser, areaParser, areasParser, gmbKitParser, localityParser, poolParser } from "../model/kit";
+import type { Country } from "../model/gmb";
+import { type GmbKit, type KitAreaGmbs, type KitPool, type KitTarget, areaGmbsParser, gmbKitParser, poolParser } from "../model/kit";
 
 /** A photo's largest size, as the server takes it. */
 export const PHOTO_MAX = 10 << 20;
@@ -47,35 +46,7 @@ export async function kitShown(gmb: number): Promise<void> {
   await http.send("POST", `/api/v1/gmbs/${gmb}/kit/shown`, undefined, ignoreBody);
 }
 
-export async function fetchAreas(): Promise<KitArea[]> {
-  return (await http.get("/api/v1/kit/areas", areasParser)).areas;
-}
-
-/** Refused: 400 a path of the conductor's own, 409 someone else's. */
-export function putArea(slug: string, area: PutKitArea): Promise<KitArea> {
-  return http.send("PUT", `/api/v1/kit/areas/${encodeURIComponent(slug)}`, area, areaParser);
-}
-
 /** The caller's GBPs in it or next to it, nearest first. */
 export function fetchAreaGmbs(slug: string): Promise<KitAreaGmbs> {
   return http.get(`/api/v1/kit/areas/${encodeURIComponent(slug)}/gmbs`, areaGmbsParser);
-}
-
-/** Cities and towns, paid as `suggestPlaces`; the caller debounces. */
-export async function suggestCities(input: string): Promise<Suggestion[]> {
-  return (await http.get("/api/v1/kit/cities", suggestionsParser, { input })).suggestions;
-}
-
-export function fetchCity(placeId: string): Promise<Locality> {
-  return http.get(`/api/v1/kit/cities/${encodeURIComponent(placeId)}`, localityParser);
-}
-
-/** `null`: the point is in no locality. */
-export async function localityAt(at: LatLng): Promise<Locality | null> {
-  try {
-    return await http.get("/api/v1/kit/locality", localityParser, { lat: at.lat, lng: at.lng });
-  } catch (e) {
-    if (e instanceof ApiError && e.failure.kind === "not_found") return null;
-    throw e;
-  }
 }

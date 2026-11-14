@@ -15,11 +15,12 @@ use sa_panel::{store::browsers::Provider, tokens::Kind};
 use sa_server::{
 	access::AccessRequestDto,
 	alerts::AlertsDto,
+	areas::{AreasDto, LocalityDto, PutAreaDto},
 	assistant::{AccessDto, ChatDto, ChatsDto, PeopleDto},
 	browser::{SetBrowser, StartBrowser},
 	connections::ConnectionsDto,
 	gmbs::{CandidatesDto, GmailsDto, GoogleCategoriesDto, MapDto, SuggestionsDto, TradesDto},
-	kit::{AreaGmbsDto, AreasDto, EditDraftDto, GmbKitDto, LocalityDto, NewDraftDto, PoolDto, PutAreaDto, SetKitDto},
+	kit::{AreaGmbsDto, EditDraftDto, GmbKitDto, NewDraftDto, PoolDto, SetKitDto},
 	signin::Caller,
 	tokens::{BalanceChangeDto, BalanceDto, FLOW_KINDS, FlowsDto, LedgerDto, PricesDto, SetPricesDto, TokenHoldersDto, TokensDto, UsageDto},
 	trash::{SetSettingsDto, TrashDto},

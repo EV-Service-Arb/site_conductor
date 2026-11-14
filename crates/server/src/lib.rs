@@ -7,6 +7,7 @@
 
 pub mod access;
 pub mod alerts;
+pub mod areas;
 pub mod api;
 pub mod assistant;
 pub mod browser;

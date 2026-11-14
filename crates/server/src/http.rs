@@ -25,7 +25,7 @@ use tower_http::timeout::TimeoutLayer;
 use crate::{
 	access,
 	alerts::{self, Telegram},
-	api, assistant, browser, connected, connections,
+	api, areas, assistant, browser, connected, connections,
 	forward::{Forward, Services},
 	gmbs,
 	grafana::Grafana,
@@ -91,6 +91,7 @@ pub fn api_routes() -> Vec<ApiRoute> {
 		usage::routes(),
 		assistant::routes(),
 		kit::routes(),
+		areas::routes(),
 	]
 	.into_iter()
 	.flatten()

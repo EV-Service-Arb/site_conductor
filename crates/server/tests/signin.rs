@@ -944,10 +944,10 @@ async fn no_permission_opens_no_section() {
 			"/gmbs/{id}/kit",
 			"/gmbs/{id}/kit",
 			"/gmbs/{id}/kit/shown",
-			"/kit/areas",
-			"/kit/areas/{slug}",
-			"/kit/areas/{slug}",
 			"/kit/areas/{slug}/gmbs",
+			"/areas",
+			"/areas/{slug}",
+			"/areas/{slug}",
 			"/kit/cities",
 			"/kit/cities/{place_id}",
 			"/kit/locality"

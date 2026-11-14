@@ -5,11 +5,11 @@ import { Copy, Crosshair, ExternalLink, MapPin, Plus, QrCode, X } from "lucide-r
 import { type ReactNode, useEffect, useState } from "react";
 
 import {
-  type KitArea,
+  type Area,
   type KitNearby,
   type LatLng,
   type Locality,
-  type PutKitArea,
+  type PutArea,
   type Suggestion,
   TARGET_NAME,
   fetchAreaGmbs,
@@ -144,7 +144,7 @@ function Draw({ map }: { map: google.maps.Map }) {
   const slug = slugTyped ?? (city !== null ? slugOf(city.name) : name === "" ? "" : `${slugOf(name)}-${radius / 1000}km`);
   const outline: Outline | null = city !== null ? { kind: "city", viewport: city.viewport, margin_m: margin } : circleAt !== null ? { kind: "circle", center: circleAt, radius_m: radius, margin_m: margin } : null;
   useOutline(map, outline);
-  const body: PutKitArea | null = city !== null ? { kind: "city", place_id: city.place_id, margin_m: margin } : circleAt !== null && name.trim() !== "" ? { kind: "circle", name: name.trim(), lat: circleAt.lat, lng: circleAt.lng, radius_m: radius, margin_m: margin } : null;
+  const body: PutArea | null = city !== null ? { kind: "city", place_id: city.place_id, margin_m: margin } : circleAt !== null && name.trim() !== "" ? { kind: "circle", name: name.trim(), lat: circleAt.lat, lng: circleAt.lng, radius_m: radius, margin_m: margin } : null;
 
   const save = async () => {
     if (body === null) throw new Error("saved with nothing drawn");
@@ -410,7 +410,7 @@ function NewArea() {
   );
 }
 
-const outlineOf = (a: KitArea): Outline => (a.shape.kind === "city" ? { kind: "city", viewport: a.shape.viewport, margin_m: a.margin_m } : { kind: "circle", center: a.center, radius_m: a.shape.radius_m, margin_m: a.margin_m });
+const outlineOf = (a: Area): Outline => (a.shape.kind === "city" ? { kind: "city", viewport: a.shape.viewport, margin_m: a.margin_m } : { kind: "circle", center: a.center, radius_m: a.shape.radius_m, margin_m: a.margin_m });
 
 function Group({ title, gmbs, locale }: { title: string; gmbs: readonly KitNearby[]; locale: string }) {
   const t = useT();

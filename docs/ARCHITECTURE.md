@@ -56,7 +56,8 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          (a panorama bought, the month's free ones counted), `import`
                          (review_archive's, once), `assistant` (the assistant's chats), `trash`
                          (what was removed, restored until purged), `kit` (the review kit: a
-                         category's drafts and photos, the offer, the areas)
+                         category's drafts and photos, the offer, the caller's GBPs by an area), `areas`
+                         (geography, everyone's: the kit's links and studies' frames)
 crates/alerts/           no I/O: the alert rules, and the notes a service publishes to the
                          conductor and their check; sites and review_archive take it too
 crates/auth/             the `sa` permissions (concierge_iam derives), the aliases `sa:operator` /
@@ -99,6 +100,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/usage.rs           /api/v1/map/loaded, /api/v1/admin/usage; the services' usage feeds followed
   src/assistant.rs       /api/v1/assistant; the turns' shape
   src/kit.rs             the review kit: its /api/v1 routes, the landings' /api/kit/v1
+  src/areas.rs           /api/v1/areas, and the cities and localities they are drawn from
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
                          work in `serve`
   src/telegram.rs        the Bot API, its long poll
@@ -520,15 +522,16 @@ GET    /gmbs/{id}/kit                       {target, url, page, drafts (the offe
 PUT    /gmbs/{id}/kit                       {target: google|drafts|one_tap | null} → 200 as GET; 409 no
                                             place, or a page target without a landing page
 POST   /gmbs/{id}/kit/shown                 204
-GET    /kit/areas                           {areas}
-GET    /kit/areas/{slug}                    {slug, name, center, shape: {kind: city, place_id, viewport}
-                                            | {kind: circle, radius_m}, margin_m}
-PUT    /kit/areas/{slug}                    {kind: city, place_id, margin_m} | {kind: circle, name, lat,
-                                            lng, radius_m, margin_m} → 200 as GET; 400 a path of the
-                                            conductor's own; 409 someone else's
+GET    /areas                               {areas}
+GET    /areas/{slug}                        {slug, name, country, center, shape: {kind: city, place_id,
+                                            viewport} | {kind: circle, radius_m}, margin_m}
+PUT    /areas/{slug}                        {kind: city, place_id, margin_m} | {kind: circle, name, lat,
+                                            lng, radius_m, margin_m} → 200 as GET, its country from
+                                            Places (never sent); 400 a path of the conductor's own, a
+                                            centre in no country; 409 someone else's
 GET    /kit/areas/{slug}/gmbs               {area, gmbs}: the caller's in it or next to it, nearest first
 GET    /kit/cities?input=                   {suggestions}: cities and towns, paid as /gmbs/suggest
-GET    /kit/cities/{place_id}               {place_id, name, location, viewport}
+GET    /kit/cities/{place_id}               {place_id, name, location, viewport, country}
 GET    /kit/locality?lat=&lng=              the same, the locality the point is in (Geocoding); 404 none
 GET    /google-categories/{country}         {categories: [{id, name}]}: Google's list there
 GET    /trash                               {settings: {keep_days, never_purge}, gmails: [{id, gmail,
@@ -822,7 +825,7 @@ photos saved  → a use (photo, g), once
   download works.
 - **Photos** are re-encoded on the way in (JPEG, ≤ 2048 px, upright, no EXIF): what a reviewer
   saves carries nothing of where it was taken.
-- **Areas** are geography, everyone's: a city (Google's locality: inside its viewport is in) or a
+- **Areas** are geography, everyone's, and carry their country (ISO 3166-1 alpha-2, Places'): a city (Google's locality: inside its viewport is in) or a
   circle, and a margin around it that is "next to it". `/<slug>/` is the kit's page when the slug is
   an area's; a slug never takes a path of the conductor's own (the front end's directories, the
   reserved and forwarded prefixes).

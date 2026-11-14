@@ -10,9 +10,10 @@
 //! [`alerts`] the hub: users' destinations and rules, the feeds fanned out to them; [`telegram`]
 //! the method that reaches them; [`live`] the bus that tells the server's sockets what changed;
 //! [`assistant`] the assistant's chats; [`trash`] what was removed, until it is purged; [`kit`] the
-//! review kit.
+//! review kit; [`areas`] the geography it and placement studies share.
 
 pub mod access;
+pub mod areas;
 pub mod alerts;
 pub mod assistant;
 pub mod browsers;
