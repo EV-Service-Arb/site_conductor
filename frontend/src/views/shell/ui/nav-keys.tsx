@@ -18,17 +18,17 @@ export function NavKeys() {
   const go = (key: string, label: string, href: string, may = true): KeyBinding => ({ on: { key }, run: { label, run: may ? () => router.push(href) : null } });
   useBinding({
     on: { key: "g" },
-    label: t("keys.go"),
+    label: t("Go to"),
     children: [
-      go("h", t("nav.home"), "/"),
-      go("s", t("nav.sites"), ROUTES.sites, seesSites(me)),
-      go("r", t("nav.reviewArchive"), ROUTES.reviewArchive),
-      go("c", t("nav.sources"), ROUTES.sources, own.includes("sources")),
-      go("t", t("nav.tokens"), ROUTES.tokens, own.includes("tokens")),
-      go("u", t("usage.title"), ROUTES.usage, own.includes("usage")),
-      go("w", t("nav.wallet"), ROUTES.wallet, own.includes("wallet")),
-      go("e", t("nav.alerts"), ROUTES.alerts),
-      go("y", t("nav.account"), ROUTES.account),
+      go("h", t("Home"), "/"),
+      go("s", t("Sites"), ROUTES.sites, seesSites(me)),
+      go("r", t("Review Archive"), ROUTES.reviewArchive),
+      go("c", t("Sources"), ROUTES.sources, own.includes("sources")),
+      go("t", t("Tokens"), ROUTES.tokens, own.includes("tokens")),
+      go("u", t("Usage"), ROUTES.usage, own.includes("usage")),
+      go("w", t("Wallet"), ROUTES.wallet, own.includes("wallet")),
+      go("e", t("Alerts"), ROUTES.alerts),
+      go("y", t("Profile"), ROUTES.account),
     ],
   });
   return null;

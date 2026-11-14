@@ -50,11 +50,11 @@ export function AddSourceForm({ onAdded }: { onAdded: (added: AddedSource) => vo
       }}
     >
       <Field className="flex flex-col gap-1">
-        <FieldLabel htmlFor={`${id}-key`}>{t("sources.keyId")}</FieldLabel>
+        <FieldLabel htmlFor={`${id}-key`}>{t("Key id")}</FieldLabel>
         <Input id={`${id}-key`} size={size} autoCapitalize="none" value={keyId} onChange={(e) => setKeyId(e.target.value.toLowerCase())} />
       </Field>
       <Field className="flex flex-col gap-1">
-        <FieldLabel htmlFor={`${id}-kind`}>{t("sources.kind")}</FieldLabel>
+        <FieldLabel htmlFor={`${id}-kind`}>{t("Kind")}</FieldLabel>
         <Select value={kind} onValueChange={(v) => setKind(KEYED_SOURCE_KINDS.find((k) => k === v) ?? "site")}>
           <SelectTrigger id={`${id}-kind`} size={size} className="w-full">
             <SelectValue />
@@ -69,19 +69,19 @@ export function AddSourceForm({ onAdded }: { onAdded: (added: AddedSource) => vo
         </Select>
       </Field>
       <Field className="flex flex-col gap-1">
-        <FieldLabel htmlFor={`${id}-brands`}>{t("sources.brands")}</FieldLabel>
+        <FieldLabel htmlFor={`${id}-brands`}>{t("Brands")}</FieldLabel>
         <Input id={`${id}-brands`} size={size} autoCapitalize="none" value={brandsText} onChange={(e) => setBrandsText(e.target.value)} />
-        <FieldDescription>{t("sources.brands.hint")}</FieldDescription>
+        <FieldDescription>{t("Comma-separated, e.g. aquafix, vifnet")}</FieldDescription>
       </Field>
       {site && (
         <Field className="flex flex-col gap-1">
-          <FieldLabel htmlFor={`${id}-origin`}>{t("sources.origin")}</FieldLabel>
+          <FieldLabel htmlFor={`${id}-origin`}>{t("Origin")}</FieldLabel>
           <Input id={`${id}-origin`} size={size} autoCapitalize="none" inputMode="url" value={origin} onChange={(e) => setOrigin(e.target.value.trim())} />
-          <FieldDescription>{t("sources.origin.hint")}</FieldDescription>
+          <FieldDescription>{t("The site's address, e.g. https://aquafix.top")}</FieldDescription>
         </Field>
       )}
       <Button type="submit" disabled={busy || !ready} size={button()} className="md:mb-6">
-        {t("sources.add")}
+        {t("Add source")}
       </Button>
     </form>
   );

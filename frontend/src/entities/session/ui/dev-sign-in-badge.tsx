@@ -12,8 +12,8 @@ export function DevSignInBadge({ className }: { className?: string }) {
   const { dev_sign_in } = useMe();
   if (!dev_sign_in) return null;
   return (
-    <Badge tone="warn" title={t("session.devSignIn.hint")} className={cn("uppercase tracking-wide", className)}>
-      {t("session.devSignIn")}
+    <Badge tone="warn" title={t("This backend signs people in without concierge. It is for local work only.")} className={cn("uppercase tracking-wide", className)}>
+      {t("dev sign-in")}
     </Badge>
   );
 }

@@ -12,5 +12,5 @@ export function ErrorState({ failure, onRetry }: { failure: ApiFailure | { kind:
   const t = useT();
   const message = failureText(failure, t);
   if (!onRetry) return <ResourceError variant="alert" message={message} />;
-  return <ResourceError message={message} onRetry={onRetry} labels={{ retry: t("state.retry") }} />;
+  return <ResourceError message={message} onRetry={onRetry} labels={{ retry: t("Try again") }} />;
 }

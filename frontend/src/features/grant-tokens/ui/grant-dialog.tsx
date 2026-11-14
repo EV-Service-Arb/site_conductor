@@ -49,7 +49,7 @@ export function GrantDialog({ holder, onClose, onDone }: { holder: Holder; onClo
     setBusy(true);
     try {
       const balance = await changeTokens(holder.user_id, c);
-      toast.positive(t("tokens.grant.done", { n: balance }));
+      toast.positive(t("Now {n} tokens", { n: balance }));
       onDone();
     } catch (e) {
       notifyFailure(e, t);
@@ -69,27 +69,27 @@ export function GrantDialog({ holder, onClose, onDone }: { holder: Holder; onClo
           }}
         >
           <DialogHeader>
-            <DialogTitle>{t("tokens.grant.title", { who: holder.email })}</DialogTitle>
-            <DialogDescription>{t("tokens.count", { n: holder.balance })}</DialogDescription>
+            <DialogTitle>{t("Tokens of {who}", { who: holder.email })}</DialogTitle>
+            <DialogDescription>{t("{n} tokens", { n: holder.balance })}</DialogDescription>
           </DialogHeader>
           <ToggleGroup type="single" variant="outline" value={mode} onValueChange={(v) => v && setMode(v as Mode)}>
             {(["set", "add", "grant"] as const).map((m) => (
               <ToggleGroupItem key={m} value={m}>
-                {t(`tokens.grant.mode.${m}`)}
+                {m === "set" ? t("Set to") : m === "add" ? t("Add") : t("Owe back")}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
           <Field className="flex flex-col gap-1">
-            <FieldLabel htmlFor={`${id}-amount`}>{t("tokens.grant.amount")}</FieldLabel>
+            <FieldLabel htmlFor={`${id}-amount`}>{t("Tokens")}</FieldLabel>
             <Input id={`${id}-amount`} type="number" inputMode="numeric" size={size} value={amount} onChange={(e) => setAmount(e.target.value)} />
           </Field>
           <Field className="flex flex-col gap-1">
-            <FieldLabel htmlFor={`${id}-note`}>{t(mode === "grant" ? "tokens.grant.note.required" : "tokens.grant.note")}</FieldLabel>
+            <FieldLabel htmlFor={`${id}-note`}>{(mode === "grant" ? t("What it is for") : t("Note (optional)"))}</FieldLabel>
             <Input id={`${id}-note`} size={size} value={note} onChange={(e) => setNote(e.target.value)} />
           </Field>
           <DialogFooter>
             <Button type="submit" size={button()} disabled={busy || change === null}>
-              {t("tokens.grant.submit")}
+              {t("Apply")}
             </Button>
           </DialogFooter>
         </form>

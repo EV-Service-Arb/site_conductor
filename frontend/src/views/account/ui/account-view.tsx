@@ -45,11 +45,11 @@ export function AccountView() {
     return route !== null;
   };
   return (
-    <PageFrame breakpoint="md" title={t("nav.account")} width="content">
+    <PageFrame breakpoint="md" title={t("Profile")} width="content">
       {scriptUrl === undefined ? (
         loading
       ) : scriptUrl === null ? (
-        <EmptyState title={t("account.unavailable")} />
+        <EmptyState title={t("Your account could not be loaded.")} />
       ) : (
         <AccountPage
           // The element reads `<html lang>` only when it renders.

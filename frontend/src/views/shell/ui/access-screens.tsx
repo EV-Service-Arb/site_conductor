@@ -18,11 +18,11 @@ export function UnavailableScreen({ onRetry }: { onRetry: () => void }) {
   return (
     <Empty className="min-h-svh">
       <EmptyHeader>
-        <EmptyTitle>{t("state.unavailable.title")}</EmptyTitle>
-        <EmptyDescription>{t("state.unavailable.body")}</EmptyDescription>
+        <EmptyTitle>{t("Sign-in service unavailable")}</EmptyTitle>
+        <EmptyDescription>{t("Try again in a minute. You are still signed in.")}</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button size={button()} onClick={onRetry}>{t("state.retry")}</Button>
+        <Button size={button()} onClick={onRetry}>{t("Try again")}</Button>
       </EmptyContent>
     </Empty>
   );
@@ -31,7 +31,7 @@ export function UnavailableScreen({ onRetry }: { onRetry: () => void }) {
 export function ShellSkeleton() {
   const t = useT();
   return (
-    <div className="flex min-h-svh flex-col" aria-busy="true" aria-label={t("state.loading")}>
+    <div className="flex min-h-svh flex-col" aria-busy="true" aria-label={t("Loading…")}>
       <Skeleton className="h-14 w-full rounded-none" />
       <div className="flex flex-1 flex-col gap-3 p-6">
         <Skeleton className="h-8 w-48" />

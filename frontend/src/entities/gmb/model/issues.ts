@@ -9,6 +9,17 @@ import { MUST_HAVES, readiness } from "./readiness";
 export const ISSUES = ["overdue", "suspended", "failing", "draft", "unlocated", "no_site", "no_category", "off"] as const;
 export type Issue = (typeof ISSUES)[number];
 
+export const ISSUE_LABEL = {
+  overdue: (t) => t("Overdue"),
+  suspended: (t) => t("Reviews suspended"),
+  failing: (t) => t.ctx("issue", "Failing"),
+  draft: (t) => t("Drafts"),
+  unlocated: (t) => t("No location"),
+  no_site: (t) => t("No site"),
+  no_category: (t) => t("No category"),
+  off: (t) => t("Off"),
+} satisfies Record<Issue, (t: T) => string>;
+
 /** The services' tags by GMB id, and the caller's trades; `null`: not read, the service did not answer, or the caller does not see it. */
 export interface Tags {
   archive: ReadonlyMap<number, ArchiveTag> | null;
@@ -44,8 +55,8 @@ export function issueCounts(gmbs: readonly Gmb[], tags: Tags): Map<Issue, number
 /** The issue as a row and a card name it: with its count where it has one. `issue` is `issueOf` the GMB under these tags. */
 export function issueText(issue: Issue, listed: Listed, tags: Tags, t: T): string {
   const { gmb } = listed;
-  if (issue === "overdue") return t("gmbs.tag.overdue", { n: tags.sites!.get(gmb.id)!.overdue });
-  if (issue === "suspended") return t("gmbs.tag.suspended", { n: tags.archive!.get(gmb.id)!.suspended });
+  if (issue === "overdue") return t("{n} overdue", { n: tags.sites!.get(gmb.id)!.overdue });
+  if (issue === "suspended") return t("{n} reviews suspended", { n: tags.archive!.get(gmb.id)!.suspended });
   if (issue === "draft") return `${readiness(listed, tags).filter((r) => r.ready).length}/${MUST_HAVES.length}`;
-  return t(`gmbs.issue.${issue}`);
+  return ISSUE_LABEL[issue](t);
 }

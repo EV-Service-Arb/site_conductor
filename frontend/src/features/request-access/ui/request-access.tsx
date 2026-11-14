@@ -6,7 +6,7 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { type AccessRequest, type Caller, fetchMe } from "@/entities/session";
 import { ApiError, switchAccountPath } from "@/shared/api";
-import { type MessageKey, useLocale, useT } from "@/shared/i18n";
+import { useLocale, useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { ErrorState } from "@/shared/ui/error-state";
 import { failureText } from "@/shared/ui/failure-text";
@@ -63,14 +63,14 @@ function Granted() {
       <Card>
         <CardHeader className="text-center">
           <Marks client={false} />
-          <CardTitle>{t("access.in.title")}</CardTitle>
-          <CardDescription>{t("access.in.body")}</CardDescription>
+          <CardTitle>{t("You’re in")}</CardTitle>
+          <CardDescription>{t("The admins granted your access.")}</CardDescription>
         </CardHeader>
         <CardContent>
           <Button asChild className="w-full" size={button("lg")}>
             {/* A full load: a shell that saw the access gone reads it again only from scratch. */}
             {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-            <a href="/">{t("access.in.open")}</a>
+            <a href="/">{t("Open the panel")}</a>
           </Button>
         </CardContent>
       </Card>
@@ -113,15 +113,15 @@ function Asking({
       (e: unknown) => {
         setBusy(false);
         if (e instanceof ApiError && e.failure.kind === "conflict") return onHeld(); // held already: /me says so on its next read
-        setFailure(e instanceof ApiError ? failureText(e.failure, t) : t("state.error", { detail: String(e) }));
+        setFailure(e instanceof ApiError ? failureText(e.failure, t) : t("Could not load this. {detail}", { detail: String(e) }));
       },
     );
   };
 
   const at = pending && new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(pending.requested_at));
-  const [title, body]: [MessageKey, MessageKey] = pending
-    ? ["access.sent.title", "access.sent.body"]
-    : [playbook ? "access.playbook.title" : "access.title", "access.body"];
+  const [title, body] = pending
+    ? [t("Request sent"), t("The Service-Arb admins have your email.")]
+    : [playbook ? t("No access to the playbook yet") : t("No access yet"), t("Your EV account is ready — it just needs access.")];
   const here = window.location.pathname + window.location.search;
 
   return (
@@ -129,8 +129,8 @@ function Asking({
       <Card>
         <CardHeader className="text-center">
           <Marks client={continueTo !== null} />
-          <CardTitle>{t(title)}</CardTitle>
-          <CardDescription>{t(body)}</CardDescription>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>{body}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           <div className="flex items-center gap-3 rounded-md border border-border p-3">
@@ -138,20 +138,20 @@ function Asking({
               <AvatarFallback>{(me.preferred_name || me.email).charAt(0).toUpperCase()}</AvatarFallback>
             </Avatar>
             <div className="min-w-0 text-sm">
-              <p className="text-ink-soft">{t("access.account")}</p>
+              <p className="text-ink-soft">{t("Signed in as")}</p>
               <p className="truncate text-ink">{me.email}</p>
             </div>
           </div>
           <ol className="flex flex-col gap-3">
-            <Step n={1} done={pending !== null} title={t("access.step.request")}>
-              {at ? t(sentHere ? "access.step.request.sentNow" : "access.step.request.sent", { time: at }) : t("access.step.request.hint")}
+            <Step n={1} done={pending !== null} title={t("Request access")}>
+              {at ? (sentHere ? t("Sent just now · {time}", { time: at }) : t("Sent · {time}", { time: at })) : t("We’ll message the Service-Arb admins with your email.")}
             </Step>
-            <Step n={2} done={false} title={t("access.step.wait")}>
-              {t("access.step.wait.hint")}
+            <Step n={2} done={false} title={t("Wait for approval")}>
+              {t("Usually within a working day. Keep this tab open — it continues by itself once you’re in.")}
             </Step>
             {continueTo !== null && (
-              <Step n={3} done={false} title={t("access.step.back")}>
-                {t("access.step.back.hint")}
+              <Step n={3} done={false} title={t("Back in Claude Code")}>
+                {t("The connection finishes on its own. Closed the tab? Run /mcp → service-arb → Authenticate.")}
               </Step>
             )}
           </ol>
@@ -159,20 +159,20 @@ function Asking({
             {pending ? (
               <p role="status" aria-live="polite" className="flex items-center justify-center gap-2 py-2 text-sm text-ink-soft">
                 <span aria-hidden className="size-2 shrink-0 rounded-full bg-accent-warn motion-safe:animate-pulse" />
-                {t("access.waiting")}
+                {t("Waiting for approval — checking every 30 s")}
               </p>
             ) : (
               <Button className="w-full" size={button("lg")} onClick={ask} disabled={busy}>
-                {t("access.request")}
+                {t("Request access")}
               </Button>
             )}
             {failure && <p className="text-sm text-accent-error">{failure}</p>}
             <Button asChild variant="outline" className="w-full" size={button("lg")}>
-              <a href={switchAccountPath(here)}>{t("access.switch")}</a>
+              <a href={switchAccountPath(here)}>{t("Use a different account")}</a>
             </Button>
             {continueTo !== null && (
               <a className="py-2 text-center text-sm text-ink-soft hover:underline" href={`${continueTo}${continueTo.includes("?") ? "&" : "?"}decision=deny`}>
-                {t("access.cancel")}
+                {t("Cancel and return to Claude Code")}
               </a>
             )}
           </div>

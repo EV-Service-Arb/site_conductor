@@ -40,7 +40,7 @@ function clip(value: string): string {
 /** The chip is the account's: past the profile it holds only acting as a member, for whoever may. */
 export function panelGroups(me: Caller, t: T): ChipGroup[] {
   if (!may(me, "sa:review_archive:members:act_as")) return [];
-  return [{ id: "sa", items: [{ id: "act-as", href: ROUTES.reviewArchiveActAs, label: t("account.actAs"), external: true }] }];
+  return [{ id: "sa", items: [{ id: "act-as", href: ROUTES.reviewArchiveActAs, label: t("View as member…"), external: true }] }];
 }
 
 /** The element's attributes for `me` on `pathname`; an absent value is an absent attribute. */

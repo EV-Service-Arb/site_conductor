@@ -35,16 +35,16 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
   const pathname = usePathname();
   const folded = useSidebarFolded();
   const live = useLiveSocket({ onUnauthenticated: goToSignIn, onForbidden });
-  const leads = t("title.leads");
+  const leads = t("Leads");
   useEffect(() => followTitleCount(window, document, leads), [leads]);
   useEffect(() => {
     window.addEventListener(UNAUTHENTICATED_EVENT, goToSignIn);
     return () => window.removeEventListener(UNAUTHENTICATED_EVENT, goToSignIn);
   }, []);
-  const elements = Object.fromEntries(Object.entries(PANEL.elementKeys).map(([tag, k]) => [tag, { on: { key: k.key }, label: t(k.label) }]));
+  const elements = Object.fromEntries(Object.entries(PANEL.elementKeys).map(([tag, k]) => [tag, { on: { key: k.key }, label: k.label(t) }]));
   return (
-    <KeymapProvider leader={LEADER} elements={elements} labels={{ title: t("keys.help") }}>
-      <UndoProvider labels={{ undo: t("undo.undo"), redo: t("undo.redo") }}>
+    <KeymapProvider leader={LEADER} elements={elements} labels={{ title: t("Keybinds") }}>
+      <UndoProvider labels={{ undo: t.ctx("undone", "Undo"), redo: t("Redo") }}>
         <GmailsProvider seesSites={seesSites(me)}>
           <PublishSelection />
           <NavKeys />

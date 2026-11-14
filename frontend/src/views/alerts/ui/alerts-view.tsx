@@ -34,7 +34,7 @@ import {
   useAlerts,
 } from "@/entities/alerts";
 import { type Gmail, fetchGmails } from "@/entities/gmb";
-import { useT } from "@/shared/i18n";
+import { type T, useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -59,13 +59,13 @@ export function AlertsView() {
   };
 
   return (
-    <PageFrame breakpoint="md" title={t("alerts.title")} description={t("alerts.description")} width="content">
+    <PageFrame breakpoint="md" title={t("Alerts")} description={t("Where your alerts go, and which go where.")} width="content">
       {alerts.status === "loading" ? (
         <Skeleton className="h-40 w-full" />
       ) : alerts.status === "error" ? (
         <ErrorState failure={alerts.failure} onRetry={alerts.reload} />
       ) : !alerts.data.enabled ? (
-        <p className="text-sm text-ink-soft">{t("alerts.off")}</p>
+        <p className="text-sm text-ink-soft">{t("Telegram is not set up on this server.")}</p>
       ) : (
         <Page alerts={alerts.data} gmails={gmails.status === "ok" ? gmails.data.gmails : []} busy={busy} act={act} />
       )}
@@ -74,6 +74,21 @@ export function AlertsView() {
 }
 
 type Act = (write: () => Promise<unknown>) => Promise<void>;
+
+const KIND = { private: (t) => t("Your chat"), channel: (t) => t("channel"), group: (t) => t("group") } satisfies Record<Destination["kind"], (t: T) => string>;
+const RULE = {
+  new_lead: (t) => t("New leads"),
+  contact_overdue: (t) => t("Leads waiting too long"),
+  booked: (t) => t("Bookings"),
+  payment_received: (t) => t("Payments"),
+  source_silent: (t) => t("Silent sources"),
+  access_requested: (t) => t("Access requests"),
+  review_new: (t) => t("New reviews"),
+  review_changed: (t) => t("Edited reviews"),
+  review_gone: (t) => t("Removed reviews"),
+  review_reappeared: (t) => t("Reviews back"),
+  scan_failed: (t) => t("Failed scans"),
+} satisfies Record<(typeof RULES)[number], (t: T) => string>;
 
 function Page({ alerts, gmails, busy, act }: { alerts: Alerts; gmails: Gmail[]; busy: boolean; act: Act }) {
   const t = useT();
@@ -96,24 +111,24 @@ function Page({ alerts, gmails, busy, act }: { alerts: Alerts; gmails: Gmail[]; 
 
   return (
     <>
-      <Section title={t("alerts.own")}>
+      <Section title={t("Your Telegram")}>
         {own === undefined ? (
           <div className="space-y-1">
             <Button type="button" size="sm" disabled={busy} onClick={connect}>
-              {t("alerts.connect")}
+              {t("Connect Telegram")}
             </Button>
-            <p className="text-xs text-ink-soft">{t("alerts.connect.hint")}</p>
+            <p className="text-xs text-ink-soft">{t("Opens the bot: press Start there.")}</p>
           </div>
         ) : (
           <DestinationCard destination={own} alerts={alerts} gmails={gmails} busy={busy} act={act} onReconnect={connect} />
         )}
       </Section>
-      <Section title={t("alerts.chats")}>
+      <Section title={t("Channels and groups")}>
         {chats.map((d) => (
           <DestinationCard key={d.id} destination={d} alerts={alerts} gmails={gmails} busy={busy} act={act} />
         ))}
         {own === undefined ? (
-          <p className="text-sm text-ink-soft">{t("alerts.chats.linkFirst")}</p>
+          <p className="text-sm text-ink-soft">{t("Connect your own Telegram first: the bot checks with it that you run the channel.")}</p>
         ) : (
           <AddChat bot={alerts.bot} gmails={gmails} busy={busy} act={act} />
         )}
@@ -149,35 +164,35 @@ function DestinationCard({
   onReconnect?: () => void;
 }) {
   const t = useT();
-  const name = d.title ?? t(`alerts.kind.${d.kind}`);
+  const name = d.title ?? KIND[d.kind](t);
   return (
     <div className="space-y-2 rounded-md border border-border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="text-ink">
           {name}
-          {d.topic_id !== null && <span className="text-ink-soft"> · {t("alerts.topic", { topic: d.topic_id })}</span>}
-          {d.kind !== "private" && <span className="text-ink-soft"> · {t(`alerts.kind.${d.kind}`)}</span>}
+          {d.topic_id !== null && <span className="text-ink-soft"> · {t("topic {topic}", { topic: d.topic_id })}</span>}
+          {d.kind !== "private" && <span className="text-ink-soft"> · {KIND[d.kind](t)}</span>}
         </span>
         <span className="flex gap-1">
           <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void act(() => testDestination(d.id))}>
-            {t("alerts.test")}
+            {t("Test")}
           </Button>
           <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void act(() => removeDestination(d.id))}>
-            {t("alerts.remove")}
+            {t("Remove")}
           </Button>
         </span>
       </div>
       {d.dead !== null && (
         <div className="space-y-1">
-          <p className="text-sm text-accent-warn">{t("alerts.dead", { why: d.dead })}</p>
+          <p className="text-sm text-accent-warn">{t("Nothing reaches it: {why}. Fix it, then Test.", { why: d.dead })}</p>
           {onReconnect !== undefined && (
             <Button type="button" size="sm" disabled={busy} onClick={onReconnect}>
-              {t("alerts.connect")}
+              {t("Connect Telegram")}
             </Button>
           )}
         </div>
       )}
-      {d.kind !== "private" && <p className="text-xs text-ink-soft">{t("alerts.chats.noPii")}</p>}
+      {d.kind !== "private" && <p className="text-xs text-ink-soft">{t("Without contact details or buttons: whoever is in the chat reads it.")}</p>}
       {gmails.length > 0 && (
         <GmailScope value={d.gmail_id} gmails={gmails} busy={busy} onChange={(gmail) => void act(() => setGmail(d.id, gmail))} />
       )}
@@ -194,13 +209,13 @@ function GmailScope({ value, gmails, busy, onChange }: { value: number | null; g
   const size = useControlSize();
   return (
     <Field className="flex flex-col gap-1">
-      <FieldLabel htmlFor={id}>{t("alerts.gmail")}</FieldLabel>
+      <FieldLabel htmlFor={id}>{t("Reviews of")}</FieldLabel>
       <Select value={value === null ? ALL : String(value)} onValueChange={(v) => onChange(v === ALL ? null : Number(v))}>
         <SelectTrigger id={id} size={size} className="w-full" disabled={busy}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={ALL}>{t("alerts.gmail.all")}</SelectItem>
+          <SelectItem value={ALL}>{t("Every gmail")}</SelectItem>
           {gmails.map((g) => (
             <SelectItem key={g.id} value={String(g.id)}>
               {g.gmail}
@@ -214,12 +229,12 @@ function GmailScope({ value, gmails, busy, onChange }: { value: number | null; g
 
 function Rules({ alerts, destination, busy, onToggle }: { alerts: Alerts; destination: Destination; busy: boolean; onToggle: (rule: (typeof RULES)[number], on: boolean) => void }) {
   const t = useT();
-  if (alerts.rules.length === 0) return <p className="text-sm text-ink-soft">{t("alerts.none")}</p>;
+  if (alerts.rules.length === 0) return <p className="text-sm text-ink-soft">{t("Your access has nothing to alert you of.")}</p>;
   return (
     <div className="space-y-2 border-t border-border pt-2">
       {RULES.filter((rule) => alerts.rules.includes(rule)).map((rule) => (
         <label key={rule} className="flex items-center justify-between gap-2 text-sm text-ink">
-          {t(`alerts.rule.${rule}`)}
+          {RULE[rule](t)}
           <Switch checked={destination.rules[rule] === true} disabled={busy} onCheckedChange={(next) => onToggle(rule, next)} />
         </label>
       ))}
@@ -247,13 +262,13 @@ function AddChat({ bot, gmails, busy, act }: { bot: string | null; gmails: Gmail
       }}
     >
       <Field className="flex flex-col gap-1">
-        <FieldLabel htmlFor={id}>{t("alerts.chats.add")}</FieldLabel>
+        <FieldLabel htmlFor={id}>{t("Channel, group or topic")}</FieldLabel>
         <Input id={id} size={size} autoCapitalize="none" value={chat} onChange={(e) => setChat(e.target.value)} placeholder="@channel" />
-        <FieldDescription>{t("alerts.chats.hint", { bot: bot ?? "…" })}</FieldDescription>
+        <FieldDescription>{t("Add {bot} to it as an admin, then paste @channel, its -100… id, or <group id>/<topic id>.", { bot: bot ?? "…" })}</FieldDescription>
       </Field>
       {gmails.length > 0 && <GmailScope value={gmail} gmails={gmails} busy={busy} onChange={setGmailScope} />}
       <Button type="submit" disabled={busy || !ready} size={button()}>
-        {t("alerts.chats.addButton")}
+        {t("Add")}
       </Button>
     </form>
   );

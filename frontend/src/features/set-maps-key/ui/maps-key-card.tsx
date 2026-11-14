@@ -36,36 +36,36 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
   const failing = mapsKey !== null && (mapsKey.checked.error !== null || mapsKey.out !== null);
   const cost =
     prices.details === null || prices.search === null || prices.autocomplete === null
-      ? t("account.mapsKey.unpriced")
-      : t("account.mapsKey.cost", { details: prices.details, search: prices.search, autocomplete: prices.autocomplete });
+      ? t("The shared keys are not priced yet: without a key of your own, Google lookups are refused.")
+      : t("On the shared keys: {details} tokens a lookup, {search} a search, {autocomplete} a suggestion.", { details: prices.details, search: prices.search, autocomplete: prices.autocomplete });
 
   return (
     <Card className="gap-3 py-4">
       <CardContent className="flex flex-col gap-3 px-4">
         <header className="flex items-center gap-2">
           <KeyRound aria-hidden className="size-4 text-ink-soft" />
-          <h3 className="flex-1 text-sm font-semibold text-ink">{t("account.mapsKey.title")}</h3>
-          {mapsKey && <Badge tone={failing ? "error" : "positive"}>{t(failing ? "account.mapsKey.failing" : "account.mapsKey.works")}</Badge>}
+          <h3 className="flex-1 text-sm font-semibold text-ink">{t("Google Maps key")}</h3>
+          {mapsKey && <Badge tone={failing ? "error" : "positive"}>{(failing ? t("Failing") : t("Works"))}</Badge>}
         </header>
         {mapsKey && !editing ? (
           <>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-              <dt className="text-ink-soft">{t("account.mapsKey.key")}</dt>
+              <dt className="text-ink-soft">{t("Key")}</dt>
               <dd className="text-right font-mono text-ink">••••{mapsKey.last4}</dd>
-              <dt className="text-ink-soft">{t("account.mapsKey.set")}</dt>
+              <dt className="text-ink-soft">{t("Set")}</dt>
               <dd className="text-right text-ink-soft">{formatDateTime(mapsKey.set_at, locale)}</dd>
             </dl>
             <p className="text-xs text-ink-soft">
-              {t("account.checkedAt", { at: formatDateTime(mapsKey.checked.at, locale) })}
+              {t("Checked {at}", { at: formatDateTime(mapsKey.checked.at, locale) })}
               {mapsKey.checked.error !== null && <span className="block text-accent-error">{mapsKey.checked.error}</span>}
-              {mapsKey.out !== null && <span className="block text-accent-warn">{t("account.mapsKey.out", { why: mapsKey.out })}</span>}
+              {mapsKey.out !== null && <span className="block text-accent-warn">{t("Passed over now: {why}", { why: mapsKey.out })}</span>}
             </p>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void act(() => testConnection(gmail, "maps_key"))}>
-                {t("account.test")}
+                {t("Test")}
               </Button>
               <Button variant="ghost" size={button("sm")} disabled={busy} onClick={() => setEditing(true)}>
-                {t("account.replace")}
+                {t("Replace")}
               </Button>
               <Button
                 variant="ghost"
@@ -75,7 +75,7 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
                   void act(() => disconnect(gmail, "maps_key"))
                 }
               >
-                {t("account.remove")}
+                {t("Remove")}
               </Button>
             </div>
           </>
@@ -88,22 +88,22 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
             }}
           >
             <Field>
-              <FieldLabel htmlFor={`${id}-key`}>{t("account.mapsKey.key")}</FieldLabel>
+              <FieldLabel htmlFor={`${id}-key`}>{t("Key")}</FieldLabel>
               <Input id={`${id}-key`} size={size} type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" placeholder="AIza…" />
             </Field>
             <div className="flex gap-2">
               <Button type="submit" size={button("sm")} disabled={key.trim() === "" || busy}>
-                {t("account.mapsKey.add")}
+                {t("Check and keep")}
               </Button>
               {mapsKey && (
                 <Button type="button" variant="ghost" size={button("sm")} disabled={busy} onClick={() => setEditing(false)}>
-                  {t("account.cancel")}
+                  {t("Cancel")}
                 </Button>
               )}
             </div>
           </form>
         )}
-        <p className="text-xs text-ink-soft">{t("account.mapsKey.order")}</p>
+        <p className="text-xs text-ink-soft">{t("Tried first for this gmail's GBPs, then for your other gmails', before the shared keys. Your own key costs no tokens.")}</p>
         <p className="text-xs text-ink-soft">{cost}</p>
       </CardContent>
     </Card>

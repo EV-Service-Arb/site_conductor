@@ -10,8 +10,8 @@ import { EmptyState } from "@/shared/ui/empty-state";
 export function WalletView() {
   const t = useT();
   return (
-    <PageFrame breakpoint="md" title={t("wallet.title")} {...(PANEL.walletPage ? { description: t("wallet.description") } : {})} width="content">
-      {PANEL.walletPage ? <WalletElement /> : <EmptyState title={t("wallet.unavailable.title")} description={t("wallet.off.body")} />}
+    <PageFrame breakpoint="md" title={t("Wallet")} {...(PANEL.walletPage ? { description: t("Balances and recent activity of the Service-Arb compartment.") } : {})} width="content">
+      {PANEL.walletPage ? <WalletElement /> : <EmptyState title={t("Wallet is unavailable")} description={t("The wallet is not enabled for this panel yet.")} />}
     </PageFrame>
   );
 }

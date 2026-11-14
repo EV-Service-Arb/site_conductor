@@ -15,7 +15,7 @@ export function PlaceButton({ gmb, item = false, onNavigate }: { gmb: Gmb; item?
   const router = useRouter();
   const pathname = usePathname();
   if (gmb.location !== null && !gmb.location.placed) return null;
-  const label = t(gmb.location === null ? "gmbs.place.set" : "gmbs.place.move");
+  const label = (gmb.location === null ? t("Set location") : t("Move location"));
   const open = () => {
     if (pathname !== "/") router.push("/");
     else peek(null);

@@ -19,10 +19,10 @@ export function Peek({ listed, onClose }: { listed: Listed; onClose: () => void 
   const site = tags.sites?.get(gmb.id);
   const issue = issueOf(gmb, tags);
   const name = gmb.name;
-  const reviewsNote = archive && (archive.suspended > 0 ? t("gmbs.tag.suspended", { n: archive.suspended }) : archive.failing ? t("gmbs.issue.failing") : null);
+  const reviewsNote = archive && (archive.suspended > 0 ? t("{n} reviews suspended", { n: archive.suspended }) : archive.failing ? t("Failing") : null);
   const numbers = [
-    archive?.rating != null && archive.reviews !== null && t("home.peek.rating", { rating: archive.rating.toFixed(1), n: archive.reviews }),
-    site && (site.overdue > 0 ? t("home.peek.leadsOverdue", { n: site.leads_7d, overdue: site.overdue }) : t("home.peek.leads", { n: site.leads_7d })),
+    archive?.rating != null && archive.reviews !== null && t("★ {rating} ({n} reviews)", { rating: archive.rating.toFixed(1), n: archive.reviews }),
+    site && (site.overdue > 0 ? t("{n} leads in 7 days ({overdue} overdue)", { n: site.leads_7d, overdue: site.overdue }) : t("{n} leads in 7 days", { n: site.leads_7d })),
   ].filter(Boolean);
   return (
     <Card className="absolute top-4 right-4 w-80 max-w-[calc(100%-2rem)] gap-3 py-4 shadow-overlay">
@@ -36,7 +36,7 @@ export function Peek({ listed, onClose }: { listed: Listed; onClose: () => void 
             <CategoryChip gmb={gmb} />
           </div>
         </div>
-        <Button variant="ghost" size={button("sm")} icon aria-label={t("home.peek.close")} title={t("home.peek.close")} onClick={onClose}>
+        <Button variant="ghost" size={button("sm")} icon aria-label={t("Close")} title={t("Close")} onClick={onClose}>
           <X aria-hidden />
         </Button>
       </CardHeader>
@@ -44,22 +44,22 @@ export function Peek({ listed, onClose }: { listed: Listed; onClose: () => void 
         <div className="flex flex-col gap-0.5 text-sm">
           {numbers.length > 0 && <p className="text-ink tabular-nums">{numbers.join(" · ")}</p>}
           <p className={cn(issue === null || issue === "off" || issue === "draft" || issue === "no_category" ? "text-ink-soft" : "font-medium text-accent-error")}>
-            {issue === null ? t("home.peek.fine") : issue === "off" ? t("home.peek.off") : issueText(issue, listed, tags, t)}
+            {issue === null ? t("Nothing needs you") : issue === "off" ? t("Switched off: the services do no work on it.") : issueText(issue, listed, tags, t)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {TABS[gmb.state].length > 0 && (
             <Button size={button("sm")} onClick={() => open(gmb)}>
-              {t("home.peek.open")}
+              {t("Open")}
             </Button>
           )}
           <Link href={`${ROUTES.reviewArchive}gmbs/${gmb.id}`} className={buttonVariants({ variant: "outline", size: button("sm") })}>
-            {reviewsNote ? `${t("home.peek.reviews")} · ${reviewsNote}` : t("home.peek.reviews")}
+            {reviewsNote ? `${t("Reviews")} · ${reviewsNote}` : t("Reviews")}
           </Link>
           {site && (
             <Link href={`${ROUTES.sites}places`} className={buttonVariants({ variant: "outline", size: button("sm") })}>
-              {t("gmbs.tag.site", { place: `${site.brand}/${site.location}` })}
-              {site.overdue > 0 && ` · ${t("gmbs.tag.overdue", { n: site.overdue })}`}
+              {t("site {place}", { place: `${site.brand}/${site.location}` })}
+              {site.overdue > 0 && ` · ${t("{n} overdue", { n: site.overdue })}`}
             </Link>
           )}
         </div>

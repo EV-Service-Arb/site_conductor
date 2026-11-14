@@ -6,41 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 
-import {
-  COUNTRIES,
-  type Gmb,
-  ISSUES,
-  type Listed,
-  MUST_HAVES,
-  type SiteTag,
-  type State,
-  TABS,
-  type Tags,
-  byView,
-  chooseGmailScope,
-  issueCounts,
-  issueOf,
-  issueText,
-  open,
-  openTrash,
-  readiness,
-  removeGmb,
-  select,
-  setFilter,
-  setOnMap,
-  setOnly,
-  setTrades,
-  switchGmbs,
-  useGmails,
-  useGmbTags,
-  useOnMap,
-  usePeeked,
-  useScope,
-  useSelection,
-  useTrades,
-  useTrash,
-  useUndoable,
-} from "@/entities/gmb";
+import { byView, chooseGmailScope, COUNTRIES, type Gmb, ISSUE_LABEL, issueCounts, issueOf, ISSUES, issueText, type Listed, MUST_HAVES, open, openTrash, readiness, removeGmb, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, type State, STATE_LABEL, switchGmbs, TABS, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { AddGmbButton } from "@/features/add-gmb";
 import { EditGbp } from "@/features/edit-gbp";
@@ -141,16 +107,16 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     // NOT SELECTED and the footer stay in reach under a long SELECTED, which scrolls alone
-    <section aria-label={t("gmbs.title")} className="flex min-h-0 flex-1 flex-col gap-1">
+    <section aria-label={t("Managing gmails")} className="flex min-h-0 flex-1 flex-col gap-1">
       <ScopePicker data={gmails.data} selection={selection} onFlip={flip} onChanged={changed} />
       <InputGroup className="mx-0.5 w-auto">
         <InputGroupAddon>
           <Search aria-hidden />
         </InputGroupAddon>
-        <InputGroupInput type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t("gmbs.filter")} aria-label={t("gmbs.filter")} />
+        <InputGroupInput type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t("Name, address, place id, gmail")} aria-label={t("Name, address, place id, gmail")} />
       </InputGroup>
       {counts.size > 0 && (
-        <div role="group" aria-label={t("gmbs.issues")} className="flex flex-wrap gap-1 px-0.5 pt-1">
+        <div role="group" aria-label={t("What needs you")} className="flex flex-wrap gap-1 px-0.5 pt-1">
           {ISSUES.filter((i) => counts.has(i)).map((i) => (
             <button
               key={i}
@@ -163,21 +129,21 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
                 only !== i && (i === "off" || i === "draft" || i === "no_category" ? "text-ink-soft" : "text-accent-error"),
               )}
             >
-              {t(`gmbs.issue.${i}`)} <span className="tabular-nums">{counts.get(i)}</span>
+              {ISSUE_LABEL[i](t)} <span className="tabular-nums">{counts.get(i)}</span>
             </button>
           ))}
         </div>
       )}
       {rows.length === 0 ? (
-        <p className="px-2 py-1.5 text-xs text-ink-soft">{t("gmbs.none")}</p>
+        <p className="px-2 py-1.5 text-xs text-ink-soft">{t("No GMBs yet.")}</p>
       ) : (
         <>
           <Group
             into
             className="min-h-0 flex-1 overflow-y-auto"
-            heading={t("gmbs.selected")}
+            heading={t("Selected")}
             count={inSelection.length}
-            empty={t("gmbs.selected.empty")}
+            empty={t("Drag locations here: every app shows only these.")}
             onMove={move}
             action={
               <>
@@ -189,19 +155,19 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
             {split ? (
               <>
                 <h4 className={SUBHEADING}>
-                  {t("gmbs.inView")} <span className="tabular-nums">{split.inView.length + split.offInView.length}</span>
+                  {t("In view")} <span className="tabular-nums">{split.inView.length + split.offInView.length}</span>
                 </h4>
                 <ul className="flex flex-col">{split.inView.map(row)}</ul>
                 {split.offInView.length > 0 && (
                   <>
                     <h4 className={cn(SUBHEADING, "mx-2 border-t border-border px-0")}>
-                      {t("gmbs.issue.off")} <span className="tabular-nums">{split.offInView.length}</span>
+                      {t("Off")} <span className="tabular-nums">{split.offInView.length}</span>
                     </h4>
                     <ul className="flex flex-col">{split.offInView.map(row)}</ul>
                   </>
                 )}
                 <h4 className={SUBHEADING}>
-                  {t("gmbs.elsewhere")} <span className="tabular-nums">{split.elsewhere.length}</span>
+                  {t("Elsewhere")} <span className="tabular-nums">{split.elsewhere.length}</span>
                 </h4>
                 <ul className="flex flex-col">{split.elsewhere.map(row)}</ul>
               </>
@@ -212,11 +178,11 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
           <Group
             into={false}
             className="max-h-2/5 shrink-0 overflow-y-auto border-t border-border"
-            heading={t("gmbs.unselected")}
+            heading={t("Not selected")}
             count={outOfSelection.length}
-            empty={t("gmbs.unselected.empty")}
+            empty={t("Drag a location here to leave it out of every app.")}
             onMove={move}
-            action={chosen !== null && <HeadAction onClick={() => select(null)}>{t("gmbs.selectAll")}</HeadAction>}
+            action={chosen !== null && <HeadAction onClick={() => select(null)}>{t("Select all")}</HeadAction>}
           >
             <ul className="flex flex-col">{outOfSelection.map(row)}</ul>
           </Group>
@@ -252,7 +218,7 @@ function TrashButton() {
       }}
     >
       <Trash2 aria-hidden />
-      {t("trash.open")}
+      {t("Trash")}
       {n !== null && n > 0 && <span className="tabular-nums">{n}</span>}
     </Button>
   );
@@ -329,13 +295,13 @@ function SetTrade({ gmbs, onSet }: { gmbs: Gmb[]; onSet: () => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex items-center gap-0.5 rounded px-1 text-xs font-normal tracking-normal normal-case outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
-        {t("trades.set", { n: gmbs.length })}
+        {t("Set trade · {n}", { n: gmbs.length })}
         <ChevronDown aria-hidden className="size-3" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-96">
         <DropdownMenuLabel className="flex text-xs tracking-wide text-ink-soft uppercase">
-          <span className="flex-1">{t("trades.set.title", { n: gmbs.length })}</span>
-          <span className="font-normal normal-case">{[...byCountry.map(([c, n]) => `${c} ${n}`), ...(nowhere > 0 ? [t("trades.set.nowhere", { n: nowhere })] : [])].join(" · ")}</span>
+          <span className="flex-1">{t("Set the trade of {n}", { n: gmbs.length })}</span>
+          <span className="font-normal normal-case">{[...byCountry.map(([c, n]) => `${c} ${n}`), ...(nowhere > 0 ? [t("{n} no country", { n: nowhere })] : [])].join(" · ")}</span>
         </DropdownMenuLabel>
         {trades.status === "ok" &&
           trades.data.map((tr) => (
@@ -349,7 +315,7 @@ function SetTrade({ gmbs, onSet }: { gmbs: Gmb[]; onSet: () => void }) {
                     return (
                       <span key={c} className={cn(!setUp && "text-accent-warn")}>
                         {i > 0 && " · "}
-                        {setUp ? `${tr.name} · ${c} ${n}` : t("trades.set.notSetUp", { category: `${tr.name} · ${c}`, n })}
+                        {setUp ? `${tr.name} · ${c} ${n}` : t("{category} {n} · not set up", { category: `${tr.name} · ${c}`, n })}
                       </span>
                     );
                   })}
@@ -361,8 +327,8 @@ function SetTrade({ gmbs, onSet }: { gmbs: Gmb[]; onSet: () => void }) {
         <DropdownMenuItem disabled={untraded} onClick={() => void give(null)}>
           <X aria-hidden />
           <span className="flex flex-col">
-            {t("trades.none")}
-            {untraded && <span className="text-xs text-ink-soft">{t("trades.set.untraded", { n: gmbs.length })}</span>}
+            {t("No trade")}
+            {untraded && <span className="text-xs text-ink-soft">{t("all {n} already have no trade", { n: gmbs.length })}</span>}
           </span>
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -410,17 +376,17 @@ function GmbRow({
   const hovered = useOnMap((s) => s.hovered === gmb.id);
   const [dialog, setDialog] = useState<"edit" | "link" | "remove" | null>(null);
   const name = gmb.name;
-  const move = t(selected ? "gmbs.deselect" : "gmbs.select");
+  const move = (selected ? t("Leave out") : t("Select"));
   const issue = issueOf(gmb, tags);
   const archive = tags.archive?.get(gmb.id);
   const site = tags.sites?.get(gmb.id);
   const ready = gmb.state === "draft" ? readiness({ gmb, gmail }, tags).filter((r) => r.ready).length : null;
   const key =
     ready !== null
-      ? { text: issueText("draft", { gmb, gmail }, tags, t), title: t("gmbs.readiness.title"), tone: ready === MUST_HAVES.length ? "text-positive" : "text-accent-warn" }
+      ? { text: issueText("draft", { gmb, gmail }, tags, t), title: t("Must-haves ready before Google's form"), tone: ready === MUST_HAVES.length ? "text-positive" : "text-accent-warn" }
       : tags.sites !== null
-        ? site && { text: String(site.leads_7d), title: t("gmbs.leads7d.title"), tone: "text-ink-soft" }
-        : archive?.rating != null && { text: `★ ${archive.rating.toFixed(1)}`, title: t("gmbs.rating.title"), tone: "text-ink-soft" };
+        ? site && { text: String(site.leads_7d), title: t("Leads in the last 7 days"), tone: "text-ink-soft" }
+        : archive?.rating != null && { text: `★ ${archive.rating.toFixed(1)}`, title: t("Rating on Google"), tone: "text-ink-soft" };
   const shown = issue === "draft" ? null : issue;
   const where = [gmb.address, showGmail ? gmail?.gmail : null].filter(Boolean).join(" · ");
   const label = (
@@ -434,7 +400,7 @@ function GmbRow({
         )}
       </span>
       <span className="block truncate text-xs text-ink-soft">
-        {gmb.state !== "verified" && <span className={cn("font-medium", gmb.state === "suspended" && "text-accent-error")}>{t(`gmbs.state.${gmb.state}`)}</span>}
+        {gmb.state !== "verified" && <span className={cn("font-medium", gmb.state === "suspended" && "text-accent-error")}>{STATE_LABEL[gmb.state](t)}</span>}
         {gmb.state !== "verified" && (shown || where) && " · "}
         {shown && <span className={cn("font-medium", shown === "off" || shown === "no_category" ? "text-ink-soft" : "text-accent-error")}>{issueText(shown, { gmb, gmail }, tags, t)}</span>}
         {shown && where && " · "}
@@ -456,7 +422,7 @@ function GmbRow({
     >
       {/* the ⋮'s dots are the state's, so the menu takes no width of its own */}
       <DropdownMenu>
-        <DropdownMenuTrigger aria-label={t("gmbs.actions", { name })} title={t(`gmbs.state.${gmb.state}`)} className="flex w-4 shrink-0 flex-col items-center justify-center gap-0.5 self-stretch rounded-sm outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-hover">
+        <DropdownMenuTrigger aria-label={t("{name}: actions", { name })} title={STATE_LABEL[gmb.state](t)} className="flex w-4 shrink-0 flex-col items-center justify-center gap-0.5 self-stretch rounded-sm outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-hover">
           {[0, 1, 2].map((i) => (
             <span key={i} aria-hidden className={cn("size-1.5 rounded-full", DOT[gmb.state], !gmb.enabled && "border-ink-soft bg-ink-soft", gmb.location === null && "opacity-40")} />
           ))}
@@ -469,26 +435,26 @@ function GmbRow({
           {gmb.state !== "draft" && (
             <DropdownMenuItem onClick={() => setDialog("edit")}>
               <Pencil aria-hidden />
-              {t("gmbs.edit")}
+              {t("Edit…")}
             </DropdownMenuItem>
           )}
           <PlaceButton gmb={gmb} item {...(onNavigate && { onNavigate })} />
           {linked && (
             <DropdownMenuItem onClick={() => setDialog("link")}>
               <Link2 aria-hidden />
-              {linked.has(gmb.id) ? t("gmbs.tag.site", { place: `${linked.get(gmb.id)!.brand}/${linked.get(gmb.id)!.location}` }) : t("gmbs.tag.site.link")}
+              {linked.has(gmb.id) ? t("site {place}", { place: `${linked.get(gmb.id)!.brand}/${linked.get(gmb.id)!.location}` }) : t("site: link…")}
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onClick={() => setDialog("remove")}>
             <Trash2 aria-hidden />
-            {t("gmbs.remove")}…
+            {t("Remove")}…
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       {dialog === "edit" && <EditGbp gmb={gmb} onClose={() => setDialog(null)} onChanged={onChanged} />}
       {dialog === "link" && linked && <LinkPlace gmbId={gmb.id} linked={linked} onClose={() => setDialog(null)} onDone={onChanged} />}
-      {dialog === "remove" && <RemoveDialog title={t("gmbs.gmb.remove.title", { name })} body={t("gmbs.gmb.remove.body", { kept })} remove={() => removeGmb(gmb.id)} onRemoved={onChanged} onClose={() => setDialog(null)} />}
+      {dialog === "remove" && <RemoveDialog title={t("Remove {name}?", { name })} body={t("It goes to the trash{kept}: every service stops working on it until then; its history stays.", { kept })} remove={() => removeGmb(gmb.id)} onRemoved={onChanged} onClose={() => setDialog(null)} />}
       {onMap ? (
         <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => open(gmb)}>
           {label}
@@ -508,7 +474,7 @@ function GmbRow({
           {label}
         </Link>
       )}
-      <Switch aria-label={t("gmbs.switch", { name })} checked={gmb.enabled} onCheckedChange={(v) => void onFlip([gmb], v)} />
+      <Switch aria-label={t("{name} on or off", { name })} checked={gmb.enabled} onCheckedChange={(v) => void onFlip([gmb], v)} />
     </li>
   );
 }

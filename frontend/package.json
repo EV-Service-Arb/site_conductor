@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "next dev --port ${PANEL_WEB_PORT:?the dev shell sets it}",
     "dev:stub": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/dev-stub.ts",
-    "build": "next build",
+    "build": "evinvest-i18n-check --root . --exclude out,tests && next build",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@evinvest/concierge": "^0.5.0",
+    "@evinvest/i18n": "^0.13.0",
     "@evinvest/mfe": "^0.3.0",
     "@evinvest/uikit": "^0.33.0",
     "@googlemaps/js-api-loader": "^2.1.3",

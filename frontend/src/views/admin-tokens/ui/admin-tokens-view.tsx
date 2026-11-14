@@ -28,29 +28,29 @@ export function AdminTokensView() {
 
   if (!may(me, "sa:admin:tokens:grant")) {
     return (
-      <PageFrame breakpoint="md" title={t("tokens.admin.title")}>
+      <PageFrame breakpoint="md" title={t("Tokens of everyone")}>
         <ErrorState failure={{ kind: "forbidden", message: "" }} />
       </PageFrame>
     );
   }
 
   return (
-    <PageFrame breakpoint="md" title={t("tokens.admin.title")}>
+    <PageFrame breakpoint="md" title={t("Tokens of everyone")}>
       {prices.status === "error" && <ErrorState failure={prices.failure} onRetry={prices.reload} />}
       {prices.status === "ok" && <PricesCard key={`${prices.data.details}:${prices.data.search}`} prices={prices.data} onSaved={prices.reload} />}
       <Settled loading={holders.status === "loading"} skeleton={<Skeleton className="h-40 w-full" />}>
         {holders.status === "error" && <ErrorState failure={holders.failure} onRetry={holders.reload} />}
-        {holders.status === "ok" && holders.data.length === 0 && <EmptyState title={t("tokens.admin.empty")} description="" />}
+        {holders.status === "ok" && holders.data.length === 0 && <EmptyState title={t("Nobody has signed in yet.")} description="" />}
         {holders.status === "ok" && holders.data.length > 0 && (
           <Card className="overflow-hidden py-0">
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className={HEAD}>{t("tokens.admin.user")}</TableHead>
-                    <TableHead className={cn(HEAD, "text-right")}>{t("tokens.admin.balance")}</TableHead>
+                    <TableHead className={HEAD}>{t("Person")}</TableHead>
+                    <TableHead className={cn(HEAD, "text-right")}>{t("Tokens")}</TableHead>
                     <TableHead className={HEAD}>
-                      <span className="sr-only">{t("tokens.admin.change")}</span>
+                      <span className="sr-only">{t("Change")}</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -64,7 +64,7 @@ export function AdminTokensView() {
                       <TableCell className={cn(EDGE_CELL, "text-right tabular-nums")}>{h.balance}</TableCell>
                       <TableCell className={cn(EDGE_CELL, "text-right")}>
                         <Button variant="ghost" size={button("sm")} onClick={() => setChanging(h)}>
-                          {t("tokens.admin.change")}
+                          {t("Change")}
                         </Button>
                       </TableCell>
                     </TableRow>

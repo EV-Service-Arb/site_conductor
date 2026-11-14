@@ -24,7 +24,7 @@ export function Outline({ folded, onNavigate, className }: { folded: boolean; on
   const pathname = usePathname();
   const sections: NavSection[] = [
     ...useApps(onNavigate).flatMap((a) => (a.here ? [a.section] : "content" in a.section ? [{ ...a.section, hidden: true }] : [])),
-    { id: "gbps", label: t("nav.gbps"), icon: Store, content: <GmbTree {...(onNavigate && { onNavigate })} /> },
+    { id: "gbps", label: t("GBPs"), icon: Store, content: <GmbTree {...(onNavigate && { onNavigate })} /> },
   ];
   return (
     <ShellNav
@@ -32,7 +32,7 @@ export function Outline({ folded, onNavigate, className }: { folded: boolean; on
       pathname={pathname}
       linkComponent={Link}
       unfold={folded ? toggleSidebar : undefined}
-      labels={{ primary: t("nav.outline") }}
+      labels={{ primary: t("Outline") }}
       {...(onNavigate && { onNavigate: () => onNavigate() })}
       style={WIDTH}
       className={cn("gap-4 px-2 pt-2 pb-2", className)}

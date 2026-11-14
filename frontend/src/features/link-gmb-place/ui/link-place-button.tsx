@@ -16,7 +16,7 @@ export function LinkPlaceButton({ gmbId, linked, onDone }: { gmbId: number; link
   const button = useButtonSize();
   const [open, setOpen] = useState(false);
   const own = linked.get(gmbId);
-  const label = own ? t("gmbs.tag.site", { place: `${own.brand}/${own.location}` }) : t("gmbs.tag.site.link");
+  const label = own ? t("site {place}", { place: `${own.brand}/${own.location}` }) : t("site: link…");
   return (
     <>
       <Button variant="ghost" size={button("sm")} icon aria-label={label} title={label} className={own ? "text-ink" : "text-ink-soft"} onClick={() => setOpen(true)}>
@@ -69,11 +69,11 @@ function Picker({
   const holder = new Map([...linked].map(([id, tag]) => [`${tag.brand}/${tag.location}`, id]));
   return (
     <CommandDialog open onOpenChange={(o) => !o && onClose()}>
-      <CommandInput placeholder={t("gmbs.link.search")} />
+      <CommandInput placeholder={t("brand/location")} />
       <CommandList>
-        <CommandEmpty>{places.status === "loading" ? "…" : t("gmbs.link.none")}</CommandEmpty>
-        {onUnlink && <CommandItem value={t("gmbs.link.unlink")} onSelect={onUnlink}>{t("gmbs.link.unlink")}</CommandItem>}
-        {places.status === "error" && <p className="px-3 py-2 text-sm text-ink-soft">{t("gmbs.tags.failed", { service: t("nav.sites") })}</p>}
+        <CommandEmpty>{places.status === "loading" ? "…" : t("No such place.")}</CommandEmpty>
+        {onUnlink && <CommandItem value={t("No site place")} onSelect={onUnlink}>{t("No site place")}</CommandItem>}
+        {places.status === "error" && <p className="px-3 py-2 text-sm text-ink-soft">{t("{service} can't be read right now.", { service: t("Sites") })}</p>}
         {places.status === "ok" &&
           places.data.map((p) => {
             const key = `${p.brand}/${p.location}`;
@@ -82,8 +82,8 @@ function Picker({
             return (
               <CommandItem key={key} value={key} disabled={p.withdrawn || taken} onSelect={() => onPick(p.brand, p.location)}>
                 <span className="flex-1">{key}</span>
-                {p.withdrawn && <span className="text-xs text-ink-soft">{t("gmbs.link.withdrawn")}</span>}
-                {taken && <span className="text-xs text-ink-soft">{t("gmbs.link.taken")}</span>}
+                {p.withdrawn && <span className="text-xs text-ink-soft">{t("withdrawn")}</span>}
+                {taken && <span className="text-xs text-ink-soft">{t("another GMB's")}</span>}
               </CommandItem>
             );
           })}
