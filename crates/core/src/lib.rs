@@ -8,11 +8,13 @@
 //! - [`queries_cache`]: the queries cache's wire;
 //! - [`notify`]: the Telegram rules, the conductor's own messages, the buttons' signed data, and
 //!   how a delivery is retried;
+//! - [`prices`]: what costs tokens, tool by tool;
 //! - [`tokens`]: how a balance renews and a charge falls on its payers.
 
 pub mod gbp;
 pub mod ids;
 pub mod notify;
+pub mod prices;
 pub mod queries_cache;
 pub mod signature;
 pub mod tokens;

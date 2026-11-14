@@ -11,7 +11,10 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::get,
 };
-use sa_core::gbp::{Country, OnGoogle};
+use sa_core::{
+	gbp::{Country, OnGoogle},
+	prices::{Item, PlacesRequest},
+};
 use sa_panel::{
 	Panel,
 	gmbs::{Existing, Gmb, Located, Unplaced},
@@ -19,7 +22,7 @@ use sa_panel::{
 	seal::DataKey,
 	testing::{TestDb, operator, panel_on},
 };
-use sa_places::{Google, Keys, Sku};
+use sa_places::{Google, Keys};
 use sa_server::{
 	concierge::{Concierge, DevIdentity},
 	gmbs::MapDto,
@@ -79,10 +82,14 @@ async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
 	let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
 	let p = panel_on(db.store().await, key, google);
 	// what a point costs is tests/connections.rs's
-	p.set_prices(&[(Sku::Details, 0), (Sku::Search, 0), (Sku::Autocomplete, 0)], "admin@localhost", jiff::Timestamp::now())
-		.await
-		.unwrap()
-		.unwrap();
+	p.set_prices(
+		&[PlacesRequest::Details, PlacesRequest::Search, PlacesRequest::Autocomplete].map(|r| (Item::Places(r), Some(0))),
+		"admin@localhost",
+		jiff::Timestamp::now(),
+	)
+	.await
+	.unwrap()
+	.unwrap();
 	p
 }
 
@@ -335,7 +342,14 @@ async fn a_draft_goes_onto_google_and_is_verified() {
 	let gbp = format!("/api/v1/gmbs/{}", draft["id"]);
 	let (status, _) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(new)).await;
 	assert_eq!(status, StatusCode::CONFLICT);
-	let (status, body) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(json!({ "name": "Nowhere", "trade": trade["id"], "state": "draft" }))).await;
+	let (status, body) = call(
+		&mut b,
+		&app,
+		Method::POST,
+		"/api/v1/gmbs",
+		Some(json!({ "name": "Nowhere", "trade": trade["id"], "state": "draft" })),
+	)
+	.await;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "a draft is somewhere: {body}");
 
 	let spots = json!([
@@ -540,7 +554,11 @@ async fn beside_another(db: &TestDb) -> (Router, Browser, i64, i64) {
 		gmail_id: None,
 		country: None,
 		at: None,
-		spots: vec![sa_panel::gmbs::Spot { at: sa_places::LatLng { lat: 45.76, lng: 4.84 }, label: None, note: None }],
+		spots: vec![sa_panel::gmbs::Spot {
+			at: sa_places::LatLng { lat: 45.76, lng: 4.84 },
+			label: None,
+			note: None,
+		}],
 	};
 	let gbp = p.create_gmb(other, unplaced, jiff::Timestamp::now()).await.unwrap().unwrap();
 	let app = app(p, None);
@@ -566,7 +584,11 @@ async fn a_trade_is_its_owners() {
 	let set_up = json!({ "keywords": [], "google_primary": null, "google_additional": [], "study": null });
 	for (method, uri, body) in [
 		(Method::PATCH, format!("/api/v1/gmbs/{}", mine["id"]), Some(json!({ "trade": theirs }))),
-		(Method::POST, "/api/v1/gmbs".to_owned(), Some(json!({ "name": "Lyon 8", "trade": theirs, "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] }))),
+		(
+			Method::POST,
+			"/api/v1/gmbs".to_owned(),
+			Some(json!({ "name": "Lyon 8", "trade": theirs, "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] })),
+		),
 		(Method::PATCH, format!("/api/v1/trades/{theirs}"), Some(json!({ "name": "Mine" }))),
 		(Method::PUT, format!("/api/v1/trades/{theirs}/FR"), Some(set_up)),
 		(Method::DELETE, format!("/api/v1/trades/{theirs}"), None),

@@ -7,7 +7,7 @@ use ev_lib::ts_gen::Ts;
 use sa_alerts::Rule;
 use sa_auth::{Catalog, SourceKind};
 use sa_browsers::view::{In as ViewerIn, Out as ViewerOut};
-use sa_core::gbp::OnGoogle;
+use sa_core::{gbp::OnGoogle, prices::Item};
 use sa_panel::{store::browsers::Provider, tokens::Kind};
 use sa_server::{
 	access::AccessRequestDto,
@@ -17,11 +17,17 @@ use sa_server::{
 	connections::ConnectionsDto,
 	gmbs::{CandidatesDto, GmailsDto, GoogleCategoriesDto, MapDto, SuggestionsDto, TradesDto},
 	signin::Caller,
-	tokens::{BalanceChangeDto, BalanceDto, LedgerDto, SetPricesDto, TokenHoldersDto, TokensDto, UsageDto},
+	tokens::{BalanceChangeDto, BalanceDto, FLOW_KINDS, FlowsDto, LedgerDto, PricesDto, SetPricesDto, TokenHoldersDto, TokensDto, UsageDto},
 	trash::{SetSettingsDto, TrashDto},
 };
 
 fn main() {
+	// a leaked string per item: the union's items are `&'static str`, and this runs once
+	let priced_items = || Ts::Union {
+		name: "PRICED_ITEMS",
+		ty: "PricedItem",
+		items: Item::all().map(|i| &*i.to_string().leak()).collect(),
+	};
 	let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../frontend/src");
 	let [permissions, aliases] = Catalog::collect("sa", 0).ts();
 	Ts::write(
@@ -68,12 +74,19 @@ fn main() {
 				ty: "Provider",
 				items: <Provider as strum::VariantArray>::VARIANTS.iter().map(|p| <&str>::from(*p)).collect(),
 			},
+			priced_items(),
 		],
 	);
 	Ts::write(
 		&root.join("entities/tokens/model/generated.ts"),
 		&[
-			Ts::types::<(TokensDto, LedgerDto, UsageDto, TokenHoldersDto, BalanceChangeDto, BalanceDto, SetPricesDto)>(),
+			Ts::types::<(TokensDto, LedgerDto, UsageDto, TokenHoldersDto, BalanceChangeDto, BalanceDto, (PricesDto, SetPricesDto, FlowsDto))>(),
+			priced_items(),
+			Ts::Union {
+				name: "FLOW_KINDS",
+				ty: "FlowKind",
+				items: FLOW_KINDS.into(),
+			},
 			Ts::Union {
 				name: "LEDGER_KINDS",
 				ty: "LedgerKind",

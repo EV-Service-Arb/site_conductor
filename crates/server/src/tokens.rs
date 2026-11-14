@@ -9,13 +9,14 @@
 //! POST /api/v1/tokens/claim            → Tokens
 //! GET  /api/v1/admin/tokens            TokenHolders
 //! POST /api/v1/admin/tokens/{user_id}  BalanceChange (fresh) → Balance
-//! GET  /api/v1/admin/tokens/prices     Prices: of a Places request on the shared keys
-//! PUT  /api/v1/admin/tokens/prices {details, search}  (fresh) → Prices
+//! GET  /api/v1/admin/tokens/prices     Prices: every item of `sa_core::prices`, priced or not
+//! PUT  /api/v1/admin/tokens/prices     SetPrices (fresh) → Prices
+//! GET  /api/v1/admin/tokens/flows?from=&to=  Flows: everyone's, for Grafana
 //! ```
 //!
 //! Before the import from review_archive, every one of them answers 503, and `serve` waits.
 
-use std::time::Duration;
+use std::{collections::BTreeMap, time::Duration};
 
 use axum::{
 	Extension, Json,
@@ -28,12 +29,14 @@ use axum::{
 };
 use jiff::Timestamp;
 use sa_auth::{Principal, Service};
-use sa_core::tokens::ChargePage;
+use sa_core::{
+	prices::{Item, Scope},
+	tokens::ChargePage,
+};
 use sa_panel::{
 	Panel,
-	tokens::{Change, Entry, Kickback, Owed},
+	tokens::{Change, Entry, Flow, FlowKind, Kickback, Kind, Owed, Price},
 };
-use sa_places::Sku;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use ts_rs::TS;
@@ -41,12 +44,13 @@ use uuid::Uuid;
 
 use crate::{
 	api::{ApiError, ApiResult, body},
-	connections::PricesDto,
 	forward::Services,
 	http::{ApiRoute, Section},
 	signin::{Caller, Freshness},
 };
 
+/// What a [`Flow`] is called on the wire: a claimed kick-back is a refund, or a grant claimed.
+pub const FLOW_KINDS: [&str; 7] = ["renewal", "purchase", "set", "spend", "refund", "grant_claimed", "granted"];
 /// The most entries a page of the ledger holds.
 const LEDGER_PAGE: i64 = 200;
 
@@ -65,6 +69,10 @@ const BACKOFF: (Duration, Duration) = (Duration::from_secs(1), Duration::from_se
 const CALL_TIMEOUT: Duration = Duration::from_secs(10);
 /// The most of review_archive's answer read: a page of charges, with room.
 const ANSWER: usize = 16 * 1024 * 1024;
+
+/// The widest window `flows` reads.
+const FLOWS_SPAN: jiff::SignedDuration = jiff::SignedDuration::from_hours(24 * 400);
+
 /// What the caller is owed until they claim it: a charge kicked back (`service`, `key`,
 /// `label`), or an admin's grant (`by`, `note`).
 #[derive(Clone, Debug, Serialize, TS)]
@@ -227,17 +235,65 @@ pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<boo
 	tokio::join!(follow, push);
 }
 
-/// Every request kind priced, in tokens.
+/// A priced item, and its price: `tokens` null, not sold.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(rename = "Price")]
+pub struct PriceDto {
+	#[ts(type = "PricedItem")]
+	pub item: Item,
+	pub scope: Scope,
+	pub tool: &'static str,
+	pub tool_title: &'static str,
+	pub title: &'static str,
+	pub description: &'static str,
+	#[ts(type = "number | null")]
+	pub tokens: Option<i64>,
+	/// The admin's email.
+	pub set_by: Option<String>,
+	/// RFC 3339.
+	pub set_at: Option<String>,
+}
+
+/// `GET /admin/tokens/prices`: every item, in the catalog's order.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(rename = "Prices")]
+pub struct PricesDto {
+	pub prices: Vec<PriceDto>,
+}
+
+/// The items given, each priced at 0 or more or `null` off sale; the others stay.
 #[derive(Deserialize, TS)]
 #[ts(rename = "SetPrices")]
 #[serde(deny_unknown_fields)]
 pub struct SetPricesDto {
+	#[ts(type = "Partial<Record<PricedItem, number | null>>")]
+	pub prices: BTreeMap<Item, Option<i64>>,
+}
+
+/// One row of [`FlowsDto`]: `tokens` what the balance moved by, a grant's amount for `granted`.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(rename = "Flow")]
+pub struct FlowDto {
+	/// RFC 3339.
+	pub at: String,
+	pub email: String,
+	pub name: String,
+	#[ts(type = "FlowKind")]
+	pub kind: &'static str,
 	#[ts(type = "number")]
-	pub details: i64,
-	#[ts(type = "number")]
-	pub search: i64,
-	#[ts(type = "number")]
-	pub autocomplete: i64,
+	pub tokens: i64,
+	pub service: Option<String>,
+	pub label: Option<String>,
+	/// The admin's email.
+	pub by: Option<String>,
+	pub note: Option<String>,
+}
+
+/// `GET /admin/tokens/flows`: oldest first.
+#[derive(Clone, Debug, Serialize, TS)]
+#[ts(rename = "Flows")]
+pub struct FlowsDto {
+	pub flows: Vec<FlowDto>,
 }
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
@@ -255,6 +311,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/admin/tokens/prices", admin, Cached, prices),
 		// A price is what every request on the shared keys charges.
 		ApiRoute::new(M::PUT, "/admin/tokens/prices", admin, Fresh, set_prices),
+		ApiRoute::new(M::GET, "/admin/tokens/flows", admin, Cached, flows),
 	]
 }
 
@@ -382,20 +439,79 @@ async fn change(State(panel): State<Panel>, Extension(caller): Extension<Caller>
 	Ok(Json(BalanceDto { balance }))
 }
 
+impl From<(Item, Option<Price>)> for PriceDto {
+	fn from((item, price): (Item, Option<Price>)) -> Self {
+		Self {
+			item,
+			scope: item.scope(),
+			tool: item.tool(),
+			tool_title: item.tool_title(),
+			title: item.title(),
+			description: item.description(),
+			tokens: price.as_ref().map(|p| p.tokens),
+			set_by: price.as_ref().map(|p| p.set_by.clone()),
+			set_at: price.map(|p| p.set_at.to_string()),
+		}
+	}
+}
+
 async fn prices(State(panel): State<Panel>) -> ApiResult<Json<PricesDto>> {
-	Ok(Json(panel.prices().await?.into()))
+	Ok(Json(PricesDto {
+		prices: panel.prices().await?.into_iter().map(PriceDto::from).collect(),
+	}))
 }
 
 async fn set_prices(State(panel): State<Panel>, Extension(caller): Extension<Caller>, b: Result<Json<SetPricesDto>, JsonRejection>) -> ApiResult<Json<PricesDto>> {
 	let b = body(b)?;
-	panel
-		.set_prices(
-			&[(Sku::Details, b.details), (Sku::Search, b.search), (Sku::Autocomplete, b.autocomplete)],
-			&caller.email,
-			Timestamp::now(),
-		)
-		.await??;
-	Ok(Json(panel.prices().await?.into()))
+	panel.set_prices(&b.prices.into_iter().collect::<Vec<_>>(), &caller.email, Timestamp::now()).await??;
+	prices(State(panel)).await
+}
+
+impl From<Flow> for FlowDto {
+	fn from(f: Flow) -> Self {
+		let kind = match f.kind {
+			FlowKind::Granted => "granted",
+			FlowKind::Ledger(Kind::Accrual) => "renewal",
+			FlowKind::Ledger(Kind::Add) => "purchase",
+			FlowKind::Ledger(Kind::Set) => "set",
+			FlowKind::Ledger(Kind::Charge) => "spend",
+			FlowKind::Ledger(Kind::Kickback) if f.by.is_some() => "grant_claimed",
+			FlowKind::Ledger(Kind::Kickback) => "refund",
+		};
+		debug_assert!(FLOW_KINDS.contains(&kind));
+		Self {
+			at: f.at.to_string(),
+			email: f.email,
+			name: f.name,
+			kind,
+			tokens: f.delta,
+			service: f.service,
+			label: f.label,
+			by: f.by,
+			note: f.note,
+		}
+	}
+}
+
+/// Grafana's `${__from}` and `${__to}`: Unix milliseconds.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FlowsQuery {
+	from: i64,
+	to: i64,
+}
+
+async fn flows(State(panel): State<Panel>, q: Result<Query<FlowsQuery>, QueryRejection>) -> ApiResult<Json<FlowsDto>> {
+	let Query(q) = q.map_err(|e| ApiError::BadRequest(e.body_text()))?;
+	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| ApiError::BadRequest(format!("{ms}: {e}")));
+	let (from, to) = (at(q.from)?, at(q.to)?);
+	if from >= to || to.duration_since(from) > FLOWS_SPAN {
+		return Err(ApiError::BadRequest(format!("from is before to, at most {} days", FLOWS_SPAN.as_hours() / 24)));
+	}
+	let flows = panel.flows(from, to).await??;
+	Ok(Json(FlowsDto {
+		flows: flows.into_iter().map(FlowDto::from).collect(),
+	}))
 }
 
 // ── review_archive, in `serve` ──────────────────────────────────────────────────────────

@@ -10,6 +10,22 @@ export type Balance = { balance: number, };
  */
 export type BalanceChange = { set: number, note?: string, } | { add: number, note?: string, } | { grant: number, note: string, };
 /**
+ * One row of [`FlowsDto`]: `tokens` what the balance moved by, a grant's amount for `granted`.
+ */
+export type Flow = { 
+/**
+ * RFC 3339.
+ */
+at: string, email: string, name: string, kind: FlowKind, tokens: number, service: string | null, label: string | null, 
+/**
+ * The admin's email.
+ */
+by: string | null, note: string | null, };
+/**
+ * `GET /admin/tokens/flows`: oldest first.
+ */
+export type Flows = { flows: Array<Flow>, };
+/**
  * What the caller is owed until they claim it: a charge kicked back (`service`, `key`,
  * `label`), or an admin's grant (`by`, `note`).
  */
@@ -36,9 +52,29 @@ at: string, delta: number, kind: LedgerKind, service: string | null, key: string
  */
 by: string | null, note: string | null, };
 /**
- * Every request kind priced, in tokens.
+ * A priced item, and its price: `tokens` null, not sold.
  */
-export type SetPrices = { details: number, search: number, autocomplete: number, };
+export type Price = { item: PricedItem, scope: Scope, tool: string, tool_title: string, title: string, description: string, tokens: number | null, 
+/**
+ * The admin's email.
+ */
+set_by: string | null, 
+/**
+ * RFC 3339.
+ */
+set_at: string | null, };
+/**
+ * `GET /admin/tokens/prices`: every item, in the catalog's order.
+ */
+export type Prices = { prices: Array<Price>, };
+/**
+ * Who charges.
+ */
+export type Scope = "conductor" | "review_archive";
+/**
+ * The items given, each priced at 0 or more or `null` off sale; the others stay.
+ */
+export type SetPrices = { prices: Partial<Record<PricedItem, number | null>>, };
 export type TokenHolder = { user_id: string, email: string, name: string, balance: number, };
 /**
  * `GET /admin/tokens`.
@@ -61,6 +97,12 @@ export type UsageDay = {
  * `YYYY-MM-DD`, UTC.
  */
 day: string, charges: number, tokens: number, };
+
+export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step"] as const;
+export type PricedItem = (typeof PRICED_ITEMS)[number];
+
+export const FLOW_KINDS = ["renewal", "purchase", "set", "spend", "refund", "grant_claimed", "granted"] as const;
+export type FlowKind = (typeof FLOW_KINDS)[number];
 
 export const LEDGER_KINDS = ["accrual", "add", "set", "charge", "kickback"] as const;
 export type LedgerKind = (typeof LEDGER_KINDS)[number];

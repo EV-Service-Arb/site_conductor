@@ -282,7 +282,7 @@ pub struct Managed {
 	pub address: Option<String>,
 }
 
-/// `PUT /api/conductor/gmbs`: every GBP that ever had a place, and every balance, at once.
+/// `PUT /api/conductor/gmbs`: every GBP that ever had a place, every balance and every price, at once.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(deny_unknown_fields)]
@@ -293,4 +293,7 @@ pub struct Snapshot {
 	pub balances: BTreeMap<Uuid, i64>,
 	/// The last of review_archive's charges in these balances.
 	pub charges_through: i64,
+	/// What its walks cost; a step without a price is not walked.
+	#[cfg_attr(feature = "utoipa", schema(value_type = BTreeMap<String, i64>))]
+	pub prices: crate::prices::Prices,
 }

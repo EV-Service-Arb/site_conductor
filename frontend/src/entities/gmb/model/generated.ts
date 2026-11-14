@@ -68,7 +68,11 @@ export type Checked = { at: string,
  * `null`: it went through.
  */
 error: string | null, };
-export type Connections = { imap: Imap | null, maps_key: MapsKey | null, prices: Prices, browser: Browser | null, };
+export type Connections = { imap: Imap | null, maps_key: MapsKey | null, 
+/**
+ * What a Places request on the shared keys costs.
+ */
+prices: Array<Price>, browser: Browser | null, };
 /**
  * ISO 3166-1 alpha-2, of the countries GBPs are in.
  */
@@ -222,9 +226,21 @@ location: { lat: number, lng: number } | null,
  */
 country: Country | null, };
 /**
- * Tokens a Places request on the shared keys costs; `null`, not sold yet.
+ * A priced item, and its price: `tokens` null, not sold.
  */
-export type Prices = { details: number | null, search: number | null, autocomplete: number | null, };
+export type Price = { item: PricedItem, scope: Scope, tool: string, tool_title: string, title: string, description: string, tokens: number | null, 
+/**
+ * The admin's email.
+ */
+set_by: string | null, 
+/**
+ * RFC 3339.
+ */
+set_at: string | null, };
+/**
+ * Who charges.
+ */
+export type Scope = "conductor" | "review_archive";
 export type SetBrowser = { provider: Provider, 
 /**
  * A browser's; a cloud phone's model is drawn.
@@ -340,3 +356,6 @@ export type Device = (typeof DEVICES)[number];
 
 export const PROVIDERS = ["multilogin", "multilogin_browser", "gologin"] as const;
 export type Provider = (typeof PROVIDERS)[number];
+
+export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step"] as const;
+export type PricedItem = (typeof PRICED_ITEMS)[number];
