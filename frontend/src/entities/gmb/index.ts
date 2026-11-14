@@ -45,7 +45,8 @@ export { PublishSelection, type Selection, select, setFilter, setOnly, useSelect
 export { TradeSelect } from "./ui/trade-select";
 export { CategoryChip } from "./ui/category-chip";
 export { LiveReviews } from "./ui/live-reviews";
-export { gmbs, trades, browser, windowKeys, scopeKeys, trash, undo, move, kit } from "./model/i18n";
+export { gmbs, trades, browser, windowKeys, scopeKeys, trash, undo, move, kit, areaKeys } from "./model/i18n";
+export { AreaDraw, type Outline, outlineOf, useOutline } from "./ui/area-draw";
 export { fetchAreas, fetchCity, localityAt, putArea, suggestCities } from "./api/areas";
 export { isSlug, slugOf } from "./model/areas";
 export type { Area, AreaShape, Locality, PutArea } from "./model/areas";
