@@ -2,7 +2,8 @@
 
 import { Skeleton, cn } from "@evinvest/uikit";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import {
   type LatLng,
@@ -14,8 +15,8 @@ import {
   fetchMapConfig,
   issueOf,
   narrowed,
-  open,
   openAccount,
+  openOrFocus,
   peek,
   setOnMap,
   under,
@@ -153,7 +154,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       dot.innerHTML = TEARDROP;
       dot.addEventListener("mouseenter", () => setOnMap({ hovered: l.gmb.id }));
       dot.addEventListener("mouseleave", () => setOnMap({ hovered: null }));
-      dot.addEventListener("click", () => open(l.gmb));
+      dot.addEventListener("click", () => openOrFocus(l.gmb, styling.current.peeked === l.gmb.id));
       made.set(l.gmb.id, { remove: pin(map.map, dot, l.gmb.location!, { anchor: "tip" }).remove, dot, listed: l });
     }
     styleDots(made, styling.current);
@@ -222,10 +223,15 @@ function GmbMap({ config }: { config: MapConfig }) {
   useEffect(() => {
     if (accountGone) openAccount(null);
   }, [accountGone]);
+  const focus = useOnMap((s) => s.focus);
   useEffect(() => {
+    if (map.status !== "ok" || focus === null) return;
     const at = peekedListed?.gmb.location;
-    if (map.status === "ok" && at) map.map.panTo(at);
-  }, [map, peekedListed?.gmb.location]);
+    if (focus !== peekedListed?.gmb.id || !at) throw new Error(`GMB ${focus} focused while not the peeked one on the map`);
+    map.map.setCenter(at);
+    map.map.setZoom(Math.max(map.map.getZoom() ?? FOCUS_ZOOM, FOCUS_ZOOM));
+    setOnMap({ focus: null });
+  }, [map, focus, peekedListed?.gmb.id, peekedListed?.gmb.location]);
 
   return (
     <>
@@ -236,7 +242,12 @@ function GmbMap({ config }: { config: MapConfig }) {
           <ErrorState failure={{ kind: "invalid", message: map.message }} />
         </div>
       )}
-      {peekedListed && placed === undefined && !windowed && <Peek listed={peekedListed} onClose={() => peek(null)} />}
+      {peekedListed && placed === undefined && !windowed && map.status === "ok" && peekedListed.gmb.location && (
+        <OnPin key={peekedListed.gmb.id} map={map.map} at={peekedListed.gmb.location}>
+          <Peek listed={peekedListed} onClose={() => peek(null)} className="pointer-events-auto" />
+        </OnPin>
+      )}
+      {peekedListed && placed === undefined && !windowed && !peekedListed.gmb.location && <Peek listed={peekedListed} onClose={() => peek(null)} className="absolute top-4 right-4" />}
       {peekedListed && placed === undefined && windowed && <LocationWindow listed={peekedListed} tab={tab} />}
       {opened && tradeWindow && gmails.status === "ok" && placed === undefined && <TradeWindow trade={opened} tab={tradeWindow.tab} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
       {categoriesWindow && trades.status === "ok" && gmails.status === "ok" && placed === undefined && <CategoriesWindow trades={trades.data} gmbs={gmails.data.gmbs} />}
@@ -245,6 +256,58 @@ function GmbMap({ config }: { config: MapConfig }) {
       {map.status === "ok" && placed !== undefined && placedAt !== null && <PlacingBar gmb={placed} map={map.map} at={placedAt} onMove={(at) => setMoved({ gmb: placed.id, at })} />}
     </>
   );
+}
+
+const FOCUS_ZOOM = 17;
+const MARGIN = 16;
+
+/** `children` over the map standing on a GMB's pin, the map panned the least that shows them when they first are. */
+function OnPin({ map, at, children }: { map: google.maps.Map; at: LatLng; children: ReactNode }) {
+  const [box] = useState(() => {
+    const made = document.createElement("div");
+    made.style.zIndex = "4";
+    made.style.pointerEvents = "none"; // the pin under its padding stays clickable
+    return made;
+  });
+  const { lat, lng } = at;
+  useEffect(() => {
+    const placed = pin(map, box, { lat, lng }, { anchor: "tip" });
+    // sized once the map has drawn it
+    const seen = new ResizeObserver(() => {
+      if (box.offsetHeight === 0) return;
+      seen.disconnect();
+      reveal(map, { lat, lng }, box);
+    });
+    seen.observe(box);
+    return () => {
+      seen.disconnect();
+      placed.remove();
+    };
+  }, [map, box, lat, lng]);
+  return createPortal(
+    <div className="relative pb-14">
+      {children}
+      <span aria-hidden className="absolute bottom-12 left-1/2 size-3 -translate-x-1/2 rotate-45 border-r border-b border-border bg-card" />
+    </div>,
+    box,
+  );
+}
+
+function reveal(map: google.maps.Map, at: LatLng, box: HTMLElement) {
+  const projection = map.getProjection();
+  const centre = map.getCenter();
+  const zoom = map.getZoom();
+  if (projection === undefined || centre === undefined || zoom === undefined) throw new Error("the map drew a pin before it had a camera");
+  const p = projection.fromLatLngToPoint(at);
+  const c = projection.fromLatLngToPoint(centre);
+  if (p === null || c === null) throw new Error("a point off the map's projection");
+  const frame = map.getDiv();
+  const x = (p.x - c.x) * 2 ** zoom + frame.clientWidth / 2;
+  const y = (p.y - c.y) * 2 ** zoom + frame.clientHeight / 2;
+  const past = (lo: number, hi: number, size: number) => (lo < MARGIN ? lo - MARGIN : hi > size - MARGIN ? hi - size + MARGIN : 0);
+  const dx = past(x - box.offsetWidth / 2, x + box.offsetWidth / 2, frame.clientWidth);
+  const dy = past(y - box.offsetHeight, y, frame.clientHeight);
+  if (dx !== 0 || dy !== 0) map.panBy(dx, dy);
 }
 
 // ours are white teardrops standing on their point, apart from the competitors' dots the placement overlay draws

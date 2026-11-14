@@ -22,7 +22,7 @@ import {
   issueCounts,
   issueOf,
   issueText,
-  open,
+  openOrFocus,
   openTrash,
   readiness,
   removeGmb,
@@ -489,7 +489,7 @@ function GmbRow({
       {dialog === "link" && linked && <LinkPlace gmbId={gmb.id} linked={linked} onClose={() => setDialog(null)} onDone={onChanged} />}
       {dialog === "remove" && <RemoveDialog title={t(gmbsKeys.gmb.remove.title, "Remove {name}?", { name })} body={t(gmbsKeys.gmb.remove.body, "It goes to the trash{kept}: every service stops working on it until then; its history stays.", { kept })} remove={() => removeGmb(gmb.id)} onRemoved={onChanged} onClose={() => setDialog(null)} />}
       {onMap ? (
-        <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => open(gmb)}>
+        <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => openOrFocus(gmb, peeked)}>
           {label}
         </button>
       ) : TABS[gmb.state][0] !== undefined ? (

@@ -14,9 +14,11 @@ export interface OnMap {
   hovered: number | null;
   /** The GMB whose point is being placed on the map by hand: until set or cancelled, the map left or not. */
   placing: number | null;
+  /** The GMB the map is asked to go to, until it has. */
+  focus: number | null;
 }
 
-const NONE: OnMap = { inView: null, hovered: null, placing: null };
+const NONE: OnMap = { inView: null, hovered: null, placing: null, focus: null };
 let state = NONE;
 const listeners = new Set<() => void>();
 
@@ -67,6 +69,13 @@ export function useTab(): Tab | null {
 export function open(gmb: Gmb): void {
   const tabs = TABS[gmb.state];
   setQuery((now) => ({ gmb: String(gmb.id), trade: null, categories: null, account: null, trash: null, tab: now.trade === null && tabs.includes(now.tab as Tab) ? now.tab : (tabs[0] ?? null) }));
+}
+
+/** A GBP clicked on the map or in the outline beside it: the first click opens it, the next goes to it on the map, out of its window. */
+export function openOrFocus(gmb: Gmb, peeked: boolean): void {
+  if (!peeked || gmb.location === null) return open(gmb);
+  setQuery({ tab: null });
+  setOnMap({ focus: gmb.id });
 }
 
 /** The trade whose window is open, on a country's tab; `null` tab: the trade has none set up yet, or none picked. One window at a time: it and a GBP's share `?tab`. */
