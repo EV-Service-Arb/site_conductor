@@ -14,9 +14,9 @@ use strum::{EnumMessage, VariantArray};
 pub type Prices = BTreeMap<Item, i64>;
 
 /// Who charges.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, VariantArray, strum::IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum Scope {
 	/// At the buy, before Google is asked.
 	Conductor,

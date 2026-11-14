@@ -4,11 +4,14 @@ import type { Ledger } from "../model/generated";
 import {
   type Change,
   type Holder,
+  type Price,
+  type SetPrices,
   type Tokens,
   type UsageDay,
   balanceParser,
   holdersParser,
   ledgerParser,
+  pricesParser,
   tokensParser,
   usageParser,
 } from "../model/tokens";
@@ -35,4 +38,14 @@ export async function fetchHolders(): Promise<Holder[]> {
 
 export async function changeTokens(userId: string, change: Change): Promise<number> {
   return (await http.send("POST", `/api/v1/admin/tokens/${encodeURIComponent(userId)}`, change, balanceParser)).balance;
+}
+
+/** Every priced item, in the catalog's order. */
+export async function fetchPrices(): Promise<Price[]> {
+  return (await http.get("/api/v1/admin/tokens/prices", pricesParser)).prices;
+}
+
+/** Only the items given change; `null` takes one off sale. */
+export async function setPrices(prices: SetPrices["prices"]): Promise<Price[]> {
+  return (await http.send("PUT", "/api/v1/admin/tokens/prices", { prices }, pricesParser)).prices;
 }

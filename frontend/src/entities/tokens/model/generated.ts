@@ -68,10 +68,6 @@ set_at: string | null, };
  */
 export type Prices = { prices: Array<Price>, };
 /**
- * Who charges.
- */
-export type Scope = "conductor" | "review_archive";
-/**
  * The items given, each priced at 0 or more or `null` off sale; the others stay.
  */
 export type SetPrices = { prices: Partial<Record<PricedItem, number | null>>, };
@@ -100,6 +96,9 @@ day: string, charges: number, tokens: number, };
 
 export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step"] as const;
 export type PricedItem = (typeof PRICED_ITEMS)[number];
+
+export const SCOPES = ["conductor", "review_archive"] as const;
+export type Scope = (typeof SCOPES)[number];
 
 export const FLOW_KINDS = ["renewal", "purchase", "set", "spend", "refund", "grant_claimed", "granted"] as const;
 export type FlowKind = (typeof FLOW_KINDS)[number];

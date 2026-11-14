@@ -25,7 +25,7 @@ export {
   suggestPlaces,
   switchGmbs,
 } from "./api/gmbs";
-export { type Connection, browsersUnconnected, disconnect, fetchConnections, fetchPrices, removeFilm, setBrowser, setImap, setMapsKey, setPrices, startBrowser, stopBrowser, testConnection, uploadFilm } from "./api/connections";
+export { type Connection, browsersUnconnected, disconnect, fetchConnections, removeFilm, setBrowser, setImap, setMapsKey, startBrowser, stopBrowser, testConnection, uploadFilm } from "./api/connections";
 export { fetchArchive } from "./api/tags";
 export { restoreGmail, restoreGmb, setTrashSettings } from "./api/trash";
 export type { Trash, TrashedGmail, TrashedGmb } from "./model/trash";
@@ -33,7 +33,7 @@ export { type Placed, categoryName, categoryOf } from "./model/category";
 export { GmailsProvider, useGmails, useGmbTags, useTrades, useTrash, useUndoable } from "./model/gmails-context";
 export { COUNTRIES, type Country, GMAIL_ROLES, GMAIL_ROLE_NAME, ON_GOOGLE, type OnGoogle, STATE_NAME, type State, googleName } from "./model/gmb";
 export { DEVICES, type Device, PROVIDERS, type Provider } from "./model/generated";
-export type { Browser, BrowserIn, BrowserOut, Checked, Connections, Imap, MapsKey, Prices } from "./model/generated";
+export type { Browser, BrowserIn, BrowserOut, Checked, Connections, Imap, MapsKey } from "./model/generated";
 export type { ArchiveTag, Candidate, Category, Gmail, GmailRole, Gmails, Gmb, GoogleCategory, LatLng, MapConfig, SiteTag, SitesPlace, Suggestion, Trade } from "./model/gmb";
 export { ISSUES, ISSUE_NAME, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
 export { type Listed, byView, narrowed, under } from "./model/narrow";

@@ -237,10 +237,6 @@ set_by: string | null,
  * RFC 3339.
  */
 set_at: string | null, };
-/**
- * Who charges.
- */
-export type Scope = "conductor" | "review_archive";
 export type SetBrowser = { provider: Provider, 
 /**
  * A browser's; a cloud phone's model is drawn.
@@ -359,3 +355,6 @@ export type Provider = (typeof PROVIDERS)[number];
 
 export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step"] as const;
 export type PricedItem = (typeof PRICED_ITEMS)[number];
+
+export const SCOPES = ["conductor", "review_archive"] as const;
+export type Scope = (typeof SCOPES)[number];

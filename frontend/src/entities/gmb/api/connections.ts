@@ -1,12 +1,12 @@
 import { ApiError, http, ignoreBody } from "@/shared/api";
-import { type Parser, bool, nullable, num, object, oneOf, str } from "@/shared/lib/parse";
+import { priceParser } from "@/entities/tokens";
+import { type Parser, arrayOf, bool, nullable, num, object, oneOf, str } from "@/shared/lib/parse";
 
-import { type Browser, type Checked, type Connections, type Imap, type MapsKey, type Prices, PROVIDERS, type SetBrowser } from "../model/generated";
+import { type Browser, type Checked, type Connections, type Imap, type MapsKey, PROVIDERS, type SetBrowser } from "../model/generated";
 
 const checkedParser: Parser<Checked> = object({ at: str, error: nullable(str) });
 const imapParser: Parser<Imap> = object({ host: str, username: str, set_at: str, checked: checkedParser });
 const mapsKeyParser: Parser<MapsKey> = object({ last4: str, set_at: str, checked: checkedParser, out: nullable(str) });
-export const pricesParser: Parser<Prices> = object({ details: nullable(num), search: nullable(num), autocomplete: nullable(num) });
 const browserParser: Parser<Browser> = object({
   provider: oneOf(PROVIDERS),
   device: str,
@@ -17,7 +17,7 @@ const browserParser: Parser<Browser> = object({
   running: nullable(object({ gmb: nullable(num), stream: nullable(str) })),
   film: bool,
 });
-const connectionsParser: Parser<Connections> = object({ imap: nullable(imapParser), maps_key: nullable(mapsKeyParser), prices: pricesParser, browser: nullable(browserParser) });
+const connectionsParser: Parser<Connections> = object({ imap: nullable(imapParser), maps_key: nullable(mapsKeyParser), prices: arrayOf(priceParser), browser: nullable(browserParser) });
 
 export type Connection = "imap" | "maps_key" | "browser";
 
@@ -69,12 +69,4 @@ export function testConnection(gmail: number, which: Connection): Promise<Connec
 
 export async function disconnect(gmail: number, which: Connection): Promise<void> {
   await http.send("DELETE", `/api/v1/gmails/${gmail}/${which}`, undefined, ignoreBody);
-}
-
-export function fetchPrices(): Promise<Prices> {
-  return http.get("/api/v1/admin/tokens/prices", pricesParser);
-}
-
-export function setPrices(prices: { details: number; search: number; autocomplete: number }): Promise<Prices> {
-  return http.send("PUT", "/api/v1/admin/tokens/prices", prices, pricesParser);
 }

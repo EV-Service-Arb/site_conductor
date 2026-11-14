@@ -176,8 +176,8 @@
     "t": "Проверить и сохранить"
   },
   "account.mapsKey.cost": {
-    "en": "On the shared keys: {details} tokens a lookup, {search} a search, {autocomplete} a suggestion.",
-    "t": "На общих ключах: {details} токенов за запрос места, {search} за поиск, {autocomplete} за подсказку."
+    "en": "On the shared keys, in tokens: {list}.",
+    "t": "На общих ключах, в токенах: {list}."
   },
   "account.mapsKey.failing": {
     "en": "Failing",
@@ -203,9 +203,9 @@
     "en": "Google Maps key",
     "t": "Ключ Google Maps"
   },
-  "account.mapsKey.unpriced": {
-    "en": "The shared keys are not priced yet: without a key of your own, Google lookups are refused.",
-    "t": "Цены на общие ключи не заданы: без своего ключа запросы к Google отклоняются."
+  "account.mapsKey.unsold": {
+    "en": "not sold",
+    "t": "не продаётся"
   },
   "account.mapsKey.works": {
     "en": "Works",
@@ -358,6 +358,18 @@
   "add.where.placeholder": {
     "en": "An address, a street or a business nearby",
     "t": "Адрес, улица или организация рядом"
+  },
+  "admin.sources.description": {
+    "en": "Source keys and the sites they connect",
+    "t": "Ключи источников и сайты, которые они подключают"
+  },
+  "admin.tokens": {
+    "en": "Tokens",
+    "t": "Токены"
+  },
+  "admin.tokens.description": {
+    "en": "Prices, spending and everyone's balance",
+    "t": "Цены, расходы и балансы всех"
   },
   "alerts.chats": {
     "en": "Channels and groups",
@@ -2011,6 +2023,14 @@
     "en": "Profile",
     "t": "Профиль"
   },
+  "nav.admin": {
+    "en": "Admin",
+    "t": "Админ"
+  },
+  "nav.admin.description": {
+    "en": "Prices, everyone's tokens, source keys",
+    "t": "Цены, токены всех, ключи источников"
+  },
   "nav.alerts": {
     "en": "Alerts",
     "t": "Оповещения"
@@ -2179,41 +2199,45 @@
     "en": "Zoom in to see the grid",
     "t": "Приблизьте, чтобы увидеть сетку"
   },
-  "prices.autocomplete": {
-    "en": "Suggestions (as typed)",
-    "t": "Подсказки при вводе"
-  },
-  "prices.details": {
-    "en": "Lookup (details)",
-    "t": "Запрос места"
+  "prices.reset": {
+    "en": "Undo changes",
+    "t": "Отменить изменения"
   },
   "prices.save": {
     "en": "Save",
     "t": "Сохранить"
   },
+  "prices.save.count": {
+    "en": "Save {n}",
+    "t": "Сохранить {n}"
+  },
   "prices.saved": {
     "en": "Prices saved",
     "t": "Цены сохранены"
   },
-  "prices.search": {
-    "en": "Search",
-    "t": "Поиск"
+  "prices.scope.conductor": {
+    "en": "GBPs and the map",
+    "t": "GBP и карта"
+  },
+  "prices.setBy": {
+    "en": "{by}, {at}",
+    "t": "{by}, {at}"
   },
   "prices.title": {
-    "en": "Places on the shared keys",
-    "t": "Places на общих ключах"
+    "en": "Prices",
+    "t": "Цены"
   },
-  "prices.unpriced": {
-    "en": "Not priced: requests on the shared keys are refused for everyone without a key of their own.",
-    "t": "Без цены: запросы на общих ключах отклоняются для всех, у кого нет своего ключа."
+  "prices.unsold": {
+    "en": "not sold",
+    "t": "не продаётся"
   },
-  "prices.unset": {
-    "en": "not priced",
-    "t": "без цены"
+  "prices.unsold.count": {
+    "en": "{n} not sold",
+    "t": "Не продаётся: {n}"
   },
   "prices.why": {
-    "en": "Tokens a Google Places request costs when a person has no Maps key of their own that answers. Cached answers and own keys cost nothing.",
-    "t": "Сколько токенов стоит запрос Google Places, когда у человека нет своего работающего ключа Maps. Кэш и свои ключи бесплатны."
+    "en": "Tokens each thing costs a person. Empty is not sold: a Places request is refused, a walk step not walked. Cached answers and a person's own Maps keys cost nothing.",
+    "t": "Сколько токенов стоит каждая вещь. Пусто — не продаётся: запрос к Places отклоняется, шаг обхода не выполняется. Кэшированные ответы и собственные ключи Maps ничего не стоят."
   },
   "reviewArchive.loading": {
     "en": "Loading the review archive…",
@@ -2478,6 +2502,10 @@
   "tokens.admin.empty": {
     "en": "Nobody has signed in yet.",
     "t": "Ещё никто не входил."
+  },
+  "tokens.admin.spending": {
+    "en": "Spending",
+    "t": "Расходы"
   },
   "tokens.admin.title": {
     "en": "Tokens of everyone",

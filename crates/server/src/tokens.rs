@@ -241,6 +241,7 @@ pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<boo
 pub struct PriceDto {
 	#[ts(type = "PricedItem")]
 	pub item: Item,
+	#[ts(type = "Scope")]
 	pub scope: Scope,
 	pub tool: &'static str,
 	pub tool_title: &'static str,

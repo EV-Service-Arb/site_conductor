@@ -7,7 +7,10 @@ use ev_lib::ts_gen::Ts;
 use sa_alerts::Rule;
 use sa_auth::{Catalog, SourceKind};
 use sa_browsers::view::{In as ViewerIn, Out as ViewerOut};
-use sa_core::{gbp::OnGoogle, prices::Item};
+use sa_core::{
+	gbp::OnGoogle,
+	prices::{Item, Scope},
+};
 use sa_panel::{store::browsers::Provider, tokens::Kind};
 use sa_server::{
 	access::AccessRequestDto,
@@ -27,6 +30,11 @@ fn main() {
 		name: "PRICED_ITEMS",
 		ty: "PricedItem",
 		items: Item::all().map(|i| &*i.to_string().leak()).collect(),
+	};
+	let scopes = || Ts::Union {
+		name: "SCOPES",
+		ty: "Scope",
+		items: <Scope as strum::VariantArray>::VARIANTS.iter().map(|s| <&str>::from(*s)).collect(),
 	};
 	let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../frontend/src");
 	let [permissions, aliases] = Catalog::collect("sa", 0).ts();
@@ -75,6 +83,7 @@ fn main() {
 				items: <Provider as strum::VariantArray>::VARIANTS.iter().map(|p| <&str>::from(*p)).collect(),
 			},
 			priced_items(),
+			scopes(),
 		],
 	);
 	Ts::write(
@@ -82,6 +91,7 @@ fn main() {
 		&[
 			Ts::types::<(TokensDto, LedgerDto, UsageDto, TokenHoldersDto, BalanceChangeDto, BalanceDto, (PricesDto, SetPricesDto, FlowsDto))>(),
 			priced_items(),
+			scopes(),
 			Ts::Union {
 				name: "FLOW_KINDS",
 				ty: "FlowKind",

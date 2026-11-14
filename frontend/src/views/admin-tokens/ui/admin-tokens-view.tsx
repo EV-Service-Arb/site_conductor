@@ -3,11 +3,11 @@
 import { Button, Card, CardContent, PageFrame, Settled, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn } from "@evinvest/uikit";
 import { useState } from "react";
 
-import { fetchPrices } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
-import { type Holder, fetchHolders, tokens } from "@/entities/tokens";
+import { type Holder, fetchHolders, fetchPrices, tokens } from "@/entities/tokens";
 import { GrantDialog } from "@/features/grant-tokens";
-import { PricesCard } from "@/features/price-places";
+import { PricesCard } from "@/features/price-tokens";
+import { ROUTES } from "@/shared/config/routes";
 import { useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -17,7 +17,7 @@ import { useButtonSize } from "@/shared/ui/touch";
 
 const HEAD = cn(TABLE_HEAD, EDGE_CELL);
 
-/** Everyone's balance, for whoever grants tokens. */
+/** Prices, everyone's spending and balances, for whoever grants tokens. */
 export function AdminTokensView() {
   const t = useT();
   const me = useMe();
@@ -37,7 +37,15 @@ export function AdminTokensView() {
   return (
     <PageFrame breakpoint="md" title={t(tokens.admin.title, "Tokens of everyone")}>
       {prices.status === "error" && <ErrorState failure={prices.failure} onRetry={prices.reload} />}
-      {prices.status === "ok" && <PricesCard key={`${prices.data.details}:${prices.data.search}`} prices={prices.data} onSaved={prices.reload} />}
+      {prices.status === "ok" && <PricesCard prices={prices.data} onSaved={prices.reload} />}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-ink">{t(tokens.admin.spending, "Spending")}</h2>
+        <iframe
+          title={t(tokens.admin.spending, "Spending")}
+          src={`${ROUTES.grafana}d/sa-tokens/?kiosk&hideLogo&_dash.hideLinks&theme=dark`}
+          className="h-screen w-full rounded-lg border border-border"
+        />
+      </section>
       <Settled loading={holders.status === "loading"} skeleton={<Skeleton className="h-40 w-full" />}>
         {holders.status === "error" && <ErrorState failure={holders.failure} onRetry={holders.reload} />}
         {holders.status === "ok" && holders.data.length === 0 && <EmptyState title={t(tokens.admin.empty, "Nobody has signed in yet.")} description="" />}
