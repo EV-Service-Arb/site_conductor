@@ -45,7 +45,7 @@ export async function fetchPrices(): Promise<Price[]> {
   return (await http.get("/api/v1/admin/tokens/prices", pricesParser)).prices;
 }
 
-/** Only the items given change; `null` takes one off sale. */
-export async function setPrices(prices: SetPrices["prices"]): Promise<Price[]> {
-  return (await http.send("PUT", "/api/v1/admin/tokens/prices", { prices }, pricesParser)).prices;
+/** Only the items given change: a price `null` takes one off sale, a cost `null` makes it unknown. */
+export async function setPrices(prices: SetPrices["prices"], costs: SetPrices["costs"]): Promise<Price[]> {
+  return (await http.send("PUT", "/api/v1/admin/tokens/prices", { prices, costs }, pricesParser)).prices;
 }

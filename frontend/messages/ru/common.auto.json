@@ -2283,10 +2283,6 @@
     "en": "GBPs and the map",
     "t": "GBP и карта"
   },
-  "prices.setBy": {
-    "en": "{by}, {at}",
-    "t": "{by}, {at}"
-  },
   "prices.title": {
     "en": "Prices",
     "t": "Цены"
@@ -2298,10 +2294,6 @@
   "prices.unsold.count": {
     "en": "{n} not sold",
     "t": "Не продаётся: {n}"
-  },
-  "prices.why": {
-    "en": "Tokens each thing costs a person. Empty is not sold: a Places request is refused, a walk step not walked. Cached answers and a person's own Maps keys cost nothing.",
-    "t": "Сколько токенов стоит каждая вещь. Пусто — не продаётся: запрос к Places отклоняется, шаг обхода не выполняется. Кэшированные ответы и собственные ключи Maps ничего не стоят."
   },
   "reviewArchive.loading": {
     "en": "Loading the review archive…",

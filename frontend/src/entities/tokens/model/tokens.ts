@@ -1,6 +1,6 @@
 import { type Parser, arrayOf, isoDay, nullable, num, object, oneOf, str } from "@/shared/lib/parse";
 
-import { type Balance, type Kickback, LEDGER_KINDS, type Ledger, type LedgerEntry, PRICED_ITEMS, type Price, type Prices, SCOPES, type TokenHolders, type Tokens, type Usage } from "./generated";
+import { type Balance, type Kickback, LEDGER_KINDS, type Ledger, type LedgerEntry, PRICED_ITEMS, type Price, type Prices, SALES, SCOPES, type TokenHolders, type Tokens, type Usage } from "./generated";
 
 export type { BalanceChange as Change, Kickback, LedgerEntry, Price, PricedItem, Scope, SetPrices, TokenHolder as Holder, Tokens, UsageDay } from "./generated";
 export { LEDGER_KINDS };
@@ -40,13 +40,14 @@ export const balanceParser: Parser<Balance> = object({ balance: num });
 export const priceParser: Parser<Price> = object({
   item: oneOf(PRICED_ITEMS),
   scope: oneOf(SCOPES),
+  sale: oneOf(SALES),
+  unit: str,
   tool: str,
   tool_title: str,
   title: str,
   description: str,
-  tokens: nullable(num),
-  set_by: nullable(str),
-  set_at: nullable(str),
+  price: nullable(object({ tokens: num, set_by: str, set_at: str })),
+  cost: nullable(object({ usd_micros: num, set_by: str, set_at: str })),
 });
 
 export const pricesParser: Parser<Prices> = object({ prices: arrayOf(priceParser) });
