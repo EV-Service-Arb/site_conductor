@@ -19,6 +19,7 @@ use crate::{
 	api::{ApiError, ApiResult, Body, Id, Ids, Params},
 	http::{ApiRoute, ApiState, Gate},
 	signin::Caller,
+	tokens::BalanceDto,
 };
 
 /// `GET /map`: the browser's Maps JS key, referrer-restricted.
@@ -213,6 +214,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::DELETE, "/gmbs/{id}/location", user, unplace_gmb),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/country", user, set_gmb_country),
 		ApiRoute::new(M::GET, "/map", user, map_key),
+		ApiRoute::new(M::POST, "/map/street_view", user, street_view).spends(),
 		ApiRoute::new(M::GET, "/trades", user, trades),
 		ApiRoute::new(M::POST, "/trades", user, add_trade),
 		ApiRoute::new(M::PATCH, "/trades/{id}", user, rename_trade),
@@ -399,6 +401,18 @@ async fn suggest_places(State(panel): State<Panel>, Extension(caller): Extension
 /// The browser's Maps JS key, referrer-restricted. 404 without one: there is no map.
 async fn map_key(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
 	s.map.map(Json).ok_or(ApiError::NotFound)
+}
+
+/// Buys the Street View panorama at a point: recorded and charged (`street_view.panorama`, the
+/// admin's price) in one write.
+///
+/// 404 without a map; 409 not priced, past the balance, or the month's free ones used.
+async fn street_view(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Body(at): Body<sa_places::LatLng>) -> ApiResult<Json<BalanceDto>> {
+	if s.map.is_none() {
+		return Err(ApiError::NotFound);
+	}
+	let balance = s.panel.open_street_view(caller.user_id, at.lat, at.lng, Timestamp::now()).await??;
+	Ok(Json(BalanceDto { balance }))
 }
 
 #[derive(Deserialize, JsonSchema)]

@@ -1,13 +1,13 @@
 "use client";
 
 import type { NavIcon, NavSection } from "@evinvest/uikit";
-import { Archive, Globe, MapPin, Settings } from "lucide-react";
+import { Archive, Coins, Globe, KeyRound, MapPin, Settings, ShieldCheck } from "lucide-react";
 import { usePathname } from "next/navigation";
 
-import { seesSites, useMe } from "@/entities/session";
+import { may, seesSites, useMe } from "@/entities/session";
 import { SitesElement } from "@/features/sites-element";
 import { ROUTES } from "@/shared/config/routes";
-import { useT, nav, reviewArchive } from "@/shared/i18n";
+import { useT, admin, nav, reviewArchive } from "@/shared/i18n";
 
 export interface App {
   href: string;
@@ -24,6 +24,12 @@ export function useApps(onNavigate?: () => void): App[] {
   const t = useT();
   const me = useMe();
   const pathname = usePathname();
+  const adminItems = [
+    ...(may(me, "sa:admin:tokens:grant")
+      ? [{ id: "tokens", href: ROUTES.adminTokens, label: t(admin.tokens, "Tokens"), icon: Coins, description: t(admin.tokens.description, "Prices, spending and everyone's balance") }]
+      : []),
+    ...(may(me, "sa:admin:sources:manage") ? [{ id: "sources", href: ROUTES.sources, label: t(nav.sources, "Sources"), icon: KeyRound, description: t(admin.sources.description, "Source keys and the sites they connect") }] : []),
+  ];
   return [
     ...(seesSites(me)
       ? [
@@ -62,5 +68,17 @@ export function useApps(onNavigate?: () => void): App[] {
         ],
       },
     },
+    ...(adminItems[0] !== undefined
+      ? [
+          {
+            href: adminItems[0].href,
+            label: t(nav.admin, "Admin"),
+            icon: ShieldCheck,
+            description: t(nav.admin.description, "Prices, everyone's tokens, source keys"),
+            here: adminItems.some((i) => pathname.startsWith(i.href)),
+            section: { id: "admin", items: adminItems },
+          },
+        ]
+      : []),
   ];
 }

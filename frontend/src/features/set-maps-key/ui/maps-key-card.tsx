@@ -5,14 +5,14 @@ import { KeyRound } from "lucide-react";
 import { useId, useState } from "react";
 
 import { api, ok } from "@/shared/api";
-import type { MapsKey, Prices } from "@/shared/api/schema";
+import type { MapsKey, Price } from "@/shared/api/schema";
 import { useLocale, useT, account } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 /** A gmail's own Maps key: tried first for its GBPs, then for its owner's others, before the shared keys that cost tokens. */
-export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: number; mapsKey: MapsKey | null; prices: Prices; onChanged: () => void }) {
+export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: number; mapsKey: MapsKey | null; prices: Price[]; onChanged: () => void }) {
   const t = useT();
   const locale = useLocale();
   const id = useId();
@@ -35,10 +35,9 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
     }
   };
   const failing = mapsKey !== null && (mapsKey.checked.error != null || mapsKey.out != null);
-  const cost =
-    prices.details == null || prices.search == null || prices.autocomplete == null
-      ? t(account.mapsKey.unpriced, "The shared keys are not priced yet: without a key of your own, Google lookups are refused.")
-      : t(account.mapsKey.cost, "On the shared keys: {details} tokens a lookup, {search} a search, {autocomplete} a suggestion.", { details: prices.details, search: prices.search, autocomplete: prices.autocomplete });
+  const cost = t(account.mapsKey.cost, "On the shared keys, in tokens: {list}.", {
+    list: prices.map((p) => `${p.title} ${p.tokens ?? t(account.mapsKey.unsold, "not sold")}`).join(" · "),
+  });
 
   return (
     <Card className="gap-3 py-4">

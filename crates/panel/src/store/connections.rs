@@ -1,8 +1,7 @@
-//! A gmail's connections, their secrets sealed, and the shared keys' prices.
+//! A gmail's connections, their secrets sealed.
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_places::Sku;
 use sqlx::SqliteConnection;
 use uuid::Uuid;
 
@@ -159,25 +158,4 @@ pub(crate) async fn own_keys(conn: &mut SqliteConnection, owner: Uuid, first: Op
 	.await
 	.wrap_err("listing a person's Maps keys")?;
 	Ok(rows.into_iter().map(|(id, blob, data_key_fp)| (id, Sealed { blob, data_key_fp })).collect())
-}
-
-/// Tokens a request of `sku` on the shared keys costs; `None`, not sold yet.
-pub(crate) async fn price(conn: &mut SqliteConnection, sku: Sku) -> eyre::Result<Option<i64>> {
-	sqlx::query_scalar("SELECT tokens FROM places_prices WHERE sku = $1")
-		.bind(<&str>::from(sku))
-		.fetch_optional(&mut *conn)
-		.await
-		.wrap_err("reading a Places price")
-}
-
-pub(crate) async fn set_price(conn: &mut SqliteConnection, sku: Sku, tokens: i64, by: &str, now: Timestamp) -> eyre::Result<()> {
-	sqlx::query("INSERT INTO places_prices (sku, tokens, set_by, set_at) VALUES ($1, $2, $3, $4) ON CONFLICT (sku) DO UPDATE SET tokens = excluded.tokens, set_by = excluded.set_by, set_at = excluded.set_at")
-		.bind(<&str>::from(sku))
-		.bind(tokens)
-		.bind(by)
-		.bind(to_db(now))
-		.execute(&mut *conn)
-		.await
-		.wrap_err("setting a Places price")?;
-	Ok(())
 }

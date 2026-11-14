@@ -18,13 +18,14 @@ use eyre::WrapErr;
 use jiff::{Timestamp, civil::Date, tz::TimeZone};
 use sa_core::{
 	gbp::Snapshot,
+	prices::Item,
 	tokens::{ChargePage, Renewal, split},
 };
 use sqlx::SqliteConnection;
 use uuid::Uuid;
 
 pub use crate::store::{
-	tokens::{Charged, Entry, Kickback, Kind, Owed},
+	tokens::{Charged, Entry, Flow, FlowKind, Kickback, Kind, Owed, Price},
 	users::User,
 };
 use crate::{
@@ -150,6 +151,15 @@ impl Panel {
 			.map(Ok)
 	}
 
+	/// Everyone's ledger and the grants given between `from` and `to`, oldest first.
+	pub async fn flows(&self, from: Timestamp, to: Timestamp) -> eyre::Result<Result<Vec<Flow>, Refused>> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the flows")?;
+		if !is_open(&mut conn).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		Ok(Ok(db::flows(&mut conn, from, to).await?))
+	}
+
 	/// Everyone's balance, renewed.
 	pub async fn holders(&self, now: Timestamp) -> eyre::Result<Result<Vec<(User, i64)>, Refused>> {
 		let mut tx = self.store.begin_write().await?;
@@ -205,6 +215,29 @@ impl Panel {
 		tracing::info!(user_id = %user, by, kind = kind.as_str(), delta, "balance changed");
 		self.snapshot_due.notify_one();
 		Ok(Ok(balance + delta))
+	}
+
+	/// Every priced item, in the catalog's order, and its price if it has one.
+	pub async fn prices(&self) -> eyre::Result<Vec<(Item, Option<Price>)>> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the prices")?;
+		let mut priced = db::prices(&mut conn).await?;
+		Ok(Item::all().map(|i| (i, priced.remove(&i))).collect())
+	}
+
+	/// An admin (`by`, their email) prices each item given at 0 tokens or more, `None` taking it
+	/// off sale: every one, or none.
+	pub async fn set_prices(&self, prices: &[(Item, Option<i64>)], by: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+		if prices.iter().any(|(_, n)| n.is_some_and(|n| n < 0)) {
+			return Ok(Err(Refused::Invalid("a price is 0 tokens or more".to_owned())));
+		}
+		let mut tx = self.store.begin_write().await?;
+		for (item, n) in prices {
+			db::set_price(&mut tx, *item, *n, by, now).await?;
+		}
+		tx.commit().await.wrap_err("committing the prices")?;
+		tracing::info!(by, ?prices, "prices set");
+		self.snapshot_due.notify_one();
+		Ok(Ok(()))
 	}
 
 	/// Where review_archive's next page of charges starts; `None` before the import.
@@ -285,7 +318,13 @@ impl Panel {
 			balances.insert(u.user_id, db::renewed(&mut tx, u.user_id, now, &self.renewal).await?);
 		}
 		let gmbs = gmbs_db::managed(&mut tx).await?;
+		let prices = db::prices(&mut tx).await?.into_iter().map(|(i, p)| (i, p.tokens)).collect();
 		tx.commit().await.wrap_err("committing the snapshot's renewals")?;
-		Ok(Some(Snapshot { gmbs, balances, charges_through }))
+		Ok(Some(Snapshot {
+			gmbs,
+			balances,
+			charges_through,
+			prices,
+		}))
 	}
 }

@@ -12,7 +12,8 @@ use std::sync::{Arc, Mutex};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_places::{Bought, Hold, Payer, Pending, Purse, Sku};
+use sa_core::prices::{Item, PlacesRequest};
+use sa_places::{Bought, Hold, Payer, Pending, Purse};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -24,7 +25,7 @@ use crate::{
 		browsers as browsers_db,
 		connections::{self as db, Sealed},
 		gmbs as gmbs_db,
-		tokens::{self as ledger, Charged, Entry, Kind},
+		tokens::{self as ledger, Charged, Entry, Kind, Price},
 	},
 	tokens::is_open,
 };
@@ -41,8 +42,8 @@ pub struct Connections {
 	pub imap: Option<Imap>,
 	/// With why the rotation passes it over now, if it does.
 	pub maps_key: Option<(MapsKey, Option<String>)>,
-	/// What a request on the shared keys costs, per [`Sku`]; `None`, not sold.
-	pub prices: Vec<(Sku, Option<i64>)>,
+	/// What a request on the shared keys costs, per [`Item::Places`]; `None`, not sold.
+	pub prices: Vec<(Item, Option<Price>)>,
 	pub browser: Option<crate::browsers::Browser>,
 }
 
@@ -71,10 +72,8 @@ impl Panel {
 			}
 			None => None,
 		};
-		let mut prices = Vec::new();
-		for sku in <Sku as strum::VariantArray>::VARIANTS {
-			prices.push((*sku, db::price(&mut conn, *sku).await?));
-		}
+		let priced = ledger::prices(&mut conn).await?;
+		let prices = Item::all().filter(|i| matches!(i, Item::Places(_))).map(|i| (i, priced.get(&i).cloned())).collect();
 		let browser = browsers_db::browser(&mut conn, id).await?.map(|(b, _)| b);
 		Ok(Ok(Connections { imap, maps_key, prices, browser }))
 	}
@@ -171,30 +170,6 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
-	/// What a request on the shared keys costs, per [`Sku`]; `None`, not sold.
-	pub async fn prices(&self) -> eyre::Result<Vec<(Sku, Option<i64>)>> {
-		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the prices")?;
-		let mut out = Vec::new();
-		for sku in <Sku as strum::VariantArray>::VARIANTS {
-			out.push((*sku, db::price(&mut conn, *sku).await?));
-		}
-		Ok(out)
-	}
-
-	/// An admin (`by`, their email) prices every [`Sku`], 0 or more each.
-	pub async fn set_prices(&self, prices: &[(Sku, i64)], by: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
-		if prices.iter().any(|(_, n)| *n < 0) || <Sku as strum::VariantArray>::VARIANTS.iter().any(|s| !prices.iter().any(|(p, _)| p == s)) {
-			return Ok(Err(Refused::Invalid("every request kind is priced, at 0 tokens or more".to_owned())));
-		}
-		let mut tx = self.store.begin_write().await?;
-		for (sku, n) in prices {
-			db::set_price(&mut tx, *sku, *n, by, now).await?;
-		}
-		tx.commit().await.wrap_err("committing the prices")?;
-		tracing::info!(by, ?prices, "Places prices set");
-		Ok(Ok(()))
-	}
-
 	/// Who a request about the owner's gmail `first` (else none of theirs in particular) is made
 	/// for: their keys, then the rotation `purse` pays for, the house when `None`.
 	pub(crate) async fn payer<'a>(&self, owner: Uuid, first: Option<i64>, purse: Option<&'a dyn Purse>) -> eyre::Result<Payer<'a>> {
@@ -255,7 +230,7 @@ struct Held {
 }
 
 impl Purse for Tokens {
-	fn hold(&self, sku: Sku) -> Pending<'_, Box<dyn Hold>> {
+	fn hold(&self, sku: PlacesRequest) -> Pending<'_, Box<dyn Hold>> {
 		Box::pin(async move {
 			let turn = self.panel.purses.lock().expect("never poisoned: no panic while held").entry(self.user).or_default().clone();
 			let turn = turn.lock_owned().await;
@@ -264,16 +239,18 @@ impl Purse for Tokens {
 			if !is_open(&mut tx).await.map_err(unpaid)? {
 				return Err(sa_places::Error::Unpaid(Refused::Closed.to_string()));
 			}
-			let Some(price) = db::price(&mut tx, sku).await.map_err(unpaid)? else {
+			let Some(price) = ledger::price(&mut tx, sku.into()).await.map_err(unpaid)? else {
 				return Err(sa_places::Error::Unpaid(format!(
-					"Places {sku} on the shared keys is not priced yet: add a Maps key to one of your gmails, or ask an admin to price it"
+					"Places {} on the shared keys is not priced yet: add a Maps key to one of your gmails, or ask an admin to price it",
+					Item::from(sku).title()
 				)));
 			};
 			let balance = ledger::renewed(&mut tx, self.user, Timestamp::now(), &self.panel.renewal).await.map_err(unpaid)?;
 			tx.commit().await.map_err(|e| unpaid(eyre::eyre!(e)))?;
 			if balance < price {
 				return Err(sa_places::Error::Unpaid(format!(
-					"Places {sku} on the shared keys costs {price} tokens, and you hold {balance}: add a Maps key to one of your gmails, or ask for tokens"
+					"Places {} on the shared keys costs {price} tokens, and you hold {balance}: add a Maps key to one of your gmails, or ask for tokens",
+					Item::from(sku).title()
 				)));
 			}
 			Ok(Box::new(Held {
@@ -311,7 +288,7 @@ impl Hold for Held {
 			ledger::append(&mut tx, user, &entry).await.map_err(store)?;
 			tx.commit().await.map_err(|e| store(eyre::eyre!(e)))?;
 			drop(turn);
-			tracing::info!(user_id = %user, tokens = price, sku = %bought.sku, "Places buy charged");
+			tracing::info!(user_id = %user, tokens = price, item = %Item::from(bought.sku), "Places buy charged");
 			panel.snapshot_due.notify_one();
 			Ok(())
 		})

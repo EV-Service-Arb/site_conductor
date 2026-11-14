@@ -52,9 +52,8 @@ function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Pr
         zoomControlOptions: { position: ControlPosition.RIGHT_BOTTOM },
         fullscreenControl: true,
         fullscreenControlOptions: { position: ControlPosition.RIGHT_TOP },
-        // a panorama entered is a Dynamic Street View load, billed to the browser key
-        streetViewControl: true,
-        streetViewControlOptions: { position: ControlPosition.RIGHT_BOTTOM },
+        // Google's pegman opens panoramas unpaid: `StreetView` is the map's
+        streetViewControl: false,
         clickableIcons: false,
       }),
   );

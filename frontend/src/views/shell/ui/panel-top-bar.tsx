@@ -252,13 +252,13 @@ function LanguageMenu() {
 }
 
 /** The screens the bar keeps behind its menu; a phone's Sheet lists them with the rest. */
-const inMenu = (id: string): id is "sources" | "usage" => id === "sources" || id === "usage";
+const inMenu = (id: string): id is "usage" => id === "usage";
 
 function ScreensMenu() {
   const t = useT();
   const me = useMe();
   const pathname = usePathname();
-  const label = { sources: t(nav.sources, "Sources"), usage: t(usage.title, "Usage") };
+  const label = { usage: t(usage.title, "Usage") };
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -288,7 +288,6 @@ function OwnScreens({ bar = false, className, onNavigate }: { bar?: boolean; cla
   const tokens = useTokens();
   const pathname = usePathname();
   const label = {
-    sources: t(nav.sources, "Sources"),
     usage: t(usage.title, "Usage"),
     tokens: tokens.status === "ok" ? t(tokensKeys.count, "{n} tokens", { n: tokens.data.balance }) : t(nav.tokens, "Tokens"),
     wallet: t(nav.wallet, "Wallet"),

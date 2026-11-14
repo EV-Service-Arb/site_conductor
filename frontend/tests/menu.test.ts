@@ -28,7 +28,7 @@ describe("the top bar, by what the caller holds", () => {
   });
 
   it("gives Sources to admins alone", () => {
-    check(alias("sa:admin"), true, { sites: true, own: ["sources", "usage", "tokens", "wallet"], chip: [["act-as"]] });
+    check(alias("sa:admin"), true, { sites: true, own: ["usage", "tokens", "wallet"], chip: [["act-as"]] });
   });
 
   it("shows Sites for either section its nav lists, and nothing for a sites write alone", () => {

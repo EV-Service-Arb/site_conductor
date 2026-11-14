@@ -58,6 +58,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/tokens/flows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everyone's ledger and grants in a window, oldest first: what Grafana's sa-tokens dashboard reads. */
+        get: operations["token_flows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/tokens/prices": {
         parameters: {
             query?: never;
@@ -65,9 +82,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Tokens a Places request on the shared keys costs, per kind; null, not sold. */
+        /** Every item of the price catalog (`sa_core::prices`): Places requests, Street View, review_archive's walk steps; each priced in tokens or not sold. */
         get: operations["token_prices"];
-        /** Prices every kind of Places request on the shared keys, 0 or more tokens. */
+        /** Prices the items given, 0 or more tokens or `null` off sale; the others stay. 400 an item not priced. */
         put: operations["set_token_prices"];
         post?: never;
         delete?: never;
@@ -934,6 +951,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/map/street_view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Buys the Street View panorama at a point: recorded and charged (`street_view.panorama`, the admin's price) in one write.
+         * @description 404 without a map; 409 not priced, past the balance, or the month's free ones used.
+         */
+        post: operations["street_view"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me": {
         parameters: {
             query?: never;
@@ -1487,7 +1524,8 @@ export interface components {
             browser: components["schemas"]["Browser"] | null;
             imap: components["schemas"]["Imap"] | null;
             maps_key: components["schemas"]["MapsKey"] | null;
-            prices: components["schemas"]["Prices"];
+            /** @description What a Places request on the shared keys costs. */
+            prices: components["schemas"]["Price"][];
         };
         /**
          * @description ISO 3166-1 alpha-2, of the countries GBPs are in.
@@ -1556,6 +1594,33 @@ export interface components {
         };
         /** @enum {string} */
         Feedback: "up" | "down";
+        /** @description One flow: `tokens` what the balance moved by, a grant's amount for `granted`. */
+        Flow: {
+            /** @description RFC 3339. */
+            at: string;
+            /** @description The admin's email. */
+            by: string | null;
+            email: string;
+            kind: components["schemas"]["FlowKindDto"];
+            label: string | null;
+            name: string;
+            note: string | null;
+            service: string | null;
+            /** Format: int64 */
+            tokens: number;
+        };
+        /**
+         * @description What moved a balance, as Grafana reads it.
+         *
+         *     - `refund`: A charge kicked back, claimed.
+         *     - `granted`: A grant made, owed until claimed.
+         * @enum {string}
+         */
+        FlowKindDto: "renewal" | "purchase" | "set" | "spend" | "grant_claimed" | "refund" | "granted";
+        /** @description Everyone's flows, oldest first. */
+        Flows: {
+            flows: components["schemas"]["Flow"][];
+        };
         GbpCountry: {
             /** @description Set by hand, Google having none. */
             by_hand: boolean;
@@ -1877,14 +1942,26 @@ export interface components {
             /** Format: uint32 */
             width: number;
         };
-        /** @description Tokens a Places request on the shared keys costs; `null`, not sold yet. */
+        /** @description A priced item, and its price: `tokens` null, not sold. */
+        Price: {
+            description: string;
+            item: components["schemas"]["PricedItem"];
+            scope: components["schemas"]["Scope"];
+            /** @description RFC 3339. */
+            set_at: string | null;
+            /** @description The admin's email. */
+            set_by: string | null;
+            title: string;
+            /** Format: int64 */
+            tokens: number | null;
+            tool: string;
+            tool_title: string;
+        };
+        /** @enum {string} */
+        PricedItem: "places.details" | "places.search" | "places.autocomplete" | "street_view.panorama" | "walk.open" | "walk.reviews" | "walk.sort" | "walk.sort_retry" | "walk.step";
+        /** @description Every item, in the catalog's order. */
         Prices: {
-            /** Format: int64 */
-            autocomplete: number | null;
-            /** Format: int64 */
-            details: number | null;
-            /** Format: int64 */
-            search: number | null;
+            prices: components["schemas"]["Price"][];
         };
         Probe: {
             /** @constant */
@@ -1983,6 +2060,14 @@ export interface components {
             gmb: number | null;
             stream: string | null;
         };
+        /**
+         * @description Who charges.
+         *
+         *     - `conductor`: At the buy, before Google is asked.
+         *     - `review_archive`: After the fact, through its charge feed.
+         * @enum {string}
+         */
+        Scope: "conductor" | "review_archive";
         SetBrowser: {
             /** @description A browser's; a cloud phone's model is drawn. */
             device?: components["schemas"]["Device"] | null;
@@ -2004,14 +2089,28 @@ export interface components {
         SetMapsKey: {
             key: string;
         };
-        /** @description Every request kind priced, in tokens. */
+        /** @description The items given, each priced at 0 or more or `null` off sale; the others stay. */
         SetPrices: {
-            /** Format: int64 */
-            autocomplete: number;
-            /** Format: int64 */
-            details: number;
-            /** Format: int64 */
-            search: number;
+            prices: {
+                /** Format: int64 */
+                "places.autocomplete"?: number | null;
+                /** Format: int64 */
+                "places.details"?: number | null;
+                /** Format: int64 */
+                "places.search"?: number | null;
+                /** Format: int64 */
+                "street_view.panorama"?: number | null;
+                /** Format: int64 */
+                "walk.open"?: number | null;
+                /** Format: int64 */
+                "walk.reviews"?: number | null;
+                /** Format: int64 */
+                "walk.sort"?: number | null;
+                /** Format: int64 */
+                "walk.sort_retry"?: number | null;
+                /** Format: int64 */
+                "walk.step"?: number | null;
+            };
         };
         SetRole: {
             /** @description Required: `null` clears it. */
@@ -2503,6 +2602,9 @@ export type Device = components['schemas']['Device'];
 export type Error = components['schemas']['Error'];
 export type Exit = components['schemas']['Exit'];
 export type Feedback = components['schemas']['Feedback'];
+export type Flow = components['schemas']['Flow'];
+export type FlowKindDto = components['schemas']['FlowKindDto'];
+export type Flows = components['schemas']['Flows'];
 export type GbpCountry = components['schemas']['GbpCountry'];
 export type GeneralAccess = components['schemas']['GeneralAccess'];
 export type Gmail = components['schemas']['Gmail'];
@@ -2541,6 +2643,8 @@ export type Person = components['schemas']['Person'];
 export type Place = components['schemas']['Place'];
 export type Point = components['schemas']['Point'];
 export type Preview = components['schemas']['Preview'];
+export type Price = components['schemas']['Price'];
+export type PricedItem = components['schemas']['PricedItem'];
 export type Prices = components['schemas']['Prices'];
 export type Probe = components['schemas']['Probe'];
 export type Provider = components['schemas']['Provider'];
@@ -2552,6 +2656,7 @@ export type Role = components['schemas']['Role'];
 export type Rule = components['schemas']['Rule'];
 export type RulesBody = components['schemas']['RulesBody'];
 export type Running = components['schemas']['Running'];
+export type Scope = components['schemas']['Scope'];
 export type SetBrowser = components['schemas']['SetBrowser'];
 export type SetCountry = components['schemas']['SetCountry'];
 export type SetGeneral = components['schemas']['SetGeneral'];
@@ -2702,6 +2807,40 @@ export interface operations {
             };
         };
     };
+    token_flows: {
+        parameters: {
+            query: {
+                /** @description Unix milliseconds. */
+                from: number;
+                /** @description Unix milliseconds, at most 400 days after `from`. */
+                to: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Everyone's flows, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Flows"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     token_prices: {
         parameters: {
             query?: never;
@@ -2711,7 +2850,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Tokens a Places request on the shared keys costs; `null`, not sold yet. */
+            /** @description Every item, in the catalog's order. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2738,14 +2877,14 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        /** @description Every request kind priced, in tokens. */
+        /** @description The items given, each priced at 0 or more or `null` off sale; the others stay. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SetPrices"];
             };
         };
         responses: {
-            /** @description Tokens a Places request on the shared keys costs; `null`, not sold yet. */
+            /** @description Every item, in the catalog's order. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4588,6 +4727,39 @@ export interface operations {
             };
         };
     };
+    street_view: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LatLng"];
+            };
+        };
+        responses: {
+            /** @description The answer to a balance change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Balance"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     me: {
         parameters: {
             query?: never;
@@ -5193,6 +5365,7 @@ export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["sch
 export const destinationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DestinationKind"]> = ["channel", "private", "group"];
 export const deviceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Device"]> = ["pixel_7", "galaxy_s23", "redmi_note_14"];
 export const feedbackValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Feedback"]> = ["up", "down"];
+export const flowKindDtoValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FlowKindDto"]> = ["renewal", "purchase", "set", "spend", "grant_claimed", "refund", "granted"];
 export const generalAccessValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GeneralAccess"]> = ["none", "view"];
 export const gmailRoleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GmailRole"]> = ["owner", "manager"];
 export const keyedSourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KeyedSourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "bot"];
@@ -5201,9 +5374,11 @@ export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>[
 export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
 export const onGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OnGoogle"]> = ["verifying", "verified", "suspended"];
 export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Permission"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
+export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "street_view.panorama", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step"];
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
 export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "payment_received", "source_silent", "booked", "access_requested", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed"];
+export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scope"]> = ["conductor", "review_archive"];
 export const sourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "panel", "booking", "bot"];
 export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["State"]> = ["draft", "verifying", "verified", "suspended"];
 export const touchPhaseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["TouchPhase"]> = ["start", "move", "end"];

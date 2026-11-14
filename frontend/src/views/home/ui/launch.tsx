@@ -7,7 +7,7 @@ import { type ReactNode, useState } from "react";
 import { CategoryChip, categoryName, categoryOf, GMAIL_ROLE_NAME, gmbs, googleName, type Listed, MUST_HAVES, type MustHave, openAccount, openTrade, type Placed, readiness, TradeSelect, under, useGmails, useGmbTags } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { LinkPlaceButton } from "@/features/link-gmb-place";
-import { PlaceButton } from "@/features/place-gmb";
+import { SpotsEditor } from "@/features/add-gmb";
 import { type Country, type Gmb, type GmbEdit, type GoogleCategory, countryValues } from "@/shared/api/schema";
 import { ApiError, api, ok } from "@/shared/api";
 import { type T, useLocale, useT, account, nav } from "@/shared/i18n";
@@ -391,10 +391,21 @@ function Behind({ listed: { gmb } }: { listed: Listed }) {
   return (
     <section className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3 text-sm">
       <h3 className="font-medium text-ink">{t(launch.behind, "Behind it")}</h3>
-      <div className="flex items-center gap-3">
-        <span className="w-28 shrink-0 text-ink-soft">{t(launch.point, "Point")}</span>
-        <span className="flex-1 text-ink">{gmb.location ? `${gmb.location.lat.toFixed(4)}, ${gmb.location.lng.toFixed(4)}` : <span className="text-accent-warn">{t(gmbs.issue.unlocated, "No location")}</span>}</span>
-        <PlaceButton gmb={gmb} />
+      <div className="flex flex-col gap-2">
+        <span className="flex items-baseline gap-2">
+          <span className="text-ink-soft">{t(launch.where, "Where")}</span>
+          <span className="text-xs text-ink-faint">{t(launch.where.hint, "where it could stand, each with a note · its point is the first · drag to reorder")}</span>
+        </span>
+        <SpotsEditor
+          spots={gmb.spots}
+          gmail={gmb.gmail_id}
+          onChange={(spots) =>
+            void ok(api.PUT("/gmbs/{id}/spots", { params: { path: { id: gmb.id } }, body: { spots } })).then(gmails.reload, (e: unknown) => {
+              notifyFailure(e, t);
+              gmails.reload();
+            })
+          }
+        />
       </div>
       <div className="flex items-center gap-3">
         <span className="w-28 shrink-0 text-ink-soft">{t(gmbs.gbp.country, "Country")}</span>

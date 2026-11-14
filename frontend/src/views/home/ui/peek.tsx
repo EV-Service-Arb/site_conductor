@@ -10,7 +10,7 @@ import { useT, home } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
 
 /** A GMB's card over the map: its numbers, what needs the operator, and where its services show it. */
-export function Peek({ listed, onClose }: { listed: Listed; onClose: () => void }) {
+export function Peek({ listed, onClose, className }: { listed: Listed; onClose: () => void; className?: string }) {
   const t = useT();
   const button = useButtonSize();
   const { tags } = useGmbTags();
@@ -25,7 +25,7 @@ export function Peek({ listed, onClose }: { listed: Listed; onClose: () => void 
     site && (site.overdue > 0 ? t(home.peek.leadsOverdue, "{n} leads in 7 days ({overdue} overdue)", { n: site.leads_7d, overdue: site.overdue }) : t(home.peek.leads, "{n} leads in 7 days", { n: site.leads_7d })),
   ].filter(Boolean);
   return (
-    <Card className="absolute top-4 right-4 w-80 max-w-[calc(100%-2rem)] gap-3 py-4 shadow-overlay">
+    <Card className={cn("w-80 gap-3 py-4 shadow-overlay", className)}>
       <CardHeader className="flex items-start gap-2 px-4">
         <div className="min-w-0 flex-1">
           <CardTitle className="truncate" title={name}>

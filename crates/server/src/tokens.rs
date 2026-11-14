@@ -4,7 +4,7 @@
 //!
 //! Before the import from review_archive, every one of them answers 503, and `serve` waits.
 
-use std::time::Duration;
+use std::{collections::BTreeMap, time::Duration};
 
 use axum::{
 	Extension, Json,
@@ -15,19 +15,20 @@ use axum::{
 use ev_lib::api::JsonSchema;
 use jiff::Timestamp;
 use sa_auth::{Principal, Service};
-use sa_core::tokens::ChargePage;
+use sa_core::{
+	prices::{Item, Scope},
+	tokens::ChargePage,
+};
 use sa_panel::{
 	Panel,
-	tokens::{Change, Entry, Kickback, Kind, Owed},
+	tokens::{Change, Entry, Flow, FlowKind, Kickback, Kind, Owed, Price},
 };
-use sa_places::Sku;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use uuid::Uuid;
 
 use crate::{
 	api::{ApiError, ApiResult, Body, Ids, Params},
-	connections::PricesDto,
 	forward::Services,
 	http::{ApiRoute, Gate, Section},
 	signin::Caller,
@@ -51,6 +52,9 @@ const BACKOFF: (Duration, Duration) = (Duration::from_secs(1), Duration::from_se
 const CALL_TIMEOUT: Duration = Duration::from_secs(10);
 /// The most of review_archive's answer read: a page of charges, with room.
 const ANSWER: usize = 16 * 1024 * 1024;
+
+/// The widest window `flows` reads.
+const FLOWS_SPAN: jiff::SignedDuration = jiff::SignedDuration::from_hours(24 * 400);
 /// What the caller is owed until they claim it: a charge kicked back (`service`, `key`,
 /// `label`), or an admin's grant (`by`, `note`).
 #[derive(Clone, Debug, JsonSchema, Serialize)]
@@ -186,14 +190,75 @@ pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<boo
 	tokio::join!(follow, push);
 }
 
-/// Every request kind priced, in tokens.
+/// A priced item, and its price: `tokens` null, not sold.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Price")]
+pub struct PriceDto {
+	pub item: Item,
+	pub scope: Scope,
+	pub tool: &'static str,
+	pub tool_title: &'static str,
+	pub title: &'static str,
+	pub description: &'static str,
+	pub tokens: Option<i64>,
+	/// The admin's email.
+	pub set_by: Option<String>,
+	/// RFC 3339.
+	pub set_at: Option<String>,
+}
+
+/// Every item, in the catalog's order.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Prices")]
+pub struct PricesDto {
+	pub prices: Vec<PriceDto>,
+}
+
+/// The items given, each priced at 0 or more or `null` off sale; the others stay.
 #[derive(Deserialize, JsonSchema)]
 #[schemars(rename = "SetPrices")]
 #[serde(deny_unknown_fields)]
 pub struct SetPricesDto {
-	pub details: i64,
-	pub search: i64,
-	pub autocomplete: i64,
+	pub prices: BTreeMap<Item, Option<i64>>,
+}
+
+/// What moved a balance, as Grafana reads it.
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FlowKindDto {
+	Renewal,
+	Purchase,
+	Set,
+	Spend,
+	/// A charge kicked back, claimed.
+	Refund,
+	GrantClaimed,
+	/// A grant made, owed until claimed.
+	Granted,
+}
+
+/// One flow: `tokens` what the balance moved by, a grant's amount for `granted`.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Flow")]
+pub struct FlowDto {
+	/// RFC 3339.
+	pub at: String,
+	pub email: String,
+	pub name: String,
+	pub kind: FlowKindDto,
+	pub tokens: i64,
+	pub service: Option<String>,
+	pub label: Option<String>,
+	/// The admin's email.
+	pub by: Option<String>,
+	pub note: Option<String>,
+}
+
+/// Everyone's flows, oldest first.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Flows")]
+pub struct FlowsDto {
+	pub flows: Vec<FlowDto>,
 }
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
@@ -211,6 +276,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/admin/tokens/prices", admin, token_prices),
 		// A price is what every request on the shared keys charges.
 		ApiRoute::new(M::PUT, "/admin/tokens/prices", admin.fresh(), set_token_prices),
+		ApiRoute::new(M::GET, "/admin/tokens/flows", admin, token_flows),
 	]
 }
 
@@ -355,21 +421,83 @@ async fn change_balance(
 	Ok(Json(BalanceDto { balance }))
 }
 
-/// Tokens a Places request on the shared keys costs, per kind; null, not sold.
-async fn token_prices(State(panel): State<Panel>) -> ApiResult<Json<PricesDto>> {
-	Ok(Json(panel.prices().await?.into()))
+impl From<(Item, Option<Price>)> for PriceDto {
+	fn from((item, price): (Item, Option<Price>)) -> Self {
+		Self {
+			item,
+			scope: item.scope(),
+			tool: item.tool(),
+			tool_title: item.tool_title(),
+			title: item.title(),
+			description: item.description(),
+			tokens: price.as_ref().map(|p| p.tokens),
+			set_by: price.as_ref().map(|p| p.set_by.clone()),
+			set_at: price.map(|p| p.set_at.to_string()),
+		}
+	}
 }
 
-/// Prices every kind of Places request on the shared keys, 0 or more tokens.
+/// Every item of the price catalog (`sa_core::prices`): Places requests, Street View, review_archive's
+/// walk steps; each priced in tokens or not sold.
+async fn token_prices(State(panel): State<Panel>) -> ApiResult<Json<PricesDto>> {
+	Ok(Json(PricesDto {
+		prices: panel.prices().await?.into_iter().map(PriceDto::from).collect(),
+	}))
+}
+
+/// Prices the items given, 0 or more tokens or `null` off sale; the others stay. 400 an item not
+/// priced.
 async fn set_token_prices(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<SetPricesDto>) -> ApiResult<Json<PricesDto>> {
-	panel
-		.set_prices(
-			&[(Sku::Details, b.details), (Sku::Search, b.search), (Sku::Autocomplete, b.autocomplete)],
-			&caller.email,
-			Timestamp::now(),
-		)
-		.await??;
-	Ok(Json(panel.prices().await?.into()))
+	panel.set_prices(&b.prices.into_iter().collect::<Vec<_>>(), &caller.email, Timestamp::now()).await??;
+	token_prices(State(panel)).await
+}
+
+impl From<Flow> for FlowDto {
+	fn from(f: Flow) -> Self {
+		let kind = match f.kind {
+			FlowKind::Granted => FlowKindDto::Granted,
+			FlowKind::Ledger(Kind::Accrual) => FlowKindDto::Renewal,
+			FlowKind::Ledger(Kind::Add) => FlowKindDto::Purchase,
+			FlowKind::Ledger(Kind::Set) => FlowKindDto::Set,
+			FlowKind::Ledger(Kind::Charge) => FlowKindDto::Spend,
+			FlowKind::Ledger(Kind::Kickback) if f.by.is_some() => FlowKindDto::GrantClaimed,
+			FlowKind::Ledger(Kind::Kickback) => FlowKindDto::Refund,
+		};
+		Self {
+			at: f.at.to_string(),
+			email: f.email,
+			name: f.name,
+			kind,
+			tokens: f.delta,
+			service: f.service,
+			label: f.label,
+			by: f.by,
+			note: f.note,
+		}
+	}
+}
+
+/// Grafana's `${__from}` and `${__to}`.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct FlowsQuery {
+	/// Unix milliseconds.
+	from: i64,
+	/// Unix milliseconds, at most 400 days after `from`.
+	to: i64,
+}
+
+/// Everyone's ledger and grants in a window, oldest first: what Grafana's sa-tokens dashboard reads.
+async fn token_flows(State(panel): State<Panel>, Params(q): Params<FlowsQuery>) -> ApiResult<Json<FlowsDto>> {
+	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| ApiError::BadRequest(format!("{ms}: {e}")));
+	let (from, to) = (at(q.from)?, at(q.to)?);
+	if from >= to || to.duration_since(from) > FLOWS_SPAN {
+		return Err(ApiError::BadRequest(format!("from is before to, at most {} days", FLOWS_SPAN.as_hours() / 24)));
+	}
+	let flows = panel.flows(from, to).await??;
+	Ok(Json(FlowsDto {
+		flows: flows.into_iter().map(FlowDto::from).collect(),
+	}))
 }
 
 // ── review_archive, in `serve` ──────────────────────────────────────────────────────────

@@ -56,7 +56,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = locale;
   }, [locale]);
   return (
-    <I18nProvider locale={locale} messages={MESSAGES[locale]} missing={process.env.NODE_ENV === "production" ? "throw" : "warn"}>
+    <I18nProvider locale={locale} messages={MESSAGES[locale]} missing="warn">
       {children}
     </I18nProvider>
   );

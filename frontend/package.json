@@ -10,13 +10,15 @@
   "scripts": {
     "dev": "next dev --port ${PANEL_WEB_PORT:?the dev shell sets it}",
     "dev:stub": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/dev-stub.ts",
-    "build": "evinvest-i18n-check --exclude out,public,messages,tests,tmp,scripts && next build",
+    "build": "npm run i18n && evinvest-i18n-check --exclude out,public,messages,tests,tmp,scripts && next build",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
     "gen:api": "openapi-typescript src/shared/api/openapi.json -o src/shared/api/schema.ts --enum-values --root-types --root-types-no-schema-prefix --default-non-nullable=false",
     "postinstall": "[ -z \"$IN_NIX_SHELL\" ] || js-local",
-    "i18n": "evinvest-i18n-extract --exclude out,public,messages,tests,tmp,scripts"
+    "i18n": "evinvest-i18n-extract --exclude out,public,messages,tests,tmp,scripts",
+    "i18n:release": "evinvest-i18n-check --release --exclude out,public,messages,tests,tmp,scripts",
+    "i18n:translate": "evinvest-i18n-translate --exclude out,public,messages,tests,tmp,scripts"
   },
   "dependencies": {
     "@evinvest/concierge": "^0.5.0",

@@ -176,8 +176,8 @@
     "t": "Проверить и сохранить"
   },
   "account.mapsKey.cost": {
-    "en": "On the shared keys: {details} tokens a lookup, {search} a search, {autocomplete} a suggestion.",
-    "t": "На общих ключах: {details} токенов за запрос места, {search} за поиск, {autocomplete} за подсказку."
+    "en": "On the shared keys, in tokens: {list}.",
+    "t": "На общих ключах, в токенах: {list}."
   },
   "account.mapsKey.failing": {
     "en": "Failing",
@@ -203,9 +203,9 @@
     "en": "Google Maps key",
     "t": "Ключ Google Maps"
   },
-  "account.mapsKey.unpriced": {
-    "en": "The shared keys are not priced yet: without a key of your own, Google lookups are refused.",
-    "t": "Цены на общие ключи не заданы: без своего ключа запросы к Google отклоняются."
+  "account.mapsKey.unsold": {
+    "en": "not sold",
+    "t": "не продаётся"
   },
   "account.mapsKey.works": {
     "en": "Works",
@@ -279,6 +279,14 @@
     "en": "Last 7 days",
     "t": "За 7 дней"
   },
+  "add.close": {
+    "en": "Close",
+    "t": "Закрыть"
+  },
+  "add.country.byHand": {
+    "en": "Not on Maps: its country is said by hand.",
+    "t": "Не на Картах: страна указывается вручную."
+  },
   "add.country.none": {
     "en": "Google gives this place no country.",
     "t": "Google не даёт этому месту страны."
@@ -327,6 +335,54 @@
     "en": "no point from Google",
     "t": "Google не дал точку"
   },
+  "add.spots.another": {
+    "en": "Another spot: an address, a business nearby",
+    "t": "Ещё место: адрес, компания рядом"
+  },
+  "add.spots.drag": {
+    "en": "Drag to reorder",
+    "t": "Перетащите, чтобы изменить порядок"
+  },
+  "add.spots.hint": {
+    "en": "Where it could stand, each with a note. Its country, which its reviews' language follows, is the first spot's.",
+    "t": "Где он мог бы стоять, у каждого места — заметка. Страна, за которой следует язык его отзывов, — страна первого места."
+  },
+  "add.spots.move": {
+    "en": "Move spot {n}: ↑ ↓",
+    "t": "Переместить место {n}: ↑ ↓"
+  },
+  "add.spots.noPoint": {
+    "en": "Google gives {place} no point: pick it on the map.",
+    "t": "Google не даёт {place} точки: выберите её на карте."
+  },
+  "add.spots.note": {
+    "en": "A note",
+    "t": "Заметка"
+  },
+  "add.spots.order": {
+    "en": "its point is the first · drag to reorder",
+    "t": "его точка — первое место · перетащите, чтобы изменить порядок"
+  },
+  "add.spots.pick": {
+    "en": "Pick it on the map",
+    "t": "Выбрать на карте"
+  },
+  "add.spots.picking": {
+    "en": "Click the map where spot {n} stands",
+    "t": "Нажмите на карту там, где стоит место {n}"
+  },
+  "add.spots.point": {
+    "en": "A point on the map",
+    "t": "Точка на карте"
+  },
+  "add.spots.remove": {
+    "en": "Remove spot {n}",
+    "t": "Убрать место {n}"
+  },
+  "add.spots.twice": {
+    "en": "That spot is listed already.",
+    "t": "Это место уже в списке."
+  },
   "add.state.draft.hint": {
     "en": "Not on Google yet. Everything Google's form asks is filled on its Launch tab.",
     "t": "Ещё не в Google. Всё, что спрашивает форма Google, заполняется на вкладке запуска."
@@ -355,9 +411,25 @@
     "en": "Its point on the map, and its country, which its reviews' language follows.",
     "t": "Его точка на карте и страна, по которой выбирается язык отзывов."
   },
+  "add.where.optional": {
+    "en": "optional",
+    "t": "необязательно"
+  },
   "add.where.placeholder": {
     "en": "An address, a street or a business nearby",
     "t": "Адрес, улица или организация рядом"
+  },
+  "admin.sources.description": {
+    "en": "Source keys and the sites they connect",
+    "t": "Ключи источников и сайты, которые они подключают"
+  },
+  "admin.tokens": {
+    "en": "Tokens",
+    "t": "Токены"
+  },
+  "admin.tokens.description": {
+    "en": "Prices, spending and everyone's balance",
+    "t": "Цены, расходы и балансы всех"
   },
   "alerts.chats": {
     "en": "Channels and groups",
@@ -1871,10 +1943,6 @@
     "en": "then what stands behind it · ready rows fold to one line",
     "t": "затем то, что за ними · готовые строки сворачиваются"
   },
-  "launch.point": {
-    "en": "Point",
-    "t": "Точка"
-  },
   "launch.profile.noGmail": {
     "en": "pick its gmail first: the browser is the gmail's",
     "t": "сначала выберите gmail: браузер принадлежит ему"
@@ -1914,6 +1982,14 @@
   "launch.visit.yes": {
     "en": "Customers visit",
     "t": "Клиенты приходят"
+  },
+  "launch.where": {
+    "en": "Where",
+    "t": "Где"
+  },
+  "launch.where.hint": {
+    "en": "where it could stand, each with a note · its point is the first · drag to reorder",
+    "t": "где он мог бы стоять, у каждого места — заметка · его точка — первое место · перетащите, чтобы изменить порядок"
   },
   "launch.why.areas": {
     "en": "up to 20 · they cover where the film is shot",
@@ -2002,6 +2078,14 @@
   "nav.account": {
     "en": "Profile",
     "t": "Профиль"
+  },
+  "nav.admin": {
+    "en": "Admin",
+    "t": "Админ"
+  },
+  "nav.admin.description": {
+    "en": "Prices, everyone's tokens, source keys",
+    "t": "Цены, токены всех, ключи источников"
   },
   "nav.alerts": {
     "en": "Alerts",
@@ -2171,41 +2255,45 @@
     "en": "Zoom in to see the grid",
     "t": "Приблизьте, чтобы увидеть сетку"
   },
-  "prices.autocomplete": {
-    "en": "Suggestions (as typed)",
-    "t": "Подсказки при вводе"
-  },
-  "prices.details": {
-    "en": "Lookup (details)",
-    "t": "Запрос места"
+  "prices.reset": {
+    "en": "Undo changes",
+    "t": "Отменить изменения"
   },
   "prices.save": {
     "en": "Save",
     "t": "Сохранить"
   },
+  "prices.save.count": {
+    "en": "Save {n}",
+    "t": "Сохранить {n}"
+  },
   "prices.saved": {
     "en": "Prices saved",
     "t": "Цены сохранены"
   },
-  "prices.search": {
-    "en": "Search",
-    "t": "Поиск"
+  "prices.scope.conductor": {
+    "en": "GBPs and the map",
+    "t": "GBP и карта"
+  },
+  "prices.setBy": {
+    "en": "{by}, {at}",
+    "t": "{by}, {at}"
   },
   "prices.title": {
-    "en": "Places on the shared keys",
-    "t": "Places на общих ключах"
+    "en": "Prices",
+    "t": "Цены"
   },
-  "prices.unpriced": {
-    "en": "Not priced: requests on the shared keys are refused for everyone without a key of their own.",
-    "t": "Без цены: запросы на общих ключах отклоняются для всех, у кого нет своего ключа."
+  "prices.unsold": {
+    "en": "not sold",
+    "t": "не продаётся"
   },
-  "prices.unset": {
-    "en": "not priced",
-    "t": "без цены"
+  "prices.unsold.count": {
+    "en": "{n} not sold",
+    "t": "Не продаётся: {n}"
   },
   "prices.why": {
-    "en": "Tokens a Google Places request costs when a person has no Maps key of their own that answers. Cached answers and own keys cost nothing.",
-    "t": "Сколько токенов стоит запрос Google Places, когда у человека нет своего работающего ключа Maps. Кэш и свои ключи бесплатны."
+    "en": "Tokens each thing costs a person. Empty is not sold: a Places request is refused, a walk step not walked. Cached answers and a person's own Maps keys cost nothing.",
+    "t": "Сколько токенов стоит каждая вещь. Пусто — не продаётся: запрос к Places отклоняется, шаг обхода не выполняется. Кэшированные ответы и собственные ключи Maps ничего не стоят."
   },
   "reviewArchive.loading": {
     "en": "Loading the review archive…",
@@ -2451,6 +2539,14 @@
     "en": "Sign-in service unavailable",
     "t": "Сервис входа недоступен"
   },
+  "streetView": {
+    "en": "Street View: where it is; drag onto the map to open it",
+    "t": "Просмотр улиц: где он есть; перетащите на карту, чтобы открыть"
+  },
+  "streetView.none": {
+    "en": "No Street View here",
+    "t": "Здесь нет просмотра улиц"
+  },
   "title.leads": {
     "en": "Leads",
     "t": "Заявки"
@@ -2470,6 +2566,10 @@
   "tokens.admin.empty": {
     "en": "Nobody has signed in yet.",
     "t": "Ещё никто не входил."
+  },
+  "tokens.admin.spending": {
+    "en": "Spending",
+    "t": "Расходы"
   },
   "tokens.admin.title": {
     "en": "Tokens of everyone",

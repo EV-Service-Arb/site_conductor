@@ -125,12 +125,70 @@
         "x-permission": "sa:admin:tokens:grant"
       }
     },
+    "/admin/tokens/flows": {
+      "get": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Everyone's ledger and grants in a window, oldest first: what Grafana's sa-tokens dashboard reads.",
+        "operationId": "token_flows",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "description": "Unix milliseconds.",
+            "required": true,
+            "schema": {
+              "description": "Unix milliseconds.",
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "description": "Unix milliseconds, at most 400 days after `from`.",
+            "required": true,
+            "schema": {
+              "description": "Unix milliseconds, at most 400 days after `from`.",
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Everyone's flows, oldest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Flows"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "sa:admin:tokens:grant"
+      }
+    },
     "/admin/tokens/prices": {
       "get": {
         "tags": [
           "tokens"
         ],
-        "summary": "Tokens a Places request on the shared keys costs, per kind; null, not sold.",
+        "summary": "Every item of the price catalog (`sa_core::prices`): Places requests, Street View, review_archive's walk steps; each priced in tokens or not sold.",
         "operationId": "token_prices",
         "responses": {
           "default": {
@@ -144,7 +202,7 @@
             }
           },
           "200": {
-            "description": "Tokens a Places request on the shared keys costs; `null`, not sold yet.",
+            "description": "Every item, in the catalog's order.",
             "content": {
               "application/json": {
                 "schema": {
@@ -160,10 +218,10 @@
         "tags": [
           "tokens"
         ],
-        "summary": "Prices every kind of Places request on the shared keys, 0 or more tokens.",
+        "summary": "Prices the items given, 0 or more tokens or `null` off sale; the others stay. 400 an item not priced.",
         "operationId": "set_token_prices",
         "requestBody": {
-          "description": "Every request kind priced, in tokens.",
+          "description": "The items given, each priced at 0 or more or `null` off sale; the others stay.",
           "content": {
             "application/json": {
               "schema": {
@@ -185,7 +243,7 @@
             }
           },
           "200": {
-            "description": "Tokens a Places request on the shared keys costs; `null`, not sold yet.",
+            "description": "Every item, in the catalog's order.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2681,6 +2739,49 @@
         }
       }
     },
+    "/map/street_view": {
+      "post": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Buys the Street View panorama at a point: recorded and charged (`street_view.panorama`, the admin's price) in one write.",
+        "description": "404 without a map; 409 not priced, past the balance, or the month's free ones used.",
+        "operationId": "street_view",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LatLng"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The answer to a balance change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Balance"
+                }
+              }
+            }
+          }
+        },
+        "x-spends": true
+      }
+    },
     "/me": {
       "get": {
         "tags": [
@@ -4257,7 +4358,11 @@
             ]
           },
           "prices": {
-            "$ref": "#/components/schemas/Prices"
+            "description": "What a Places request on the shared keys costs.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Price"
+            }
           }
         },
         "required": [
@@ -4432,6 +4537,93 @@
         "enum": [
           "up",
           "down"
+        ]
+      },
+      "Flow": {
+        "description": "One flow: `tokens` what the balance moved by, a grant's amount for `granted`.",
+        "type": "object",
+        "properties": {
+          "at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
+          "by": {
+            "description": "The admin's email.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FlowKindDto"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "service": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tokens": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "at",
+          "email",
+          "name",
+          "kind",
+          "tokens",
+          "service",
+          "label",
+          "by",
+          "note"
+        ]
+      },
+      "FlowKindDto": {
+        "description": "What moved a balance, as Grafana reads it.\n\n- `refund`: A charge kicked back, claimed.\n- `granted`: A grant made, owed until claimed.",
+        "type": "string",
+        "enum": [
+          "renewal",
+          "purchase",
+          "set",
+          "spend",
+          "grant_claimed",
+          "refund",
+          "granted"
+        ]
+      },
+      "Flows": {
+        "description": "Everyone's flows, oldest first.",
+        "type": "object",
+        "properties": {
+          "flows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Flow"
+            }
+          }
+        },
+        "required": [
+          "flows"
         ]
       },
       "GbpCountry": {
@@ -5462,37 +5654,89 @@
           "height"
         ]
       },
-      "Prices": {
-        "description": "Tokens a Places request on the shared keys costs; `null`, not sold yet.",
+      "Price": {
+        "description": "A priced item, and its price: `tokens` null, not sold.",
         "type": "object",
         "properties": {
-          "autocomplete": {
+          "description": {
+            "type": "string"
+          },
+          "item": {
+            "$ref": "#/components/schemas/PricedItem"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "set_at": {
+            "description": "RFC 3339.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "set_by": {
+            "description": "The admin's email.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "tokens": {
             "type": [
               "integer",
               "null"
             ],
             "format": "int64"
           },
-          "details": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
+          "tool": {
+            "type": "string"
           },
-          "search": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
+          "tool_title": {
+            "type": "string"
           }
         },
-        "additionalProperties": false,
         "required": [
-          "details",
-          "search",
-          "autocomplete"
+          "item",
+          "scope",
+          "tool",
+          "tool_title",
+          "title",
+          "description",
+          "tokens",
+          "set_by",
+          "set_at"
+        ]
+      },
+      "PricedItem": {
+        "type": "string",
+        "enum": [
+          "places.details",
+          "places.search",
+          "places.autocomplete",
+          "street_view.panorama",
+          "walk.open",
+          "walk.reviews",
+          "walk.sort",
+          "walk.sort_retry",
+          "walk.step"
+        ]
+      },
+      "Prices": {
+        "description": "Every item, in the catalog's order.",
+        "type": "object",
+        "properties": {
+          "prices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Price"
+            }
+          }
+        },
+        "required": [
+          "prices"
         ]
       },
       "Probe": {
@@ -5799,6 +6043,14 @@
           "stream"
         ]
       },
+      "Scope": {
+        "description": "Who charges.\n\n- `conductor`: At the buy, before Google is asked.\n- `review_archive`: After the fact, through its charge feed.",
+        "type": "string",
+        "enum": [
+          "conductor",
+          "review_archive"
+        ]
+      },
       "SetBrowser": {
         "type": "object",
         "properties": {
@@ -5884,27 +6136,82 @@
         ]
       },
       "SetPrices": {
-        "description": "Every request kind priced, in tokens.",
+        "description": "The items given, each priced at 0 or more or `null` off sale; the others stay.",
         "type": "object",
         "properties": {
-          "autocomplete": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "details": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "search": {
-            "type": "integer",
-            "format": "int64"
+          "prices": {
+            "type": "object",
+            "properties": {
+              "places.autocomplete": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "places.details": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "places.search": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "street_view.panorama": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "walk.open": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "walk.reviews": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "walk.sort": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "walk.sort_retry": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "walk.step": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false,
         "required": [
-          "details",
-          "search",
-          "autocomplete"
+          "prices"
         ]
       },
       "SetRole": {

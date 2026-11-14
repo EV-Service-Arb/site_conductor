@@ -896,6 +896,8 @@ async fn no_permission_opens_no_section() {
 			"/gmbs/{id}/location",
 			"/gmbs/{id}/country",
 			"/map",
+			"/map/street_view",
+			"/gmbs/{id}/spots",
 			"/trades",
 			"/trades",
 			"/trades/{id}",

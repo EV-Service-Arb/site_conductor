@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 
-import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, MUST_HAVES, open, openTrash, readiness, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, TABS, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, trades as tradesKeys } from "@/entities/gmb";
+import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, MUST_HAVES, openOrFocus, openTrash, readiness, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, TABS, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, trades as tradesKeys } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { AddGmbButton } from "@/features/add-gmb";
 import { EditGbp } from "@/features/edit-gbp";
@@ -192,7 +192,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
       )}
       <footer className="flex items-center">
         {scoped.length <= 1 && (
-          <AddGmbButton labeled gmailId={scoped[0]?.id ?? null} trade={categories?.length === 1 && categories[0]!.trade !== "*" ? categories[0]!.trade : null} onAdded={changed} />
+          <AddGmbButton labeled gmail={scoped[0]?.id ?? null} trade={categories?.length === 1 && categories[0]!.trade !== "*" ? categories[0]!.trade : null} />
         )}
         <span className="flex-1" />
         <TrashButton />
@@ -451,7 +451,7 @@ function GmbRow({
       {dialog === "link" && linked && <LinkPlace gmbId={gmb.id} linked={linked} onClose={() => setDialog(null)} onDone={onChanged} />}
       {dialog === "remove" && <RemoveDialog title={t(gmbsKeys.gmb.remove.title, "Remove {name}?", { name })} body={t(gmbsKeys.gmb.remove.body, "It goes to the trash{kept}: every service stops working on it until then; its history stays.", { kept })} remove={() => ok(api.DELETE("/gmbs/{id}", { params: { path: { id: gmb.id } } }))} onRemoved={onChanged} onClose={() => setDialog(null)} />}
       {onMap ? (
-        <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => open(gmb)}>
+        <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => openOrFocus(gmb, peeked)}>
           {label}
         </button>
       ) : TABS[gmb.state][0] !== undefined ? (

@@ -14,7 +14,10 @@ pub use keys::{Keys, Spent};
 use parse::Parsed;
 use queries_cache::Request;
 pub use queries_cache::{Pending, QueriesCache, Remote};
-use sa_core::queries_cache::{Claim, Put};
+use sa_core::{
+	prices::PlacesRequest,
+	queries_cache::{Claim, Put},
+};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
@@ -31,26 +34,13 @@ const PROBE_PLACE: &str = "ChIJj61dQgK6j4AR4GeTYWZsKWw";
 /// Pays for buys on the rotation.
 pub trait Purse: Send + Sync {
 	/// Room for one buy of `sku`, kept until paid or dropped; else [`Error::Unpaid`].
-	fn hold(&self, sku: Sku) -> Pending<'_, Box<dyn Hold>>;
+	fn hold(&self, sku: PlacesRequest) -> Pending<'_, Box<dyn Hold>>;
 }
 
 /// A purse's room for one buy; dropped unpaid, it is given back.
 pub trait Hold: Send {
 	/// The buy went through.
 	fn paid(self: Box<Self>, bought: Bought) -> Pending<'static, ()>;
-}
-
-/// How Google bills a request, by what its field mask asks: both masks ask a display name, which
-/// makes them the Pro SKUs.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::Display, strum::EnumString, strum::IntoStaticStr, strum::VariantArray)]
-#[strum(serialize_all = "snake_case")]
-pub enum Sku {
-	/// Place Details Pro.
-	Details,
-	/// Text Search Pro.
-	Search,
-	/// Autocomplete Requests: per request, no session token.
-	Autocomplete,
 }
 
 /// Who a request is made for.
@@ -72,7 +62,7 @@ impl Payer<'_> {
 pub struct Bought {
 	/// The query's, as the queries cache keys it.
 	pub key: sa_core::queries_cache::Key,
-	pub sku: Sku,
+	pub sku: PlacesRequest,
 	/// What was asked, as a person reads it.
 	pub label: String,
 }
@@ -257,7 +247,7 @@ impl Google {
 			url: &url,
 			mask: AUTOCOMPLETE_MASK,
 			body: &body,
-			sku: Sku::Autocomplete,
+			sku: PlacesRequest::Autocomplete,
 			subject: &input,
 		};
 		let (json, _) = self.ask(&req, Some(SEARCH_AGE), Ask::Cached, payer).await?;
@@ -292,7 +282,7 @@ impl Google {
 			url: &url,
 			mask: SEARCH_MASK,
 			body: &body,
-			sku: Sku::Search,
+			sku: PlacesRequest::Search,
 			subject: query,
 		};
 		let (json, paid) = self.ask(&req, Some(SEARCH_AGE), Ask::Cached, payer).await?;
@@ -366,9 +356,9 @@ impl Google {
 			.await?;
 		if let Some(hold) = hold {
 			let label = match req.sku {
-				Sku::Details => format!("Places details · {}", req.subject),
-				Sku::Search => format!("Places search · {:?}", req.subject),
-				Sku::Autocomplete => format!("Places autocomplete · {:?}", req.subject),
+				PlacesRequest::Details => format!("Places details · {}", req.subject),
+				PlacesRequest::Search => format!("Places search · {:?}", req.subject),
+				PlacesRequest::Autocomplete => format!("Places autocomplete · {:?}", req.subject),
 			};
 			hold.paid(Bought { key, sku: req.sku, label }).await?;
 		}
@@ -477,7 +467,7 @@ impl<'a> Request<'a> {
 			url,
 			mask: DETAILS_MASK,
 			body: "",
-			sku: Sku::Details,
+			sku: PlacesRequest::Details,
 			subject: place_id,
 		}
 	}

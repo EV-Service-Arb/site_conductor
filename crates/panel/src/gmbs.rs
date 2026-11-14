@@ -23,6 +23,8 @@ pub use crate::{
 	store::gmbs::{Category, GbpCountry, Gmail, Gmb, Point, Spot, Trade},
 };
 
+const MAX_SPOTS: usize = 20;
+
 /// What [`Panel::locate`] did.
 #[derive(Debug, Default, PartialEq)]
 pub struct Located {
@@ -194,8 +196,6 @@ fn spots(spots: Vec<Spot>) -> Result<Vec<Spot>, Refused> {
 		})
 		.collect()
 }
-
-const MAX_SPOTS: usize = 20;
 
 /// Google's country of `place`: one it puts in a country not served is refused.
 fn google_country(place: Option<&Place>) -> Result<Option<Country>, Refused> {

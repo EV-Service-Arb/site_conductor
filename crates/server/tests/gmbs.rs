@@ -11,7 +11,10 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::get,
 };
-use sa_core::gbp::{Country, OnGoogle};
+use sa_core::{
+	gbp::{Country, OnGoogle},
+	prices::{Item, PlacesRequest},
+};
 use sa_panel::{
 	Panel,
 	gmbs::{Existing, Gmb, Located, Unplaced},
@@ -19,7 +22,7 @@ use sa_panel::{
 	seal::DataKey,
 	testing::{TestDb, operator, panel_on},
 };
-use sa_places::{Google, Keys, Sku};
+use sa_places::{Google, Keys};
 use sa_server::{
 	concierge::{Concierge, DevIdentity},
 	gmbs::MapDto,
@@ -79,10 +82,14 @@ async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
 	let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
 	let p = panel_on(db.store().await, key, google);
 	// what a point costs is tests/connections.rs's
-	p.set_prices(&[(Sku::Details, 0), (Sku::Search, 0), (Sku::Autocomplete, 0)], "admin@localhost", jiff::Timestamp::now())
-		.await
-		.unwrap()
-		.unwrap();
+	p.set_prices(
+		&[PlacesRequest::Details, PlacesRequest::Search, PlacesRequest::Autocomplete].map(|r| (Item::Places(r), Some(0))),
+		"admin@localhost",
+		jiff::Timestamp::now(),
+	)
+	.await
+	.unwrap()
+	.unwrap();
 	p
 }
 

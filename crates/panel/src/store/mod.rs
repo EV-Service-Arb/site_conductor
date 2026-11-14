@@ -18,6 +18,7 @@ pub mod oauth;
 mod queries_cache;
 pub mod sessions;
 pub mod sources;
+pub(crate) mod street_view;
 pub mod telegram;
 pub mod tokens;
 pub(crate) mod trash;

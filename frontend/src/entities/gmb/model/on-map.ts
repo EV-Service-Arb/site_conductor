@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import { type Country, type Gmb, type State, countryValues } from "@/shared/api/schema";
+import { type Country, type Gmb, type LatLng, type State, countryValues } from "@/shared/api/schema";
 import { setQuery, useQuery } from "@/shared/lib/query";
 
 /** What the map and the outline beside it share about the GMBs. */
@@ -13,9 +13,15 @@ export interface OnMap {
   hovered: number | null;
   /** The GMB whose point is being placed on the map by hand: until set or cancelled, the map left or not. */
   placing: number | null;
+  /** A point being picked on the map: a click gives it to `onPick` and ends the picking, Escape ends it. */
+  picking: { label: string; onPick: (at: LatLng) => void } | null;
+  /** What an open form has picked, drawn numbered on the map. */
+  marks: readonly LatLng[];
+  /** The GMB the map is asked to go to, until it has. */
+  focus: number | null;
 }
 
-const NONE: OnMap = { inView: null, hovered: null, placing: null };
+const NONE: OnMap = { inView: null, hovered: null, placing: null, picking: null, marks: [], focus: null };
 let state = NONE;
 const listeners = new Set<() => void>();
 
@@ -65,7 +71,14 @@ export function useTab(): Tab | null {
 /** The GBP's window, on the open tab while its state has it, else on its state's first; its card alone where it has none. */
 export function open(gmb: Gmb): void {
   const tabs = TABS[gmb.state];
-  setQuery((now) => ({ gmb: String(gmb.id), trade: null, categories: null, account: null, trash: null, tab: now.trade === null && tabs.includes(now.tab as Tab) ? now.tab : (tabs[0] ?? null) }));
+  setQuery((now) => ({ gmb: String(gmb.id), trade: null, categories: null, account: null, trash: null, add: null, tab: now.trade === null && tabs.includes(now.tab as Tab) ? now.tab : (tabs[0] ?? null) }));
+}
+
+/** A GBP clicked on the map or in the outline beside it: the first click opens it, the next goes to it on the map, out of its window. */
+export function openOrFocus(gmb: Gmb, peeked: boolean): void {
+  if (!peeked || gmb.location === null) return open(gmb);
+  setQuery({ tab: null });
+  setOnMap({ focus: gmb.id });
 }
 
 /** The trade whose window is open, on a country's tab; `null` tab: the trade has none set up yet, or none picked. One window at a time: it and a GBP's share `?tab`. */
@@ -80,7 +93,7 @@ export function useTradeWindow(): { trade: number; tab: Country | null } | null 
 }
 
 export function openTrade(trade: number | null, tab?: Country): void {
-  setQuery({ trade: trade === null ? null : String(trade), tab: tab ?? null, categories: null, gmb: null, account: null, trash: null });
+  setQuery({ trade: trade === null ? null : String(trade), tab: tab ?? null, categories: null, gmb: null, account: null, trash: null, add: null });
 }
 
 /** Every trade by country, the level a trade's window sits under (`?categories`). */
@@ -89,7 +102,7 @@ export function useCategoriesWindow(): boolean {
 }
 
 export function openCategories(on: boolean): void {
-  setQuery({ categories: on ? "" : null, trade: null, tab: null, gmb: null, account: null, trash: null });
+  setQuery({ categories: on ? "" : null, trade: null, tab: null, gmb: null, account: null, trash: null, add: null });
 }
 
 export const ACCOUNT_TABS = ["connections", "browser"] as const;
@@ -107,7 +120,7 @@ export function useAccountWindow(): { gmail: number; tab: AccountTab } | null {
 }
 
 export function openAccount(at: { gmail: number; tab: AccountTab } | null): void {
-  setQuery({ account: at === null ? null : String(at.gmail), tab: at?.tab ?? null, gmb: null, trade: null, categories: null, trash: null });
+  setQuery({ account: at === null ? null : String(at.gmail), tab: at?.tab ?? null, gmb: null, trade: null, categories: null, trash: null, add: null });
 }
 
 /** What the caller removed (`?trash`), restorable until purged. */
@@ -116,5 +129,32 @@ export function useTrashWindow(): boolean {
 }
 
 export function openTrash(on: boolean): void {
-  setQuery({ trash: on ? "" : null, trade: null, tab: null, gmb: null, account: null, categories: null });
+  setQuery({ trash: on ? "" : null, add: null, trade: null, tab: null, gmb: null, account: null, categories: null });
 }
+
+/** What the Add a GBP panel opens with: the outline's gmail and trade, when it is scoped to one. */
+export type Adding = { gmail: number | null; trade: number | null };
+
+const addValue = ({ gmail, trade }: Adding) => `${gmail ?? ""},${trade ?? ""}`;
+
+/** The Add a GBP panel over the map (`?add=<gmail>,<trade>`, each empty for none). */
+export function useAddWindow(): { raw: string; adding: Adding } | null {
+  const raw = useQuery("add");
+  if (raw === null) return null;
+  const parts = raw.split(",");
+  if (parts.length !== 2) throw new Error(`?add=${raw}: not <gmail>,<trade>`);
+  const id = (p: string) => {
+    if (p === "") return null;
+    const n = Number(p);
+    if (!Number.isSafeInteger(n)) throw new Error(`?add=${raw}: ${p} is no id`);
+    return n;
+  };
+  return { raw, adding: { gmail: id(parts[0]!), trade: id(parts[1]!) } };
+}
+
+export function openAdd(at: Adding | null): void {
+  setQuery({ add: at === null ? null : addValue(at), gmb: null, trade: null, tab: null, categories: null, account: null, trash: null });
+}
+
+/** The home page with the panel open, from another page. */
+export const addHref = (at: Adding) => `/?add=${addValue(at)}`;

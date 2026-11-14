@@ -9,7 +9,6 @@ use sa_panel::{
 	browsers::Provider,
 	connections::{Checked, Connection, Connections, Imap, MapsKey, NewImap},
 };
-use sa_places::Sku;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
@@ -18,6 +17,7 @@ use crate::{
 	browser::{BrowserDto, ExitDto},
 	http::{ApiRoute, ApiState, Gate},
 	signin::Caller,
+	tokens::PriceDto,
 };
 
 #[derive(Clone, Debug, JsonSchema, Serialize)]
@@ -47,22 +47,13 @@ pub struct MapsKeyDto {
 	pub out: Option<String>,
 }
 
-/// Tokens a Places request on the shared keys costs; `null`, not sold yet.
-#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
-#[schemars(rename = "Prices")]
-#[serde(deny_unknown_fields)]
-pub struct PricesDto {
-	pub details: Option<i64>,
-	pub search: Option<i64>,
-	pub autocomplete: Option<i64>,
-}
-
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Connections")]
 pub struct ConnectionsDto {
 	pub imap: Option<ImapDto>,
 	pub maps_key: Option<MapsKeyDto>,
-	pub prices: PricesDto,
+	/// What a Places request on the shared keys costs.
+	pub prices: Vec<PriceDto>,
 	pub browser: Option<crate::browser::BrowserDto>,
 }
 impl ConnectionsDto {
@@ -80,7 +71,7 @@ impl ConnectionsDto {
 				checked: k.checked.into(),
 				out,
 			}),
-			prices: c.prices.into(),
+			prices: c.prices.into_iter().map(PriceDto::from).collect(),
 			browser: c.browser.map(|b| BrowserDto {
 				provider: b.provider,
 				device: b.device.to_string(),
@@ -220,17 +211,6 @@ impl From<Checked> for CheckedDto {
 		Self {
 			at: c.at.to_string(),
 			error: c.error,
-		}
-	}
-}
-
-impl From<Vec<(Sku, Option<i64>)>> for PricesDto {
-	fn from(prices: Vec<(Sku, Option<i64>)>) -> Self {
-		let of = |sku| prices.iter().find(|(s, _)| *s == sku).expect("every SKU is read").1;
-		Self {
-			details: of(Sku::Details),
-			search: of(Sku::Search),
-			autocomplete: of(Sku::Autocomplete),
 		}
 	}
 }

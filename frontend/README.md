@@ -18,9 +18,7 @@ src/features/        account-chip · sign-out · wallet-element · sites-element
 src/entities/        session · source · tokens · gmb · alerts · assistant — what the screens make of the API's answers
 src/shared/          api/ (`api`: /api/v1 from openapi.json, its answers checked against it; `http`: the services' forwards;
                      CSRF, the gate's answers), i18n/, lib/ (live/: the socket), mfe/, ui/
-messages/            en/common.json generated from the code's t(key, "English") (`npm run i18n`); ru/common.auto.json
-                     generated, ru/common.json hand overrides, both {en, t}; `npm run build` fails on anything
-                     untranslated or stale — see @evinvest/i18n's README. Root keys live in the slice they name.
+messages/            @evinvest/i18n's catalogues (`npm run i18n` regenerates them); a root key lives in the slice it names
 scripts/dev-stub.ts  a stand-in backend for local work
 tests/               vitest, in Node: the rules the screens obey live in plain modules; e2e/: the Figma frames
 ```

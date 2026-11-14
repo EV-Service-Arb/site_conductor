@@ -15,13 +15,14 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::get,
 };
+use sa_core::prices::{Item, PlacesRequest};
 use sa_panel::{
 	Panel,
 	import::Export,
 	seal::DataKey,
-	testing::{TestDb, operator, panel_on},
+	testing::{TestDb, admin, operator, panel_on},
 };
-use sa_places::{Google, Keys, Sku};
+use sa_places::{Google, Keys};
 use sa_server::{
 	concierge::{Concierge, DevIdentity},
 	http,
@@ -77,6 +78,10 @@ struct World {
 impl World {
 	/// Signed in, tokens open (the caller's first balance 500), the shared rotation one key.
 	async fn new() -> Self {
+		Self::holding(operator()).await
+	}
+
+	async fn holding(permissions: sa_auth::PermissionSet) -> Self {
 		let stub = Stub::default();
 		let places = Router::new().route("/v1/places/{id}", get(details)).with_state(stub.clone());
 		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -96,7 +101,7 @@ impl World {
 		panel.import_review_archive(empty).await.unwrap();
 		let who = DevIdentity {
 			user_id: DevIdentity::named("dev@localhost"),
-			permissions: operator(),
+			permissions,
 			email: "dev@localhost".to_owned(),
 		};
 		let config = SignInConfig {
@@ -134,7 +139,11 @@ impl World {
 	async fn price(&self, details: i64) {
 		self.panel
 			.set_prices(
-				&[(Sku::Details, details), (Sku::Search, 2 * details), (Sku::Autocomplete, details)],
+				&[
+					(Item::Places(PlacesRequest::Details), Some(details)),
+					(Item::Places(PlacesRequest::Search), Some(2 * details)),
+					(Item::Places(PlacesRequest::Autocomplete), Some(details)),
+				],
 				"admin@localhost",
 				jiff::Timestamp::now(),
 			)
@@ -261,4 +270,43 @@ async fn a_gmails_secrets_are_checked_before_kept_and_never_come_back() {
 	assert_eq!(status, StatusCode::NO_CONTENT);
 	let (_, gone) = w.call(Method::GET, &format!("/api/v1/gmails/{gmail}/connections"), None).await;
 	assert_eq!(gone["maps_key"], Value::Null, "{gone}");
+}
+
+#[tokio::test]
+async fn every_priced_item_is_the_admins_to_price_and_the_archive_is_told() {
+	let mut w = World::holding(admin()).await;
+	let (status, read) = w.call(Method::GET, "/api/v1/admin/tokens/prices", None).await;
+	assert_eq!(status, StatusCode::OK, "{read}");
+	let listed: Vec<_> = read["prices"].as_array().unwrap().iter().map(|p| p["item"].as_str().unwrap().to_owned()).collect();
+	assert_eq!(listed, Item::all().map(|i| i.to_string()).collect::<Vec<_>>(), "the catalog, whole and in order");
+	let of = |read: &Value, item: &str| read["prices"].as_array().unwrap().iter().find(|p| p["item"] == item).unwrap()["tokens"].clone();
+	assert_eq!(
+		(of(&read, "places.details"), of(&read, "walk.open")),
+		(Value::Null, json!(7)),
+		"Places unsold, a walk as the archive metered it"
+	);
+
+	let (status, set) = w
+		.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(json!({ "prices": { "places.details": 3, "walk.step": null } })))
+		.await;
+	assert_eq!(status, StatusCode::OK, "{set}");
+	assert_eq!(
+		(of(&set, "places.details"), of(&set, "walk.step"), of(&set, "walk.open")),
+		(json!(3), Value::Null, json!(7)),
+		"only those given change"
+	);
+	let told = w.panel.snapshot(jiff::Timestamp::now()).await.unwrap().unwrap().prices;
+	assert_eq!(told.get(&"walk.open".parse().unwrap()), Some(&7));
+	assert_eq!(told.get(&"walk.step".parse().unwrap()), None, "off sale: not walked");
+
+	for refused in [json!({ "prices": { "walk.fly": 1 } }), json!({ "prices": { "walk.open": -1 } })] {
+		let (status, body) = w.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(refused.clone())).await;
+		assert_eq!(status, StatusCode::BAD_REQUEST, "{refused}: {body}");
+	}
+	let (_, after) = w.call(Method::GET, "/api/v1/admin/tokens/prices", None).await;
+	assert_eq!(of(&after, "walk.open"), json!(7), "a refusal changes nothing");
+
+	let mut op = World::new().await;
+	let (status, _) = op.call(Method::GET, "/api/v1/admin/tokens/prices", None).await;
+	assert_eq!(status, StatusCode::FORBIDDEN);
 }
