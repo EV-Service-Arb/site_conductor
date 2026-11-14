@@ -279,6 +279,14 @@
     "en": "Last 7 days",
     "t": "За 7 дней"
   },
+  "add.close": {
+    "en": "Close",
+    "t": "Закрыть"
+  },
+  "add.country.byHand": {
+    "en": "Not on Maps: its country is said by hand.",
+    "t": "Не на Картах: страна указывается вручную."
+  },
   "add.country.none": {
     "en": "Google gives this place no country.",
     "t": "Google не даёт этому месту страны."
@@ -327,6 +335,54 @@
     "en": "no point from Google",
     "t": "Google не дал точку"
   },
+  "add.spots.another": {
+    "en": "Another spot: an address, a business nearby",
+    "t": "Ещё место: адрес, компания рядом"
+  },
+  "add.spots.drag": {
+    "en": "Drag to reorder",
+    "t": "Перетащите, чтобы изменить порядок"
+  },
+  "add.spots.hint": {
+    "en": "Where it could stand, each with a note. Its country, which its reviews' language follows, is the first spot's.",
+    "t": "Где он мог бы стоять, у каждого места — заметка. Страна, за которой следует язык его отзывов, — страна первого места."
+  },
+  "add.spots.move": {
+    "en": "Move spot {n}: ↑ ↓",
+    "t": "Переместить место {n}: ↑ ↓"
+  },
+  "add.spots.noPoint": {
+    "en": "Google gives {place} no point: pick it on the map.",
+    "t": "Google не даёт {place} точки: выберите её на карте."
+  },
+  "add.spots.note": {
+    "en": "A note",
+    "t": "Заметка"
+  },
+  "add.spots.order": {
+    "en": "its point is the first · drag to reorder",
+    "t": "его точка — первое место · перетащите, чтобы изменить порядок"
+  },
+  "add.spots.pick": {
+    "en": "Pick it on the map",
+    "t": "Выбрать на карте"
+  },
+  "add.spots.picking": {
+    "en": "Click the map where spot {n} stands",
+    "t": "Нажмите на карту там, где стоит место {n}"
+  },
+  "add.spots.point": {
+    "en": "A point on the map",
+    "t": "Точка на карте"
+  },
+  "add.spots.remove": {
+    "en": "Remove spot {n}",
+    "t": "Убрать место {n}"
+  },
+  "add.spots.twice": {
+    "en": "That spot is listed already.",
+    "t": "Это место уже в списке."
+  },
   "add.state.draft.hint": {
     "en": "Not on Google yet. Everything Google's form asks is filled on its Launch tab.",
     "t": "Ещё не в Google. Всё, что спрашивает форма Google, заполняется на вкладке запуска."
@@ -354,6 +410,10 @@
   "add.where.hint": {
     "en": "Its point on the map, and its country, which its reviews' language follows.",
     "t": "Его точка на карте и страна, по которой выбирается язык отзывов."
+  },
+  "add.where.optional": {
+    "en": "optional",
+    "t": "необязательно"
   },
   "add.where.placeholder": {
     "en": "An address, a street or a business nearby",
@@ -1891,10 +1951,6 @@
     "en": "then what stands behind it · ready rows fold to one line",
     "t": "затем то, что за ними · готовые строки сворачиваются"
   },
-  "launch.point": {
-    "en": "Point",
-    "t": "Точка"
-  },
   "launch.profile.noGmail": {
     "en": "pick its gmail first: the browser is the gmail's",
     "t": "сначала выберите gmail: браузер принадлежит ему"
@@ -1934,6 +1990,14 @@
   "launch.visit.yes": {
     "en": "Customers visit",
     "t": "Клиенты приходят"
+  },
+  "launch.where": {
+    "en": "Where",
+    "t": "Где"
+  },
+  "launch.where.hint": {
+    "en": "where it could stand, each with a note · its point is the first · drag to reorder",
+    "t": "где он мог бы стоять, у каждого места — заметка · его точка — первое место · перетащите, чтобы изменить порядок"
   },
   "launch.why.areas": {
     "en": "up to 20 · they cover where the film is shot",
@@ -2483,6 +2547,14 @@
     "en": "Sign-in service unavailable",
     "t": "Сервис входа недоступен"
   },
+  "streetView": {
+    "en": "Street View: where it is; drag onto the map to open it",
+    "t": "Просмотр улиц: где он есть; перетащите на карту, чтобы открыть"
+  },
+  "streetView.none": {
+    "en": "No Street View here",
+    "t": "Здесь нет просмотра улиц"
+  },
   "title.leads": {
     "en": "Leads",
     "t": "Заявки"
@@ -2546,14 +2618,6 @@
   "tokens.grant.mode.add": {
     "en": "Add",
     "t": "Добавить"
-  },
-  "streetView": {
-    "en": "Street View: where it is; drag onto the map to open it",
-    "t": "Просмотр улиц: где он есть; перетащите на карту, чтобы открыть"
-  },
-  "streetView.none": {
-    "en": "No Street View here",
-    "t": "Здесь нет просмотра улиц"
   },
   "tokens.grant.mode.grant": {
     "en": "Owe back",

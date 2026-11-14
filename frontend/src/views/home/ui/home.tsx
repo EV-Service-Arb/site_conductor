@@ -1,6 +1,6 @@
 "use client";
 
-import { Skeleton, cn } from "@evinvest/uikit";
+import { Button, Skeleton, cn } from "@evinvest/uikit";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -24,6 +24,8 @@ import {
   useCategoriesWindow,
   useTrash,
   useTrashWindow,
+  useAddWindow,
+  move,
   useGmails,
   useGmbTags,
   useOnMap,
@@ -33,6 +35,7 @@ import {
   useTradeWindow,
   useTrades,
 } from "@/entities/gmb";
+import { AddPanel } from "@/features/add-gmb";
 import { PlacingBar } from "@/features/place-gmb";
 import { PlacementOverlay } from "@/features/placement-overlay";
 import { takeReturnPage } from "@/shared/api";
@@ -41,6 +44,7 @@ import { setQuery, useQuery } from "@/shared/lib/query";
 import { useResource } from "@/shared/lib/use-resource";
 import { StreetView, pin, useTheMap } from "@/shared/map";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { useButtonSize } from "@/shared/ui/touch";
 import { ErrorState } from "@/shared/ui/error-state";
 
 import { AccountWindow } from "./account-window";
@@ -83,6 +87,11 @@ function GmbMap({ config }: { config: MapConfig }) {
   const selection = useSelection();
   const hovered = useOnMap((s) => s.hovered);
   const placing = useOnMap((s) => s.placing);
+  const picking = useOnMap((s) => s.picking);
+  const marks = useOnMap((s) => s.marks);
+  const add = useAddWindow();
+  const t = useT();
+  const button = useButtonSize();
   const peeked = usePeeked();
   const tab = useTab();
   // `?at` as the page opened: what it says after is where the map has since moved
@@ -233,26 +242,89 @@ function GmbMap({ config }: { config: MapConfig }) {
     setOnMap({ focus: null });
   }, [map, focus, peekedListed?.gmb.id, peekedListed?.gmb.location]);
 
+  useEffect(() => {
+    if (map.status !== "ok" || picking === null) return;
+    const m = map.map;
+    m.setOptions({ draggableCursor: "crosshair" });
+    const click = m.addListener("click", (e: google.maps.MapMouseEvent) => {
+      if (!e.latLng) return;
+      setOnMap({ picking: null });
+      picking.onPick(e.latLng.toJSON());
+    });
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOnMap({ picking: null });
+    window.addEventListener("keydown", esc);
+    return () => {
+      click.remove();
+      m.setOptions({ draggableCursor: null });
+      window.removeEventListener("keydown", esc);
+    };
+  }, [map, picking]);
+
+  // a form's picks while one is open, else the peeked draft's spots past its first, which is its pin
+  const peekedSpots = peekedListed?.gmb.state === "draft" ? peekedListed.gmb.spots.slice(1) : [];
+  const numbered = add !== null ? marks.map((at, i) => ({ at, n: i + 1 })) : peekedSpots.map(({ lat, lng }, i) => ({ at: { lat, lng }, n: i + 2 }));
+  const numberedRef = useRef(numbered);
+  useEffect(() => {
+    numberedRef.current = numbered;
+  });
+  const numberedKey = numbered.map(({ at, n }) => `${n}:${at.lat},${at.lng}`).join(" ");
+  const markCount = useRef(0);
+  useEffect(() => {
+    if (map.status !== "ok") return;
+    const drawn = numberedRef.current.map(({ at, n }) => {
+      const dot = document.createElement("span");
+      dot.textContent = String(n);
+      dot.className = cn(
+        "flex size-7 items-center justify-center rounded-full border-2 text-xs font-semibold shadow-md",
+        n === 1 ? "border-background bg-primary text-primary-foreground" : "border-ink bg-background text-ink",
+      );
+      dot.style.zIndex = "3";
+      return pin(map.map, dot, at);
+    });
+    // a mark just added is shown close enough to place by
+    const last = numberedRef.current.at(-1);
+    if (last !== undefined && numberedRef.current.length > markCount.current) {
+      map.map.panTo(last.at);
+      map.map.setZoom(Math.max(map.map.getZoom() ?? CLOSE_ZOOM, CLOSE_ZOOM));
+    }
+    markCount.current = numberedRef.current.length;
+    return () => {
+      for (const d of drawn) d.remove();
+    };
+  }, [map, numberedKey]);
+
+  const windows = placed === undefined && picking === null;
   return (
     <>
       <div ref={host} className="absolute inset-0" />
       {map.status === "ok" && <PlacementOverlay map={map.map} />}
+      {map.status === "ok" && <StreetView map={map.map} />}
       {map.status === "error" && (
         <div className="absolute inset-x-6 top-6">
           <ErrorState failure={{ kind: "invalid", message: map.message }} />
         </div>
       )}
-      {peekedListed && placed === undefined && !windowed && map.status === "ok" && peekedListed.gmb.location && (
+      {peekedListed && windows && !windowed && map.status === "ok" && peekedListed.gmb.location && (
         <OnPin key={peekedListed.gmb.id} map={map.map} at={peekedListed.gmb.location}>
           <Peek listed={peekedListed} onClose={() => peek(null)} className="pointer-events-auto" />
         </OnPin>
       )}
-      {peekedListed && placed === undefined && !windowed && !peekedListed.gmb.location && <Peek listed={peekedListed} onClose={() => peek(null)} className="absolute top-4 right-4" />}
-      {peekedListed && placed === undefined && windowed && <LocationWindow listed={peekedListed} tab={tab} />}
-      {opened && tradeWindow && gmails.status === "ok" && placed === undefined && <TradeWindow trade={opened} tab={tradeWindow.tab} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
-      {categoriesWindow && trades.status === "ok" && gmails.status === "ok" && placed === undefined && <CategoriesWindow trades={trades.data} gmbs={gmails.data.gmbs} />}
-      {trashWindow && trash.status === "ok" && placed === undefined && <TrashWindow trash={trash.data} />}
-      {account && accountWindow && gmails.status === "ok" && placed === undefined && <AccountWindow gmail={account} tab={accountWindow.tab} gbps={under(gmails.data, account.id).length} />}
+      {peekedListed && windows && !windowed && !peekedListed.gmb.location && <Peek listed={peekedListed} onClose={() => peek(null)} className="absolute top-4 right-4" />}
+      {peekedListed && windows && windowed && <LocationWindow listed={peekedListed} tab={tab} />}
+      {opened && tradeWindow && gmails.status === "ok" && windows && <TradeWindow trade={opened} tab={tradeWindow.tab} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
+      {categoriesWindow && trades.status === "ok" && gmails.status === "ok" && windows && <CategoriesWindow trades={trades.data} gmbs={gmails.data.gmbs} />}
+      {trashWindow && trash.status === "ok" && windows && <TrashWindow trash={trash.data} />}
+      {account && accountWindow && gmails.status === "ok" && windows && <AccountWindow gmail={account} tab={accountWindow.tab} gbps={under(gmails.data, account.id).length} />}
+      {add && placed === undefined && <AddPanel key={add.raw} {...add.adding} />}
+      {picking !== null && (
+        <div className="absolute bottom-4 left-4 flex items-center gap-3 rounded-lg border border-border bg-background py-2 pr-2 pl-4 shadow-overlay">
+          <p className="text-sm text-ink">{picking.label}</p>
+          <kbd className="font-mono text-xs text-ink-faint">Esc</kbd>
+          <Button variant="outline" size={button("sm")} onClick={() => setOnMap({ picking: null })}>
+            {t(move.cancel, "Cancel")}
+          </Button>
+        </div>
+      )}
       {map.status === "ok" && placed !== undefined && placedAt !== null && <PlacingBar gmb={placed} map={map.map} at={placedAt} onMove={(at) => setMoved({ gmb: placed.id, at })} />}
     </>
   );
@@ -298,7 +370,6 @@ function reveal(map: google.maps.Map, at: LatLng, box: HTMLElement) {
   const centre = map.getCenter();
   const zoom = map.getZoom();
   if (projection === undefined || centre === undefined || zoom === undefined) throw new Error("the map drew a pin before it had a camera");
-      {map.status === "ok" && <StreetView map={map.map} />}
   const p = projection.fromLatLngToPoint(at);
   const c = projection.fromLatLngToPoint(centre);
   if (p === null || c === null) throw new Error("a point off the map's projection");
@@ -312,6 +383,8 @@ function reveal(map: google.maps.Map, at: LatLng, box: HTMLElement) {
 }
 
 // ours are white teardrops standing on their point, apart from the competitors' dots the placement overlay draws
+const CLOSE_ZOOM = 15;
+
 const TEARDROP = `<svg viewBox="0 0 28 34" class="block h-8 w-7 overflow-visible drop-shadow-md" aria-hidden="true"><path d="M14 33s-10-11.6-10-19a10 10 0 0 1 20 0c0 7.4-10 19-10 19z" stroke-width="1.5"/><circle data-core cx="14" cy="14" r="4"/><circle data-badge cx="22" cy="5" r="4" stroke-width="1.5"/></svg>`;
 
 const CORE: Record<State, string> = {

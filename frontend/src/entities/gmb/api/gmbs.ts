@@ -12,6 +12,7 @@ import {
   type Gmb,
   type GoogleCategory,
   type LatLng,
+  type Spot,
   type MapConfig,
   type SitesPlace,
   type State,
@@ -72,8 +73,13 @@ export function addGmb(gmailId: number, add: { place_id: string; state: State; n
 }
 
 /** A GBP no place is known of: a draft, or one verifying or suspended (off Maps), which needs `gmail_id` and `country`; `location` is placed by hand. Refused when a live one has the name. */
-export function createGmb(add: { name: string; trade: number; state: Exclude<State, "verified">; gmail_id?: number; country?: Country; location?: LatLng }): Promise<Gmb> {
+export function createGmb(add: { name: string; trade: number; state: Exclude<State, "verified">; gmail_id?: number; country?: Country; location?: LatLng; spots?: Spot[] }): Promise<Gmb> {
   return http.send("POST", "/api/v1/gmbs", add, gmbParser);
+}
+
+/** A draft's spots, in order: the first its point. */
+export function setSpots(id: number, spots: Spot[]): Promise<Gmb> {
+  return http.send("PUT", `/api/v1/gmbs/${id}/spots`, { spots }, gmbParser);
 }
 
 /** What a GBP's PATCH takes: `name` a draft's only, `null` clears a field. */

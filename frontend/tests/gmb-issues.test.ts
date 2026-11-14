@@ -24,6 +24,7 @@ const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
   created_at: "2026-11-06T00:00:00Z",
   enabled,
   location: located ? { lat: 45.76, lng: 4.83, placed: false } : null,
+  spots: [],
 });
 const archive = (suspended: number, failing: boolean): ArchiveTag => ({ tracked: true, rating: 4.5, reviews: 10, suspended, reinstating: 0, failing, live_30d: Array(30).fill(null) });
 const site = (overdue: number): SiteTag => ({ brand: "aquafix", location: "lyon-9", leads_7d: 3, overdue });

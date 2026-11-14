@@ -7,6 +7,8 @@ import { gmbs } from "./i18n";
 export type { Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategory, MapConfig, OnGoogle, Place as Candidate, State, Suggestion, Trade, Trades } from "./generated";
 
 export type LatLng = { lat: number; lng: number };
+/** One of a draft's candidate spots. */
+export type Spot = Gmb["spots"][number];
 
 /** Each a key, so the compiler holds the lists to the generated unions. */
 export const STATES = Object.keys({ draft: true, verifying: true, verified: true, suspended: true } satisfies Record<State, true>) as State[];
@@ -44,6 +46,7 @@ export const gmbParser: Parser<Gmb> = object({
   created_at: str,
   enabled: bool,
   location: nullable(object({ lat: num, lng: num, placed: bool })),
+  spots: arrayOf(object({ lat: num, lng: num, label: nullable(str), note: nullable(str) })),
 });
 
 export const mapConfigParser: Parser<MapConfig> = object({ key: str });

@@ -164,7 +164,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
                   </button>
                   <span className={cn("flex items-center", ON_HOVER)}>
                     <OpenAccount gmail={g} onOpened={() => setOpen(false)} />
-                    <AddGmbButton gmailId={g.id} trade={null} onAdded={onChanged} />
+                    <AddGmbButton gmail={g.id} trade={null} />
                     <Remove title={t(gmbsKeys.gmail.remove.title, "Remove {gmail}?", { gmail: g.gmail })} body={t(gmbsKeys.gmail.remove.body, "It goes to the trash with its GBPs{kept}: every service stops working on them until then.", { kept })} remove={() => removeGmail(g.id)} onRemoved={onChanged} />
                   </span>
                   <span className="text-xs text-ink-soft tabular-nums" title={t(scopeKeys.gmail.count, "Its GBPs in the categories picked")}>

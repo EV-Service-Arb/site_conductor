@@ -451,10 +451,13 @@ GET    /gmbs/resolve?place=&gmail=          {candidates: [{place_id, name, addre
                                             first); 400 one in a country not served
 GET    /gmbs/suggest?input=&gmail=          {suggestions: [{place_id, main, secondary | null}]}: Places
                                             Autocomplete in the countries served, paid as resolve
-POST   /gmbs                                {name, trade, state, gmail_id?, country?, location?} → 201 a
-                                            GBP no place is known of: draft, verifying or suspended;
-                                            past a draft gmail_id and country (by hand) required;
-                                            location placed by hand; 409 the name a live GBP's
+POST   /gmbs                                {name, trade, state, gmail_id?, country?, location?, spots?}
+                                            → 201 a GBP no place is known of: a draft by its spots
+                                            (1–20), verifying or suspended by a location placed by
+                                            hand; past a draft gmail_id and country (by hand)
+                                            required; 409 the name a live GBP's
+PUT    /gmbs/{id}/spots                     {spots: [{lat, lng, label, note}]} → 200 the GBP: a
+                                            draft's, replaced in order; 409 not a draft
 POST   /gmails/{id}/gmbs                    {place_id, state, name?, country?, trade} → 201 a GBP on Google
                                             already (state not draft; name and country fill what
                                             Google lacks, else 400); 409 the name or place taken
@@ -475,12 +478,12 @@ DELETE /gmbs/{id}/location                  → 204, the point placed by hand ta
 PUT    /gmbs/{id}/country                   {country} → 204, set by hand; 409 Google has its country
 GET    /map                                 {key}: the browser's Maps JS key; 404 without
                                             GOOGLE_MAPS_BROWSER_KEY
-GET    /trades                              {trades: [{id, name, created_at, categories: [{country, lang,
-                                            keywords, google_primary: {id, name} | null,
-                                            google_additional: [{id, name}], study}]}]}
 POST   /map/street_view                     {lat, lng} → 200 {balance}: a panorama there bought; 409
                                             unpriced, above the balance, or the month's free ones used;
                                             404 without GOOGLE_MAPS_BROWSER_KEY
+GET    /trades                              {trades: [{id, name, created_at, categories: [{country, lang,
+                                            keywords, google_primary: {id, name} | null,
+                                            google_additional: [{id, name}], study}]}]}
 POST   /trades                              {name} → 201 the trade; 409 the caller's already, any case
 PATCH  /trades/{id}                         {name} → 200 the trade; 409
 DELETE /trades/{id}                         204, its categories with it; 409 while a live GBP holds it
@@ -624,9 +627,6 @@ that charges declares its items there once (an enum, a variant's message its nam
 what it is), and the admin's page, `token_prices` and the snapshot are walked from it. An item
 without a price is not sold: a Places request is refused, a walk step not walked.
 
-**A GBP's life** (`sa_core::gbp::State::nexts`; the schema checks each move again):
-
-```text
 **Street View is bought before it opens.** Google bills each panorama opened on the browser's key
 (Dynamic Street View) past 5 000 free a month. The map has no Google pegman: its own shows the
 coverage (a press toggles it, a drag shows it while held), and dropped on a panorama Street View
@@ -634,13 +634,17 @@ finds (free) asks `POST /map/street_view`, which records it and charges `street_
 one write, and refuses whoever asks once the month's free ones are recorded (counted from the
 1st at 00:00 UTC−7). Only then does the browser open it.
 
+**A GBP's life** (`sa_core::gbp::State::nexts`; the schema checks each move again):
+
+```text
              name (unique)    + gmail, country     + place, if none yet   walked
  ┌───────┐  ─────────────▶ ┌───────────┐ ─────────▶ ┌──────────┐ ◀────────▶ ┌───────────┐
  │ Draft │                 │ Verifying │            │ Verified │            │ Suspended │
  └───────┘                 └───────────┘ ◀───────── └──────────┘            └───────────┘
   no place;                 place optional  Google re-asks │  ▲ reinstated    place optional
-  phone, point,             (off Maps)                     └──┼──────────────────┘
-  gmail/country optional                                      └ re-verify ◀──────┘
+  spots (the first its      (off Maps)                     └──┼──────────────────┘
+  point); phone, gmail,                                       └ re-verify ◀──────┘
+  country optional
                             place certain only once Verified (on Maps); with one, the
                             snapshot → archive: a track, walked only while Verified
 ```

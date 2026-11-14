@@ -230,7 +230,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
       )}
       <footer className="flex items-center">
         {scoped.length <= 1 && (
-          <AddGmbButton labeled gmailId={scoped[0]?.id ?? null} trade={categories?.length === 1 && categories[0]!.trade !== "*" ? categories[0]!.trade : null} onAdded={changed} />
+          <AddGmbButton labeled gmail={scoped[0]?.id ?? null} trade={categories?.length === 1 && categories[0]!.trade !== "*" ? categories[0]!.trade : null} />
         )}
         <span className="flex-1" />
         <TrashButton />

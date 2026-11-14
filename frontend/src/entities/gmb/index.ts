@@ -20,6 +20,7 @@ export {
   resolvePlace,
   setCountry,
   setGmailRole,
+  setSpots,
   setTrades,
   setUpCategory,
   suggestPlaces,
@@ -34,11 +35,11 @@ export { GmailsProvider, useGmails, useGmbTags, useTrades, useTrash, useUndoable
 export { COUNTRIES, type Country, GMAIL_ROLES, GMAIL_ROLE_NAME, ON_GOOGLE, type OnGoogle, STATE_NAME, type State, googleName } from "./model/gmb";
 export { DEVICES, type Device, PROVIDERS, type Provider } from "./model/generated";
 export type { Browser, BrowserIn, BrowserOut, Checked, Connections, Imap, MapsKey } from "./model/generated";
-export type { ArchiveTag, Candidate, Category, Gmail, GmailRole, Gmails, Gmb, GoogleCategory, LatLng, MapConfig, SiteTag, SitesPlace, Suggestion, Trade } from "./model/gmb";
+export type { ArchiveTag, Candidate, Category, Gmail, GmailRole, Gmails, Gmb, GoogleCategory, LatLng, MapConfig, SiteTag, SitesPlace, Spot, Suggestion, Trade } from "./model/gmb";
 export { ISSUES, ISSUE_NAME, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
 export { type Listed, byView, narrowed, under } from "./model/narrow";
 export { MUST_HAVES, type MustHave, readiness } from "./model/readiness";
-export { ACCOUNT_TABS, type AccountTab, type OnMap, TABS, type Tab, open, openAccount, openCategories, openTrade, openTrash, openOrFocus, peek, setOnMap, useAccountWindow, useCategoriesWindow, useOnMap, usePeeked, useTab, useTradeWindow, useTrashWindow } from "./model/on-map";
+export { ACCOUNT_TABS, type AccountTab, type Adding, type OnMap, TABS, type Tab, addHref, open, openAccount, openAdd, openCategories, openTrade, openTrash, openOrFocus, peek, setOnMap, useAccountWindow, useAddWindow, useCategoriesWindow, useOnMap, usePeeked, useTab, useTradeWindow, useTrashWindow } from "./model/on-map";
 export { type Pattern, type Scope, chooseCategoryScope, chooseGmailScope, covers, inCategories, inScope, useScope } from "./model/scope";
 export { PublishSelection, type Selection, select, setFilter, setOnly, useSelection } from "./model/selection";
 export { TradeSelect } from "./ui/trade-select";
