@@ -779,6 +779,7 @@ offer, per view of GBP g:
     − copied on g                 − offered to another view of g whose 15-min lease runs
   order: copies ↑, then saves of its photos not saved on g ↑, then the oldest
   take 6 (one_tap: 1), lease them to this view; each its photos not saved on g, saves ↑
+  none left: the view is answered as `google`
 copy tap      → a use (draft, g), once     the reviewer's tap, before Google's form opens
 photos saved  → a use (photo, g), once
 ```

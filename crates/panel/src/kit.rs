@@ -110,7 +110,8 @@ pub struct Offer {
 	pub lang: &'static str,
 	pub review_uri: String,
 	pub view: Uuid,
-	/// Best first, their photos not gone here; none for [`Target::Google`].
+	/// Best first, their photos not gone here; none for [`Target::Google`], which a page target
+	/// becomes once none is left for the GBP.
 	pub drafts: Vec<Ranked>,
 }
 
@@ -416,6 +417,8 @@ impl Panel {
 				})
 				.collect(),
 		};
+		// none left for this GBP: nothing to copy, so straight to Google's form
+		let target = if drafts.is_empty() { Target::Google } else { target };
 		let view = Uuid::now_v7();
 		db::add_view(&mut tx, view, gmb, qr, now, now + LEASE, &drafts.iter().map(|d| d.id).collect::<Vec<_>>()).await?;
 		tx.commit().await.wrap_err("committing a view")?;
