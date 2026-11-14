@@ -1,7 +1,8 @@
 //! The runner as the conductor drives it, stand-ins in the browsers' and phones' places (Orbita,
 //! the Multilogin app, Multilogin's API, adb): a launch is up once its devtools (a phone: adb)
 //! answer, one run per gmail, bounded, stopped with what it brought scrubbed, and nobody but the
-//! conductor heard. A phone is recorded before it starts and stopped on every way its run ends.
+//! conductor heard. A phone is recorded before it starts and stopped on every way its run ends,
+//! its minutes fed once.
 
 use std::{
 	collections::HashMap,
@@ -21,6 +22,7 @@ const SEED: &str = "k1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
 
 struct Runner {
 	base: String,
+	max: usize,
 	dir: tempfile::TempDir,
 	signer: Signer,
 	http: reqwest::Client,
@@ -34,26 +36,41 @@ impl Runner {
 		Self::with(max, &[]).await
 	}
 
-	/// `left` recorded as running phones before it starts, as a runner that died would leave them.
-	async fn with(max: usize, left: &[&str]) -> Self {
+	/// `left` recorded as phones it may have started, started 150 s ago, each with its status at
+	/// Multilogin, as a runner that died would leave them.
+	async fn with(max: usize, left: &[(&str, u64)]) -> Self {
 		let dir = tempfile::tempdir().unwrap();
-		let orbita = script(
+		script(
 			dir.path(),
 			"orbita",
 			"echo \"$@\" > args\nprintf '9\\n/devtools/browser/stand-in\\n' > DevToolsActivePort\nexec sleep 600",
 		);
-		let mlx = script(dir.path(), "mlx", "exec sleep 600");
-		let adb = stand_in_adb(dir.path());
+		script(dir.path(), "mlx", "exec sleep 600");
+		stand_in_adb(dir.path());
 		let sessions = dir.path().join("sessions");
 		std::fs::create_dir_all(&sessions).unwrap();
 		let multilogin = Multilogin::serve(sessions.clone()).await;
 		if !left.is_empty() {
-			let records: Vec<Value> = left.iter().map(|p| json!({ "phone": p, "token": "run-token" })).collect();
+			let since = jiff::Timestamp::now() - jiff::SignedDuration::from_secs(150);
+			let records: Vec<Value> = left.iter().map(|(p, _)| json!({ "phone": p, "token": "run-token", "since": since })).collect();
 			std::fs::write(sessions.join("phones.json"), serde_json::to_vec(&records).unwrap()).unwrap();
-			for p in left {
-				multilogin.0.lock().unwrap().status.insert((*p).to_owned(), 0);
+			for (p, status) in left {
+				multilogin.0.lock().unwrap().status.insert((*p).to_owned(), *status);
 			}
 		}
+		Self::serve(max, dir, multilogin).await
+	}
+
+	/// Killed, and started again on the same disk.
+	async fn restart(mut self) -> Self {
+		if self.child.try_wait().unwrap().is_none() {
+			self.child.kill().await.unwrap();
+		}
+		Self::serve(self.max, self.dir, self.multilogin).await
+	}
+
+	async fn serve(max: usize, dir: tempfile::TempDir, multilogin: Multilogin) -> Self {
+		let (orbita, sessions) = (dir.path().join("orbita"), dir.path().join("sessions"));
 		let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
 		let signer: Signer = SEED.parse().unwrap();
 		let child = tokio::process::Command::new(env!("CARGO_BIN_EXE_sa_browsers"))
@@ -63,10 +80,10 @@ impl Runner {
 			.env("BROWSERS_MAX", max.to_string())
 			.env("BROWSERS_ORBITA", &orbita)
 			.env("BROWSERS_FFMPEG", ffmpeg())
-			.env("BROWSERS_MLX", &mlx)
+			.env("BROWSERS_MLX", dir.path().join("mlx"))
 			.env("BROWSERS_MLX_LAUNCHER", "http://127.0.0.1:9")
 			.env("BROWSERS_MULTILOGIN_API", &multilogin.1)
-			.env("BROWSERS_ADB", &adb)
+			.env("BROWSERS_ADB", dir.path().join("adb"))
 			.env("BROWSERS_BUSYBOX", &orbita)
 			.env("BROWSERS_ADB_KEYBOARD", &orbita)
 			.env("PANEL_ASSERTION_KEYS", signer.public())
@@ -76,6 +93,7 @@ impl Runner {
 			.unwrap();
 		let r = Self {
 			base: format!("http://127.0.0.1:{port}"),
+			max,
 			dir,
 			signer,
 			http: reqwest::Client::new(),
@@ -104,7 +122,7 @@ impl Runner {
 	async fn call(&self, method: reqwest::Method, path: &str, body: Option<Value>, signed: bool) -> (u16, String) {
 		let mut req = self.http.request(method.clone(), format!("{}{path}", self.base));
 		if signed {
-			req = req.header(sa_auth::HEADER, self.token(method.as_str(), path));
+			req = req.header(sa_auth::HEADER, self.token(method.as_str(), path.split_once('?').map_or(path, |(p, _)| p)));
 		}
 		if let Some(b) = body {
 			req = req.json(&b);
@@ -131,6 +149,24 @@ impl Runner {
 		let launch = json!({ "run": "gmb:7", "browser": { "provider": "multilogin_phone", "token": "run-token", "phone": phone,
 			"geo": [45.764, 4.8357], "zone": "Europe/Paris", "country": "FR" } });
 		self.call(reqwest::Method::POST, &format!("/profiles/{gmail}/launch"), Some(launch), true).await
+	}
+
+	/// The feed's page after `after`.
+	async fn usage(&self, after: i64, limit: usize) -> Value {
+		let (status, body) = self.call(reqwest::Method::GET, &format!("/usage?after={after}&limit={limit}"), None, true).await;
+		assert_eq!(status, 200, "{body}");
+		serde_json::from_str(&body).unwrap()
+	}
+
+	/// The feed whole: each entry's item and units.
+	async fn used(&self) -> Vec<(String, i64)> {
+		let page = self.usage(0, 1000).await;
+		page["used"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.map(|u| (u["item"].as_str().unwrap().to_owned(), u["units"].as_i64().unwrap()))
+			.collect()
 	}
 
 	fn records(&self) -> String {
@@ -226,6 +262,7 @@ async fn a_film_is_the_next_launchs_camera_and_its_sound_the_mic() {
 async fn nobody_but_the_conductor_is_heard() {
 	let r = Runner::start(1).await;
 	assert_eq!(r.call(reqwest::Method::GET, "/profiles", None, false).await.0, 401);
+	assert_eq!(r.call(reqwest::Method::GET, "/usage?after=0&limit=10", None, false).await.0, 401);
 	let other: Signer = "k1:AQECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=".parse().unwrap();
 	let token = other.sign(&Assertion {
 		aud: Service::Browsers,
@@ -434,6 +471,7 @@ async fn a_phone_whose_exit_is_elsewhere_is_stopped() {
 	assert_eq!((status, why.contains("not FR")), (502, true), "{why}");
 	assert_eq!(r.multilogin.status("p1"), Some(2));
 	assert!(!r.records().contains("p1"), "{}", r.records());
+	assert_eq!(r.used().await, [("phone.running".to_owned(), 1)], "it ran: billed all the same");
 }
 
 // r[verify browsers.phone-stops]
@@ -448,13 +486,50 @@ async fn sigterm_stops_every_phone_before_the_runner_exits() {
 	assert!(exited.success(), "{exited}");
 	assert_eq!((r.multilogin.status("p1"), r.multilogin.status("p2")), (Some(2), Some(2)));
 	assert_eq!(serde_json::from_str::<Value>(&r.records()).unwrap(), json!([]));
+	let r = r.restart().await;
+	assert_eq!(r.used().await, [("phone.running".to_owned(), 1), ("phone.running".to_owned(), 1)]);
 }
 
 // r[verify browsers.phone-stops]
 #[tokio::test]
 async fn a_phone_left_running_is_stopped_before_the_runner_serves() {
-	let r = Runner::with(1, &["p9"]).await;
+	let r = Runner::with(1, &[("p9", 0), ("p8", 2)]).await;
 	assert_eq!(r.multilogin.status("p9"), Some(2), "stopped by the time it listens");
 	assert!(!r.multilogin.ops().contains(&"start".to_owned()));
 	assert_eq!(serde_json::from_str::<Value>(&r.records()).unwrap(), json!([]));
+	assert_eq!(
+		r.used().await,
+		[("phone.running".to_owned(), 3)],
+		"p9's 150 s from its start on disk; p8 read stopped: counted at its stop already, or never started"
+	);
+}
+
+#[tokio::test]
+async fn the_feed_resumes_after_its_cursor_and_outlives_the_runner() {
+	let r = Runner::start(2).await;
+	let before = jiff::Timestamp::now();
+	assert_eq!(r.launch(1, "Plombier Lyon 7").await.0, 204);
+	assert_eq!(r.launch_phone(2, "p1").await.0, 204);
+	assert_eq!(r.call(reqwest::Method::POST, "/profiles/2/stop", None, true).await.0, 204);
+	let first = r.usage(0, 1).await;
+	assert_eq!(
+		(first["used"][0]["id"].clone(), first["used"][0]["item"].clone(), first["next"].clone()),
+		(json!(1), json!("browser.gologin"), json!(1))
+	);
+	let rest = r.usage(1, 10).await;
+	assert_eq!(rest["used"].as_array().unwrap().len(), 1, "{rest}");
+	let phone = &rest["used"][0];
+	assert_eq!(
+		(phone["id"].clone(), phone["item"].clone(), phone["units"].clone(), rest["next"].clone()),
+		(json!(2), json!("phone.running"), json!(1), json!(2))
+	);
+	assert!(phone["at"].as_str().unwrap().parse::<jiff::Timestamp>().unwrap() > before, "at its stop: {phone}");
+	assert_eq!(r.usage(2, 10).await, json!({ "used": [], "next": 2 }), "nothing new: the cursor stays");
+	assert_eq!(r.call(reqwest::Method::GET, "/usage?after=-1&limit=10", None, true).await.0, 400);
+	assert_eq!(r.call(reqwest::Method::POST, "/profiles/1/stop", None, true).await.0, 204);
+
+	let r = r.restart().await;
+	assert_eq!(r.usage(0, 10).await["used"], json!([first["used"][0], phone]), "kept as it was");
+	assert_eq!(r.launch(1, "Plombier Lyon 7").await.0, 204);
+	assert_eq!(r.usage(2, 10).await["used"][0]["id"], 3, "ids go on from the disk's");
 }

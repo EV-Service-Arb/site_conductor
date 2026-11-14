@@ -10,6 +10,7 @@ use std::{path::Path, sync::Arc, time::Duration};
 
 use eyre::WrapErr;
 use sa_browsers::{Browser, Launch};
+use sa_core::prices::{BrowserStart, Item};
 use serde_json::Value;
 use tokio::sync::{Notify, oneshot, watch};
 
@@ -295,6 +296,7 @@ async fn orbita(runner: &Runner, gmail: i64, dir: &Path, o: Orbita, ends: &mut E
 		status = child.wait() => eyre::bail!("it exited ({}) before it was up; see {}/orbita.log", status?, dir.display()),
 	};
 	up(runner, gmail, Up::Devtools(devtools.clone()));
+	runner.0.usage.record(Item::Browser(BrowserStart::Gologin), 1, jiff::Timestamp::now())?;
 	let facing = async {
 		match with_film {
 			true => film::facing(&devtools).await,

@@ -282,6 +282,10 @@ conductor ── POST /profiles/{gmail}/launch {Launch}, Conductor ──▶ sa_
   the time it should take, stop, removal, idle, the cap, SIGTERM), the stop retried until `statuses` reads it stopped, and a recorded one
   stopped before the runner serves again. The launch brings a 3-hour token, past the 180 billed
   minutes Multilogin caps a session at: the runner holds no long-lived one.
+- **What it spent, the runner tells** (`GET /usage`, `sa_core::usage`): a phone's run at its stop,
+  its minutes from just before `phone/start` (on disk with its record), a started one whole; it is
+  counted if its start was answered or it was read running at the stop, so one stopped already
+  when a restarted runner reads it is not counted twice. A browser's start, once up.
 - **The relay** never sends `Runtime.enable` (what pages detect devtools by): `Target.*`, `Page.*`
   (the screencast, navigation, dialogs) and `Input.*`, a finger's touches for the pointer. A phone is
   not devtools: the runner speaks the viewer's frames itself (screencap, `input`, ADBKeyBoard's
@@ -991,7 +995,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   server's keys never reach it.
 - **Browsers.** sa_browsers is its own pod (`PANEL_BROWSERS_URL`, in-cluster only): `BROWSERS_DIR` on
   a volume of its own (the gmails' sessions: signed-in Google lives there; `phones.json`, the phones it
-  may have started) and `HOME` on it too (the Multilogin app's `~/mlx`, Mimic's profiles),
+  may have started; `usage.jsonl`, the feed, a line an id) and `HOME` on it too (the Multilogin app's `~/mlx`, Mimic's profiles),
   `BROWSERS_MAX`, the conductor's public keys (`PANEL_ASSERTION_KEYS`), Orbita (`.#orbita`), ffmpeg,
   the Multilogin app under Xvfb (`.#mlx`, `BROWSERS_MLX`; its launcher `launcher.mlx.yt:45001`, a
   public name for 127.0.0.1), `BROWSERS_MULTILOGIN_API`, and a phone's tools (`.#phone-tools`: adb,

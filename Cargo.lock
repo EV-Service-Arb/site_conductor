@@ -4067,6 +4067,7 @@ dependencies = [
  "reqwest",
  "rustix",
  "sa_auth",
+ "sa_core",
  "serde",
  "serde_json",
  "strum",
