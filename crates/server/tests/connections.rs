@@ -144,6 +144,7 @@ impl World {
 					(Item::Places(PlacesRequest::Search), Some(2 * details)),
 					(Item::Places(PlacesRequest::Autocomplete), Some(details)),
 				],
+				&[],
 				"admin@localhost",
 				jiff::Timestamp::now(),
 			)
@@ -279,7 +280,7 @@ async fn every_priced_item_is_the_admins_to_price_and_the_archive_is_told() {
 	assert_eq!(status, StatusCode::OK, "{read}");
 	let listed: Vec<_> = read["prices"].as_array().unwrap().iter().map(|p| p["item"].as_str().unwrap().to_owned()).collect();
 	assert_eq!(listed, Item::all().map(|i| i.to_string()).collect::<Vec<_>>(), "the catalog, whole and in order");
-	let of = |read: &Value, item: &str| read["prices"].as_array().unwrap().iter().find(|p| p["item"] == item).unwrap()["tokens"].clone();
+	let of = |read: &Value, item: &str| read["prices"].as_array().unwrap().iter().find(|p| p["item"] == item).unwrap()["price"]["tokens"].clone();
 	assert_eq!(
 		(of(&read, "places.details"), of(&read, "walk.open")),
 		(Value::Null, json!(7)),
@@ -287,7 +288,7 @@ async fn every_priced_item_is_the_admins_to_price_and_the_archive_is_told() {
 	);
 
 	let (status, set) = w
-		.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(json!({ "prices": { "places.details": 3, "walk.step": null } })))
+		.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(json!({ "prices": { "places.details": 3, "walk.step": null }, "costs": { "map.map": 7000 } })))
 		.await;
 	assert_eq!(status, StatusCode::OK, "{set}");
 	assert_eq!(
@@ -295,11 +296,18 @@ async fn every_priced_item_is_the_admins_to_price_and_the_archive_is_told() {
 		(json!(3), Value::Null, json!(7)),
 		"only those given change"
 	);
+	let map = set["prices"].as_array().unwrap().iter().find(|p| p["item"] == "map.map").unwrap();
+	assert_eq!((&map["sale"], &map["price"], &map["cost"]["usd_micros"]), (&json!("metered"), &Value::Null, &json!(7000)), "a cost, no price: {map}");
 	let told = w.panel.snapshot(jiff::Timestamp::now()).await.unwrap().unwrap().prices;
 	assert_eq!(told.get(&"walk.open".parse().unwrap()), Some(&7));
 	assert_eq!(told.get(&"walk.step".parse().unwrap()), None, "off sale: not walked");
 
-	for refused in [json!({ "prices": { "walk.fly": 1 } }), json!({ "prices": { "walk.open": -1 } })] {
+	for refused in [
+		json!({ "prices": { "walk.fly": 1 }, "costs": {} }),
+		json!({ "prices": { "walk.open": -1 }, "costs": {} }),
+		json!({ "prices": { "map.map": 1 }, "costs": {} }),
+		json!({ "prices": {}, "costs": { "map.map": -1 } }),
+	] {
 		let (status, body) = w.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(refused.clone())).await;
 		assert_eq!(status, StatusCode::BAD_REQUEST, "{refused}: {body}");
 	}
@@ -309,4 +317,35 @@ async fn every_priced_item_is_the_admins_to_price_and_the_archive_is_told() {
 	let mut op = World::new().await;
 	let (status, _) = op.call(Method::GET, "/api/v1/admin/tokens/prices", None).await;
 	assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn every_paid_answer_and_map_is_counted_once_on_whose_bill() {
+	let mut w = World::holding(admin()).await;
+	w.price(0).await;
+	let gmail = w.gmail("a@gmail.com").await;
+	let (status, gbp) = w.add_gbp(gmail, PROCOPE).await;
+	assert_eq!(status, StatusCode::CREATED, "{gbp}");
+	let (status, set) = w.call(Method::PUT, &format!("/api/v1/gmails/{gmail}/maps_key"), Some(json!({ "key": "own-key-of-a" }))).await;
+	assert_eq!(status, StatusCode::OK, "{set}");
+	let (status, gbp) = w.add_gbp(gmail, FLORE).await;
+	assert_eq!(status, StatusCode::CREATED, "{gbp}");
+	let (status, kept) = w.call(Method::GET, &format!("/api/v1/gmbs/resolve?place={FLORE}&gmail={gmail}"), None).await;
+	assert_eq!(status, StatusCode::OK, "{kept}");
+	for _ in 0..2 {
+		assert_eq!(w.call(Method::POST, "/api/v1/map/loaded", None).await.0, StatusCode::NO_CONTENT);
+	}
+
+	let now = jiff::Timestamp::now().as_millisecond();
+	let (status, usage) = w.call(Method::GET, &format!("/api/v1/admin/usage?from={}&to={}", now - 3_600_000, now + 60_000), None).await;
+	assert_eq!(status, StatusCode::OK, "{usage}");
+	let units = |item: &str, bill: &str| -> i64 {
+		usage["days"].as_array().unwrap().iter().filter(|d| d["item"] == item && d["bill"] == bill).map(|d| d["units"].as_i64().unwrap()).sum()
+	};
+	assert_eq!(units("places.details", "ours"), 1, "the shared key's buy: {usage}");
+	assert_eq!(units("places.details", "theirs"), 1, "the gmail's own key, and the kept answer not again: {usage}");
+	assert_eq!(units("map.map", "ours"), 2, "{usage}");
+
+	let mut op = World::new().await;
+	assert_eq!(op.call(Method::GET, &format!("/api/v1/admin/usage?from={}&to={now}", now - 1), None).await.0, StatusCode::FORBIDDEN);
 }

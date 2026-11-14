@@ -308,17 +308,13 @@ location: { lat: number, lng: number } | null,
  */
 country: Country | null, };
 /**
- * A priced item, and its price: `tokens` null, not sold.
+ * A catalog item, its price (`null`: not sold, or metered) and what a unit costs us (`null`: unknown).
  */
-export type Price = { item: PricedItem, scope: Scope, tool: string, tool_title: string, title: string, description: string, tokens: number | null, 
+export type Price = { item: PricedItem, scope: Scope, sale: Sale, 
 /**
- * The admin's email.
+ * What one is counted in.
  */
-set_by: string | null, 
-/**
- * RFC 3339.
- */
-set_at: string | null, };
+unit: string, tool: string, tool_title: string, title: string, description: string, price: TokenPrice | null, cost: UnitCost | null, };
 export type PutKitArea = { "kind": "city", place_id: string, margin_m: number, } | { "kind": "circle", name: string, lat: number, lng: number, radius_m: number, margin_m: number, };
 export type SetBrowser = { provider: Provider, 
 /**
@@ -368,6 +364,15 @@ secondary: string | null, };
  */
 export type Suggestions = { suggestions: Array<Suggestion>, };
 export type Tab = { id: string, title: string, url: string, };
+export type TokenPrice = { tokens: number, 
+/**
+ * The admin's email.
+ */
+set_by: string, 
+/**
+ * RFC 3339.
+ */
+set_at: string, };
 export type TouchPhase = "start" | "move" | "end";
 /**
  * A trade of the caller's: Plumbing, set up in some countries.
@@ -430,6 +435,19 @@ removed_at: string,
  * RFC 3339; `null`: kept until restored.
  */
 purge_at: string | null, blocked: string | null, };
+export type UnitCost = { 
+/**
+ * Millionths of a dollar a unit.
+ */
+usd_micros: number, 
+/**
+ * The admin's email.
+ */
+set_by: string, 
+/**
+ * RFC 3339.
+ */
+set_at: string, };
 export type Viewport = { south: number, west: number, north: number, east: number, };
 
 export const DEVICES = ["pixel_7", "galaxy_s23", "redmi_note_14"] as const;
@@ -438,8 +456,11 @@ export type Device = (typeof DEVICES)[number];
 export const PROVIDERS = ["multilogin", "multilogin_browser", "gologin"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
-export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "browser.gologin", "browser.mimic"] as const;
+export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "ads.location", "ads.keyword_ideas", "dataforseo.keywords_for_keywords", "browser.gologin", "browser.mimic"] as const;
 export type PricedItem = (typeof PRICED_ITEMS)[number];
 
-export const SCOPES = ["conductor", "review_archive", "browsers"] as const;
+export const SCOPES = ["conductor", "review_archive", "browsers", "placement"] as const;
 export type Scope = (typeof SCOPES)[number];
+
+export const SALES = ["sold", "metered"] as const;
+export type Sale = (typeof SALES)[number];

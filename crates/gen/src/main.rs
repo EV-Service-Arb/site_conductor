@@ -9,7 +9,7 @@ use sa_auth::{Catalog, SourceKind};
 use sa_browsers::view::{In as ViewerIn, Out as ViewerOut};
 use sa_core::{
 	gbp::OnGoogle,
-	prices::{Item, Scope},
+	prices::{Item, Sale, Scope},
 };
 use sa_panel::{store::browsers::Provider, tokens::Kind};
 use sa_server::{
@@ -36,6 +36,11 @@ fn main() {
 		name: "SCOPES",
 		ty: "Scope",
 		items: <Scope as strum::VariantArray>::VARIANTS.iter().map(|s| <&str>::from(*s)).collect(),
+	};
+	let sales = || Ts::Union {
+		name: "SALES",
+		ty: "Sale",
+		items: <Sale as strum::VariantArray>::VARIANTS.iter().map(|s| <&str>::from(*s)).collect(),
 	};
 	let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../frontend/src");
 	let [permissions, aliases] = Catalog::collect("sa", 0).ts();
@@ -85,6 +90,7 @@ fn main() {
 			},
 			priced_items(),
 			scopes(),
+			sales(),
 		],
 	);
 	Ts::write(
@@ -93,6 +99,7 @@ fn main() {
 			Ts::types::<(TokensDto, LedgerDto, UsageDto, TokenHoldersDto, BalanceChangeDto, BalanceDto, (PricesDto, SetPricesDto, FlowsDto))>(),
 			priced_items(),
 			scopes(),
+			sales(),
 			Ts::Union {
 				name: "FLOW_KINDS",
 				ty: "FlowKind",

@@ -150,7 +150,7 @@ async fn kit(db: &TestDb) -> Kit {
 		.await
 		.unwrap();
 	panel
-		.set_prices(&[PlacesRequest::Details].map(|r| (Item::Places(r), Some(0))), "admin@localhost", now)
+		.set_prices(&[PlacesRequest::Details].map(|r| (Item::Places(r), Some(0))), &[], "admin@localhost", now)
 		.await
 		.unwrap()
 		.unwrap();

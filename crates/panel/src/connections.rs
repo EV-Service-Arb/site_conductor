@@ -25,7 +25,7 @@ use crate::{
 		browsers as browsers_db,
 		connections::{self as db, Sealed},
 		gmbs as gmbs_db,
-		tokens::{self as ledger, Charged, Entry, Kind, Price},
+		tokens::{self as ledger, Charged, Entry, Kind},
 	},
 	tokens::is_open,
 };
@@ -42,8 +42,8 @@ pub struct Connections {
 	pub imap: Option<Imap>,
 	/// With why the rotation passes it over now, if it does.
 	pub maps_key: Option<(MapsKey, Option<String>)>,
-	/// What a request on the shared keys costs, per [`Item::Places`]; `None`, not sold.
-	pub prices: Vec<(Item, Option<Price>)>,
+	/// What a request on the shared keys costs, per [`Item::Places`].
+	pub prices: Vec<crate::tokens::Priced>,
 	pub browser: Option<crate::browsers::Browser>,
 }
 
@@ -72,8 +72,7 @@ impl Panel {
 			}
 			None => None,
 		};
-		let priced = ledger::prices(&mut conn).await?;
-		let prices = Item::all().filter(|i| matches!(i, Item::Places(_))).map(|i| (i, priced.get(&i).cloned())).collect();
+		let prices = self.prices().await?.into_iter().filter(|p| matches!(p.item, Item::Places(_))).collect();
 		let browser = browsers_db::browser(&mut conn, id).await?.map(|(b, _)| b);
 		Ok(Ok(Connections { imap, maps_key, prices, browser }))
 	}

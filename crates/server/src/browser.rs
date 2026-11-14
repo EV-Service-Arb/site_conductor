@@ -186,6 +186,14 @@ impl Connected {
 	}
 
 	/// What the gmail's browser runs for now, and whether its next launch plays a film.
+	/// A page of the runner's usage feed after `after`: its status and body.
+	pub(crate) async fn usage(&self, after: i64, limit: usize) -> eyre::Result<(StatusCode, Vec<u8>)> {
+		match self.runner.call(Method::GET, &format!("/usage?after={after}&limit={limit}"), None).await {
+			Ok((status, text)) => Ok((status, text.into_bytes())),
+			Err(e) => Err(eyre::eyre!("the browsers' runner's usage: {e:?}")),
+		}
+	}
+
 	pub(crate) async fn state(&self, gmail: i64) -> ApiResult<(Option<RunningDto>, bool)> {
 		let (status, body) = self.runner.call(Method::GET, "/profiles", None).await?;
 		if status != StatusCode::OK {
@@ -227,7 +235,8 @@ impl Runner {
 		let req = self
 			.http
 			.request(method.clone(), format!("{}{path}", self.base))
-			.header(sa_auth::HEADER, self.assertion(&method, path));
+			// an assertion names the path, not its query, as the forward's do
+			.header(sa_auth::HEADER, self.assertion(&method, path.split_once('?').map_or(path, |(p, _)| p)));
 		let req = match body {
 			Some(b) => req.json(b),
 			None => req,

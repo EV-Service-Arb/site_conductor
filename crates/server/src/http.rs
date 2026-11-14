@@ -33,7 +33,7 @@ use crate::{
 	live::{self, Live, LiveLimits},
 	queries_cache,
 	signin::{self, Freshness, Gate, SignIn},
-	tokens, trash,
+	tokens, trash, usage,
 };
 
 /// A part of the conductor's API, and the permission that opens it.
@@ -88,6 +88,7 @@ pub fn api_routes() -> Vec<ApiRoute> {
 		browser::routes(),
 		tokens::routes(),
 		trash::routes(),
+		usage::routes(),
 		assistant::routes(),
 		kit::routes(),
 	]

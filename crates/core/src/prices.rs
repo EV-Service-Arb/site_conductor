@@ -25,6 +25,8 @@ pub enum Scope {
 	ReviewArchive,
 	/// sa_browsers' runner: nobody is charged.
 	Browsers,
+	/// gmaps_optimal_placement's studies: the house's for now.
+	Placement,
 }
 
 /// Whether a person pays tokens for it.
@@ -95,6 +97,28 @@ pub enum BrowserStart {
 	/// Multilogin's Mimic, through the Multilogin app on the runner.
 	#[strum(message = "Multilogin browser")]
 	Mimic,
+}
+
+/// What a study asks the Google Ads API for: free per request, within the developer token's
+/// daily quota.
+#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum AdsRequest {
+	/// `geoTargetConstants:suggest`: the Ads location a study's place is.
+	#[strum(message = "Location")]
+	Location,
+	/// `generateKeywordIdeas`: a keyword group's monthly search volumes there.
+	#[strum(message = "Search volumes")]
+	KeywordIdeas,
+}
+
+/// What a study buys of DataForSEO, by the task.
+#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum DataForSeoTask {
+	/// `keywords_for_keywords/live`: keyword ideas and their volumes from Google Ads' data.
+	#[strum(message = "Keywords for keywords")]
+	KeywordsForKeywords,
 }
 
 /// What a walk down a place's reviews does in its browser, each time it does it.
@@ -186,6 +210,8 @@ priced! {
 	Map(MapLoad) = "map", Conductor, Metered, "load", "Google Maps in the browser";
 	Walk(WalkStep) = "walk", ReviewArchive, Sold, "step", "A walk down a place's reviews";
 	Phone(PhoneTime) = "phone", Browsers, Metered, "minute", "Multilogin's cloud phones";
+	Ads(AdsRequest) = "ads", Placement, Metered, "request", "Google Ads API";
+	DataForSeo(DataForSeoTask) = "dataforseo", Placement, Metered, "task", "DataForSEO";
 	Browser(BrowserStart) = "browser", Browsers, Metered, "start", "Antidetect browsers";
 }
 

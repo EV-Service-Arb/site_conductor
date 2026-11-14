@@ -1,0 +1,189 @@
+//! What our tools spend on vendors (`sa_panel::usage`): a map built in the browser, everyone's
+//! usage for Grafana, and in `serve` each service's usage feed followed (review_archive's walks,
+//! the browsers' runner's phones and starts).
+//!
+//! ```text
+//! POST /api/v1/map/loaded             → 204: the caller's browser built a map
+//! GET  /api/v1/admin/usage?from=&to=  Usage: by UTC day, item, bill and source, Unix ms
+//! ```
+
+use std::{collections::BTreeSet, time::Duration};
+
+use axum::{
+	Extension, Json,
+	body::{Body, to_bytes},
+	extract::{
+		Query, State,
+		rejection::QueryRejection,
+	},
+	http::{HeaderMap, Method, StatusCode},
+};
+use jiff::Timestamp;
+use sa_auth::{Principal, Service};
+use sa_core::{
+	prices::{Item, Scope},
+	usage::{Bill, UsagePage},
+};
+use sa_panel::{Panel, usage::Day};
+use serde::{Deserialize, Serialize};
+use tokio::sync::watch;
+
+use crate::{
+	api::{ApiError, ApiResult},
+	browser::Connected,
+	forward::Services,
+	http::{ApiRoute, Section},
+	signin::{Caller, Freshness},
+};
+
+/// Each feed is asked this often while it has no more.
+const FOLLOW_EVERY: Duration = Duration::from_secs(10);
+/// Uses asked of a feed at once.
+const PAGE: usize = 500;
+const CALL_TIMEOUT: Duration = Duration::from_secs(10);
+/// The widest window `/admin/usage` reads.
+const SPAN: jiff::SignedDuration = jiff::SignedDuration::from_hours(24 * 400);
+
+/// A UTC day's units of one item, by whose bill and who told; `usd` at today's cost of a unit,
+/// `null` while it is unknown.
+#[derive(Clone, Debug, Serialize)]
+pub struct UsageDayDto {
+	/// `YYYY-MM-DD`.
+	pub day: String,
+	pub item: Item,
+	pub scope: Scope,
+	pub tool_title: &'static str,
+	pub title: &'static str,
+	pub unit: &'static str,
+	pub bill: Bill,
+	pub source: String,
+	pub units: i64,
+	/// How many times it was recorded: a phone's run is one time of many minutes.
+	pub times: i64,
+	pub usd: Option<f64>,
+}
+
+/// `GET /admin/usage`, for Grafana: oldest first.
+#[derive(Clone, Debug, Serialize)]
+pub struct UsageDto {
+	pub days: Vec<UsageDayDto>,
+}
+
+/// Follows every usage feed there is until `shutdown` turns true. Nothing here ends `serve`.
+pub async fn run(panel: Panel, services: Option<Services>, browsers: Option<Connected>, shutdown: watch::Receiver<bool>) {
+	let of = |scope| Item::all().filter(|i| i.scope() == scope).collect::<BTreeSet<_>>();
+	let feeds: Vec<Feed> = [
+		services.map(|s| Feed {
+			name: "review_archive",
+			items: of(Scope::ReviewArchive),
+			from: From::ReviewArchive(s),
+		}),
+		browsers.map(|b| Feed {
+			name: "browsers",
+			items: of(Scope::Browsers),
+			from: From::Browsers(b),
+		}),
+	]
+	.into_iter()
+	.flatten()
+	.collect();
+	let follow = feeds.iter().map(|feed| {
+		crate::every(FOLLOW_EVERY, shutdown.clone(), "following a usage feed", || async {
+			loop {
+				let after = panel.usage_after(feed.name).await?;
+				let Some(page) = feed.page(after).await? else { return Ok(()) };
+				if panel.take_usage(feed.name, &feed.items, page, after).await? < PAGE {
+					return Ok(());
+				}
+			}
+		})
+	});
+	futures::future::join_all(follow).await;
+}
+
+pub(crate) fn routes() -> Vec<ApiRoute> {
+	use Freshness::Cached;
+	use Method as M;
+	vec![
+		ApiRoute::new(M::POST, "/map/loaded", None, Cached, loaded),
+		ApiRoute::new(M::GET, "/admin/usage", Some(Section::Tokens), Cached, usage),
+	]
+}
+
+async fn loaded(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<StatusCode> {
+	panel.map_loaded(caller.user_id, Timestamp::now()).await?;
+	Ok(StatusCode::NO_CONTENT)
+}
+
+/// Grafana's `${__from}` and `${__to}`: Unix milliseconds.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Window {
+	from: i64,
+	to: i64,
+}
+
+async fn usage(State(panel): State<Panel>, q: Result<Query<Window>, QueryRejection>) -> ApiResult<Json<UsageDto>> {
+	let Query(q) = q.map_err(|e| ApiError::BadRequest(e.body_text()))?;
+	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| ApiError::BadRequest(format!("{ms}: {e}")));
+	let (from, to) = (at(q.from)?, at(q.to)?);
+	if from >= to || to.duration_since(from) > SPAN {
+		return Err(ApiError::BadRequest(format!("from is before to, at most {} days", SPAN.as_hours() / 24)));
+	}
+	let costs = panel.prices().await?;
+	let days = panel.used(from, to).await?;
+	Ok(Json(UsageDto {
+		days: days
+			.into_iter()
+			.map(|d: Day| {
+				let cost = costs.iter().find(|p| p.item == d.item).expect("the catalog prices every item").cost.as_ref();
+				UsageDayDto {
+					day: Timestamp::from_second(d.day * 86_400).expect("a stored day").strftime("%Y-%m-%d").to_string(),
+					item: d.item,
+					scope: d.item.scope(),
+					tool_title: d.item.tool_title(),
+					title: d.item.title(),
+					unit: d.item.unit(),
+					bill: d.bill,
+					source: d.source,
+					units: d.units,
+					times: d.times,
+					usd: cost.map(|c| (d.units * c.usd_micros) as f64 / 1e6),
+				}
+			})
+			.collect(),
+	}))
+}
+
+/// A service whose usage feed is followed, and what it may tell of.
+struct Feed {
+	name: &'static str,
+	items: BTreeSet<Item>,
+	from: From,
+}
+impl Feed {
+	/// The page after `after`; `None` while the service serves no feed yet (404).
+	async fn page(&self, after: i64) -> eyre::Result<Option<UsagePage>> {
+		let (status, answer) = match &self.from {
+			From::ReviewArchive(services) => {
+				let path = format!("/api/conductor/usage?after={after}&limit={PAGE}");
+				let sent = services.send(Service::ReviewArchive, Method::GET, &path, HeaderMap::new(), Some(Principal::Conductor), Body::empty());
+				let res = tokio::time::timeout(CALL_TIMEOUT, sent).await.map_err(|_| eyre::eyre!("review_archive did not answer {path} in time"))??;
+				let status = res.status();
+				let answer = to_bytes(res.into_body(), 16 * 1024 * 1024).await.map_err(|e| eyre::eyre!("reading review_archive's usage: {e}"))?;
+				(status, answer.to_vec())
+			}
+			From::Browsers(b) => b.usage(after, PAGE).await?,
+		};
+		match status {
+			StatusCode::NOT_FOUND => Ok(None),
+			StatusCode::OK => Ok(Some(serde_json::from_slice(&answer).map_err(|e| eyre::eyre!("{}'s usage: {e}", self.name))?)),
+			other => eyre::bail!("{} answered its usage with {other}: {}", self.name, String::from_utf8_lossy(&answer)),
+		}
+	}
+}
+
+enum From {
+	ReviewArchive(Services),
+	Browsers(Connected),
+}

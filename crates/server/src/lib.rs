@@ -28,6 +28,7 @@ pub mod telegram;
 pub mod testing;
 pub mod tokens;
 pub mod trash;
+pub mod usage;
 pub mod web;
 
 /// What the contract's `provides` names, as the router mounts it (`--print-provided-paths`).

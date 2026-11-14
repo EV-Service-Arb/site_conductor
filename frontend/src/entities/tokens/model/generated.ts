@@ -52,30 +52,36 @@ at: string, delta: number, kind: LedgerKind, service: string | null, key: string
  */
 by: string | null, note: string | null, };
 /**
- * A priced item, and its price: `tokens` null, not sold.
+ * A catalog item, its price (`null`: not sold, or metered) and what a unit costs us (`null`: unknown).
  */
-export type Price = { item: PricedItem, scope: Scope, tool: string, tool_title: string, title: string, description: string, tokens: number | null, 
+export type Price = { item: PricedItem, scope: Scope, sale: Sale, 
 /**
- * The admin's email.
+ * What one is counted in.
  */
-set_by: string | null, 
-/**
- * RFC 3339.
- */
-set_at: string | null, };
+unit: string, tool: string, tool_title: string, title: string, description: string, price: TokenPrice | null, cost: UnitCost | null, };
 /**
  * `GET /admin/tokens/prices`: every item, in the catalog's order.
  */
 export type Prices = { prices: Array<Price>, };
 /**
- * The items given, each priced at 0 or more or `null` off sale; the others stay.
+ * The items given, each priced at 0 tokens or more or `null` off sale, each costed at 0 µ$ a unit
+ * or more or `null` unknown; the others stay.
  */
-export type SetPrices = { prices: Partial<Record<PricedItem, number | null>>, };
+export type SetPrices = { prices: Partial<Record<PricedItem, number | null>>, costs: Partial<Record<PricedItem, number | null>>, };
 export type TokenHolder = { user_id: string, email: string, name: string, balance: number, };
 /**
  * `GET /admin/tokens`.
  */
 export type TokenHolders = { users: Array<TokenHolder>, };
+export type TokenPrice = { tokens: number, 
+/**
+ * The admin's email.
+ */
+set_by: string, 
+/**
+ * RFC 3339.
+ */
+set_at: string, };
 /**
  * `GET /tokens`, `POST /tokens/claim`.
  */
@@ -84,6 +90,19 @@ export type Tokens = { balance: number,
  * Renewal: added per day while under `cap`.
  */
 daily: number, cap: number, kickbacks: Array<Kickback>, };
+export type UnitCost = { 
+/**
+ * Millionths of a dollar a unit.
+ */
+usd_micros: number, 
+/**
+ * The admin's email.
+ */
+set_by: string, 
+/**
+ * RFC 3339.
+ */
+set_at: string, };
 /**
  * `GET /tokens/usage`.
  */
@@ -94,11 +113,14 @@ export type UsageDay = {
  */
 day: string, charges: number, tokens: number, };
 
-export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "browser.gologin", "browser.mimic"] as const;
+export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "ads.location", "ads.keyword_ideas", "dataforseo.keywords_for_keywords", "browser.gologin", "browser.mimic"] as const;
 export type PricedItem = (typeof PRICED_ITEMS)[number];
 
-export const SCOPES = ["conductor", "review_archive", "browsers"] as const;
+export const SCOPES = ["conductor", "review_archive", "browsers", "placement"] as const;
 export type Scope = (typeof SCOPES)[number];
+
+export const SALES = ["sold", "metered"] as const;
+export type Sale = (typeof SALES)[number];
 
 export const FLOW_KINDS = ["renewal", "purchase", "set", "spend", "refund", "grant_claimed", "granted"] as const;
 export type FlowKind = (typeof FLOW_KINDS)[number];
