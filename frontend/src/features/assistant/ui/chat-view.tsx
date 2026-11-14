@@ -5,12 +5,12 @@ import { CornerDownRight, Eye, Lock, Sparkles, Upload } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { type AssistantTurn, type Mention, type Turn, clearArchived, deleteChat, putTurns, removeMember, useChat } from "@/entities/assistant";
+import { type AssistantTurn, type Mention, type Turn, clearArchived, deleteChat, putTurns, removeMember, useChat, assistant } from "@/entities/assistant";
 import { type Listed, narrowed, useGmails, useGmbTags, usePeeked } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
 import { ApiError } from "@/shared/api";
 import { ROUTES } from "@/shared/config/routes";
-import { useT } from "@/shared/i18n";
+import { type T, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 
 import { asMentions, play, script, suggestions } from "../model/canned";
@@ -19,6 +19,12 @@ import { type Confirm, type Controls, ControlsContext } from "./chat-actions";
 import { Composer, type ComposerHandle, type Draft, keepDraft } from "./composer";
 import { ContextCard, Header } from "./header";
 import { AssistantTurnView, UserTurnView } from "./turns";
+
+const CONFIRM = {
+  delete: { title: (t) => t(assistant.delete.title, "Delete this chat?"), action: (t) => t(assistant.delete, "Delete") },
+  leave: { title: (t) => t(assistant.leave.title, "Leave this chat?"), action: (t) => t(assistant.leave, "Leave") },
+  clear: { title: (t) => t(assistant.clear.title, "Clear archived chats?"), action: (t) => t(assistant.history.clear, "Clear") },
+} satisfies Record<Confirm["kind"], { title: (t: T) => string; action: (t: T) => string }>;
 
 /** Where full screen was opened from: leaving it goes back there. */
 let back: string | null = null;
@@ -59,7 +65,7 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
   useEffect(() => {
     // Full screen is a link's page: it says so in place. Beside a page, the chat gives way to a new one.
     if (!gone || display === "full") return;
-    if (seen.current.has(id)) toast(t("assistant.gone"));
+    if (seen.current.has(id)) toast(t(assistant.gone, "That chat was deleted, or is no longer shared with you"));
     onOpen(null);
   }, [gone, id, display, onOpen, t]);
   const written = s.running?.chat === id ? s.running.written : null;
@@ -68,7 +74,7 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
   }, [written, chat?.version, reload]);
 
   const failed = (e: unknown) => {
-    if (e instanceof ApiError && e.failure.kind === "conflict") toast.error(t("assistant.conflict"));
+    if (e instanceof ApiError && e.failure.kind === "conflict") toast.error(t(assistant.conflict, "Someone wrote in this chat meanwhile: it is read again, and your message kept"));
     else notifyFailure(e, t);
     reload();
   };
@@ -77,7 +83,7 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
     const named = [...(subject && !draft.subjectOff ? asMentions([subject]) : []), ...draft.mentions].filter((m, i, xs) => xs.findIndex((x) => x.id === m.id) === i);
     const answer = script(draft.text, resolve(named), all, tags, t);
     const asked = ask(chat, from, { text: draft.text, mentions: named, files: draft.files }, (put, signal) => play(answer, s.approval, put, signal), (e) => {
-      if (e instanceof ApiError && e.failure.kind === "conflict") toast.error(t("assistant.lost"));
+      if (e instanceof ApiError && e.failure.kind === "conflict") toast.error(t(assistant.lost, "Someone wrote in this chat meanwhile: the answer was not saved"));
       else notifyFailure(e, t);
     });
     if (asked.id !== id) onOpen(asked.id);
@@ -138,12 +144,12 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
   const conversation = (
     <ChatPanel
       streaming={streaming}
-      labels={{ jump: t("assistant.jump"), log: t("assistant.log") }}
+      labels={{ jump: t(assistant.jump, "Jump to latest"), log: t(assistant.log, "Conversation") }}
       empty={
         notShared ? (
-          <Blocked icon={Lock} text={t("assistant.notShared")} />
+          <Blocked icon={Lock} text={t(assistant.notShared, "This chat isn't shared with you")} />
         ) : loading ? (
-          read.status === "error" ? <Blocked icon={Lock} text={t("assistant.failed")} /> : <Spinner className="m-auto size-5" />
+          read.status === "error" ? <Blocked icon={Lock} text={t(assistant.failed, "This chat could not be read")} /> : <Spinner className="m-auto size-5" />
         ) : (
           <Empty subject={subject} onAsk={(text) => send({ text, mentions: [], files: [], subjectOff: false })} />
         )
@@ -167,7 +173,7 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
         ) : (
           <p className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-secondary text-body-s text-ink-soft">
             <Eye aria-hidden className="size-4" />
-            {t("assistant.viewOnly", { name: chat!.owner.name })}
+            {t(assistant.viewOnly, "View only · shared by {name}", { name: chat!.owner.name })}
           </p>
         )
       }
@@ -228,7 +234,7 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
         {dropping > 0 && (
           <div className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-2 rounded-panel border-2 border-dashed border-ring bg-card/90 text-body text-ink">
             <Upload aria-hidden className="size-6 text-ink-soft" />
-            {t("assistant.drop")}
+            {t(assistant.drop, "Drop to attach")}
           </div>
         )}
       </div>
@@ -238,10 +244,10 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
           if (!open) setConfirm(null);
         }}
         tone="error"
-        title={t(confirm === null ? "assistant.delete.title" : `assistant.${confirm.kind}.title`)}
-        description={confirm === null || confirm.kind === "clear" ? t("assistant.clear.description") : (confirm.chat.title ?? t("assistant.newChat"))}
-        confirmLabel={t(confirm === null ? "assistant.delete" : confirm.kind === "clear" ? "assistant.history.clear" : `assistant.${confirm.kind}`)}
-        labels={{ cancel: t("assistant.edit.cancel") }}
+        title={CONFIRM[confirm?.kind ?? "delete"].title(t)}
+        description={confirm === null || confirm.kind === "clear" ? t(assistant.clear.description, "Your archived chats are deleted; the archived ones shared with you, left.") : (confirm.chat.title ?? t(assistant.newChat, "New chat"))}
+        confirmLabel={CONFIRM[confirm?.kind ?? "delete"].action(t)}
+        labels={{ cancel: t(assistant.edit.cancel, "Cancel") }}
         onConfirm={() => confirmed(confirm!)}
       />
     </ControlsContext.Provider>
@@ -277,16 +283,16 @@ function Empty({ subject, onAsk }: { subject: Listed | null; onAsk: (text: strin
         <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-ink">
           <Sparkles aria-hidden className="size-5" />
         </span>
-        <h2 className="text-body-l font-semibold text-ink">{name ? t("assistant.empty.about", { name }) : t("assistant.empty")}</h2>
+        <h2 className="text-body-l font-semibold text-ink">{name ? t(assistant.empty.about, "What about {name}?", { name }) : t(assistant.empty, "What do you want to know?")}</h2>
         <p className="text-body-s text-ink-soft">
-          {t("assistant.empty.hint.before")}
+          {t(assistant.empty.hint.before, "Preview: answers are canned, nothing is sent. Name a location with ")}
           <Kbd>@</Kbd>
-          {t("assistant.empty.hint.between")}
+          {t(assistant.empty.hint.between, ", pick a command with ")}
           <Kbd>/</Kbd>
-          {t("assistant.empty.hint.after")}
+          {t(assistant.empty.hint.after, ".")}
         </p>
       </div>
-      <div role="menu" aria-label={t("assistant.suggest")} data-enter="stagger" className="flex flex-col">
+      <div role="menu" aria-label={t(assistant.suggest, "Suggestions")} data-enter="stagger" className="flex flex-col">
         {suggestions(subject, tags).map((q) => (
           <button
             key={q}

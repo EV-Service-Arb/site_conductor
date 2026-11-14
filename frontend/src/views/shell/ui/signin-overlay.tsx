@@ -18,6 +18,7 @@ import {
 } from "@/shared/api";
 import { useT } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
+import { signin } from "@/entities/session";
 
 /** Past this the person is sent to the full-page sign-in instead of waiting on a bundle that may never come. */
 const BUNDLE_BUDGET_MS = 5000;
@@ -81,11 +82,11 @@ export function SignInOverlay() {
       {state === "dismissed" && (
         <Empty className="fixed inset-0 z-50 bg-background">
           <EmptyHeader>
-            <EmptyTitle>{t("signin.expired.title")}</EmptyTitle>
-            <EmptyDescription>{t("signin.expired.body")}</EmptyDescription>
+            <EmptyTitle>{t(signin.expired.title, "Your session has ended")}</EmptyTitle>
+            <EmptyDescription>{t(signin.expired.body, "Sign in to continue.")}</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button size={button()} onClick={openOverlay}>{t("signin.expired.action")}</Button>
+            <Button size={button()} onClick={openOverlay}>{t(signin.expired.action, "Sign in")}</Button>
           </EmptyContent>
         </Empty>
       )}

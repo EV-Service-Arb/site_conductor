@@ -7,6 +7,7 @@ import { type Prices, setPrices } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
+import { prices as pricesKeys } from "../model/i18n";
 
 const tokens = (raw: string) => (raw.trim() !== "" && Number.isSafeInteger(Number(raw)) && Number(raw) >= 0 ? Number(raw) : null);
 
@@ -28,8 +29,8 @@ export function PricesCard({ prices, onSaved }: { prices: Prices; onSaved: () =>
   return (
     <Card className="gap-3 py-4">
       <CardContent className="flex flex-col gap-3 px-4">
-        <h2 className="text-sm font-semibold text-ink">{t("prices.title")}</h2>
-        <p className="text-xs text-ink-soft">{t("prices.why")}</p>
+        <h2 className="text-sm font-semibold text-ink">{t(pricesKeys.title, "Places on the shared keys")}</h2>
+        <p className="text-xs text-ink-soft">{t(pricesKeys.why, "Tokens a Google Places request costs when a person has no Maps key of their own that answers. Cached answers and own keys cost nothing.")}</p>
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={(e) => {
@@ -38,7 +39,7 @@ export function PricesCard({ prices, onSaved }: { prices: Prices; onSaved: () =>
             setBusy(true);
             setPrices({ details: d, search: s, autocomplete: a })
               .then(() => {
-                toast.positive(t("prices.saved"));
+                toast.positive(t(pricesKeys.saved, "Prices saved"));
                 onSaved();
               })
               .catch((err: unknown) => notifyFailure(err, t))
@@ -46,22 +47,22 @@ export function PricesCard({ prices, onSaved }: { prices: Prices; onSaved: () =>
           }}
         >
           <Field className="w-36">
-            <FieldLabel htmlFor={`${id}-details`}>{t("prices.details")}</FieldLabel>
-            <Input id={`${id}-details`} type="number" inputMode="numeric" min={0} size={size} value={details} onChange={(e) => setDetails(e.target.value)} placeholder={t("prices.unset")} />
+            <FieldLabel htmlFor={`${id}-details`}>{t(pricesKeys.details, "Lookup (details)")}</FieldLabel>
+            <Input id={`${id}-details`} type="number" inputMode="numeric" min={0} size={size} value={details} onChange={(e) => setDetails(e.target.value)} placeholder={t(pricesKeys.unset, "not priced")} />
           </Field>
           <Field className="w-36">
-            <FieldLabel htmlFor={`${id}-search`}>{t("prices.search")}</FieldLabel>
-            <Input id={`${id}-search`} type="number" inputMode="numeric" min={0} size={size} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("prices.unset")} />
+            <FieldLabel htmlFor={`${id}-search`}>{t(pricesKeys.search, "Search")}</FieldLabel>
+            <Input id={`${id}-search`} type="number" inputMode="numeric" min={0} size={size} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t(pricesKeys.unset, "not priced")} />
           </Field>
           <Field className="w-36">
-            <FieldLabel htmlFor={`${id}-autocomplete`}>{t("prices.autocomplete")}</FieldLabel>
-            <Input id={`${id}-autocomplete`} type="number" inputMode="numeric" min={0} size={size} value={autocomplete} onChange={(e) => setAutocomplete(e.target.value)} placeholder={t("prices.unset")} />
+            <FieldLabel htmlFor={`${id}-autocomplete`}>{t(pricesKeys.autocomplete, "Suggestions (as typed)")}</FieldLabel>
+            <Input id={`${id}-autocomplete`} type="number" inputMode="numeric" min={0} size={size} value={autocomplete} onChange={(e) => setAutocomplete(e.target.value)} placeholder={t(pricesKeys.unset, "not priced")} />
           </Field>
           <Button type="submit" size={button("sm")} disabled={busy || d === null || s === null || a === null || !changed}>
-            {t("prices.save")}
+            {t(pricesKeys.save, "Save")}
           </Button>
         </form>
-        {(prices.details === null || prices.search === null || prices.autocomplete === null) && <p className="text-xs text-accent-warn">{t("prices.unpriced")}</p>}
+        {(prices.details === null || prices.search === null || prices.autocomplete === null) && <p className="text-xs text-accent-warn">{t(pricesKeys.unpriced, "Not priced: requests on the shared keys are refused for everyone without a key of their own.")}</p>}
       </CardContent>
     </Card>
   );

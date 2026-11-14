@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { may, useMe } from "@/entities/session";
-import { type LedgerEntry, UsageFigures, fetchLedger, fetchUsage, useTokens } from "@/entities/tokens";
+import { type LedgerEntry, UsageFigures, fetchLedger, fetchUsage, useTokens, tokens as tokensKeys } from "@/entities/tokens";
 import { ClaimButton } from "@/features/claim-kickbacks";
 import { ROUTES } from "@/shared/config/routes";
-import { useLocale, useT } from "@/shared/i18n";
+import { type T, useLocale, useT, account } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { useResource } from "@/shared/lib/use-resource";
 import { ErrorState } from "@/shared/ui/error-state";
@@ -16,6 +16,14 @@ import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
 
 const PAGE = 50;
+
+const KIND_NAME = {
+  accrual: (t) => t(tokensKeys.kind.accrual, "Daily renewal"),
+  add: (t) => t(tokensKeys.kind.add, "Added"),
+  charge: (t) => t(tokensKeys.kind.charge, "Charge"),
+  kickback: (t) => t(tokensKeys.kind.kickback, "Given back"),
+  set: (t) => t(tokensKeys.kind.set, "Set"),
+} satisfies Record<LedgerEntry["kind"], (t: T) => string>;
 
 export function TokensView() {
   const t = useT();
@@ -32,29 +40,29 @@ export function TokensView() {
   return (
     <PageFrame
       breakpoint="md"
-      title={t("tokens.title")}
-      description={t("tokens.description")}
+      title={t(tokensKeys.title, "Tokens")}
+      description={t(tokensKeys.description, "What your walks may spend, what is owed back to you, and every change.")}
       width="content"
       actions={
         may(me, "sa:admin:tokens:grant") && (
           <Link className="text-sm text-ink hover:underline" href={ROUTES.adminTokens}>
-            {t("tokens.admin")}
+            {t(tokensKeys.admin, "All balances")}
           </Link>
         )
       }
     >
-      <Section title={t("tokens.balance")}>
+      <Section title={t(tokensKeys.balance, "Now")}>
         {tokens.status === "loading" && <Skeleton className="h-10 w-48" />}
         {tokens.status === "error" && <ErrorState failure={tokens.failure} onRetry={tokens.reload} />}
         {tokens.status === "ok" && (
           <>
-            <span className="text-2xl font-semibold tabular-nums">{t("tokens.count", { n: tokens.data.balance })}</span>
-            <p className="text-sm text-ink-soft">{t("account.tokens.renewal", { daily: tokens.data.daily, cap: tokens.data.cap })}</p>
+            <span className="text-2xl font-semibold tabular-nums">{t(tokensKeys.count, "{n} tokens", { n: tokens.data.balance })}</span>
+            <p className="text-sm text-ink-soft">{t(account.tokens.renewal, "+{daily} a day, up to {cap}", { daily: tokens.data.daily, cap: tokens.data.cap })}</p>
           </>
         )}
       </Section>
       {tokens.status === "ok" && tokens.data.kickbacks.length > 0 && (
-        <Section title={t("tokens.kickbacks")}>
+        <Section title={t(tokensKeys.kickbacks, "Owed back")}>
           <ul className="flex flex-col gap-1 text-sm">
             {tokens.data.kickbacks.map((k) => (
               <li key={k.id} className="flex items-baseline gap-3">
@@ -68,12 +76,12 @@ export function TokensView() {
           </div>
         </Section>
       )}
-      <Section title={t("account.usage")}>
+      <Section title={t(account.usage, "Usage")}>
         {usage.status === "loading" && <Skeleton className="h-24 w-full" />}
         {usage.status === "error" && <ErrorState failure={usage.failure} onRetry={usage.reload} />}
         {usage.status === "ok" && <UsageFigures days={usage.data} />}
       </Section>
-      <Section title={t("tokens.ledger")}>
+      <Section title={t(tokensKeys.ledger, "History")}>
         <Ledger key={ledgerVersion} />
       </Section>
     </PageFrame>
@@ -117,7 +125,7 @@ function Ledger() {
     }
   };
 
-  if (entries.length === 0) return <p className="text-sm text-ink-soft">{t("tokens.ledger.empty")}</p>;
+  if (entries.length === 0) return <p className="text-sm text-ink-soft">{t(tokensKeys.ledger.empty, "Nothing yet.")}</p>;
   return (
     <>
       <ul className="flex flex-col divide-y divide-border text-sm">
@@ -127,7 +135,7 @@ function Ledger() {
               {e.delta > 0 ? `+${e.delta}` : e.delta}
             </span>
             <span className="min-w-0 truncate text-ink">
-              {t(`tokens.kind.${e.kind}`)}
+              {KIND_NAME[e.kind](t)}
               {(e.label ?? e.note) && <span className="text-ink-soft"> · {e.label ?? e.note}</span>}
               {e.by && <span className="text-ink-soft"> · {e.by}</span>}
             </span>
@@ -138,7 +146,7 @@ function Ledger() {
       {next !== null && (
         <div>
           <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void loadMore(next)}>
-            {t("tokens.ledger.more")}
+            {t(tokensKeys.ledger.more, "More")}
           </Button>
         </div>
       )}

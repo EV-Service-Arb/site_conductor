@@ -22,6 +22,7 @@ import { type Listed, narrowed, useGmails } from "@/entities/gmb";
 import { type T, useT } from "@/shared/i18n";
 
 import { type Approval, setApproval } from "../model/chat";
+import { assistant } from "@/entities/assistant";
 
 export interface Draft {
   text: string;
@@ -50,10 +51,10 @@ export function keepDraft(chat: string | null, draft: Draft): void {
 }
 
 const COMMANDS = [
-  { id: "status", prompt: (s: string | null) => (s ? `How is @${s} doing?` : "Which locations need me today?") },
-  { id: "appeal", prompt: (s: string | null) => (s ? `Appeal the suspended reviews at @${s}` : "Appeal the suspended reviews") },
-  { id: "leads", prompt: (s: string | null) => (s ? `Which overdue leads at @${s} first?` : "Which overdue leads first?") },
-  { id: "triage", prompt: () => "Which locations need me today?" },
+  { id: "status", name: (t: T) => t(assistant.command.status, "How is it doing"), prompt: (s: string | null) => (s ? `How is @${s} doing?` : "Which locations need me today?") },
+  { id: "appeal", name: (t: T) => t(assistant.command.appeal, "Appeal suspended reviews"), prompt: (s: string | null) => (s ? `Appeal the suspended reviews at @${s}` : "Appeal the suspended reviews") },
+  { id: "leads", name: (t: T) => t(assistant.command.leads, "Overdue leads first"), prompt: (s: string | null) => (s ? `Which overdue leads at @${s} first?` : "Which overdue leads first?") },
+  { id: "triage", name: (t: T) => t(assistant.command.triage, "What needs me today"), prompt: () => "Which locations need me today?" },
 ] as const;
 
 type Picking = { kind: "mention"; query: string; from: number } | { kind: "command"; query: string };
@@ -171,11 +172,11 @@ export function Composer({
         <div
           role="listbox"
           id="assistant-picker"
-          aria-label={t(picking.kind === "mention" ? "assistant.pick.locations" : "assistant.pick.commands")}
+          aria-label={(picking.kind === "mention" ? t(assistant.pick.locations, "Locations") : t(assistant.pick.commands, "Commands"))}
           className="absolute inset-x-0 bottom-full z-10 mb-1.5 flex flex-col overflow-hidden rounded-xl border border-border bg-popover p-1.5 shadow-overlay"
           onMouseDown={(e) => e.preventDefault()}
         >
-          <div className="px-2 pt-1 pb-1.5 text-caption text-ink-soft">{t(picking.kind === "mention" ? "assistant.pick.locations" : "assistant.pick.commands")}</div>
+          <div className="px-2 pt-1 pb-1.5 text-caption text-ink-soft">{(picking.kind === "mention" ? t(assistant.pick.locations, "Locations") : t(assistant.pick.commands, "Commands"))}</div>
           {picking.kind === "mention"
             ? locations.map((l, i) => (
                 <Option key={l.gmb.id} active={i === active} onHover={() => setActive(i)} onChoose={() => choose(i)}>
@@ -187,7 +188,7 @@ export function Composer({
             : commands.map((c, i) => (
                 <Option key={c.id} active={i === active} onHover={() => setActive(i)} onChoose={() => choose(i)}>
                   <Slash aria-hidden className="size-4 shrink-0 text-ink-soft" />
-                  <span className="text-ink">{t(`assistant.command.${c.id}`)}</span>
+                  <span className="text-ink">{c.name(t)}</span>
                   <span className="ml-auto pl-3 font-mono text-caption text-ink-faint">/{c.id}</span>
                 </Option>
               ))}
@@ -200,20 +201,20 @@ export function Composer({
         onSend={send}
         streaming={streaming}
         onStop={onStop}
-        placeholder={name ? t("assistant.placeholder.about", { name: name.length > 28 ? `${name.slice(0, 27).trimEnd()}…` : name }) : t("assistant.placeholder")}
-        labels={{ field: t("assistant.field"), send: t("assistant.send"), stop: t("assistant.stop"), attach: t("assistant.attach") }}
+        placeholder={name ? t(assistant.placeholder.about, "Ask about {name}, or any location…", { name: name.length > 28 ? `${name.slice(0, 27).trimEnd()}…` : name }) : t(assistant.placeholder, "Ask about your locations…")}
+        labels={{ field: t(assistant.field, "Message"), send: t(assistant.send, "Send"), stop: t(assistant.stop, "Stop"), attach: t(assistant.attach, "Attach files") }}
         attachments={
           chips ? (
             <>
               {subjectShown && (
-                <Chip title={t("assistant.context.page")} onRemove={() => setDraft((d) => ({ ...d, subjectOff: true }))} removeLabel={t("assistant.context.remove", { name: name! })}>
+                <Chip title={t(assistant.context.page, "The location this page is on")} onRemove={() => setDraft((d) => ({ ...d, subjectOff: true }))} removeLabel={t(assistant.context.remove, "Remove {name}", { name: name! })}>
                   <MapPin aria-hidden className="size-3.5 shrink-0 text-ink-soft" />
                   <span className="max-w-48 truncate">{name}</span>
-                  <span className="shrink-0 text-ink-faint">· {t("assistant.context.here")}</span>
+                  <span className="shrink-0 text-ink-faint">· {t(assistant.context.here, "this page")}</span>
                 </Chip>
               )}
               {draft.files.map((f, i) => (
-                <Chip key={i} onRemove={() => setDraft((d) => ({ ...d, files: d.files.filter((_, j) => j !== i) }))} removeLabel={t("assistant.context.remove", { name: f.name })}>
+                <Chip key={i} onRemove={() => setDraft((d) => ({ ...d, files: d.files.filter((_, j) => j !== i) }))} removeLabel={t(assistant.context.remove, "Remove {name}", { name: f.name })}>
                   {f.preview !== null ? <Image unoptimized src={f.preview.url} alt="" width={16} height={16} className="size-4 rounded-sm object-cover" /> : <FileText aria-hidden className="size-3.5 text-ink-soft" />}
                   <span className="max-w-32 truncate">{f.name}</span>
                 </Chip>
@@ -225,23 +226,23 @@ export function Composer({
           <>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <IconButton size="sm" aria-label={t("assistant.add")} tooltip={t("assistant.add")} className="rounded-full">
+                <IconButton size="sm" aria-label={t(assistant.add, "Add files and context")} tooltip={t(assistant.add, "Add files and context")} className="rounded-full">
                   <Plus />
                 </IconButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 <DropdownMenuItem onClick={() => fileInput.current?.click()}>
                   <Paperclip aria-hidden />
-                  {t("assistant.attach")}
+                  {t(assistant.attach, "Attach files")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => requestAnimationFrame(() => insert("@"))}>
                   <AtSign aria-hidden />
-                  {t("assistant.mention")}
+                  {t(assistant.mention, "Mention a location")}
                 </DropdownMenuItem>
                 {subject !== null && draft.subjectOff && (
                   <DropdownMenuItem onClick={() => setDraft((d) => ({ ...d, subjectOff: false }))}>
                     <MapPin aria-hidden />
-                    {t("assistant.context.add", { name: name! })}
+                    {t(assistant.context.add, "Ask about {name}", { name: name! })}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
@@ -313,26 +314,31 @@ function Chip({ title, onRemove, removeLabel, children }: { title?: string; onRe
   );
 }
 
+const APPROVAL = {
+  ask: { name: (t) => t(assistant.approval.ask, "Ask first"), hint: (t) => t(assistant.approval.ask.hint, "Proposes actions; you press to take one") },
+  act: { name: (t) => t(assistant.approval.act, "Act on its own"), hint: (t) => t(assistant.approval.act.hint, "Takes the first action at once; you can undo it") },
+} satisfies Record<Approval, { name: (t: T) => string; hint: (t: T) => string }>;
+
 /** Whether the assistant waits for a press before acting. */
 function ApprovalChip({ approval, t }: { approval: Approval; t: T }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label={`${t("assistant.approval")}: ${t(`assistant.approval.${approval}`)}`}
+        aria-label={`${t(assistant.approval, "Before acting")}: ${APPROVAL[approval].name(t)}`}
         className="inline-flex h-7 items-center gap-1 rounded-full pr-2 pl-2.5 text-body-s text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-hover"
       >
-        {t(`assistant.approval.${approval}`)}
+        {APPROVAL[approval].name(t)}
         <ChevronDown aria-hidden className="size-3.5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
-        <DropdownMenuLabel>{t("assistant.approval")}</DropdownMenuLabel>
+        <DropdownMenuLabel>{t(assistant.approval, "Before acting")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup value={approval} onValueChange={(v) => setApproval(v as Approval)}>
           {(["ask", "act"] as const).map((a) => (
             <DropdownMenuRadioItem key={a} value={a} className="items-start">
               <span className="flex flex-col">
-                <span>{t(`assistant.approval.${a}`)}</span>
-                <span className="text-caption text-ink-soft">{t(`assistant.approval.${a}.hint`)}</span>
+                <span>{APPROVAL[a].name(t)}</span>
+                <span className="text-caption text-ink-soft">{APPROVAL[a].hint(t)}</span>
               </span>
             </DropdownMenuRadioItem>
           ))}

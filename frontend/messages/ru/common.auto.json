@@ -1,0 +1,3026 @@
+{
+  "access.account": {
+    "en": "Signed in as",
+    "t": "Вы вошли как"
+  },
+  "access.body": {
+    "en": "Your EV account is ready — it just needs access.",
+    "t": "Ваш аккаунт EV готов — осталось получить доступ."
+  },
+  "access.cancel": {
+    "en": "Cancel and return to Claude Code",
+    "t": "Отменить и вернуться в Claude Code"
+  },
+  "access.in.body": {
+    "en": "The admins granted your access.",
+    "t": "Администраторы выдали вам доступ."
+  },
+  "access.in.open": {
+    "en": "Open the panel",
+    "t": "Открыть панель"
+  },
+  "access.in.title": {
+    "en": "You’re in",
+    "t": "Доступ есть"
+  },
+  "access.invalid.body": {
+    "en": "It names no access the Service-Arb panel gives. Go back to where you came from and start again.",
+    "t": "Она не называет доступ, который выдаёт панель Service-Arb. Вернитесь туда, откуда пришли, и начните заново."
+  },
+  "access.invalid.title": {
+    "en": "This link is not valid",
+    "t": "Ссылка недействительна"
+  },
+  "access.playbook.title": {
+    "en": "No access to the playbook yet",
+    "t": "Доступа к плейбуку пока нет"
+  },
+  "access.request": {
+    "en": "Request access",
+    "t": "Запросить доступ"
+  },
+  "access.sent.body": {
+    "en": "The Service-Arb admins have your email.",
+    "t": "Администраторы Service-Arb получили ваш email."
+  },
+  "access.sent.title": {
+    "en": "Request sent",
+    "t": "Запрос отправлен"
+  },
+  "access.step.back": {
+    "en": "Back in Claude Code",
+    "t": "Вернуться в Claude Code"
+  },
+  "access.step.back.hint": {
+    "en": "The connection finishes on its own. Closed the tab? Run /mcp → service-arb → Authenticate.",
+    "t": "Подключение завершится само. Закрыли вкладку? Выполните /mcp → service-arb → Authenticate."
+  },
+  "access.step.request": {
+    "en": "Request access",
+    "t": "Запросить доступ"
+  },
+  "access.step.request.hint": {
+    "en": "We’ll message the Service-Arb admins with your email.",
+    "t": "Мы напишем администраторам Service-Arb и передадим ваш email."
+  },
+  "access.step.request.sent": {
+    "en": "Sent · {time}",
+    "t": "Отправлено · {time}"
+  },
+  "access.step.request.sentNow": {
+    "en": "Sent just now · {time}",
+    "t": "Отправлено только что · {time}"
+  },
+  "access.step.wait": {
+    "en": "Wait for approval",
+    "t": "Дождаться одобрения"
+  },
+  "access.step.wait.hint": {
+    "en": "Usually within a working day. Keep this tab open — it continues by itself once you’re in.",
+    "t": "Обычно в течение рабочего дня. Не закрывайте вкладку — всё продолжится само, как только доступ появится."
+  },
+  "access.switch": {
+    "en": "Use a different account",
+    "t": "Войти другим аккаунтом"
+  },
+  "access.title": {
+    "en": "No access yet",
+    "t": "Доступа пока нет"
+  },
+  "access.waiting": {
+    "en": "Waiting for approval — checking every 30 s",
+    "t": "Ждём одобрения — проверяем каждые 30 с"
+  },
+  "account.access": {
+    "en": "Access",
+    "t": "Доступ"
+  },
+  "account.access.none": {
+    "en": "No Service-Arb permissions yet.",
+    "t": "Прав в Service-Arb пока нет."
+  },
+  "account.access.playbook": {
+    "en": "Playbook",
+    "t": "Playbook"
+  },
+  "account.actAs": {
+    "en": "View as member…",
+    "t": "Смотреть как участник…"
+  },
+  "account.alerts": {
+    "en": "Alerts",
+    "t": "Оповещения"
+  },
+  "account.alerts.hint": {
+    "en": "Where your alerts go: your Telegram, channels and groups.",
+    "t": "Куда приходят оповещения: ваш Telegram, каналы и группы."
+  },
+  "account.cancel": {
+    "en": "Cancel",
+    "t": "Отмена"
+  },
+  "account.checkedAt": {
+    "en": "Checked {at}",
+    "t": "Проверено {at}"
+  },
+  "account.gbps": {
+    "en": "{n} GBP",
+    "t": "{n} GBP"
+  },
+  "account.imap.appPassword": {
+    "en": "App password",
+    "t": "Пароль приложения"
+  },
+  "account.imap.connect": {
+    "en": "Connect",
+    "t": "Подключить"
+  },
+  "account.imap.connected": {
+    "en": "Connected",
+    "t": "Подключена"
+  },
+  "account.imap.failing": {
+    "en": "Failing",
+    "t": "Ошибка"
+  },
+  "account.imap.host": {
+    "en": "Server",
+    "t": "Сервер"
+  },
+  "account.imap.how": {
+    "en": "Google account → Security → 2-step verification → App passwords. Checked by logging in before it is kept; never shown again.",
+    "t": "Аккаунт Google → Безопасность → Двухэтапная аутентификация → Пароли приложений. Проверяется входом до сохранения; больше не показывается."
+  },
+  "account.imap.password": {
+    "en": "App password",
+    "t": "Пароль приложения"
+  },
+  "account.imap.title": {
+    "en": "Email · IMAP",
+    "t": "Почта · IMAP"
+  },
+  "account.imap.username": {
+    "en": "Login",
+    "t": "Логин"
+  },
+  "account.imap.why": {
+    "en": "Inbox alerts and email automations will read it; nothing reads mail yet.",
+    "t": "Её будут читать оповещения о письмах и автоматизации почты; пока почту ничто не читает."
+  },
+  "account.integrations": {
+    "en": "Integrations",
+    "t": "Интеграции"
+  },
+  "account.mapsKey.add": {
+    "en": "Check and keep",
+    "t": "Проверить и сохранить"
+  },
+  "account.mapsKey.cost": {
+    "en": "On the shared keys: {details} tokens a lookup, {search} a search, {autocomplete} a suggestion.",
+    "t": "На общих ключах: {details} токенов за запрос места, {search} за поиск, {autocomplete} за подсказку."
+  },
+  "account.mapsKey.failing": {
+    "en": "Failing",
+    "t": "Ошибка"
+  },
+  "account.mapsKey.key": {
+    "en": "Key",
+    "t": "Ключ"
+  },
+  "account.mapsKey.order": {
+    "en": "Tried first for this gmail's GBPs, then for your other gmails', before the shared keys. Your own key costs no tokens.",
+    "t": "Используется первым для GBP этого gmail, затем для ваших других gmail, до общих ключей. Свой ключ не тратит токены."
+  },
+  "account.mapsKey.out": {
+    "en": "Passed over now: {why}",
+    "t": "Сейчас пропускается: {why}"
+  },
+  "account.mapsKey.set": {
+    "en": "Set",
+    "t": "Задан"
+  },
+  "account.mapsKey.title": {
+    "en": "Google Maps key",
+    "t": "Ключ Google Maps"
+  },
+  "account.mapsKey.unpriced": {
+    "en": "The shared keys are not priced yet: without a key of your own, Google lookups are refused.",
+    "t": "Цены на общие ключи не заданы: без своего ключа запросы к Google отклоняются."
+  },
+  "account.mapsKey.works": {
+    "en": "Works",
+    "t": "Работает"
+  },
+  "account.open": {
+    "en": "Connections of {gmail}",
+    "t": "Подключения {gmail}"
+  },
+  "account.remove": {
+    "en": "Remove",
+    "t": "Убрать"
+  },
+  "account.replace": {
+    "en": "Replace",
+    "t": "Заменить"
+  },
+  "account.setAt": {
+    "en": "set {at}",
+    "t": "задан {at}"
+  },
+  "account.tab.browser": {
+    "en": "Browser",
+    "t": "Браузер"
+  },
+  "account.tab.connections": {
+    "en": "Connections",
+    "t": "Подключения"
+  },
+  "account.test": {
+    "en": "Test",
+    "t": "Проверить"
+  },
+  "account.tokens.renewal": {
+    "en": "+{daily} a day, up to {cap}",
+    "t": "+{daily} в день, до {cap}"
+  },
+  "account.unavailable": {
+    "en": "Your account could not be loaded.",
+    "t": "Не удалось загрузить аккаунт."
+  },
+  "account.usage": {
+    "en": "Usage",
+    "t": "Использование"
+  },
+  "account.usage.charges": {
+    "en": "{n} walks paid",
+    "t": "Оплачено обходов: {n}"
+  },
+  "account.usage.chart": {
+    "en": "Tokens spent per day, last 30 days",
+    "t": "Токены по дням, последние 30 дней"
+  },
+  "account.usage.month": {
+    "en": "Last 30 days",
+    "t": "За 30 дней"
+  },
+  "account.usage.places": {
+    "en": "Places tracked now",
+    "t": "Отслеживается мест"
+  },
+  "account.usage.spent": {
+    "en": "{n} tokens spent",
+    "t": "Потрачено токенов: {n}"
+  },
+  "account.usage.unavailable": {
+    "en": "Usage can't be shown right now.",
+    "t": "Использование сейчас не показать."
+  },
+  "account.usage.week": {
+    "en": "Last 7 days",
+    "t": "За 7 дней"
+  },
+  "add.country.none": {
+    "en": "Google gives this place no country.",
+    "t": "Google не даёт этому месту страны."
+  },
+  "add.country.pick": {
+    "en": "Pick its country",
+    "t": "Выберите страну"
+  },
+  "add.find": {
+    "en": "Find it on Google",
+    "t": "Найти в Google"
+  },
+  "add.find.placeholder": {
+    "en": "Its name and city, a Maps link or a place id",
+    "t": "Название и город, ссылка Google Maps или id места"
+  },
+  "add.gmail.add": {
+    "en": "Add",
+    "t": "Добавить"
+  },
+  "add.gmail.new": {
+    "en": "New gmail…",
+    "t": "Новый gmail…"
+  },
+  "add.gmail.new.placeholder": {
+    "en": "name@gmail.com",
+    "t": "name@gmail.com"
+  },
+  "add.gmail.pick": {
+    "en": "Pick a gmail",
+    "t": "Выберите gmail"
+  },
+  "add.name.unnamed": {
+    "en": "Google gives this place no name.",
+    "t": "Google не даёт этому месту названия."
+  },
+  "add.optional": {
+    "en": "optional for a draft",
+    "t": "необязательно для черновика"
+  },
+  "add.picked.clear": {
+    "en": "Pick another",
+    "t": "Выбрать другое"
+  },
+  "add.picked.noPoint": {
+    "en": "no point from Google",
+    "t": "Google не дал точку"
+  },
+  "add.state.draft.hint": {
+    "en": "Not on Google yet. Everything Google's form asks is filled on its Launch tab.",
+    "t": "Ещё не в Google. Всё, что спрашивает форма Google, заполняется на вкладке запуска."
+  },
+  "add.state.suspended.hint": {
+    "en": "Hidden from Maps, so Google won't find it: its place comes once it is reinstated.",
+    "t": "Скрыт с Карт, Google его не найдёт: место появится после восстановления."
+  },
+  "add.state.verified.hint": {
+    "en": "Public on Maps: Google has its place, its point and its country.",
+    "t": "Виден на Картах: у Google есть его место, точка и страна."
+  },
+  "add.state.verifying.hint": {
+    "en": "Sent to Google, not published yet, so not findable: its place comes once verified.",
+    "t": "Отправлен в Google, но ещё не опубликован, поэтому не находится: место появится после подтверждения."
+  },
+  "add.suggestions": {
+    "en": "Google's suggestions · one request per pause in typing · paid once, then kept",
+    "t": "Подсказки Google · один запрос на паузу в наборе · оплачивается один раз, потом хранится"
+  },
+  "add.where": {
+    "en": "Where",
+    "t": "Где"
+  },
+  "add.where.hint": {
+    "en": "Its point on the map, and its country, which its reviews' language follows.",
+    "t": "Его точка на карте и страна, по которой выбирается язык отзывов."
+  },
+  "add.where.placeholder": {
+    "en": "An address, a street or a business nearby",
+    "t": "Адрес, улица или организация рядом"
+  },
+  "alerts.chats": {
+    "en": "Channels and groups",
+    "t": "Каналы и группы"
+  },
+  "alerts.chats.add": {
+    "en": "Channel, group or topic",
+    "t": "Канал, группа или тема"
+  },
+  "alerts.chats.addButton": {
+    "en": "Add",
+    "t": "Добавить"
+  },
+  "alerts.chats.hint": {
+    "en": "Add {bot} to it as an admin, then paste @channel, its -100… id, or <group id>/<topic id>.",
+    "t": "Добавьте туда {bot} администратором, затем вставьте @канал, его id -100… или <id группы>/<id темы>."
+  },
+  "alerts.chats.linkFirst": {
+    "en": "Connect your own Telegram first: the bot checks with it that you run the channel.",
+    "t": "Сначала подключите свой Telegram: по нему бот проверяет, что вы администратор канала."
+  },
+  "alerts.chats.noPii": {
+    "en": "Without contact details or buttons: whoever is in the chat reads it.",
+    "t": "Без контактов и кнопок: это читают все в чате."
+  },
+  "alerts.connect": {
+    "en": "Connect Telegram",
+    "t": "Подключить Telegram"
+  },
+  "alerts.connect.hint": {
+    "en": "Opens the bot: press Start there.",
+    "t": "Откроется бот: нажмите там «Старт»."
+  },
+  "alerts.dead": {
+    "en": "Nothing reaches it: {why}. Fix it, then Test.",
+    "t": "Сюда ничего не доходит: {why}. Исправьте и нажмите «Проверить»."
+  },
+  "alerts.description": {
+    "en": "Where your alerts go, and which go where.",
+    "t": "Куда приходят оповещения и какие куда."
+  },
+  "alerts.gmail": {
+    "en": "Reviews of",
+    "t": "Отзывы"
+  },
+  "alerts.gmail.all": {
+    "en": "Every gmail",
+    "t": "Всех gmail"
+  },
+  "alerts.kind.channel": {
+    "en": "channel",
+    "t": "канал"
+  },
+  "alerts.kind.group": {
+    "en": "group",
+    "t": "группа"
+  },
+  "alerts.kind.private": {
+    "en": "Your chat",
+    "t": "Ваш чат"
+  },
+  "alerts.none": {
+    "en": "Your access has nothing to alert you of.",
+    "t": "С вашим доступом оповещать не о чем."
+  },
+  "alerts.off": {
+    "en": "Telegram is not set up on this server.",
+    "t": "Telegram на этом сервере не настроен."
+  },
+  "alerts.own": {
+    "en": "Your Telegram",
+    "t": "Ваш Telegram"
+  },
+  "alerts.remove": {
+    "en": "Remove",
+    "t": "Убрать"
+  },
+  "alerts.rule.access_requested": {
+    "en": "Access requests",
+    "t": "Запросы доступа"
+  },
+  "alerts.rule.booked": {
+    "en": "Bookings",
+    "t": "Записи"
+  },
+  "alerts.rule.contact_overdue": {
+    "en": "Leads waiting too long",
+    "t": "Заявки, ждущие слишком долго"
+  },
+  "alerts.rule.new_lead": {
+    "en": "New leads",
+    "t": "Новые заявки"
+  },
+  "alerts.rule.payment_received": {
+    "en": "Payments",
+    "t": "Платежи"
+  },
+  "alerts.rule.review_changed": {
+    "en": "Edited reviews",
+    "t": "Изменённые отзывы"
+  },
+  "alerts.rule.review_gone": {
+    "en": "Removed reviews",
+    "t": "Пропавшие отзывы"
+  },
+  "alerts.rule.review_new": {
+    "en": "New reviews",
+    "t": "Новые отзывы"
+  },
+  "alerts.rule.review_reappeared": {
+    "en": "Reviews back",
+    "t": "Вернувшиеся отзывы"
+  },
+  "alerts.rule.scan_failed": {
+    "en": "Failed scans",
+    "t": "Неудачные проверки"
+  },
+  "alerts.rule.source_silent": {
+    "en": "Silent sources",
+    "t": "Молчащие источники"
+  },
+  "alerts.test": {
+    "en": "Test",
+    "t": "Проверить"
+  },
+  "alerts.title": {
+    "en": "Alerts",
+    "t": "Оповещения"
+  },
+  "alerts.topic": {
+    "en": "topic {topic}",
+    "t": "тема {topic}"
+  },
+  "app.name": {
+    "en": "Service-Arb",
+    "t": "Service-Arb"
+  },
+  "apps.elsewhere": {
+    "en": "Elsewhere",
+    "t": "Другие сервисы"
+  },
+  "apps.switch": {
+    "en": "Switch service",
+    "t": "Сменить сервис"
+  },
+  "assistant": {
+    "en": "Assistant",
+    "t": "Ассистент"
+  },
+  "assistant.add": {
+    "en": "Add files and context",
+    "t": "Файлы и контекст"
+  },
+  "assistant.approval": {
+    "en": "Before acting",
+    "t": "Перед действием"
+  },
+  "assistant.approval.act": {
+    "en": "Act on its own",
+    "t": "Действовать сам"
+  },
+  "assistant.approval.act.hint": {
+    "en": "Takes the first action at once; you can undo it",
+    "t": "Сразу выполняет первое действие, его можно отменить"
+  },
+  "assistant.approval.ask": {
+    "en": "Ask first",
+    "t": "Спрашивать"
+  },
+  "assistant.approval.ask.hint": {
+    "en": "Proposes actions; you press to take one",
+    "t": "Предлагает действия, вы нажимаете"
+  },
+  "assistant.archive": {
+    "en": "Archive",
+    "t": "В архив"
+  },
+  "assistant.attach": {
+    "en": "Attach files",
+    "t": "Приложить файлы"
+  },
+  "assistant.clear.description": {
+    "en": "Your archived chats are deleted; the archived ones shared with you, left.",
+    "t": "Ваши чаты из архива будут удалены; из чатов, которыми с вами поделились, вы выйдете."
+  },
+  "assistant.clear.title": {
+    "en": "Clear archived chats?",
+    "t": "Очистить архив?"
+  },
+  "assistant.command.appeal": {
+    "en": "Appeal suspended reviews",
+    "t": "Обжаловать скрытые отзывы"
+  },
+  "assistant.command.leads": {
+    "en": "Overdue leads first",
+    "t": "Сначала просроченные лиды"
+  },
+  "assistant.command.status": {
+    "en": "How is it doing",
+    "t": "Как дела"
+  },
+  "assistant.command.triage": {
+    "en": "What needs me today",
+    "t": "Что требует внимания"
+  },
+  "assistant.conflict": {
+    "en": "Someone wrote in this chat meanwhile: it is read again, and your message kept",
+    "t": "В чате тем временем написали: он перечитан, ваше сообщение сохранено"
+  },
+  "assistant.context": {
+    "en": "Context",
+    "t": "Контекст"
+  },
+  "assistant.context.add": {
+    "en": "Ask about {name}",
+    "t": "Спросить о {name}"
+  },
+  "assistant.context.here": {
+    "en": "this page",
+    "t": "эта страница"
+  },
+  "assistant.context.locations": {
+    "en": "Locations",
+    "t": "Локации"
+  },
+  "assistant.context.none": {
+    "en": "Nothing named or read yet",
+    "t": "Пока ничего не упомянуто и не прочитано"
+  },
+  "assistant.context.page": {
+    "en": "The location this page is on",
+    "t": "Локация этой страницы"
+  },
+  "assistant.context.read": {
+    "en": "Read",
+    "t": "Прочитано"
+  },
+  "assistant.context.remove": {
+    "en": "Remove {name}",
+    "t": "Убрать {name}"
+  },
+  "assistant.copied": {
+    "en": "Copied",
+    "t": "Скопировано"
+  },
+  "assistant.copy": {
+    "en": "Copy",
+    "t": "Копировать"
+  },
+  "assistant.copyLink": {
+    "en": "Copy link",
+    "t": "Скопировать ссылку"
+  },
+  "assistant.delete": {
+    "en": "Delete",
+    "t": "Удалить"
+  },
+  "assistant.delete.title": {
+    "en": "Delete this chat?",
+    "t": "Удалить этот чат?"
+  },
+  "assistant.display.floating": {
+    "en": "Floating",
+    "t": "В окне"
+  },
+  "assistant.display.full": {
+    "en": "Full screen",
+    "t": "Во весь экран"
+  },
+  "assistant.display.sidebar": {
+    "en": "Sidebar",
+    "t": "Сбоку"
+  },
+  "assistant.drop": {
+    "en": "Drop to attach",
+    "t": "Отпустите, чтобы приложить"
+  },
+  "assistant.edit": {
+    "en": "Edit message",
+    "t": "Изменить сообщение"
+  },
+  "assistant.edit.cancel": {
+    "en": "Cancel",
+    "t": "Отмена"
+  },
+  "assistant.edit.send": {
+    "en": "Send",
+    "t": "Отправить"
+  },
+  "assistant.empty": {
+    "en": "What do you want to know?",
+    "t": "Что хотите узнать?"
+  },
+  "assistant.empty.about": {
+    "en": "What about {name}?",
+    "t": "Что насчёт {name}?"
+  },
+  "assistant.empty.hint.after": {
+    "en": ".",
+    "t": "."
+  },
+  "assistant.empty.hint.before": {
+    "en": "Preview: answers are canned, nothing is sent. Name a location with ",
+    "t": "Превью: ответы заготовлены, ничего не отправляется. Локацию — через "
+  },
+  "assistant.empty.hint.between": {
+    "en": ", pick a command with ",
+    "t": ", команду — через "
+  },
+  "assistant.failed": {
+    "en": "This chat could not be read",
+    "t": "Не удалось прочитать чат"
+  },
+  "assistant.feedback.down": {
+    "en": "Bad answer",
+    "t": "Плохой ответ"
+  },
+  "assistant.feedback.up": {
+    "en": "Good answer",
+    "t": "Хороший ответ"
+  },
+  "assistant.field": {
+    "en": "Message",
+    "t": "Сообщение"
+  },
+  "assistant.fold": {
+    "en": "Hide",
+    "t": "Скрыть"
+  },
+  "assistant.gone": {
+    "en": "That chat was deleted, or is no longer shared with you",
+    "t": "Тот чат удалён или больше не доступен вам"
+  },
+  "assistant.history": {
+    "en": "Chat history",
+    "t": "История чатов"
+  },
+  "assistant.history.archived": {
+    "en": "Archived chats",
+    "t": "Архив чатов"
+  },
+  "assistant.history.back": {
+    "en": "Previous chats",
+    "t": "Чаты"
+  },
+  "assistant.history.clear": {
+    "en": "Clear",
+    "t": "Очистить"
+  },
+  "assistant.history.failed": {
+    "en": "Chats could not be read",
+    "t": "Не удалось прочитать чаты"
+  },
+  "assistant.history.month": {
+    "en": "Past 30 days",
+    "t": "Последние 30 дней"
+  },
+  "assistant.history.noArchived": {
+    "en": "No archived chats",
+    "t": "В архиве пусто"
+  },
+  "assistant.history.none": {
+    "en": "No chats yet",
+    "t": "Чатов пока нет"
+  },
+  "assistant.history.nothing": {
+    "en": "No chat matches",
+    "t": "Ничего не найдено"
+  },
+  "assistant.history.older": {
+    "en": "Older",
+    "t": "Раньше"
+  },
+  "assistant.history.pinned": {
+    "en": "Pinned",
+    "t": "Закреплённые"
+  },
+  "assistant.history.search": {
+    "en": "Type to search",
+    "t": "Начните печатать для поиска"
+  },
+  "assistant.history.today": {
+    "en": "Today",
+    "t": "Сегодня"
+  },
+  "assistant.history.week": {
+    "en": "Past 7 days",
+    "t": "Последние 7 дней"
+  },
+  "assistant.jump": {
+    "en": "Jump to latest",
+    "t": "К последнему"
+  },
+  "assistant.leave": {
+    "en": "Leave",
+    "t": "Покинуть"
+  },
+  "assistant.leave.title": {
+    "en": "Leave this chat?",
+    "t": "Покинуть этот чат?"
+  },
+  "assistant.linkCopied": {
+    "en": "Link copied",
+    "t": "Ссылка скопирована"
+  },
+  "assistant.log": {
+    "en": "Conversation",
+    "t": "Переписка"
+  },
+  "assistant.lost": {
+    "en": "Someone wrote in this chat meanwhile: the answer was not saved",
+    "t": "В чате тем временем написали: ответ не сохранён"
+  },
+  "assistant.mention": {
+    "en": "Mention a location",
+    "t": "Упомянуть локацию"
+  },
+  "assistant.minimize": {
+    "en": "Minimize",
+    "t": "Свернуть"
+  },
+  "assistant.more": {
+    "en": "More",
+    "t": "Ещё"
+  },
+  "assistant.new": {
+    "en": "New chat",
+    "t": "Новый чат"
+  },
+  "assistant.newChat": {
+    "en": "New chat",
+    "t": "Новый чат"
+  },
+  "assistant.notShared": {
+    "en": "This chat isn't shared with you",
+    "t": "Этим чатом с вами не поделились"
+  },
+  "assistant.pick.commands": {
+    "en": "Commands",
+    "t": "Команды"
+  },
+  "assistant.pick.locations": {
+    "en": "Locations",
+    "t": "Локации"
+  },
+  "assistant.pin": {
+    "en": "Pin",
+    "t": "Закрепить"
+  },
+  "assistant.placeholder": {
+    "en": "Ask about your locations…",
+    "t": "Спросите о ваших локациях…"
+  },
+  "assistant.placeholder.about": {
+    "en": "Ask about {name}, or any location…",
+    "t": "Спросите о {name} или любой локации…"
+  },
+  "assistant.rename": {
+    "en": "Rename",
+    "t": "Переименовать"
+  },
+  "assistant.renameTitle": {
+    "en": "Rename “{title}”",
+    "t": "Переименовать «{title}»"
+  },
+  "assistant.resize": {
+    "en": "Resize the assistant",
+    "t": "Изменить ширину ассистента"
+  },
+  "assistant.retry": {
+    "en": "Try again",
+    "t": "Ещё раз"
+  },
+  "assistant.send": {
+    "en": "Send",
+    "t": "Отправить"
+  },
+  "assistant.share": {
+    "en": "Share",
+    "t": "Поделиться"
+  },
+  "assistant.share.everyone": {
+    "en": "Everyone in Service-Arb",
+    "t": "Все в Service-Arb"
+  },
+  "assistant.share.failed": {
+    "en": "Who has access could not be read",
+    "t": "Не удалось прочитать, у кого есть доступ"
+  },
+  "assistant.share.general": {
+    "en": "General access",
+    "t": "Общий доступ"
+  },
+  "assistant.share.interact": {
+    "en": "Can interact",
+    "t": "Может писать"
+  },
+  "assistant.share.invite": {
+    "en": "Search by name or email",
+    "t": "Имя или email"
+  },
+  "assistant.share.nobody": {
+    "en": "Nobody with that email has signed in",
+    "t": "Никто с таким email ещё не входил"
+  },
+  "assistant.share.none": {
+    "en": "No access",
+    "t": "Нет доступа"
+  },
+  "assistant.share.owner": {
+    "en": "Owner",
+    "t": "Владелец"
+  },
+  "assistant.share.people": {
+    "en": "People with access",
+    "t": "У кого есть доступ"
+  },
+  "assistant.share.pick": {
+    "en": "Select a person",
+    "t": "Выберите человека"
+  },
+  "assistant.share.remove": {
+    "en": "Remove",
+    "t": "Убрать"
+  },
+  "assistant.share.send": {
+    "en": "Share",
+    "t": "Поделиться"
+  },
+  "assistant.share.typeEmail": {
+    "en": "Type their full email",
+    "t": "Введите email целиком"
+  },
+  "assistant.share.unpick": {
+    "en": "Remove {name}",
+    "t": "Убрать {name}"
+  },
+  "assistant.share.view": {
+    "en": "Can view",
+    "t": "Может смотреть"
+  },
+  "assistant.share.you": {
+    "en": "(You)",
+    "t": "(Вы)"
+  },
+  "assistant.stop": {
+    "en": "Stop",
+    "t": "Остановить"
+  },
+  "assistant.stopped": {
+    "en": "Stopped",
+    "t": "Остановлено"
+  },
+  "assistant.suggest": {
+    "en": "Suggestions",
+    "t": "Подсказки"
+  },
+  "assistant.thinking": {
+    "en": "Thinking…",
+    "t": "Думает…"
+  },
+  "assistant.unarchive": {
+    "en": "Unarchive",
+    "t": "Из архива"
+  },
+  "assistant.undo": {
+    "en": "Undo",
+    "t": "Отменить"
+  },
+  "assistant.unpin": {
+    "en": "Unpin",
+    "t": "Открепить"
+  },
+  "assistant.unread": {
+    "en": "New answer",
+    "t": "Новый ответ"
+  },
+  "assistant.updated": {
+    "en": "Last updated {when}",
+    "t": "Изменён {when}"
+  },
+  "assistant.viewOnly": {
+    "en": "View only · shared by {name}",
+    "t": "Только просмотр · поделился {name}"
+  },
+  "assistant.worked": {
+    "en": "Worked for {time}",
+    "t": "Работал {time}"
+  },
+  "browser.address": {
+    "en": "Address",
+    "t": "Адрес"
+  },
+  "browser.back": {
+    "en": "Back",
+    "t": "Назад"
+  },
+  "browser.closeTab": {
+    "en": "Close {title}",
+    "t": "Закрыть {title}"
+  },
+  "browser.control.no": {
+    "en": "Click the page to take control",
+    "t": "Нажмите на страницу, чтобы управлять"
+  },
+  "browser.control.yes": {
+    "en": "You have control · keys and clicks go to the page",
+    "t": "Управление у вас · клавиши и клики идут на страницу"
+  },
+  "browser.device": {
+    "en": "Device",
+    "t": "Устройство"
+  },
+  "browser.device.drawn": {
+    "en": "A real Android phone; its model is drawn from Multilogin's Google and Samsung ones.",
+    "t": "Настоящий Android-телефон; модель выбирается из Google и Samsung, что есть у Multilogin."
+  },
+  "browser.device.galaxy_s23": {
+    "en": "Galaxy S23",
+    "t": "Galaxy S23"
+  },
+  "browser.device.pixel_7": {
+    "en": "Pixel 7",
+    "t": "Pixel 7"
+  },
+  "browser.device.redmi_note_14": {
+    "en": "Redmi Note 14",
+    "t": "Redmi Note 14"
+  },
+  "browser.dialog": {
+    "en": "The page asks",
+    "t": "Страница спрашивает"
+  },
+  "browser.exit": {
+    "en": "Exit",
+    "t": "Выход"
+  },
+  "browser.failing": {
+    "en": "Failing",
+    "t": "Сбой"
+  },
+  "browser.film.none": {
+    "en": "An mp4 the next start plays as the back camera, its sound as the mic.",
+    "t": "mp4, который следующий запуск проигрывает как заднюю камеру, его звук — как микрофон."
+  },
+  "browser.film.phone.none": {
+    "en": "An mp4 (up to 100 MiB) for Multilogin's Library: pick it in the phone's Camera panel in the Multilogin app.",
+    "t": "mp4 (до 100 МиБ) в библиотеку Multilogin: выберите его в панели «Камера» телефона в приложении Multilogin."
+  },
+  "browser.film.phone.set": {
+    "en": "Film in Multilogin's Library: pick it in the phone's Camera panel in the Multilogin app.",
+    "t": "Видео в библиотеке Multilogin: выберите его в панели «Камера» телефона в приложении Multilogin."
+  },
+  "browser.film.phone.tooBig": {
+    "en": "The film is over 100 MiB: Multilogin's Library takes no more.",
+    "t": "Видео больше 100 МиБ: библиотека Multilogin больше не принимает."
+  },
+  "browser.film.running": {
+    "en": "The browser runs: stop it first, the next launch plays the film.",
+    "t": "Браузер запущен: сначала остановите его, видео проиграет следующий запуск."
+  },
+  "browser.film.set": {
+    "en": "Film set — the next start plays it as the back camera (5 s still, the film, last frame held 60 s).",
+    "t": "Видео задано — следующий запуск проиграет его как заднюю камеру (5 с кадр, видео, последний кадр 60 с)."
+  },
+  "browser.film.title": {
+    "en": "Film as camera",
+    "t": "Видео как камера"
+  },
+  "browser.film.tooBig": {
+    "en": "The film is over 512 MiB.",
+    "t": "Видео больше 512 МиБ."
+  },
+  "browser.film.upload": {
+    "en": "Upload an mp4",
+    "t": "Загрузить mp4"
+  },
+  "browser.film.uploading": {
+    "en": "Uploading the film",
+    "t": "Загрузка видео"
+  },
+  "browser.fixed": {
+    "en": "fixed line",
+    "t": "проводной"
+  },
+  "browser.forward": {
+    "en": "Forward",
+    "t": "Вперёд"
+  },
+  "browser.healthy": {
+    "en": "Healthy",
+    "t": "В порядке"
+  },
+  "browser.how": {
+    "en": "socks5:// or http://, user:pass@host:port. Kept only once it exits in the country of this gmail's GBPs; the provider and device are set once.",
+    "t": "socks5:// или http://, user:pass@host:port. Сохраняется, только если выходит в стране GBP этого gmail; провайдер и устройство задаются один раз."
+  },
+  "browser.how.replace": {
+    "en": "The same profile, out through another proxy; checked before it is kept.",
+    "t": "Тот же профиль через другой прокси; проверяется перед сохранением."
+  },
+  "browser.mobile": {
+    "en": "mobile",
+    "t": "мобильный"
+  },
+  "browser.newTab": {
+    "en": "New tab",
+    "t": "Новая вкладка"
+  },
+  "browser.ok": {
+    "en": "OK",
+    "t": "OK"
+  },
+  "browser.page": {
+    "en": "The browser's page",
+    "t": "Страница браузера"
+  },
+  "browser.phase.connecting": {
+    "en": "connecting",
+    "t": "подключение"
+  },
+  "browser.phase.elsewhere": {
+    "en": "running elsewhere",
+    "t": "запущен для другого"
+  },
+  "browser.phase.lost": {
+    "en": "disconnected",
+    "t": "отключён"
+  },
+  "browser.phase.off": {
+    "en": "stopped",
+    "t": "остановлен"
+  },
+  "browser.phase.open": {
+    "en": "running",
+    "t": "работает"
+  },
+  "browser.phase.starting": {
+    "en": "starting",
+    "t": "запускается"
+  },
+  "browser.phase.taken": {
+    "en": "taken over",
+    "t": "перехвачен"
+  },
+  "browser.profile": {
+    "en": "Profile",
+    "t": "Профиль"
+  },
+  "browser.provider": {
+    "en": "Provider",
+    "t": "Провайдер"
+  },
+  "browser.provider.gologin": {
+    "en": "GoLogin",
+    "t": "GoLogin"
+  },
+  "browser.provider.multilogin": {
+    "en": "Multilogin · cloud phone",
+    "t": "Multilogin · облачный телефон"
+  },
+  "browser.provider.multilogin_browser": {
+    "en": "Multilogin · browser",
+    "t": "Multilogin · браузер"
+  },
+  "browser.proxy": {
+    "en": "Proxy",
+    "t": "Прокси"
+  },
+  "browser.reconnect": {
+    "en": "Reconnect",
+    "t": "Переподключиться"
+  },
+  "browser.remove.body": {
+    "en": "Its profile goes with it: the fingerprint, the cookies, the signed-in session. A new one starts from nothing.",
+    "t": "Профиль удаляется вместе с ним: отпечаток, cookies, сессия входа. Новый начнётся с нуля."
+  },
+  "browser.remove.title": {
+    "en": "Remove the browser?",
+    "t": "Удалить браузер?"
+  },
+  "browser.replaceProxy": {
+    "en": "Replace proxy",
+    "t": "Заменить прокси"
+  },
+  "browser.restartHere": {
+    "en": "Stop and start here",
+    "t": "Остановить и запустить здесь"
+  },
+  "browser.session.checkFailed": {
+    "en": "Its last check failed: {error}",
+    "t": "Последняя проверка не прошла: {error}"
+  },
+  "browser.session.elsewhere.gbp": {
+    "en": "It runs for {name}, at its point.",
+    "t": "Он запущен для {name}, в его точке."
+  },
+  "browser.session.elsewhere.gmail": {
+    "en": "It runs for the gmail alone, the position blocked.",
+    "t": "Он запущен для самого gmail, без позиции."
+  },
+  "browser.session.lost": {
+    "en": "The connection to the browser was lost.",
+    "t": "Связь с браузером потеряна."
+  },
+  "browser.session.none": {
+    "en": "No browser for this gmail yet",
+    "t": "У этого gmail пока нет браузера"
+  },
+  "browser.session.none.body": {
+    "en": "Set up {gmail}'s antidetect environment on its Connections tab.",
+    "t": "Настройте антидетект-окружение {gmail} во вкладке «Подключения»."
+  },
+  "browser.session.off": {
+    "en": "The browser is not running.",
+    "t": "Браузер не запущен."
+  },
+  "browser.session.setUp": {
+    "en": "Set it up",
+    "t": "Настроить"
+  },
+  "browser.session.taken": {
+    "en": "Another viewer of this gmail took over.",
+    "t": "Управление перехватил другой зритель этого gmail."
+  },
+  "browser.set": {
+    "en": "Set",
+    "t": "Задан"
+  },
+  "browser.set.submit": {
+    "en": "Check and set up",
+    "t": "Проверить и настроить"
+  },
+  "browser.start": {
+    "en": "Start",
+    "t": "Запустить"
+  },
+  "browser.starting": {
+    "en": "Starting…",
+    "t": "Запуск…"
+  },
+  "browser.status": {
+    "en": "Browser · {gmail}",
+    "t": "Браузер · {gmail}"
+  },
+  "browser.stop": {
+    "en": "Stop",
+    "t": "Остановить"
+  },
+  "browser.stream": {
+    "en": "Open Multilogin's view",
+    "t": "Открыть вид Multilogin"
+  },
+  "browser.tabs": {
+    "en": "The browser's tabs",
+    "t": "Вкладки браузера"
+  },
+  "browser.takeBack": {
+    "en": "Take back",
+    "t": "Вернуть управление"
+  },
+  "browser.title": {
+    "en": "Antidetect environment",
+    "t": "Антидетект-окружение"
+  },
+  "browser.unconnected": {
+    "en": "Browsers not connected",
+    "t": "Браузеры не подключены"
+  },
+  "browser.watch": {
+    "en": "Watch it as it runs",
+    "t": "Смотреть как есть"
+  },
+  "browser.why": {
+    "en": "One fingerprint and one session for every GBP of this gmail, out through its proxy in their country.",
+    "t": "Один отпечаток и одна сессия на все GBP этого gmail, через его прокси в их стране."
+  },
+  "categories.counts": {
+    "en": "{trades} trades · {countries} countries · {held} of {of} GBPs hold one",
+    "t": "Ниш: {trades} · стран: {countries} · GBP с нишей: {held} из {of}"
+  },
+  "categories.how": {
+    "en": "a cell opens that country's tab · ⋯ renames or deletes the trade",
+    "t": "ячейка открывает вкладку страны · ⋯ переименовать или удалить нишу"
+  },
+  "categories.keywords": {
+    "en": "{n} keywords",
+    "t": "ключевых слов: {n}"
+  },
+  "categories.new.why": {
+    "en": "A new trade has no country yet: a cell's Set up gives it one.",
+    "t": "У новой ниши нет страны: «Настроить» в ячейке добавляет её."
+  },
+  "categories.noGoogle": {
+    "en": "no Google category",
+    "t": "нет категории Google"
+  },
+  "categories.none": {
+    "en": "No trades yet: name one below.",
+    "t": "Ниш ещё нет: назовите ниже."
+  },
+  "categories.open": {
+    "en": "Open {trade}",
+    "t": "Открыть {trade}"
+  },
+  "categories.row": {
+    "en": "{gbps} GBPs · {countries} countries",
+    "t": "GBP: {gbps} · стран: {countries}"
+  },
+  "categories.setUp": {
+    "en": "Set up",
+    "t": "Настроить"
+  },
+  "categories.trades": {
+    "en": "Trades",
+    "t": "Ниши"
+  },
+  "categories.untraded": {
+    "en": "{n} GBPs hold no trade: no category keywords to rank on, no Google category on Launch.",
+    "t": "GBP без ниши: {n} — нет ключевых слов для ранжирования, нет категории Google в Launch."
+  },
+  "categories.untraded.show": {
+    "en": "Show them · No category {n}",
+    "t": "Показать · Без категории {n}"
+  },
+  "connected.empty": {
+    "en": "No site keys",
+    "t": "Нет ключей сайтов"
+  },
+  "connected.empty.body": {
+    "en": "A site key with its origin shows here, with what its site reports.",
+    "t": "Здесь появится ключ сайта с его адресом и то, что сообщает сам сайт."
+  },
+  "connected.experiments": {
+    "en": "experiments",
+    "t": "эксперименты"
+  },
+  "connected.failed": {
+    "en": "No report",
+    "t": "Нет отчёта"
+  },
+  "connected.lastIngest": {
+    "en": "Last event",
+    "t": "Последнее событие"
+  },
+  "connected.lastRead": {
+    "en": "Last data read",
+    "t": "Последнее чтение данных"
+  },
+  "connected.never": {
+    "en": "never",
+    "t": "никогда"
+  },
+  "connected.noOrigin": {
+    "en": "No origin set",
+    "t": "Адрес не задан"
+  },
+  "connected.pricing": {
+    "en": "pricing",
+    "t": "цены"
+  },
+  "connected.sitesFailed": {
+    "en": "sites_panel did not answer: {detail}",
+    "t": "sites_panel не ответил: {detail}"
+  },
+  "connected.state.down": {
+    "en": "down",
+    "t": "недоступно"
+  },
+  "connected.state.empty": {
+    "en": "empty",
+    "t": "пусто"
+  },
+  "connected.state.live": {
+    "en": "live",
+    "t": "работает"
+  },
+  "connected.state.unset": {
+    "en": "not configured",
+    "t": "не настроено"
+  },
+  "connected.state.withdrawn": {
+    "en": "withdrawn",
+    "t": "снято"
+  },
+  "connected.title": {
+    "en": "Connected sites",
+    "t": "Подключённые сайты"
+  },
+  "connected.unknown": {
+    "en": "unknown",
+    "t": "неизвестно"
+  },
+  "gmbs.actions": {
+    "en": "{name}: actions",
+    "t": "{name}: действия"
+  },
+  "gmbs.collapse": {
+    "en": "Hide {gmail}'s GMBs",
+    "t": "Скрыть GMB {gmail}"
+  },
+  "gmbs.deselect": {
+    "en": "Leave out",
+    "t": "Убрать"
+  },
+  "gmbs.edit": {
+    "en": "Edit…",
+    "t": "Изменить…"
+  },
+  "gmbs.elsewhere": {
+    "en": "Elsewhere",
+    "t": "В других местах"
+  },
+  "gmbs.expand": {
+    "en": "Show {gmail}'s GMBs",
+    "t": "Показать GMB {gmail}"
+  },
+  "gmbs.filter": {
+    "en": "Name, address, place id, gmail",
+    "t": "Название, адрес, place id, gmail"
+  },
+  "gmbs.gbp.country": {
+    "en": "Country",
+    "t": "Страна"
+  },
+  "gmbs.gbp.country.google": {
+    "en": "Google's",
+    "t": "от Google"
+  },
+  "gmbs.gbp.create": {
+    "en": "Create the draft",
+    "t": "Создать черновик"
+  },
+  "gmbs.gbp.edit": {
+    "en": "Edit {name}",
+    "t": "Изменить {name}"
+  },
+  "gmbs.gbp.gmail": {
+    "en": "Gmail",
+    "t": "Gmail"
+  },
+  "gmbs.gbp.gmail.none": {
+    "en": "No gmail yet",
+    "t": "Пока без gmail"
+  },
+  "gmbs.gbp.move": {
+    "en": "Move to",
+    "t": "Перевести в"
+  },
+  "gmbs.gbp.name": {
+    "en": "Name",
+    "t": "Название"
+  },
+  "gmbs.gbp.phone": {
+    "en": "Phone",
+    "t": "Телефон"
+  },
+  "gmbs.gbp.place.needed": {
+    "en": "Its Maps link or place id: needed to become verified.",
+    "t": "Ссылка Maps или id места: нужны, чтобы стать верифицированным."
+  },
+  "gmbs.gbp.save": {
+    "en": "Save",
+    "t": "Сохранить"
+  },
+  "gmbs.gbp.state": {
+    "en": "Its state on Google",
+    "t": "Состояние в Google"
+  },
+  "gmbs.gbp.toGoogle": {
+    "en": "Its place on Google",
+    "t": "Его место в Google"
+  },
+  "gmbs.gbp.toGoogle.hint": {
+    "en": "Once created on Google, it is verifying. Paste its Maps link or place id if Maps shows it yet; it is needed once verified.",
+    "t": "Когда создан в Google — он на верификации. Вставьте ссылку Maps или id места, если Maps его уже показывает; без них не верифицировать."
+  },
+  "gmbs.gmail.add": {
+    "en": "Add a managing gmail",
+    "t": "Добавить gmail"
+  },
+  "gmbs.gmail.empty": {
+    "en": "No GMBs under this gmail yet.",
+    "t": "Под этим gmail пока нет GMB."
+  },
+  "gmbs.gmail.hint": {
+    "en": "The Google account that manages the business profiles.",
+    "t": "Аккаунт Google, который управляет профилями."
+  },
+  "gmbs.gmail.label": {
+    "en": "Gmail",
+    "t": "Gmail"
+  },
+  "gmbs.gmail.remove.body": {
+    "en": "It goes to the trash with its GBPs{kept}: every service stops working on them until then.",
+    "t": "Он уйдёт в корзину вместе со своими GBP{kept}; до тех пор сервисы с ними не работают."
+  },
+  "gmbs.gmail.remove.title": {
+    "en": "Remove {gmail}?",
+    "t": "Удалить {gmail}?"
+  },
+  "gmbs.gmail.role": {
+    "en": "Role of {gmail} on its GBPs",
+    "t": "Роль {gmail} в его GBP"
+  },
+  "gmbs.gmail.role.hint": {
+    "en": "optional · owners usually hold up to 3 GBPs, managers 6",
+    "t": "необязательно · владелец обычно держит до 3 GBP, менеджер до 6"
+  },
+  "gmbs.gmail.role.manager": {
+    "en": "Manager",
+    "t": "Менеджер"
+  },
+  "gmbs.gmail.role.owner": {
+    "en": "Owner",
+    "t": "Владелец"
+  },
+  "gmbs.gmail.role.pick": {
+    "en": "No role",
+    "t": "Без роли"
+  },
+  "gmbs.gmb.add": {
+    "en": "Add a GBP",
+    "t": "Добавить GBP"
+  },
+  "gmbs.gmb.none": {
+    "en": "No place found.",
+    "t": "Место не найдено."
+  },
+  "gmbs.gmb.remove.body": {
+    "en": "It goes to the trash{kept}: every service stops working on it until then; its history stays.",
+    "t": "Он уйдёт в корзину{kept}; до тех пор сервисы с ним не работают, история останется."
+  },
+  "gmbs.gmb.remove.title": {
+    "en": "Remove {name}?",
+    "t": "Удалить {name}?"
+  },
+  "gmbs.inView": {
+    "en": "In view",
+    "t": "На карте"
+  },
+  "gmbs.issue.draft": {
+    "en": "Drafts",
+    "t": "Черновики"
+  },
+  "gmbs.issue.failing": {
+    "en": "Failing",
+    "t": "Сбой обхода"
+  },
+  "gmbs.issue.no_category": {
+    "en": "No category",
+    "t": "Без категории"
+  },
+  "gmbs.issue.no_site": {
+    "en": "No site",
+    "t": "Нет сайта"
+  },
+  "gmbs.issue.off": {
+    "en": "Off",
+    "t": "Выключены"
+  },
+  "gmbs.issue.overdue": {
+    "en": "Overdue",
+    "t": "Просрочено"
+  },
+  "gmbs.issue.suspended": {
+    "en": "Reviews suspended",
+    "t": "Сняты отзывы"
+  },
+  "gmbs.issue.unlocated": {
+    "en": "No location",
+    "t": "Нет точки"
+  },
+  "gmbs.issues": {
+    "en": "What needs you",
+    "t": "Что требует внимания"
+  },
+  "gmbs.link.none": {
+    "en": "No such place.",
+    "t": "Такого места нет."
+  },
+  "gmbs.link.search": {
+    "en": "brand/location",
+    "t": "бренд/место"
+  },
+  "gmbs.link.taken": {
+    "en": "another GMB's",
+    "t": "у другого GMB"
+  },
+  "gmbs.link.unlink": {
+    "en": "No site place",
+    "t": "Без места на сайте"
+  },
+  "gmbs.link.withdrawn": {
+    "en": "withdrawn",
+    "t": "снято"
+  },
+  "gmbs.live.title": {
+    "en": "Live reviews over the last 30 days",
+    "t": "Живые отзывы за 30 дней"
+  },
+  "gmbs.live.week": {
+    "en": "7d",
+    "t": "7 дн"
+  },
+  "gmbs.none": {
+    "en": "No GMBs yet.",
+    "t": "GMB пока нет."
+  },
+  "gmbs.place.move": {
+    "en": "Move location",
+    "t": "Передвинуть точку"
+  },
+  "gmbs.place.set": {
+    "en": "Set location",
+    "t": "Указать точку"
+  },
+  "gmbs.readiness.title": {
+    "en": "Must-haves ready before Google's form",
+    "t": "Готово из обязательного для формы Google"
+  },
+  "gmbs.remove": {
+    "en": "Remove",
+    "t": "Удалить"
+  },
+  "gmbs.reset": {
+    "en": "Reset selection",
+    "t": "Сбросить выбор"
+  },
+  "gmbs.scope.counts": {
+    "en": "{gmails} · {gmbs} GMBs",
+    "t": "{gmails} · {gmbs} GMB"
+  },
+  "gmbs.scope.many": {
+    "en": "{n} gmails",
+    "t": "{n} gmail"
+  },
+  "gmbs.select": {
+    "en": "Select",
+    "t": "Выбрать"
+  },
+  "gmbs.selectAll": {
+    "en": "Select all",
+    "t": "Выбрать все"
+  },
+  "gmbs.selected": {
+    "en": "Selected",
+    "t": "Выбрано"
+  },
+  "gmbs.selected.empty": {
+    "en": "Drag locations here: every app shows only these.",
+    "t": "Перетащите сюда точки: все приложения покажут только их."
+  },
+  "gmbs.state.draft": {
+    "en": "Draft",
+    "t": "Черновик"
+  },
+  "gmbs.state.suspended": {
+    "en": "Suspended",
+    "t": "Заблокирован"
+  },
+  "gmbs.state.verified": {
+    "en": "Verified",
+    "t": "Верифицирован"
+  },
+  "gmbs.state.verifying": {
+    "en": "Verifying",
+    "t": "Верификация"
+  },
+  "gmbs.switch": {
+    "en": "{name} on or off",
+    "t": "{name}: вкл. или выкл."
+  },
+  "gmbs.tag.overdue": {
+    "en": "{n} overdue",
+    "t": "просрочено: {n}"
+  },
+  "gmbs.tag.site": {
+    "en": "site {place}",
+    "t": "сайт {place}"
+  },
+  "gmbs.tag.site.link": {
+    "en": "site: link…",
+    "t": "сайт: связать…"
+  },
+  "gmbs.tag.suspended": {
+    "en": "{n} reviews suspended",
+    "t": "снято отзывов: {n}"
+  },
+  "gmbs.tags.failed": {
+    "en": "{service} can't be read right now.",
+    "t": "{service} сейчас недоступен."
+  },
+  "gmbs.title": {
+    "en": "Managing gmails",
+    "t": "Управляющие gmail"
+  },
+  "gmbs.unselected": {
+    "en": "Not selected",
+    "t": "Не выбрано"
+  },
+  "gmbs.unselected.empty": {
+    "en": "Drag a location here to leave it out of every app.",
+    "t": "Перетащите сюда точку, чтобы убрать её из всех приложений."
+  },
+  "home.noMap": {
+    "en": "No map here",
+    "t": "Карты нет"
+  },
+  "home.noMap.why": {
+    "en": "The conductor has no Google Maps browser key (GOOGLE_MAPS_BROWSER_KEY). Your GMBs are in the list beside.",
+    "t": "У conductor нет браузерного ключа Google Maps (GOOGLE_MAPS_BROWSER_KEY). Ваши GMB в списке слева."
+  },
+  "home.peek.close": {
+    "en": "Close",
+    "t": "Закрыть"
+  },
+  "home.peek.fine": {
+    "en": "Nothing needs you",
+    "t": "Ничего не требует внимания"
+  },
+  "home.peek.leads": {
+    "en": "{n} leads in 7 days",
+    "t": "заявок за 7 дней: {n}"
+  },
+  "home.peek.leadsOverdue": {
+    "en": "{n} leads in 7 days ({overdue} overdue)",
+    "t": "заявок за 7 дней: {n} (просрочено {overdue})"
+  },
+  "home.peek.off": {
+    "en": "Switched off: the services do no work on it.",
+    "t": "Выключен: сервисы с ним не работают."
+  },
+  "home.peek.open": {
+    "en": "Open",
+    "t": "Открыть"
+  },
+  "home.peek.rating": {
+    "en": "★ {rating} ({n} reviews)",
+    "t": "★ {rating} (отзывов: {n})"
+  },
+  "home.peek.reviews": {
+    "en": "Reviews",
+    "t": "Отзывы"
+  },
+  "home.placing": {
+    "en": "Placing {name} · click the map or drag the pin",
+    "t": "Точка для {name} · щёлкните по карте или перетащите метку"
+  },
+  "home.placing.set": {
+    "en": "Set here",
+    "t": "Поставить здесь"
+  },
+  "hotbar": {
+    "en": "Hotbar",
+    "t": "Панель действий"
+  },
+  "hotbar.base": {
+    "en": "Satellite",
+    "t": "Спутник"
+  },
+  "hotbar.customize": {
+    "en": "Customize",
+    "t": "Настроить"
+  },
+  "hotbar.description": {
+    "en": "Pinned actions show in the bar.",
+    "t": "Закреплённые действия видны на панели."
+  },
+  "hotbar.done": {
+    "en": "Done",
+    "t": "Готово"
+  },
+  "hotbar.hide": {
+    "en": "Hide from hotbar",
+    "t": "Убрать с панели"
+  },
+  "hotbar.places": {
+    "en": "Google's places",
+    "t": "Места Google"
+  },
+  "hotbar.reset": {
+    "en": "Reset to default",
+    "t": "По умолчанию"
+  },
+  "hotbar.title": {
+    "en": "Customize hotbar",
+    "t": "Настройка панели"
+  },
+  "keys.assistant": {
+    "en": "Assistant: show or hide",
+    "t": "Ассистент: показать или скрыть"
+  },
+  "keys.go": {
+    "en": "Go to",
+    "t": "Перейти"
+  },
+  "keys.help": {
+    "en": "Keybinds",
+    "t": "Клавиши"
+  },
+  "keys.sidebar": {
+    "en": "Sidebar: fold or unfold",
+    "t": "Боковая панель: свернуть или развернуть"
+  },
+  "launch.areas.add": {
+    "en": "Add an area, Enter",
+    "t": "Добавить зону, Enter"
+  },
+  "launch.areas.remove": {
+    "en": "Remove {area}",
+    "t": "Убрать {area}"
+  },
+  "launch.behind": {
+    "en": "Behind it",
+    "t": "За этим"
+  },
+  "launch.category.copy": {
+    "en": "Copy {category}",
+    "t": "Скопировать {category}"
+  },
+  "launch.category.in": {
+    "en": "in {country} →",
+    "t": "{country} →"
+  },
+  "launch.category.noCountry": {
+    "en": "country not set:",
+    "t": "страна не указана:"
+  },
+  "launch.category.noCountry.why": {
+    "en": "the category and Google's categories wait for the country",
+    "t": "категория и категории Google ждут страну"
+  },
+  "launch.category.noPrimary": {
+    "en": "{category} has no primary Google category yet",
+    "t": "у {category} ещё нет основной категории Google"
+  },
+  "launch.category.notSetUp": {
+    "en": "{category} not set up: no Google category to type",
+    "t": "{category} не настроена: нечего вводить в Google"
+  },
+  "launch.category.open": {
+    "en": "Open {category}",
+    "t": "Открыть {category}"
+  },
+  "launch.category.setUp": {
+    "en": "Set up {category}",
+    "t": "Настроить {category}"
+  },
+  "launch.category.then": {
+    "en": "then the additional ones, in this order:",
+    "t": "затем дополнительные, в этом порядке:"
+  },
+  "launch.category.type": {
+    "en": "type into Google's form:",
+    "t": "в форму Google:"
+  },
+  "launch.country.why": {
+    "en": "its reviews' language follows it",
+    "t": "язык отзывов следует за ней"
+  },
+  "launch.edit": {
+    "en": "Edit",
+    "t": "Изменить"
+  },
+  "launch.fold": {
+    "en": "Fold",
+    "t": "Свернуть"
+  },
+  "launch.isReady": {
+    "en": "Ready",
+    "t": "Готово"
+  },
+  "launch.missing": {
+    "en": "Missing: {what}",
+    "t": "Не хватает: {what}"
+  },
+  "launch.must.areas": {
+    "en": "Areas",
+    "t": "Зоны"
+  },
+  "launch.must.category": {
+    "en": "Category",
+    "t": "Категория"
+  },
+  "launch.must.film": {
+    "en": "Film",
+    "t": "Видео"
+  },
+  "launch.must.gmail": {
+    "en": "Gmail",
+    "t": "Gmail"
+  },
+  "launch.must.hidden_address": {
+    "en": "Address",
+    "t": "Адрес"
+  },
+  "launch.must.name": {
+    "en": "Name",
+    "t": "Название"
+  },
+  "launch.must.phone": {
+    "en": "Phone",
+    "t": "Телефон"
+  },
+  "launch.must.profile": {
+    "en": "Browser",
+    "t": "Браузер"
+  },
+  "launch.must.site": {
+    "en": "Site",
+    "t": "Сайт"
+  },
+  "launch.nine": {
+    "en": "The nine, in Google's order",
+    "t": "Девять, в порядке Google"
+  },
+  "launch.nine.hint": {
+    "en": "then what stands behind it · ready rows fold to one line",
+    "t": "затем то, что за ними · готовые строки сворачиваются"
+  },
+  "launch.point": {
+    "en": "Point",
+    "t": "Точка"
+  },
+  "launch.profile.noGmail": {
+    "en": "pick its gmail first: the browser is the gmail's",
+    "t": "сначала выберите gmail: браузер принадлежит ему"
+  },
+  "launch.profile.of": {
+    "en": "{gmail}'s browser",
+    "t": "браузер {gmail}"
+  },
+  "launch.profile.open": {
+    "en": "Open {gmail}'s connections",
+    "t": "Подключения {gmail}"
+  },
+  "launch.ready": {
+    "en": "{n} of {of} ready to open Google's form",
+    "t": "{n} из {of} готово, чтобы открыть форму Google"
+  },
+  "launch.ready.all": {
+    "en": "Everything Google's form asks is ready: open it from the profile.",
+    "t": "Всё, что спрашивает форма Google, готово: откройте её из профиля."
+  },
+  "launch.toVerifying": {
+    "en": "Verifying",
+    "t": "На верификацию"
+  },
+  "launch.visit.hidden": {
+    "en": "hidden",
+    "t": "скрыт"
+  },
+  "launch.visit.no": {
+    "en": "Customers don't visit",
+    "t": "Клиенты не приходят"
+  },
+  "launch.visit.shown": {
+    "en": "shown",
+    "t": "показан"
+  },
+  "launch.visit.yes": {
+    "en": "Customers visit",
+    "t": "Клиенты приходят"
+  },
+  "launch.why.areas": {
+    "en": "up to 20 · they cover where the film is shot",
+    "t": "до 20 · покрывают место съёмки видео"
+  },
+  "launch.why.category": {
+    "en": "its trade, set up in its country with Google's category",
+    "t": "ниша, настроенная в её стране, с категорией Google"
+  },
+  "launch.why.film": {
+    "en": "the verification film from the kit (verif_vid)",
+    "t": "видео верификации из набора (verif_vid)"
+  },
+  "launch.why.gmail": {
+    "en": "the gmail that manages it: an owner holds 3, a manager 6",
+    "t": "gmail, который им управляет: владелец держит 3, менеджер 6"
+  },
+  "launch.why.hidden_address": {
+    "en": "customers don't visit → service area; the address is where the film is shot",
+    "t": "клиенты не приходят → зона обслуживания; адрес — место съёмки видео"
+  },
+  "launch.why.name": {
+    "en": "keyword name: a nom commercial at the top helps an appeal",
+    "t": "название с ключом: nom commercial наверху помогает апелляции"
+  },
+  "launch.why.phone": {
+    "en": "routes to the closers · on no other GBP",
+    "t": "ведёт к закрывающим · ни на одном другом GBP"
+  },
+  "launch.why.profile": {
+    "en": "the gmail's antidetect browser: its fingerprint, its proxy in the GBP's country, its session",
+    "t": "антидетект-браузер gmail: его отпечаток, прокси в стране GBP, его сессия"
+  },
+  "launch.why.site": {
+    "en": "its page on our sites; its own domain: a shared site links profiles",
+    "t": "его страница на наших сайтах; свой домен: общий сайт связывает профили"
+  },
+  "launch.why.site.noAccess": {
+    "en": "linking a site page needs access to the sites",
+    "t": "привязка страницы сайта требует доступа к сайтам"
+  },
+  "links.discord": {
+    "en": "Ask the other operators",
+    "t": "Вопросы другим операторам"
+  },
+  "links.evEstate": {
+    "en": "Property with EV",
+    "t": "Недвижимость с EV"
+  },
+  "links.evInvestment": {
+    "en": "Investing with EV",
+    "t": "Инвестиции с EV"
+  },
+  "links.github": {
+    "en": "The code behind this panel",
+    "t": "Код этой панели"
+  },
+  "live.closed": {
+    "en": "Disconnected",
+    "t": "Отключено"
+  },
+  "live.connecting": {
+    "en": "Connecting",
+    "t": "Подключение"
+  },
+  "live.live": {
+    "en": "Live",
+    "t": "На связи"
+  },
+  "live.offline": {
+    "en": "Offline",
+    "t": "Нет сети"
+  },
+  "live.paused": {
+    "en": "Paused",
+    "t": "Пауза"
+  },
+  "live.reconnecting": {
+    "en": "Reconnecting",
+    "t": "Переподключение"
+  },
+  "move.cancel": {
+    "en": "Cancel",
+    "t": "Отмена"
+  },
+  "nav.account": {
+    "en": "Profile",
+    "t": "Профиль"
+  },
+  "nav.alerts": {
+    "en": "Alerts",
+    "t": "Оповещения"
+  },
+  "nav.gbps": {
+    "en": "GBPs",
+    "t": "GBP"
+  },
+  "nav.home": {
+    "en": "Home",
+    "t": "Главная"
+  },
+  "nav.home.description": {
+    "en": "Every GBP on one map",
+    "t": "Все GBP на одной карте"
+  },
+  "nav.language": {
+    "en": "Language",
+    "t": "Язык"
+  },
+  "nav.menu": {
+    "en": "Menu",
+    "t": "Меню"
+  },
+  "nav.outline": {
+    "en": "Outline",
+    "t": "Навигация"
+  },
+  "nav.primary": {
+    "en": "Main navigation",
+    "t": "Основная навигация"
+  },
+  "nav.resizeOutline": {
+    "en": "Resize the outline",
+    "t": "Изменить ширину боковой панели"
+  },
+  "nav.reviewArchive": {
+    "en": "Review Archive",
+    "t": "Архив отзывов"
+  },
+  "nav.reviewArchive.description": {
+    "en": "Every place's reviews and their state",
+    "t": "Отзывы каждого места и их состояние"
+  },
+  "nav.signOut": {
+    "en": "Sign out",
+    "t": "Выйти"
+  },
+  "nav.sites": {
+    "en": "Sites",
+    "t": "Сайты"
+  },
+  "nav.sites.description": {
+    "en": "Leads, locations, pricing, invoices",
+    "t": "Лиды, точки, цены, счета"
+  },
+  "nav.sources": {
+    "en": "Sources",
+    "t": "Источники"
+  },
+  "nav.tokens": {
+    "en": "Tokens",
+    "t": "Токены"
+  },
+  "nav.wallet": {
+    "en": "Wallet",
+    "t": "Кошелёк"
+  },
+  "placement.base": {
+    "en": "Base",
+    "t": "Подложка"
+  },
+  "placement.base.satellite": {
+    "en": "Satellite",
+    "t": "Спутник"
+  },
+  "placement.base.schematic": {
+    "en": "Schematic",
+    "t": "Схема"
+  },
+  "placement.competitors": {
+    "en": "Competitors",
+    "t": "Конкуренты"
+  },
+  "placement.demand": {
+    "en": "Demand",
+    "t": "Спрос"
+  },
+  "placement.from.pick": {
+    "en": "your pick",
+    "t": "ваш выбор"
+  },
+  "placement.from.scope": {
+    "en": "scope",
+    "t": "область"
+  },
+  "placement.heat": {
+    "en": "Heat",
+    "t": "Тепловая карта"
+  },
+  "placement.more": {
+    "en": "More",
+    "t": "Ещё"
+  },
+  "placement.noGrid": {
+    "en": "No grid here",
+    "t": "Здесь нет сетки"
+  },
+  "placement.noHeat": {
+    "en": "No heat",
+    "t": "Без тепловой карты"
+  },
+  "placement.notices": {
+    "en": "Data",
+    "t": "Данные"
+  },
+  "placement.overlays": {
+    "en": "Overlays",
+    "t": "Слои"
+  },
+  "placement.pickTrade": {
+    "en": "pick a trade",
+    "t": "выберите нишу"
+  },
+  "placement.pressure": {
+    "en": "Competitor pressure",
+    "t": "Давление конкурентов"
+  },
+  "placement.pressureOn": {
+    "en": "pressure on",
+    "t": "давление вкл."
+  },
+  "placement.pull": {
+    "en": "Pull latest · {n} searches",
+    "t": "Загрузить свежее · {n} запросов"
+  },
+  "placement.radius": {
+    "en": "Radius λ {km} km",
+    "t": "Радиус λ {km} км"
+  },
+  "placement.studies.category": {
+    "en": "Categories with a study",
+    "t": "Категории с исследованием"
+  },
+  "placement.studies.scope": {
+    "en": "In scope",
+    "t": "В области"
+  },
+  "placement.studies.stem": {
+    "en": "Studies no category links",
+    "t": "Исследования без категории"
+  },
+  "placement.title": {
+    "en": "Map",
+    "t": "Карта"
+  },
+  "placement.trade": {
+    "en": "Trade",
+    "t": "Ниша"
+  },
+  "placement.unconnected": {
+    "en": "Placement not connected",
+    "t": "Размещение не подключено"
+  },
+  "placement.zoomIn": {
+    "en": "Zoom in to see the grid",
+    "t": "Приблизьте, чтобы увидеть сетку"
+  },
+  "prices.autocomplete": {
+    "en": "Suggestions (as typed)",
+    "t": "Подсказки при вводе"
+  },
+  "prices.details": {
+    "en": "Lookup (details)",
+    "t": "Запрос места"
+  },
+  "prices.save": {
+    "en": "Save",
+    "t": "Сохранить"
+  },
+  "prices.saved": {
+    "en": "Prices saved",
+    "t": "Цены сохранены"
+  },
+  "prices.search": {
+    "en": "Search",
+    "t": "Поиск"
+  },
+  "prices.title": {
+    "en": "Places on the shared keys",
+    "t": "Places на общих ключах"
+  },
+  "prices.unpriced": {
+    "en": "Not priced: requests on the shared keys are refused for everyone without a key of their own.",
+    "t": "Без цены: запросы на общих ключах отклоняются для всех, у кого нет своего ключа."
+  },
+  "prices.unset": {
+    "en": "not priced",
+    "t": "без цены"
+  },
+  "prices.why": {
+    "en": "Tokens a Google Places request costs when a person has no Maps key of their own that answers. Cached answers and own keys cost nothing.",
+    "t": "Сколько токенов стоит запрос Google Places, когда у человека нет своего работающего ключа Maps. Кэш и свои ключи бесплатны."
+  },
+  "reviewArchive.loading": {
+    "en": "Loading the review archive…",
+    "t": "Загружаем архив отзывов…"
+  },
+  "reviewArchive.places": {
+    "en": "Places",
+    "t": "Места"
+  },
+  "reviewArchive.places.description": {
+    "en": "Each place's reviews, newest first",
+    "t": "Отзывы каждого места, сначала новые"
+  },
+  "reviewArchive.settings": {
+    "en": "Settings",
+    "t": "Настройки"
+  },
+  "reviewArchive.settings.description": {
+    "en": "How the archive scans and keeps reviews",
+    "t": "Как архив собирает и хранит отзывы"
+  },
+  "scope.categories": {
+    "en": "Categories",
+    "t": "Категории"
+  },
+  "scope.categories.all": {
+    "en": "All categories",
+    "t": "Все категории"
+  },
+  "scope.categories.counts": {
+    "en": "{trades} trades · {countries} countries",
+    "t": "{trades} ниш · {countries} стран"
+  },
+  "scope.categories.manage": {
+    "en": "Manage categories",
+    "t": "Управлять категориями"
+  },
+  "scope.categories.many": {
+    "en": "{n} categories",
+    "t": "{n} категорий"
+  },
+  "scope.categories.none": {
+    "en": "No trades yet: ⚙ names one.",
+    "t": "Ниш ещё нет: ⚙ — добавить."
+  },
+  "scope.everyApp": {
+    "en": "scope applies in every app",
+    "t": "область действует во всех приложениях"
+  },
+  "scope.gmail.count": {
+    "en": "Its GBPs in the categories picked",
+    "t": "Его GBP в выбранных категориях"
+  },
+  "scope.gmails": {
+    "en": "Managing gmails",
+    "t": "Управляющие gmail"
+  },
+  "scope.gmails.all": {
+    "en": "All gmails",
+    "t": "Все gmail"
+  },
+  "scope.gmails.holding": {
+    "en": "{n} of {of} hold it",
+    "t": "{n} из {of} держат"
+  },
+  "scope.matrix.all": {
+    "en": "All",
+    "t": "Все"
+  },
+  "scope.matrix.country": {
+    "en": "Every trade in {country}",
+    "t": "Все ниши в {country}"
+  },
+  "scope.matrix.how": {
+    "en": "Click scopes · Shift-click adds",
+    "t": "Клик — область · Shift добавляет"
+  },
+  "scope.matrix.notSetUp": {
+    "en": "{category}: GBPs there, not set up",
+    "t": "{category}: GBP есть, не настроена"
+  },
+  "scope.matrix.open": {
+    "en": "Open {category}",
+    "t": "Открыть {category}"
+  },
+  "scope.matrix.trade": {
+    "en": "{trade} in every country",
+    "t": "{trade} во всех странах"
+  },
+  "scope.matrix.untraded": {
+    "en": "{n} GBPs have no trade → the outline's No category chip",
+    "t": "{n} GBP без ниши → чип «Без категории» в outline"
+  },
+  "session.devSignIn": {
+    "en": "dev sign-in",
+    "t": "dev-вход"
+  },
+  "session.devSignIn.hint": {
+    "en": "This backend signs people in without concierge. It is for local work only.",
+    "t": "Этот бэкенд пускает без concierge. Только для локальной работы."
+  },
+  "signin.expired.action": {
+    "en": "Sign in",
+    "t": "Войти"
+  },
+  "signin.expired.body": {
+    "en": "Sign in to continue.",
+    "t": "Войдите, чтобы продолжить."
+  },
+  "signin.expired.title": {
+    "en": "Your session has ended",
+    "t": "Сессия завершена"
+  },
+  "sites.loading": {
+    "en": "Loading the sites…",
+    "t": "Загружаем сайты…"
+  },
+  "sources.add": {
+    "en": "Add source",
+    "t": "Добавить источник"
+  },
+  "sources.brands": {
+    "en": "Brands",
+    "t": "Бренды"
+  },
+  "sources.brands.hint": {
+    "en": "Comma-separated, e.g. aquafix, vifnet",
+    "t": "Через запятую, например aquafix, vifnet"
+  },
+  "sources.created": {
+    "en": "Added",
+    "t": "Добавлен"
+  },
+  "sources.empty": {
+    "en": "No sources yet",
+    "t": "Источников пока нет"
+  },
+  "sources.empty.body": {
+    "en": "Add a key for each site or import that sends events to the panel.",
+    "t": "Заведите ключ для каждого сайта или импорта, который шлёт события в панель."
+  },
+  "sources.keyId": {
+    "en": "Key id",
+    "t": "Идентификатор ключа"
+  },
+  "sources.kind": {
+    "en": "Kind",
+    "t": "Тип"
+  },
+  "sources.kind.bot": {
+    "en": "Bot (WhatsApp/Telegram)",
+    "t": "Бот (WhatsApp/Telegram)"
+  },
+  "sources.origin": {
+    "en": "Origin",
+    "t": "Адрес сайта"
+  },
+  "sources.origin.hint": {
+    "en": "The site's address, e.g. https://aquafix.top",
+    "t": "Например https://aquafix.top"
+  },
+  "sources.revoke": {
+    "en": "Revoke",
+    "t": "Отозвать"
+  },
+  "sources.revoke.body": {
+    "en": "Events signed with this key will be refused from now on. This cannot be undone; a new key has to be added instead.",
+    "t": "События, подписанные этим ключом, дальше отклоняются. Отменить нельзя — придётся завести новый ключ."
+  },
+  "sources.revoke.confirm": {
+    "en": "Revoke",
+    "t": "Отозвать"
+  },
+  "sources.revoke.title": {
+    "en": "Revoke {key}?",
+    "t": "Отозвать {key}?"
+  },
+  "sources.revoked": {
+    "en": "Revoked {at}",
+    "t": "Отозван {at}"
+  },
+  "sources.revoked.toast": {
+    "en": "Source revoked",
+    "t": "Источник отозван"
+  },
+  "sources.secret.body": {
+    "en": "Shown once. Put it in the source's secret store now; it cannot be shown again.",
+    "t": "Показывается один раз. Сохраните его в секретах источника сейчас — повторно его не показать."
+  },
+  "sources.secret.copied": {
+    "en": "Copied",
+    "t": "Скопировано"
+  },
+  "sources.secret.copy": {
+    "en": "Copy",
+    "t": "Скопировать"
+  },
+  "sources.secret.done": {
+    "en": "I saved it",
+    "t": "Я сохранил"
+  },
+  "sources.secret.title": {
+    "en": "Secret for {key}",
+    "t": "Секрет для {key}"
+  },
+  "sources.state": {
+    "en": "State",
+    "t": "Состояние"
+  },
+  "sources.title": {
+    "en": "Sources",
+    "t": "Источники"
+  },
+  "state.csrf": {
+    "en": "The page is out of date. Reload it and repeat the action.",
+    "t": "Страница устарела. Обновите её и повторите действие."
+  },
+  "state.error": {
+    "en": "Could not load this. {detail}",
+    "t": "Не удалось загрузить. {detail}"
+  },
+  "state.forbidden": {
+    "en": "Your role may not do this.",
+    "t": "Вашей роли это недоступно."
+  },
+  "state.loading": {
+    "en": "Loading…",
+    "t": "Загрузка…"
+  },
+  "state.noAccess.title": {
+    "en": "No access to the Service-Arb panel",
+    "t": "Нет доступа к панели Service-Arb"
+  },
+  "state.retry": {
+    "en": "Try again",
+    "t": "Повторить"
+  },
+  "state.unavailable.body": {
+    "en": "Try again in a minute. You are still signed in.",
+    "t": "Попробуйте позже. Вы по-прежнему в системе."
+  },
+  "state.unavailable.title": {
+    "en": "Sign-in service unavailable",
+    "t": "Сервис входа недоступен"
+  },
+  "title.leads": {
+    "en": "Leads",
+    "t": "Заявки"
+  },
+  "tokens.admin": {
+    "en": "All balances",
+    "t": "Все балансы"
+  },
+  "tokens.admin.balance": {
+    "en": "Tokens",
+    "t": "Токены"
+  },
+  "tokens.admin.change": {
+    "en": "Change",
+    "t": "Изменить"
+  },
+  "tokens.admin.empty": {
+    "en": "Nobody has signed in yet.",
+    "t": "Ещё никто не входил."
+  },
+  "tokens.admin.title": {
+    "en": "Tokens of everyone",
+    "t": "Токены всех"
+  },
+  "tokens.admin.user": {
+    "en": "Person",
+    "t": "Человек"
+  },
+  "tokens.balance": {
+    "en": "Now",
+    "t": "Сейчас"
+  },
+  "tokens.claim": {
+    "en": "Claim",
+    "t": "Забрать"
+  },
+  "tokens.claimed": {
+    "en": "{n} tokens claimed",
+    "t": "Получено токенов: {n}"
+  },
+  "tokens.count": {
+    "en": "{n} tokens",
+    "t": "Токенов: {n}"
+  },
+  "tokens.description": {
+    "en": "What your walks may spend, what is owed back to you, and every change.",
+    "t": "Сколько могут потратить обходы, что вам вернут, и все изменения."
+  },
+  "tokens.grant.amount": {
+    "en": "Tokens",
+    "t": "Токены"
+  },
+  "tokens.grant.done": {
+    "en": "Now {n} tokens",
+    "t": "Теперь токенов: {n}"
+  },
+  "tokens.grant.mode.add": {
+    "en": "Add",
+    "t": "Добавить"
+  },
+  "tokens.grant.mode.grant": {
+    "en": "Owe back",
+    "t": "Вернуть"
+  },
+  "tokens.grant.mode.set": {
+    "en": "Set to",
+    "t": "Установить"
+  },
+  "tokens.grant.note": {
+    "en": "Note (optional)",
+    "t": "Заметка (необязательно)"
+  },
+  "tokens.grant.note.required": {
+    "en": "What it is for",
+    "t": "За что"
+  },
+  "tokens.grant.submit": {
+    "en": "Apply",
+    "t": "Применить"
+  },
+  "tokens.grant.title": {
+    "en": "Tokens of {who}",
+    "t": "Токены {who}"
+  },
+  "tokens.kickbacks": {
+    "en": "Owed back",
+    "t": "К возврату"
+  },
+  "tokens.kind.accrual": {
+    "en": "Daily renewal",
+    "t": "Ежедневное пополнение"
+  },
+  "tokens.kind.add": {
+    "en": "Added",
+    "t": "Начислено"
+  },
+  "tokens.kind.charge": {
+    "en": "Charge",
+    "t": "Списание"
+  },
+  "tokens.kind.kickback": {
+    "en": "Given back",
+    "t": "Возврат"
+  },
+  "tokens.kind.set": {
+    "en": "Set",
+    "t": "Установлено"
+  },
+  "tokens.ledger": {
+    "en": "History",
+    "t": "История"
+  },
+  "tokens.ledger.empty": {
+    "en": "Nothing yet.",
+    "t": "Пока ничего."
+  },
+  "tokens.ledger.more": {
+    "en": "More",
+    "t": "Ещё"
+  },
+  "tokens.title": {
+    "en": "Tokens",
+    "t": "Токены"
+  },
+  "trades.google": {
+    "en": "Google's primary category",
+    "t": "Основная категория Google"
+  },
+  "trades.google.additional": {
+    "en": "Additional categories",
+    "t": "Дополнительные категории"
+  },
+  "trades.google.additional.add": {
+    "en": "Add",
+    "t": "Добавить"
+  },
+  "trades.google.additional.earlier": {
+    "en": "Move {category} earlier",
+    "t": "Сдвинуть {category} раньше"
+  },
+  "trades.google.additional.full": {
+    "en": "Google takes 9 at most",
+    "t": "Google принимает не больше 9"
+  },
+  "trades.google.additional.later": {
+    "en": "Move {category} later",
+    "t": "Сдвинуть {category} позже"
+  },
+  "trades.google.additional.needPrimary": {
+    "en": "Pick the primary category first",
+    "t": "Сначала выберите основную категорию"
+  },
+  "trades.google.additional.order": {
+    "en": "Typed into Google's form in this order after the primary, and the order matters. Drag a chip, or move it with ‹ ›.",
+    "t": "Вводятся в форму Google в этом порядке после основной, и порядок важен. Перетащите чип или сдвиньте его ‹ ›."
+  },
+  "trades.google.additional.remove": {
+    "en": "Remove {category}",
+    "t": "Убрать {category}"
+  },
+  "trades.google.copy": {
+    "en": "Copy",
+    "t": "Копировать"
+  },
+  "trades.google.more": {
+    "en": "{n} more: keep typing",
+    "t": "Ещё {n}: уточните запрос"
+  },
+  "trades.google.nothing": {
+    "en": "Google lists no such category",
+    "t": "У Google нет такой категории"
+  },
+  "trades.google.pick": {
+    "en": "Pick Google's primary category",
+    "t": "Выберите основную категорию Google"
+  },
+  "trades.google.search": {
+    "en": "Search Google's categories",
+    "t": "Поиск по категориям Google"
+  },
+  "trades.google.where": {
+    "en": "copied in {lang}, as Google's form in {country} names it",
+    "t": "копируется на языке: {lang} — так её называет форма Google, {country}"
+  },
+  "trades.google.why": {
+    "en": "Off Google's own list. Every {category} draft's Launch tab shows them to type in.",
+    "t": "Из списка самого Google. Вкладка запуска каждого черновика {category} показывает их для ввода."
+  },
+  "trades.heldBy": {
+    "en": "Held by",
+    "t": "Держат"
+  },
+  "trades.heldBy.none": {
+    "en": "No GBP holds it yet.",
+    "t": "Ни один GBP её пока не держит."
+  },
+  "trades.heldBy.what": {
+    "en": "one category, several gmails · click narrows the outline",
+    "t": "одна категория, несколько gmail · клик сужает outline"
+  },
+  "trades.keywords": {
+    "en": "Keywords",
+    "t": "Ключевые слова"
+  },
+  "trades.keywords.add": {
+    "en": "Add keywords, comma-separated — no city: the grid point is the place",
+    "t": "Ключевые слова через запятую — без города: точка сетки и есть место"
+  },
+  "trades.keywords.remove": {
+    "en": "Remove {keyword}",
+    "t": "Убрать {keyword}"
+  },
+  "trades.keywords.why": {
+    "en": "Every GBP of the category is ranked and compared on these. A term one study or one location adds stays its own.",
+    "t": "По ним ранжируются и сравниваются все GBP категории. Слово отдельного исследования или точки остаётся их собственным."
+  },
+  "trades.new": {
+    "en": "New trade…",
+    "t": "Новая ниша…"
+  },
+  "trades.new.add": {
+    "en": "Add the trade",
+    "t": "Добавить нишу"
+  },
+  "trades.new.name": {
+    "en": "A trade's name: Plumbing",
+    "t": "Название ниши: Сантехника"
+  },
+  "trades.none": {
+    "en": "No trade",
+    "t": "Без ниши"
+  },
+  "trades.option.notSetUp": {
+    "en": "{trade} — not set up in {country}",
+    "t": "{trade} — не настроена в {country}"
+  },
+  "trades.pick": {
+    "en": "Pick a trade",
+    "t": "Выберите нишу"
+  },
+  "trades.set": {
+    "en": "Set trade · {n}",
+    "t": "Ниша · {n}"
+  },
+  "trades.set.notSetUp": {
+    "en": "{category} {n} · not set up",
+    "t": "{category} {n} · не настроена"
+  },
+  "trades.set.nowhere": {
+    "en": "{n} no country",
+    "t": "{n} без страны"
+  },
+  "trades.set.title": {
+    "en": "Set the trade of {n}",
+    "t": "Ниша для {n}"
+  },
+  "trades.set.untraded": {
+    "en": "all {n} already have no trade",
+    "t": "у всех {n} ниши нет"
+  },
+  "trades.study": {
+    "en": "Study",
+    "t": "Исследование"
+  },
+  "trades.study.none": {
+    "en": "None",
+    "t": "Нет"
+  },
+  "trades.study.what": {
+    "en": "which placement trade studies it",
+    "t": "какая ниша placement её изучает"
+  },
+  "trades.study.why": {
+    "en": "With the scope on {category}, the Map panel shows this study. None: the category has no study.",
+    "t": "Когда outline на {category}, панель карты показывает это исследование. Нет: у категории нет исследования."
+  },
+  "trades.trade": {
+    "en": "Trade",
+    "t": "Ниша"
+  },
+  "trades.window.countries": {
+    "en": "Countries",
+    "t": "Страны"
+  },
+  "trades.window.country": {
+    "en": "Country",
+    "t": "Страна"
+  },
+  "trades.window.counts": {
+    "en": "{gbps} GBPs · {gmails} gmails",
+    "t": "{gbps} GBP · {gmails} gmail"
+  },
+  "trades.window.delete": {
+    "en": "Delete {trade}",
+    "t": "Удалить {trade}"
+  },
+  "trades.window.delete.body": {
+    "en": "Its categories go with it. No GBP holds it.",
+    "t": "Её категории удалятся с ней. Ни один GBP её не держит."
+  },
+  "trades.window.delete.held": {
+    "en": "{n} GBPs hold it: give them another trade first",
+    "t": "{n} GBP в этой нише: сначала дайте им другую"
+  },
+  "trades.window.more": {
+    "en": "More",
+    "t": "Ещё"
+  },
+  "trades.window.notSetUp": {
+    "en": "{category} is not set up.",
+    "t": "{category} не настроена."
+  },
+  "trades.window.pickCountry": {
+    "en": "Not set up anywhere yet: add a country.",
+    "t": "Нигде не настроена: добавьте страну."
+  },
+  "trades.window.rename": {
+    "en": "Rename",
+    "t": "Переименовать"
+  },
+  "trades.window.scope": {
+    "en": "Scope the outline to it",
+    "t": "Ограничить outline ей"
+  },
+  "trades.window.setUp": {
+    "en": "Set up {category}",
+    "t": "Настроить {category}"
+  },
+  "trades.window.tab.notSetUp": {
+    "en": "{n} · not set up",
+    "t": "{n} · не настроена"
+  },
+  "trades.window.trade": {
+    "en": "trade: {gbps} GBPs in {countries} countries",
+    "t": "ниша: {gbps} GBP в {countries} странах"
+  },
+  "trades.window.unset": {
+    "en": "No longer set up {category}",
+    "t": "Снять настройку {category}"
+  },
+  "trades.window.waiting": {
+    "en": "{n} GBPs wait for {category}.",
+    "t": "{n} GBP ждут {category}."
+  },
+  "trades.window.willAsk": {
+    "en": "It will ask: keywords in its language · Google's category · the study, if a grid covers it.",
+    "t": "Спросит: ключевые слова на её языке · категорию Google · исследование, если есть сетка."
+  },
+  "trash.empty": {
+    "en": "Nothing removed.",
+    "t": "Ничего не удалено."
+  },
+  "trash.for.days": {
+    "en": ", restorable for {days} days",
+    "t": " и восстановим {days} дн."
+  },
+  "trash.for.ever": {
+    "en": ", kept until you restore it",
+    "t": " и хранится, пока вы его не восстановите"
+  },
+  "trash.gmails": {
+    "en": "Gmails",
+    "t": "Gmail"
+  },
+  "trash.gmbs": {
+    "en": "GBPs removed on their own",
+    "t": "GBP, удалённые по одному"
+  },
+  "trash.gone": {
+    "en": "gone for good in {days} d",
+    "t": "исчезнет через {days} дн."
+  },
+  "trash.keep.after": {
+    "en": "then delete for good",
+    "t": "затем удалять навсегда"
+  },
+  "trash.keep.before": {
+    "en": "Keep for",
+    "t": "Хранить"
+  },
+  "trash.keep.days": {
+    "en": "{days} d",
+    "t": "{days} дн."
+  },
+  "trash.kept": {
+    "en": "kept until restored",
+    "t": "хранится до восстановления"
+  },
+  "trash.never": {
+    "en": "Never delete for good",
+    "t": "Никогда не удалять навсегда"
+  },
+  "trash.never.on": {
+    "en": "Nothing here is deleted for good.",
+    "t": "Отсюда ничего не удаляется навсегда."
+  },
+  "trash.open": {
+    "en": "Trash",
+    "t": "Корзина"
+  },
+  "trash.removed": {
+    "en": "removed {days} d ago",
+    "t": "удалено {days} дн. назад"
+  },
+  "trash.removed.today": {
+    "en": "removed today",
+    "t": "удалено сегодня"
+  },
+  "trash.restore": {
+    "en": "Restore",
+    "t": "Восстановить"
+  },
+  "trash.title": {
+    "en": "Trash",
+    "t": "Корзина"
+  },
+  "trash.what": {
+    "en": "What you removed: every service stops working on it until it is restored.",
+    "t": "Что вы удалили: сервисы не работают с этим, пока его не восстановят."
+  },
+  "trash.with": {
+    "en": "{n} GBPs with it",
+    "t": "{n} GBP вместе с ним"
+  },
+  "undo.changed": {
+    "en": "Not undone: {label} has changed since. The history is cleared.",
+    "t": "Не отменено: «{label}» с тех пор изменилось. История очищена."
+  },
+  "undo.off": {
+    "en": "{n} switched off",
+    "t": "Выключено: {n}"
+  },
+  "undo.on": {
+    "en": "{n} switched on",
+    "t": "Включено: {n}"
+  },
+  "undo.placed": {
+    "en": "{name} placed on the map",
+    "t": "{name}: точка на карте"
+  },
+  "undo.redo": {
+    "en": "Redo",
+    "t": "Повторено"
+  },
+  "undo.trade": {
+    "en": "Trade set on {n}",
+    "t": "Профиль задан: {n}"
+  },
+  "undo.undo": {
+    "en": "Undo",
+    "t": "Отменено"
+  },
+  "usage.access.admin": {
+    "en": "Administration",
+    "t": "Администрирование"
+  },
+  "usage.description": {
+    "en": "Your access, tokens and spending on Service-Arb.",
+    "t": "Ваш доступ, токены и расходы в Service-Arb."
+  },
+  "usage.title": {
+    "en": "Usage",
+    "t": "Использование"
+  },
+  "wallet.description": {
+    "en": "Balances and recent activity of the Service-Arb compartment.",
+    "t": "Балансы и последние операции отсека Service-Arb."
+  },
+  "wallet.off.body": {
+    "en": "The wallet is not enabled for this panel yet.",
+    "t": "Кошелёк для этой панели ещё не включён."
+  },
+  "wallet.title": {
+    "en": "Wallet",
+    "t": "Кошелёк"
+  },
+  "wallet.unavailable.body": {
+    "en": "The wallet could not be loaded. Try again later.",
+    "t": "Не удалось загрузить кошелёк. Попробуйте позже."
+  },
+  "wallet.unavailable.title": {
+    "en": "Wallet is unavailable",
+    "t": "Кошелёк недоступен"
+  },
+  "window.browser.copy": {
+    "en": "Copy {what}",
+    "t": "Копировать: {what}"
+  },
+  "window.browser.form": {
+    "en": "Google's form",
+    "t": "Форма Google"
+  },
+  "window.browser.form.hint": {
+    "en": "Click the field in the page, then type its value in.",
+    "t": "Нажмите на поле на странице, затем впишите в него значение."
+  },
+  "window.browser.needsGmail": {
+    "en": "Needs a gmail",
+    "t": "Нужен gmail"
+  },
+  "window.browser.needsGmail.body": {
+    "en": "A GBP's browser is its managing gmail's: pick one on the Launch tab.",
+    "t": "Браузер GBP принадлежит управляющему gmail: выберите его во вкладке «Запуск»."
+  },
+  "window.browser.type": {
+    "en": "Type into the field",
+    "t": "Ввести в поле"
+  },
+  "window.browser.typeOff": {
+    "en": "Open the browser first",
+    "t": "Сначала откройте браузер"
+  },
+  "window.browser.unset": {
+    "en": "not set",
+    "t": "не задано"
+  },
+  "window.browser.visit": {
+    "en": "Customers visit?",
+    "t": "Клиенты приходят?"
+  },
+  "window.category.noCountry": {
+    "en": "{trade} · no country",
+    "t": "{trade} · без страны"
+  },
+  "window.category.notSetUp": {
+    "en": "{category} · not set up",
+    "t": "{category} · не настроена"
+  },
+  "window.category.open": {
+    "en": "Open its trade",
+    "t": "Открыть её нишу"
+  },
+  "window.close": {
+    "en": "Close the window",
+    "t": "Закрыть окно"
+  },
+  "window.next": {
+    "en": "Next",
+    "t": "Следующий"
+  },
+  "window.planned": {
+    "en": "planned · {at}",
+    "t": "план · {at}"
+  },
+  "window.prev": {
+    "en": "Previous",
+    "t": "Предыдущий"
+  },
+  "window.readyToSubmit": {
+    "en": "ready to submit",
+    "t": "готово к отправке"
+  },
+  "window.tab.browser": {
+    "en": "Browser",
+    "t": "Браузер"
+  },
+  "window.tab.launch": {
+    "en": "Launch",
+    "t": "Запуск"
+  },
+  "window.tabs": {
+    "en": "Sections",
+    "t": "Разделы"
+  }
+}

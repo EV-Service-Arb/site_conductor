@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import { PANEL } from "@config";
 
-import { DocumentLang } from "@/shared/i18n";
+import { LocaleProvider } from "@/shared/i18n";
 
 import "./globals.css";
 
@@ -22,8 +22,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" data-theme={PANEL.theme === "dark" ? undefined : PANEL.theme}>
       <body className="min-h-svh bg-background font-sans text-ink antialiased">
-        <DocumentLang />
-        {children}
+        <LocaleProvider>{children}</LocaleProvider>
       </body>
     </html>
   );

@@ -4,10 +4,24 @@ import { categoryOf } from "./category";
 import type { ArchiveTag, Gmb, SiteTag, Trade } from "./gmb";
 import type { Listed } from "./narrow";
 import { MUST_HAVES, readiness } from "./readiness";
+import { gmbs as gmbsKeys } from "./i18n";
+
+const issueKeys = gmbsKeys.issue;
 
 /** What needs the operator on a GMB, most pressing first. */
 export const ISSUES = ["overdue", "suspended", "failing", "draft", "unlocated", "no_site", "no_category", "off"] as const;
 export type Issue = (typeof ISSUES)[number];
+
+export const ISSUE_NAME = {
+  overdue: (t) => t(issueKeys.overdue, "Overdue"),
+  suspended: (t) => t(issueKeys.suspended, "Reviews suspended"),
+  failing: (t) => t(issueKeys.failing, "Failing"),
+  draft: (t) => t(issueKeys.draft, "Drafts"),
+  unlocated: (t) => t(issueKeys.unlocated, "No location"),
+  no_site: (t) => t(issueKeys.no_site, "No site"),
+  no_category: (t) => t(issueKeys.no_category, "No category"),
+  off: (t) => t(issueKeys.off, "Off"),
+} satisfies Record<Issue, (t: T) => string>;
 
 /** The services' tags by GMB id, and the caller's trades; `null`: not read, the service did not answer, or the caller does not see it. */
 export interface Tags {
@@ -44,8 +58,8 @@ export function issueCounts(gmbs: readonly Gmb[], tags: Tags): Map<Issue, number
 /** The issue as a row and a card name it: with its count where it has one. `issue` is `issueOf` the GMB under these tags. */
 export function issueText(issue: Issue, listed: Listed, tags: Tags, t: T): string {
   const { gmb } = listed;
-  if (issue === "overdue") return t("gmbs.tag.overdue", { n: tags.sites!.get(gmb.id)!.overdue });
-  if (issue === "suspended") return t("gmbs.tag.suspended", { n: tags.archive!.get(gmb.id)!.suspended });
+  if (issue === "overdue") return t(gmbsKeys.tag.overdue, "{n} overdue", { n: tags.sites!.get(gmb.id)!.overdue });
+  if (issue === "suspended") return t(gmbsKeys.tag.suspended, "{n} reviews suspended", { n: tags.archive!.get(gmb.id)!.suspended });
   if (issue === "draft") return `${readiness(listed, tags).filter((r) => r.ready).length}/${MUST_HAVES.length}`;
-  return t(`gmbs.issue.${issue}`);
+  return ISSUE_NAME[issue](t);
 }

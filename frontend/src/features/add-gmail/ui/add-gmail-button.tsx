@@ -4,7 +4,7 @@ import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogH
 import { Plus } from "lucide-react";
 import { useId, useState } from "react";
 
-import { addGmail } from "@/entities/gmb";
+import { addGmail, gmbs } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -39,7 +39,7 @@ export function AddGmailButton({ onAdded }: { onAdded: () => void }) {
     <>
       <Button variant="ghost" size={button("sm")} className="justify-start text-ink-soft" onClick={() => setOpen(true)}>
         <Plus aria-hidden />
-        {t("gmbs.gmail.add")}
+        {t(gmbs.gmail.add, "Add a managing gmail")}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -51,16 +51,16 @@ export function AddGmailButton({ onAdded }: { onAdded: () => void }) {
             }}
           >
             <DialogHeader>
-              <DialogTitle>{t("gmbs.gmail.add")}</DialogTitle>
-              <DialogDescription>{t("gmbs.gmail.hint")}</DialogDescription>
+              <DialogTitle>{t(gmbs.gmail.add, "Add a managing gmail")}</DialogTitle>
+              <DialogDescription>{t(gmbs.gmail.hint, "The Google account that manages the business profiles.")}</DialogDescription>
             </DialogHeader>
             <Field className="flex flex-col gap-1">
-              <FieldLabel htmlFor={`${id}-gmail`}>{t("gmbs.gmail.label")}</FieldLabel>
+              <FieldLabel htmlFor={`${id}-gmail`}>{t(gmbs.gmail.label, "Gmail")}</FieldLabel>
               <Input id={`${id}-gmail`} size={size} autoCapitalize="none" value={gmail} onChange={(e) => setGmail(e.target.value)} />
             </Field>
             <DialogFooter>
               <Button type="submit" size={button()} disabled={busy || !looksLikeEmail(gmail)}>
-                {t("gmbs.gmail.add")}
+                {t(gmbs.gmail.add, "Add a managing gmail")}
               </Button>
             </DialogFooter>
           </form>

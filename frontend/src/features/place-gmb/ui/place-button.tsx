@@ -4,7 +4,7 @@ import { Button, DropdownMenuItem } from "@evinvest/uikit";
 import { MapPinPlus, Move } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 
-import { type Gmb, peek, setOnMap } from "@/entities/gmb";
+import { type Gmb, peek, setOnMap, gmbs } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
 
@@ -15,7 +15,7 @@ export function PlaceButton({ gmb, item = false, onNavigate }: { gmb: Gmb; item?
   const router = useRouter();
   const pathname = usePathname();
   if (gmb.location !== null && !gmb.location.placed) return null;
-  const label = t(gmb.location === null ? "gmbs.place.set" : "gmbs.place.move");
+  const label = (gmb.location === null ? t(gmbs.place.set, "Set location") : t(gmbs.place.move, "Move location"));
   const open = () => {
     if (pathname !== "/") router.push("/");
     else peek(null);

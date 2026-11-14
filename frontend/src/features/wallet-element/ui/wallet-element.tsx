@@ -3,7 +3,7 @@
 import { Skeleton } from "@evinvest/uikit";
 import { useEffect, useRef } from "react";
 
-import { useLocale, useT } from "@/shared/i18n";
+import { useLocale, useT, wallet } from "@/shared/i18n";
 import { useElementBundle } from "@/shared/mfe";
 import { EmptyState } from "@/shared/ui/empty-state";
 
@@ -35,7 +35,7 @@ export function WalletElement() {
     return () => element.remove();
   }, [bundle, locale]);
 
-  if (bundle === "failed") return <EmptyState title={t("wallet.unavailable.title")} description={t("wallet.unavailable.body")} />;
+  if (bundle === "failed") return <EmptyState title={t(wallet.unavailable.title, "Wallet is unavailable")} description={t(wallet.unavailable.body, "The wallet could not be loaded. Try again later.")} />;
   return (
     <div ref={hostRef} aria-busy={bundle === "loading"}>
       {bundle === "loading" && <Skeleton className="h-40 w-full" />}

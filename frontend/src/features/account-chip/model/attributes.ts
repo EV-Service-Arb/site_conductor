@@ -2,6 +2,7 @@ import { type Caller, may } from "@/entities/session";
 import { switchAccountPath } from "@/shared/api";
 import { ROUTES } from "@/shared/config/routes";
 import type { T } from "@/shared/i18n";
+import { account } from "@/shared/i18n";
 
 // The host side of the account chip's host-mode contract (apiVersion 2). The panel has
 // its own origin and session, so the chip fetches nothing and shows what these attributes say.
@@ -40,7 +41,7 @@ function clip(value: string): string {
 /** The chip is the account's: past the profile it holds only acting as a member, for whoever may. */
 export function panelGroups(me: Caller, t: T): ChipGroup[] {
   if (!may(me, "sa:review_archive:members:act_as")) return [];
-  return [{ id: "sa", items: [{ id: "act-as", href: ROUTES.reviewArchiveActAs, label: t("account.actAs"), external: true }] }];
+  return [{ id: "sa", items: [{ id: "act-as", href: ROUTES.reviewArchiveActAs, label: t(account.actAs, "View as member…"), external: true }] }];
 }
 
 /** The element's attributes for `me` on `pathname`; an absent value is an absent attribute. */

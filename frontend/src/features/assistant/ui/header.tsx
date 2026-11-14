@@ -5,7 +5,7 @@ import { BookOpen, ChevronDown, ChevronsRight, Ellipsis, FileText, MapPin, Messa
 import Link from "next/link";
 import { useState } from "react";
 
-import { type ChatSummary, type Mention, type Source, type Turn, pinChat, renameChat } from "@/entities/assistant";
+import { type ChatSummary, type Mention, type Source, type Turn, pinChat, renameChat, assistant } from "@/entities/assistant";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 
@@ -41,7 +41,7 @@ export function Header({
   const [renaming, setRenaming] = useState(false);
   const full = display === "full";
   const interacts = chat !== null && chat.role !== "viewer";
-  const title = chat?.title ?? t("assistant.newChat");
+  const title = chat?.title ?? t(assistant.newChat, "New chat");
   const rename = (value: string) => {
     setRenaming(false);
     onRenamed();
@@ -49,7 +49,7 @@ export function Header({
   };
   const history = (
     <History current={chat?.id ?? null} onOpen={onOpen}>
-      <IconButton size="sm" aria-label={t("assistant.history")} tooltip={t("assistant.history")} className="size-6 aria-expanded:bg-active">
+      <IconButton size="sm" aria-label={t(assistant.history, "Chat history")} tooltip={t(assistant.history, "Chat history")} className="size-6 aria-expanded:bg-active">
         <ChevronDown />
       </IconButton>
     </History>
@@ -61,12 +61,12 @@ export function Header({
           <Sparkles aria-hidden className="size-3.5 text-ink-mid" />
         </span>
       )}
-      {full && <span className="mr-1.5 text-body-s text-ink-soft">{t("assistant")} /</span>}
+      {full && <span className="mr-1.5 text-body-s text-ink-soft">{t(assistant, "Assistant")} /</span>}
       {renaming && chat !== null ? (
         <Input
           autoFocus
           defaultValue={chat.title ?? ""}
-          aria-label={t("assistant.rename")}
+          aria-label={t(assistant.rename, "Rename")}
           className="h-7 min-w-0 flex-1"
           onFocus={(e) => e.currentTarget.select()}
           onBlur={(e) => rename(e.currentTarget.value)}
@@ -82,7 +82,7 @@ export function Header({
         <button
           type="button"
           onClick={() => setRenaming(true)}
-          aria-label={t("assistant.renameTitle", { title })}
+          aria-label={t(assistant.renameTitle, "Rename “{title}”", { title })}
           className="h-7 min-w-0 truncate rounded-md px-1.5 text-left text-body-s font-medium text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
         >
           {title}
@@ -94,10 +94,10 @@ export function Header({
       <span className="flex-1" />
       <IconButton
         size="sm"
-        aria-label={t("assistant.new")}
+        aria-label={t(assistant.new, "New chat")}
         tooltip={
           <span className="flex items-center gap-2">
-            {t("assistant.new")}
+            {t(assistant.new, "New chat")}
             <KbdGroup>
               <Kbd>Ctrl</Kbd>
               <Kbd>⇧</Kbd>
@@ -112,27 +112,27 @@ export function Header({
       </IconButton>
       {chat !== null ? (
         <Share chat={chat}>
-          <IconButton size="sm" aria-label={t("assistant.share")} tooltip={t("assistant.share")} className="aria-expanded:bg-active">
+          <IconButton size="sm" aria-label={t(assistant.share, "Share")} tooltip={t(assistant.share, "Share")} className="aria-expanded:bg-active">
             <ShareIcon />
           </IconButton>
         </Share>
       ) : (
-        <IconButton size="sm" aria-label={t("assistant.share")} disabled>
+        <IconButton size="sm" aria-label={t(assistant.share, "Share")} disabled>
           <ShareIcon />
         </IconButton>
       )}
       {context === null ? (
         <Context turns={turns} />
       ) : (
-        <IconButton size="sm" aria-label={t("assistant.context")} tooltip={t("assistant.context")} pressed={context} onClick={onContext}>
+        <IconButton size="sm" aria-label={t(assistant.context, "Context")} tooltip={t(assistant.context, "Context")} pressed={context} onClick={onContext}>
           <PanelRight />
         </IconButton>
       )}
       {full && interacts && (
         <IconButton
           size="sm"
-          aria-label={t(chat.pinned_at === null ? "assistant.pin" : "assistant.unpin")}
-          tooltip={t(chat.pinned_at === null ? "assistant.pin" : "assistant.unpin")}
+          aria-label={(chat.pinned_at === null ? t(assistant.pin, "Pin") : t(assistant.unpin, "Unpin"))}
+          tooltip={(chat.pinned_at === null ? t(assistant.pin, "Pin") : t(assistant.unpin, "Unpin"))}
           pressed={chat.pinned_at !== null}
           onClick={() => void pinChat(chat.id, chat.pinned_at === null).then(onChanged, (e: unknown) => notifyFailure(e, t))}
         >
@@ -141,7 +141,7 @@ export function Header({
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <IconButton size="sm" aria-label={t("assistant.more")} tooltip={t("assistant.more")} disabled={chat === null} className="aria-expanded:bg-active">
+          <IconButton size="sm" aria-label={t(assistant.more, "More")} tooltip={t(assistant.more, "More")} disabled={chat === null} className="aria-expanded:bg-active">
             <Ellipsis />
           </IconButton>
         </DropdownMenuTrigger>
@@ -152,10 +152,10 @@ export function Header({
       {onHide !== null && (
         <IconButton
           size="sm"
-          aria-label={t(display === "floating" ? "assistant.minimize" : "assistant.fold")}
+          aria-label={(display === "floating" ? t(assistant.minimize, "Minimize") : t(assistant.fold, "Hide"))}
           tooltip={
             <span className="flex items-center gap-2">
-              {t(display === "floating" ? "assistant.minimize" : "assistant.fold")}
+              {(display === "floating" ? t(assistant.minimize, "Minimize") : t(assistant.fold, "Hide"))}
               <KbdGroup>
                 <Kbd>Ctrl</Kbd>
                 <Kbd>J</Kbd>
@@ -191,7 +191,7 @@ function Context({ turns }: { turns: readonly Turn[] }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <IconButton size="sm" aria-label={t("assistant.context")} tooltip={t("assistant.context")} disabled={locations.length === 0 && read.length === 0} className="aria-expanded:bg-active">
+        <IconButton size="sm" aria-label={t(assistant.context, "Context")} tooltip={t(assistant.context, "Context")} disabled={locations.length === 0 && read.length === 0} className="aria-expanded:bg-active">
           <PanelRight />
         </IconButton>
       </PopoverTrigger>
@@ -207,8 +207,8 @@ export function ContextCard({ turns }: { turns: readonly Turn[] }) {
   const t = useT();
   const { locations, read } = touched(turns);
   return (
-    <aside aria-label={t("assistant.context")} className="flex w-64 shrink-0 flex-col gap-2 self-start rounded-xl border border-border-subtle p-1.5">
-      {locations.length === 0 && read.length === 0 ? <p className="px-2 py-1.5 text-body-s text-ink-soft">{t("assistant.context.none")}</p> : <Touched turns={turns} />}
+    <aside aria-label={t(assistant.context, "Context")} className="flex w-64 shrink-0 flex-col gap-2 self-start rounded-xl border border-border-subtle p-1.5">
+      {locations.length === 0 && read.length === 0 ? <p className="px-2 py-1.5 text-body-s text-ink-soft">{t(assistant.context.none, "Nothing named or read yet")}</p> : <Touched turns={turns} />}
     </aside>
   );
 }
@@ -221,7 +221,7 @@ function Touched({ turns }: { turns: readonly Turn[] }) {
     <>
       {locations.length > 0 && (
         <section className="flex flex-col">
-          <h3 className="px-2 py-1 text-caption text-ink-soft">{t("assistant.context.locations")}</h3>
+          <h3 className="px-2 py-1 text-caption text-ink-soft">{t(assistant.context.locations, "Locations")}</h3>
           {locations.map((m) => (
             <Link key={m.id} href={`/?gmb=${m.id}`} className={row}>
               <MapPin aria-hidden className="size-4 shrink-0 text-ink-soft" />
@@ -232,7 +232,7 @@ function Touched({ turns }: { turns: readonly Turn[] }) {
       )}
       {read.length > 0 && (
         <section className="flex flex-col">
-          <h3 className="px-2 py-1 text-caption text-ink-soft">{t("assistant.context.read")}</h3>
+          <h3 className="px-2 py-1 text-caption text-ink-soft">{t(assistant.context.read, "Read")}</h3>
           {read.map((source) =>
             source.href === null ? (
               <span key={source.label} className={cn(row, "hover:bg-transparent")}>

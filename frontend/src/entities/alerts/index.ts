@@ -2,3 +2,4 @@ export { addChat, linkTelegram, removeDestination, setGmail, setRules, testDesti
 export { RULES, unreached } from "./model/alerts";
 export type { Alerts, Destination, Rule } from "./model/alerts";
 export { useAlerts } from "./model/use-alerts";
+export { alerts } from "./model/i18n";

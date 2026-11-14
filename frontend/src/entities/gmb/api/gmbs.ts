@@ -28,6 +28,7 @@ import {
   tradeParser,
   tradesParser,
 } from "../model/gmb";
+import { undo } from "../model/i18n";
 
 export function fetchGmails(): Promise<Gmails> {
   return http.get("/api/v1/gmails", gmailsParser);
@@ -137,7 +138,7 @@ async function set<V>(field: Field<V>, gmbs: Gmb[], to: V, label: string, t: T):
   const after = JSON.stringify(to);
   const holds = async (value: (id: number) => string) => {
     const now = new Map((await fetchGmails()).gmbs.map((b) => [b.id, JSON.stringify(field.of(b))]));
-    if (!ids.every((id) => now.get(id) === value(id))) throw new Error(t("undo.changed", { label }));
+    if (!ids.every((id) => now.get(id) === value(id))) throw new Error(t(undo.changed, "Not undone: {label} has changed since. The history is cleared.", { label }));
   };
   return {
     label,
@@ -156,7 +157,7 @@ async function set<V>(field: Field<V>, gmbs: Gmb[], to: V, label: string, t: T):
 
 /** Refused when Google has the place's point: only one it has none of is placed by hand. */
 export function placeGmb(gmb: Gmb, at: LatLng, t: T): Promise<UndoEntry> {
-  return set(LOCATION, [gmb], { lat: at.lat, lng: at.lng, placed: true }, t("undo.placed", { name: gmb.name ?? gmb.place_id ?? String(gmb.id) }), t);
+  return set(LOCATION, [gmb], { lat: at.lat, lng: at.lng, placed: true }, t(undo.placed, "{name} placed on the map", { name: gmb.name ?? gmb.place_id ?? String(gmb.id) }), t);
 }
 
 export async function removeGmb(id: number): Promise<void> {
@@ -165,12 +166,12 @@ export async function removeGmb(id: number): Promise<void> {
 
 /** All of `gmbs` or none: one not the caller's refuses the lot. */
 export function switchGmbs(gmbs: Gmb[], enabled: boolean, t: T): Promise<UndoEntry> {
-  return set(ENABLED, gmbs, enabled, t(enabled ? "undo.on" : "undo.off", { n: gmbs.length }), t);
+  return set(ENABLED, gmbs, enabled, (enabled ? t(undo.on, "{n} switched on", { n: gmbs.length }) : t(undo.off, "{n} switched off", { n: gmbs.length })), t);
 }
 
 /** All of `gmbs` or none: one not the caller's refuses the lot. `null` takes their trade away. */
 export function setTrades(gmbs: Gmb[], trade: number | null, t: T): Promise<UndoEntry> {
-  return set(TRADE, gmbs, trade, t("undo.trade", { n: gmbs.length }), t);
+  return set(TRADE, gmbs, trade, t(undo.trade, "Trade set on {n}", { n: gmbs.length }), t);
 }
 
 export async function fetchTrades(): Promise<Trade[]> {

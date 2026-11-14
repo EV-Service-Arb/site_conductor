@@ -4,7 +4,7 @@ import { PageFrame, Settled, Skeleton } from "@evinvest/uikit";
 import { useState } from "react";
 
 import { may, useMe } from "@/entities/session";
-import { type AddedSource, fetchConnectedSites, fetchSources } from "@/entities/source";
+import { type AddedSource, fetchConnectedSites, fetchSources, sources as sourcesKeys } from "@/entities/source";
 import { AddSourceForm, SecretDialog } from "@/features/manage-sources";
 import { useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
@@ -13,6 +13,7 @@ import { ErrorState } from "@/shared/ui/error-state";
 
 import { ConnectedSitesTable } from "./connected-sites-table";
 import { SourcesTable } from "./sources-table";
+import { connected as connectedKeys } from "../model/i18n";
 
 /** Admin only (spec §5.4): the signing keys the sources ingest with. */
 export function SourcesView() {
@@ -24,14 +25,14 @@ export function SourcesView() {
 
   if (!may(me, "sa:admin:sources:manage")) {
     return (
-      <PageFrame breakpoint="md" title={t("sources.title")}>
+      <PageFrame breakpoint="md" title={t(sourcesKeys.title, "Sources")}>
         <ErrorState failure={{ kind: "forbidden", message: "" }} />
       </PageFrame>
     );
   }
 
   return (
-    <PageFrame breakpoint="md" title={t("sources.title")}>
+    <PageFrame breakpoint="md" title={t(sourcesKeys.title, "Sources")}>
       <AddSourceForm
         onAdded={(a) => {
           setAdded(a);
@@ -40,21 +41,21 @@ export function SourcesView() {
       />
       <Settled loading={sources.status === "loading"} skeleton={<Skeleton className="h-40 w-full" />}>
         {sources.status === "error" && <ErrorState failure={sources.failure} onRetry={sources.reload} />}
-        {sources.status === "ok" && sources.data.length === 0 && <EmptyState title={t("sources.empty")} description={t("sources.empty.body")} />}
+        {sources.status === "ok" && sources.data.length === 0 && <EmptyState title={t(sourcesKeys.empty, "No sources yet")} description={t(sourcesKeys.empty.body, "Add a key for each site or import that sends events to the panel.")} />}
         {sources.status === "ok" && sources.data.length > 0 && (
           <SourcesTable sources={sources.data} onRevoked={sources.reload} />
         )}
       </Settled>
-      <h2 className="text-lg font-semibold">{t("connected.title")}</h2>
+      <h2 className="text-lg font-semibold">{t(connectedKeys.title, "Connected sites")}</h2>
       <Settled loading={connected.status === "loading"} skeleton={<Skeleton className="h-24 w-full" />}>
         {connected.status === "error" && <ErrorState failure={connected.failure} onRetry={connected.reload} />}
         {connected.status === "ok" &&
           connected.data.sitesFailures.map((detail) => (
             <p key={detail} className="text-sm text-ink-soft">
-              {t("connected.sitesFailed", { detail })}
+              {t(connectedKeys.sitesFailed, "sites_panel did not answer: {detail}", { detail })}
             </p>
           ))}
-        {connected.status === "ok" && connected.data.sites.length === 0 && <EmptyState title={t("connected.empty")} description={t("connected.empty.body")} />}
+        {connected.status === "ok" && connected.data.sites.length === 0 && <EmptyState title={t(connectedKeys.empty, "No site keys")} description={t(connectedKeys.empty.body, "A site key with its origin shows here, with what its site reports.")} />}
         {connected.status === "ok" && connected.data.sites.length > 0 && <ConnectedSitesTable sites={connected.data.sites} />}
       </Settled>
       <SecretDialog added={added} onClose={() => setAdded(null)} />

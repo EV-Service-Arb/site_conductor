@@ -15,7 +15,7 @@ import {
 import { Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import { select, useTrash } from "@/entities/gmb";
+import { select, useTrash, trash as trashKeys, move, gmbs } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -29,7 +29,7 @@ export function useKept(): string {
   const trash = useTrash();
   if (trash.status !== "ok") return "";
   const { never_purge, keep_days } = trash.data.settings;
-  return never_purge ? t("trash.for.ever") : t("trash.for.days", { days: keep_days });
+  return never_purge ? t(trashKeys.for.ever, ", kept until you restore it") : t(trashKeys.for.days, ", restorable for {days} days", { days: keep_days });
 }
 
 export const HEADING = "flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-medium tracking-wide text-ink-soft uppercase";
@@ -67,9 +67,9 @@ export function RemoveDialog({ title, body, remove, onRemoved, onClose }: { titl
           <AlertDialogDescription>{body}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t("move.cancel")}</AlertDialogCancel>
+          <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t(move.cancel, "Cancel")}</AlertDialogCancel>
           <AlertDialogAction className={buttonVariants({ variant: "destructive", size: button() })} onClick={() => void act()}>
-            {t("gmbs.remove")}
+            {t(gmbs.remove, "Remove")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -80,7 +80,7 @@ export function RemoveDialog({ title, body, remove, onRemoved, onClose }: { titl
 export function ResetSelection() {
   const t = useT();
   return (
-    <button type="button" onClick={() => select(null)} aria-label={t("gmbs.reset")} title={t("gmbs.reset")} className="rounded p-0.5 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+    <button type="button" onClick={() => select(null)} aria-label={t(gmbs.reset, "Reset selection")} title={t(gmbs.reset, "Reset selection")} className="rounded p-0.5 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
       <X aria-hidden className="size-3.5" />
     </button>
   );

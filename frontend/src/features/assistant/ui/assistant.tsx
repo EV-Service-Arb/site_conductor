@@ -1,13 +1,14 @@
 "use client";
 
-import { Button, NavDot, cn, useSequences } from "@evinvest/uikit";
+import { Button, NavDot, cn, useKeymap as usePageKeymap } from "@evinvest/uikit";
 import { Sparkles } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
-import { type ChatSummary, useChats } from "@/entities/assistant";
-import { useT } from "@/shared/i18n";
+import { type ChatSummary, useChats, assistant } from "@/entities/assistant";
+import { useT, keys as keysKeys } from "@/shared/i18n";
 import { useQuery } from "@/shared/lib/query";
 import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
+import { ResizeEdge } from "@/shared/ui/resize-edge";
 
 import { type Mode, WIDTH, notice, openChat, setWidth, show, useAssistant } from "../model/chat";
 import { hideOnEscape, useKeymap } from "../model/keymap";
@@ -40,14 +41,14 @@ export function Assistant() {
   const view = <ChatView id={s.current} display={shown} onOpen={openChat} onHide={fold} />;
   if (!desktop)
     return (
-      <section aria-label={t("assistant")} onKeyDown={(e) => hideOnEscape(e, fold)} className="absolute inset-0 z-30 flex flex-col bg-card">
+      <section aria-label={t(assistant, "Assistant")} onKeyDown={(e) => hideOnEscape(e, fold)} className="absolute inset-0 z-30 flex flex-col bg-card">
         {view}
       </section>
     );
   if (shown === "floating")
     return (
       <section
-        aria-label={t("assistant")}
+        aria-label={t(assistant, "Assistant")}
         onKeyDown={(e) => hideOnEscape(e, fold)}
         className="absolute right-3.5 bottom-3.5 z-30 flex h-125 w-112 flex-col overflow-hidden rounded-t-3xl rounded-b-4xl bg-card shadow-overlay ring-1 ring-border"
       >
@@ -68,7 +69,7 @@ export function AssistantToggle() {
   const shown = useQuery("assistant");
   const running = s.running !== null && (s.running.answer.state === "working" || s.running.answer.state === "writing");
   const button = useRef<HTMLButtonElement>(null);
-  const keys = useSequences().get("assistant");
+  const keys = usePageKeymap().bound.get("assistant")?.sequence;
   // Folded from inside the assistant, focus lands here; not on a page loaded folded.
   const was = useRef(shown);
   useEffect(() => {
@@ -86,12 +87,12 @@ export function AssistantToggle() {
       className="relative"
       onClick={() => show(shown !== null ? null : s.mode)}
       aria-pressed={shown !== null}
-      aria-label={t("keys.assistant")}
-      title={keys === undefined ? t("keys.assistant") : `${t("keys.assistant")} · ${keys}`}
+      aria-label={t(keysKeys.assistant, "Assistant: show or hide")}
+      title={keys === undefined ? t(keysKeys.assistant, "Assistant: show or hide") : `${t(keysKeys.assistant, "Assistant: show or hide")} · ${keys}`}
     >
       <Sparkles aria-hidden className={cn(running && "animate-pulse")} />
       {running && <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary [animation-duration:1.4s]" />}
-      {s.unread && !running && <NavDot corner label={t("assistant.unread")} />}
+      {s.unread && !running && <NavDot corner label={t(assistant.unread, "New answer")} />}
     </Button>
   );
 }
@@ -110,39 +111,12 @@ function useNoticeShared(): void {
   }, [data]);
 }
 
-/** The column beside the page, its left edge dragged (or arrowed) to resize. */
+/** The column beside the page, its left edge resizing it. */
 function Dock({ width, onHide, children }: { width: number; onHide: () => void; children: React.ReactNode }) {
   const t = useT();
-  const [dragging, setDragging] = useState(false);
   return (
-    <aside aria-label={t("assistant")} style={{ width }} onKeyDown={(e) => hideOnEscape(e, onHide)} className="relative flex shrink-0 flex-col border-l border-border bg-card">
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={t("assistant.resize")}
-        aria-valuemin={WIDTH.min}
-        aria-valuemax={WIDTH.max}
-        aria-valuenow={width}
-        tabIndex={0}
-        onKeyDown={(e) => {
-          const step = e.key === "ArrowLeft" ? 24 : e.key === "ArrowRight" ? -24 : 0;
-          if (step === 0) return;
-          e.preventDefault();
-          setWidth(width + step);
-        }}
-        onPointerDown={(e) => {
-          e.currentTarget.setPointerCapture(e.pointerId);
-          setDragging(true);
-        }}
-        onPointerMove={(e) => dragging && setWidth(window.innerWidth - e.clientX)}
-        onPointerUp={() => setDragging(false)}
-        onDoubleClick={() => setWidth(WIDTH.initial)}
-        className={cn(
-          "absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize outline-none after:absolute after:inset-y-0 after:left-0.75 after:w-0.5 after:transition-colors hover:after:bg-border-strong focus-visible:after:bg-ring",
-          dragging && "after:bg-ring",
-        )}
-      />
-      {dragging && <div className="fixed inset-0 z-50 cursor-col-resize" />}
+    <aside aria-label={t(assistant, "Assistant")} style={{ width }} onKeyDown={(e) => hideOnEscape(e, onHide)} className="relative flex shrink-0 flex-col border-l border-border bg-card">
+      <ResizeEdge side="left" width={width} bounds={WIDTH} onWidth={setWidth} label={t(assistant.resize, "Resize the assistant")} />
       {children}
     </aside>
   );

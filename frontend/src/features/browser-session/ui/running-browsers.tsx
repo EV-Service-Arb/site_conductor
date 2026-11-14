@@ -3,7 +3,7 @@
 import { StatusItem } from "@evinvest/uikit";
 import Link from "next/link";
 
-import { type Gmail, fetchConnections, useGmails } from "@/entities/gmb";
+import { type Gmail, fetchConnections, useGmails, browser } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 
@@ -20,7 +20,7 @@ function Running({ gmail }: { gmail: Gmail }) {
   if (connections.status !== "ok" || connections.data.browser?.running == null) return null;
   return (
     <Link href={`/?account=${gmail.id}&tab=browser`} className="rounded outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
-      <StatusItem tone="positive">{t("browser.status", { gmail: gmail.gmail })}</StatusItem>
+      <StatusItem tone="positive">{t(browser.status, "Browser · {gmail}", { gmail: gmail.gmail })}</StatusItem>
     </Link>
   );
 }

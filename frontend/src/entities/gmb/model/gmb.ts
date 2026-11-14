@@ -1,6 +1,8 @@
+import type { T } from "@/shared/i18n";
 import { type Infer, type Parser, arrayOf, bool, nullable, num, object, oneOf, recordOf, str } from "@/shared/lib/parse";
 
 import type { Candidates, Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategories, GoogleCategory, MapConfig, OnGoogle, Place, State, Suggestion, Suggestions, Trade, Trades } from "./generated";
+import { gmbs } from "./i18n";
 
 export type { Category, Country, Gmail, GmailRole, Gmails, Gmb, GoogleCategory, MapConfig, OnGoogle, Place as Candidate, State, Suggestion, Trade, Trades } from "./generated";
 
@@ -11,6 +13,18 @@ export const STATES = Object.keys({ draft: true, verifying: true, verified: true
 export const ON_GOOGLE = Object.keys({ verifying: true, verified: true, suspended: true } satisfies Record<OnGoogle, true>) as OnGoogle[];
 export const COUNTRIES = Object.keys({ FR: true, US: true, CA: true, GB: true } satisfies Record<Country, true>) as Country[];
 export const GMAIL_ROLES = Object.keys({ owner: true, manager: true } satisfies Record<GmailRole, true>) as GmailRole[];
+
+export const GMAIL_ROLE_NAME = {
+  owner: (t) => t(gmbs.gmail.role.owner, "Owner"),
+  manager: (t) => t(gmbs.gmail.role.manager, "Manager"),
+} satisfies Record<GmailRole, (t: T) => string>;
+
+export const STATE_NAME = {
+  draft: (t) => t(gmbs.state.draft, "Draft"),
+  verifying: (t) => t(gmbs.state.verifying, "Verifying"),
+  verified: (t) => t(gmbs.state.verified, "Verified"),
+  suspended: (t) => t(gmbs.state.suspended, "Suspended"),
+} satisfies Record<State, (t: T) => string>;
 
 export const gmbParser: Parser<Gmb> = object({
   id: num,
@@ -82,7 +96,13 @@ function byGmb<T>(p: Parser<T>): Parser<Map<number, T>> {
   };
 }
 
-const archiveTagParser = object({ tracked: bool, rating: nullable(num), reviews: nullable(num), suspended: num, reinstating: num, failing: bool });
+const daysParser = arrayOf(nullable(object({ live: num, lost: num })));
+const live30dParser: Parser<Infer<typeof daysParser>> = (v, path) => {
+  const days = daysParser(v, path);
+  if (days.length !== 30) throw new Error(`${path}: expected 30 days, got ${days.length}`);
+  return days;
+};
+const archiveTagParser = object({ tracked: bool, rating: nullable(num), reviews: nullable(num), suspended: num, reinstating: num, failing: bool, live_30d: live30dParser });
 export type ArchiveTag = Infer<typeof archiveTagParser>;
 export const archiveParser = object({ gmbs: byGmb(archiveTagParser), places_tracked: num });
 export type Archive = Infer<typeof archiveParser>;

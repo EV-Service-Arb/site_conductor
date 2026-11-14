@@ -5,7 +5,7 @@ import { ownScreens, seesSites } from "@/entities/session/model/access";
 import { type Caller, type Permission, ALIASES } from "@/entities/session/model/generated";
 import type { T } from "@/shared/i18n";
 
-const t: T = (key) => key;
+const t: T = (...args) => args[1];
 
 const holding = (...permissions: Permission[]): Caller => ({ user_id: "u", email: "e", preferred_name: "", permissions, dev_sign_in: false });
 const alias = (name: keyof typeof ALIASES): Caller => holding(...ALIASES[name]);

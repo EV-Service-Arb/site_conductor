@@ -1,4 +1,3 @@
-export type { MessageKey } from "./catalogue";
-export { LOCALES } from "./translate";
-export type { Locale, T } from "./translate";
-export { DocumentLang, chooseLocale, useLocale, useT } from "./use-t";
+export * from "./keys";
+export { LOCALES, LocaleProvider, chooseLocale, useLocale, useT } from "./use-t";
+export type { Locale, T } from "./use-t";

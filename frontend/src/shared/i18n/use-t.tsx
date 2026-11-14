@@ -1,8 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { createLocaleRegistry, type Translate } from "@evinvest/i18n";
+import { createPolicy } from "@evinvest/i18n/policy";
+import { createI18nReact } from "@evinvest/i18n/react";
+import { type ReactNode, useEffect, useSyncExternalStore } from "react";
 
-import { LOCALES, type Locale, type T, localeOf, translator } from "./translate";
+import en from "../../../messages/en/common.json";
+import ruOverrides from "../../../messages/ru/common.json";
+import ruAuto from "../../../messages/ru/common.auto.json";
+
+/** Each language by its own name. */
+export const LOCALES = { en: "English", ru: "Русский" } as const;
+export type Locale = keyof typeof LOCALES;
+export type T = Translate;
+
+const i18n = createLocaleRegistry({ locales: ["en", "ru"], labels: LOCALES, default: "en" });
+const { I18nProvider, useT } = createI18nReact(i18n);
+export { useT };
+
+const MESSAGES = { en, ru: createPolicy(i18n).resolveCatalogue("ru", en, ruAuto, ruOverrides).messages };
 
 const CHOSEN = "sa:locale";
 const CHOSEN_EVENT = "sa:locale-chosen";
@@ -15,9 +31,10 @@ const subscribe = (onChange: () => void) => {
   };
 };
 
+/** The panel speaks the reader's browser language when it is Russian, English otherwise. */
 function current(): Locale {
   const chosen = localStorage.getItem(CHOSEN);
-  if (chosen === null) return localeOf(navigator.language);
+  if (chosen === null) return navigator.language.toLowerCase().startsWith("ru") ? "ru" : "en";
   if (!(chosen in LOCALES)) throw new Error(`${CHOSEN}: not a locale: ${chosen}`);
   return chosen as Locale;
 }
@@ -32,16 +49,15 @@ export function chooseLocale(locale: Locale): void {
   window.dispatchEvent(new Event(CHOSEN_EVENT));
 }
 
-/** Keeps `<html lang>` on the language the page is actually in (the export says "en"). */
-export function DocumentLang() {
+/** Translates the tree in the reader's language and keeps `<html lang>` on it (the export says "en"). */
+export function LocaleProvider({ children }: { children: ReactNode }) {
   const locale = useLocale();
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
-  return null;
-}
-
-export function useT(): T {
-  const locale = useLocale();
-  return useMemo(() => translator(locale), [locale]);
+  return (
+    <I18nProvider locale={locale} messages={MESSAGES[locale]} missing={process.env.NODE_ENV === "production" ? "throw" : "warn"}>
+      {children}
+    </I18nProvider>
+  );
 }

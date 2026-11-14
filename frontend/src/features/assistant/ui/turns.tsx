@@ -6,11 +6,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { useLocale, useT } from "@/shared/i18n";
+import { type T, useLocale, useT } from "@/shared/i18n";
 
 import type { Action, AssistantTurn, UserTurn } from "@/entities/assistant";
 
 import { LocationToken, RichText } from "./rich-text";
+import { assistant } from "@/entities/assistant";
 
 const plain = (text: string) => text.replace(/@\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/ ?\[\d+\]/g, "");
 
@@ -23,7 +24,7 @@ function CopyButton({ text, disabled = false }: { text: string; disabled?: boole
     const id = setTimeout(() => setCopied(false), 1500);
     return () => clearTimeout(id);
   }, [copied]);
-  const label = copied ? t("assistant.copied") : t("assistant.copy");
+  const label = copied ? t(assistant.copied, "Copied") : t(assistant.copy, "Copy");
   return (
     <IconButton size="sm" aria-label={label} tooltip={label} disabled={disabled} onClick={() => void navigator.clipboard.writeText(text).then(() => setCopied(true))}>
       {copied ? <Check /> : <Copy />}
@@ -38,6 +39,11 @@ export function When({ at }: { at: number }) {
   const today = new Date().toDateString() === d.toDateString();
   return new Intl.DateTimeFormat(locale, today ? { hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(d);
 }
+
+const FEEDBACK = {
+  up: (t) => t(assistant.feedback.up, "Good answer"),
+  down: (t) => t(assistant.feedback.down, "Bad answer"),
+} satisfies Record<"up" | "down", (t: T) => string>;
 
 const HOVER_TOOLS = "flex gap-0.5 opacity-0 transition-opacity group-hover/turn:opacity-100 group-focus-within/turn:opacity-100";
 
@@ -79,7 +85,7 @@ export function UserTurnView({ turn, editing, onEdit, onEditing }: { turn: UserT
         <div className="flex w-full items-start justify-end gap-1">
           <div className={cn(HOVER_TOOLS, "pt-1")}>
             {onEditing !== null && (
-              <IconButton size="sm" aria-label={t("assistant.edit")} tooltip={t("assistant.edit")} onClick={() => onEditing(true)}>
+              <IconButton size="sm" aria-label={t(assistant.edit, "Edit message")} tooltip={t(assistant.edit, "Edit message")} onClick={() => onEditing(true)}>
                 <Pencil />
               </IconButton>
             )}
@@ -117,7 +123,7 @@ function EditBox({ text, onCancel, onSave }: { text: string; onCancel: () => voi
         autoFocus
         rows={1}
         value={value}
-        aria-label={t("assistant.edit")}
+        aria-label={t(assistant.edit, "Edit message")}
         onChange={(e) => setValue(e.target.value)}
         onFocus={(e) => e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length)}
         onKeyDown={(e) => {
@@ -134,10 +140,10 @@ function EditBox({ text, onCancel, onSave }: { text: string; onCancel: () => voi
       />
       <div className="flex justify-end gap-1.5">
         <Button size="sm" variant="ghost" onClick={onCancel}>
-          {t("assistant.edit.cancel")}
+          {t(assistant.edit.cancel, "Cancel")}
         </Button>
         <Button size="sm" onClick={save} disabled={value.trim() === ""}>
-          {t("assistant.edit.send")}
+          {t(assistant.edit.send, "Send")}
         </Button>
       </div>
     </div>
@@ -153,7 +159,7 @@ export function AssistantTurnView({ turn, last, onChange, onRetry }: { turn: Ass
     <div data-enter="rise" className="group/turn flex flex-col gap-2.5">
       <Work turn={turn} />
       {turn.text !== "" && <RichText text={turn.text} sources={turn.sources} writing={turn.state === "writing"} />}
-      {turn.state === "stopped" && <p className="text-body-s text-ink-soft italic">{t("assistant.stopped")}</p>}
+      {turn.state === "stopped" && <p className="text-body-s text-ink-soft italic">{t(assistant.stopped, "Stopped")}</p>}
       {turn.actions.length > 0 && (
         <div data-enter="stagger" className="flex flex-col gap-1.5">
           {turn.actions.map((a, i) => (
@@ -165,7 +171,7 @@ export function AssistantTurnView({ turn, last, onChange, onRetry }: { turn: Ass
         <div className={cn("-ml-1.5 flex gap-0.5", !last && HOVER_TOOLS)}>
           <CopyButton text={plain(turn.text)} disabled={turn.text === ""} />
           {last && onRetry !== null && (
-            <IconButton size="sm" aria-label={t("assistant.retry")} tooltip={t("assistant.retry")} onClick={onRetry}>
+            <IconButton size="sm" aria-label={t(assistant.retry, "Try again")} tooltip={t(assistant.retry, "Try again")} onClick={onRetry}>
               <RotateCcw />
             </IconButton>
           )}
@@ -174,8 +180,8 @@ export function AssistantTurnView({ turn, last, onChange, onRetry }: { turn: Ass
               <IconButton
                 key={f}
                 size="sm"
-                aria-label={t(`assistant.feedback.${f}`)}
-                tooltip={t(`assistant.feedback.${f}`)}
+                aria-label={FEEDBACK[f](t)}
+                tooltip={FEEDBACK[f](t)}
                 aria-pressed={turn.feedback === f}
                 onClick={() => onChange({ ...turn, feedback: turn.feedback === f ? null : f })}
               >
@@ -201,11 +207,11 @@ function Work({ turn }: { turn: AssistantTurn }) {
     return working ? (
       <div role="status" className="flex items-center gap-2 text-body-s text-ink-soft">
         <Spinner className="size-3.5" />
-        <span className="animate-pulse">{t("assistant.thinking")}</span>
+        <span className="animate-pulse">{t(assistant.thinking, "Thinking…")}</span>
       </div>
     ) : null;
   const seconds = Math.max(1, Math.round((turn.worked ?? 0) / 1000));
-  const label = working && now ? now.label : t("assistant.worked", { time: seconds < 60 ? `${seconds}s` : `${Math.round(seconds / 60)}m` });
+  const label = working && now ? now.label : t(assistant.worked, "Worked for {time}", { time: seconds < 60 ? `${seconds}s` : `${Math.round(seconds / 60)}m` });
   return (
     <div className="flex flex-col gap-1.5">
       <button
@@ -242,7 +248,7 @@ function ActionCard({ action, primary, set }: { action: Action; primary: boolean
         {set !== null && (
           <Button size="sm" variant="ghost" onClick={() => set("proposed")}>
             <Undo2 aria-hidden />
-            {t("assistant.undo")}
+            {t(assistant.undo, "Undo")}
           </Button>
         )}
       </div>

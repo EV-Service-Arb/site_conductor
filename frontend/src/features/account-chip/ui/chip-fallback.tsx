@@ -6,7 +6,7 @@ import { Fragment } from "react";
 
 import type { Caller } from "@/entities/session";
 import { ROUTES } from "@/shared/config/routes";
-import { useT } from "@/shared/i18n";
+import { useT, nav } from "@/shared/i18n";
 
 import { fallbackIdentity, panelGroups } from "../model/attributes";
 
@@ -23,7 +23,7 @@ export function ChipFallback({ me, onSignOut, className }: { me: Caller; onSignO
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn("flex size-8.5 shrink-0 items-center justify-center rounded-full bg-primary-ink/15 text-xs font-semibold text-primary-ink outline-none focus-visible:ring-2 focus-visible:ring-ring", className)}
-        aria-label={t("nav.account")}
+        aria-label={t(nav.account, "Profile")}
         title={label}
       >
         <span aria-hidden>{initials}</span>
@@ -35,7 +35,7 @@ export function ChipFallback({ me, onSignOut, className }: { me: Caller; onSignO
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href={ROUTES.account}>{t("nav.account")}</Link>
+          <Link href={ROUTES.account}>{t(nav.account, "Profile")}</Link>
         </DropdownMenuItem>
         {panelGroups(me, t).map((group) => (
           <Fragment key={group.id}>
@@ -50,7 +50,7 @@ export function ChipFallback({ me, onSignOut, className }: { me: Caller; onSignO
           </Fragment>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onSignOut}>{t("nav.signOut")}</DropdownMenuItem>
+        <DropdownMenuItem onClick={onSignOut}>{t(nav.signOut, "Sign out")}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

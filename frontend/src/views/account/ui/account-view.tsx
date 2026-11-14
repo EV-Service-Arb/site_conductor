@@ -10,7 +10,7 @@ import { panelRouteFor } from "@/features/account-chip";
 import { useSignOut } from "@/features/sign-out";
 import { platformMfe } from "@/shared/api";
 import { ROUTES } from "@/shared/config/routes";
-import { useLocale, useT } from "@/shared/i18n";
+import { useLocale, useT, nav, account } from "@/shared/i18n";
 import { EmptyState } from "@/shared/ui/empty-state";
 
 const TIMEOUT_MS = 8000;
@@ -45,11 +45,11 @@ export function AccountView() {
     return route !== null;
   };
   return (
-    <PageFrame breakpoint="md" title={t("nav.account")} width="content">
+    <PageFrame breakpoint="md" title={t(nav.account, "Profile")} width="content">
       {scriptUrl === undefined ? (
         loading
       ) : scriptUrl === null ? (
-        <EmptyState title={t("account.unavailable")} />
+        <EmptyState title={t(account.unavailable, "Your account could not be loaded.")} />
       ) : (
         <AccountPage
           // The element reads `<html lang>` only when it renders.

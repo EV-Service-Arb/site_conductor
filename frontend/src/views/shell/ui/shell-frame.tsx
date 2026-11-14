@@ -1,26 +1,28 @@
 "use client";
 
 import { KeymapProvider, UndoProvider } from "@evinvest/uikit";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 import { PANEL } from "@config";
 
-import { GmailsProvider, PublishSelection } from "@/entities/gmb";
+import { GmailsProvider, PublishSelection, undo } from "@/entities/gmb";
 import { seesSites, useMe } from "@/entities/session";
 import { Assistant } from "@/features/assistant";
 import { goToSignIn } from "@/shared/api";
-import { useT } from "@/shared/i18n";
+import { useT, keys, nav } from "@/shared/i18n";
 import { ROUTES } from "@/shared/config/routes";
 import { useLiveSocket } from "@/shared/lib/live";
+import { ResizeEdge } from "@/shared/ui/resize-edge";
 
-import { useSidebarFolded } from "../model/sidebar";
+import { WIDTH, setSidebarWidth, useSidebarFolded, useSidebarWidth } from "../model/sidebar";
 import { followTitleCount } from "../model/title-count";
 import { NavKeys } from "./nav-keys";
 import { Outline } from "./outline";
 import { PanelHotbar } from "./panel-hotbar";
 import { PanelTopBar } from "./panel-top-bar";
+import { title } from "../model/i18n";
 
 /** Bare `z` (Alt+Z too, and only that from a field): Alt+S got eaten by key remappers (keyd's Alt layer). */
 const LEADER = { key: "z" };
@@ -34,17 +36,18 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
   const me = useMe();
   const pathname = usePathname();
   const folded = useSidebarFolded();
+  const width = useSidebarWidth();
   const live = useLiveSocket({ onUnauthenticated: goToSignIn, onForbidden });
-  const leads = t("title.leads");
+  const leads = t(title.leads, "Leads");
   useEffect(() => followTitleCount(window, document, leads), [leads]);
   useEffect(() => {
     window.addEventListener(UNAUTHENTICATED_EVENT, goToSignIn);
     return () => window.removeEventListener(UNAUTHENTICATED_EVENT, goToSignIn);
   }, []);
-  const elements = Object.fromEntries(Object.entries(PANEL.elementKeys).map(([tag, k]) => [tag, { on: { key: k.key }, label: t(k.label) }]));
+  const elements = Object.fromEntries(Object.entries(PANEL.elementKeys).map(([tag, k]) => [tag, { on: { key: k.key }, label: k.label(t) }]));
   return (
-    <KeymapProvider leader={LEADER} elements={elements} labels={{ title: t("keys.help") }}>
-      <UndoProvider labels={{ undo: t("undo.undo"), redo: t("undo.redo") }}>
+    <KeymapProvider leader={LEADER} elements={elements} labels={{ title: t(keys.help, "Keybinds") }}>
+      <UndoProvider labels={{ undo: t(undo.undo, "Undo"), redo: t(undo.redo, "Redo") }}>
         <GmailsProvider seesSites={seesSites(me)}>
           <PublishSelection />
           <NavKeys />
@@ -52,7 +55,10 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
             <PanelTopBar />
             <div className="relative flex min-h-0 flex-1">
               {/* `hidden`, not unmounted, on a phone: the outline keeps `mfe-sites-nav` mounted */}
-              <Outline folded={folded} className="hidden shrink-0 md:flex" />
+              <div style={{ "--shell-rail-w": `${width}px` } as CSSProperties} className="relative hidden shrink-0 md:flex">
+                <Outline folded={folded} />
+                {!folded && <ResizeEdge side="right" width={width} bounds={WIDTH} onWidth={setSidebarWidth} label={t(nav.resizeOutline, "Resize the outline")} />}
+              </div>
               <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
               {PANEL.assistant && !`${pathname}/`.startsWith(ROUTES.assistant) && <Assistant />}
             </div>

@@ -3,7 +3,7 @@
 import { ResourceError } from "@evinvest/uikit";
 
 import type { ApiFailure } from "@/shared/api";
-import { useT } from "@/shared/i18n";
+import { useT, state } from "@/shared/i18n";
 
 import { failureText } from "./failure-text";
 
@@ -12,5 +12,5 @@ export function ErrorState({ failure, onRetry }: { failure: ApiFailure | { kind:
   const t = useT();
   const message = failureText(failure, t);
   if (!onRetry) return <ResourceError variant="alert" message={message} />;
-  return <ResourceError message={message} onRetry={onRetry} labels={{ retry: t("state.retry") }} />;
+  return <ResourceError message={message} onRetry={onRetry} labels={{ retry: t(state.retry, "Try again") }} />;
 }

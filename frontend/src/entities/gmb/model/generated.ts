@@ -170,7 +170,11 @@ enabled: boolean,
  * `null`: none on Google (a service-area place, a draft) and none placed yet. `placed`: on
  * the map by hand.
  */
-location: { lat: number, lng: number, placed: boolean } | null, };
+location: { lat: number, lng: number, placed: boolean } | null, 
+/**
+ * A draft's candidate spots, in order, its location the first's; none past a draft.
+ */
+spots: { lat: number, lng: number, label: string | null, note: string | null }[], };
 /**
  * `GET /google-categories/{country}`.
  */

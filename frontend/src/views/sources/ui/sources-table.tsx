@@ -2,7 +2,7 @@
 
 import { Badge, Card, CardContent, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn } from "@evinvest/uikit";
 
-import { type Source, sourceKindLabel } from "@/entities/source";
+import { type Source, sourceKindLabel, sources as sourcesKeys } from "@/entities/source";
 import { RevokeButton } from "@/features/manage-sources";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
@@ -28,7 +28,7 @@ export function SourcesTable({ sources, onRevoked }: { sources: Source[]; onRevo
 function State({ source, onRevoked }: { source: Source; onRevoked: () => void }) {
   const t = useT();
   const locale = useLocale();
-  if (source.revoked_at) return <Badge tone="neutral">{t("sources.revoked", { at: formatDateTime(source.revoked_at, locale) })}</Badge>;
+  if (source.revoked_at) return <Badge tone="neutral">{t(sourcesKeys.revoked, "Revoked {at}", { at: formatDateTime(source.revoked_at, locale) })}</Badge>;
   return <RevokeButton keyId={source.key_id} onRevoked={onRevoked} />;
 }
 
@@ -39,12 +39,12 @@ function Wide({ sources, onRevoked }: { sources: Source[]; onRevoked: () => void
     <Table>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          <TableHead className={HEAD}>{t("sources.keyId")}</TableHead>
-          <TableHead className={HEAD}>{t("sources.kind")}</TableHead>
-          <TableHead className={HEAD}>{t("sources.brands")}</TableHead>
-          <TableHead className={cn(HEAD, "text-right")}>{t("sources.created")}</TableHead>
+          <TableHead className={HEAD}>{t(sourcesKeys.keyId, "Key id")}</TableHead>
+          <TableHead className={HEAD}>{t(sourcesKeys.kind, "Kind")}</TableHead>
+          <TableHead className={HEAD}>{t(sourcesKeys.brands, "Brands")}</TableHead>
+          <TableHead className={cn(HEAD, "text-right")}>{t(sourcesKeys.created, "Added")}</TableHead>
           <TableHead className={HEAD}>
-            <span className="sr-only">{t("sources.state")}</span>
+            <span className="sr-only">{t(sourcesKeys.state, "State")}</span>
           </TableHead>
         </TableRow>
       </TableHeader>

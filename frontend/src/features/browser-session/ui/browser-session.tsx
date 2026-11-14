@@ -4,9 +4,9 @@ import { Button, Input, Settled, Skeleton, StatusDot, buttonVariants, cn, toast 
 import { ArrowLeft, ArrowRight, Hand, Plus, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
-import { type Browser, type BrowserIn, type BrowserOut, type Gmail, browsersUnconnected, fetchConnections, openAccount, startBrowser, stopBrowser, useGmails } from "@/entities/gmb";
+import { type Browser, type BrowserIn, type BrowserOut, type Gmail, browsersUnconnected, fetchConnections, openAccount, startBrowser, stopBrowser, useGmails, browser as browserKeys } from "@/entities/gmb";
 import { ApiError } from "@/shared/api";
-import { useT } from "@/shared/i18n";
+import { type T, useT, account } from "@/shared/i18n";
 import { backoffDelay } from "@/shared/lib/live";
 import { useResource } from "@/shared/lib/use-resource";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -33,9 +33,9 @@ export function BrowserSession({ gmail, gmb, aside }: { gmail: Gmail; gmb: numbe
       {connections.status === "error" && <ErrorState failure={connections.failure} onRetry={connections.reload} />}
       {connections.status === "ok" &&
         (connections.data.browser === null ? (
-          <EmptyState title={t("browser.session.none")} description={t("browser.session.none.body", { gmail: gmail.gmail })}>
+          <EmptyState title={t(browserKeys.session.none, "No browser for this gmail yet")} description={t(browserKeys.session.none.body, "Set up {gmail}'s antidetect environment on its Connections tab.", { gmail: gmail.gmail })}>
             <Button size={button("sm")} onClick={() => openAccount({ gmail: gmail.id, tab: "connections" })}>
-              {t("browser.session.setUp")}
+              {t(browserKeys.session.setUp, "Set it up")}
             </Button>
           </EmptyState>
         ) : (
@@ -48,6 +48,16 @@ export function BrowserSession({ gmail, gmb, aside }: { gmail: Gmail; gmb: numbe
 /** `elsewhere`: it runs, for another GBP or for the gmail alone. */
 type Phase = "off" | "elsewhere" | "starting" | "connecting" | "open" | "taken" | "lost";
 type Runs = "no" | "here" | "elsewhere";
+
+const PHASE_NAME = {
+  off: (t) => t(browserKeys.phase.off, "stopped"),
+  elsewhere: (t) => t(browserKeys.phase.elsewhere, "running elsewhere"),
+  starting: (t) => t(browserKeys.phase.starting, "starting"),
+  connecting: (t) => t(browserKeys.phase.connecting, "connecting"),
+  open: (t) => t(browserKeys.phase.open, "running"),
+  taken: (t) => t(browserKeys.phase.taken, "taken over"),
+  lost: (t) => t(browserKeys.phase.lost, "disconnected"),
+} satisfies Record<Phase, (t: T) => string>;
 interface Page {
   frame: { src: string; width: number; height: number } | null;
   tabs: { id: string; title: string; url: string }[];
@@ -145,7 +155,7 @@ function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: nu
     } catch (e) {
       setPhase(stopped ? "off" : "elsewhere");
       if (!(e instanceof ApiError)) throw e;
-      if (browsersUnconnected(e)) setFailure(t("browser.unconnected"));
+      if (browsersUnconnected(e)) setFailure(t(browserKeys.unconnected, "Browsers not connected"));
       // the runner full: its own words
       else if (e.failure.kind === "unavailable" && e.failure.message !== "") setFailure(e.failure.message);
       else if (e.failure.kind !== "unauthenticated") setFailure(failureText(e.failure, t));
@@ -177,18 +187,18 @@ function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: nu
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
         <div className="flex items-center gap-2 border-b border-border bg-hover/40 px-3 py-2 text-xs">
           <StatusDot tone={phase === "open" ? "positive" : phase === "connecting" || phase === "starting" ? "warn" : "muted"} />
-          <span className="font-medium text-ink">{t(`browser.phase.${phase}`)}</span>
+          <span className="font-medium text-ink">{PHASE_NAME[phase](t)}</span>
           <span className="min-w-0 flex-1 truncate font-mono text-ink-soft">
-            {[activeTab?.url, browser.exit.country, browser.exit.city, browser.exit.mobile ? t("browser.mobile") : t("browser.fixed"), browser.exit.ip].filter(Boolean).join(" · ")}
+            {[activeTab?.url, browser.exit.country, browser.exit.city, browser.exit.mobile ? t(browserKeys.mobile, "mobile") : t(browserKeys.fixed, "fixed line"), browser.exit.ip].filter(Boolean).join(" · ")}
           </span>
           {browser.running?.stream && (
             <a href={browser.running.stream} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "ghost", size: button("sm") })}>
-              {t("browser.stream")}
+              {t(browserKeys.stream, "Open Multilogin's view")}
             </a>
           )}
           {phase === "open" || phase === "connecting" || phase === "taken" || phase === "elsewhere" ? (
             <Button variant="outline" size={button("sm")} onClick={() => void stop()}>
-              {t("browser.stop")}
+              {t(browserKeys.stop, "Stop")}
             </Button>
           ) : null}
         </div>
@@ -232,40 +242,40 @@ function Idle({ phase, browser, failure, onStart, onConnect }: { phase: Phase; b
     <div className="flex max-w-sm flex-col items-center gap-3 p-6 text-center text-sm">
       {phase === "elsewhere" ? (
         <>
-          <p className="text-ink-soft">{name === null ? t("browser.session.elsewhere.gmail") : t("browser.session.elsewhere.gbp", { name })}</p>
+          <p className="text-ink-soft">{name === null ? t(browserKeys.session.elsewhere.gmail, "It runs for the gmail alone, the position blocked.") : t(browserKeys.session.elsewhere.gbp, "It runs for {name}, at its point.", { name })}</p>
           <div className="flex flex-wrap justify-center gap-2">
             <Button size={button("sm")} onClick={() => onStart(true)}>
-              {t("browser.restartHere")}
+              {t(browserKeys.restartHere, "Stop and start here")}
             </Button>
             <Button variant="outline" size={button("sm")} onClick={onConnect}>
-              {t("browser.watch")}
+              {t(browserKeys.watch, "Watch it as it runs")}
             </Button>
           </div>
         </>
       ) : phase === "off" || phase === "starting" ? (
         <>
-          <p className="text-ink-soft">{t("browser.session.off")}</p>
+          <p className="text-ink-soft">{t(browserKeys.session.off, "The browser is not running.")}</p>
           <Button size={button("sm")} disabled={phase === "starting"} onClick={() => onStart(false)}>
-            {t(phase === "starting" ? "browser.starting" : "browser.start")}
+            {(phase === "starting" ? t(browserKeys.starting, "Starting…") : t(browserKeys.start, "Start"))}
           </Button>
-          {browser.checked.error !== null && <p className="text-xs text-accent-warn">{t("browser.session.checkFailed", { error: browser.checked.error })}</p>}
+          {browser.checked.error !== null && <p className="text-xs text-accent-warn">{t(browserKeys.session.checkFailed, "Its last check failed: {error}", { error: browser.checked.error })}</p>}
         </>
       ) : phase === "taken" ? (
         <>
-          <p className="text-ink-soft">{t("browser.session.taken")}</p>
+          <p className="text-ink-soft">{t(browserKeys.session.taken, "Another viewer of this gmail took over.")}</p>
           <Button size={button("sm")} onClick={onConnect}>
-            {t("browser.takeBack")}
+            {t(browserKeys.takeBack, "Take back")}
           </Button>
         </>
       ) : phase === "lost" ? (
         <>
-          <p className="text-ink-soft">{t("browser.session.lost")}</p>
+          <p className="text-ink-soft">{t(browserKeys.session.lost, "The connection to the browser was lost.")}</p>
           <Button variant="outline" size={button("sm")} onClick={onConnect}>
-            {t("browser.reconnect")}
+            {t(browserKeys.reconnect, "Reconnect")}
           </Button>
         </>
       ) : (
-        <p className="text-ink-soft">{t("browser.phase.connecting")}</p>
+        <p className="text-ink-soft">{t(browserKeys.phase.connecting, "connecting")}</p>
       )}
       {failure !== null && <p className="text-xs text-accent-error">{failure}</p>}
     </div>
@@ -279,27 +289,27 @@ function Chrome({ page, phone, send }: { page: Page; phone: boolean; send: (fram
   const active = page.tabs.find((tab) => tab.id === page.active) ?? null;
   return (
     <div className="flex flex-col border-b border-border">
-      {!phone && <div role="tablist" aria-label={t("browser.tabs")} className="flex items-center gap-1 overflow-x-auto px-2 pt-1.5">
+      {!phone && <div role="tablist" aria-label={t(browserKeys.tabs, "The browser's tabs")} className="flex items-center gap-1 overflow-x-auto px-2 pt-1.5">
         {page.tabs.map((tab) => (
           <span key={tab.id} className={cn("flex max-w-48 items-center gap-1 rounded-t-md border border-b-0 px-2 py-1 text-xs", tab.id === page.active ? "border-border bg-background text-ink" : "border-transparent text-ink-soft hover:text-ink")}>
             <button type="button" role="tab" aria-selected={tab.id === page.active} title={tab.url} className="min-w-0 truncate outline-none focus-visible:underline" onClick={() => send({ type: "activate", id: tab.id })}>
               {tab.title || tab.url}
             </button>
-            <button type="button" aria-label={t("browser.closeTab", { title: tab.title || tab.url })} className="shrink-0 rounded text-ink-soft hover:text-ink" onClick={() => send({ type: "close_tab", id: tab.id })}>
+            <button type="button" aria-label={t(browserKeys.closeTab, "Close {title}", { title: tab.title || tab.url })} className="shrink-0 rounded text-ink-soft hover:text-ink" onClick={() => send({ type: "close_tab", id: tab.id })}>
               <X aria-hidden className="size-3" />
             </button>
           </span>
         ))}
-        <Button variant="ghost" size={button("sm")} icon aria-label={t("browser.newTab")} title={t("browser.newTab")} onClick={() => send({ type: "new_tab" })}>
+        <Button variant="ghost" size={button("sm")} icon aria-label={t(browserKeys.newTab, "New tab")} title={t(browserKeys.newTab, "New tab")} onClick={() => send({ type: "new_tab" })}>
           <Plus aria-hidden />
         </Button>
       </div>}
       <div className="flex items-center gap-1 px-2 py-1.5">
-        <Button variant="ghost" size={button("sm")} icon aria-label={t("browser.back")} title={t("browser.back")} onClick={() => send({ type: "history", delta: -1 })}>
+        <Button variant="ghost" size={button("sm")} icon aria-label={t(browserKeys.back, "Back")} title={t(browserKeys.back, "Back")} onClick={() => send({ type: "history", delta: -1 })}>
           <ArrowLeft aria-hidden />
         </Button>
         {!phone && (
-          <Button variant="ghost" size={button("sm")} icon aria-label={t("browser.forward")} title={t("browser.forward")} onClick={() => send({ type: "history", delta: 1 })}>
+          <Button variant="ghost" size={button("sm")} icon aria-label={t(browserKeys.forward, "Forward")} title={t(browserKeys.forward, "Forward")} onClick={() => send({ type: "history", delta: 1 })}>
             <ArrowRight aria-hidden />
           </Button>
         )}
@@ -323,7 +333,7 @@ function UrlBar({ url, onGo }: { url: string; onGo: (url: string) => void }) {
         if (v !== "") onGo(/^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`);
       }}
     >
-      <Input size={size} value={typed} onChange={(e) => setTyped(e.target.value)} aria-label={t("browser.address")} spellCheck={false} autoComplete="off" className="font-mono text-xs" />
+      <Input size={size} value={typed} onChange={(e) => setTyped(e.target.value)} aria-label={t(browserKeys.address, "Address")} spellCheck={false} autoComplete="off" className="font-mono text-xs" />
     </form>
   );
 }
@@ -357,7 +367,7 @@ function Screen({ frame, send, onPaste }: { frame: NonNullable<Page["frame"]>; s
     <div
       tabIndex={0}
       role="application"
-      aria-label={t("browser.page")}
+      aria-label={t(browserKeys.page, "The browser's page")}
       className="relative flex h-full w-full items-center justify-center outline-none"
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
@@ -389,7 +399,7 @@ function Screen({ frame, send, onPaste }: { frame: NonNullable<Page["frame"]>; s
       <img
         ref={img}
         src={frame.src}
-        alt={t("browser.page")}
+        alt={t(browserKeys.page, "The browser's page")}
         draggable={false}
         style={{ aspectRatio: `${frame.width} / ${frame.height}` }}
         className="h-full max-w-full touch-none object-contain select-none"
@@ -411,7 +421,7 @@ function Screen({ frame, send, onPaste }: { frame: NonNullable<Page["frame"]>; s
       />
       <span className={cn("pointer-events-none absolute bottom-3 left-3 flex items-center gap-1.5 rounded-md border border-border bg-background/90 px-2 py-1 text-xs", focused ? "text-ink" : "text-ink-soft")}>
         <Hand aria-hidden className="size-3.5" />
-        {t(focused ? "browser.control.yes" : "browser.control.no")}
+        {(focused ? t(browserKeys.control.yes, "You have control · keys and clicks go to the page") : t(browserKeys.control.no, "Click the page to take control"))}
       </span>
     </div>
   );
@@ -427,24 +437,24 @@ function Dialog({ dialog, send }: { dialog: NonNullable<Page["dialog"]>; send: (
   return (
     <form
       role="alertdialog"
-      aria-label={t("browser.dialog")}
+      aria-label={t(browserKeys.dialog, "The page asks")}
       className="absolute top-1/3 left-1/2 flex w-80 max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col gap-3 rounded-lg border border-border bg-background p-4 shadow-overlay"
       onSubmit={(e) => {
         e.preventDefault();
         send({ type: "dialog", accept: true, text: prompt ? text : null });
       }}
     >
-      <p className="text-xs text-ink-soft">{t("browser.dialog")}</p>
+      <p className="text-xs text-ink-soft">{t(browserKeys.dialog, "The page asks")}</p>
       <p className="text-sm whitespace-pre-wrap text-ink">{dialog.message}</p>
       {prompt && <Input size={size} value={text} onChange={(e) => setText(e.target.value)} autoFocus />}
       <div className="flex justify-end gap-2">
         {dialog.kind !== "alert" && (
           <Button type="button" variant="ghost" size={button("sm")} onClick={() => send({ type: "dialog", accept: false, text: null })}>
-            {t("account.cancel")}
+            {t(account.cancel, "Cancel")}
           </Button>
         )}
         <Button type="submit" size={button("sm")}>
-          {t("browser.ok")}
+          {t(browserKeys.ok, "OK")}
         </Button>
       </div>
     </form>

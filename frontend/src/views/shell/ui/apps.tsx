@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import { seesSites, useMe } from "@/entities/session";
 import { SitesElement } from "@/features/sites-element";
 import { ROUTES } from "@/shared/config/routes";
-import { useT } from "@/shared/i18n";
+import { useT, nav, reviewArchive } from "@/shared/i18n";
 
 export interface App {
   href: string;
@@ -29,13 +29,13 @@ export function useApps(onNavigate?: () => void): App[] {
       ? [
           {
             href: ROUTES.sites,
-            label: t("nav.sites"),
+            label: t(nav.sites, "Sites"),
             icon: Globe,
-            description: t("nav.sites.description"),
+            description: t(nav.sites.description, "Leads, locations, pricing, invoices"),
             here: pathname.startsWith("/sites"),
             section: {
               id: "sites",
-              label: t("nav.sites"),
+              label: t(nav.sites, "Sites"),
               icon: Globe,
               menu: true,
               // A click on one of its links has routed (CONTRACT §9).
@@ -50,15 +50,15 @@ export function useApps(onNavigate?: () => void): App[] {
       : []),
     {
       href: ROUTES.reviewArchive,
-      label: t("nav.reviewArchive"),
+      label: t(nav.reviewArchive, "Review Archive"),
       icon: Archive,
-      description: t("nav.reviewArchive.description"),
+      description: t(nav.reviewArchive.description, "Every place's reviews and their state"),
       here: pathname.startsWith("/review_archive"),
       section: {
         id: "archive",
         items: [
-          { id: "places", href: ROUTES.reviewArchive, label: t("reviewArchive.places"), icon: MapPin, description: t("reviewArchive.places.description") },
-          { id: "settings", href: ROUTES.reviewArchiveSettings, label: t("reviewArchive.settings"), icon: Settings, description: t("reviewArchive.settings.description") },
+          { id: "places", href: ROUTES.reviewArchive, label: t(reviewArchive.places, "Places"), icon: MapPin, description: t(reviewArchive.places.description, "Each place's reviews, newest first") },
+          { id: "settings", href: ROUTES.reviewArchiveSettings, label: t(reviewArchive.settings, "Settings"), icon: Settings, description: t(reviewArchive.settings.description, "How the archive scans and keeps reviews") },
         ],
       },
     },
