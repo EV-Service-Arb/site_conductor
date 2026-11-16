@@ -72,7 +72,7 @@ function GmbMap({ config }: { config: MapConfig }) {
   const { tags } = useGmbTags();
   const { host, map } = useTheMap(config.key);
   const listed = selection?.selected ?? [];
-  const located = listed.filter((l) => l.gmb.location != null);
+  const located = listed.filter((l) => l.gmb.location !== null);
   const locatedRef = useRef(located);
   // first of the effects, so each one after reads this render's
   useEffect(() => {

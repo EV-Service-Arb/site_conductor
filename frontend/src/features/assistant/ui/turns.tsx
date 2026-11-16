@@ -57,7 +57,7 @@ export function UserTurnView({ turn, editing, onEdit, onEditing }: { turn: UserT
       {turn.files.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1.5">
           {turn.files.map((f, i) =>
-            f.preview != null ? (
+            f.preview !== null ? (
               <a key={i} href={f.preview.url} target="_blank" rel="noreferrer" title={f.name} className="overflow-hidden rounded-lg border border-border">
                 <Image unoptimized src={f.preview.url} alt={f.name} width={f.preview.width} height={f.preview.height} className="max-h-40 w-auto max-w-60 object-cover" />
               </a>

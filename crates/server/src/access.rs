@@ -47,7 +47,7 @@ impl JsonSchema for PermissionName {
 	}
 }
 
-/// A permission or an alias of the `sa` catalog.
+/// A permission or an alias of the `sa` catalog; `x-members` names each alias's permissions.
 struct Need;
 
 impl JsonSchema for Need {
@@ -56,7 +56,11 @@ impl JsonSchema for Need {
 	}
 
 	fn json_schema(_: &mut SchemaGenerator) -> Schema {
-		json_schema!({ "type": "string", "enum": CATALOG.permissions.iter().chain(CATALOG.aliases.keys()).collect::<Vec<_>>() })
+		json_schema!({
+			"type": "string",
+			"enum": CATALOG.permissions.iter().chain(CATALOG.aliases.keys()).collect::<Vec<_>>(),
+			"x-members": &CATALOG.aliases,
+		})
 	}
 }
 

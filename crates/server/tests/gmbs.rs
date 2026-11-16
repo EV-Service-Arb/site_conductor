@@ -312,7 +312,7 @@ async fn the_map_is_told_only_when_configured() {
 	let db = TestDb::create().await;
 	let configured = MapDto { key: "browser-key".into() };
 	for (map, want) in [
-		(None, (StatusCode::NOT_FOUND, json!({ "error": "not found" }))),
+		(None, (StatusCode::NOT_FOUND, json!({ "code": "not_found", "error": "not found" }))),
 		(Some(configured), (StatusCode::OK, json!({ "key": "browser-key" }))),
 	] {
 		let app = app(panel(&db, None).await, map);

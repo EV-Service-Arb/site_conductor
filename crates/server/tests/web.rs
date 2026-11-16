@@ -176,7 +176,7 @@ async fn the_sites_page_serves_every_view_of_it() {
 	}
 	assert_eq!(get_(&app, "/sites/leads/nothing.txt").await.0, StatusCode::NOT_FOUND);
 	let (status, h, body) = get_(&app, "/sites/mfe/mfe-sites.js").await;
-	assert_eq!((status, body.as_str()), (StatusCode::NOT_FOUND, r#"{"error":"not found"}"#), "the forward's, not the export's");
+	assert_eq!((status, body.as_str()), (StatusCode::NOT_FOUND, r#"{"code":"not_found","error":"not found"}"#), "the forward's, not the export's");
 	assert!(!is_page(&h));
 }
 
@@ -204,7 +204,7 @@ async fn the_api_side_never_falls_through_to_the_front_end() {
 		let (status, h, body) = get_(&app, uri).await;
 		assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");
 		assert!(h[header::CONTENT_TYPE].to_str().unwrap().starts_with("application/json"), "{uri}: {h:?}");
-		assert_eq!(body, r#"{"error":"not found"}"#, "{uri}");
+		assert_eq!(body, r#"{"code":"not_found","error":"not found"}"#, "{uri}");
 	}
 }
 
@@ -217,7 +217,7 @@ async fn the_retired_mfe_paths_are_json_404s_never_a_page() {
 	let app = app(&export.web(), &db).await;
 	for uri in ["/cabinet/mfe/account-chip.js", "/cabinet", "/cabinet/elsewhere", "/auth/mfe/account-chip.js"] {
 		let (status, h, body) = get_(&app, uri).await;
-		assert_eq!((status, body.as_str()), (StatusCode::NOT_FOUND, r#"{"error":"not found"}"#), "{uri}");
+		assert_eq!((status, body.as_str()), (StatusCode::NOT_FOUND, r#"{"code":"not_found","error":"not found"}"#), "{uri}");
 		assert!(!is_page(&h), "{uri}: not the SPA's 404 page");
 	}
 }

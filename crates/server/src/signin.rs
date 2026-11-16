@@ -39,7 +39,6 @@ use std::{
 };
 
 use axum::{
-	Json,
 	extract::{Query, Request, State},
 	http::{HeaderMap, HeaderValue, Method, StatusCode, header},
 	middleware::Next,
@@ -54,7 +53,6 @@ use sa_panel::{
 	session::{PRELOGIN_TTL, SessionError, SessionKey},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
@@ -308,7 +306,7 @@ pub async fn callback(State(s): State<SignIn>, headers: HeaderMap, Query(q): Que
 /// meant to end access, not one browser's copy of it) and the cookies cleared.
 pub async fn logout(State(s): State<SignIn>, headers: HeaderMap) -> Response {
 	if !s.cookies.csrf_ok(&headers) {
-		return json_error(StatusCode::FORBIDDEN, "csrf");
+		return ApiError::Csrf.into_response();
 	}
 	if let Some(key) = s.cookies.get(&headers, cookies::SESSION).and_then(SessionKey::of_cookie) {
 		s.forget_me(&key);
@@ -319,8 +317,7 @@ pub async fn logout(State(s): State<SignIn>, headers: HeaderMap) -> Response {
 			}
 			Ok(None) => {}
 			Err(e) => {
-				crate::report(&e, "closing a user's sessions");
-				return json_error(StatusCode::INTERNAL_SERVER_ERROR, "internal error");
+				return ApiError::Internal(e.wrap_err("closing a user's sessions")).into_response();
 			}
 		}
 	}
@@ -359,10 +356,6 @@ pub(crate) fn to_concierge(s: &SignIn, return_to: Option<&str>, dev_as: Option<&
 	};
 	let prelogin = s.cookies.set(cookies::PRELOGIN, &begun.cookie, PRELOGIN_TTL.as_secs(), true);
 	private((StatusCode::FOUND, [(header::LOCATION, location), (header::SET_COOKIE, prelogin)]).into_response())
-}
-
-fn json_error(status: StatusCode, msg: &str) -> Response {
-	(status, Json(json!({ "error": msg }))).into_response()
 }
 
 /// A page on this origin with fixed text: nothing from the request is echoed.
@@ -449,7 +442,7 @@ pub(crate) async fn gate(State(g): State<Gatekeeper>, mut req: Request, next: Ne
 	} else {
 		let safe = matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
 		if !safe && !g.sign_in.cookies.csrf_ok(req.headers()) {
-			return json_error(StatusCode::FORBIDDEN, "csrf");
+			return ApiError::Csrf.into_response();
 		}
 		check(&g.sign_in, req.headers(), g.gate.freshness).await
 	};
@@ -487,16 +480,16 @@ pub(crate) enum Denied {
 	Unauthenticated,
 	/// Concierge cannot be asked now; nothing is closed (503).
 	Unavailable,
-	/// Our failure, or concierge's: the status and the message the caller sees.
-	Failed(StatusCode, &'static str),
+	/// Our failure, or concierge's.
+	Failed(ApiError),
 }
 
 impl Denied {
 	pub(crate) fn into_response(self, s: &SignIn) -> Response {
 		match self {
-			Self::Unauthenticated => signed_out(s, json_error(StatusCode::UNAUTHORIZED, "sign in")),
-			Self::Unavailable => json_error(StatusCode::SERVICE_UNAVAILABLE, "sign-in is unavailable, try again"),
-			Self::Failed(status, msg) => json_error(status, msg),
+			Self::Unauthenticated => signed_out(s, ApiError::Unauthenticated.into_response()),
+			Self::Unavailable => ApiError::Unavailable("sign-in is unavailable, try again".to_owned()).into_response(),
+			Self::Failed(e) => e.into_response(),
 		}
 	}
 }
@@ -525,10 +518,7 @@ async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Res
 		Ok(session) => session,
 		Err(SessionError::Missing | SessionError::Rejected) => return Err(Denied::Unauthenticated),
 		Err(SessionError::Unavailable) => return Err(Denied::Unavailable),
-		Err(SessionError::Internal(e)) => {
-			crate::report(&e, "reading a session");
-			return Err(Denied::Failed(StatusCode::INTERNAL_SERVER_ERROR, "internal error"));
-		}
+		Err(SessionError::Internal(e)) => return Err(Denied::Failed(ApiError::Internal(e.wrap_err("reading a session")))),
 	};
 	// The user is here: the bot may ask concierge with this session for another week.
 	if let Err(e) = s.panel.touch_session(&session.key, Timestamp::now()).await {
@@ -559,13 +549,13 @@ async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Res
 			}
 			Err(e @ ConciergeError::Failed(_)) => {
 				crate::report(&eyre::eyre!(e), "GetMe");
-				return Err(Denied::Failed(StatusCode::BAD_GATEWAY, "sign-in failed"));
+				return Err(Denied::Failed(ApiError::BadGateway("sign-in failed".to_owned())));
 			}
 		},
 	};
 	if me.user_id != session.user_id {
 		crate::report(&eyre::eyre!("GetMe answered another user than the session's"), "GetMe");
-		return Err(Denied::Failed(StatusCode::BAD_GATEWAY, "sign-in failed"));
+		return Err(Denied::Failed(ApiError::BadGateway("sign-in failed".to_owned())));
 	}
 	if fresh {
 		// Alerts go only on permissions concierge confirmed lately; every answer the gate gets is
@@ -581,8 +571,7 @@ async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Res
 			name: me.preferred_name.clone(),
 		};
 		if let Err(e) = s.panel.user_seen(&user, Timestamp::now()).await {
-			crate::report(&e, "recording a user seen");
-			return Err(Denied::Failed(StatusCode::INTERNAL_SERVER_ERROR, "internal error"));
+			return Err(Denied::Failed(ApiError::Internal(e.wrap_err("recording a user seen"))));
 		}
 	}
 	Ok(Caller {

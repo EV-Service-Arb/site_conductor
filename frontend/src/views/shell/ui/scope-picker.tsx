@@ -43,7 +43,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
       chooseCategoryScope(scope.categories.filter((p) => p.trade === "*" || known.some((k) => k.id === p.trade)));
   }, [known, scope.categories]);
 
-  const byGmail = (b: Gmb) => scope.gmails === null || (b.gmail_id != null && scope.gmails.has(b.gmail_id));
+  const byGmail = (b: Gmb) => scope.gmails === null || (b.gmail_id !== null && scope.gmails.has(b.gmail_id));
   const byCategory = (b: Gmb) => scope.categories === null || inCategories(b, scope.categories);
   const covered = (gmbs: Gmb[]) => gmbs.filter((b) => isSelected(b.id)).length;
   const pickGmail = (g: Gmail) => {
@@ -94,7 +94,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
         </div>
         {known !== null && <Matrix all={data.gmbs} gmbs={data.gmbs.filter(byGmail)} trades={known} picked={scope.categories} />}
         <p className="px-2 pt-1 text-xs text-ink-soft">{t(scopeKeys.matrix.how, "Click scopes · Shift-click adds")}</p>
-        {data.gmbs.some((b) => b.trade_id == null) && <p className="px-2 text-xs text-ink-soft">{t(scopeKeys.matrix.untraded, "{n} GBPs have no trade → the outline's No category chip", { n: data.gmbs.filter((b) => b.trade_id == null).length })}</p>}
+        {data.gmbs.some((b) => b.trade_id === null) && <p className="px-2 text-xs text-ink-soft">{t(scopeKeys.matrix.untraded, "{n} GBPs have no trade → the outline's No category chip", { n: data.gmbs.filter((b) => b.trade_id === null).length })}</p>}
         <div className={cn(HEADING, "mt-1 border-t border-border pt-2")}>
           {t(scopeKeys.gmails, "Managing gmails")}
           <span className="flex-1" />
@@ -221,7 +221,7 @@ function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[
               className={cn(box, "flex w-full items-center px-2 text-ink-soft", picked === null && PICKED)}
             >
               <span className="flex-1 text-left">{t(scopeKeys.matrix.all, "All")}</span>
-              <span>{gmbs.filter((b) => b.trade_id != null).length}</span>
+              <span>{gmbs.filter((b) => b.trade_id !== null).length}</span>
             </button>
           </th>
           {countries.map((c) => {

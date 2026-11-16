@@ -88,20 +88,20 @@ describe("the init a write may add", () => {
 
 describe("the gate's answers", () => {
   it("401 sends the browser to sign in", async () => {
-    const { api, onUnauthenticated } = harness(() => json(401, { error: "sign in" }));
+    const { api, onUnauthenticated } = harness(() => json(401, { code: "unauthenticated", error: "sign in" }));
     await expect(ok(api.GET("/me"))).rejects.toMatchObject({ failure: { kind: "unauthenticated" } });
     expect(onUnauthenticated).toHaveBeenCalledOnce();
   });
 
-  it("403 without a grant is 'no access', a 403 csrf is told apart", async () => {
-    const noAccess = harness(() => json(403, { error: "no access to the panel" }));
-    await expect(ok(noAccess.api.GET("/me"))).rejects.toMatchObject({ failure: { kind: "no_access" } });
-    const csrf = harness(() => json(403, { error: "csrf" }));
+  it("a 403 is csrf by its code, whatever it says", async () => {
+    const forbidden = harness(() => json(403, { code: "forbidden", error: "csrf" }));
+    await expect(ok(forbidden.api.GET("/sources"))).rejects.toMatchObject({ failure: { kind: "forbidden" } });
+    const csrf = harness(() => json(403, { code: "csrf", error: "the page is out of date: reload it" }));
     await expect(ok(csrf.api.DELETE("/sources/{key_id}", { params: { path: { key_id: "k" } } }))).rejects.toMatchObject({ failure: { kind: "csrf" } });
   });
 
   it("503 is 'unavailable' and signs nobody out", async () => {
-    const { api, onUnauthenticated } = harness(() => json(503, { error: "sign-in is unavailable, try again" }));
+    const { api, onUnauthenticated } = harness(() => json(503, { code: "unavailable", error: "sign-in is unavailable, try again" }));
     const err = await ok(api.GET("/me")).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).failure.kind).toBe("unavailable");

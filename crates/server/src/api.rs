@@ -31,23 +31,51 @@ use crate::{
 
 pub(crate) type ApiResult<T> = Result<T, ApiError>;
 
-/// Why a request failed, as the front end is told.
+/// Why a request failed, as the front end is told: every JSON refusal the conductor writes itself.
 #[derive(Debug)]
 pub enum ApiError {
 	BadRequest(String),
+	/// No session, or one closed.
+	Unauthenticated,
+	/// A cookie's write without the page's CSRF header, or a socket from another origin.
+	Csrf,
 	Forbidden,
 	NotFound,
 	Conflict(String),
 	TooLarge(String),
+	TooMany(String),
 	/// Not now: the message says until when.
 	Unavailable(String),
+	/// No browser provider is configured: no browser route answers anything else.
+	BrowsersNotConnected,
+	/// What this answer stands on did not answer.
+	BadGateway(String),
 	Internal(eyre::Report),
 }
 
-/// What every failed operation answers, its status saying which failure.
+/// Which failure, for a client to act on; the status follows from it.
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorCode {
+	BadRequest,
+	Unauthenticated,
+	Csrf,
+	Forbidden,
+	NotFound,
+	Conflict,
+	TooLarge,
+	TooMany,
+	Unavailable,
+	BrowsersNotConnected,
+	BadGateway,
+	Internal,
+}
+
+/// What every failed operation answers: `error` is for a person.
 #[derive(JsonSchema, Serialize)]
 #[schemars(rename = "Error")]
 pub struct ErrorDto {
+	code: ErrorCode,
 	error: String,
 }
 
@@ -67,19 +95,25 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 
 impl IntoResponse for ApiError {
 	fn into_response(self) -> Response {
-		let (status, msg) = match self {
-			Self::BadRequest(m) => (StatusCode::BAD_REQUEST, m),
-			Self::Forbidden => (StatusCode::FORBIDDEN, "your permissions do not allow this".to_owned()),
-			Self::NotFound => (StatusCode::NOT_FOUND, "not found".to_owned()),
-			Self::Conflict(m) => (StatusCode::CONFLICT, m),
-			Self::TooLarge(m) => (StatusCode::PAYLOAD_TOO_LARGE, m),
-			Self::Unavailable(m) => (StatusCode::SERVICE_UNAVAILABLE, m),
+		use ErrorCode as C;
+		let (status, code, msg) = match self {
+			Self::BadRequest(m) => (StatusCode::BAD_REQUEST, C::BadRequest, m),
+			Self::Unauthenticated => (StatusCode::UNAUTHORIZED, C::Unauthenticated, "sign in".to_owned()),
+			Self::Csrf => (StatusCode::FORBIDDEN, C::Csrf, "the page is out of date: reload it".to_owned()),
+			Self::Forbidden => (StatusCode::FORBIDDEN, C::Forbidden, "your permissions do not allow this".to_owned()),
+			Self::NotFound => (StatusCode::NOT_FOUND, C::NotFound, "not found".to_owned()),
+			Self::Conflict(m) => (StatusCode::CONFLICT, C::Conflict, m),
+			Self::TooLarge(m) => (StatusCode::PAYLOAD_TOO_LARGE, C::TooLarge, m),
+			Self::TooMany(m) => (StatusCode::TOO_MANY_REQUESTS, C::TooMany, m),
+			Self::Unavailable(m) => (StatusCode::SERVICE_UNAVAILABLE, C::Unavailable, m),
+			Self::BrowsersNotConnected => (StatusCode::SERVICE_UNAVAILABLE, C::BrowsersNotConnected, "browsers not connected".to_owned()),
+			Self::BadGateway(m) => (StatusCode::BAD_GATEWAY, C::BadGateway, m),
 			Self::Internal(e) => {
 				crate::report(&e, "the conductor's API");
-				(StatusCode::INTERNAL_SERVER_ERROR, "internal error".to_owned())
+				(StatusCode::INTERNAL_SERVER_ERROR, C::Internal, "internal error".to_owned())
 			}
 		};
-		(status, Json(ErrorDto { error: msg })).into_response()
+		(status, Json(ErrorDto { code, error: msg })).into_response()
 	}
 }
 

@@ -7,7 +7,7 @@
 use std::{sync::Arc, time::Duration};
 
 use axum::{
-	Json, Router,
+	Router,
 	error_handling::HandleErrorLayer,
 	extract::{FromRef, RawPathParams, Request, State},
 	http::{HeaderValue, Method, StatusCode, header},
@@ -23,7 +23,6 @@ use sa_panel::{
 	Panel,
 	live::{Audience, Change},
 };
-use serde_json::json;
 use tower::{BoxError, ServiceBuilder, limit::GlobalConcurrencyLimitLayer};
 use tower_http::timeout::TimeoutLayer;
 
@@ -359,7 +358,7 @@ fn bounded<S: Clone + Send + Sync + 'static>(routes: Router<S>, concurrent: usiz
 	routes.layer(
 		ServiceBuilder::new()
 			// The only error the layers below raise is the shed: everything else is a response.
-			.layer(HandleErrorLayer::new(|_: BoxError| async { error(StatusCode::SERVICE_UNAVAILABLE, "busy, try again") }))
+			.layer(HandleErrorLayer::new(|_: BoxError| async { api::ApiError::Unavailable("busy, try again".to_owned()).into_response() }))
 			.load_shed()
 			.layer(GlobalConcurrencyLimitLayer::with_semaphore(permits))
 			.layer(TimeoutLayer::with_status_code(StatusCode::SERVICE_UNAVAILABLE, timeout)),
@@ -370,8 +369,4 @@ fn bounded<S: Clone + Send + Sync + 'static>(routes: Router<S>, concurrent: usiz
 async fn nosniff(mut res: Response) -> Response {
 	res.headers_mut().insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
 	res
-}
-
-fn error(status: StatusCode, msg: impl Into<String>) -> Response {
-	(status, Json(json!({ "error": msg.into() }))).into_response()
 }

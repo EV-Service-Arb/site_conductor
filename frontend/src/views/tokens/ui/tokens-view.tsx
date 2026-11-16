@@ -145,7 +145,7 @@ function Ledger() {
           </li>
         ))}
       </ul>
-      {next != null && (
+      {next !== null && (
         <div>
           <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void loadMore(next)}>
             {t(tokensKeys.ledger.more, "More")}

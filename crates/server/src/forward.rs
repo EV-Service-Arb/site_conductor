@@ -21,7 +21,7 @@
 use std::{sync::Arc, time::Duration};
 
 use axum::{
-	Json, Router,
+	Router,
 	body::{Body, to_bytes},
 	extract::{Request, State},
 	http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header},
@@ -30,9 +30,9 @@ use axum::{
 };
 use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use sa_auth::{Assertion, Principal, Service, Signer, User};
-use serde_json::json;
 
 use crate::{
+	api::ApiError,
 	catalog::Catalog,
 	cookies,
 	signin::{self, Caller, Denied, Freshness, SignIn},
@@ -281,19 +281,19 @@ impl Forward {
 				let route = ROUTES.iter().find(|r| r.prefix == prefix).expect("apis() are ROUTES");
 				self.pass(route, req, Some(Principal::User(user(viewer, service)))).await
 			}
-			None => json_error(StatusCode::NOT_FOUND, "not a service's API"),
+			None => ApiError::NotFound.into_response(),
 		}
 	}
 
 	async fn pass(&self, route: &Route, req: Request, principal: Option<Principal>) -> Response {
 		if route.service == Service::Placement && self.services.upstreams.placement.is_none() {
-			return json_error(StatusCode::SERVICE_UNAVAILABLE, "placement not connected");
+			return ApiError::Unavailable("placement not connected".to_owned()).into_response();
 		}
 		let rest = &req.uri().path()[route.prefix.len()..];
 		// decoded as a service might, so no route reaches above its upstream prefix
 		let decoded = rest.to_ascii_lowercase().replace("%2e", ".").replace("%2f", "/").replace("%5c", "/").replace('\\', "/");
 		if decoded.split('/').any(|s| s == "." || s == "..") {
-			return json_error(StatusCode::BAD_REQUEST, "not a forwardable path");
+			return ApiError::BadRequest("not a forwardable path".to_owned()).into_response();
 		}
 		let upstream_path = format!("{}{rest}", route.upstream);
 		let upstream_path = if upstream_path.is_empty() { "/".to_owned() } else { upstream_path };
@@ -306,7 +306,7 @@ impl Forward {
 			Ok(res) => res,
 			Err(e) => {
 				tracing::warn!(error = %e, service = ?route.service, "a forward failed");
-				json_error(StatusCode::BAD_GATEWAY, "the service did not answer")
+				ApiError::BadGateway("the service did not answer".to_owned()).into_response()
 			}
 		}
 	}
@@ -363,10 +363,6 @@ pub(crate) fn name(service: Service) -> String {
 		.to_owned()
 }
 
-pub(crate) fn json_error(status: StatusCode, msg: &str) -> Response {
-	(status, Json(json!({ "error": msg }))).into_response()
-}
-
 async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 	let route = ROUTES.iter().find(|r| under(req.uri().path(), r.prefix)).expect("mounted under one of ROUTES");
 	let principal = match route.gate {
@@ -382,7 +378,7 @@ async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 				caller
 			} else {
 				if write && writes == Writes::Csrf && !f.sign_in.cookies().csrf_ok(req.headers()) {
-					return json_error(StatusCode::FORBIDDEN, "csrf");
+					return ApiError::Csrf.into_response();
 				}
 				signin::check(&f.sign_in, req.headers(), freshness).await
 			};

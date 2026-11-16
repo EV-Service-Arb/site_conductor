@@ -52,11 +52,11 @@ export function covers(p: Pattern, trade: number, country: Country | null): bool
 /** Whether the GBP is under any of `patterns`: one with no trade is under none. */
 export function inCategories(gmb: Gmb, patterns: readonly Pattern[]): boolean {
   const trade = gmb.trade_id;
-  return trade != null && patterns.some((p) => covers(p, trade, gmb.country?.code ?? null));
+  return trade !== null && patterns.some((p) => covers(p, trade, gmb.country?.code ?? null));
 }
 
 export function inScope(gmb: Gmb, scope: Scope): boolean {
-  return (scope.gmails === null || (gmb.gmail_id != null && scope.gmails.has(gmb.gmail_id))) && (scope.categories === null || inCategories(gmb, scope.categories));
+  return (scope.gmails === null || (gmb.gmail_id !== null && scope.gmails.has(gmb.gmail_id))) && (scope.categories === null || inCategories(gmb, scope.categories));
 }
 
 export function chooseGmailScope(gmails: Iterable<number> | null): void {

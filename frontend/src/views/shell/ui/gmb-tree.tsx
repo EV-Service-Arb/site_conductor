@@ -315,8 +315,8 @@ function SetTrade({ gmbs, onSet }: { gmbs: Gmb[]; onSet: () => void }) {
     }
   };
   const byCountry = countryValues.map((c) => [c, gmbs.filter((b) => b.country?.code === c).length] as const).filter(([, n]) => n > 0);
-  const nowhere = gmbs.filter((b) => b.country == null).length;
-  const untraded = gmbs.every((b) => b.trade_id == null);
+  const nowhere = gmbs.filter((b) => b.country === null).length;
+  const untraded = gmbs.every((b) => b.trade_id === null);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex items-center gap-0.5 rounded px-1 text-xs font-normal tracking-normal normal-case outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
@@ -442,7 +442,7 @@ function GmbRow({
       <DropdownMenu>
         <DropdownMenuTrigger aria-label={t(gmbsKeys.actions, "{name}: actions", { name })} title={STATE_NAME[gmb.state](t)} className="flex w-4 shrink-0 flex-col items-center justify-center gap-0.5 self-stretch rounded-sm outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-hover">
           {[0, 1, 2].map((i) => (
-            <span key={i} aria-hidden className={cn("size-1.5 rounded-full", DOT[gmb.state], !gmb.enabled && "border-ink-soft bg-ink-soft", gmb.location == null && "opacity-40")} />
+            <span key={i} aria-hidden className={cn("size-1.5 rounded-full", DOT[gmb.state], !gmb.enabled && "border-ink-soft bg-ink-soft", gmb.location === null && "opacity-40")} />
           ))}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-48">

@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { panelGroups } from "@/features/account-chip/model/attributes";
-import { ALIASES, ownScreens, seesSites } from "@/entities/session/model/access";
-import type { Caller, Permission } from "@/shared/api/schema";
+import { grants, ownScreens, seesSites } from "@/entities/session/model/access";
+import type { Caller, Need, Permission } from "@/shared/api/schema";
 import type { T } from "@/shared/i18n";
 
 const t: T = (...args) => args[1];
 
 const holding = (...permissions: Permission[]): Caller => ({ user_id: "u", email: "e", preferred_name: "", permissions, dev_sign_in: false });
-const alias = (name: keyof typeof ALIASES): Caller => holding(...ALIASES[name]);
+const alias = (name: Need): Caller => holding(...grants(name));
 
 /** What the top bar offers a caller: Sites, the screens beside the chip, the chip's entries past the profile. */
 function check(caller: Caller, walletPage: boolean, expected: { sites: boolean; own: string[]; chip: string[][] }) {

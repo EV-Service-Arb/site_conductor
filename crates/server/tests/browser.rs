@@ -668,3 +668,29 @@ async fn a_phones_viewer_is_the_runners_its_frames_checked_and_passed_both_ways(
 	let heard: Vec<Value> = heard.lock().unwrap().iter().map(|t| serde_json::from_str(t).unwrap()).collect();
 	assert_eq!(heard, [touch], "only the viewer's frames reach the runner");
 }
+
+#[tokio::test]
+async fn without_a_runner_every_browser_route_says_so_by_its_code() {
+	let db = TestDb::create().await;
+	let who = DevIdentity {
+		user_id: DevIdentity::named("dev@localhost"),
+		permissions: operator(),
+		email: "dev@localhost".to_owned(),
+	};
+	let config = SignInConfig {
+		panel_origin: ORIGIN.to_owned(),
+		concierge_origin: ORIGIN.to_owned(),
+	};
+	let app = http::app(SignIn::new(panel(&db).await, Concierge::dev(who), config), None, None, Default::default(), None, None, None, None, None);
+	let mut b = Browser::default();
+	b.sign_in(&app).await;
+	for (method, uri, body) in [
+		(Method::POST, "/api/v1/gmails/1/browser/start", json!({"gmb": null})),
+		(Method::PUT, "/api/v1/gmails/1/browser", json!({"provider": "multilogin", "device": null, "proxy": "p"})),
+	] {
+		let json = [("content-type", "application/json")];
+		let (status, _, bytes) = b.send_body(&app, method, uri, &json, true, Body::from(body.to_string())).await;
+		let body: Value = serde_json::from_slice(&bytes).unwrap();
+		assert_eq!((status, &body["code"]), (StatusCode::SERVICE_UNAVAILABLE, &json!("browsers_not_connected")), "{uri}: {body}");
+	}
+}

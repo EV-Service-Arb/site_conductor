@@ -61,9 +61,9 @@ export function ChatActions({ chat, onRename, pinOutside = false }: { chat: Chat
         <DropdownMenuShortcut>Ctrl+Alt+L</DropdownMenuShortcut>
       </DropdownMenuItem>
       {interacts && !pinOutside && (
-        <DropdownMenuItem onClick={() => write(ok(api.PUT("/assistant/chats/{id}/pinned", { params: { path: { id: chat.id } }, body: { on: chat.pinned_at == null } })))}>
-          {chat.pinned_at == null ? <Pin aria-hidden /> : <PinOff aria-hidden />}
-          {(chat.pinned_at == null ? t(assistant.pin, "Pin") : t(assistant.unpin, "Unpin"))}
+        <DropdownMenuItem onClick={() => write(ok(api.PUT("/assistant/chats/{id}/pinned", { params: { path: { id: chat.id } }, body: { on: chat.pinned_at === null } })))}>
+          {chat.pinned_at === null ? <Pin aria-hidden /> : <PinOff aria-hidden />}
+          {(chat.pinned_at === null ? t(assistant.pin, "Pin") : t(assistant.unpin, "Unpin"))}
         </DropdownMenuItem>
       )}
       {interacts && (
@@ -73,9 +73,9 @@ export function ChatActions({ chat, onRename, pinOutside = false }: { chat: Chat
         </DropdownMenuItem>
       )}
       {interacts && (
-        <DropdownMenuItem onClick={() => write(ok(api.PUT("/assistant/chats/{id}/archived", { params: { path: { id: chat.id } }, body: { on: chat.archived_at == null } })))}>
-          {chat.archived_at == null ? <Archive aria-hidden /> : <ArchiveRestore aria-hidden />}
-          {(chat.archived_at == null ? t(assistant.archive, "Archive") : t(assistant.unarchive, "Unarchive"))}
+        <DropdownMenuItem onClick={() => write(ok(api.PUT("/assistant/chats/{id}/archived", { params: { path: { id: chat.id } }, body: { on: chat.archived_at === null } })))}>
+          {chat.archived_at === null ? <Archive aria-hidden /> : <ArchiveRestore aria-hidden />}
+          {(chat.archived_at === null ? t(assistant.archive, "Archive") : t(assistant.unarchive, "Unarchive"))}
         </DropdownMenuItem>
       )}
       {chat.role === "owner" && (

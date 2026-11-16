@@ -66,7 +66,7 @@ export function BrowserCard({ gmail, browser, onChanged }: { gmail: number; brow
       setBusy(false);
     }
   };
-  const failing = browser !== null && browser.checked.error != null;
+  const failing = browser !== null && browser.checked.error !== null;
 
   return (
     <Card className="gap-3 py-4">
@@ -94,7 +94,7 @@ export function BrowserCard({ gmail, browser, onChanged }: { gmail: number; brow
             </dl>
             <p className="text-xs text-ink-soft">
               {t(account.checkedAt, "Checked {at}", { at: formatDateTime(browser.checked.at, locale) })}
-              {browser.checked.error != null && <span className="block text-accent-error">{browser.checked.error}</span>}
+              {browser.checked.error !== null && <span className="block text-accent-error">{browser.checked.error}</span>}
             </p>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void act(() => ok(api.POST("/gmails/{id}/browser/test", { params: { path: { id: gmail } } })))}>
@@ -152,7 +152,7 @@ function Film({ gmail, browser, onChanged }: { gmail: number; browser: Browser; 
   const picker = useRef<HTMLInputElement>(null);
   const [sent, setSent] = useState<number | null>(null);
   const phone = browser.provider === "multilogin";
-  const running = !phone && browser.running != null;
+  const running = !phone && browser.running !== null;
   const act = async (run: () => Promise<unknown>) => {
     setSent(0);
     try {

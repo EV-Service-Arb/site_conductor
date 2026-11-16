@@ -33,7 +33,7 @@ export function BrowserSession({ gmail, gmb, aside }: { gmail: Gmail; gmb: numbe
     <Settled loading={connections.status === "loading"} skeleton={<Skeleton className="h-96 w-full" />}>
       {connections.status === "error" && <ErrorState failure={connections.failure} onRetry={connections.reload} />}
       {connections.status === "ok" &&
-        (connections.data.browser == null ? (
+        (connections.data.browser === null ? (
           <EmptyState title={t(browserKeys.session.none, "No browser for this gmail yet")} description={t(browserKeys.session.none.body, "Set up {gmail}'s antidetect environment on its Connections tab.", { gmail: gmail.gmail })}>
             <Button size={button("sm")} onClick={() => openAccount({ gmail: gmail.id, tab: "connections" })}>
               {t(browserKeys.session.setUp, "Set it up")}
@@ -70,7 +70,7 @@ const BLANK: Page = { frame: null, tabs: [], active: null, dialog: null };
 function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: number | null; browser: Browser; reload: () => void; aside: ((type: TypeIn) => ReactNode) | undefined }) {
   const t = useT();
   const button = useButtonSize();
-  const runs: Runs = browser.running == null ? "no" : (browser.running.gmb ?? null) === gmb ? "here" : "elsewhere";
+  const runs: Runs = browser.running === null ? "no" : browser.running.gmb === gmb ? "here" : "elsewhere";
   const [phase, setPhase] = useState<Phase>(runs === "here" ? "connecting" : runs === "no" ? "off" : "elsewhere");
   const [link, setLink] = useState<{ n: number; delay: number } | null>(runs === "here" ? { n: 0, delay: 0 } : null);
   const [page, setPage] = useState<Page>(BLANK);
@@ -259,7 +259,7 @@ function Idle({ phase, browser, failure, onStart, onConnect }: { phase: Phase; b
           <Button size={button("sm")} disabled={phase === "starting"} onClick={() => onStart(false)}>
             {(phase === "starting" ? t(browserKeys.starting, "Starting…") : t(browserKeys.start, "Start"))}
           </Button>
-          {browser.checked.error != null && <p className="text-xs text-accent-warn">{t(browserKeys.session.checkFailed, "Its last check failed: {error}", { error: browser.checked.error })}</p>}
+          {browser.checked.error !== null && <p className="text-xs text-accent-warn">{t(browserKeys.session.checkFailed, "Its last check failed: {error}", { error: browser.checked.error })}</p>}
         </>
       ) : phase === "taken" ? (
         <>

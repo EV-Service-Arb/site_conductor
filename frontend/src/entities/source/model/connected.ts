@@ -46,7 +46,7 @@ export function joinConnectedSites(raw: Answer): ConnectedSites {
     return {
       keyId: s.key_id,
       brands: s.brands,
-      origin: s.origin ?? null,
+      origin: s.origin,
       report: s.report,
       lastIngest: received.state === "read" ? (received.value[s.key_id] ?? null) : undefined,
       lastRead: internal.state === "read" ? latest : undefined,

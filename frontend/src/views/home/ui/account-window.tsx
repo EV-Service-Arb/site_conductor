@@ -72,9 +72,9 @@ function Connections({ gmail }: { gmail: Gmail }) {
       {connections.status === "error" && <ErrorState failure={connections.failure} onRetry={connections.reload} />}
       {connections.status === "ok" && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <ImapCard gmail={gmail} imap={connections.data.imap ?? null} onChanged={connections.reload} />
-          <MapsKeyCard gmail={gmail.id} mapsKey={connections.data.maps_key ?? null} prices={connections.data.prices} onChanged={connections.reload} />
-          <BrowserCard gmail={gmail.id} browser={connections.data.browser ?? null} onChanged={connections.reload} />
+          <ImapCard gmail={gmail} imap={connections.data.imap} onChanged={connections.reload} />
+          <MapsKeyCard gmail={gmail.id} mapsKey={connections.data.maps_key} prices={connections.data.prices} onChanged={connections.reload} />
+          <BrowserCard gmail={gmail.id} browser={connections.data.browser} onChanged={connections.reload} />
         </div>
       )}
     </Settled>

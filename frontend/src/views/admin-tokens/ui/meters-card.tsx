@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge, Card, CardContent, cn } from "@evinvest/uikit";
+import { useState } from "react";
 
 import { tokens } from "@/entities/tokens";
 import type { MeterUse } from "@/shared/api/schema";
@@ -14,7 +15,7 @@ const day = (iso: string) => new Date(iso).toLocaleString(undefined, { day: "num
 /** Each vendor meter this period: the vendor's own count plus ours since it, against its free units. */
 export function MetersCard({ meters }: { meters: MeterUse[] }) {
   const t = useT();
-  const now = Date.now();
+  const [now] = useState(Date.now);
   return (
     <Card className="gap-3 py-4">
       <CardContent className="flex flex-col gap-3 px-4">

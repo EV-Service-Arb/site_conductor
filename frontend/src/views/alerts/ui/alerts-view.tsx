@@ -125,7 +125,7 @@ function Page({ alerts, gmails, busy, act }: { alerts: Alerts; gmails: Gmail[]; 
         {own === undefined ? (
           <p className="text-sm text-ink-soft">{t(alertsKeys.chats.linkFirst, "Connect your own Telegram first: the bot checks with it that you run the channel.")}</p>
         ) : (
-          <AddChat bot={alerts.bot ?? null} gmails={gmails} busy={busy} act={act} />
+          <AddChat bot={alerts.bot} gmails={gmails} busy={busy} act={act} />
         )}
       </Section>
     </>
@@ -165,7 +165,7 @@ function DestinationCard({
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="text-ink">
           {name}
-          {d.topic_id != null && <span className="text-ink-soft"> · {t(alertsKeys.topic, "topic {topic}", { topic: d.topic_id })}</span>}
+          {d.topic_id !== null && <span className="text-ink-soft"> · {t(alertsKeys.topic, "topic {topic}", { topic: d.topic_id })}</span>}
           {d.kind !== "private" && <span className="text-ink-soft"> · {KIND_NAME[d.kind](t)}</span>}
         </span>
         <span className="flex gap-1">
@@ -177,7 +177,7 @@ function DestinationCard({
           </Button>
         </span>
       </div>
-      {d.dead != null && (
+      {d.dead !== null && (
         <div className="space-y-1">
           <p className="text-sm text-accent-warn">{t(alertsKeys.dead, "Nothing reaches it: {why}. Fix it, then Test.", { why: d.dead })}</p>
           {onReconnect !== undefined && (
@@ -189,7 +189,7 @@ function DestinationCard({
       )}
       {d.kind !== "private" && <p className="text-xs text-ink-soft">{t(alertsKeys.chats.noPii, "Without contact details or buttons: whoever is in the chat reads it.")}</p>}
       {gmails.length > 0 && (
-        <GmailScope value={d.gmail_id ?? null} gmails={gmails} busy={busy} onChange={(gmail) => void act(() => ok(api.PUT("/alerts/destinations/{id}/gmail", { params: { path: { id: d.id } }, body: { gmail_id: gmail } })))} />
+        <GmailScope value={d.gmail_id} gmails={gmails} busy={busy} onChange={(gmail) => void act(() => ok(api.PUT("/alerts/destinations/{id}/gmail", { params: { path: { id: d.id } }, body: { gmail_id: gmail } })))} />
       )}
       <Rules alerts={alerts} destination={d} busy={busy} onToggle={(rule, on) => void act(() => ok(api.PUT("/alerts/destinations/{id}/rules", { params: { path: { id: d.id } }, body: { rules: { [rule]: on } } })))} />
     </div>

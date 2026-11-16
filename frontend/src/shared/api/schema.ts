@@ -1919,10 +1919,16 @@ export interface components {
             photos?: number[] | null;
             text?: string | null;
         };
-        /** @description What every failed operation answers, its status saying which failure. */
+        /** @description What every failed operation answers: `error` is for a person. */
         Error: {
+            code: components["schemas"]["ErrorCode"];
             error: string;
         };
+        /**
+         * @description Which failure, for a client to act on; the status follows from it.
+         * @enum {string}
+         */
+        ErrorCode: "bad_request" | "unauthenticated" | "csrf" | "forbidden" | "not_found" | "conflict" | "too_large" | "too_many" | "unavailable" | "browsers_not_connected" | "bad_gateway" | "internal";
         /** @description Where a gmail's proxy comes out, at its last check. */
         Exit: {
             city: string;
@@ -3294,6 +3300,7 @@ export type DestinationKind = components['schemas']['DestinationKind'];
 export type Device = components['schemas']['Device'];
 export type EditKitDraft = components['schemas']['EditKitDraft'];
 export type Error = components['schemas']['Error'];
+export type ErrorCode = components['schemas']['ErrorCode'];
 export type Exit = components['schemas']['Exit'];
 export type Feedback = components['schemas']['Feedback'];
 export type Flow = components['schemas']['Flow'];
@@ -3459,7 +3466,7 @@ export interface operations {
                     "application/json": components["schemas"]["AccessRequest"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3487,7 +3494,7 @@ export interface operations {
                     "application/json": components["schemas"]["AccessRequests"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3516,7 +3523,7 @@ export interface operations {
                     "application/json": components["schemas"]["Meters"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3550,7 +3557,7 @@ export interface operations {
                     "application/json": components["schemas"]["MeterReadings"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3579,7 +3586,7 @@ export interface operations {
                     "application/json": components["schemas"]["TokenHolders"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3613,7 +3620,7 @@ export interface operations {
                     "application/json": components["schemas"]["Flows"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3642,7 +3649,7 @@ export interface operations {
                     "application/json": components["schemas"]["Prices"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3679,7 +3686,7 @@ export interface operations {
                     "application/json": components["schemas"]["Prices"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3718,7 +3725,7 @@ export interface operations {
                     "application/json": components["schemas"]["Balance"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3752,7 +3759,7 @@ export interface operations {
                     "application/json": components["schemas"]["Spend"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3781,7 +3788,7 @@ export interface operations {
                     "application/json": components["schemas"]["Alerts"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3810,7 +3817,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3845,7 +3852,7 @@ export interface operations {
                     "application/json": components["schemas"]["Alerts"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3880,7 +3887,7 @@ export interface operations {
                     "application/json": components["schemas"]["Alerts"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3909,7 +3916,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3942,7 +3949,7 @@ export interface operations {
                     "application/json": components["schemas"]["Alerts"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3971,7 +3978,7 @@ export interface operations {
                     "application/json": components["schemas"]["TelegramLink"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -3999,7 +4006,7 @@ export interface operations {
                     "application/json": components["schemas"]["Areas"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4029,7 +4036,7 @@ export interface operations {
                     "application/json": components["schemas"]["Area"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4063,7 +4070,7 @@ export interface operations {
                     "application/json": components["schemas"]["Area"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4090,7 +4097,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4119,7 +4126,7 @@ export interface operations {
                     "application/json": components["schemas"]["Chats"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4152,7 +4159,7 @@ export interface operations {
                     "application/json": components["schemas"]["Chat"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4183,7 +4190,7 @@ export interface operations {
                     "application/json": components["schemas"]["Chat"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4212,7 +4219,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4243,7 +4250,7 @@ export interface operations {
                     "application/json": components["schemas"]["Access"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4278,7 +4285,7 @@ export interface operations {
                     "application/json": components["schemas"]["Chat"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4311,7 +4318,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4346,7 +4353,7 @@ export interface operations {
                     "application/json": components["schemas"]["Chat"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4381,7 +4388,7 @@ export interface operations {
                     "application/json": components["schemas"]["Access"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4416,7 +4423,7 @@ export interface operations {
                     "application/json": components["schemas"]["Access"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4446,7 +4453,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4479,7 +4486,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4514,7 +4521,7 @@ export interface operations {
                     "application/json": components["schemas"]["Chat"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4549,7 +4556,7 @@ export interface operations {
                     "application/json": components["schemas"]["Chat"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4581,7 +4588,7 @@ export interface operations {
                     "application/json": components["schemas"]["People"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4610,7 +4617,7 @@ export interface operations {
                     "application/json": components["schemas"]["Gmails"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4643,7 +4650,7 @@ export interface operations {
                     "application/json": components["schemas"]["Gmail"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4672,7 +4679,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4707,7 +4714,7 @@ export interface operations {
                     "application/json": components["schemas"]["Gmail"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4741,7 +4748,7 @@ export interface operations {
                     "application/json": components["schemas"]["Connections"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4770,7 +4777,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4803,7 +4810,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4832,7 +4839,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4865,7 +4872,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4894,7 +4901,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4924,7 +4931,7 @@ export interface operations {
                     "application/json": components["schemas"]["Connections"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4954,7 +4961,7 @@ export interface operations {
                     "application/json": components["schemas"]["Connections"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -4989,7 +4996,7 @@ export interface operations {
                     "application/json": components["schemas"]["Gmb"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5023,7 +5030,7 @@ export interface operations {
                     "application/json": components["schemas"]["Connections"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5052,7 +5059,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5082,7 +5089,7 @@ export interface operations {
                     "application/json": components["schemas"]["Connections"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5116,7 +5123,7 @@ export interface operations {
                     "application/json": components["schemas"]["Connections"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5145,7 +5152,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5175,7 +5182,7 @@ export interface operations {
                     "application/json": components["schemas"]["Connections"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5208,7 +5215,7 @@ export interface operations {
                     "application/json": components["schemas"]["Gmb"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5239,7 +5246,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5273,7 +5280,7 @@ export interface operations {
                     "application/json": components["schemas"]["Candidates"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5307,7 +5314,7 @@ export interface operations {
                     "application/json": components["schemas"]["Suggestions"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5338,7 +5345,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5367,7 +5374,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5403,7 +5410,7 @@ export interface operations {
                     "application/json": components["schemas"]["Gmb"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5436,7 +5443,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5467,7 +5474,7 @@ export interface operations {
                     "application/json": components["schemas"]["GmbKit"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5502,7 +5509,7 @@ export interface operations {
                     "application/json": components["schemas"]["GmbKit"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5531,7 +5538,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5564,7 +5571,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5593,7 +5600,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5628,7 +5635,7 @@ export interface operations {
                     "application/json": components["schemas"]["Gmb"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5663,7 +5670,7 @@ export interface operations {
                     "application/json": components["schemas"]["Gmb"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5694,7 +5701,7 @@ export interface operations {
                     "application/json": components["schemas"]["GoogleCategories"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5724,7 +5731,7 @@ export interface operations {
                     "application/json": components["schemas"]["KitAreaGmbs"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5756,7 +5763,7 @@ export interface operations {
                     "application/json": components["schemas"]["Suggestions"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5786,7 +5793,7 @@ export interface operations {
                     "application/json": components["schemas"]["Locality"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5817,7 +5824,7 @@ export interface operations {
                     "application/json": components["schemas"]["Locality"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5846,7 +5853,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapConfig"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5873,7 +5880,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5906,7 +5913,7 @@ export interface operations {
                     "application/json": components["schemas"]["Balance"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -5974,7 +5981,7 @@ export interface operations {
                     "application/json": components["schemas"]["SourceKeys"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6007,7 +6014,7 @@ export interface operations {
                     "application/json": components["schemas"]["NewSourceKey"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6035,7 +6042,7 @@ export interface operations {
                     "application/json": components["schemas"]["ConnectedSites"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6064,7 +6071,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6093,7 +6100,7 @@ export interface operations {
                     "application/json": components["schemas"]["Tokens"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6122,7 +6129,7 @@ export interface operations {
                     "application/json": components["schemas"]["Tokens"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6156,7 +6163,7 @@ export interface operations {
                     "application/json": components["schemas"]["Ledger"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6185,7 +6192,7 @@ export interface operations {
                     "application/json": components["schemas"]["Usage"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6214,7 +6221,7 @@ export interface operations {
                     "application/json": components["schemas"]["Trades"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6247,7 +6254,7 @@ export interface operations {
                     "application/json": components["schemas"]["Trade"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6276,7 +6283,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6311,7 +6318,7 @@ export interface operations {
                     "application/json": components["schemas"]["Trade"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6347,7 +6354,7 @@ export interface operations {
                     "application/json": components["schemas"]["Trade"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6377,7 +6384,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6409,7 +6416,7 @@ export interface operations {
                     "application/json": components["schemas"]["KitPool"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6445,7 +6452,7 @@ export interface operations {
                     "application/json": components["schemas"]["KitPool"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6476,7 +6483,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6513,7 +6520,7 @@ export interface operations {
                     "application/json": components["schemas"]["KitPool"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6551,7 +6558,7 @@ export interface operations {
                     "application/json": components["schemas"]["KitPool"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6585,7 +6592,7 @@ export interface operations {
                     "image/jpeg": unknown;
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6616,7 +6623,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6645,7 +6652,7 @@ export interface operations {
                     "application/json": components["schemas"]["Trash"];
                 };
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6674,7 +6681,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6703,7 +6710,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6735,7 +6742,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description What every failed operation answers, its status saying which failure. */
+            /** @description What every failed operation answers: `error` is for a person. */
             default: {
                 headers: {
                     [name: string]: unknown;
@@ -6761,6 +6768,7 @@ export const billValues: ReadonlyArray<FlattenedDeepRequired<components>["schema
 export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Country"]> = ["FR", "US", "CA", "GB"];
 export const destinationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DestinationKind"]> = ["channel", "private", "group"];
 export const deviceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Device"]> = ["pixel_7", "galaxy_s23", "redmi_note_14"];
+export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["bad_request", "unauthenticated", "csrf", "forbidden", "not_found", "conflict", "too_large", "too_many", "unavailable", "browsers_not_connected", "bad_gateway", "internal"];
 export const feedbackValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Feedback"]> = ["up", "down"];
 export const flowKindDtoValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FlowKindDto"]> = ["renewal", "purchase", "set", "spend", "grant_claimed", "refund", "granted"];
 export const generalAccessValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GeneralAccess"]> = ["none", "view"];

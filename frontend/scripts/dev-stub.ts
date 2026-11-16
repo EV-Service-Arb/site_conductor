@@ -6,7 +6,7 @@
  *
  *   npm run dev:stub                  # on STUB_PORT (the dev shell's), signed in as an operator
  *   STUB_ROLE=admin npm run dev:stub  # as an admin
- *   STUB_ME=403 npm run dev:stub      # the gate refusing: 401 | 403 | 503
+ *   STUB_ME=503 npm run dev:stub      # the gate refusing: 401 | 503
  *   STUB_LIVE=off npm run dev:stub     # no /api/v1/live socket (4401 | 4403: close at once)
  *   STUB_LIVE_EVERY=5 npm run dev:stub # live activity every 5 s rather than every 20–40 s
  *   STUB_MAP_KEY=<key> npm run dev:stub # a Maps JS key: the home map, and the windows over it
@@ -20,7 +20,7 @@ import { randomUUID } from "node:crypto";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
 import type { Duplex } from "node:stream";
 
-import { ALIASES } from "../src/entities/session/model/access.ts";
+import openapi from "../src/shared/api/openapi.json" with { type: "json" };
 import { type Alerts, type GoogleCategory, type Trade, type Trash, ruleValues } from "../src/shared/api/schema.ts";
 import { browserOf, browserRoute, browserUpgrade } from "./stub-browser.ts";
 import { changed, closing, every, handshake, liveUpgrade } from "./stub-live.ts";
@@ -102,13 +102,12 @@ const accessRequests: { need: string; requested_at: string }[] = [];
 async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
   const path = url.pathname.replace(/^\/api\/v1/, "");
   const write = req.method !== "GET";
-  if (write && req.headers["x-sa-csrf"] !== CSRF) return send(res, 403, { error: "csrf" });
-  if (ME_FAILURE === "403") return send(res, 403, { error: "no access to the panel" });
-  if (ME_FAILURE === "503") return send(res, 503, { error: "sign-in is unavailable, try again" });
-  if (ME_FAILURE === "401" || !signedIn(req)) return send(res, 401, { error: "sign in" }, { "set-cookie": "sa_session=; Path=/; Max-Age=0" });
+  if (write && req.headers["x-sa-csrf"] !== CSRF) return send(res, 403, { code: "csrf", error: "the page is out of date: reload it" });
+  if (ME_FAILURE === "503") return send(res, 503, { code: "unavailable", error: "sign-in is unavailable, try again" });
+  if (ME_FAILURE === "401" || !signedIn(req)) return send(res, 401, { code: "unauthenticated", error: "sign in" }, { "set-cookie": "sa_session=; Path=/; Max-Age=0" });
 
   // The stub signs anyone in, as the backend's dev sign-in does: it says so.
-  if (path === "/me") return send(res, 200, { user_id: USER_ID, permissions: ALIASES[`sa:${ROLE}`], email: "stub@example.test", preferred_name: `Stub ${ROLE}`, dev_sign_in: true });
+  if (path === "/me") return send(res, 200, { user_id: USER_ID, permissions: openapi.components.schemas.Need["x-members"][`sa:${ROLE}`], email: "stub@example.test", preferred_name: `Stub ${ROLE}`, dev_sign_in: true });
   if (path === "/access/requests/mine") return send(res, 200, { requests: accessRequests });
   if (path === "/access/requests" && write) {
     const { need } = (await readJson(req)) as { need: string };
@@ -141,12 +140,12 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
     return send(res, 201, made);
   }
   // no browser key unless given: the home page shows the outline without a map, and no window over it
-  if (path === "/map") return process.env.STUB_MAP_KEY ? send(res, 200, { key: process.env.STUB_MAP_KEY }) : send(res, 404, { error: "not found" });
+  if (path === "/map") return process.env.STUB_MAP_KEY ? send(res, 200, { key: process.env.STUB_MAP_KEY }) : send(res, 404, { code: "not_found", error: "not found" });
   if (path === "/gmbs/resolve") return send(res, 200, { candidates: [{ place_id: "ChIJstubstubstub00009", name: "Électricien Lille (stub)", address: "8 rue Faidherbe, Lille" }] });
   const placing = path.match(/^\/gmbs\/(\d+)\/location$/);
   if (placing && req.method === "PUT") {
     const gmb = gmbs.find((b) => b.id === Number(placing[1]));
-    if (!gmb) return send(res, 404, { error: "not found" });
+    if (!gmb) return send(res, 404, { code: "not_found", error: "not found" });
     const { lat, lng } = (await readJson(req)) as { lat: number; lng: number };
     gmb.location = { lat, lng, placed: true };
     changed("gmbs", null, String(gmb.id));
@@ -158,12 +157,12 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   if (path === "/tokens/usage") return send(res, 200, { days: usageDays });
   if (path === "/admin/tokens") return send(res, 200, { users: [{ user_id: USER_ID, email: "stub@example.test", name: `Stub ${ROLE}`, balance: tokens.balance }] });
   if (path === "/assistant/chats" && !write) return send(res, 200, { chats: [] });
-  if (path.startsWith("/sources") && ROLE !== "admin") return send(res, 403, { error: "your permissions do not allow this" });
+  if (path.startsWith("/sources") && ROLE !== "admin") return send(res, 403, { code: "forbidden", error: "your permissions do not allow this" });
   if (path === "/sources" && req.method === "GET") return send(res, 200, { sources });
   if (path === "/sources/sites" && req.method === "GET") return send(res, 200, connectedSites());
   if (path === "/sources" && req.method === "POST") {
     const b = await readJson(req);
-    if (sources.some((s) => s.key_id === b.key_id)) return send(res, 409, { error: `a source ${String(b.key_id)} exists already` });
+    if (sources.some((s) => s.key_id === b.key_id)) return send(res, 409, { code: "conflict", error: `a source ${String(b.key_id)} exists already` });
     sources.push({ key_id: b.key_id, kind: b.kind, brands: b.brands, created_at: iso(now()), revoked_at: null, origin: b.origin });
     changed("sources");
     return send(res, 201, { key_id: b.key_id, secret: `stub-secret-${randomUUID()}` });
@@ -171,13 +170,13 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   const revoke = path.match(/^\/sources\/([^/]+)$/);
   if (revoke && req.method === "DELETE") {
     const s = sources.find((x) => x.key_id === decodeURIComponent(revoke[1]!));
-    if (!s) return send(res, 404, { error: "not found" });
+    if (!s) return send(res, 404, { code: "not_found", error: "not found" });
     s.revoked_at = iso(now());
     changed("sources");
     return send(res, 204);
   }
 
-  return send(res, 404, { error: "not found" });
+  return send(res, 404, { code: "not_found", error: "not found" });
 }
 
 // ---- the sites at work ----------------------------------------------------------------
@@ -195,22 +194,22 @@ const server = createServer((req, res) => {
     return send(res, 204, undefined, { "set-cookie": ["sa_session=; Path=/; Max-Age=0", "sa_csrf=; Path=/; Max-Age=0"] });
   }
   if (url.pathname === "/api/review_archive/me/gmbs") {
-    if (!signedIn(req)) return send(res, 401, { error: "sign in" });
+    if (!signedIn(req)) return send(res, 401, { code: "unauthenticated", error: "sign in" });
     return send(res, 200, { gmbs: { "1": { tracked: true, rating: 4.6, reviews: 132, suspended: 2, reinstating: 1, failing: false }, "2": { tracked: false, rating: null, reviews: null, suspended: 0, reinstating: 0, failing: false } }, places_tracked: 1 });
   }
   if (url.pathname === "/api/sites/gmbs") {
-    if (!signedIn(req)) return send(res, 401, { error: "sign in" });
+    if (!signedIn(req)) return send(res, 401, { code: "unauthenticated", error: "sign in" });
     return send(res, 200, { "1": { brand: "aquafix", location: "paris-11", leads_7d: 5, overdue: 1 } });
   }
   if (url.pathname === "/api/sites/places") {
-    if (!signedIn(req)) return send(res, 401, { error: "sign in" });
+    if (!signedIn(req)) return send(res, 401, { code: "unauthenticated", error: "sign in" });
     return send(res, 200, { places: [{ brand: "aquafix", location: "paris-11", withdrawn: false }, { brand: "aquafix", location: "lyon-3", withdrawn: false }] });
   }
   if (url.pathname.startsWith("/api/v1/")) {
     api(req, res, url).catch((e: unknown) => send(res, 500, { error: String(e) }));
     return;
   }
-  send(res, 404, { error: "not found" });
+  send(res, 404, { code: "not_found", error: "not found" });
 });
 server.on("upgrade", (req: IncomingMessage, socket: Duplex) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);

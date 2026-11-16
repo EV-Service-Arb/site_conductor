@@ -2679,10 +2679,6 @@
     "en": "Loading…",
     "t": "Загрузка…"
   },
-  "state.noAccess.title": {
-    "en": "No access to the Service-Arb panel",
-    "t": "Нет доступа к панели Service-Arb"
-  },
   "state.retry": {
     "en": "Try again",
     "t": "Повторить"

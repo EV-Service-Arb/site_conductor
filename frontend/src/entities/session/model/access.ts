@@ -1,11 +1,20 @@
-import type { Caller, Need, Permission } from "@/shared/api/schema";
+import openapi from "@/shared/api/openapi.json";
+import { type Caller, type Need, type Permission, permissionValues } from "@/shared/api/schema";
 
-/** What each alias of the `sa` catalog grants (`sa_auth`): the document names the aliases, not their members. */
-export const ALIASES = {
-  "sa:admin": ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"],
-  "sa:everyone": ["sa:playbook:mcp:use"],
-  "sa:operator": ["sa:placement:study:read", "sa:sites:analysis:read", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:read"],
-} as const satisfies Record<Exclude<Need, Permission>, readonly Permission[]>;
+const members: Record<Exclude<Need, Permission>, readonly string[]> = openapi.components.schemas.Need["x-members"];
+
+const isPermission = (need: Need): need is Permission => permissionValues.some((p) => p === need);
+
+function asPermission(p: string): Permission {
+  const found = permissionValues.find((q) => q === p);
+  if (found === undefined) throw new Error(`the document's alias names ${p}, no permission of it`);
+  return found;
+}
+
+/** The permissions `need` stands for: itself, or an alias's members as the document's `Need` names them. */
+export function grants(need: Need): readonly Permission[] {
+  return isPermission(need) ? [need] : members[need].map(asPermission);
+}
 
 /** Whether the caller holds `permission`: the set concierge resolved is concrete. */
 export function may(caller: Caller, permission: Permission): boolean {

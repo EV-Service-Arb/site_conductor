@@ -108,7 +108,7 @@ function useNoticeShared(): void {
     const now = new Map(data.map((c) => [c.id, c.updated_at]));
     const was = last.current;
     last.current = now;
-    if (was !== null && data.some((c) => c.archived_at == null && was.get(c.id) !== c.updated_at)) notice();
+    if (was !== null && data.some((c) => c.archived_at === null && was.get(c.id) !== c.updated_at)) notice();
   }, [data]);
 }
 

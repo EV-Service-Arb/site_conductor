@@ -11,8 +11,6 @@ export function failureText(failure: ApiFailure | { kind: "invalid"; message: st
       return t(state.forbidden, "Your role may not do this.");
     case "unavailable":
       return t(state.unavailable.body, "Try again in a minute. You are still signed in.");
-    case "no_access":
-      return t(state.noAccess.title, "No access to the Service-Arb panel");
     case "bad_request":
     case "conflict":
       return failure.message;
