@@ -133,12 +133,12 @@ export function Header({
       {full && interacts && (
         <IconButton
           size="sm"
-          aria-label={(chat.pinned_at == null ? t(assistant.pin, "Pin") : t(assistant.unpin, "Unpin"))}
-          tooltip={(chat.pinned_at == null ? t(assistant.pin, "Pin") : t(assistant.unpin, "Unpin"))}
-          pressed={chat.pinned_at != null}
-          onClick={() => void ok(api.PUT("/assistant/chats/{id}/pinned", { params: { path: { id: chat.id } }, body: { on: chat.pinned_at == null } })).then(onChanged, (e: unknown) => notifyFailure(e, t))}
+          aria-label={(chat.pinned_at === null ? t(assistant.pin, "Pin") : t(assistant.unpin, "Unpin"))}
+          tooltip={(chat.pinned_at === null ? t(assistant.pin, "Pin") : t(assistant.unpin, "Unpin"))}
+          pressed={chat.pinned_at !== null}
+          onClick={() => void ok(api.PUT("/assistant/chats/{id}/pinned", { params: { path: { id: chat.id } }, body: { on: chat.pinned_at === null } })).then(onChanged, (e: unknown) => notifyFailure(e, t))}
         >
-          {chat.pinned_at == null ? <Pin /> : <PinOff />}
+          {chat.pinned_at === null ? <Pin /> : <PinOff />}
         </IconButton>
       )}
       <DropdownMenu>
@@ -236,7 +236,7 @@ function Touched({ turns }: { turns: readonly Turn[] }) {
         <section className="flex flex-col">
           <h3 className="px-2 py-1 text-caption text-ink-soft">{t(assistant.context.read, "Read")}</h3>
           {read.map((source) =>
-            source.href == null ? (
+            source.href === null ? (
               <span key={source.label} className={cn(row, "hover:bg-transparent")}>
                 <BookOpen aria-hidden className="size-4 shrink-0 text-ink-soft" />
                 <span className="truncate">{source.label}</span>

@@ -37,7 +37,7 @@ export function ImapCard({ gmail, imap, onChanged }: { gmail: Gmail; imap: Imap 
         <header className="flex items-center gap-2">
           <Mail aria-hidden className="size-4 text-ink-soft" />
           <h3 className="flex-1 text-sm font-semibold text-ink">{t(account.imap.title, "Email · IMAP")}</h3>
-          {imap && <Badge tone={imap.checked.error == null ? "positive" : "error"}>{(imap.checked.error == null ? t(account.imap.connected, "Connected") : t(account.imap.failing, "Failing"))}</Badge>}
+          {imap && <Badge tone={imap.checked.error === null ? "positive" : "error"}>{(imap.checked.error === null ? t(account.imap.connected, "Connected") : t(account.imap.failing, "Failing"))}</Badge>}
         </header>
         {imap && !editing ? (
           <>
@@ -51,7 +51,7 @@ export function ImapCard({ gmail, imap, onChanged }: { gmail: Gmail; imap: Imap 
             </dl>
             <p className="text-xs text-ink-soft">
               {t(account.checkedAt, "Checked {at}", { at: formatDateTime(imap.checked.at, locale) })}
-              {imap.checked.error != null && <span className="block text-accent-error">{imap.checked.error}</span>}
+              {imap.checked.error !== null && <span className="block text-accent-error">{imap.checked.error}</span>}
             </p>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void act(() => ok(api.POST("/gmails/{id}/imap/test", { params: { path: { id: gmail.id } } })))}>

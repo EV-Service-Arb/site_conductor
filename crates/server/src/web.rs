@@ -26,18 +26,19 @@ use std::{
 };
 
 use axum::{
-	Json, Router,
+	Router,
 	body::Body,
 	extract::Request,
 	http::{HeaderValue, StatusCode, header},
 	response::{IntoResponse, Response},
 };
 use sa_panel::Panel;
-use serde_json::json;
 use tower_http::{
 	services::{ServeDir, ServeFile},
 	set_status::SetStatus,
 };
+
+use crate::api::ApiError;
 
 /// The pages' policy: never framed, no `<base>`, forms posted only here. What a page loads is
 /// left to the browser's defaults: Maps JS, the platform's elements and Turnstile come from
@@ -124,7 +125,7 @@ fn element_page(path: &str) -> Option<String> {
 
 async fn page(mut files: Files, panel: Panel, mut req: Request) -> Response {
 	if reserved(req.uri().path()) {
-		return dressed((StatusCode::NOT_FOUND, Json(json!({ "error": "not found" }))).into_response(), false);
+		return dressed(ApiError::NotFound.into_response(), false);
 	}
 	if let Some(page) = element_page(req.uri().path()) {
 		let query = req.uri().query().map(|q| format!("?{q}")).unwrap_or_default();

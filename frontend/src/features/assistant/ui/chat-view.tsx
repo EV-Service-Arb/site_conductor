@@ -143,7 +143,7 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
     if (c.kind === "clear") await ok(api.DELETE("/assistant/archived"));
     else if (c.kind === "delete") await ok(api.DELETE("/assistant/chats/{id}", { params: { path: { id: c.chat.id } } }));
     else await ok(api.DELETE("/assistant/chats/{id}/members/{user}", { params: { path: { id: c.chat.id, user: me.user_id } } }));
-    if (c.kind === "clear" ? chat !== null && chat.archived_at != null : c.chat.id === id) onOpen(null);
+    if (c.kind === "clear" ? chat !== null && chat.archived_at !== null : c.chat.id === id) onOpen(null);
     reload();
   };
 

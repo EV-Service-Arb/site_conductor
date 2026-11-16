@@ -311,7 +311,7 @@ async fn a_point_is_placed_and_taken_back_only_on_the_callers_gmb_without_google
 async fn the_map_is_told_only_when_configured() {
 	let db = TestDb::create().await;
 	for (accounts, want) in [
-		(vec![account("server", Some("k"), None)], (StatusCode::NOT_FOUND, json!({ "error": "not found" }))),
+		(vec![account("server", Some("k"), None)], (StatusCode::NOT_FOUND, json!({ "code": "not_found", "error": "not found" }))),
 		(
 			vec![account("server", Some("k"), None), account("browser", None, Some("browser-key"))],
 			(StatusCode::OK, json!({ "key": "browser-key", "account": "browser" })),

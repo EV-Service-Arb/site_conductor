@@ -89,7 +89,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
                   {t(trashKeys.gmails, "Gmails")} <span className="font-normal tabular-nums">{trash.gmails.length}</span>
                 </h3>
                 <ul className="flex flex-col">
-                  {trash.gmails.map((g) => row(`g${g.id}`, g.gmail, t(trashKeys.with, "{n} GBPs with it", { n: g.gmbs }), null, undefined, g.removed_at, g.purge_at ?? null, g.blocked ?? null, () => ok(api.POST("/trash/gmails/{id}/restore", { params: { path: { id: g.id } } }))))}
+                  {trash.gmails.map((g) => row(`g${g.id}`, g.gmail, t(trashKeys.with, "{n} GBPs with it", { n: g.gmbs }), null, undefined, g.removed_at, g.purge_at, g.blocked, () => ok(api.POST("/trash/gmails/{id}/restore", { params: { path: { id: g.id } } }))))}
                 </ul>
               </section>
             )}
@@ -99,7 +99,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
                   {t(trashKeys.gmbs, "GBPs removed on their own")} <span className="font-normal tabular-nums">{trash.gmbs.length}</span>
                 </h3>
                 <ul className="flex flex-col">
-                  {trash.gmbs.map((b) => row(`b${b.id}`, b.name, b.gmail ?? null, STATE_NAME[b.state](t), TONE[b.state], b.removed_at, b.purge_at ?? null, b.blocked ?? null, () => ok(api.POST("/trash/gmbs/{id}/restore", { params: { path: { id: b.id } } }))))}
+                  {trash.gmbs.map((b) => row(`b${b.id}`, b.name, b.gmail, STATE_NAME[b.state](t), TONE[b.state], b.removed_at, b.purge_at, b.blocked, () => ok(api.POST("/trash/gmbs/{id}/restore", { params: { path: { id: b.id } } }))))}
                 </ul>
               </section>
             )}

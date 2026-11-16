@@ -24,7 +24,7 @@ interface Field<V> {
 }
 
 const LOCATION: Field<Point | null> = {
-  of: (b) => b.location ?? null,
+  of: (b) => b.location,
   write: async (ids, at) => {
     for (const id of ids) {
       const path = { params: { path: { id } } };
@@ -40,7 +40,7 @@ const ENABLED: Field<boolean> = {
   },
 };
 const TRADE: Field<number | null> = {
-  of: (b) => b.trade_id ?? null,
+  of: (b) => b.trade_id,
   write: async (gmbs, trade) => {
     await ok(api.PUT("/gmbs/trade", { body: { gmbs, trade } }));
   },

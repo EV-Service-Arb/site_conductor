@@ -58,8 +58,6 @@ function PanelBody({ bare, children }: { bare: boolean; children: ReactNode }) {
     switch (me.failure.kind) {
       case "unauthenticated":
         return <ShellSkeleton />;
-      case "no_access":
-        return <NoAccessScreen />;
       case "unavailable":
         return <UnavailableScreen onRetry={me.reload} />;
       default:

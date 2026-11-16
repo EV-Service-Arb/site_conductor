@@ -3,7 +3,7 @@ import type { paths } from "@/shared/api/schema";
 
 /** Every browser route's 503 while the server has no browser provider configured. */
 export function browsersUnconnected(e: unknown): boolean {
-  return e instanceof ApiError && e.failure.kind === "unavailable" && e.failure.message === "browsers not connected";
+  return e instanceof ApiError && e.failure.kind === "unavailable" && e.failure.code === "browsers_not_connected";
 }
 
 const FILM = "/gmails/{id}/browser/film" satisfies keyof paths;

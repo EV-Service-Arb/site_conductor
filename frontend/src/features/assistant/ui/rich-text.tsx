@@ -83,7 +83,7 @@ export function LocationToken({ mention, className }: { mention: Mention; classN
 
 function Citation({ n, source }: { n: number; source: Source }) {
   const look = "mx-0.5 inline-flex size-4.5 -translate-y-px items-center justify-center rounded-full bg-tint-neutral-fill align-middle text-caption leading-none font-medium text-ink-mid";
-  if (source.href == null)
+  if (source.href === null)
     return (
       <span title={source.label} className={look}>
         {n}

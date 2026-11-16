@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge, Card, CardContent, cn } from "@evinvest/uikit";
+import { useState } from "react";
 
 import { tokens } from "@/entities/tokens";
 import type { Meters } from "@/shared/api/schema";
@@ -24,7 +25,7 @@ function Bar({ share, thin }: { share: number; thin?: boolean }) {
 /** Each vendor meter this period, over every billing account and folded out per account: the vendor's own count plus ours since it, against its free units; and each account's spend against its allowance. */
 export function MetersCard({ meters: { accounts, meters } }: { meters: Meters }) {
   const t = useT();
-  const now = Date.now();
+  const [now] = useState(Date.now);
   return (
     <Card className="gap-3 py-4">
       <CardContent className="flex flex-col gap-3 px-4">

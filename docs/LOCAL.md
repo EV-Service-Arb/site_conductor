@@ -45,8 +45,8 @@ those origins.
 `--watch` builds every part from its checkout instead of with Nix: the conductor, sites_panel
 and review_archive with cargo, each restarted when its crates change; review_archive's and the
 sites' bundles rebuilt in place as their sources change (a reload shows them); the conductor's
-front end from `next dev` on this checkout's `frontend/`, which proxies `/api`, `/auth`, the
-bundles and `/grafana` to the conductor and is the origin to open (the sign-in returns there, the
+front end from `next dev` on this checkout's `frontend/`, which proxies `/api`, `/auth`, `/mcp`,
+`/.well-known`, the bundles and `/grafana` to the conductor and is the origin to open (the sign-in returns there, the
 live socket comes from there). The landings are `next dev` either way.
 
 ### `nix run .#dev`

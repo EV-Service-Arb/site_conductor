@@ -28,7 +28,7 @@ use axum::{
 	extract::{Request, State},
 	http::{HeaderMap, HeaderValue, Method, StatusCode, Uri, header},
 	middleware::Next,
-	response::Response,
+	response::{IntoResponse, Response},
 	routing::{any, post},
 };
 use eyre::WrapErr;
@@ -41,7 +41,8 @@ use serde_json::{Value, json};
 use tokio::sync::watch;
 
 use crate::{
-	forward::{self, DASHBOARDS, Forward, json_error},
+	api::ApiError,
+	forward::{self, DASHBOARDS, Forward},
 	http::Section,
 	signin::{self, Caller, Denied, Freshness},
 };
@@ -322,7 +323,7 @@ impl Grafana {
 			}
 			Err(e) => {
 				tracing::warn!(error = %e, "grafana did not answer");
-				json_error(StatusCode::BAD_GATEWAY, "grafana did not answer")
+				ApiError::BadGateway("grafana did not answer".to_owned()).into_response()
 			}
 		}
 	}
@@ -368,10 +369,10 @@ async fn query(State(g): State<Grafana>, req: Request) -> Response {
 		.and_then(|b| serde_json::from_slice(&b).map_err(|e| e.to_string()))
 	{
 		Ok(q) => q,
-		Err(e) => return json_error(StatusCode::BAD_REQUEST, &format!("a Grafana query: {e}")),
+		Err(e) => return ApiError::BadRequest(format!("a Grafana query: {e}")).into_response(),
 	};
 	let Some(targets) = query.get_mut("queries").and_then(Value::as_array_mut) else {
-		return json_error(StatusCode::BAD_REQUEST, "a Grafana query without `queries`");
+		return ApiError::BadRequest("a Grafana query without `queries`".to_owned()).into_response();
 	};
 	let viewer = g.viewers.mint(caller);
 	let vouched = |uid: &Value| uid == CONDUCTOR || serde_json::from_value::<Service>(uid.clone()).is_ok();
@@ -384,7 +385,7 @@ async fn query(State(g): State<Grafana>, req: Request) -> Response {
 			.as_object_mut()
 			.and_then(|o| o.entry("headers").or_insert_with(|| json!([])).as_array_mut());
 		let Some(headers) = headers else {
-			return json_error(StatusCode::BAD_REQUEST, "a Grafana query's `url_options.headers` is not a list");
+			return ApiError::BadRequest("a Grafana query's `url_options.headers` is not a list".to_owned()).into_response();
 		};
 		headers.retain(|h| !h["key"].as_str().is_some_and(|k| k.eq_ignore_ascii_case(VIEWER_HEADER)));
 		headers.push(json!({"key": VIEWER_HEADER, "value": viewer.token}));
@@ -401,7 +402,7 @@ async fn query(State(g): State<Grafana>, req: Request) -> Response {
 async fn as_viewer(State(g): State<Grafana>, req: Request) -> Response {
 	match vouched(&g, &req) {
 		Some(viewer) => g.forward.as_viewer(viewer, req).await,
-		None => json_error(StatusCode::UNAUTHORIZED, "a viewer's token, on a GET"),
+		None => ApiError::Unauthenticated.into_response(),
 	}
 }
 
@@ -415,10 +416,10 @@ fn vouched(g: &Grafana, req: &Request) -> Option<Caller> {
 /// route's section open to them.
 pub(crate) async fn viewer_gate(State((g, section)): State<(Grafana, Option<Section>)>, mut req: Request, next: Next) -> Response {
 	let Some(viewer) = vouched(&g, &req) else {
-		return json_error(StatusCode::UNAUTHORIZED, "a viewer's token, on a GET");
+		return ApiError::Unauthenticated.into_response();
 	};
 	if section.is_some_and(|s| !s.may(&viewer.permissions)) {
-		return json_error(StatusCode::FORBIDDEN, "not allowed");
+		return ApiError::Forbidden.into_response();
 	}
 	req.extensions_mut().insert(viewer);
 	next.run(req).await

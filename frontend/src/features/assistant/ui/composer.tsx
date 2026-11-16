@@ -215,7 +215,7 @@ export function Composer({
               )}
               {draft.files.map((f, i) => (
                 <Chip key={i} onRemove={() => setDraft((d) => ({ ...d, files: d.files.filter((_, j) => j !== i) }))} removeLabel={t(assistant.context.remove, "Remove {name}", { name: f.name })}>
-                  {f.preview != null ? <Image unoptimized src={f.preview.url} alt="" width={16} height={16} className="size-4 rounded-sm object-cover" /> : <FileText aria-hidden className="size-3.5 text-ink-soft" />}
+                  {f.preview !== null ? <Image unoptimized src={f.preview.url} alt="" width={16} height={16} className="size-4 rounded-sm object-cover" /> : <FileText aria-hidden className="size-3.5 text-ink-soft" />}
                   <span className="max-w-32 truncate">{f.name}</span>
                 </Chip>
               ))}

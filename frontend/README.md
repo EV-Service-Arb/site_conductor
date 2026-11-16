@@ -27,7 +27,7 @@ tests/               vitest, in Node: the rules the screens obey live in plain m
 
 ```sh
 npm ci
-npm run dev:stub     # on STUB_PORT — /api/v1 (me, sources, access) and /auth; STUB_ROLE=admin, STUB_ME=401|403|503,
+npm run dev:stub     # on STUB_PORT — /api/v1 (me, sources, access) and /auth; STUB_ROLE=admin, STUB_ME=401|503,
                      # STUB_LIVE=off for no socket, STUB_LIVE_EVERY=5 for busier live activity
 PANEL_DEV_BACKEND=http://127.0.0.1:$STUB_PORT npm run dev
                      # on PANEL_WEB_PORT — proxies /api, /auth and /sites/mfe to PANEL_DEV_BACKEND

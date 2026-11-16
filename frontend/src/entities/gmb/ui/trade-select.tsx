@@ -74,7 +74,7 @@ export function TradeSelect({ value, onPick, none, label, country, className }: 
           const there = country == null ? undefined : (tr.categories.find((c) => c.country === country) ?? null);
           return (
             <NativeSelectOption key={tr.id} value={String(tr.id)}>
-              {there === undefined ? tr.name : there === null ? t(tradesKeys.option.notSetUp, "{trade} — not set up in {country}", { trade: tr.name, country: country! }) : `${tr.name} — ${there.google_primary == null ? "…" : googleName(there.google_primary, locale)}`}
+              {there === undefined ? tr.name : there === null ? t(tradesKeys.option.notSetUp, "{trade} — not set up in {country}", { trade: tr.name, country: country! }) : `${tr.name} — ${there.google_primary === null ? "…" : googleName(there.google_primary, locale)}`}
             </NativeSelectOption>
           );
         })}

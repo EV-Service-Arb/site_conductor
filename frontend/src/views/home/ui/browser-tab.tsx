@@ -31,18 +31,18 @@ function FormValues({ gmb, type }: { gmb: Gmb; type: TypeIn }) {
       </header>
       <ol className="flex flex-col gap-3">
         <Value label={t(launch.must.name, "Name")} value={gmb.name} type={type} />
-        <Value label={t(launch.must.category, "Category")} value={placed?.status === "set_up" && placed.category.google_primary != null ? googleName(placed.category.google_primary, placed.category.lang) : null} type={type} />
+        <Value label={t(launch.must.category, "Category")} value={placed?.status === "set_up" && placed.category.google_primary !== null ? googleName(placed.category.google_primary, placed.category.lang) : null} type={type} />
         <li className="flex flex-col gap-0.5 text-sm">
           <span className="text-xs text-ink-soft">{t(windowKeys.browser.visit, "Customers visit?")}</span>
-          {gmb.customers_visit == null ? <span className="text-accent-warn">{t(windowKeys.browser.unset, "not set")}</span> : <span className="text-ink">{(gmb.customers_visit ? t(launch.visit.yes, "Customers visit") : t(launch.visit.no, "Customers don't visit"))}</span>}
+          {gmb.customers_visit === null ? <span className="text-accent-warn">{t(windowKeys.browser.unset, "not set")}</span> : <span className="text-ink">{(gmb.customers_visit ? t(launch.visit.yes, "Customers visit") : t(launch.visit.no, "Customers don't visit"))}</span>}
         </li>
         {gmb.areas.length === 0 ? (
           <Value label={t(launch.must.areas, "Areas")} value={null} type={type} />
         ) : (
           gmb.areas.map((a, i) => <Value key={a} label={`${t(launch.must.areas, "Areas")} · ${i + 1}/${gmb.areas.length}`} value={a} type={type} />)
         )}
-        <Value label={t(launch.must.phone, "Phone")} value={gmb.phone ?? null} type={type} />
-        <Value label={t(launch.must.hidden_address, "Address")} value={gmb.hidden_address ?? null} type={type} />
+        <Value label={t(launch.must.phone, "Phone")} value={gmb.phone} type={type} />
+        <Value label={t(launch.must.hidden_address, "Address")} value={gmb.hidden_address} type={type} />
       </ol>
     </aside>
   );

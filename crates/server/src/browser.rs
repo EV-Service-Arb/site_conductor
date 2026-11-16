@@ -19,7 +19,7 @@
 //!                                           a browser's through the relay here, a phone's the
 //!                                           runner's own, passed through
 //! ```
-//! Unset PANEL_BROWSERS_URL: 503, "browsers not connected"; a provider without its token, 503
+//! Unset PANEL_BROWSERS_URL: 503 `browsers_not_connected`; a provider without its token, 503
 //! "<provider> not connected".
 
 use std::{
@@ -84,8 +84,6 @@ pub const CLOSE_STOPPED: u16 = 4410;
 /// A launch waits on the runner, which bounds it: a phone's start, its adb and its placement
 /// the longest.
 const LAUNCH_WITHIN: Duration = Duration::from_secs(9 * 60);
-
-const NOT_CONNECTED: &str = "browsers not connected";
 
 /// How often the viewer's session is asked again.
 const RECHECK: Duration = Duration::from_secs(60);
@@ -302,7 +300,7 @@ impl OperationInput for Mp4 {
 }
 
 fn connected(state: &ApiState) -> ApiResult<&Connected> {
-	state.browsers.as_ref().ok_or_else(|| ApiError::Unavailable(NOT_CONNECTED.to_owned()))
+	state.browsers.as_ref().ok_or(ApiError::BrowsersNotConnected)
 }
 
 /// Sets the gmail's browser up, kept only once its proxy comes out in the country of every GBP of
@@ -472,7 +470,7 @@ async fn upgrade(State(s): State<ViewerState>, Path(raw): Path<String>, headers:
 		Err(denied) => return denied.into_response(&s.sign_in),
 	};
 	let Some(c) = s.browsers.clone() else {
-		return ApiError::Unavailable(NOT_CONNECTED.to_owned()).into_response();
+		return ApiError::BrowsersNotConnected.into_response();
 	};
 	let Ok(gmail) = raw.parse::<i64>() else {
 		return ApiError::NotFound.into_response();
@@ -574,8 +572,10 @@ impl Watch {
 					Ok(Signal::GoingAway) | Err(RecvError::Closed) => return (live::CLOSE_GOING_AWAY, "server stopping"),
 					Ok(_) | Err(RecvError::Lagged(_)) => {}
 				},
-				_ = self.recheck.tick() => if let Err(Denied::Unauthenticated) = signin::check(&self.sign_in, &self.cookie, Freshness::Cached).await {
-					return (live::CLOSE_SESSION_ENDED, "session ended");
+				_ = self.recheck.tick() => match signin::check(&self.sign_in, &self.cookie, Freshness::Cached).await {
+					Err(Denied::Unauthenticated) => return (live::CLOSE_SESSION_ENDED, "session ended"),
+					Err(Denied::Failed(ApiError::Internal(e))) => crate::report(&e, "a viewer's session asked again"),
+					Ok(_) | Err(_) => {}
 				},
 			}
 		}

@@ -1,22 +1,20 @@
 import { type Parser, parse } from "@/shared/lib/parse";
 
+import { type ErrorCode, errorCodeValues } from "./schema";
+
 import { CSRF_HEADER, readCsrf } from "./csrf";
 import { requestSignInOverlay } from "./signin-overlay";
 
 /**
- * Why a call failed, in the words the screens act on. The backend's gate
- * (`sa_server::signin::gate`) answers 401 for no session, 403 with
- * `"no access to the panel"` for a signed-in person without a grant, 403 `"csrf"`
- * for a write without the header, and 503 while concierge is unreachable —
- * which keeps the session, so the front end must not sign anyone out on it.
+ * Why a call failed, in the words the screens act on. A 503 keeps the session
+ * (concierge unreachable, say), so the front end must not sign anyone out on it.
  */
 export type ApiFailure =
   | { kind: "unauthenticated" }
-  | { kind: "no_access" }
   | { kind: "csrf" }
   | { kind: "forbidden"; message: string }
-  /** `message`: the backend's, where a route says what is down. */
-  | { kind: "unavailable"; message: string }
+  /** `message`: the backend's, where a route says what is down; `code`: the conductor's, a service's answer has none. */
+  | { kind: "unavailable"; code: ErrorCode | null; message: string }
   | { kind: "not_found" }
   /** `body` is the whole answer: some 409s carry the record as it now is (`current`). */
   | { kind: "conflict"; message: string; body: unknown }
@@ -54,19 +52,21 @@ function withQuery(path: string, query?: Query): string {
 }
 
 interface ErrorBody {
+  code: ErrorCode | null;
   message: string;
   fields: Record<string, string> | null;
   path: string | null;
   body: unknown;
 }
 
-const NO_BODY: ErrorBody = { message: "", fields: null, path: null, body: null };
+const NO_BODY: ErrorBody = { code: null, message: "", fields: null, path: null, body: null };
 
-/** `{"error": "...", "fields": {...}}` or `{"error": "...", "path": "..."}`, the backend's error shapes; anything else says nothing. */
+/** The conductor's `{code, error}`, or a service's `{"error": "...", "fields": {...}}` / `{"error": "...", "path": "..."}`; anything else says nothing. */
 async function errorBody(res: Response): Promise<ErrorBody> {
   try {
     const body: unknown = await res.json();
     if (typeof body !== "object" || body === null) return NO_BODY;
+    const code = "code" in body ? (errorCodeValues.find((c) => c === body.code) ?? null) : null;
     const message = "error" in body && typeof body.error === "string" ? body.error : "";
     const raw = "fields" in body ? body.fields : null;
     const fields =
@@ -74,7 +74,7 @@ async function errorBody(res: Response): Promise<ErrorBody> {
         ? Object.fromEntries(Object.entries(raw).filter((e): e is [string, string] => typeof e[1] === "string"))
         : null;
     const path = "path" in body && typeof body.path === "string" ? body.path : null;
-    return { message, fields, path, body };
+    return { code, message, fields, path, body };
   } catch {
     // Not JSON: a proxy's page, say. The status says enough.
     return NO_BODY;
@@ -82,14 +82,12 @@ async function errorBody(res: Response): Promise<ErrorBody> {
 }
 
 export async function failureOf(res: Response): Promise<ApiFailure> {
-  const { message, fields, path, body } = await errorBody(res);
+  const { code, message, fields, path, body } = await errorBody(res);
   switch (res.status) {
     case 401:
       return { kind: "unauthenticated" };
     case 403:
-      if (message === "csrf") return { kind: "csrf" };
-      if (message === "no access to the panel") return { kind: "no_access" };
-      return { kind: "forbidden", message };
+      return code === "csrf" ? { kind: "csrf" } : { kind: "forbidden", message };
     case 404:
       return { kind: "not_found" };
     case 409:
@@ -100,7 +98,7 @@ export async function failureOf(res: Response): Promise<ApiFailure> {
       if (fields) return { kind: "invalid_fields", fields };
       return path === null ? { kind: "failed", status: 422, message } : { kind: "invalid_path", path, message };
     case 503:
-      return { kind: "unavailable", message };
+      return { kind: "unavailable", code, message };
     default:
       return { kind: "failed", status: res.status, message };
   }

@@ -72,7 +72,7 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
       value: placed?.status === "set_up" && [categoryName(placed.trade, placed.category.country), placed.category.google_primary && googleName(placed.category.google_primary, locale)].filter(Boolean).join(" · "),
       editor: (
         <span className="flex flex-col gap-2">
-          <TradeSelect value={gmb.trade_id ?? null} country={gmb.country?.code ?? null} className="w-80 max-w-full" label={t(launch.must.category, "Category")} onPick={(trade) => void save("category")({ trade })} />
+          <TradeSelect value={gmb.trade_id} country={gmb.country?.code ?? null} className="w-80 max-w-full" label={t(launch.must.category, "Category")} onPick={(trade) => void save("category")({ trade })} />
           {placed !== null && <CategoryFix placed={placed} gmb={gmb} onSet={gmails.reload} />}
         </span>
       ),
@@ -80,7 +80,7 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
       why: placed === null || placed.status === "no_trade" ? t(launch.why.category, "its trade, set up in its country with Google's category") : null,
     },
     areas: { value: gmb.areas.join(" · "), editor: <AreasEditor areas={gmb.areas} onSave={(areas) => save("areas")({ areas })} />, why: t(launch.why.areas, "up to 20 · they cover where the film is shot") },
-    phone: { value: gmb.phone, editor: text("phone", gmb.phone ?? null, (phone) => ({ phone }), "tel"), why: t(launch.why.phone, "routes to the closers · on no other GBP") },
+    phone: { value: gmb.phone, editor: text("phone", gmb.phone, (phone) => ({ phone }), "tel"), why: t(launch.why.phone, "routes to the closers · on no other GBP") },
     site: {
       value: tags.sites?.get(gmb.id) && `${tags.sites.get(gmb.id)!.brand}/${tags.sites.get(gmb.id)!.location}`,
       editor: linked ? (
@@ -98,28 +98,28 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
           <ToggleGroup
             type="single"
             size="sm"
-            value={gmb.customers_visit == null ? "" : String(gmb.customers_visit)}
+            value={gmb.customers_visit === null ? "" : String(gmb.customers_visit)}
             onValueChange={(v) => typeof v === "string" && v !== "" && void save("hidden_address")({ customers_visit: v === "true" })}
           >
             <ToggleGroupItem value="false">{t(launch.visit.no, "Customers don't visit")}</ToggleGroupItem>
             <ToggleGroupItem value="true">{t(launch.visit.yes, "Customers visit")}</ToggleGroupItem>
           </ToggleGroup>
-          <TextEditor value={gmb.hidden_address ?? null} onSave={(v) => save("hidden_address")({ hidden_address: v })} />
+          <TextEditor value={gmb.hidden_address} onSave={(v) => save("hidden_address")({ hidden_address: v })} />
         </span>
       ),
       why: t(launch.why.hidden_address, "customers don't visit → service area; the address is where the film is shot"),
     },
-    film: { value: gmb.film, editor: text("film", gmb.film ?? null, (film) => ({ film })), why: t(launch.why.film, "the verification film from the kit (verif_vid)") },
+    film: { value: gmb.film, editor: text("film", gmb.film, (film) => ({ film })), why: t(launch.why.film, "the verification film from the kit (verif_vid)") },
     gmail: {
       value: gmail && `${gmail.gmail} · ${room(gmail.id)}`,
       editor: (
         <NativeSelect
           size="sm"
           wrapperClassName="w-80 max-w-full"
-          value={gmb.gmail_id == null ? "" : String(gmb.gmail_id)}
+          value={gmb.gmail_id === null ? "" : String(gmb.gmail_id)}
           onChange={(e) => e.target.value !== "" && void save("gmail")({ gmail_id: Number(e.target.value) })}
         >
-          {gmb.gmail_id == null && <NativeSelectOption value="">{t(gmbs.gbp.gmail.none, "No gmail yet")}</NativeSelectOption>}
+          {gmb.gmail_id === null && <NativeSelectOption value="">{t(gmbs.gbp.gmail.none, "No gmail yet")}</NativeSelectOption>}
           {gmailList.map((g) => (
             <NativeSelectOption key={g.id} value={String(g.id)}>
               {g.gmail} · {room(g.id)}
@@ -293,7 +293,7 @@ function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: 
   const lacking =
     placed.status === "not_set_up"
       ? t(launch.category.notSetUp, "{category} not set up: no Google category to type", { category: name })
-      : placed.category.google_primary == null
+      : placed.category.google_primary === null
         ? t(launch.category.noPrimary, "{category} has no primary Google category yet", { category: name })
         : null;
   return (
@@ -311,7 +311,7 @@ function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: 
         <span className="text-xs text-accent-warn">{lacking}</span>
       ) : (
         placed.status === "set_up" &&
-        placed.category.google_primary != null && (
+        placed.category.google_primary !== null && (
           <>
             <TypeIn category={placed.category.google_primary} lang={placed.category.lang} />
             {placed.category.google_additional.length > 0 && (
@@ -387,7 +387,7 @@ function CountrySelect({ gmb, value, disabled, onSet }: { gmb: number; value: Co
 function Behind({ listed: { gmb } }: { listed: Listed }) {
   const t = useT();
   const gmails = useGmails();
-  const googles = gmb.country != null && !gmb.country.by_hand;
+  const googles = gmb.country !== null && !gmb.country.by_hand;
   return (
     <section className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3 text-sm">
       <h3 className="font-medium text-ink">{t(launch.behind, "Behind it")}</h3>

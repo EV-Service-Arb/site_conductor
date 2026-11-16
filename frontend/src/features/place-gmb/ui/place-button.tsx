@@ -15,15 +15,15 @@ export function PlaceButton({ gmb, item = false, onNavigate }: { gmb: Gmb; item?
   const button = useButtonSize();
   const router = useRouter();
   const pathname = usePathname();
-  if (gmb.location != null && !gmb.location.placed) return null;
-  const label = (gmb.location == null ? t(gmbs.place.set, "Set location") : t(gmbs.place.move, "Move location"));
+  if (gmb.location !== null && !gmb.location.placed) return null;
+  const label = (gmb.location === null ? t(gmbs.place.set, "Set location") : t(gmbs.place.move, "Move location"));
   const open = () => {
     if (pathname !== "/") router.push("/");
     else peek(null);
     setOnMap({ placing: gmb.id });
     onNavigate?.();
   };
-  const icon = gmb.location == null ? <MapPinPlus aria-hidden /> : <Move aria-hidden />;
+  const icon = gmb.location === null ? <MapPinPlus aria-hidden /> : <Move aria-hidden />;
   if (item)
     return (
       <DropdownMenuItem onClick={open}>

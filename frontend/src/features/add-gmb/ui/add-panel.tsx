@@ -91,7 +91,7 @@ export function AddPanel({ gmail: scopedGmail, trade: scopedTrade }: Adding) {
           }));
       gmails.reload();
       openAdd(null);
-      if (added.location == null) setOnMap({ placing: added.id });
+      if (added.location === null) setOnMap({ placing: added.id });
       else open(added);
     } catch (e) {
       notifyFailure(e, t);

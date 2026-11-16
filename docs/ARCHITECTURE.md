@@ -408,7 +408,9 @@ PUT    /api/queries_cache/{scheme}/{key}         {answer, request, bought: {item
 
 ## The conductor's API, `/api/v1`
 
-JSON; timestamps RFC 3339; errors `{"error": "…"}` with 400 / 403 / 404 / 409 / 413 / 503.
+JSON; timestamps RFC 3339; every refusal the conductor writes itself, the gate's and the forward's
+included, is `{"code", "error"}`: `code` a closed enum (`ErrorCode`) a client acts on, `error` for a
+person.
 
 **One table, everything derived** (ev_lib `api`): `http::api_routes` is what the router is built
 from; each operation's request and answer are its handler's signature, its description the

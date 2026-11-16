@@ -18,9 +18,9 @@ const DAY = 24 * 60 * 60 * 1000;
 function groupsOf(chats: ChatSummary[]): { id: string; label: (t: T) => string; chats: ChatSummary[] }[] {
   const midnight = new Date().setHours(0, 0, 0, 0);
   const since = (c: ChatSummary) => Date.parse(c.updated_at);
-  const unpinned = chats.filter((c) => c.pinned_at == null);
+  const unpinned = chats.filter((c) => c.pinned_at === null);
   return [
-    { id: "pinned", label: (t: T) => t(assistant.history.pinned, "Pinned"), chats: chats.filter((c) => c.pinned_at != null).sort((a, b) => b.pinned_at!.localeCompare(a.pinned_at!)) },
+    { id: "pinned", label: (t: T) => t(assistant.history.pinned, "Pinned"), chats: chats.filter((c) => c.pinned_at !== null).sort((a, b) => b.pinned_at!.localeCompare(a.pinned_at!)) },
     { id: "today", label: (t: T) => t(assistant.history.today, "Today"), chats: unpinned.filter((c) => since(c) >= midnight) },
     { id: "week", label: (t: T) => t(assistant.history.week, "Past 7 days"), chats: unpinned.filter((c) => since(c) < midnight && since(c) >= midnight - 6 * DAY) },
     { id: "month", label: (t: T) => t(assistant.history.month, "Past 30 days"), chats: unpinned.filter((c) => since(c) < midnight - 6 * DAY && since(c) >= midnight - 29 * DAY) },
@@ -58,7 +58,7 @@ function Chats({ current, onOpen }: { current: string | null; onOpen: (id: strin
   const search = useRef<HTMLInputElement>(null);
   const needle = filter.trim().toLowerCase();
   const all = list.status === "ok" ? list.data : [];
-  const found = all.filter((c) => (c.archived_at != null) === archived && (needle === "" || (c.title ?? t(assistant.newChat, "New chat")).toLowerCase().includes(needle)));
+  const found = all.filter((c) => (c.archived_at !== null) === archived && (needle === "" || (c.title ?? t(assistant.newChat, "New chat")).toLowerCase().includes(needle)));
   const groups = archived ? [{ id: "archived", label: (t: T) => t(assistant.history.archived, "Archived chats"), chats: found }] : groupsOf(found);
   const flat = groups.flatMap((g) => g.chats);
   // A row's menu or a whole view going away would leave focus nowhere: it comes back to the search.
@@ -97,7 +97,7 @@ function Chats({ current, onOpen }: { current: string | null; onOpen: (id: strin
             <ArrowLeft />
           </IconButton>
           <h3 className="flex-1 text-body-s font-medium text-ink">{t(assistant.history.archived, "Archived chats")}</h3>
-          <Button size="sm" variant="ghost" disabled={!all.some((c) => c.archived_at != null)} onClick={() => controls.onConfirm({ kind: "clear" })}>
+          <Button size="sm" variant="ghost" disabled={!all.some((c) => c.archived_at !== null)} onClick={() => controls.onConfirm({ kind: "clear" })}>
             {t(assistant.history.clear, "Clear")}
           </Button>
         </div>

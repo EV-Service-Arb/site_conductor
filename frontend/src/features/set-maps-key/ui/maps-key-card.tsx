@@ -34,7 +34,7 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
       setBusy(false);
     }
   };
-  const failing = mapsKey !== null && (mapsKey.checked.error != null || mapsKey.out != null);
+  const failing = mapsKey !== null && (mapsKey.checked.error !== null || mapsKey.out !== null);
   const cost = t(account.mapsKey.cost, "On the shared keys, in tokens: {list}.", {
     list: prices.map((p) => `${p.title} ${p.price?.tokens ?? t(account.mapsKey.unsold, "not sold")}`).join(" · "),
   });
@@ -57,8 +57,8 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
             </dl>
             <p className="text-xs text-ink-soft">
               {t(account.checkedAt, "Checked {at}", { at: formatDateTime(mapsKey.checked.at, locale) })}
-              {mapsKey.checked.error != null && <span className="block text-accent-error">{mapsKey.checked.error}</span>}
-              {mapsKey.out != null && <span className="block text-accent-warn">{t(account.mapsKey.out, "Passed over now: {why}", { why: mapsKey.out })}</span>}
+              {mapsKey.checked.error !== null && <span className="block text-accent-error">{mapsKey.checked.error}</span>}
+              {mapsKey.out !== null && <span className="block text-accent-warn">{t(account.mapsKey.out, "Passed over now: {why}", { why: mapsKey.out })}</span>}
             </p>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size={button("sm")} disabled={busy} onClick={() => void act(() => ok(api.POST("/gmails/{id}/maps_key/test", { params: { path: { id: gmail } } })))}>

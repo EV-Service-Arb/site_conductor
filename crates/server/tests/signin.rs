@@ -381,7 +381,8 @@ async fn an_operator_signs_in_and_signs_out() {
 	});
 	let mut b = Browser::default();
 
-	assert_eq!(b.get(&app, "/api/v1/me").await.status, StatusCode::UNAUTHORIZED, "no session yet");
+	let code = |a: Answer| (a.status, a.body["code"].clone());
+	assert_eq!(code(b.get(&app, "/api/v1/me").await), (StatusCode::UNAUTHORIZED, json!("unauthenticated")), "no session yet");
 	let cb = b.sign_in(&app, &fake, None).await;
 	assert_eq!(cb.status, StatusCode::SEE_OTHER);
 	assert_eq!(cb.headers[header::LOCATION], "/");
@@ -399,13 +400,13 @@ async fn an_operator_signs_in_and_signs_out() {
 	assert_eq!(me.headers[header::CACHE_CONTROL], "no-store");
 
 	let no_csrf = b.send(&app, Method::POST, "/api/v1/access/requests", Some(json!({"need": "sa:admin"})), false).await;
-	assert_eq!(no_csrf.status, StatusCode::FORBIDDEN, "a write without the CSRF header");
+	assert_eq!(code(no_csrf), (StatusCode::FORBIDDEN, json!("csrf")), "a write without the CSRF header");
 	let asked = b.post(&app, "/api/v1/access/requests", json!({"need": "sa:admin"})).await;
 	assert_eq!(asked.status, StatusCode::CREATED, "{}", asked.body);
-	assert_eq!(b.get(&app, "/api/v1/sources").await.status, StatusCode::FORBIDDEN, "sources are an admin's");
+	assert_eq!(code(b.get(&app, "/api/v1/sources").await), (StatusCode::FORBIDDEN, json!("forbidden")), "sources are an admin's");
 
 	let no_csrf = b.send(&app, Method::POST, "/auth/logout", None, false).await;
-	assert_eq!(no_csrf.status, StatusCode::FORBIDDEN);
+	assert_eq!(code(no_csrf), (StatusCode::FORBIDDEN, json!("csrf")));
 	let session = b.jar["sa_session"].clone();
 	assert_eq!(b.send(&app, Method::POST, "/auth/logout", None, true).await.status, StatusCode::NO_CONTENT);
 	assert!(b.jar.is_empty(), "{:?}", b.jar);

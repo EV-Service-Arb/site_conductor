@@ -24,8 +24,7 @@ export function GoogleCategories({ category, write }: { category: Category; writ
   const t = useT();
   const locale = useLocale();
   const button = useButtonSize();
-  const { google_primary, google_additional: additional } = category;
-  const primary = google_primary ?? null;
+  const { google_primary: primary, google_additional: additional } = category;
   const [dragged, setDragged] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
   const move = (from: number, to: number) => {
