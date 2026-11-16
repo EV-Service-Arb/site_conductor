@@ -641,7 +641,8 @@ lock:
 ```text
 POST /api/placement/studies/{sha}/pull ─ price set, budget = balance ÷ price ─▶ placement …/pull?budget=<n>
   ├─ the sweep needs more than n: 402 {need}, nothing bought ─▶ the person told the tokens it needs
-  └─ x-billed: <k> on any answer, k ≤ n ─▶ the ledger: −k × price
+  └─ x-billed: <k> on any answer, k ≤ n ─▶ the ledger: −k × price; a pull that failed owes it all back,
+                                          as a failed walk does: the failure is the house's
 ```
 
 A person's front end reads the sold prices with their balance, and an action costing more than

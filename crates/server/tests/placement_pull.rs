@@ -4,7 +4,7 @@
 use axum::{
 	Json, Router,
 	body::Body,
-	extract::Query,
+	extract::{Path, Query},
 	http::{Method, StatusCode},
 	response::IntoResponse,
 	routing::post,
@@ -30,9 +30,11 @@ struct Budget {
 	budget: u64,
 }
 
-/// gmaps_optimal_placement's pull: refused before buying past the budget, else all of it bought.
-async fn pull(Query(Budget { budget }): Query<Budget>) -> axum::response::Response {
+/// gmaps_optimal_placement's pull: refused before buying past the budget, else all of it bought;
+/// study `fails` fails after 5.
+async fn pull(Path(sha): Path<String>, Query(Budget { budget }): Query<Budget>) -> axum::response::Response {
 	match budget < NEED {
+		_ if sha == "fails" => (StatusCode::INTERNAL_SERVER_ERROR, [("x-billed", "5")], "the day's quota ran out").into_response(),
 		true => (StatusCode::PAYMENT_REQUIRED, [("x-billed", "0")], Json(json!({ "need": NEED, "budget": budget }))).into_response(),
 		false => ([("x-billed", NEED.to_string())], Json(json!({}))).into_response(),
 	}
@@ -106,6 +108,18 @@ async fn a_balance_below_the_sweep_buys_nothing_and_is_told_the_need() {
 	assert_eq!(String::from_utf8_lossy(&body), "this pull needs at least 304 tokens (38 searches at 8), and you hold 100");
 	assert_eq!(seen.lock().unwrap().pop().unwrap().path_and_query, "/studies/abc/pull?budget=12");
 	assert_eq!(get(&mut b, &app, "/api/v1/tokens").await["balance"], 100);
+}
+
+#[tokio::test]
+async fn a_failed_pull_is_charged_what_it_bought_and_owes_it_all_back() {
+	let (_db, app, _, mut b) = setup(Some(8), 1000).await;
+
+	let (status, headers) = b.send(&app, Method::POST, "/api/placement/studies/fails/pull", &[], true).await;
+	assert_eq!((status, &headers["x-billed"]), (StatusCode::INTERNAL_SERVER_ERROR, &"5".parse().unwrap()));
+	let tokens = get(&mut b, &app, "/api/v1/tokens").await;
+	assert_eq!(tokens["balance"], 1000 - 5 * 8);
+	let owed = &tokens["kickbacks"][0];
+	assert_eq!((&owed["amount"], &owed["service"], &owed["key"]), (&json!(40), &json!("placement"), &json!("fails")), "{tokens}");
 }
 
 #[tokio::test]

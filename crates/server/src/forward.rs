@@ -285,7 +285,7 @@ impl Forward {
 		}
 	}
 
-	/// A study's pull, on what `user` affords, charged what placement says it bought.
+	/// A study's pull, on what `user` affords, charged what placement says it bought; owed back when it failed.
 	async fn pull(&self, route: &Route, mut req: Request, principal: Option<Principal>, user: uuid::Uuid, sha: &str) -> Response {
 		let held = match self.panel().pull(user).await {
 			Ok(Ok(held)) => held,
@@ -305,8 +305,9 @@ impl Forward {
 			None if !res.status().is_success() => 0,
 			None => return ApiError::Internal(eyre::eyre!("placement answered the pull of {sha} without x-billed")).into_response(),
 		};
+		let failed = !res.status().is_success();
 		if res.status() != StatusCode::PAYMENT_REQUIRED {
-			return match held.paid(billed, sha).await {
+			return match held.paid(billed, sha, failed).await {
 				Ok(()) => res,
 				Err(e) => ApiError::from(e).into_response(),
 			};
@@ -324,7 +325,7 @@ impl Forward {
 			Err(e) => return ApiError::Internal(eyre::eyre!("placement's 402 for {sha}, {:?}: {e}", String::from_utf8_lossy(&body))).into_response(),
 		};
 		let why = held.unaffordable(need);
-		if let Err(e) = held.paid(billed, sha).await {
+		if let Err(e) = held.paid(billed, sha, failed).await {
 			return ApiError::from(e).into_response();
 		}
 		(StatusCode::PAYMENT_REQUIRED, why).into_response()

@@ -2,7 +2,8 @@
 //!
 //! ```text
 //! pull(user): the person's turn held, price set — budget = balance ÷ price
-//!   ─ placement buys no more than the budget ─ paid(bought): bought × price in the ledger, the turn let go
+//!   ─ placement buys no more than the budget ─ paid(bought, failed): bought × price in the ledger,
+//!   owed back whole when the pull failed, as a failed walk's is; the turn let go
 //! ```
 
 use eyre::WrapErr;
@@ -12,7 +13,7 @@ use uuid::Uuid;
 
 use crate::{
 	Panel, Refused,
-	store::tokens::{self as ledger, Charged, Entry, Kind},
+	store::tokens::{self as ledger, Charged, Entry, Kind, Owed},
 	tokens::is_open,
 };
 
@@ -44,8 +45,9 @@ impl Pull {
 		)
 	}
 
-	/// `bought` searches of study `sha`, no more than [`Self::budget`], charged.
-	pub async fn paid(self, bought: u64, sha: &str) -> eyre::Result<()> {
+	/// `bought` searches of study `sha`, no more than [`Self::budget`], charged; a pull that `failed`
+	/// is the house's, so all of it is owed back.
+	pub async fn paid(self, bought: u64, sha: &str, failed: bool) -> eyre::Result<()> {
 		let budget = self.budget();
 		eyre::ensure!(bought <= budget, "placement bought {bought} searches of {sha} on a budget of {budget}");
 		let Self { panel, user, price, turn, .. } = self;
@@ -68,9 +70,13 @@ impl Pull {
 		};
 		let mut tx = panel.store.begin_write().await?;
 		ledger::append(&mut tx, user, &entry).await?;
+		if failed {
+			let charged = entry.charged.expect("built with its charge above");
+			ledger::owe(&mut tx, user, entry.at, tokens, &Owed::Charge(charged)).await?;
+		}
 		tx.commit().await.wrap_err("committing a pull's charge")?;
 		drop(turn);
-		tracing::info!(user_id = %user, tokens, bought, "a study's pull charged");
+		tracing::info!(user_id = %user, tokens, bought, failed, "a study's pull charged");
 		panel.snapshot_due.notify_one();
 		Ok(())
 	}
