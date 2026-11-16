@@ -25,6 +25,9 @@ export default function config(phase: string): NextConfig {
         const afterFiles = [
           { source: "/api/:path*", destination: `${backend}/api/:path*` },
           { source: "/auth/:path*", destination: `${backend}/auth/:path*` },
+          { source: "/mcp", destination: `${backend}/mcp` },
+          { source: "/mcp/:path*", destination: `${backend}/mcp/:path*` },
+          { source: "/.well-known/:path*", destination: `${backend}/.well-known/:path*` },
           { source: "/sites/mfe/:path*", destination: `${backend}/sites/mfe/:path*` },
           { source: "/review_archive/mfe/:path*", destination: `${backend}/review_archive/mfe/:path*` },
           { source: "/placement/mfe/:path*", destination: `${backend}/placement/mfe/:path*` },
