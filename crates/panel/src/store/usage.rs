@@ -21,6 +21,8 @@ pub struct Use {
 	pub item: Item,
 	pub units: i64,
 	pub bill: Bill,
+	/// The Google billing account it bills on.
+	pub account: Option<String>,
 	/// Who told: `conductor`, a queries cache scheme, or a feed's service.
 	pub source: String,
 	/// Whom it was done for, when the conductor knows.
@@ -56,11 +58,12 @@ pub struct Day {
 
 pub(crate) async fn record(conn: &mut SqliteConnection, u: &Use) -> eyre::Result<()> {
 	assert!(u.units > 0, "a use is of 1 unit or more: {u:?}");
-	sqlx::query("INSERT INTO usage (at, item, units, bill, source, user_id, key) VALUES ($1, $2, $3, $4, $5, $6, $7)")
+	sqlx::query("INSERT INTO usage (at, item, units, bill, account, source, user_id, key) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
 		.bind(to_db(u.at))
 		.bind(u.item.to_string())
 		.bind(u.units)
 		.bind(<&str>::from(u.bill))
+		.bind(&u.account)
 		.bind(&u.source)
 		.bind(u.user)
 		.bind(&u.key)

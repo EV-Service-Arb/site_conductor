@@ -1732,8 +1732,8 @@
     "t": "Карты нет"
   },
   "home.noMap.why": {
-    "en": "The conductor has no Google Maps browser key (GOOGLE_MAPS_BROWSER_KEY). Your GMBs are in the list beside.",
-    "t": "У conductor нет браузерного ключа Google Maps (GOOGLE_MAPS_BROWSER_KEY). Ваши GMB в списке слева."
+    "en": "No Google account in the conductor's config has a browser key. Your GMBs are in the list beside.",
+    "t": "Ни в одной конфигурации кондуктора для аккаунта Google не указан ключ браузера. Ваши GMB находятся в списке рядом."
   },
   "home.peek.close": {
     "en": "Close",
@@ -2831,6 +2831,14 @@
     "en": "{p}% of free",
     "t": "{p}% бесплатных"
   },
+  "tokens.meters.never": {
+    "en": "never read",
+    "t": "никогда не читались"
+  },
+  "tokens.meters.spent": {
+    "en": "{net} of {allow} {currency} net",
+    "t": "{net} из {allow} {currency} нетто"
+  },
   "tokens.meters.split": {
     "en": "{vendor} {baseline} as of {at}, ours {delta} since",
     "t": "{vendor}: {baseline} на {at}, наших с тех пор {delta}"
@@ -2848,12 +2856,16 @@
     "t": "Поставщики в этом месяце"
   },
   "tokens.meters.unread": {
-    "en": "never read",
-    "t": "ни разу не прочитан"
+    "en": "{n} not read lately",
+    "t": "{n} не читались в последнее время"
+  },
+  "tokens.meters.unspent": {
+    "en": "no reading this month · allows {allow}",
+    "t": "в этом месяце чтений нет · доступно {allow}"
   },
   "tokens.meters.why": {
-    "en": "Each one's count is the vendor's own (every project on its billing account, hours behind), plus ours since. Street View stops at its free ones.",
-    "t": "Счёт каждого — собственный счёт поставщика (все проекты его платёжного аккаунта, с отставанием в часы) плюс наш с тех пор. Street View останавливается на бесплатных."
+    "en": "Each account's count is the vendor's own (every project on that billing account, hours behind), plus ours on its keys since. A buy goes to an account with free units left, then one within its allowance. Street View stops at each account's free ones.",
+    "t": "Количество для каждого аккаунта — это собственные данные поставщика (по всем проектам этого платёжного аккаунта, с задержкой в несколько часов), дополненные нашими данными по его ключам с этого момента. Покупка направляется на аккаунт со свободными единицами, а затем — на аккаунт, в пределах которого ещё не исчерпан лимит. Просмотр улиц прекращается для каждого аккаунта после использования его бесплатных единиц."
   },
   "tokens.title": {
     "en": "Tokens",

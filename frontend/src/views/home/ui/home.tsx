@@ -46,7 +46,7 @@ export function Home() {
           <ErrorState failure={config.failure} onRetry={config.reload} />
         </div>
       )}
-      {config.status === "ok" && config.data === null && <EmptyState className="m-6" title={t(home.noMap, "No map here")} description={t(home.noMap.why, "The conductor has no Google Maps browser key (GOOGLE_MAPS_BROWSER_KEY). Your GMBs are in the list beside.")} />}
+      {config.status === "ok" && config.data === null && <EmptyState className="m-6" title={t(home.noMap, "No map here")} description={t(home.noMap.why, "No Google account in the conductor's config has a browser key. Your GMBs are in the list beside.")} />}
       {config.status === "ok" && config.data !== null && <GmbMap config={config.data} />}
     </div>
   );
@@ -70,7 +70,7 @@ function GmbMap({ config }: { config: MapConfig }) {
   // `?at` as the page opened: what it says after is where the map has since moved
   const [left] = useState(useQuery("at"));
   const { tags } = useGmbTags();
-  const { host, map } = useTheMap(config.key);
+  const { host, map } = useTheMap(config);
   const listed = selection?.selected ?? [];
   const located = listed.filter((l) => l.gmb.location != null);
   const locatedRef = useRef(located);
@@ -272,7 +272,7 @@ function GmbMap({ config }: { config: MapConfig }) {
     <>
       <div ref={host} className="absolute inset-0" />
       {map.status === "ok" && <PlacementOverlay map={map.map} />}
-      {map.status === "ok" && <StreetView map={map.map} />}
+      {map.status === "ok" && <StreetView map={map.map} account={map.account} />}
       {map.status === "ok" && <Locate map={map.map} />}
       {map.status === "error" && (
         <div className="absolute inset-x-6 top-6">

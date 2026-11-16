@@ -22,25 +22,30 @@ use uuid::Uuid;
 
 pub use crate::store::usage::{Cost, Day};
 use crate::{
-	Panel,
+	Panel, Refused,
 	store::usage::{self as db, CONDUCTOR, Use},
 };
 
 impl Panel {
-	/// The user's browser built a map on the browser's Maps key.
-	pub async fn map_loaded(&self, user: Uuid, now: Timestamp) -> eyre::Result<()> {
+	/// The user's browser built a map on `account`'s browser key.
+	pub async fn map_loaded(&self, user: Uuid, account: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+		if self.accounts.get(account).is_none_or(|a| a.browser.is_none()) {
+			return Ok(Err(Refused::Invalid(format!("{account:?} is no Google account with a browser key"))));
+		}
 		let mut tx = self.store.begin_write().await?;
 		let used = Use {
 			at: now,
 			item: MapLoad::Map.into(),
 			units: 1,
 			bill: Bill::Ours,
+			account: Some(account.to_owned()),
 			source: CONDUCTOR.to_owned(),
 			user: Some(user),
 			key: None,
 		};
 		db::record(&mut tx, &used).await?;
-		tx.commit().await.wrap_err("committing a map load")
+		tx.commit().await.wrap_err("committing a map load")?;
+		Ok(Ok(()))
 	}
 
 	/// Where `service`'s usage feed is read up to.
@@ -72,6 +77,7 @@ impl Panel {
 				item: u.item,
 				units: u.units,
 				bill: Bill::Ours,
+				account: None,
 				source: service.to_owned(),
 				user: None,
 				key: None,

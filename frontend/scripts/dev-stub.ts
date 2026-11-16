@@ -21,7 +21,7 @@ import { type IncomingMessage, type ServerResponse, createServer } from "node:ht
 import type { Duplex } from "node:stream";
 
 import { ALIASES } from "../src/entities/session/model/access.ts";
-import { type Alerts, type GoogleCategory, type Trade, type Trash, ruleValues } from "../src/shared/api/schema.ts";
+import { type Alerts, type GoogleCategory, type Meters, type Trade, type Trash, ruleValues } from "../src/shared/api/schema.ts";
 import { browserOf, browserRoute, browserUpgrade } from "./stub-browser.ts";
 import { changed, closing, every, handshake, liveUpgrade } from "./stub-live.ts";
 
@@ -92,6 +92,31 @@ const googleCategories: GoogleCategory[] = [
 ];
 const trades: Trade[] = [{ id: 1, name: "Plumbing", created_at: minsAgo(60 * 24 * 7), categories: [{ country: "FR", lang: "fr", keywords: ["plombier"], google_primary: googleCategories[0]!, google_additional: [], study: null }] }];
 const connections = (gmail: number) => ({ imap: null, maps_key: null, prices: { details: null, search: null }, browser: browserOf(gmail).browser });
+// two accounts: one near its free panoramas and past its free text searches, one never read
+const meters = (() => {
+  const start = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1, 8)).toISOString();
+  const end = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1, 8)).toISOString();
+  const read = minsAgo(60 * 5);
+  const catalog: [string, string, number, "at_free" | "never", Meters["meters"][number]["items"], number, number][] = [
+    ["google:658E-F885-E11A", "Dynamic Street View", 5000, "at_free", ["street_view.panorama"], 4620, 211],
+    ["google:FAF4-3B2D-51B2", "Dynamic Maps", 10000, "never", ["map.map"], 1840, 96],
+    ["google:4FDA-34B1-A910", "Places API Text Search Pro", 5000, "never", ["places.search"], 5004, 12],
+  ];
+  return {
+    accounts: [
+      { name: "evinvest", places: true, browser: true, allow: 20, spend: { cost: 41.3, net: 6.2, currency: "EUR", through: read } },
+      { name: "icos1", places: true, browser: false, allow: 0, spend: null },
+    ],
+    meters: catalog.map(([meter, name, free, stop, items, baseline, delta]) => ({
+      meter, vendor: "google", name, free, stop, items, period_start: start, period_end: end, delta_usd: null,
+      total: { baseline, delta, used: baseline + delta, free: free * 2, left: free * 2 - baseline - delta },
+      accounts: [
+        { account: "evinvest", reading: { account: "evinvest", meter, period_start: start, units: baseline, cost: 1.5, net: 0, currency: "EUR", through: read, synced_at: read }, baseline, since: read, delta, used: baseline + delta, left: free - baseline - delta },
+        { account: "icos1", reading: null, baseline: 0, since: start, delta: 0, used: 0, left: free },
+      ],
+    })),
+  } satisfies Meters;
+})();
 const tokens = { balance: 75, daily: 15, cap: 500, kickbacks: [{ id: 1, at: minsAgo(90), amount: 12, service: "review_archive", key: "run:42", label: "Plombier Paris 11 (stub)", by: null, note: null }] };
 const ledger = Array.from({ length: 8 }, (_, i) => ({ id: 8 - i, at: minsAgo(60 * 24 * i), delta: i % 2 ? -12 : 15, kind: i % 2 ? "charge" : "accrual", service: i % 2 ? "review_archive" : null, key: i % 2 ? `run:${40 - i}` : null, label: i % 2 ? "Plombier Paris 11 (stub)" : null, by: null, note: null }));
 const usageDays = Array.from({ length: 30 }, (_, i) => ({ day: iso(new Date(now().getTime() - (29 - i) * 86_400_000)).slice(0, 10), charges: i % 3, tokens: (i % 3) * 12 }));
@@ -141,7 +166,8 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
     return send(res, 201, made);
   }
   // no browser key unless given: the home page shows the outline without a map, and no window over it
-  if (path === "/map") return process.env.STUB_MAP_KEY ? send(res, 200, { key: process.env.STUB_MAP_KEY }) : send(res, 404, { error: "not found" });
+  if (path === "/map") return process.env.STUB_MAP_KEY ? send(res, 200, { key: process.env.STUB_MAP_KEY, account: "evinvest" }) : send(res, 404, { error: "not found" });
+  if (path === "/map/loaded" || path === "/map/street_view") return send(res, path === "/map/loaded" ? 204 : 200, path === "/map/loaded" ? undefined : { balance: tokens.balance });
   if (path === "/gmbs/resolve") return send(res, 200, { candidates: [{ place_id: "ChIJstubstubstub00009", name: "Électricien Lille (stub)", address: "8 rue Faidherbe, Lille" }] });
   const placing = path.match(/^\/gmbs\/(\d+)\/location$/);
   if (placing && req.method === "PUT") {
@@ -156,6 +182,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   if (path === "/tokens") return send(res, 200, tokens);
   if (path === "/tokens/ledger") return send(res, 200, { entries: ledger, next: null });
   if (path === "/tokens/usage") return send(res, 200, { days: usageDays });
+  if (path === "/admin/meters") return send(res, 200, meters);
   if (path === "/admin/tokens") return send(res, 200, { users: [{ user_id: USER_ID, email: "stub@example.test", name: `Stub ${ROLE}`, balance: tokens.balance }] });
   if (path === "/assistant/chats" && !write) return send(res, 200, { chats: [] });
   if (path.startsWith("/sources") && ROLE !== "admin") return send(res, 403, { error: "your permissions do not allow this" });

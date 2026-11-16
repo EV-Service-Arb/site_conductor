@@ -365,7 +365,6 @@ async fn setup_with(db: &TestDb, limits: http::Limits) -> (Router, FakeConcierge
 		None,
 		None,
 		None,
-		None,
 	);
 	(app, fake, panel)
 }
@@ -539,7 +538,6 @@ async fn concierge_down_is_a_503_not_a_sign_out() {
 		None,
 		None,
 		http::Limits::default(),
-		None,
 		None,
 		None,
 		None,
@@ -749,8 +747,8 @@ async fn the_alerts_page_links_telegram_and_chooses_rules() {
 		},
 		name: BotName::new(Some("@evinvest_sa_bot".into())),
 	};
-	let app = http::app(sign_in.clone(), None, None, http::Limits::default(), Some(telegram), None, None, None, None);
-	let off = http::app(sign_in, None, None, http::Limits::default(), None, None, None, None, None);
+	let app = http::app(sign_in.clone(), None, None, http::Limits::default(), Some(telegram), None, None, None);
+	let off = http::app(sign_in, None, None, http::Limits::default(), None, None, None, None);
 	user(&fake, OPERATOR, "investor", SA_OPERATOR.members);
 	// A private chat whose user's access was last confirmed long ago, and denied: the gate's GetMe
 	// renews it.
@@ -855,7 +853,6 @@ async fn no_permission_opens_no_section() {
 			None,
 			None,
 			http::Limits::default(),
-			None,
 			None,
 			None,
 			None,
@@ -1021,7 +1018,6 @@ async fn every_write_is_told() {
 		None,
 		None,
 		None,
-		None,
 	);
 	let mut b = Browser::default();
 	let login = b.get(&app, "/auth/login").await;
@@ -1098,9 +1094,12 @@ async fn serve_publishes_the_catalog_first() {
 	let fake = FakeConcierge::default();
 	let addr = serve_fake(fake.clone()).await;
 	let path = db.path().display().to_string();
+	let config = tempfile::NamedTempFile::with_suffix(".json").unwrap();
+	std::fs::write(config.path(), r#"{ "google": [] }"#).unwrap();
+	let config = config.path().display().to_string();
 	let serve = || {
 		tokio::process::Command::new(env!("CARGO_BIN_EXE_panel"))
-			.args(["serve", "--bind", "127.0.0.1:0"])
+			.args(["--config", config.as_str(), "serve", "--bind", "127.0.0.1:0"])
 			.env_clear()
 			.envs([
 				("APP_ENV", "development"),

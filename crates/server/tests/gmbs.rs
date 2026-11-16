@@ -20,12 +20,11 @@ use sa_panel::{
 	gmbs::{Existing, Gmb, Located, Unplaced},
 	import::Export,
 	seal::DataKey,
-	testing::{TestDb, operator, panel_on},
+	testing::{TestDb, account, operator, panel_on},
 };
 use sa_places::{Google, Keys};
 use sa_server::{
 	concierge::{Concierge, DevIdentity},
-	gmbs::MapDto,
 	http,
 	signin::{SignIn, SignInConfig},
 	testing::{Browser, ORIGIN},
@@ -73,14 +72,15 @@ async fn places() -> (Arc<Mutex<Vec<String>>>, String) {
 
 /// A panel on `db` asking `base` with a key (`None`: keyless), its answers in `db`, its requests free.
 async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
-	let keys = Keys::new(base.map(|_| vec!["k".to_owned()]).unwrap_or_default());
-	let google = Google::try_new(keys, Arc::new(db.store().await)).unwrap();
+	let keys = Keys::new(base.map(|_| vec![("house".to_owned(), "k".to_owned())]).unwrap_or_default());
+	let google = Google::try_new(keys, Arc::new(sa_places::InOrder), Arc::new(db.store().await)).unwrap();
 	let google = match base {
 		Some(b) => google.at(b),
 		None => google,
 	};
 	let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
-	let p = panel_on(db.store().await, key, google);
+	let accounts = base.map(|_| vec![sa_panel::testing::account("house", Some("k"), None)]).unwrap_or_default();
+	let p = panel_on(db.store().await, key, google, sa_places::Accounts::new(accounts));
 	// what a point costs is tests/connections.rs's
 	p.set_prices(
 		&[PlacesRequest::Details, PlacesRequest::Search, PlacesRequest::Autocomplete].map(|r| (Item::Places(r), Some(0))),
@@ -105,7 +105,7 @@ async fn opened(p: &Panel) {
 	p.import_review_archive(empty).await.unwrap();
 }
 
-fn app(panel: Panel, map: Option<MapDto>) -> Router {
+fn app(panel: Panel) -> Router {
 	let who = DevIdentity {
 		user_id: DevIdentity::named("dev@localhost"),
 		permissions: operator(),
@@ -115,7 +115,7 @@ fn app(panel: Panel, map: Option<MapDto>) -> Router {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: ORIGIN.to_owned(),
 	};
-	http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, map, None, None, None)
+	http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, None, None, None)
 }
 
 async fn call(b: &mut Browser, app: &Router, method: Method, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
@@ -139,7 +139,7 @@ async fn a_gmb_is_located_when_added_and_its_place_asked_once() {
 	let db = TestDb::create().await;
 	let p = panel(&db, Some(&base)).await;
 	opened(&p).await;
-	let app = app(p, None);
+	let app = app(p);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 
@@ -238,7 +238,7 @@ async fn a_service_area_gmb_has_no_point_until_placed_on_the_map() {
 	add(&keyless, owner, gmail.id, FLORE).await;
 
 	let keyed = panel(&db, Some(&base)).await;
-	let app = app(keyed.clone(), None);
+	let app = app(keyed.clone());
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (status, assist) = call(
@@ -279,7 +279,7 @@ async fn a_point_is_placed_and_taken_back_only_on_the_callers_gmb_without_google
 	let other = seen(&p, "other@localhost").await;
 	let theirs = p.add_gmail(other, "other@gmail.com", jiff::Timestamp::now()).await.unwrap().unwrap();
 	let theirs = add(&p, other, theirs.id, FLORE).await;
-	let app = app(p, None);
+	let app = app(p);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
@@ -310,12 +310,16 @@ async fn a_point_is_placed_and_taken_back_only_on_the_callers_gmb_without_google
 #[tokio::test]
 async fn the_map_is_told_only_when_configured() {
 	let db = TestDb::create().await;
-	let configured = MapDto { key: "browser-key".into() };
-	for (map, want) in [
-		(None, (StatusCode::NOT_FOUND, json!({ "error": "not found" }))),
-		(Some(configured), (StatusCode::OK, json!({ "key": "browser-key" }))),
+	for (accounts, want) in [
+		(vec![account("server", Some("k"), None)], (StatusCode::NOT_FOUND, json!({ "error": "not found" }))),
+		(
+			vec![account("server", Some("k"), None), account("browser", None, Some("browser-key"))],
+			(StatusCode::OK, json!({ "key": "browser-key", "account": "browser" })),
+		),
 	] {
-		let app = app(panel(&db, None).await, map);
+		let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
+		let keyless = Google::try_new(Keys::new(vec![]), Arc::new(sa_places::InOrder), Arc::new(db.store().await)).unwrap();
+		let app = app(panel_on(db.store().await, key, keyless, sa_places::Accounts::new(accounts)));
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		assert_eq!(call(&mut b, &app, Method::GET, "/api/v1/map", None).await, want);
@@ -328,7 +332,7 @@ async fn a_draft_goes_onto_google_and_is_verified() {
 	let db = TestDb::create().await;
 	let p = panel(&db, Some(&base)).await;
 	opened(&p).await;
-	let app = app(p, None);
+	let app = app(p);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
@@ -398,7 +402,7 @@ async fn a_gbp_off_maps_is_added_without_its_place_and_given_it_once_verified() 
 	let db = TestDb::create().await;
 	let p = panel(&db, Some(&base)).await;
 	opened(&p).await;
-	let app = app(p, None);
+	let app = app(p);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
@@ -466,7 +470,7 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 	let db = TestDb::create().await;
 	let p = panel(&db, None).await;
 	opened(&p).await;
-	let app = app(p, None);
+	let app = app(p);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, heating) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Heating" }))).await;
@@ -522,7 +526,7 @@ async fn a_gmails_role_is_optional() {
 	let db = TestDb::create().await;
 	let p = panel(&db, None).await;
 	opened(&p).await;
-	let app = app(p, None);
+	let app = app(p);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
@@ -562,7 +566,7 @@ async fn beside_another(db: &TestDb) -> (Router, Browser, i64, i64) {
 		}],
 	};
 	let gbp = p.create_gmb(other, unplaced, jiff::Timestamp::now()).await.unwrap().unwrap();
-	let app = app(p, None);
+	let app = app(p);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	(app, b, trade.id, gbp.id)
@@ -742,7 +746,7 @@ async fn a_removed_gmail_is_restored_from_the_trash_and_only_an_admin_keeps_it_f
 	let db = TestDb::create().await;
 	let p = panel(&db, None).await;
 	opened(&p).await;
-	let app = app(p, None);
+	let app = app(p);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;

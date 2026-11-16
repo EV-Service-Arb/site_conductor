@@ -1,6 +1,6 @@
-//! The Places API keys: a person's own first, in the order they were given, then the rotation's.
-//! A key sits out while Google says it is spent, and the next one is asked. The rotation's free
-//! keys go first, so billed ones pay only for what the free ones could not.
+//! The Places API keys: a person's own first, in the order they were given, then the rotation's,
+//! one an account, by the [`crate::Rank`] of its account. A key sits out while Google says it is
+//! spent, and the next one is asked.
 
 use std::{
 	collections::HashMap,
@@ -24,6 +24,9 @@ pub enum Spent {
 	/// Its project's billing is off, which is what an ended trial looks like: back only at
 	/// restart, after a human has fixed it.
 	Billing,
+	/// Its account's free units of the SKU and its allowance this month are used: never sat out,
+	/// only ranked out for a buy.
+	Allowance,
 }
 impl Spent {
 	/// What a refusal says about the key, if it says the key is done for a window. Anything else —
@@ -52,7 +55,7 @@ impl Spent {
 	fn back_by(&self, now: SystemTime) -> bool {
 		match self {
 			Self::Quota { reset, .. } => now >= UNIX_EPOCH + Duration::from_secs(*reset),
-			Self::Billing => false,
+			Self::Billing | Self::Allowance => false,
 		}
 	}
 }
@@ -62,60 +65,85 @@ impl std::fmt::Display for Spent {
 		match self {
 			Self::Quota { limit, reset } => write!(f, "its project's {limit} is used, until {:02}:{:02} UTC", reset % 86_400 / 3600, reset % 3600 / 60),
 			Self::Billing => write!(f, "its project's billing is disabled"),
+			Self::Allowance => write!(f, "its account's free units and allowance this month are used"),
 		}
 	}
 }
 
-/// The rotation's keys and which of them sit out, and the own keys sitting out (by digest: an own
-/// key is held only for the request that brings it).
+/// The rotation's keys, each on its account, and which of them sit out, and the own keys sitting
+/// out (by digest: an own key is held only for the request that brings it).
 pub struct Keys(Mutex<Held>);
 impl Keys {
-	/// The rotation, `keys` in the order they are used in.
-	pub fn new(keys: Vec<String>) -> Self {
-		for (i, k) in keys.iter().enumerate() {
-			assert!(!keys[..i].contains(k), "a Places key is listed twice");
+	/// The rotation, `(account, key)` in the order ties are broken in.
+	pub fn new(keys: Vec<(String, String)>) -> Self {
+		for (i, (account, k)) in keys.iter().enumerate() {
+			assert!(keys[..i].iter().all(|(a, e)| e != k && a != account), "{account} or its Places key is listed twice");
 		}
 		Self(Mutex::new(Held {
-			rotation: keys.into_iter().map(|k| (Zeroizing::new(k), None)).collect(),
+			rotation: keys.into_iter().map(|(a, k)| (a, Zeroizing::new(k), None)).collect(),
 			own: HashMap::new(),
 		}))
 	}
 
 	pub(crate) fn is_empty(&self) -> bool {
-		self.0.lock().expect("never poisoned: no panic while held").rotation.is_empty()
+		self.lock().rotation.is_empty()
 	}
 
-	/// The first of `own`, then of the rotation, not sitting out and not `tried` (by this request:
-	/// a window Google says is over already must not loop it), else why each sits out.
-	pub(crate) fn next(&self, own: &[Zeroizing<String>], tried: &[Zeroizing<String>]) -> Result<(Zeroizing<String>, Tier), Vec<Spent>> {
-		let mut held = self.0.lock().expect("never poisoned: no panic while held");
+	/// The rotation's accounts, in its order.
+	pub(crate) fn accounts(&self) -> Vec<String> {
+		self.lock().rotation.iter().map(|(a, ..)| a.clone()).collect()
+	}
+
+	/// The first of `own` not sitting out and not `tried` (by this request: a window Google says
+	/// is over already must not loop it).
+	pub(crate) fn own(&self, own: &[Zeroizing<String>], tried: &[Zeroizing<String>]) -> Option<Zeroizing<String>> {
+		let mut held = self.lock();
 		let now = SystemTime::now();
-		for key in own.iter().filter(|k| !tried.contains(k)) {
+		own.iter().filter(|k| !tried.contains(k)).find_map(|key| {
 			let digest = digest(key);
 			if held.own.get(&digest).is_some_and(|s| s.back_by(now)) {
 				held.own.remove(&digest);
 			}
-			if !held.own.contains_key(&digest) {
-				return Ok((key.clone(), Tier::Own));
-			}
-		}
-		for (key, out) in held.rotation.iter_mut().filter(|(k, _)| !tried.contains(k)) {
+			(!held.own.contains_key(&digest)).then(|| key.clone())
+		})
+	}
+
+	/// The rotation's key `rank` (one standing per account, as [`Self::accounts`] lists them) puts
+	/// first, ties to the earlier, not sitting out and not `tried`; else why each of `own` and the
+	/// rotation is out.
+	pub(crate) fn rotation(&self, own: &[Zeroizing<String>], tried: &[Zeroizing<String>], rank: &[Option<u8>]) -> Result<(String, Zeroizing<String>), Vec<Spent>> {
+		let mut held = self.lock();
+		assert_eq!(rank.len(), held.rotation.len(), "a standing per account");
+		let now = SystemTime::now();
+		let mut best: Option<(u8, usize)> = None;
+		for (i, ((_, key, out), r)) in held.rotation.iter_mut().zip(rank).enumerate() {
 			if out.as_ref().is_some_and(|s| s.back_by(now)) {
 				*out = None;
 			}
-			if out.is_none() {
-				return Ok((key.clone(), Tier::Rotation));
+			if let (None, Some(r), false) = (&out, r, tried.contains(key))
+				&& best.is_none_or(|(b, _)| *r < b)
+			{
+				best = Some((*r, i));
 			}
 		}
+		if let Some((_, i)) = best {
+			let (account, key, _) = &held.rotation[i];
+			return Ok((account.clone(), key.clone()));
+		}
 		let own_out = own.iter().filter_map(|k| held.own.get(&digest(k)).cloned());
-		Err(own_out.chain(held.rotation.iter().filter_map(|(_, out)| out.clone())).collect())
+		let rotation_out = held.rotation.iter().zip(rank).filter_map(|((_, _, out), r)| match (out, r) {
+			(Some(why), _) => Some(why.clone()),
+			(None, None) => Some(Spent::Allowance),
+			(None, Some(_)) => None,
+		});
+		Err(own_out.chain(rotation_out).collect())
 	}
 
 	pub(crate) fn sit_out(&self, key: &str, why: Spent) {
-		let mut held = self.0.lock().expect("never poisoned: no panic while held");
+		let mut held = self.lock();
 		tracing::warn!(key = %format!("…{}", tail(key)), "Places key spent: {why}");
-		match held.rotation.iter_mut().find(|(k, _)| k.as_str() == key) {
-			Some((_, out)) => *out = Some(why),
+		match held.rotation.iter_mut().find(|(_, k, _)| k.as_str() == key) {
+			Some((_, _, out)) => *out = Some(why),
 			None => {
 				held.own.insert(digest(key), why);
 			}
@@ -124,7 +152,7 @@ impl Keys {
 
 	/// Why `key`, an own key, sits out; `None` once Google takes it again.
 	pub(crate) fn out(&self, key: &str) -> Option<Spent> {
-		let mut held = self.0.lock().expect("never poisoned: no panic while held");
+		let mut held = self.lock();
 		let digest = digest(key);
 		if held.own.get(&digest).is_some_and(|s| s.back_by(SystemTime::now())) {
 			held.own.remove(&digest);
@@ -134,20 +162,17 @@ impl Keys {
 
 	/// `key`, an own key, answered: back in at once.
 	pub(crate) fn back(&self, key: &str) {
-		self.0.lock().expect("never poisoned: no panic while held").own.remove(&digest(key));
+		self.lock().own.remove(&digest(key));
+	}
+
+	fn lock(&self) -> std::sync::MutexGuard<'_, Held> {
+		self.0.lock().expect("never poisoned: no panic while held")
 	}
 }
 
 struct Held {
-	rotation: Vec<(Zeroizing<String>, Option<Spent>)>,
+	rotation: Vec<(String, Zeroizing<String>, Option<Spent>)>,
 	own: HashMap<[u8; 32], Spent>,
-}
-
-/// Where a key handed out by [`Keys::next`] is from.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Tier {
-	Own,
-	Rotation,
 }
 
 fn digest(key: &str) -> [u8; 32] {
@@ -161,9 +186,9 @@ pub(crate) fn tail(key: &str) -> &str {
 
 impl std::fmt::Debug for Keys {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let held = self.0.lock().expect("never poisoned: no panic while held");
+		let held = self.lock();
 		f.debug_struct("Keys")
-			.field("rotation", &held.rotation.iter().map(|(_, out)| out).collect::<Vec<_>>())
+			.field("rotation", &held.rotation.iter().map(|(a, _, out)| (a, out)).collect::<Vec<_>>())
 			.field("own_out", &held.own.len())
 			.finish()
 	}

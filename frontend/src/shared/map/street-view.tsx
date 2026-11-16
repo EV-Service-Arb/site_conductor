@@ -37,7 +37,7 @@ const PEGMAN = "#fbbc04"; // Google's own pegman yellow
  * it); dragged, it shows it while held, and dropped where there is a panorama, buys it
  * (`POST /api/v1/map/street_view`, tokens, refused past the month's free ones) before opening it.
  */
-export function StreetView({ map }: { map: google.maps.Map }) {
+export function StreetView({ map, account }: { map: google.maps.Map; account: string }) {
   const t = useT();
   const { box, coverage, pixels } = controls(map);
   const [shown, setShown] = useState(coverage.getMap() != null);
@@ -62,7 +62,7 @@ export function StreetView({ map }: { map: google.maps.Map }) {
     }
     const pano = found.data.location;
     if (pano?.pano == null || pano.latLng == null) throw new Error("Street View found a panorama without its id or point");
-    await ok(api.POST("/map/street_view", { body: pano.latLng.toJSON() }));
+    await ok(api.POST("/map/street_view", { body: { ...pano.latLng.toJSON(), account } }));
     const panorama = map.getStreetView();
     panorama.setPano(pano.pano);
     panorama.setVisible(true);

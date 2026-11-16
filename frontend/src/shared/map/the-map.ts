@@ -8,6 +8,7 @@ import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { type RefObject, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { api, ok } from "@/shared/api";
+import type { MapConfig } from "@/shared/api/schema";
 import { setQuery, useQuery } from "@/shared/lib/query";
 
 const PLACES_KEY = "sa:map-places";
@@ -22,16 +23,13 @@ export type Base = "schematic" | "satellite";
 const placesShown = () => localStorage.getItem(PLACES_KEY) === "shown";
 const mapTypeId = (base: Base) => (base === "satellite" ? "hybrid" : "roadmap");
 
-// on globalThis: a hot update re-running this module keeps the page's (billed) map
-const kept = globalThis as typeof globalThis & { saMap?: { key: string; element: HTMLDivElement; map: Promise<google.maps.Map> } };
+// on globalThis: a hot update re-running this module keeps the page's (billed) map, on the account it loaded on
+const kept = globalThis as typeof globalThis & { saMap?: { account: string; element: HTMLDivElement; map: Promise<google.maps.Map> } };
 const styles = () => (placesShown() ? [] : PLACES_HIDDEN);
 
-function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Promise<google.maps.Map> } {
-  const made = kept.saMap;
-  if (made !== undefined) {
-    if (made.key !== key) throw new Error("the map's key changed within a page session");
-    return made;
-  }
+// Maps JS takes one key a page load: a config naming another account after is for the next load
+function theMap({ key, account }: MapConfig, scheme: string): { account: string; element: HTMLDivElement; map: Promise<google.maps.Map> } {
+  if (kept.saMap !== undefined) return kept.saMap;
   if (scheme !== "dark" && scheme !== "light") throw new Error(`--scheme is ${JSON.stringify(scheme)}, not dark or light`);
   setOptions({ key, v: "weekly" });
   const element = document.createElement("div");
@@ -59,32 +57,32 @@ function theMap(key: string, scheme: string): { element: HTMLDivElement; map: Pr
       }),
   );
   // counted once built: each is a load Google bills; a failed count is only lost from the tally
-  void map.then(() => ok(api.POST("/map/loaded"))).catch((e: unknown) => console.warn("a map load went uncounted", e));
-  kept.saMap = { key, element, map };
+  void map.then(() => ok(api.POST("/map/loaded", { body: { account } }))).catch((e: unknown) => console.warn("a map load went uncounted", e));
+  kept.saMap = { account, element, map };
   return kept.saMap;
 }
 
-export type TheMap = { status: "loading" } | { status: "ok"; map: google.maps.Map } | { status: "error"; message: string };
+export type TheMap = { status: "loading" } | { status: "ok"; map: google.maps.Map; account: string } | { status: "error"; message: string };
 
 /** The page session's map, inside `host`; its polarity is the host's `--scheme`. */
-export function useTheMap(key: string): { host: RefObject<HTMLDivElement | null>; map: TheMap } {
+export function useTheMap(config: MapConfig): { host: RefObject<HTMLDivElement | null>; map: TheMap } {
   const host = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<TheMap>({ status: "loading" });
   useEffect(() => {
     const box = host.current;
     if (box === null) throw new Error("useTheMap: its host is not rendered");
-    const { element, map } = theMap(key, getComputedStyle(box).getPropertyValue("--scheme").trim());
+    const { account, element, map } = theMap(config, getComputedStyle(box).getPropertyValue("--scheme").trim());
     box.appendChild(element);
     let live = true;
     map.then(
-      (m) => live && setMap({ status: "ok", map: m }),
+      (m) => live && setMap({ status: "ok", map: m, account }),
       (e: unknown) => live && setMap({ status: "error", message: e instanceof Error ? e.message : String(e) }),
     );
     return () => {
       live = false;
       element.remove();
     };
-  }, [key]);
+  }, [config]);
   const base = useBase();
   useEffect(() => {
     if (map.status === "ok") map.map.setMapTypeId(mapTypeId(base));

@@ -217,6 +217,8 @@
         # litestream — which is what `sqlite` below asks for. One writer: one pod, replaced
         # (Recreate), never two at once on the volume.
         dbPath = "/data/panel.db";
+        # the config file, in the image the deploy's literal `sa_conductor.json` mounted (docs/ARCHITECTURE.md, Deploy requirements)
+        configPath = "/etc/settings/sa_conductor.json";
 
         # sa_browsers' browser: Chrome 151 is what the measured devices' UA says (crates/browsers)
         orbita = import ./nix/orbita.nix { inherit pkgs; } "151";
@@ -228,7 +230,10 @@
         deploy = {
           # Settings::required_var_names("production"): the pod exits 78 without any of them.
           # PANEL_DB_PATH is the container's own env (below); the rest the deploy supplies.
-          requiredEnv = [ "PANEL_DB_PATH" "PANEL_DATA_KEY" "PANEL_PUBLIC_ORIGIN" "CONCIERGE_PUBLIC_ORIGIN" "CONCIERGE_GRPC_ADDR" "RP_CLIENT_SECRET_SA" "PANEL_ASSERTION_KEY" "PANEL_REVIEW_ARCHIVE_URL" "PANEL_PLAYBOOK_URL" "PANEL_SITES_URL" "TOKENS_START_CAP_MULTIPLE" "GOOGLE_BILLING_EXPORT" "GOOGLE_BILLING_KEY" ];
+          requiredEnv = [ "PANEL_DB_PATH" "PANEL_DATA_KEY" "PANEL_PUBLIC_ORIGIN" "CONCIERGE_PUBLIC_ORIGIN" "CONCIERGE_GRPC_ADDR" "RP_CLIENT_SECRET_SA" "PANEL_ASSERTION_KEY" "PANEL_REVIEW_ARCHIVE_URL" "PANEL_PLAYBOOK_URL" "PANEL_SITES_URL" "TOKENS_START_CAP_MULTIPLE" ];
+          # The Google accounts (docs/ARCHITECTURE.md, Google accounts): a literal mounted here, each
+          # account's secrets named in it as `{ env = "…"; }`, from the sops-backed Secret.
+          configFile = configPath;
           # from the sops-backed Secret, never literal env
           secretEnv = [
             "PANEL_DATA_KEY"
@@ -236,8 +241,6 @@
             "RP_CLIENT_SECRET_SA"
             "PANEL_ASSERTION_KEY"
             "TELEGRAM_BOT_TOKEN"
-            "GOOGLE_MAPS_KEYS"
-            "GOOGLE_BILLING_KEY"
             "GOLOGIN_TOKEN"
             "MULTILOGIN_TOKEN"
             "ANTHROPIC_API_KEY"
@@ -251,11 +254,6 @@
             # 15 and 500 by default
             "TOKENS_DAILY"
             "TOKENS_CAP"
-            # comma-separated, free ones first; without them a GMB is added by its place id alone,
-            # unnamed and unlocated
-            "GOOGLE_MAPS_KEYS"
-            # the browser's Maps JS key (referrer-restricted); without it the home page has no map
-            "GOOGLE_MAPS_BROWSER_KEY"
             # the gmails' browsers: the runner (sa_browsers, below) with a provider's token or both; unset,
             # their routes answer 503, and a provider without its token too
             "GOLOGIN_TOKEN"
@@ -276,9 +274,9 @@
           egress = {
             # concierge's gRPC, at the address it names
             grpcEnv = [ "CONCIERGE_GRPC_ADDR" ];
-            # the Bot API; the Places API (GOOGLE_MAPS_KEYS); GoLogin's (GOLOGIN_TOKEN) and Multilogin's
-            # (MULTILOGIN_TOKEN) APIs; the Claude API (ANTHROPIC_API_KEY)
-            # the meters' baseline: the billing export (GOOGLE_BILLING_EXPORT), its service account's token
+            # the Bot API; the Places API (the accounts' Places keys); GoLogin's (GOLOGIN_TOKEN) and
+            # Multilogin's (MULTILOGIN_TOKEN) APIs; the Claude API (ANTHROPIC_API_KEY)
+            # the meters' baseline: each account's billing export, its service account's token
             hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "geocode.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" "bigquery.googleapis.com:443" "oauth2.googleapis.com:443" "api.anthropic.com:443" ];
           };
         };
@@ -311,7 +309,7 @@
             healthPath = "/health";
             # a source that gets a 5xx retries from its outbox; nothing is lost while down
             criticality = "normal";
-            entrypoint = [ "${bin}/bin/${pname}" "serve" "--bind" "0.0.0.0:${toString port}" ];
+            entrypoint = [ "${bin}/bin/${pname}" "--config" configPath "serve" "--bind" "0.0.0.0:${toString port}" ];
             # /bin/panel, for `kubectl exec … panel source add` and the like
             contents = [ bin ];
             # the production guards (`#[required_in("production")]`) are armed wherever it runs

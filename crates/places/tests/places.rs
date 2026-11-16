@@ -15,9 +15,12 @@ use axum::{
 	routing::{get, post},
 };
 use jiff::Timestamp;
-use sa_core::queries_cache::{Claim, Key, Put, Stored};
+use sa_core::{
+	prices::PlacesRequest,
+	queries_cache::{Claim, Key, Put, Stored},
+};
 use sa_places::{
-	Ask, Error, Google, Keys, LatLng, Payer, Pending, QueriesCache, Remote, Spent,
+	Ask, Error, Google, InOrder, Keys, Rank, LatLng, Payer, Pending, QueriesCache, Remote, Spent,
 	parse::{Parsed, parse},
 };
 use serde_json::{Value, json};
@@ -183,6 +186,11 @@ async fn google(keys: &[&str]) -> (Stub, Google, Arc<Memory>, tokio::task::JoinH
 
 /// The stub, and a `Google` on it with `keys` and `cache`.
 async fn google_on(keys: &[&str], cache: Arc<dyn QueriesCache>) -> (Stub, Google, tokio::task::JoinHandle<()>) {
+	google_ranked(keys, Arc::new(InOrder), cache).await
+}
+
+/// The stub, and a `Google` on it with `keys` ranked by `rank`, and `cache`.
+async fn google_ranked(keys: &[&str], rank: Arc<dyn Rank>, cache: Arc<dyn QueriesCache>) -> (Stub, Google, tokio::task::JoinHandle<()>) {
 	let s = Stub::default();
 	let app = Router::new()
 		.route("/v1/places:searchText", post(search_text))
@@ -192,7 +200,8 @@ async fn google_on(keys: &[&str], cache: Arc<dyn QueriesCache>) -> (Stub, Google
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let base = format!("http://{}/v1/places", listener.local_addr().unwrap());
 	let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-	let google = Google::try_new(Keys::new(keys.iter().map(|k| k.to_string()).collect()), cache).unwrap().at(base);
+	let keys = Keys::new(keys.iter().map(|k| (format!("account of {k}"), k.to_string())).collect());
+	let google = Google::try_new(keys, rank, cache).unwrap().at(base);
 	(s, google, server)
 }
 
@@ -333,6 +342,31 @@ async fn a_spent_key_sits_out_until_its_window_ends() {
 	server.abort();
 	let Error::Exhausted(why) = spent else { panic!("{spent:#}") };
 	assert!(matches!(why[..], [Spent::Billing, Spent::Quota { .. }]), "{why:?}");
+}
+
+/// The same standing for every buy.
+#[derive(Debug)]
+struct Fixed(Vec<Option<u8>>);
+impl Rank for Fixed {
+	fn rank<'a>(&'a self, _: PlacesRequest, accounts: &'a [String]) -> Pending<'a, Vec<Option<u8>>> {
+		assert_eq!(accounts.len(), self.0.len());
+		Box::pin(std::future::ready(Ok(self.0.clone())))
+	}
+}
+
+#[tokio::test]
+async fn the_rotation_asks_the_best_standing_account_and_none_ranked_out() {
+	let check = async |rank: Vec<Option<u8>>, asked: Option<&str>| {
+		let (s, google, _) = google_ranked(&["x", "y", "z"], Arc::new(Fixed(rank.clone())), Arc::new(Memory::default())).await;
+		let got = google.details(PROCOPE, Ask::Cached, &Payer::house()).await;
+		match asked {
+			Some(key) => assert_eq!((got.map(|_| ()).unwrap(), s.keys()), ((), vec![key.to_owned()]), "{rank:?}"),
+			None => assert!(matches!(got, Err(Error::Exhausted(ref why)) if why.iter().all(|w| *w == Spent::Allowance)), "{rank:?}: {got:?}"),
+		}
+	};
+	check(vec![Some(1), Some(0), Some(0)], Some("y")).await;
+	check(vec![None, Some(1), Some(1)], Some("y")).await;
+	check(vec![None, None, None], None).await;
 }
 
 #[tokio::test]

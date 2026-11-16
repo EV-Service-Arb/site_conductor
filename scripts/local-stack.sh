@@ -422,6 +422,9 @@ placement_origin="${PLACEMENT_PORT:+http://127.0.0.1:$PLACEMENT_PORT}"
 # The gmails' browsers only with the caller's GOLOGIN_TOKEN or MULTILOGIN_TOKEN: neither runs without a plan's.
 browsers_origin=""
 [ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ] || [ "$run_panel" = 0 ] || browsers_origin="http://127.0.0.1:$BROWSERS_PORT"
+# The Google accounts, their keys named in it from the environment (docs/ARCHITECTURE.md, Google accounts).
+conductor_config="${SA_CONDUCTOR_CONFIG:-$HOME/.config/sa_conductor.nix}"
+[ -f "$conductor_config" ] || { echo "no conductor config at $conductor_config (SA_CONDUCTOR_CONFIG): its \`google\` accounts, \`[]\` for none" >&2; exit 1; }
 # A key for this machine alone: the 32 bytes 0..31, and its public half for sites_panel.
 assertion_key="local:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
 assertion_public="local:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="
@@ -448,11 +451,7 @@ panel() {
 		PANEL_GRAFANA_DIR="$state/grafana" \
 		PANEL_PLAYBOOK_URL="http://127.0.0.1:9" \
 		TOKENS_START_CAP_MULTIPLE=1 \
-		GOOGLE_MAPS_KEYS="${GOOGLE_MAPS_KEYS:-${GOOGLE_MAPS_KEY:+$GOOGLE_MAPS_KEY${GOOGLE_MAPS_KEY_ICOS1:+,$GOOGLE_MAPS_KEY_ICOS1}${GOOGLE_MAPS_KEY_EVINVEST:+,$GOOGLE_MAPS_KEY_EVINVEST}}}" \
-		GOOGLE_MAPS_BROWSER_KEY="${GOOGLE_MAPS_BROWSER_KEY:-${GOOGLE_MAPS_BROWSER_KEY_EVINVEST:-${GOOGLE_MAPS_KEY:-}}}" \
-		GOOGLE_BILLING_EXPORT="${GOOGLE_BILLING_EXPORT:-gen-lang-client-0759123990.billing.gcp_billing_export_v1_010027_EEDB26_C25F67}" \
-		GOOGLE_BILLING_KEY="${GOOGLE_BILLING_KEY:-$(cat "$HOME/.config/gcloud/accounting-reader.json")}" \
-		"$PANEL_BIN" "$@"
+		"$PANEL_BIN" --config "$conductor_config" "$@"
 }
 sites_panel() {
 	env -u POSTHOG_PROJECT_API_KEY -u POSTHOG_PROJECT_ID -u SENTRY_DSN \
@@ -477,7 +476,7 @@ queries_cache = "http://127.0.0.1:$PANEL_PORT/api/queries_cache"
 [browser]
 lean = []
 EOF
-	env -u SENTRY_DSN -u TELEGRAM_BOT_TOKEN -u GOOGLE_MAPS_KEY -u GOOGLE_MAPS_KEYS \
+	env -u SENTRY_DSN -u TELEGRAM_BOT_TOKEN \
 		APP_ENV=development \
 		PANEL_ASSERTION_KEYS="$assertion_public" \
 		"$REVIEW_ARCHIVE_BIN" --config "$state/review_archive/config.toml" "$@"

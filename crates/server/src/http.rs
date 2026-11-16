@@ -154,7 +154,6 @@ pub fn app(
 	grafana: Option<&Grafana>,
 	limits: Limits,
 	telegram: Option<Telegram>,
-	map: Option<gmbs::MapDto>,
 	browsers: Option<browser::Connected>,
 	web: Option<&crate::web::Files>,
 	model: Option<Model>,
@@ -199,7 +198,6 @@ pub fn app(
 		web: web.cloned(),
 		probe: connected::probe_client(),
 		telegram,
-		map,
 		browsers: browsers.clone(),
 		model,
 	};
@@ -318,8 +316,6 @@ pub(crate) struct ApiState {
 	pub(crate) probe: reqwest::Client,
 	/// With `TELEGRAM_BOT_TOKEN`.
 	pub(crate) telegram: Option<Telegram>,
-	/// With `GOOGLE_MAPS_BROWSER_KEY`.
-	pub(crate) map: Option<gmbs::MapDto>,
 	/// With GOLOGIN_TOKEN and PANEL_BROWSERS_URL.
 	pub(crate) browsers: Option<browser::Connected>,
 	/// With ANTHROPIC_API_KEY: the assistant's.

@@ -22,7 +22,12 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 url.workspace = true
+v_utils = { workspace = true, optional = true }
 zeroize.workspace = true
+
+[features]
+# `Account` read from a v_utils config file, its keys `{ env = "…" }`.
+settings = ["dep:v_utils", "v_utils/cli"]
 
 [dev-dependencies]
 axum.workspace = true

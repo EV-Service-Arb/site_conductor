@@ -77,12 +77,13 @@ impl Store {
 	/// `bought`, it is counted as `source`'s use in the same write.
 	pub async fn keep_query(&self, scheme: Scheme, key: Key, answer: &str, request: Option<&str>, bought: Option<(Billed, &str)>, fetched_at: Timestamp) -> eyre::Result<()> {
 		let mut tx = self.begin_write().await?;
-		if let Some((Billed { item, bill }, source)) = bought {
+		if let Some((Billed { item, bill, account }, source)) = bought {
 			let used = Use {
 				at: fetched_at,
 				item,
 				units: 1,
 				bill,
+				account,
 				source: source.to_owned(),
 				user: None,
 				key: None,

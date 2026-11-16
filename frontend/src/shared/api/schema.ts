@@ -48,7 +48,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every vendor meter this period: the vendor's own count at its last reading, ours since, what is left of the free units and when buying stops. */
+        /** Every vendor meter this period, summed over the accounts and on each: the vendor's own count at its last reading, ours since, what is left of the free units and when buying stops; and each account's spend against its allowance. */
         get: operations["meters"];
         put?: never;
         post?: never;
@@ -1139,7 +1139,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The browser's Maps JS key, referrer-restricted. 404 without one: there is no map. */
+        /** The Maps JS key this page loads on: of the accounts with a browser key, the first with free map loads and panoramas left, else the first within its allowance. 404 when none has a browser key: there is no map; 409 when none has room. */
         get: operations["map_key"];
         put?: never;
         post?: never;
@@ -1158,7 +1158,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Records that the caller's browser built a Google map: a billed load of ours. */
+        /** Records that the caller's browser built a Google map on an account's browser key: a billed load of ours. 400 an account without one. */
         post: operations["map_loaded"];
         delete?: never;
         options?: never;
@@ -1176,8 +1176,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Buys the Street View panorama at a point: recorded and charged (`street_view.panorama`, the admin's price) in one write.
-         * @description 404 without a map; 409 not priced, past the balance, or its meter stopped.
+         * Buys the Street View panorama at a point on the page's account: recorded and charged (`street_view.panorama`, the admin's price) in one write.
+         * @description 400 an account without a browser key; 409 not priced, past the balance, or its meter there
+         *     stopped (with the account a reload would load on, when another has room).
          */
         post: operations["street_view"];
         delete?: never;
@@ -1594,6 +1595,22 @@ export interface components {
         };
         AccessRequests: {
             requests: components["schemas"]["AccessRequest"][];
+        };
+        /** @description A billing account's spend with Google this period, as its latest readings tell. */
+        AccountSpend: {
+            /**
+             * Format: double
+             * @description Gross, in `currency`.
+             */
+            cost: number;
+            currency: string;
+            /**
+             * Format: double
+             * @description After credits: what `allow` is held against.
+             */
+            net: number;
+            /** @description RFC 3339: the earliest its readings reach. */
+            through: string;
         };
         Act: {
             /** @description The action's id in it. */
@@ -2271,6 +2288,10 @@ export interface components {
          * @enum {string}
          */
         LedgerKind: "add" | "set" | "charge" | "accrual" | "kickback";
+        /** @description The account a page's map loaded on. */
+        Loaded: {
+            account: string;
+        };
         Locality: {
             /** @description ISO 3166-1 alpha-2. */
             country: string;
@@ -2279,8 +2300,12 @@ export interface components {
             place_id: string;
             viewport: components["schemas"]["Viewport"];
         };
-        /** @description `GET /map`: the browser's Maps JS key, referrer-restricted. */
+        /**
+         * @description `GET /map`: the Maps JS key this page loads on, referrer-restricted, and its account, which the
+         *     page's map loads and panoramas name.
+         */
         MapConfig: {
+            account: string;
             key: string;
         };
         MapsKey: {
@@ -2299,8 +2324,46 @@ export interface components {
         };
         /** @enum {string} */
         MentionKind: "location";
+        /** @description A Google billing account, as configured. */
+        MeterAccount: {
+            /**
+             * Format: double
+             * @description Money a month past its free units and credits, in its currency.
+             */
+            allow: number;
+            browser: boolean;
+            name: string;
+            /** @description Whether it has a Places key, and a browser key. */
+            places: boolean;
+            /** @description `null` before a reading of this period. */
+            spend: components["schemas"]["AccountSpend"] | null;
+        };
+        /**
+         * @description A meter's use this period on one account: `used` is the vendor's `baseline` plus our `delta`
+         *     on its keys after `since`.
+         */
+        MeterAccountUse: {
+            account: string;
+            /** Format: int64 */
+            baseline: number;
+            /** Format: int64 */
+            delta: number;
+            /**
+             * Format: int64
+             * @description Of the account's free units.
+             */
+            left: number;
+            /** @description The account's latest reading, of whichever period; `null` before a first one. */
+            reading: components["schemas"]["MeterReading"] | null;
+            /** @description RFC 3339: ours are counted after it. */
+            since: string;
+            /** Format: int64 */
+            used: number;
+        };
         /** @description The vendor's count of a meter, as last read. */
         MeterReading: {
+            /** @description The billing account's name. */
+            account: string;
             /**
              * Format: double
              * @description Gross, before credits, in `currency`.
@@ -2309,6 +2372,11 @@ export interface components {
             currency: string;
             /** @description Its id, `<vendor>.<name>`. */
             meter: string;
+            /**
+             * Format: double
+             * @description After credits, in `currency`.
+             */
+            net: number;
             /** @description RFC 3339: the period it counts from. */
             period_start: string;
             /** @description RFC 3339. */
@@ -2322,39 +2390,51 @@ export interface components {
         MeterReadings: {
             readings: components["schemas"]["MeterReading"][];
         };
-        /** @description A meter's use this period: `used` is the vendor's `baseline` plus our `delta` after `since`. */
-        MeterUse: {
+        /** @description A meter's use this period, summed over the accounts. */
+        MeterTotal: {
             /** Format: int64 */
             baseline: number;
             /** Format: int64 */
             delta: number;
             /**
-             * Format: double
-             * @description `delta` at the admin's cost of a unit; `null` while its items' costs are unknown or differ.
+             * Format: int64
+             * @description Every account's free units.
              */
-            delta_usd: number | null;
-            /** Format: int64 */
             free: number;
-            items: components["schemas"]["PricedItem"][];
             /** Format: int64 */
             left: number;
+            /** Format: int64 */
+            used: number;
+        };
+        /** @description A meter's use this period: all accounts, and each. */
+        MeterUse: {
+            /** @description In the config's order. */
+            accounts: components["schemas"]["MeterAccountUse"][];
+            /**
+             * Format: double
+             * @description The total `delta` at the admin's cost of a unit; `null` while its items' costs are unknown or differ.
+             */
+            delta_usd: number | null;
+            /**
+             * Format: int64
+             * @description Free units a period, on each account.
+             */
+            free: number;
+            items: components["schemas"]["PricedItem"][];
             /** @description Its id, `<vendor>.<name>`. */
             meter: string;
             name: string;
             period_end: string;
             /** @description RFC 3339, `[start, end)`. */
             period_start: string;
-            /** @description The latest reading, of whichever period; `null` before a first one. */
-            reading: components["schemas"]["MeterReading"] | null;
-            /** @description RFC 3339: ours are counted after it. */
-            since: string;
             stop: components["schemas"]["Stop"];
-            /** Format: int64 */
-            used: number;
+            total: components["schemas"]["MeterTotal"];
             vendor: components["schemas"]["Vendor"];
         };
         /** @description `GET /admin/meters`: every meter, in the catalog's order. */
         Meters: {
+            /** @description In the config's order. */
+            accounts: components["schemas"]["MeterAccount"][];
             meters: components["schemas"]["MeterUse"][];
         };
         /** @enum {string} */
@@ -2425,6 +2505,14 @@ export interface components {
         OnGoogle: "verifying" | "verified" | "suspended";
         /** @description An OpenAPI 3.1 document. */
         OpenApi: Record<string, never>;
+        /** @description A panorama to open, on the account the page's map loaded on. */
+        PanoramaAt: {
+            account: string;
+            /** Format: double */
+            lat: number;
+            /** Format: double */
+            lng: number;
+        };
         /** @description `GET /assistant/people?q=`: whom the caller may invite. */
         People: {
             people: components["schemas"]["Person"][];
@@ -3258,6 +3346,7 @@ export interface components {
 export type Access = components['schemas']['Access'];
 export type AccessRequest = components['schemas']['AccessRequest'];
 export type AccessRequests = components['schemas']['AccessRequests'];
+export type AccountSpend = components['schemas']['AccountSpend'];
 export type Act = components['schemas']['Act'];
 export type Action = components['schemas']['Action'];
 export type ActionState = components['schemas']['ActionState'];
@@ -3328,13 +3417,17 @@ export type LatLng = components['schemas']['LatLng'];
 export type Ledger = components['schemas']['Ledger'];
 export type LedgerEntry = components['schemas']['LedgerEntry'];
 export type LedgerKind = components['schemas']['LedgerKind'];
+export type Loaded = components['schemas']['Loaded'];
 export type Locality = components['schemas']['Locality'];
 export type MapConfig = components['schemas']['MapConfig'];
 export type MapsKey = components['schemas']['MapsKey'];
 export type Mention = components['schemas']['Mention'];
 export type MentionKind = components['schemas']['MentionKind'];
+export type MeterAccount = components['schemas']['MeterAccount'];
+export type MeterAccountUse = components['schemas']['MeterAccountUse'];
 export type MeterReading = components['schemas']['MeterReading'];
 export type MeterReadings = components['schemas']['MeterReadings'];
+export type MeterTotal = components['schemas']['MeterTotal'];
 export type MeterUse = components['schemas']['MeterUse'];
 export type Meters = components['schemas']['Meters'];
 export type Need = components['schemas']['Need'];
@@ -3347,6 +3440,7 @@ export type NewUnplaced = components['schemas']['NewUnplaced'];
 export type On = components['schemas']['On'];
 export type OnGoogle = components['schemas']['OnGoogle'];
 export type OpenApi = components['schemas']['OpenApi'];
+export type PanoramaAt = components['schemas']['PanoramaAt'];
 export type People = components['schemas']['People'];
 export type Permission = components['schemas']['Permission'];
 export type Person = components['schemas']['Person'];
@@ -5837,7 +5931,10 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description `GET /map`: the browser's Maps JS key, referrer-restricted. */
+            /**
+             * @description `GET /map`: the Maps JS key this page loads on, referrer-restricted, and its account, which the
+             *     page's map loads and panoramas name.
+             */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5864,7 +5961,12 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description The account a page's map loaded on. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Loaded"];
+            };
+        };
         responses: {
             /** @description no content */
             204: {
@@ -5891,9 +5993,10 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /** @description A panorama to open, on the account the page's map loaded on. */
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LatLng"];
+                "application/json": components["schemas"]["PanoramaAt"];
             };
         };
         responses: {

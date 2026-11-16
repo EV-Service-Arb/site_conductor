@@ -6,16 +6,29 @@ use std::sync::{Arc, Mutex};
 
 use axum::{Router, extract::State, routing::get};
 use jiff::{SignedDuration, Timestamp};
-use sa_core::queries_cache::{self, Claim, Key, Put, Scheme};
+use sa_core::{
+	prices::{Item, PlacesRequest},
+	queries_cache::{self, Claim, Key, Put, Scheme},
+	usage::{Bill, Billed},
+};
 use sa_panel::{
 	Panel,
-	testing::{TestDb, admin, panel},
+	seal::DataKey,
+	testing::{TestDb, account, admin, panel_on},
 };
-use sa_places::{Ask, Google, Keys, Payer, QueriesCache, Remote};
+use sa_places::{Accounts, Ask, Google, InOrder, Keys, Payer, QueriesCache, Remote};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
 const PROCOPE: &str = "ChIJprocopeprocopeproc";
+
+/// A panel whose one Google account is `house`.
+async fn housed(db: &TestDb) -> Panel {
+	let store = db.store().await;
+	let keyless = Google::try_new(Keys::new(vec![]), Arc::new(InOrder), Arc::new(store.clone())).unwrap();
+	let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
+	panel_on(store, key, keyless, Accounts::new(vec![account("house", Some("k"), None)]))
+}
 
 /// The conductor on a socket, its queries cache's URL.
 async fn conductor(panel: Panel) -> String {
@@ -44,10 +57,11 @@ async fn places() -> (String, Arc<Mutex<usize>>) {
 #[tokio::test]
 async fn two_machines_asking_at_once_pay_once_and_a_third_reads_it_for_free() {
 	let db = TestDb::create().await;
-	let url = conductor(panel(&db).await).await;
+	let url = conductor(housed(&db).await).await;
 	let (base, asked) = places().await;
-	let on = |keys: Vec<String>| Google::try_new(Keys::new(keys), Arc::new(Remote::try_new(&url).unwrap())).unwrap().at(&base);
-	let (a, b) = (on(vec!["k".into()]), on(vec!["k".into()]));
+	let on = |keys: Vec<(String, String)>| Google::try_new(Keys::new(keys), Arc::new(InOrder), Arc::new(Remote::try_new(&url).unwrap())).unwrap().at(&base);
+	let house = || vec![("house".to_owned(), "k".to_owned())];
+	let (a, b) = (on(house()), on(house()));
 	let house = Payer::house();
 	let (x, y) = tokio::join!(a.details(PROCOPE, Ask::Cached, &house), b.details(PROCOPE, Ask::Cached, &house));
 	assert_eq!(x.unwrap(), y.unwrap());
@@ -91,7 +105,7 @@ async fn a_claim_holds_until_its_lease_lapses_and_the_newest_answer_stays() {
 #[tokio::test]
 async fn a_write_is_kept_only_under_its_querys_digest() {
 	let db = TestDb::create().await;
-	let cache = Remote::try_new(&conductor(panel(&db).await).await).unwrap();
+	let cache = Remote::try_new(&conductor(housed(&db).await).await).unwrap();
 	let k = Key(Sha256::digest("GET x").into());
 	let put = Put {
 		answer: json!({}),
@@ -100,6 +114,19 @@ async fn a_write_is_kept_only_under_its_querys_digest() {
 	};
 	let mismatched = cache.put(Key([0; 32]), put.clone()).await.unwrap_err();
 	assert!(mismatched.to_string().contains("400"), "{mismatched:#}");
+	let billed = |bill, account: Option<&str>| Put {
+		bought: Some(Billed {
+			item: Item::Places(PlacesRequest::Details),
+			bill,
+			account: account.map(str::to_owned),
+		}),
+		..put.clone()
+	};
+	for (bill, account) in [(Bill::Ours, Some("elsewhere")), (Bill::Ours, None), (Bill::Theirs, Some("house"))] {
+		let refused = cache.put(k, billed(bill, account)).await.unwrap_err();
+		assert!(refused.to_string().contains("400"), "{bill:?} on {account:?}: {refused:#}");
+	}
+	assert_eq!(cache.get(k).await.unwrap(), None, "nothing refused is kept");
 	cache.put(k, put).await.unwrap();
 	assert_eq!(cache.get(k).await.unwrap().unwrap().answer, json!({}));
 }

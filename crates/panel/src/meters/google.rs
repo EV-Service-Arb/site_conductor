@@ -19,6 +19,7 @@ const SCOPE: &str = "https://www.googleapis.com/auth/bigquery.readonly";
 const WAITS: usize = 5;
 
 pub struct Google {
+	account: String,
 	http: reqwest::Client,
 	/// The job runs in the export's project.
 	project: String,
@@ -29,19 +30,20 @@ pub struct Google {
 	token: Mutex<Option<(String, Timestamp)>>,
 }
 impl Google {
-	/// `export` is the table, `project.dataset.table`; `key` the JSON key of a service account
-	/// that may query it.
-	pub fn try_new(export: &str, key: &str) -> eyre::Result<Self> {
+	/// `account`'s export read with its reader.
+	pub fn try_new(account: &sa_places::Account) -> eyre::Result<Self> {
+		let (name, export) = (&account.name, &account.export);
 		let parts: Vec<&str> = export.split('.').collect();
 		eyre::ensure!(
 			parts.len() == 3 && parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')),
-			"GOOGLE_BILLING_EXPORT is `project.dataset.table`, not {export:?}"
+			"{name}'s export is `project.dataset.table`, not {export:?}"
 		);
-		let key: ServiceKey = serde_json::from_str(key).wrap_err("GOOGLE_BILLING_KEY is no service account's JSON key")?;
+		let key: ServiceKey = serde_json::from_str(&account.reader).wrap_err_with(|| format!("{name}'s reader is no service account's JSON key"))?;
 		let pem: String = key.private_key.lines().filter(|l| !l.starts_with("-----")).collect();
-		let der = base64::engine::general_purpose::STANDARD.decode(pem).wrap_err("GOOGLE_BILLING_KEY's private_key is no PEM")?;
-		let rsa = RsaKeyPair::from_pkcs8(&der).map_err(|e| eyre!("GOOGLE_BILLING_KEY's private_key is no RSA PKCS#8 key: {e}"))?;
+		let der = base64::engine::general_purpose::STANDARD.decode(pem).wrap_err_with(|| format!("{name}'s reader's private_key is no PEM"))?;
+		let rsa = RsaKeyPair::from_pkcs8(&der).map_err(|e| eyre!("{name}'s reader's private_key is no RSA PKCS#8 key: {e}"))?;
 		Ok(Self {
+			account: name.clone(),
 			http: reqwest::Client::builder().timeout(Duration::from_secs(90)).build().wrap_err("an HTTP client for BigQuery")?,
 			project: parts[0].to_owned(),
 			table: export.to_owned(),
@@ -123,15 +125,20 @@ impl Reader for Google {
 		Vendor::Google
 	}
 
+	fn account(&self) -> &str {
+		&self.account
+	}
+
 	async fn read(&self, meters: &[&'static Meter], now: Timestamp) -> eyre::Result<Vec<Reading>> {
 		let start = Vendor::Google.period(now).0;
 		let table = &self.table;
-		// credits are not taken off: the free units are a count, not money; `through` is the
-		// export's own progress, so a quiet SKU does not hold it back
+		// the free units are a count, not money; `through` is the export's own progress, so a quiet
+		// SKU does not hold it back
 		let sql = format!(
-			"WITH used AS (SELECT sku.id AS sku, SUM(usage.amount) AS units, SUM(cost) AS cost FROM `{table}` \
+			"WITH used AS (SELECT sku.id AS sku, SUM(usage.amount) AS units, SUM(cost) AS cost, \
+			 SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS net FROM `{table}` \
 			 WHERE sku.id IN UNNEST(@skus) AND usage_start_time >= TIMESTAMP_MICROS(@start) GROUP BY sku) \
-			 SELECT sku, COALESCE(units, 0), COALESCE(cost, 0), \
+			 SELECT sku, COALESCE(units, 0), COALESCE(cost, 0), COALESCE(net, 0), \
 			 (SELECT ANY_VALUE(currency) FROM `{table}`), (SELECT UNIX_MICROS(MAX(usage_end_time)) FROM `{table}`) \
 			 FROM UNNEST(@skus) AS sku LEFT JOIN used USING (sku)"
 		);
@@ -145,8 +152,8 @@ impl Reader for Google {
 		let number = |v: &Value, what: &str| -> eyre::Result<f64> { text(v, what)?.parse().wrap_err_with(|| format!("the export's {what}")) };
 		rows.iter()
 			.map(|row| {
-				let [sku, units, cost, currency, through] = row.as_slice() else {
-					bail!("a row of {} cells, not 5", row.len());
+				let [sku, units, cost, net, currency, through] = row.as_slice() else {
+					bail!("a row of {} cells, not 6", row.len());
 				};
 				let sku = text(sku, "a SKU")?;
 				let meter = *meters.iter().find(|m| m.id == sku).ok_or_else(|| eyre!("the export answered SKU {sku}, not asked"))?;
@@ -154,10 +161,12 @@ impl Reader for Google {
 				eyre::ensure!(units.fract() == 0.0 && units >= 0.0, "{meter} counts {units}, no whole count");
 				let through: i64 = text(through, "through")?.parse().wrap_err("the export's last usage end")?;
 				Ok(Reading {
+					account: self.account.clone(),
 					meter,
 					period_start: start,
 					units: units as i64,
 					cost_micros: (number(cost, "cost")? * 1e6).round() as i64,
+					net_micros: (number(net, "net")? * 1e6).round() as i64,
 					currency: text(currency, "the currency (an empty export?)")?,
 					through: Timestamp::from_microsecond(through).wrap_err("the export's last usage end")?,
 				})

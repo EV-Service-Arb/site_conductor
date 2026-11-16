@@ -3,7 +3,7 @@
 import { Badge, Card, CardContent, cn } from "@evinvest/uikit";
 
 import { tokens } from "@/entities/tokens";
-import type { MeterUse } from "@/shared/api/schema";
+import type { Meters } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 
 /** A reading older than this is stale: the sync runs daily. */
@@ -11,8 +11,18 @@ const STALE_MS = 36 * 3600 * 1000;
 
 const day = (iso: string) => new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
-/** Each vendor meter this period: the vendor's own count plus ours since it, against its free units. */
-export function MetersCard({ meters }: { meters: MeterUse[] }) {
+const tone = (share: number) => (share >= 1 ? "bg-accent-error" : share >= 0.8 ? "bg-accent-warn" : "bg-ink-soft");
+
+function Bar({ share, thin }: { share: number; thin?: boolean }) {
+  return (
+    <div className={cn("overflow-hidden rounded-full bg-muted", thin === true ? "h-1" : "h-1.5")} aria-hidden>
+      <div className={cn("h-full rounded-full", tone(share))} style={{ width: `${Math.min(share, 1) * 100}%` }} />
+    </div>
+  );
+}
+
+/** Each vendor meter this period, over every billing account and folded out per account: the vendor's own count plus ours since it, against its free units; and each account's spend against its allowance. */
+export function MetersCard({ meters: { accounts, meters } }: { meters: Meters }) {
   const t = useT();
   const now = Date.now();
   return (
@@ -23,35 +33,66 @@ export function MetersCard({ meters }: { meters: MeterUse[] }) {
           <p className="text-xs text-ink-soft">
             {t(
               tokens.meters.why,
-              "Each one's count is the vendor's own (every project on its billing account, hours behind), plus ours since. Street View stops at its free ones.",
+              "Each account's count is the vendor's own (every project on that billing account, hours behind), plus ours on its keys since. A buy goes to an account with free units left, then one within its allowance. Street View stops at each account's free ones.",
             )}
           </p>
         </header>
+        <ul className="flex flex-wrap gap-2">
+          {accounts.map((a) => (
+            <li key={a.name} className="flex items-baseline gap-2 rounded-md border border-border px-2 py-1 text-xs">
+              <span className="text-ink">{a.name}</span>
+              <span className="tabular-nums text-ink-soft">
+                {a.spend === null
+                  ? t(tokens.meters.unspent, "no reading this month · allows {allow}", { allow: a.allow.toLocaleString() })
+                  : t(tokens.meters.spent, "{net} of {allow} {currency} net", { net: a.spend.net.toLocaleString(undefined, { maximumFractionDigits: 2 }), allow: a.allow.toLocaleString(), currency: a.spend.currency })}
+              </span>
+            </li>
+          ))}
+        </ul>
         <ul className="flex flex-col divide-y divide-border">
           {meters.map((m) => {
-            const share = m.used / m.free;
-            const stale = m.reading === null || now - Date.parse(m.reading.synced_at) > STALE_MS;
+            const share = m.total.free === 0 ? 1 : m.total.used / m.total.free;
+            const unread = m.accounts.filter((a) => a.reading === null || now - Date.parse(a.reading.synced_at) > STALE_MS);
             return (
-              <li key={m.meter} className="flex flex-col gap-1.5 py-2">
-                <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="text-sm text-ink">{m.name}</span>
-                  {m.stop === "at_free" && <Badge tone="neutral">{t(tokens.meters.stops, "stops at free")}</Badge>}
-                  {share >= 0.8 && <Badge tone={share >= 1 ? "error" : "warn"}>{t(tokens.meters.near, "{p}% of free", { p: Math.round(share * 100) })}</Badge>}
-                  {stale && (
-                    <Badge tone="warn">
-                      {m.reading === null ? t(tokens.meters.unread, "never read") : t(tokens.meters.stale, "read {at}", { at: day(m.reading.synced_at) })}
-                    </Badge>
-                  )}
-                  <span className="ml-auto text-sm tabular-nums text-ink">
-                    {m.used.toLocaleString()} / {m.free.toLocaleString()}
-                  </span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
-                  <div className={cn("h-full rounded-full", share >= 1 ? "bg-accent-error" : share >= 0.8 ? "bg-accent-warn" : "bg-ink-soft")} style={{ width: `${Math.min(share, 1) * 100}%` }} />
-                </div>
-                <span className="text-xs text-ink-soft tabular-nums">
-                  {t(tokens.meters.split, "{vendor} {baseline} as of {at}, ours {delta} since", { vendor: "Google", baseline: m.baseline.toLocaleString(), at: day(m.since), delta: m.delta.toLocaleString() })}
-                </span>
+              <li key={m.meter} className="py-2">
+                <details className="group flex flex-col gap-1.5">
+                  <summary className="flex cursor-pointer list-none flex-col gap-1.5">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-sm text-ink">{m.name}</span>
+                      {m.stop === "at_free" && <Badge tone="neutral">{t(tokens.meters.stops, "stops at free")}</Badge>}
+                      {share >= 0.8 && <Badge tone={share >= 1 ? "error" : "warn"}>{t(tokens.meters.near, "{p}% of free", { p: Math.round(share * 100) })}</Badge>}
+                      {unread.length > 0 && <Badge tone="warn">{t(tokens.meters.unread, "{n} not read lately", { n: unread.length })}</Badge>}
+                      <span className="ml-auto text-sm tabular-nums text-ink">
+                        {m.total.used.toLocaleString()} / {m.total.free.toLocaleString()}
+                      </span>
+                    </div>
+                    <Bar share={share} />
+                  </summary>
+                  <ul className="mt-1 flex flex-col gap-1.5 pl-3">
+                    {m.accounts.map((a) => {
+                      const mine = a.used / m.free;
+                      const stale = a.reading === null || now - Date.parse(a.reading.synced_at) > STALE_MS;
+                      return (
+                        <li key={a.account} className="flex flex-col gap-1">
+                          <div className="flex flex-wrap items-baseline gap-2 text-xs">
+                            <span className="text-ink">{a.account}</span>
+                            {stale && (
+                              <Badge tone="warn">
+                                {a.reading === null ? t(tokens.meters.never, "never read") : t(tokens.meters.stale, "read {at}", { at: day(a.reading.synced_at) })}
+                              </Badge>
+                            )}
+                            <span className="ml-auto tabular-nums text-ink-soft">
+                              {t(tokens.meters.split, "{vendor} {baseline} as of {at}, ours {delta} since", { vendor: "Google", baseline: a.baseline.toLocaleString(), at: day(a.since), delta: a.delta.toLocaleString() })}
+                              {" · "}
+                              {a.used.toLocaleString()} / {m.free.toLocaleString()}
+                            </span>
+                          </div>
+                          <Bar share={mine} thin />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </details>
               </li>
             );
           })}

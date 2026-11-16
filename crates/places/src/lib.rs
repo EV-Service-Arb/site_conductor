@@ -1,15 +1,17 @@
 //! A Google place from what a person pastes. The id, or a Maps URL carrying it, needs nothing;
 //! a URL with only a name in it is looked up with the Places API (New). Every Places request
 //! goes through [`Google`]: the queries cache answers what was paid for once; else the [`Payer`]'s
-//! own keys are asked first, then the [`Keys`] rotation, which its [`Purse`] pays for.
+//! own keys are asked first, then the [`Keys`] rotation, an [`Account`]'s key by its [`Rank`],
+//! which the payer's [`Purse`] pays for.
 
+mod accounts;
 mod keys;
 pub mod parse;
 mod queries_cache;
 
 use std::{sync::Arc, time::Duration};
 
-use keys::Tier;
+pub use accounts::{Account, Accounts};
 pub use keys::{Keys, Spent};
 use parse::Parsed;
 use queries_cache::Request;
@@ -48,6 +50,22 @@ pub trait Purse: Send + Sync {
 pub trait Hold: Send {
 	/// The buy went through.
 	fn paid(self: Box<Self>, bought: Bought) -> Pending<'static, ()>;
+}
+
+/// Orders the rotation's accounts for a buy.
+pub trait Rank: Send + Sync + std::fmt::Debug {
+	/// Each of `accounts`' standing for one buy of `sku`: the lowest is asked first, the earlier of
+	/// a tie; `None`, not asked.
+	fn rank<'a>(&'a self, sku: PlacesRequest, accounts: &'a [String]) -> Pending<'a, Vec<Option<u8>>>;
+}
+
+/// Every account alike: the rotation's order.
+#[derive(Debug)]
+pub struct InOrder;
+impl Rank for InOrder {
+	fn rank<'a>(&'a self, _: PlacesRequest, accounts: &'a [String]) -> Pending<'a, Vec<Option<u8>>> {
+		Box::pin(std::future::ready(Ok(vec![Some(0); accounts.len()])))
+	}
 }
 
 /// Who a request is made for.
@@ -138,6 +156,9 @@ pub enum Error {
 	/// The purse failed to answer.
 	#[error("the purse: {0}")]
 	Purse(String),
+	/// The accounts' rank failed to answer.
+	#[error("ranking the accounts: {0}")]
+	Rank(String),
 	/// Every key is sitting out.
 	#[error("every Places key is spent: {}", .0.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "))]
 	Exhausted(Vec<Spent>),
@@ -165,6 +186,7 @@ pub enum Ask {
 pub struct Google {
 	http: reqwest::Client,
 	keys: Keys,
+	rank: Arc<dyn Rank>,
 	cache: Arc<dyn QueriesCache>,
 	/// `…/v1/places`.
 	base: String,
@@ -174,11 +196,12 @@ pub struct Google {
 
 impl Google {
 	/// With no keys, a place id still resolves, unnamed and unlocated.
-	pub fn try_new(keys: Keys, cache: Arc<dyn QueriesCache>) -> Result<Self, Error> {
+	pub fn try_new(keys: Keys, rank: Arc<dyn Rank>, cache: Arc<dyn QueriesCache>) -> Result<Self, Error> {
 		let http = reqwest::Client::builder().connect_timeout(Duration::from_secs(5)).timeout(Duration::from_secs(10)).build()?;
 		Ok(Self {
 			http,
 			keys,
+			rank,
 			cache,
 			base: "https://places.googleapis.com/v1/places".to_owned(),
 			geocode: "https://geocode.googleapis.com/v4/geocode/location".to_owned(),
@@ -536,10 +559,10 @@ impl Google {
 			// the buy's error is the one to tell; the claim lapses with its lease anyway
 			tracing::warn!(error = %e, "releasing a claim after a failed buy");
 		}
-		let (answer, hold, tier) = bought?;
-		let bill = match tier {
-			Tier::Own => Bill::Theirs,
-			Tier::Rotation => Bill::Ours,
+		let (answer, hold, account) = bought?;
+		let bill = match account {
+			None => Bill::Theirs,
+			Some(_) => Bill::Ours,
 		};
 		self.cache
 			.put(
@@ -547,7 +570,11 @@ impl Google {
 				Put {
 					answer: answer.clone(),
 					request: req.preimage(),
-					bought: Some(Billed { item: req.sku.into(), bill }),
+					bought: Some(Billed {
+						item: req.sku.into(),
+						bill,
+						account,
+					}),
 				},
 			)
 			.await?;
@@ -564,14 +591,26 @@ impl Google {
 	}
 
 	/// `req` asked of Google with the first key not sitting out: the payer's own, then the
-	/// rotation's, held in their purse before the first of those is asked; the hold, to be paid
-	/// once the answer is kept.
-	async fn buy(&self, req: &Request<'_>, payer: &Payer<'_>) -> Result<(serde_json::Value, Option<Box<dyn Hold>>, Tier), Error> {
+	/// rotation's by its accounts' rank, held in their purse before the first of those is asked;
+	/// the hold, to be paid once the answer is kept, and the account that paid (`None`: the payer's
+	/// own key).
+	async fn buy(&self, req: &Request<'_>, payer: &Payer<'_>) -> Result<(serde_json::Value, Option<Box<dyn Hold>>, Option<String>), Error> {
 		let mut tried = Vec::new();
 		let mut hold: Option<Box<dyn Hold>> = None;
+		let mut rank = None;
 		loop {
-			let (api_key, tier) = self.keys.next(&payer.own, &tried).map_err(Error::Exhausted)?;
-			if tier == Tier::Rotation
+			let (api_key, account) = match self.keys.own(&payer.own, &tried) {
+				Some(key) => (key, None),
+				None => {
+					let rank = match &rank {
+						Some(r) => r,
+						None => rank.insert(self.rank.rank(req.sku, &self.keys.accounts()).await?),
+					};
+					let (account, key) = self.keys.rotation(&payer.own, &tried, rank).map_err(Error::Exhausted)?;
+					(key, Some(account))
+				}
+			};
+			if account.is_some()
 				&& hold.is_none()
 				&& let Some(purse) = payer.purse
 			{
@@ -584,7 +623,7 @@ impl Google {
 			};
 			let resp = r.header("X-Goog-Api-Key", api_key.as_str()).header("X-Goog-FieldMask", req.mask).send().await?;
 			let status = resp.status();
-			tracing::info!(method = req.method, url = req.url, %status, ?tier, "Places asked");
+			tracing::info!(method = req.method, url = req.url, %status, ?account, "Places asked");
 			let text = resp.text().await?;
 			if status.is_success() {
 				let answer = serde_json::from_str(&text).map_err(|e| Error::Api {
@@ -592,20 +631,20 @@ impl Google {
 					status: 200,
 					body: format!("not JSON ({e}), paid for and not kept: {text}"),
 				})?;
-				return Ok((answer, hold, tier));
+				return Ok((answer, hold, account));
 			}
-			match (Spent::of(&text), tier) {
+			match (Spent::of(&text), account) {
 				(Some(why), _) => {
 					self.keys.sit_out(&api_key, why);
 					tried.push(api_key);
 				}
-				(None, Tier::Own) => {
+				(None, None) => {
 					return Err(Error::OwnKey {
 						tail: keys::tail(&api_key).to_owned(),
 						said: said(&text),
 					});
 				}
-				(None, Tier::Rotation) => {
+				(None, Some(_)) => {
 					return Err(Error::Api {
 						asked: format!("{} {}", req.method, req.url),
 						status: status.as_u16(),

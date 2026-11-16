@@ -126,12 +126,14 @@ pub struct Panel {
 	live: live::Bus,
 	renewal: Renewal,
 	google: Arc<sa_places::Google>,
+	/// The Google billing accounts our keys bill on.
+	accounts: Arc<sa_places::Accounts>,
 	purses: connections::Purses,
 	/// Told of every change review_archive's snapshot carries.
 	snapshot_due: Arc<tokio::sync::Notify>,
 }
 impl Panel {
-	pub fn new(store: Store, key: DataKey, renewal: Renewal, google: sa_places::Google) -> Self {
+	pub fn new(store: Store, key: DataKey, renewal: Renewal, google: sa_places::Google, accounts: Arc<sa_places::Accounts>) -> Self {
 		Self {
 			store,
 			key: Arc::new(key),
@@ -139,6 +141,7 @@ impl Panel {
 			live: live::Bus::default(),
 			renewal,
 			google: Arc::new(google),
+			accounts,
 			purses: Arc::default(),
 			snapshot_due: Arc::default(),
 		}
@@ -152,6 +155,10 @@ impl Panel {
 
 	pub fn store(&self) -> &Store {
 		&self.store
+	}
+
+	pub fn accounts(&self) -> &sa_places::Accounts {
+		&self.accounts
 	}
 
 	/// What changed: see [`live`].

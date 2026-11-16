@@ -19,11 +19,13 @@ pub enum Bill {
 }
 
 /// One Google answer bought, as the queries cache is told it.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Billed {
 	pub item: Item,
 	pub bill: Bill,
+	/// The Google billing account whose key paid: one of the conductor's on our bill, none on theirs.
+	pub account: Option<String>,
 }
 
 /// `units` of `item`, done at `at`.

@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
 use crate::{
-	api::{ApiError, ApiResult, Params},
+	api::{self, ApiError, ApiResult, Params},
 	browser::Connected,
 	forward::Services,
 	http::{ApiRoute, Gate, Section},
@@ -127,9 +127,17 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 	]
 }
 
-/// Records that the caller's browser built a Google map: a billed load of ours.
-async fn map_loaded(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<NoContent> {
-	panel.map_loaded(caller.user_id, Timestamp::now()).await?;
+/// The account a page's map loaded on.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Loaded {
+	account: String,
+}
+
+/// Records that the caller's browser built a Google map on an account's browser key: a billed load
+/// of ours. 400 an account without one.
+async fn map_loaded(State(panel): State<Panel>, Extension(caller): Extension<Caller>, api::Body(on): api::Body<Loaded>) -> ApiResult<NoContent> {
+	panel.map_loaded(caller.user_id, &on.account, Timestamp::now()).await??;
 	Ok(NoContent)
 }
 

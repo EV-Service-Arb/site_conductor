@@ -75,16 +75,29 @@ pub async fn panel(db: &TestDb) -> Panel {
 	panel_with(db.store().await, key)
 }
 
-/// A panel on `store`: tokens renewing 15 a day up to 500 from 500, places resolving ids only.
+/// A panel on `store`: tokens renewing 15 a day up to 500 from 500, places resolving ids only, no
+/// Google account.
 pub fn panel_with(store: Store, key: DataKey) -> Panel {
-	let keyless = sa_places::Google::try_new(sa_places::Keys::new(vec![]), Arc::new(store.clone())).expect("a Places client");
-	panel_on(store, key, keyless)
+	let keyless = sa_places::Google::try_new(sa_places::Keys::new(vec![]), Arc::new(sa_places::InOrder), Arc::new(store.clone())).expect("a Places client");
+	panel_on(store, key, keyless, sa_places::Accounts::new(vec![]))
 }
 
-/// A panel on `store` asking `google`, tokens as [`panel_with`].
-pub fn panel_on(store: Store, key: DataKey, google: sa_places::Google) -> Panel {
+/// A panel on `store` asking `google` on `accounts`, tokens as [`panel_with`].
+pub fn panel_on(store: Store, key: DataKey, google: sa_places::Google, accounts: sa_places::Accounts) -> Panel {
 	let renewal = sa_core::tokens::Renewal::try_new(15, 500, 1.).expect("a valid renewal");
-	Panel::new(store, key, renewal, google)
+	Panel::new(store, key, renewal, google, Arc::new(accounts))
+}
+
+/// An account of `name` with only the keys given, free units only, its export never read.
+pub fn account(name: &str, places: Option<&str>, browser: Option<&str>) -> sa_places::Account {
+	sa_places::Account {
+		name: name.to_owned(),
+		export: format!("{name}.billing.export"),
+		reader: "{}".to_owned(),
+		places: places.map(str::to_owned),
+		browser: browser.map(str::to_owned),
+		allow: 0.0,
+	}
 }
 
 /// A request as a source sends it: the body, and the headers' values.
@@ -139,9 +152,12 @@ pub fn admin() -> sa_auth::PermissionSet {
 	sa_auth::SA_ADMIN.members.iter().copied().collect()
 }
 
-/// A vendor that counts `units` of every one of its meters, its record reaching `through`.
+/// A vendor that counts `units` of every one of its meters on `account`, each `net` after credits
+/// (millionths), its record reaching `through`.
 pub struct Told {
+	pub account: &'static str,
 	pub units: i64,
+	pub net: i64,
 	pub through: Timestamp,
 }
 
@@ -150,14 +166,20 @@ impl crate::meters::Reader for Told {
 		sa_core::meters::Vendor::Google
 	}
 
+	fn account(&self) -> &str {
+		self.account
+	}
+
 	async fn read(&self, meters: &[&'static sa_core::meters::Meter], now: Timestamp) -> eyre::Result<Vec<crate::meters::Reading>> {
 		Ok(meters
 			.iter()
 			.map(|m| crate::meters::Reading {
+				account: self.account.to_owned(),
 				meter: m,
 				period_start: m.vendor.period(now).0,
 				units: self.units,
-				cost_micros: 0,
+				cost_micros: self.net.max(0),
+				net_micros: self.net,
 				currency: "EUR".to_owned(),
 				through: self.through,
 			})

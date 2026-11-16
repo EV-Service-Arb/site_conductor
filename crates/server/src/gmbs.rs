@@ -10,7 +10,7 @@ use ev_lib::api::{Created, JsonSchema};
 use jiff::Timestamp;
 use sa_core::gbp::{Country, GmailRole, OnGoogle, State as GbpState};
 use sa_panel::{
-	Panel,
+	Panel, Refused,
 	gmbs::{Category, Edit, Existing, Gmail, Gmb, GoogleCategory, Trade, Unplaced},
 };
 use serde::{Deserialize, Serialize};
@@ -22,11 +22,22 @@ use crate::{
 	tokens::BalanceDto,
 };
 
-/// `GET /map`: the browser's Maps JS key, referrer-restricted.
+/// `GET /map`: the Maps JS key this page loads on, referrer-restricted, and its account, which the
+/// page's map loads and panoramas name.
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "MapConfig")]
 pub struct MapDto {
 	pub key: String,
+	pub account: String,
+}
+
+/// A panorama to open, on the account the page's map loaded on.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct PanoramaAt {
+	lat: f64,
+	lng: f64,
+	account: String,
 }
 
 /// A GBP of the caller's.
@@ -398,21 +409,39 @@ async fn suggest_places(State(panel): State<Panel>, Extension(caller): Extension
 	}))
 }
 
-/// The browser's Maps JS key, referrer-restricted. 404 without one: there is no map.
+/// The Maps JS key this page loads on: of the accounts with a browser key, the first with free map
+/// loads and panoramas left, else the first within its allowance. 404 when none has a browser key:
+/// there is no map; 409 when none has room.
 async fn map_key(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
-	s.map.map(Json).ok_or(ApiError::NotFound)
-}
-
-/// Buys the Street View panorama at a point: recorded and charged (`street_view.panorama`, the
-/// admin's price) in one write.
-///
-/// 404 without a map; 409 not priced, past the balance, or its meter stopped.
-async fn street_view(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Body(at): Body<sa_places::LatLng>) -> ApiResult<Json<BalanceDto>> {
-	if s.map.is_none() {
+	if s.panel.accounts().iter().all(|a| a.browser.is_none()) {
 		return Err(ApiError::NotFound);
 	}
-	let balance = s.panel.open_street_view(caller.user_id, at.lat, at.lng, Timestamp::now()).await??;
-	Ok(Json(BalanceDto { balance }))
+	let account = s
+		.panel
+		.map_account(Timestamp::now())
+		.await?
+		.ok_or_else(|| ApiError::Conflict("every Google account's free map loads and allowance this month are used".to_owned()))?;
+	Ok(Json(MapDto {
+		key: account.browser.clone().expect("only an account with a browser key stands"),
+		account: account.name.clone(),
+	}))
+}
+
+/// Buys the Street View panorama at a point on the page's account: recorded and charged
+/// (`street_view.panorama`, the admin's price) in one write.
+///
+/// 400 an account without a browser key; 409 not priced, past the balance, or its meter there
+/// stopped (with the account a reload would load on, when another has room).
+async fn street_view(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Body(at): Body<PanoramaAt>) -> ApiResult<Json<BalanceDto>> {
+	let now = Timestamp::now();
+	match s.panel.open_street_view(caller.user_id, &at.account, at.lat, at.lng, now).await? {
+		Ok(balance) => Ok(Json(BalanceDto { balance })),
+		Err(Refused::Conflict(why)) => match s.panel.map_account(now).await? {
+			Some(other) if other.name != at.account => Err(ApiError::Conflict(format!("{why}; reload the page: it then loads on {}, which has room", other.name))),
+			_ => Err(ApiError::Conflict(why)),
+		},
+		Err(refused) => Err(refused.into()),
+	}
 }
 
 #[derive(Deserialize, JsonSchema)]

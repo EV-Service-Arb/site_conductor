@@ -1,8 +1,8 @@
-//! Street View on the browser's Maps key: each panorama opened is bought here first, at the
-//! admin's price of [`StreetViewLoad::Panorama`], and none past its meter's free ones.
+//! Street View on an account's browser key: each panorama opened is bought here first, at the
+//! admin's price of [`StreetViewLoad::Panorama`], and none past its meter's free ones there.
 //!
 //! ```text
-//! the pegman dropped ─ a panorama there? (free) ─ open(user): its meter not stopped, price set,
+//! the pegman dropped ─ a panorama there? (free) ─ open(user, account): its meter there not stopped, price set,
 //!   balance ≥ price, recorded and charged in one write ─ the panorama opened in the browser
 //! ```
 
@@ -24,10 +24,14 @@ use crate::{
 };
 
 impl Panel {
-	/// The user opens a panorama at `lat, lng`: bought, or refused before anything loads. Their balance then.
-	pub async fn open_street_view(&self, user: Uuid, lat: f64, lng: f64, now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
+	/// The user opens a panorama at `lat, lng` on `account`'s browser key: bought, or refused before
+	/// anything loads. Their balance then.
+	pub async fn open_street_view(&self, user: Uuid, account: &str, lat: f64, lng: f64, now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
 		if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lng) {
 			return Ok(Err(Refused::Invalid(format!("{lat}, {lng} is no point on Earth"))));
+		}
+		if self.accounts.get(account).is_none_or(|a| a.browser.is_none()) {
+			return Ok(Err(Refused::Invalid(format!("{account:?} is no Google account with a browser key"))));
 		}
 		let mut tx = self.store.begin_write().await?;
 		if !is_open(&mut tx).await? {
@@ -35,7 +39,7 @@ impl Panel {
 		}
 		let item = Item::from(StreetViewLoad::Panorama);
 		let meter = item.meter().expect("a panorama is on Google's meter");
-		if let Some(why) = meters::gauge(&mut tx, meter, now).await?.refuses(1) {
+		if let Some(why) = meters::gauge(&mut tx, account, meter, now).await?.refuses(1) {
 			return Ok(Err(Refused::Conflict(why)));
 		}
 		let Some(price) = ledger::price(&mut tx, item).await? else {
@@ -51,6 +55,7 @@ impl Panel {
 			item,
 			units: 1,
 			bill: Bill::Ours,
+			account: Some(account.to_owned()),
 			source: CONDUCTOR.to_owned(),
 			user: Some(user),
 			key: Some(key.clone()),

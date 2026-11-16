@@ -1,6 +1,7 @@
-//! A metered buy counts the vendor's reading plus ours after it. A Street View panorama is bought
-//! before the browser opens it: at the admin's price, never on credit, and none past its meter's
-//! free ones nor without a reading of it, whoever asks.
+//! A metered buy counts the vendor's reading of its account plus ours on that account after it. A
+//! Street View panorama is bought before the browser opens it: at the admin's price, never on
+//! credit, and none past its meter's free ones there nor without a reading of it, whoever asks. A
+//! page loads on the account with room; Places buys go to it too, up to its allowance.
 
 use axum::{
 	Router,
@@ -8,15 +9,17 @@ use axum::{
 	http::{Method, StatusCode},
 };
 use jiff::{SignedDuration, Timestamp};
-use sa_core::prices::{Item, StreetViewLoad};
+use sa_core::prices::{Item, PlacesRequest, StreetViewLoad};
 use sa_panel::{
 	Panel,
 	import::Export,
-	testing::{TestDb, Told, admin, panel},
+	meters::ByStanding,
+	seal::DataKey,
+	testing::{TestDb, Told, account, admin, panel_on},
 };
+use sa_places::{Account, Accounts, Google, InOrder, Keys, Rank};
 use sa_server::{
 	concierge::{Concierge, DevIdentity},
-	gmbs::MapDto,
 	http,
 	signin::{SignIn, SignInConfig},
 	testing::{Browser, ORIGIN},
@@ -32,11 +35,27 @@ struct World {
 	db: TestDb,
 }
 
+/// An account with both keys, `allow` a month past its free units.
+fn both(name: &str, allow: f64) -> Account {
+	Account {
+		allow,
+		..account(name, Some(&format!("places-{name}")), Some(&format!("browser-{name}")))
+	}
+}
+
 impl World {
-	/// Signed in as an admin, tokens open, the browser's Maps key set; no meter read.
+	/// Signed in as an admin, tokens open, account `a` alone with both keys; no meter read.
 	async fn new() -> Self {
+		Self::on(vec![both("a", 0.0)]).await
+	}
+
+	/// As [`Self::new`], on `accounts`.
+	async fn on(accounts: Vec<Account>) -> Self {
 		let db = TestDb::create().await;
-		let panel = panel(&db).await;
+		let store = db.store().await;
+		let keyless = Google::try_new(Keys::new(vec![]), std::sync::Arc::new(InOrder), std::sync::Arc::new(store.clone())).unwrap();
+		let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
+		let panel = panel_on(store, key, keyless, Accounts::new(accounts));
 		let empty = Export {
 			people: vec![],
 			gmails: vec![],
@@ -54,14 +73,12 @@ impl World {
 			panel_origin: ORIGIN.to_owned(),
 			concierge_origin: ORIGIN.to_owned(),
 		};
-		let map = MapDto { key: "browser-key".to_owned() };
 		let app = http::app(
 			SignIn::new(panel.clone(), Concierge::dev(who), config),
 			None,
 			None,
 			Default::default(),
 			None,
-			Some(map),
 			None,
 			None,
 			None,
@@ -71,9 +88,15 @@ impl World {
 		Self { panel, app, b, db }
 	}
 
-	/// Google counts `units` of each meter at `now`, its record reaching `through`.
+	/// Google counts `units` of each meter on `a` at `now`, its record reaching `through`.
 	async fn read(&self, units: i64, through: Timestamp, now: Timestamp) {
-		self.panel.sync_meters(&Told { units, through }, now).await.unwrap();
+		self.read_on("a", units, 0, through, now).await;
+	}
+
+	/// Google counts `units` of each meter on `account`, each `net` after credits (millionths), at
+	/// `now`, its record reaching `through`.
+	async fn read_on(&self, account: &'static str, units: i64, net: i64, through: Timestamp, now: Timestamp) {
+		self.panel.sync_meters(&Told { account, units, net, through }, now).await.unwrap();
 	}
 
 	async fn price(&self, tokens: Option<i64>) {
@@ -101,13 +124,24 @@ impl World {
 	}
 
 	async fn open(&mut self) -> (StatusCode, Value) {
-		self.call(Method::POST, "/api/v1/map/street_view", Some(json!({ "lat": 45.75, "lng": 4.85 }))).await
+		self.open_on("a").await
 	}
 
-	/// `n` panoramas the caller opened at `at`, as if then.
+	async fn open_on(&mut self, account: &str) -> (StatusCode, Value) {
+		self.call(Method::POST, "/api/v1/map/street_view", Some(json!({ "lat": 45.75, "lng": 4.85, "account": account }))).await
+	}
+
+	/// The account `GET /map` loads the page on.
+	async fn map(&mut self) -> Value {
+		let (status, map) = self.call(Method::GET, "/api/v1/map", None).await;
+		assert_eq!(status, StatusCode::OK, "{map}");
+		map["account"].clone()
+	}
+
+	/// `n` panoramas the caller opened on `a` at `at`, as if then.
 	async fn opened(&mut self, n: i64, at: Timestamp) {
 		self.balance().await; // the caller is a user once their first call is seen
-		let done = sqlx::query("WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < $1) INSERT INTO usage (at, item, units, bill, source, user_id) SELECT $3, 'street_view.panorama', 1, 'ours', 'conductor', u.user_id FROM k, users u WHERE u.email = $2")
+		let done = sqlx::query("WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < $1) INSERT INTO usage (at, item, units, bill, account, source, user_id) SELECT $3, 'street_view.panorama', 1, 'ours', 'a', 'conductor', u.user_id FROM k, users u WHERE u.email = $2")
 			.bind(n)
 			.bind(EMAIL)
 			.bind(at.as_microsecond())
@@ -117,7 +151,16 @@ impl World {
 		assert_eq!(done.rows_affected(), n as u64);
 	}
 
+	/// Street View's meter on `a`, with its total beside it.
 	async fn street_view_meter(&mut self) -> Value {
+		let m = self.street_view().await;
+		let mut on_a = m["accounts"][0].clone();
+		on_a["stop"] = m["stop"].clone();
+		on_a["period_start"] = m["period_start"].clone();
+		on_a
+	}
+
+	async fn street_view(&mut self) -> Value {
 		let (status, meters) = self.call(Method::GET, "/api/v1/admin/meters", None).await;
 		assert_eq!(status, StatusCode::OK, "{meters}");
 		meters["meters"].as_array().unwrap().iter().find(|m| m["meter"] == "google:658E-F885-E11A").unwrap().clone()
@@ -204,7 +247,7 @@ async fn nothing_is_bought_on_a_stopping_meter_without_a_reading() {
 	w.price(Some(0)).await;
 	let (status, refused) = w.open().await;
 	assert_eq!(status, StatusCode::CONFLICT, "{refused}");
-	let (status, _) = w.call(Method::POST, "/api/v1/map/loaded", None).await;
+	let (status, _) = w.call(Method::POST, "/api/v1/map/loaded", Some(json!({ "account": "a" }))).await;
 	assert_eq!(status, StatusCode::NO_CONTENT, "a map load is only watched");
 
 	let m = w.street_view_meter().await;
@@ -213,4 +256,62 @@ async fn nothing_is_bought_on_a_stopping_meter_without_a_reading() {
 	w.read(0, now, now).await;
 	let (status, bought) = w.open().await;
 	assert_eq!(status, StatusCode::OK, "{bought}");
+}
+
+#[tokio::test]
+async fn a_page_loads_on_the_account_with_free_panoramas_and_a_reload_moves_on() {
+	let mut w = World::on(vec![both("a", 0.0), both("b", 0.0)]).await;
+	w.price(Some(0)).await;
+	let now = Timestamp::now();
+	w.read_on("a", 4999, 0, now, now).await;
+	w.read_on("b", 0, 0, now, now).await;
+	assert_eq!(w.map().await, "a", "the first in the config's order with room");
+	let (status, bought) = w.open_on("a").await;
+	assert_eq!(status, StatusCode::OK, "a's 5000th: {bought}");
+	let (status, refused) = w.open_on("a").await;
+	assert_eq!(status, StatusCode::CONFLICT, "{refused}");
+	assert!(refused["error"].as_str().unwrap().contains("reload the page: it then loads on b"), "{refused}");
+	assert_eq!(w.map().await, "b");
+	let (status, bought) = w.open_on("b").await;
+	assert_eq!(status, StatusCode::OK, "{bought}");
+
+	let m = w.street_view().await;
+	assert_eq!(m["total"], json!({ "baseline": 4999, "delta": 2, "used": 5001, "free": 10000, "left": 4999 }), "{m}");
+	assert_eq!((m["accounts"][0]["used"].as_i64(), m["accounts"][1]["used"].as_i64()), (Some(5000), Some(1)));
+
+	let (status, refused) = w.open_on("nowhere").await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{refused}");
+	let (status, refused) = w.call(Method::POST, "/api/v1/map/loaded", Some(json!({ "account": "nowhere" }))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "{refused}");
+}
+
+#[tokio::test]
+async fn an_account_without_its_reading_refuses_its_own_panoramas_only() {
+	let mut w = World::on(vec![both("a", 0.0), both("b", 0.0)]).await;
+	w.price(Some(0)).await;
+	let now = Timestamp::now();
+	w.read_on("b", 0, 0, now, now).await;
+	let (status, refused) = w.open_on("a").await;
+	assert_eq!(status, StatusCode::CONFLICT, "a's reader never answered: {refused}");
+	let (status, bought) = w.open_on("b").await;
+	assert_eq!(status, StatusCode::OK, "{bought}");
+}
+
+#[tokio::test]
+async fn places_go_to_free_units_first_then_within_the_allowance_then_nowhere() {
+	let w = World::on(vec![both("a", 2.0), both("b", 0.0), both("c", 5.0)]).await;
+	let now = Timestamp::now();
+	let rank = ByStanding {
+		store: w.db.store().await,
+		accounts: std::sync::Arc::new(w.panel.accounts().clone()),
+	};
+	let names = ["a", "b", "c"].map(str::to_owned);
+	let ranks = async || rank.rank(PlacesRequest::Details, &names).await.unwrap();
+	assert_eq!(ranks().await, [Some(0); 3], "nothing read: ours alone, none yet");
+	w.read_on("a", 5000, 100_000, now, now).await; // 0.6 over its 6 meters
+	w.read_on("b", 5000, 0, now, now).await;
+	w.read_on("c", 4999, 0, now, now).await;
+	assert_eq!(ranks().await, [Some(1), None, Some(0)], "a past its free units but 0.6 of its 2 spent; b allowed none");
+	w.read_on("a", 5000, 400_000, now, now).await;
+	assert_eq!(ranks().await, [None, None, Some(0)], "a past its 2");
 }

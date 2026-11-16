@@ -18,7 +18,10 @@ use axum::{
 	routing::{get, post},
 };
 use jiff::Timestamp;
-use sa_core::queries_cache::{ClaimBody, Key, Put, Scheme};
+use sa_core::{
+	queries_cache::{ClaimBody, Key, Put, Scheme},
+	usage::Bill,
+};
 use sa_panel::Panel;
 use sha2::{Digest, Sha256};
 use tower::{BoxError, ServiceBuilder};
@@ -73,6 +76,15 @@ async fn query(State(panel): State<Panel>, Path((scheme, key)): Path<(String, St
 			};
 			if <[u8; 32]>::from(Sha256::digest(&put.request)) != key.0 {
 				return error(StatusCode::BAD_REQUEST, "the key is not the SHA-256 of the request");
+			}
+			if let Some(b) = &put.bought {
+				match (b.bill, &b.account) {
+					(Bill::Theirs, None) => {}
+					(Bill::Ours, Some(a)) if panel.accounts().get(a).is_some() => {}
+					(Bill::Ours, Some(a)) => return error(StatusCode::BAD_REQUEST, format!("{a:?} is no Google account of the conductor's")),
+					(Bill::Ours, None) => return error(StatusCode::BAD_REQUEST, "a buy on our bill names the Google account that paid"),
+					(Bill::Theirs, Some(_)) => return error(StatusCode::BAD_REQUEST, "a buy on a person's own key names no account"),
+				}
 			}
 			store
 				.keep_query(

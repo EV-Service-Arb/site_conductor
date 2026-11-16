@@ -40,10 +40,10 @@ async fn an_area_has_the_country_its_place_or_its_centre_lies_in() {
 	let (base, _) = upstream(Router::new().route("/v1/places/geocode/{point}", get(country)).route("/v1/places/{id}", get(locality))).await;
 
 	let db = TestDb::create().await;
-	let google = Google::try_new(Keys::new(vec!["k".to_owned()]), Arc::new(db.store().await))
+	let google = Google::try_new(Keys::new(vec![("house".to_owned(), "k".to_owned())]), Arc::new(sa_places::InOrder), Arc::new(db.store().await))
 		.unwrap()
 		.at(format!("{base}/v1/places"));
-	let panel = panel_on(db.store().await, DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(), google);
+	let panel = panel_on(db.store().await, DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(), google, sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some("k"), None)]));
 	panel
 		.import_review_archive(Export {
 			people: vec![],
@@ -73,7 +73,7 @@ async fn an_area_has_the_country_its_place_or_its_centre_lies_in() {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: ORIGIN.to_owned(),
 	};
-	let app = http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, None, None, None, None);
+	let app = http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, None, None, None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 

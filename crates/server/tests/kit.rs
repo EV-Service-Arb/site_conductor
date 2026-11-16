@@ -134,10 +134,10 @@ fn png(shade: u8) -> Vec<u8> {
 async fn kit(db: &TestDb) -> Kit {
 	let pages = Arc::new(Mutex::new(Vec::new()));
 	let base = stand_ins(pages.clone()).await;
-	let google = Google::try_new(Keys::new(vec!["k".to_owned()]), Arc::new(db.store().await))
+	let google = Google::try_new(Keys::new(vec![("house".to_owned(), "k".to_owned())]), Arc::new(sa_places::InOrder), Arc::new(db.store().await))
 		.unwrap()
 		.at(format!("{base}/v1/places"));
-	let panel = panel_on(db.store().await, DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(), google);
+	let panel = panel_on(db.store().await, DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(), google, sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some("k"), None)]));
 	let now = Timestamp::now();
 	panel
 		.import_review_archive(Export {

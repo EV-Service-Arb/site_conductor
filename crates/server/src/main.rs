@@ -4,9 +4,10 @@
 // `ev_lib::settings!` expands once per field and recurses; the settings outgrew the default 128.
 #![recursion_limit = "256"]
 
+mod config;
 mod settings;
 
-use std::{collections::BTreeSet, net::SocketAddr};
+use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
 
 use clap::{Parser, Subcommand};
 use ev_lib::error_monitoring;
@@ -22,7 +23,6 @@ use sa_server::{
 	alerts::{self, Telegram},
 	concierge::{Concierge, DevIdentity},
 	forward::{Forward, Services},
-	gmbs::MapDto,
 	grafana::Grafana,
 	http, live,
 	signin::{SignIn, SignInConfig},
@@ -42,6 +42,8 @@ use crate::settings::Settings;
 struct Cli {
 	#[command(subcommand)]
 	cmd: Cmd,
+	#[command(flatten)]
+	config: config::SettingsFlags,
 }
 
 #[derive(Subcommand)]
@@ -111,8 +113,8 @@ enum GmailCmd {
 
 #[derive(Subcommand)]
 enum GmbCmd {
-	/// Add a GBP on Google already under a gmail: a place id, or a Maps URL (a name in it needs
-	/// GOOGLE_MAPS_KEYS).
+	/// Add a GBP on Google already under a gmail: a place id, or a Maps URL (a name in it needs an
+	/// account's Places key).
 	Add {
 		gmail_id: i64,
 		place: String,
@@ -244,10 +246,25 @@ fn init_tracing() -> eyre::Result<()> {
 }
 
 async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSignIn>) -> eyre::Result<()> {
+	let flags = cli.config;
+	let accounts = || -> eyre::Result<Arc<sa_places::Accounts>> {
+		let config = config::Config::try_build(flags.clone()).map_err(|e| eyre::eyre!("the config file: {e}"))?;
+		eyre::ensure!(
+			settings.app_env != "production" || !config.google.is_empty(),
+			"production needs a Google account in the config file's `google`"
+		);
+		Ok(Arc::new(sa_places::Accounts::new(config.google)))
+	};
 	let connect = || async {
 		let store = Store::open(settings.db_path()?).await?;
-		let google = settings.google(&store)?;
-		eyre::Ok(Panel::new(store, settings.data_key()?, settings.renewal()?, google))
+		let accounts = accounts()?;
+		let keys = sa_places::Keys::new(accounts.iter().filter_map(|a| Some((a.name.clone(), a.places.clone()?))).collect());
+		let rank = sa_panel::meters::ByStanding {
+			store: store.clone(),
+			accounts: accounts.clone(),
+		};
+		let google = sa_places::Google::try_new(keys, Arc::new(rank), Arc::new(store.clone()))?;
+		eyre::Ok(Panel::new(store, settings.data_key()?, settings.renewal()?, google, accounts))
 	};
 	match cli.cmd {
 		Cmd::Migrate => {
@@ -273,20 +290,12 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				grafana.is_none() || forward.is_some(),
 				"PANEL_GRAFANA_SERVER needs the forward (PANEL_ASSERTION_KEY and the services' URLs): Grafana reads the services through it"
 			);
-			serve(
-				connect().await?,
-				identity,
-				forward,
-				telegram,
-				grafana,
-				settings.web()?,
-				settings.map(),
-				settings.browsers()?,
-				settings.model(),
-				settings.billing()?,
-				bind,
-			)
-			.await
+			let panel = connect().await?;
+			let readers = panel.accounts().iter().map(sa_panel::meters::google::Google::try_new).collect::<eyre::Result<Vec<_>>>()?;
+			for a in panel.accounts().iter() {
+				tracing::info!(account = a.name, places = a.places.is_some(), browser = a.browser.is_some(), allow = a.allow, "Google account");
+			}
+			serve(panel, identity, forward, telegram, grafana, settings.web()?, settings.browsers()?, settings.model(), readers, bind).await
 		}
 		Cmd::Source(cmd) => source(&connect().await?, cmd).await,
 		Cmd::Gmail(GmailCmd::Add { email, gmail }) => {
@@ -317,8 +326,9 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 			Ok(())
 		}
 		Cmd::Gmb(GmbCmd::Locate) => {
-			eyre::ensure!(!settings.places_keys().is_empty(), "locating asks Places: GOOGLE_MAPS_KEYS must be set");
-			let done = connect().await?.locate().await?;
+			let panel = connect().await?;
+			eyre::ensure!(panel.accounts().iter().any(|a| a.places.is_some()), "locating asks Places: no Google account in the config file has a Places key");
+			let done = panel.locate().await?;
 			println!("{} places located", done.located);
 			if !done.no_point.is_empty() {
 				println!("{} have no point on Google: place them on the map", done.no_point.len());
@@ -423,10 +433,9 @@ async fn serve(
 	telegram: Option<settings::TelegramSettings>,
 	grafana: Option<settings::GrafanaSettings>,
 	files: Option<Files>,
-	map: Option<MapDto>,
 	browsers: Option<sa_server::browser::Connected>,
 	model: Option<sa_server::ask::Model>,
-	billing: Option<sa_panel::meters::google::Google>,
+	readers: Vec<sa_panel::meters::google::Google>,
 	bind: SocketAddr,
 ) -> eyre::Result<()> {
 	let keep_by_default = matches!(identity, Identity::Dev(_));
@@ -513,8 +522,8 @@ async fn serve(
 			None
 		}
 	};
-	if map.is_none() {
-		tracing::warn!("GOOGLE_MAPS_BROWSER_KEY unset: no map, /api/v1/map is a 404");
+	if readers.is_empty() {
+		tracing::warn!("no Google account in the config file: no meter is read, no map, no Places names");
 	}
 	if browsers.is_none() {
 		tracing::warn!("PANEL_BROWSERS_URL unset: no browsers, their routes answer 503");
@@ -531,7 +540,6 @@ async fn serve(
 		grafana.as_ref().map(|(g, _)| g),
 		http::Limits::default(),
 		bot.clone(),
-		map,
 		browsers,
 		files.as_ref(),
 		model,
@@ -583,12 +591,7 @@ async fn serve(
 				catalog.follow(services.clone(), stopped.clone()).await;
 			}
 		};
-		let meters = async {
-			match billing {
-				Some(google) => sa_server::meters::run(metered, google, stopped.clone()).await,
-				None => tracing::warn!("GOOGLE_BILLING_EXPORT unset: no meter is read, so Street View is not bought"),
-			}
-		};
+		let meters = sa_server::meters::run(metered, readers, stopped.clone());
 		tokio::join!(bot, feed, usage, tokens, grafana, purge, meters, catalog);
 	};
 	let (served, ()) = tokio::join!(server, hubs);

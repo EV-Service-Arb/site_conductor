@@ -55,7 +55,7 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          GoLogin, a launch),
                          `tokens` (the ledger, review_archive's charges, the snapshot), `street_view`
                          (a panorama bought), `meters` (the vendors' readings, synced; a meter's
-                         use; Google's billing export read), `import`
+                         use on an account, an account's standing; Google's billing export read), `import`
                          (review_archive's, once), `assistant` (the assistant's chats), `trash`
                          (what was removed, restored until purged), `oauth` (MCP clients, the
                          sessions granted them), `kit` (the review kit: a category's drafts and
@@ -75,7 +75,8 @@ crates/places/           Google Places: a place from what a person pastes (an id
                          token); a locality's viewport, the one around a point (Geocoding), a
                          place's review link; every request through the queries cache (in process,
                          or `Remote` over /api/queries_cache), then the payer's own keys, then the
-                         rotation its purse pays for; review_archive takes it too
+                         rotation its purse pays for; the Google accounts (`Account`) the rotation's
+                         keys are on; review_archive takes it too
 crates/ui/               Dioxus components the services' front ends share
 crates/contracts/        concierge's gRPC contract (tonic, from contracts/proto)
 crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
@@ -103,7 +104,8 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
   src/trash.rs           /api/v1/trash; the hourly purge
   src/usage.rs           /api/v1/map/loaded, /api/v1/admin/usage; the services' usage feeds followed
-  src/meters.rs          /api/v1/admin/meters{,/readings}; the vendors' meters read at start and daily
+  src/meters.rs          /api/v1/admin/meters{,/readings}; each account's meters read at start and daily
+  src/config.rs          the config file (`--config`): the Google accounts
   src/assistant.rs       /api/v1/assistant; the turns' shape
   src/kit.rs             the review kit: its /api/v1 routes, the landings' /api/kit/v1
   src/catalog.rs         every operation behind the origin: the conductor's own and the services'
@@ -623,8 +625,8 @@ sum, renewed a day's worth when read (`TOKENS_DAILY` up to `TOKENS_CAP`; a first
 Places requests charge at the buy.
 
 **Who pays a Places request** about a GBP or a gmail: its gmail's own Maps key, then its owner's
-other gmails' keys, free; then `GOOGLE_MAPS_KEYS` at the admin's price per request kind (Places'
-SKU), held under one lock per person from the balance read to the charge, so a
+other gmails' keys, free; then the Google accounts' Places keys (below) at the admin's price per
+request kind (Places' SKU), held under one lock per person from the balance read to the charge, so a
 request below the price, or unpriced, is refused before Google is asked. A cached answer costs
 nothing. The operator's commands (`gmb add`, `locate`) try the gmail's keys, then the house pays.
 review_archive's lookups and placement's sweeps are the house's for now.
@@ -647,28 +649,47 @@ review_archive's walk steps ─ GET /api/conductor/usage ┐ followed every 10 s
 the runner's phone minutes, browser starts ─ GET /usage ┘ cursor in one write (`sa_core::usage`)
 ```
 
-**Street View is bought before it opens.** Google bills each panorama opened on the browser's key
-(Dynamic Street View) past 5 000 free a month. The map has no Google pegman: its own shows the
+**Street View is bought before it opens.** Google bills each panorama opened on a browser key
+(Dynamic Street View) past 5 000 free a month on its account. The map has no Google pegman: its own shows the
 coverage (a press toggles it, a drag shows it while held), and dropped on a panorama Street View
-finds (free) asks `POST /map/street_view`, which records it and charges `street_view.panorama` in
-one write, and refuses whoever asks once its meter stops (below). Only then does the browser open
-it.
+finds (free) asks `POST /map/street_view` on the page's account, which records it and charges
+`street_view.panorama` in one write, and refuses whoever asks once its meter there stops (below).
+Only then does the browser open it.
 
-**A meter is the vendor's count, plus ours since it.** Google's free units are per billing account:
-dev, prod, placement and anything else billed there draw on them, and each database sees only its
-own. The vendor's own record (the account's Cloud Billing export in BigQuery, `GOOGLE_BILLING_EXPORT`)
-holds them all, hours behind. A meter (`sa_core::meters`: a SKU, its free units a period, whether
-it stops there) is named by the items drawing on it; nothing is reconciled between databases.
+**Google accounts.** Free units, credits and the money kept are per billing account, so each is
+declared once in the config file (`--config`, `google`: `sa_places::Account`) with the slots we
+recognize: its export, its reader, its Places key, its browser key (each optional), and `allow`,
+what it may spend a month past its free units and credits. Every key bills on its account; each
+use of ours is stored with the account that paid (`usage.account`). N accounts are one with N×
+the free units, the money capped per account.
 
 ```text
-used = baseline   the export's count this period (Google's: the calendar month, Pacific time), as of
-                  `through`, the export's own progress; read at boot and daily into `meter_readings`
-     + delta      `usage` of the meter's items on our bill after `through`, in the buy's write
+config google = [ { name, export, reader, places?, browser?, allow } … ]
+  each account ─ its Cloud Billing export, read at boot and daily ─▶ meter_readings (account, meter)
+a buy of an item on a meter ─ each account's standing (`meters::standing`):
+     0  its free units of that meter left
+     1  its net spend this period (the export's, after credits) under `allow`
+     ─  neither: not asked
+  the lowest, config order breaking ties: Places' rotation (sa_places `Rank`); a page's map
+  (`GET /map`: free map loads and panoramas both, its key and account for the page's life)
+```
+
+**A meter is the vendor's count, plus ours since it, on one account.** dev, prod, placement and
+anything else billed on an account draw on its free units, and each database sees only its own.
+The account's export holds them all, hours behind. A meter (`sa_core::meters`: a SKU, its free
+units a period, whether it stops there) is named by the items drawing on it; nothing is
+reconciled between databases.
+
+```text
+used = baseline   the account's export's count this period (Google's: the calendar month, Pacific
+                  time), as of `through`, the export's own progress
+     + delta      `usage` of the meter's items on the account after `through`, in the buy's write
 a reading of a period before: baseline 0, ours from the period's start
 ```
 
-Only Dynamic Street View stops, at its free ones; the rest are watched (Places is paid back in
-tokens). The cost shown is gross: the free units are a count, never money.
+Only Dynamic Street View stops, at an account's free ones; the rest are watched (Places is paid
+back in tokens). `allow` is held against the export's net as of `through`: our spend since is not
+priced in money, so an account overshoots by its hours behind.
 
 **A GBP's life** (`sa_core::gbp::State::nexts`; the schema checks each move again):
 
@@ -921,10 +942,11 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **No buy on credit.** A Places request on the shared keys or a Street View panorama for a person
   is charged at its price, and refused before it is sent when their balance is below it; their own
   keys and the queries cache cost nothing.
-- **No Street View past the free ones.** No panorama opens on the browser's key but one
-  `POST /map/street_view` bought, and none is bought past its meter's free ones.
-- **A meter's use is the vendor's count plus ours since it; a stop never opens without a
-  reading.**
+- **No Street View past the free ones.** No panorama opens on a browser key but one
+  `POST /map/street_view` bought, and none is bought past its meter's free ones on that key's
+  account.
+- **A meter is counted per billing account: its vendor's count plus ours on its keys since; a
+  stop never opens on an account without its reading.**
 - **Alerts are the conductor's.** A service publishes notes and never reaches a person itself;
   who is told, where and how is decided here.
 - **A note is in the outbox before the cursor passes it**: the page and the cursor move in one
@@ -949,12 +971,13 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   only that). A migration newer than the build is let be. Tables are STRICT, foreign keys
   enforced, timestamps INTEGER microseconds since the epoch, UUIDs 16-byte blobs.
 - **The conductor's secrets come from the environment only** (`PANEL_DATA_KEY`, `SENTRY_DSN`,
-  `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOOGLE_MAPS_KEYS`, `GOOGLE_BILLING_KEY`, `GOLOGIN_TOKEN`,
+  `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOLOGIN_TOKEN`,
   `MULTILOGIN_TOKEN`, `ANTHROPIC_API_KEY`), through
-  `ev_lib::settings`; a person's (a gmail's IMAP password, its Maps key, its proxy) through the API, sealed at
+  `ev_lib::settings`, and the Google accounts' keys and readers, which the config file names
+  (`{ env = "…" }`); a person's (a gmail's IMAP password, its Maps key, its proxy) through the API, sealed at
   once; with `APP_ENV=production` the database, the data key, the four sign-in
-  variables, the forward's four, `TOKENS_START_CAP_MULTIPLE` and the billing export's two are required at boot
-  (`panel --print-required-vars` lists them).
+  variables, the forward's four and `TOKENS_START_CAP_MULTIPLE` are required at boot
+  (`panel --print-required-vars` lists them), and `serve` a Google account in the config file.
 
 ## Deploy requirements
 
@@ -989,21 +1012,25 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **concierge within reach.** The pods call concierge's gRPC (`CONCIERGE_GRPC_ADDR`) for every
   sign-in, rotation and `GetMe`. concierge must register client `sa` with redirect URI
   `<PANEL_PUBLIC_ORIGIN>/auth/callback` exactly and hold the hash of `RP_CLIENT_SECRET_SA`.
-- **Places, outbound.** With `GOOGLE_MAPS_KEYS` the pods need egress to
+- **The config file.** The image runs `panel --config /etc/settings/sa_conductor.json`: the
+  deploy's literal `sa_conductor.json`, built from one list of the accounts, each slot a sops key
+  of the Secret the file names by its variable. review_archive takes the same list.
+- **Places, outbound.** With an account's Places key the pods need egress to
   `places.googleapis.com:443` and `geocode.googleapis.com:443` (the keys need the Geocoding API
   on) (a pasted URL without a place id, a GMB's name, address and point).
-  A person's own keys go first (Who pays, above), then these in their order, free ones first;
+  A person's own keys go first (Who pays, above), then the accounts' by their standing;
   one Google says is spent for a quota window sits out until the window resets, one whose billing
   is off until restart (a person's, until it answers a test). Every answer is kept in the queries
   cache, in the database. Set the prices (`/admin/tokens`) after the first deploy: until then a
   person without a key of their own is refused.
-- **The billing export, outbound.** `bigquery.googleapis.com:443` and `oauth2.googleapis.com:443`:
-  `GOOGLE_BILLING_EXPORT` (`project.dataset.table`, the account the Maps keys bill on) read with
-  `GOOGLE_BILLING_KEY`, a service account's JSON key (BigQuery Data Viewer on the dataset, Job User
-  on its project).
+- **The billing exports, outbound.** `bigquery.googleapis.com:443` and `oauth2.googleapis.com:443`:
+  each account's `export` (`project.dataset.table`, its Cloud Billing "detailed usage cost" export)
+  read with its `reader`, a service account's JSON key (BigQuery Data Viewer on the dataset, Job
+  User on its project). An export starts the day it is turned on: until the next month, that
+  account's baseline misses what came before.
 - **IMAP, outbound.** A gmail's inbox is dialled on :993 at a public address when it is set or
   tested: egress to public :993. The browser loads Maps JS straight
-  from Google with `GOOGLE_MAPS_BROWSER_KEY` (referrer-restricted to the public origin); the
+  from Google with the browser key `GET /map` names (referrer-restricted to the public origin); the
   server's keys never reach it.
 - **Browsers.** sa_browsers is its own pod (`PANEL_BROWSERS_URL`, in-cluster only): `BROWSERS_DIR` on
   a volume of its own (the gmails' sessions: signed-in Google lives there; `phones.json`, the phones it

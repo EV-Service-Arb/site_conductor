@@ -1,15 +1,10 @@
 //! The environment: secrets and the deployment profile. Where to listen is a flag.
 
-use std::{
-	path::{Path, PathBuf},
-	sync::Arc,
-};
+use std::path::{Path, PathBuf};
 
 use sa_auth::{Catalog, PermissionSet};
 use sa_core::{notify::Locale, tokens::Renewal};
-use sa_panel::{seal::DataKey, store::Store};
-use sa_places::{Google, Keys};
-use sa_server::gmbs::MapDto;
+use sa_panel::seal::DataKey;
 
 ev_lib::settings! {
 	/// Each secret is needed only by what uses it; a missing one fails that, with an error
@@ -82,28 +77,11 @@ ev_lib::settings! {
 		/// `migrate`: there is no first balance by default.
 		#[required_in("production")]
 		tokens_start_cap_multiple: Option<f64>,
-		/// The Places API keys GMBs are named, addressed and located with, comma-separated in the
-		/// order they are used: free ones first. Unset: a GMB is added by its place id alone,
-		/// unnamed and unlocated.
-		#[secret]
-		google_maps_keys: Option<String>,
-		/// The key the browser loads Maps JS with: referrer-restricted, public by nature. Unset: no map.
-		google_maps_browser_key: Option<String>,
 		/// The in-page assistant's model (the Claude API). Unset: asking the assistant answers 503.
 		#[secret]
 		anthropic_api_key: Option<String>,
 		/// Where the Claude API is.
 		anthropic_base_url: String = "https://api.anthropic.com",
-		/// The Cloud Billing export of the account the Maps keys bill on, `project.dataset.table`:
-		/// the meters' baseline, read at start and daily. With GOOGLE_BILLING_KEY, or neither;
-		/// neither: no reading, so Street View is not bought.
-		#[required_in("production")]
-		google_billing_export: Option<String>,
-		/// A service account's JSON key (the whole document) that may query GOOGLE_BILLING_EXPORT:
-		/// BigQuery Data Viewer on its dataset, Job User on its project.
-		#[secret]
-		#[required_in("production")]
-		google_billing_key: Option<String>,
 		/// GoLogin's API token (app.gologin.com → Settings → API; a paid plan): its browsers'
 		/// profiles. It or MULTILOGIN_TOKEN with PANEL_BROWSERS_URL; none of the three: no browsers.
 		#[secret]
@@ -153,37 +131,10 @@ impl Settings {
 		Ok(Renewal::try_new(self.tokens_daily, self.tokens_cap, multiple)?)
 	}
 
-	pub fn places_keys(&self) -> Vec<String> {
-		let keys = self.google_maps_keys.as_deref().unwrap_or_default().split(',');
-		keys.map(str::trim).filter(|k| !k.is_empty()).map(str::to_owned).collect()
-	}
-
-	/// Places, its answers kept in the conductor's own queries cache.
-	pub fn google(&self, store: &Store) -> eyre::Result<Google> {
-		Ok(Google::try_new(Keys::new(self.places_keys()), Arc::new(store.clone()))?)
-	}
-
-	/// The browser's map.
-	pub fn map(&self) -> Option<MapDto> {
-		let key = self.google_maps_browser_key.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
-		Some(MapDto { key: key.to_owned() })
-	}
-
 	/// The assistant's model.
 	pub fn model(&self) -> Option<sa_server::ask::Model> {
 		let key = self.anthropic_api_key.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
 		Some(sa_server::ask::Model::new(self.anthropic_base_url.clone(), key.to_owned()))
-	}
-
-	/// The billing export's reader; a mistake if only one of its two is set.
-	pub fn billing(&self) -> eyre::Result<Option<sa_panel::meters::google::Google>> {
-		let export = self.google_billing_export.as_deref().map(str::trim).filter(|v| !v.is_empty());
-		let key = self.google_billing_key.as_deref().map(str::trim).filter(|v| !v.is_empty());
-		match (export, key) {
-			(None, None) => Ok(None),
-			(Some(export), Some(key)) => Ok(Some(sa_panel::meters::google::Google::try_new(export, key)?)),
-			_ => eyre::bail!("GOOGLE_BILLING_EXPORT and GOOGLE_BILLING_KEY go together"),
-		}
 	}
 
 	/// The front end's files, when `PANEL_WEB_DIR` names them.
@@ -489,12 +440,8 @@ mod tests {
 				"TOKENS_DAILY",
 				"TOKENS_CAP",
 				"TOKENS_START_CAP_MULTIPLE",
-				"GOOGLE_MAPS_KEYS",
-				"GOOGLE_MAPS_BROWSER_KEY",
 				"ANTHROPIC_API_KEY",
 				"ANTHROPIC_BASE_URL",
-				"GOOGLE_BILLING_EXPORT",
-				"GOOGLE_BILLING_KEY",
 				"GOLOGIN_TOKEN",
 				"MULTILOGIN_TOKEN",
 				"PANEL_BROWSERS_URL",
@@ -520,8 +467,6 @@ mod tests {
 				"PANEL_PLAYBOOK_URL",
 				"PANEL_SITES_URL",
 				"TOKENS_START_CAP_MULTIPLE",
-				"GOOGLE_BILLING_EXPORT",
-				"GOOGLE_BILLING_KEY"
 			]
 		);
 		assert!(Settings::required_var_names("development").is_empty());
@@ -609,8 +554,6 @@ mod tests {
 				("PANEL_PLAYBOOK_URL", "http://playbook-web.personal:59082"),
 				("PANEL_SITES_URL", "http://sites-panel:59121"),
 				("TOKENS_START_CAP_MULTIPLE", "1"),
-				("GOOGLE_BILLING_EXPORT", "project.billing.export"),
-				("GOOGLE_BILLING_KEY", "{}"),
 			])
 			.unwrap()
 			.sign_in()
@@ -739,8 +682,6 @@ mod tests {
 				("PANEL_PLAYBOOK_URL", "http://playbook-web.personal:59082"),
 				("PANEL_SITES_URL", "http://sites-panel:59121"),
 				("TOKENS_START_CAP_MULTIPLE", "1"),
-				("GOOGLE_BILLING_EXPORT", "project.billing.export"),
-				("GOOGLE_BILLING_KEY", "{}"),
 				("PANEL_DEV_SIGN_IN", "sa:admin"),
 			])
 			.unwrap()

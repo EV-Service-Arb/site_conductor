@@ -27,7 +27,7 @@ export function AdminTokensView() {
   const button = useButtonSize();
   const holders = useResource("admin.tokens", async () => (await ok(api.GET("/admin/tokens"))).users, "admin.tokens", { live: ["admin"] });
   const prices = useResource("admin.prices", async () => (await ok(api.GET("/admin/tokens/prices"))).prices, "admin.prices", { live: ["admin"] });
-  const meters = useResource("admin.meters", async () => (await ok(api.GET("/admin/meters"))).meters);
+  const meters = useResource("admin.meters", async () => ok(api.GET("/admin/meters")));
   const [changing, setChanging] = useState<TokenHolder | null>(null);
 
   if (!may(me, "sa:admin:tokens:grant")) {

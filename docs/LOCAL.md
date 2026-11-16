@@ -203,16 +203,10 @@ and data key) asks for their points once.
 
 ## Google
 
-The conductor names, addresses and locates GMBs with `gmaps_optimal_placement`'s keys, in the
-order `~/.config/gmaps_optimal_placement.nix` lists them, then admin@evinvest.ltd's (the billing
-account whose export the meters read), and the map loads with evinvest's browser key:
-
-| Variable | Value, unless the shell sets it |
-| --- | --- |
-| `GOOGLE_MAPS_KEYS` | `$GOOGLE_MAPS_KEY,$GOOGLE_MAPS_KEY_ICOS1,$GOOGLE_MAPS_KEY_EVINVEST` |
-| `GOOGLE_MAPS_BROWSER_KEY` | `$GOOGLE_MAPS_BROWSER_KEY_EVINVEST`, else `$GOOGLE_MAPS_KEY` |
-
-Without `GOOGLE_MAPS_KEY` in the shell, a GMB is added by its place id alone and `/` has no map.
+The conductor's Google accounts are `~/.config/sa_conductor.nix`'s `google` (`SA_CONDUCTOR_CONFIG`
+names another): each billing account's export, its reader, its Places and browser keys as
+`{ env = "GOOGLE_MAPS_KEY_EVINVEST"; }` from the shell, and its `allow`. The stack refuses to start
+without the file; `google = [ ];` is no account: a GMB is added by its place id alone and `/` has no map.
 Answers are kept in the conductor's queries cache, `.local/panel.db`: `--reset` pays for them again.
 Every start pulls `gmaps_optimal_placement`'s own work dir into it, and placement and review_archive
 are pointed at it.
