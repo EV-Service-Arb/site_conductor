@@ -205,9 +205,9 @@ and data key) asks for their points once.
 ## Google
 
 The conductor's Google accounts are `~/.config/sa_conductor.nix`'s `google` (`SA_CONDUCTOR_CONFIG`
-names another): each billing account's export and its reader (a demo key's project has neither), its Places and browser keys as
-`{ env = "GOOGLE_MAPS_KEY_EVINVEST"; }` from the shell, and its `allow`. The stack refuses to start
-without the file; `google = [ ];` is no account: a GMB is added by its place id alone and `/` has no map.
+names another): `{ google = (import ~/s/ev/_sa/accounting/google.nix).accounts; }`, its keys
+`{ env = "GOOGLE_MAPS_KEY_EVINVEST"; }` from the shell. The stack refuses to start without the
+file; `google = [ ];` is no account: a GMB is added by its place id alone and `/` has no map.
 Answers are kept in the conductor's queries cache, `.local/panel.db`: `--reset` pays for them again.
 Every start pulls `gmaps_optimal_placement`'s own work dir into it, and placement and review_archive
 are pointed at it.

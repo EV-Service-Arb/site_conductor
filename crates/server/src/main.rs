@@ -262,7 +262,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 	let connect = || async {
 		let store = Store::open(settings.db_path()?).await?;
 		let accounts = accounts()?;
-		let keys = sa_places::Keys::new(accounts.iter().filter_map(|a| Some((a.name.clone(), a.places.clone()?))).collect());
+		let keys = sa_places::Keys::new(accounts.iter().filter_map(|a| Some((a.name.clone(), a.provides.places.as_deref()?.to_owned()))).collect());
 		let rank = sa_panel::meters::ByStanding {
 			store: store.clone(),
 			accounts: accounts.clone(),
@@ -295,11 +295,30 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				"PANEL_GRAFANA_SERVER needs the forward (PANEL_ASSERTION_KEY and the services' URLs): Grafana reads the services through it"
 			);
 			let panel = connect().await?;
-			let readers = panel.accounts().iter().filter_map(|a| sa_panel::meters::google::Google::try_new(a).transpose()).collect::<eyre::Result<Vec<_>>>()?;
+			let readers = panel.accounts().iter().map(sa_panel::meters::google::Google::try_new).collect::<eyre::Result<Vec<_>>>()?;
 			for a in panel.accounts().iter() {
-				tracing::info!(account = a.name, exported = a.export.is_some(), places = a.places.is_some(), browser = a.browser.is_some(), allow = a.allow, "Google account");
+				tracing::info!(
+					account = a.name,
+					export = a.export.table,
+					places = a.provides.places.is_some(),
+					browser = a.provides.browser.is_some(),
+					allow = sa_panel::meters::allowance(a),
+					"Google account"
+				);
 			}
-			serve(panel, identity, forward, telegram, grafana, settings.web()?, settings.browsers()?, settings.model(), readers, bind).await
+			serve(
+				panel,
+				identity,
+				forward,
+				telegram,
+				grafana,
+				settings.web()?,
+				settings.browsers()?,
+				settings.model(),
+				readers,
+				bind,
+			)
+			.await
 		}
 		Cmd::Source(cmd) => source(&connect().await?, cmd).await,
 		Cmd::Gmail(GmailCmd::Add { email, gmail }) => {
@@ -331,7 +350,10 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 		}
 		Cmd::Gmb(GmbCmd::Locate) => {
 			let panel = connect().await?;
-			eyre::ensure!(panel.accounts().iter().any(|a| a.places.is_some()), "locating asks Places: no Google account in the config file has a Places key");
+			eyre::ensure!(
+				panel.accounts().iter().any(|a| a.provides.places.is_some()),
+				"locating asks Places: no Google account in the config file has a Places key"
+			);
 			let done = panel.locate().await?;
 			println!("{} places located", done.located);
 			if !done.no_point.is_empty() {

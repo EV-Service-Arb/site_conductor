@@ -41,6 +41,18 @@ pub struct Synced {
 	pub synced_at: Timestamp,
 }
 
+/// An account's spend with a vendor in a period, as its latest reading of each meter tells.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Spend {
+	/// Gross, in millionths of `currency`.
+	pub cost_micros: i64,
+	/// After credits.
+	pub net_micros: i64,
+	pub currency: String,
+	/// The earliest the readings reach.
+	pub through: Timestamp,
+}
+
 fn synced((account, meter, period_start, units, cost_micros, net_micros, currency, through, synced_at): Row) -> eyre::Result<Synced> {
 	Ok(Synced {
 		reading: Reading {
@@ -105,18 +117,6 @@ pub(crate) async fn ours_after(conn: &mut SqliteConnection, account: &str, meter
 		.fetch_one(conn)
 		.await
 		.wrap_err_with(|| format!("summing {meter} on {account} after {since}"))
-}
-
-/// An account's spend with a vendor in a period, as its latest reading of each meter tells.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Spend {
-	/// Gross, in millionths of `currency`.
-	pub cost_micros: i64,
-	/// After credits.
-	pub net_micros: i64,
-	pub currency: String,
-	/// The earliest the readings reach.
-	pub through: Timestamp,
 }
 
 /// `account`'s spend in the period from `period_start`; `None` before a reading of it.

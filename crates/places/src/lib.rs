@@ -11,7 +11,7 @@ mod queries_cache;
 
 use std::{sync::Arc, time::Duration};
 
-pub use accounts::{Account, Accounts};
+pub use accounts::{Account, Accounts, Export, Key, Provides};
 pub use keys::{Keys, Spent};
 use parse::Parsed;
 use queries_cache::Request;
@@ -221,7 +221,11 @@ impl Google {
 	/// Places at `base` (`…/v1/places`), its geocoding at `base/geocode`, in place of Google's own: a stub's.
 	pub fn at(self, base: impl Into<String>) -> Self {
 		let base = base.into();
-		Self { geocode: format!("{base}/geocode"), base, ..self }
+		Self {
+			geocode: format!("{base}/geocode"),
+			base,
+			..self
+		}
 	}
 
 	/// The place id in `input`, and the place unless there is no key: one place only, an

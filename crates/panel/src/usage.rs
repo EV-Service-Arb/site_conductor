@@ -29,7 +29,7 @@ use crate::{
 impl Panel {
 	/// The user's browser built a map on `account`'s browser key.
 	pub async fn map_loaded(&self, user: Uuid, account: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
-		if self.accounts.get(account).is_none_or(|a| a.browser.is_none()) {
+		if self.accounts.get(account).is_none_or(|a| a.provides.browser.is_none()) {
 			return Ok(Err(Refused::Invalid(format!("{account:?} is no Google account with a browser key"))));
 		}
 		let mut tx = self.store.begin_write().await?;

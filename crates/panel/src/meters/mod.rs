@@ -12,7 +12,7 @@
 
 pub mod google;
 
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
@@ -92,6 +92,20 @@ impl Gauge {
 	}
 }
 
+/// What `account` may spend a month past its free units and credits on what is metered here: all
+/// of it falls in accounting's `maps` slice.
+pub fn allowance(account: &Account) -> f64 {
+	account.allow.get("maps").copied().unwrap_or(0.0) // a slice not named is allowed none, as accounting's guard reads it
+}
+
+/// The conductor's [`sa_places::Rank`]: each account by its [`standing`] on the meter of the
+/// SKU bought.
+#[derive(Debug)]
+pub struct ByStanding {
+	pub store: Store,
+	pub accounts: Arc<Accounts>,
+}
+
 /// `meter`'s use on `account` at `now`, read in the caller's transaction.
 pub(crate) async fn gauge(conn: &mut SqliteConnection, account: &str, meter: &'static Meter, now: Timestamp) -> eyre::Result<Gauge> {
 	let period = meter.vendor.period(now);
@@ -126,15 +140,7 @@ pub(crate) async fn standing(conn: &mut SqliteConnection, account: &Account, met
 	let vendor = meters[0].vendor;
 	assert!(meters.iter().all(|m| m.vendor == vendor), "an account bills one vendor");
 	let spend = db::spend(conn, &account.name, vendor.period(now).0).await?;
-	Ok(spend.is_some_and(|s| (s.net_micros as f64) < account.allow * 1e6).then_some(1))
-}
-
-/// The conductor's [`sa_places::Rank`]: each account by its [`standing`] on the meter of the
-/// SKU bought.
-#[derive(Debug)]
-pub struct ByStanding {
-	pub store: Store,
-	pub accounts: std::sync::Arc<Accounts>,
+	Ok(spend.is_some_and(|s| (s.net_micros as f64) < allowance(account) * 1e6).then_some(1))
 }
 
 impl sa_places::Rank for ByStanding {
@@ -206,7 +212,7 @@ impl Panel {
 		let meters = [Item::from(MapLoad::Map), Item::from(StreetViewLoad::Panorama)].map(|i| i.meter().expect("the browser's loads are on Google's meters"));
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the accounts' standing")?;
 		let mut best: Option<(u8, &Account)> = None;
-		for a in self.accounts.iter().filter(|a| a.browser.is_some()) {
+		for a in self.accounts.iter().filter(|a| a.provides.browser.is_some()) {
 			if let Some(r) = standing(&mut conn, a, &meters, now).await?
 				&& best.is_none_or(|(b, _)| r < b)
 			{

@@ -215,9 +215,9 @@ async fn meters(State(panel): State<Panel>) -> ApiResult<Json<MetersDto>> {
 		let spend = panel.spend(&a.name, Vendor::Google, now).await?;
 		accounts.push(AccountDto {
 			name: a.name.clone(),
-			places: a.places.is_some(),
-			browser: a.browser.is_some(),
-			allow: a.allow,
+			places: a.provides.places.is_some(),
+			browser: a.provides.browser.is_some(),
+			allow: sa_panel::meters::allowance(a),
 			spend: spend.map(|s| SpendDto {
 				cost: s.cost_micros as f64 / 1e6,
 				net: s.net_micros as f64 / 1e6,

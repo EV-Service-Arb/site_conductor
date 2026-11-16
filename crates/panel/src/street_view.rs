@@ -30,7 +30,7 @@ impl Panel {
 		if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lng) {
 			return Ok(Err(Refused::Invalid(format!("{lat}, {lng} is no point on Earth"))));
 		}
-		if self.accounts.get(account).is_none_or(|a| a.browser.is_none()) {
+		if self.accounts.get(account).is_none_or(|a| a.provides.browser.is_none()) {
 			return Ok(Err(Refused::Invalid(format!("{account:?} is no Google account with a browser key"))));
 		}
 		let mut tx = self.store.begin_write().await?;

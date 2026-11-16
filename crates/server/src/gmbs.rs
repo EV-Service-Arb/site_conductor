@@ -31,15 +31,6 @@ pub struct MapDto {
 	pub account: String,
 }
 
-/// A panorama to open, on the account the page's map loaded on.
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct PanoramaAt {
-	lat: f64,
-	lng: f64,
-	account: String,
-}
-
 /// A GBP of the caller's.
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Gmb")]
@@ -126,15 +117,6 @@ pub struct GoogleCategoriesDto {
 	pub categories: Vec<GoogleCategoryDto>,
 }
 
-impl From<GoogleCategory> for GoogleCategoryDto {
-	fn from(g: GoogleCategory) -> Self {
-		Self {
-			id: g.id.to_owned(),
-			names: g.names.clone(),
-		}
-	}
-}
-
 /// `GET /trades`.
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Trades")]
@@ -201,6 +183,24 @@ pub struct SuggestionDto {
 #[schemars(rename = "Suggestions")]
 pub struct SuggestionsDto {
 	pub suggestions: Vec<SuggestionDto>,
+}
+
+/// A panorama to open, on the account the page's map loaded on.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct PanoramaAt {
+	lat: f64,
+	lng: f64,
+	account: String,
+}
+
+impl From<GoogleCategory> for GoogleCategoryDto {
+	fn from(g: GoogleCategory) -> Self {
+		Self {
+			id: g.id.to_owned(),
+			names: g.names.clone(),
+		}
+	}
 }
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
@@ -413,7 +413,7 @@ async fn suggest_places(State(panel): State<Panel>, Extension(caller): Extension
 /// loads and panoramas left, else the first within its allowance. 404 when none has a browser key:
 /// there is no map; 409 when none has room.
 async fn map_key(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
-	if s.panel.accounts().iter().all(|a| a.browser.is_none()) {
+	if s.panel.accounts().iter().all(|a| a.provides.browser.is_none()) {
 		return Err(ApiError::NotFound);
 	}
 	let account = s
@@ -422,7 +422,7 @@ async fn map_key(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
 		.await?
 		.ok_or_else(|| ApiError::Conflict("every Google account's free map loads and allowance this month are used".to_owned()))?;
 	Ok(Json(MapDto {
-		key: account.browser.clone().expect("only an account with a browser key stands"),
+		key: account.provides.browser.as_deref().expect("only an account with a browser key stands").to_owned(),
 		account: account.name.clone(),
 	}))
 }

@@ -3,6 +3,8 @@
 //! credit, and none past its meter's free ones there nor without a reading of it, whoever asks. A
 //! page loads on the account with room; Places buys go to it too, up to its allowance.
 
+use std::sync::Arc;
+
 use axum::{
 	Router,
 	body::Body,
@@ -34,15 +36,6 @@ struct World {
 	b: Browser,
 	db: TestDb,
 }
-
-/// An account with both keys, `allow` a month past its free units.
-fn both(name: &str, allow: f64) -> Account {
-	Account {
-		allow,
-		..account(name, Some(&format!("places-{name}")), Some(&format!("browser-{name}")))
-	}
-}
-
 impl World {
 	/// Signed in as an admin, tokens open, account `a` alone with both keys; no meter read.
 	async fn new() -> Self {
@@ -53,7 +46,7 @@ impl World {
 	async fn on(accounts: Vec<Account>) -> Self {
 		let db = TestDb::create().await;
 		let store = db.store().await;
-		let keyless = Google::try_new(Keys::new(vec![]), std::sync::Arc::new(InOrder), std::sync::Arc::new(store.clone())).unwrap();
+		let keyless = Google::try_new(Keys::new(vec![]), Arc::new(InOrder), Arc::new(store.clone())).unwrap();
 		let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
 		let panel = panel_on(store, key, keyless, Accounts::new(accounts));
 		let empty = Export {
@@ -73,16 +66,7 @@ impl World {
 			panel_origin: ORIGIN.to_owned(),
 			concierge_origin: ORIGIN.to_owned(),
 		};
-		let app = http::app(
-			SignIn::new(panel.clone(), Concierge::dev(who), config),
-			None,
-			None,
-			Default::default(),
-			None,
-			None,
-			None,
-			None,
-		);
+		let app = http::app(SignIn::new(panel.clone(), Concierge::dev(who), config), None, None, Default::default(), None, None, None, None);
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		Self { panel, app, b, db }
@@ -128,7 +112,8 @@ impl World {
 	}
 
 	async fn open_on(&mut self, account: &str) -> (StatusCode, Value) {
-		self.call(Method::POST, "/api/v1/map/street_view", Some(json!({ "lat": 45.75, "lng": 4.85, "account": account }))).await
+		self.call(Method::POST, "/api/v1/map/street_view", Some(json!({ "lat": 45.75, "lng": 4.85, "account": account })))
+			.await
 	}
 
 	/// The account `GET /map` loads the page on.
@@ -170,6 +155,14 @@ impl World {
 		let (status, tokens) = self.call(Method::GET, "/api/v1/tokens", None).await;
 		assert_eq!(status, StatusCode::OK, "{tokens}");
 		tokens["balance"].as_i64().unwrap()
+	}
+}
+
+/// An account with both keys, `allow` a month past its free units.
+fn both(name: &str, allow: f64) -> Account {
+	Account {
+		allow: [("maps".to_owned(), allow)].into(),
+		..account(name, Some(&format!("places-{name}")), Some(&format!("browser-{name}")))
 	}
 }
 
@@ -303,7 +296,7 @@ async fn places_go_to_free_units_first_then_within_the_allowance_then_nowhere() 
 	let now = Timestamp::now();
 	let rank = ByStanding {
 		store: w.db.store().await,
-		accounts: std::sync::Arc::new(w.panel.accounts().clone()),
+		accounts: Arc::new(w.panel.accounts().clone()),
 	};
 	let names = ["a", "b", "c"].map(str::to_owned);
 	let ranks = async || rank.rank(PlacesRequest::Details, &names).await.unwrap();

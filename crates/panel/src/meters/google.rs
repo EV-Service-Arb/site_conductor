@@ -30,11 +30,9 @@ pub struct Google {
 	token: Mutex<Option<(String, Timestamp)>>,
 }
 impl Google {
-	/// `account`'s export read with its reader, if it has one.
-	pub fn try_new(account: &sa_places::Account) -> eyre::Result<Option<Self>> {
-		let (name, Some(export), Some(reader)) = (&account.name, &account.export, &account.reader) else {
-			return Ok(None);
-		};
+	/// `account`'s export read with its reader.
+	pub fn try_new(account: &sa_places::Account) -> eyre::Result<Self> {
+		let (name, export, reader) = (&account.name, &account.export.table, &account.export.reader);
 		let parts: Vec<&str> = export.split('.').collect();
 		eyre::ensure!(
 			parts.len() == 3 && parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')),
@@ -42,9 +40,11 @@ impl Google {
 		);
 		let key: ServiceKey = serde_json::from_str(reader).wrap_err_with(|| format!("{name}'s reader is no service account's JSON key"))?;
 		let pem: String = key.private_key.lines().filter(|l| !l.starts_with("-----")).collect();
-		let der = base64::engine::general_purpose::STANDARD.decode(pem).wrap_err_with(|| format!("{name}'s reader's private_key is no PEM"))?;
+		let der = base64::engine::general_purpose::STANDARD
+			.decode(pem)
+			.wrap_err_with(|| format!("{name}'s reader's private_key is no PEM"))?;
 		let rsa = RsaKeyPair::from_pkcs8(&der).map_err(|e| eyre!("{name}'s reader's private_key is no RSA PKCS#8 key: {e}"))?;
-		Ok(Some(Self {
+		Ok(Self {
 			account: name.clone(),
 			http: reqwest::Client::builder().timeout(Duration::from_secs(90)).build().wrap_err("an HTTP client for BigQuery")?,
 			project: parts[0].to_owned(),
@@ -52,7 +52,7 @@ impl Google {
 			email: key.client_email,
 			key: rsa,
 			token: Mutex::new(None),
-		}))
+		})
 	}
 
 	async fn token(&self, now: Timestamp) -> eyre::Result<String> {

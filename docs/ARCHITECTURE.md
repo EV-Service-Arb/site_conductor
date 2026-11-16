@@ -659,19 +659,23 @@ finds (free) asks `POST /map/street_view` on the page's account, which records i
 Only then does the browser open it.
 
 **Google accounts.** Free units, credits and the money kept are per billing account, so each is
-declared once in the config file (`--config`, `google`: `sa_places::Account`) with the slots we
-recognize: its export and its reader, its Places key, its browser key (each optional), and `allow`,
-what it may spend a month past its free units and credits. A demo key's project has no billing
-account, so no export: Google holds it to its free units, and we count it by ours alone. Every
-key bills on its account; each use of ours is stored with the account that paid
-(`usage.account`). N accounts are one with N× the free units, the money capped per account.
+declared once, in accounting's `google.nix`, which the config file (`--config`, `google`:
+`sa_places::Account`) imports whole: its export and reader, `allow` per slice of accounting's
+(the conductor holds its rank 1 against `maps`, which every meter here falls in; the guard holds
+them all at Google), and what it `provides`, each slot optional: `places` (Places, Geocoding),
+`browser` (Maps JS). Every key bills on its account (docs/spec/google.md); each use of ours is
+stored with the account that paid (`usage.account`). N accounts are one with N× the free units,
+the money capped per account.
 
 ```text
-config google = [ { name, export?, reader?, places?, browser?, allow } … ]
+accounting/google.nix  accounts = [ { name, export { table, reader, since }, credits, allow { <slice> }, provides { places?, browser?, ads? } } … ]
+  ├─ the guard (accounting): holds each slice's real money to `allow` at Google
+  ├─ the conductor, review_archive, gop: `import`, each reading the slots it uses
+  └─ devops: the same list, each secret slot `{ env = "SA_GOOGLE_<NAME>_<SLOT>"; }`
   each account ─ its Cloud Billing export, read at boot and daily ─▶ meter_readings (account, meter)
 a buy of an item on a meter ─ each account's standing (`meters::standing`):
      0  its free units of that meter left
-     1  its net spend this period (the export's, after credits) under `allow`
+     1  its net spend this period (the export's, after credits) under `allow.maps`
      ─  neither: not asked
   the lowest, config order breaking ties: Places' rotation (sa_places `Rank`); a page's map
   (`GET /map`: free map loads and panoramas both, its key and account for the page's life)
@@ -691,7 +695,7 @@ a reading of a period before: baseline 0, ours from the period's start
 ```
 
 Only Dynamic Street View stops, at an account's free ones; the rest are watched (Places is paid
-back in tokens). `allow` is held against the export's net as of `through`: our spend since is not
+back in tokens). `allow.maps` is held against the export's net as of `through`: our spend since is not
 priced in money, so an account overshoots by its hours behind.
 
 **A GBP's life** (`sa_core::gbp::State::nexts`; the schema checks each move again):
@@ -948,6 +952,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **No Street View past the free ones.** No panorama opens on a browser key but one
   `POST /map/street_view` bought, and none is bought past its meter's free ones on that key's
   account.
+- **A Google key bills only on an account whose export we read** (docs/spec/google.md).
 - **A meter is counted per billing account: its vendor's count plus ours on its keys since; a
   stop never opens on an account without its reading.**
 - **Alerts are the conductor's.** A service publishes notes and never reaches a person itself;
@@ -1028,8 +1033,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   person without a key of their own is refused. Only a conductor started with
   `--spend-real-quota-i-am-certain` (the image's entrypoint) buys one: without it a miss is refused.
 - **The billing exports, outbound.** `bigquery.googleapis.com:443` and `oauth2.googleapis.com:443`:
-  each account's `export` (`project.dataset.table`, its Cloud Billing "detailed usage cost" export)
-  read with its `reader`, a service account's JSON key (BigQuery Data Viewer on the dataset, Job
+  each account's `export.table` (`project.dataset.table`, its Cloud Billing "detailed usage cost"
+  export) read with its `export.reader`, a service account's JSON key (BigQuery Data Viewer on the dataset, Job
   User on its project). An export starts the day it is turned on: until the next month, that
   account's baseline misses what came before.
 - **IMAP, outbound.** A gmail's inbox is dialled on :993 at a public address when it is set or
