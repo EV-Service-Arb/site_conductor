@@ -134,7 +134,7 @@ export function ask(chat: Chat | null, from: number, asked: Omit<UserTurn, "role
   const id = chat?.id ?? newId();
   const at = Date.now();
   const question: UserTurn = { role: "user", id: newId(), at, ...asked };
-  const answer: AssistantTurn = { role: "assistant", id: newId(), at, ended: null, worked: null, steps: [], text: "", sources: [], actions: [], state: "working", feedback: null };
+  const answer: AssistantTurn = { role: "assistant", id: newId(), at, ended: null, worked: null, steps: [], text: "", sources: [], actions: [], state: "working", feedback: null, cost: null };
   const mine = (r: Running | null) => r?.answer.id === answer.id;
   set((s) => ({ ...s, running: { chat: id, from, asked: question, answer, written: null } }));
   const run = new AbortController();

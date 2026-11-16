@@ -1,15 +1,16 @@
 "use client";
 
-import { Button, IconButton, Spinner, Textarea, cn } from "@evinvest/uikit";
+import { Button, HoverCard, HoverCardContent, HoverCardTrigger, IconButton, Spinner, Textarea, cn } from "@evinvest/uikit";
 import { Check, ChevronRight, Copy, CornerDownRight, FileText, MapPin, Pencil, RotateCcw, ThumbsDown, ThumbsUp } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import type { Action } from "@/shared/api/schema";
+import type { Action, Cost } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
 
 import { type AssistantTurn, type UserTurn } from "@/entities/assistant";
+import { ConnectClaudeDialog } from "@/features/connect-claude";
 
 import { LocationToken, RichText } from "./rich-text";
 import { assistant } from "@/entities/assistant";
@@ -201,12 +202,50 @@ export function AssistantTurnView({
                 {f === "up" ? <ThumbsUp className={cn(turn.feedback === f && "fill-current text-ink")} /> : <ThumbsDown className={cn(turn.feedback === f && "fill-current text-ink")} />}
               </IconButton>
             ))}
+          {turn.cost !== null && <CostChip cost={turn.cost} />}
           <span className="ml-1.5 self-center text-caption text-ink-faint opacity-0 transition-opacity group-hover/turn:opacity-100">
             <When at={turn.ended ?? turn.at} />
           </span>
         </div>
       )}
     </div>
+  );
+}
+
+/** What an answer cost, and on whose Claude: on the panel's, the hover offers the reader's own. */
+function CostChip({ cost }: { cost: Cost }) {
+  const t = useT();
+  const locale = useLocale();
+  const [connecting, setConnecting] = useState(false);
+  const n = new Intl.NumberFormat(locale, { notation: "compact" });
+  const used = { input: n.format(cost.tokens.input + cost.tokens.cache_write + cost.tokens.cache_read), output: n.format(cost.tokens.output) };
+  const ours = cost.bill === "ours";
+  return (
+    <>
+      <HoverCard>
+        <HoverCardTrigger asChild>
+          <button type="button" className="ml-1.5 self-center rounded-chip px-1.5 py-0.5 text-caption text-ink-soft outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring">
+            {ours ? t(assistant.cost.charged, "{n} tokens", { n: cost.charged }) : t(assistant.cost.theirs, "your Claude")}
+          </button>
+        </HoverCardTrigger>
+        <HoverCardContent align="start" className="flex w-72 flex-col gap-2.5 text-body-s">
+          {ours ? (
+            <>
+              <p className="text-ink-mid">
+                {t(assistant.cost.ours, "Ran on the panel's Claude: {input} in, {output} out model tokens, {n} of your tokens.", { ...used, n: cost.charged })}
+              </p>
+              <p className="text-ink-mid">{t(assistant.cost.free, "Connect your own Claude and it costs nothing here.")}</p>
+              <Button size="sm" className="self-start" onClick={() => setConnecting(true)}>
+                {t(assistant.cost.connect, "Connect your Claude")}
+              </Button>
+            </>
+          ) : (
+            <p className="text-ink-mid">{t(assistant.cost.onTheirs, "Ran on your Claude: {input} in, {output} out model tokens, nothing charged here.", used)}</p>
+          )}
+        </HoverCardContent>
+      </HoverCard>
+      <ConnectClaudeDialog open={connecting} onOpenChange={setConnecting} />
+    </>
   );
 }
 

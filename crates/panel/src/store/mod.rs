@@ -13,6 +13,7 @@ pub mod alerts;
 pub mod areas;
 pub mod assistant;
 pub mod browsers;
+pub mod claude;
 pub mod connections;
 pub mod gmbs;
 pub mod kit;

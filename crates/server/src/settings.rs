@@ -77,12 +77,14 @@ ev_lib::settings! {
 		/// `migrate`: there is no first balance by default.
 		#[required_in("production")]
 		tokens_start_cap_multiple: Option<f64>,
-		/// The in-page assistant's model: a Claude subscription's token (`claude setup-token`). Unset:
-		/// asking the assistant answers 503.
+		/// The panel's Claude subscription (`claude setup-token`): the assistant's answers for whoever
+		/// connected none of their own. Unset: only theirs.
 		#[secret]
 		claude_code_oauth_token: Option<String>,
 		/// Where the Claude API is.
 		anthropic_base_url: String = "https://api.anthropic.com",
+		/// Where a person's Claude sign-in code is exchanged for its token.
+		claude_oauth_base: String = "https://platform.claude.com",
 		/// GoLogin's API token (app.gologin.com → Settings → API; a paid plan): its browsers'
 		/// profiles. It or MULTILOGIN_TOKEN with PANEL_BROWSERS_URL; none of the three: no browsers.
 		#[secret]
@@ -132,10 +134,14 @@ impl Settings {
 		Ok(Renewal::try_new(self.tokens_daily, self.tokens_cap, multiple)?)
 	}
 
-	/// The assistant's model.
-	pub fn model(&self) -> Option<sa_server::ask::Model> {
-		let token = self.claude_code_oauth_token.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
-		Some(sa_server::ask::Model::new(self.anthropic_base_url.clone(), token.to_owned()))
+	/// The assistant's Claude.
+	pub fn model(&self) -> sa_server::claude::Model {
+		let owner = self.claude_code_oauth_token.as_deref().map(str::trim).filter(|s| !s.is_empty());
+		sa_server::claude::Model::new(
+			self.anthropic_base_url.clone(),
+			self.claude_oauth_base.clone(),
+			owner.map(|t| zeroize::Zeroizing::new(t.to_owned())),
+		)
 	}
 
 	/// The front end's files, when `PANEL_WEB_DIR` names them.
@@ -443,6 +449,7 @@ mod tests {
 				"TOKENS_START_CAP_MULTIPLE",
 				"CLAUDE_CODE_OAUTH_TOKEN",
 				"ANTHROPIC_BASE_URL",
+				"CLAUDE_OAUTH_BASE",
 				"GOLOGIN_TOKEN",
 				"MULTILOGIN_TOKEN",
 				"PANEL_BROWSERS_URL",

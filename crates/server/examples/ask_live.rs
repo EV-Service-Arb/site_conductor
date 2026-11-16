@@ -3,7 +3,7 @@
 use axum::{body::Body, http::Method};
 use sa_panel::testing::{TestDb, operator, panel};
 use sa_server::{
-	ask::Model,
+	claude::Model,
 	concierge::{Concierge, DevIdentity},
 	http,
 	signin::{SignIn, SignInConfig},
@@ -18,6 +18,19 @@ async fn main() {
 	let token = std::env::var("CLAUDE_CODE_OAUTH_TOKEN").expect("CLAUDE_CODE_OAUTH_TOKEN is the subscription's token");
 	let db = TestDb::create().await;
 	let p = panel(&db).await;
+	let empty = sa_panel::import::Export {
+		people: vec![],
+		gmails: vec![],
+		gmbs: vec![],
+		ledger: vec![],
+		kickbacks: vec![],
+	};
+	p.import_review_archive(empty).await.expect("an empty import opens tokens");
+	let prices: Vec<_> = sa_core::prices::Item::all().filter(|i| i.tool() == "claude").map(|i| (i, Some(1))).collect();
+	p.set_prices(&prices, &[], "admin@localhost", jiff::Timestamp::now())
+		.await
+		.expect("the store answers")
+		.expect("valid prices");
 	let email = "asker@x.com";
 	let who = DevIdentity {
 		user_id: DevIdentity::named(email),
@@ -28,7 +41,7 @@ async fn main() {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: ORIGIN.to_owned(),
 	};
-	let model = Model::new("https://api.anthropic.com".into(), token);
+	let model = Model::new("https://api.anthropic.com".into(), "https://platform.claude.com".into(), Some(token.into()));
 	let app = http::app(SignIn::new(p, Concierge::dev(who), config), None, None, Default::default(), None, None, None, Some(model));
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
@@ -43,5 +56,5 @@ async fn main() {
 		.await;
 	println!("{status} {}", String::from_utf8_lossy(&answer));
 	let answer: Value = serde_json::from_slice(&answer).expect("the ask answers JSON");
-	println!("{}", serde_json::to_string_pretty(&answer["turns"][1]).unwrap());
+	println!("{}", serde_json::to_string_pretty(&answer["turns"][1]).expect("JSON serializes"));
 }

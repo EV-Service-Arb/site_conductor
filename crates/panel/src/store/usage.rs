@@ -31,7 +31,7 @@ pub struct Use {
 	pub key: Option<String>,
 }
 
-/// What one unit costs us, and the admin who set it.
+/// What [`Item::per`] units cost us, and the admin who set it.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Cost {
 	/// Millionths of a dollar.
@@ -156,14 +156,15 @@ pub(crate) async fn by_day(conn: &mut SqliteConnection, from: Timestamp, to: Tim
 	.wrap_err("summing usage by day")?;
 	rows.into_iter()
 		.map(|(day, item, bill, source, units, times, usd_micros, uncosted)| {
+			let item: Item = item.parse().wrap_err("a usage row names an item the catalog lacks: a migration renames it")?;
 			Ok(Day {
 				day,
-				item: item.parse().wrap_err("a usage row names an item the catalog lacks: a migration renames it")?,
+				item,
 				bill: bill.parse().wrap_err_with(|| format!("a usage row billed to {bill:?}"))?,
 				source,
 				units,
 				times,
-				usd_micros,
+				usd_micros: usd_micros.map(|u| u / item.per()),
 				uncosted,
 			})
 		})

@@ -203,7 +203,7 @@ pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<boo
 	tokio::join!(follow, push);
 }
 
-/// A catalog item, its price (`null`: not sold, or metered) and what a unit costs us (`null`: unknown).
+/// A catalog item, its price (`null`: not sold, or metered) and what `per` units cost us (`null`: unknown).
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Price")]
 pub struct PriceDto {
@@ -212,6 +212,8 @@ pub struct PriceDto {
 	pub sale: Sale,
 	/// What one is counted in.
 	pub unit: &'static str,
+	/// How many units the price and the cost are for.
+	pub per: i64,
 	pub tool: &'static str,
 	pub tool_title: &'static str,
 	pub title: &'static str,
@@ -233,7 +235,7 @@ pub struct TokenPriceDto {
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "UnitCost")]
 pub struct UnitCostDto {
-	/// Millionths of a dollar a unit.
+	/// Millionths of a dollar per `per` units.
 	pub usd_micros: i64,
 	/// The admin's email.
 	pub set_by: String,
@@ -475,6 +477,7 @@ impl From<Priced> for PriceDto {
 			scope: item.scope(),
 			sale: item.sale(),
 			unit: item.unit(),
+			per: item.per(),
 			tool: item.tool(),
 			tool_title: item.tool_title(),
 			title: item.title(),

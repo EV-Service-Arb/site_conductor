@@ -870,6 +870,8 @@ async fn no_permission_opens_no_section() {
 		open,
 		std::collections::BTreeSet::from([
 			"/me",
+			"/me/claude",
+			"/me/claude/connect",
 			"/openapi.json",
 			"/access/requests",
 			"/access/requests/mine",

@@ -1208,8 +1208,8 @@
     },
     "/assistant/chats/{id}/ask": {
       "post": {
-        "summary": "Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done.",
-        "description": "503 without the assistant's model, or when it does not answer.",
+        "summary": "Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done. It runs on the asker's own Claude if they connected one, else on the panel's, each round charged to them at its prices.",
+        "description": "503 without either Claude, or when the model does not answer.",
         "operationId": "ask",
         "parameters": [
           {
@@ -3559,6 +3559,138 @@
         "x-errors": {}
       }
     },
+    "/me/claude": {
+      "get": {
+        "summary": "The caller's own Claude, which their assistant's answers run on; `null`, they run on the panel's.",
+        "operationId": "claude",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers: `error` is for a person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Claude"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {}
+      },
+      "put": {
+        "tags": [
+          "claude"
+        ],
+        "summary": "Connects the caller's own Claude from the code its page showed, kept only once Claude answers on it.",
+        "description": "400 the code is not their last Connect's, it expired, or Claude refused it or its token.",
+        "operationId": "set_claude",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Pasted"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers: `error` is for a person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "A person's Claude: never its token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Claude"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {}
+      },
+      "delete": {
+        "tags": [
+          "claude"
+        ],
+        "summary": "Disconnects the caller's own Claude: their answers run on the panel's again. 404 none.",
+        "operationId": "remove_claude",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers: `error` is for a person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        },
+        "x-errors": {}
+      }
+    },
+    "/me/claude/connect": {
+      "post": {
+        "tags": [
+          "claude"
+        ],
+        "summary": "Starts connecting the caller's own Claude: open `url`, authorize, and paste the code it shows into `PUT /me/claude` within 10 minutes.",
+        "operationId": "connect",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers: `error` is for a person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Where the person authorizes the panel on claude.ai.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaudeConnect"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {}
+      }
+    },
     "/openapi.json": {
       "get": {
         "tags": [
@@ -5658,6 +5790,45 @@
           "error"
         ]
       },
+      "Claude": {
+        "description": "A person's Claude: never its token.",
+        "type": "object",
+        "properties": {
+          "checked": {
+            "description": "The last time Claude took it or refused it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Checked"
+              }
+            ]
+          },
+          "expires_at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
+          "set_at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "set_at",
+          "expires_at",
+          "checked"
+        ]
+      },
+      "ClaudeConnect": {
+        "description": "Where the person authorizes the panel on claude.ai.",
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
       "ConnectedSites": {
         "type": "object",
         "properties": {
@@ -5726,6 +5897,33 @@
           "maps_key",
           "prices",
           "browser"
+        ]
+      },
+      "Cost": {
+        "description": "What an answer cost: the model's tokens, on whose Claude, and the tokens it charged its asker.",
+        "type": "object",
+        "properties": {
+          "bill": {
+            "description": "`ours`: the panel's Claude, charged; `theirs`: the asker's own, free here.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Bill"
+              }
+            ]
+          },
+          "charged": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/ModelUsed"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "bill",
+          "tokens",
+          "charged"
         ]
       },
       "Country": {
@@ -7354,6 +7552,35 @@
           "meters"
         ]
       },
+      "ModelUsed": {
+        "description": "The model's tokens, by how Anthropic bills them ([`sa_core::prices::ModelTokens`]).",
+        "type": "object",
+        "properties": {
+          "cache_read": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cache_write": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "input": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "output": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "cache_write",
+          "cache_read",
+          "output"
+        ]
+      },
       "Need": {
         "type": "string",
         "enum": [
@@ -7634,6 +7861,19 @@
           "account"
         ]
       },
+      "Pasted": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "What Claude's page shows once authorized: `code#state`.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "code"
+        ]
+      },
       "People": {
         "description": "`GET /assistant/people?q=`: whom the caller may invite.",
         "type": "object",
@@ -7790,7 +8030,7 @@
         ]
       },
       "Price": {
-        "description": "A catalog item, its price (`null`: not sold, or metered) and what a unit costs us (`null`: unknown).",
+        "description": "A catalog item, its price (`null`: not sold, or metered) and what `per` units cost us (`null`: unknown).",
         "type": "object",
         "properties": {
           "cost": {
@@ -7808,6 +8048,11 @@
           },
           "item": {
             "$ref": "#/components/schemas/PricedItem"
+          },
+          "per": {
+            "description": "How many units the price and the cost are for.",
+            "type": "integer",
+            "format": "int64"
           },
           "price": {
             "anyOf": [
@@ -7844,6 +8089,7 @@
           "scope",
           "sale",
           "unit",
+          "per",
           "tool",
           "tool_title",
           "title",
@@ -9877,6 +10123,17 @@
                 "type": "integer",
                 "format": "int64"
               },
+              "cost": {
+                "description": "What it cost, as it grows; `null` on answers from before it was told.",
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Cost"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "ended": {
                 "description": "When the answer stopped growing; `null` while it runs.",
                 "type": [
@@ -9942,7 +10199,8 @@
               "sources",
               "actions",
               "state",
-              "feedback"
+              "feedback",
+              "cost"
             ]
           }
         ]
@@ -10002,6 +10260,17 @@
               "at": {
                 "type": "integer",
                 "format": "int64"
+              },
+              "cost": {
+                "description": "What it cost, as it grows; `null` on answers from before it was told.",
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Cost"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "ended": {
                 "description": "When the answer stopped growing; `null` while it runs.",
@@ -10110,7 +10379,7 @@
             "type": "string"
           },
           "usd_micros": {
-            "description": "Millionths of a dollar a unit.",
+            "description": "Millionths of a dollar per `per` units.",
             "type": "integer",
             "format": "int64"
           }
