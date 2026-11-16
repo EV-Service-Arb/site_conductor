@@ -47,7 +47,7 @@
             "method": "GET",
             "params": []
           },
-          "root_selector": "[meters.{\"meter\": name, \"used\": used, \"free\": free, \"left\": left, \"stops\": stop = \"at_free\" ? \"at free\" : \"never\", \"google's count\": baseline, \"as of\": since, \"ours since\": delta, \"synced\": reading ? reading.synced_at : \"never\", \"vendor's cost\": reading ? reading.cost : null, \"currency\": reading ? reading.currency : null, \"ours since, $\": delta_usd}]",
+          "root_selector": "$map(meters, function($m) { {\"meter\": $m.name, \"used\": $m.used, \"free\": $m.free, \"left\": $m.left, \"stops\": $m.stop = \"at_free\" ? \"at free\" : \"never\", \"google's count\": $m.baseline, \"as of\": $m.since, \"ours since\": $m.delta, \"synced\": $m.reading = null ? \"never\" : $m.reading.synced_at, \"vendor's cost\": $m.reading = null ? null : $m.reading.cost, \"currency\": $m.reading = null ? null : $m.reading.currency, \"ours since, $\": $m.delta_usd} })",
           "columns": [
             {
               "selector": "meter",
@@ -157,7 +157,28 @@
             ]
           }
         ]
-      }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "meter": 0,
+              "used": 1,
+              "free": 2,
+              "left": 3,
+              "stops": 4,
+              "google's count": 5,
+              "as of": 6,
+              "ours since": 7,
+              "synced": 8,
+              "vendor's cost": 9,
+              "currency": 10,
+              "ours since, $": 11
+            }
+          }
+        }
+      ]
     },
     {
       "id": 2,
@@ -189,7 +210,7 @@
             "method": "GET",
             "params": []
           },
-          "root_selector": "[meters.{\"meter\": name, \"used\": used / free * 100}]",
+          "root_selector": "$map(meters, function($m) { {\"meter\": $m.name, \"used\": $m.used / $m.free * 100} })",
           "columns": [
             {
               "selector": "meter",
@@ -284,7 +305,7 @@
               }
             ]
           },
-          "root_selector": "[readings.{\"at\": synced_at, \"series\": meter, \"units\": units}]",
+          "root_selector": "$map(readings, function($r) { {\"at\": $r.synced_at, \"series\": $r.meter, \"units\": $r.units} })",
           "columns": [
             {
               "selector": "at",
