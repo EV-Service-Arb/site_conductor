@@ -41,6 +41,7 @@ pub enum Column {
 	String,
 	Number,
 	Timestamp,
+	Boolean,
 }
 
 /// The panels of one dashboard, over `doc` as the datasource `datasource` (the service's name).
