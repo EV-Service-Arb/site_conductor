@@ -8,7 +8,7 @@
 //! ```
 //!
 //! A landing signs as ingest's sources do (a GET over `GET <path?query>`); the key's brands must
-//! hold the place's. (brand, slug) ↔ GBP is sites': `GET /api/conductor/places`, kept 60 s.
+//! hold the place's. (brand, slug) ↔ GBP is sites': `GET /api/conductor/places` (`feeds::Places`), kept 60 s.
 
 use std::{
 	sync::{Arc, Mutex},
@@ -31,6 +31,7 @@ use ev_lib::api::{
 use jiff::Timestamp;
 use sa_auth::SourceKind;
 use sa_core::{
+	feeds::{self, Place, Places},
 	gbp::{Country, State as GbpState},
 	prices::{PlacesRequest, Spends},
 };
@@ -225,20 +226,20 @@ pub(crate) struct OfferedPhotoDto {
 #[derive(Clone)]
 pub(crate) struct Pages {
 	services: Services,
-	kept: Arc<Mutex<Option<(Instant, Arc<Vec<SitePlace>>)>>>,
+	kept: Arc<Mutex<Option<(Instant, Arc<Vec<Place>>)>>>,
 }
 impl Pages {
 	pub(crate) fn new(services: Services) -> Self {
 		Self { services, kept: Arc::default() }
 	}
 
-	async fn all(&self) -> Result<Arc<Vec<SitePlace>>, ApiError> {
+	async fn all(&self) -> Result<Arc<Vec<Place>>, ApiError> {
 		if let Some((at, places)) = self.kept.lock().expect("never poisoned: no panic while held").as_ref()
 			&& at.elapsed() < PAGES_FOR
 		{
 			return Ok(places.clone());
 		}
-		let fetched: SitePlaces = self.services.conductor_get("/api/conductor/places").await.map_err(|e| {
+		let fetched: Places = self.services.conductor_get(feeds::PLACES).await.map_err(|e| {
 			tracing::warn!(error = %e, "kit: sites' places");
 			ApiError::Unavailable("sites did not say which page is which place".to_owned())
 		})?;
@@ -247,25 +248,13 @@ impl Pages {
 		Ok(places)
 	}
 
-	async fn of_gmb(&self, gmb: i64) -> Result<Option<SitePlace>, ApiError> {
+	async fn of_gmb(&self, gmb: i64) -> Result<Option<Place>, ApiError> {
 		Ok(self.all().await?.iter().find(|p| p.gmb_id == gmb).cloned())
 	}
 
 	async fn gmb_at(&self, brand: &str, slug: &str) -> Result<Option<i64>, ApiError> {
 		Ok(self.all().await?.iter().find(|p| p.brand == brand && p.slug == slug).map(|p| p.gmb_id))
 	}
-}
-
-#[derive(Clone, Debug, Deserialize)]
-struct SitePlace {
-	gmb_id: i64,
-	brand: String,
-	slug: String,
-}
-
-#[derive(Deserialize)]
-struct SitePlaces {
-	places: Vec<SitePlace>,
 }
 
 #[derive(Deserialize)]

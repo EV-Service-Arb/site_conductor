@@ -433,7 +433,7 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 			topic_id: d.topic_id,
 		};
 		let answer = match &d.photo {
-			Some(path) => match self.feeds.photo(d.rule.origin(), path).await {
+			Some(path) => match self.feeds.photo(d.rule.feed().expect("only a service's note carries a photo"), path).await {
 				Ok(photo) => self.bot.send(to, &message, &buttons, Some(photo)).await,
 				Err(e) => Err(Failure::Transient(format!("the photo {path}: {e:#}"))),
 			},
@@ -601,7 +601,8 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 		// The same button of the same message is one action, however often it is pressed or
 		// its update delivered: sites derives its event ids from this key.
 		let key = format!("tg/{outbox}/{}", button.id);
-		let status = match self.feeds.press(&identity, &button.call, &key).await {
+		let service = message.rule.feed().expect("only a service's note carries buttons");
+		let status = match self.feeds.press(&identity, service, &button.call, &key).await {
 			Ok(status) => status,
 			Err(e) => {
 				tracing::warn!(error = format!("{e:#}"), "telegram: sites did not take a press");

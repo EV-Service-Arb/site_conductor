@@ -7,19 +7,18 @@ use std::sync::{Arc, OnceLock};
 use axum::{
 	Router,
 	body::{Body, to_bytes},
-	http::{HeaderMap, HeaderValue, Method, Request, header},
+	http::{HeaderMap, HeaderValue, Request, header},
 };
 use ev_lib::api::{
 	JsonSchema,
 	openapi::{Operation, ReferenceOr},
 };
-use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use sa_core::prices::Item;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use tower::ServiceExt;
 
-use crate::catalog::Catalog;
+use crate::catalog::{Catalog, scalar};
 
 /// The most operations one search answers whole.
 const FOUND: usize = 8;
@@ -113,23 +112,7 @@ impl Tools {
 	/// through the app. Refused before the app sees it: an unknown operation, a path parameter
 	/// missing.
 	pub async fn call(&self, credentials: &HeaderMap, call: Call) -> Result<Answer, String> {
-		let (path, method, _) = self
-			.operations()
-			.into_iter()
-			.find(|(_, _, op)| op.operation_id.as_deref() == Some(call.operation.as_str()))
-			.ok_or_else(|| format!("no operation {:?}: search for one", call.operation))?;
-		let given = call.path.unwrap_or_default();
-		let mut uri = String::new();
-		for segment in path.split('/').filter(|s| !s.is_empty()) {
-			uri.push('/');
-			match segment.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
-				Some(name) => {
-					let value = given.get(name).ok_or_else(|| format!("{} needs the path parameter {name:?}", call.operation))?;
-					uri.push_str(&utf8_percent_encode(&scalar(value), NON_ALPHANUMERIC).to_string());
-				}
-				None => uri.push_str(segment),
-			}
-		}
+		let (method, mut uri) = self.catalog.resolve(&call.operation, &call.path.unwrap_or_default())?;
 		if let Some(query) = call.query.filter(|q| !q.is_empty()) {
 			let mut q = url::form_urlencoded::Serializer::new(String::new());
 			for (k, v) in &query {
@@ -138,9 +121,7 @@ impl Tools {
 			uri.push('?');
 			uri.push_str(&q.finish());
 		}
-		let mut req = Request::builder()
-			.method(Method::from_bytes(method.to_uppercase().as_bytes()).expect("the document's methods are standard"))
-			.uri(uri);
+		let mut req = Request::builder().method(method).uri(uri);
 		for name in [header::COOKIE.as_str(), header::AUTHORIZATION.as_str(), crate::cookies::CSRF_HEADER] {
 			if let Some(v) = credentials.get(name) {
 				req = req.header(name, v);
@@ -257,11 +238,6 @@ fn found(path: &str, method: &str, op: &Operation) -> Found {
 		parameters: serde_json::to_value(&op.parameters).expect("parameters serialize"),
 		body,
 	}
-}
-
-/// A string as it is, anything else as JSON writes it.
-fn scalar(v: &Value) -> String {
-	v.as_str().map_or_else(|| v.to_string(), str::to_owned)
 }
 
 fn refs(v: &Value, out: &mut Vec<String>) {

@@ -95,7 +95,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/forward.rs         the services behind the origin; `Services`, the one client and signing
                          key every call to them goes through
   src/grafana.rs         Grafana: its process, /grafana/, the viewers' tokens and the loopback
-                         listener they work on, the services' dashboards and its own (dashboards/)
+                         listener they work on, the services' dashboards; its own in dashboards.rs
   src/live.rs            GET /api/v1/live, and the follower of sites' change feed
   src/gmbs.rs            /api/v1/gmails, /api/v1/gmbs, /api/v1/trades
   src/connections.rs     /api/v1/gmails/{id}/{connections,imap,maps_key}
@@ -340,7 +340,9 @@ conductor ── GET /dashboards (Conductor), every 60 s, conditional ──▶ 
   section checked against the viewer); its url that API on the loopback listener and nothing
   beyond it allowed; written, with the dashboards' provider and the conductor's own dashboards,
   before Grafana starts.
-- **Dashboards are the services':** coupled to a service's API, they ship with its release. A
+- **Dashboards are the services':** coupled to a service's API, they ship with its release, built
+  over its document (`sa_core::dashboards`): a query names an operation, and a field its JSONata
+  reads that the answer lacks fails the build. A
   service that has them is in `forward::DASHBOARDS`, and its `GET /dashboards` answers a JSON
   array of them, each with its `uid`, and an ETag. A pull that fails — no answer, a 404, a uid
   another service serves or Grafana refuses — is reported, and what was served before stays.
@@ -597,8 +599,8 @@ closes              4401 the session ended   1001 the server is stopping
 ```
 
 - **What sites changed** comes from its feed, `GET /api/conductor/changes` (NDJSON, a Conductor
-  assertion): one follower per process puts each `changed` line on the bus with the permission
-  it names — told to whoever holds it — and each `resync` to everyone. sites sends `resync`
+  assertion): one follower per process puts each `changed` line (`sa_core::feeds::Line`: a table it
+  committed to, `sites.<table>`) on the bus, told to everyone signed in, and each `resync` to everyone. sites sends `resync`
   first on every connection and a `ping` every 25 s; a feed that ends, fails, or says nothing
   for 60 s is followed again after 1 s, doubling to 30 s, so what was missed meanwhile is read
   again.
@@ -909,7 +911,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   requests. One destination per chat and topic.
 - **A note is its service's rendering**: its text and Telegram entities, a PII text sent only to
   private chats of holders of `sa:sites:work:pii:see`, the user who is not told (`skip_user`), its
-  buttons (`{id, label, pressed, call: {method, path under /api/v1/, body}, leaves}`, sites'),
+  buttons (`{id, label, pressed, call: {operation, path: its parameters, body}, leaves}`, sites'; the
+  operation `op_id` of the service's table, resolved in the catalog as `<service>.<operation>`, a write),
   the GMBs it names, a photo path (`review_gone`'s capture, ≤ 1024 UTF-16 of caption, no
   buttons). Queued texts are sealed under `PANEL_DATA_KEY` per chat and topic and dropped once
   sent or dead; no parse mode, link previews off.
@@ -935,7 +938,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   (`t`, `n`) presses as `take`, `no_answer`. The message must be that chat's, the chat the
   private chat of the message's user, and the user's access is asked of concierge at the press —
   with no live session to ask with, the answer is "open the panel". The button's call goes to
-  sites as that user (a User assertion, the sites slice) with `Idempotency-Key: tg/<outbox
+  its service through the forward as that user (a User assertion, that service's slice) with `Idempotency-Key: tg/<outbox
   id>/<button id>`, so a press repeated, or its update redelivered, records nothing twice. 201:
   the message gains "{pressed}: {name}" and keeps the buttons the press `leaves`; 200, 400, 409
   "already recorded"; 404 "not found"; 403 "no access"; anything else "try again".

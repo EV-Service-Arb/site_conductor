@@ -49,6 +49,7 @@ use sa_panel::{
 	live::{Change, Ended, Signal},
 	session::SessionKey,
 };
+use sa_core::feeds::Line;
 use serde::Serialize;
 use tokio::sync::broadcast::{self, error::RecvError};
 use tracing::Instrument;
@@ -405,21 +406,6 @@ enum Step {
 	Drop,
 }
 
-/// A line of sites' feed (`GET /api/conductor/changes`).
-#[derive(serde::Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-enum Line {
-	Changed {
-		topic: String,
-		brand_id: Option<String>,
-		id: Option<String>,
-		at: jiff::Timestamp,
-		permission: String,
-	},
-	Resync,
-	Ping,
-}
-
 /// One connection to the feed, until it ends: whether a line came through it.
 async fn feed(services: &Services, bus: &sa_panel::live::Bus) -> eyre::Result<bool> {
 	use http_body_util::BodyExt;
@@ -428,7 +414,7 @@ async fn feed(services: &Services, bus: &sa_panel::live::Bus) -> eyre::Result<bo
 		.send(
 			sa_auth::Service::Sites,
 			axum::http::Method::GET,
-			"/api/conductor/changes",
+			sa_core::feeds::CHANGES,
 			HeaderMap::new(),
 			Some(sa_auth::Principal::Conductor),
 			axum::body::Body::empty(),
@@ -454,25 +440,13 @@ async fn feed(services: &Services, bus: &sa_panel::live::Bus) -> eyre::Result<bo
 			}
 			heard = true;
 			match serde_json::from_slice::<Line>(line)? {
-				Line::Changed {
+				Line::Changed { topic } => bus.changed(Change {
 					topic,
-					brand_id,
-					id,
-					at,
-					permission,
-				} => {
-					eyre::ensure!(
-						permission.starts_with(sa_auth::Service::Sites.prefix()),
-						"a change readable by {permission}, outside sites' permissions"
-					);
-					bus.changed(Change {
-						topic,
-						brand: brand_id,
-						id,
-						at,
-						audience: sa_panel::live::Audience::Holders(permission),
-					});
-				}
+					brand: None,
+					id: None,
+					at: jiff::Timestamp::now(),
+					audience: sa_panel::live::Audience::Everyone,
+				}),
 				Line::Resync => bus.publish(Signal::Resync),
 				Line::Ping => {}
 			}

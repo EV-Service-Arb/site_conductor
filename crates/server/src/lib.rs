@@ -17,6 +17,7 @@ pub mod concierge;
 mod connected;
 pub mod connections;
 pub mod cookies;
+mod dashboards;
 pub mod forward;
 pub mod gmbs;
 pub mod grafana;

@@ -20,7 +20,7 @@ use axum::{
 };
 use hmac::{Hmac, KeyInit, Mac};
 use jiff::{SignedDuration, Timestamp};
-use sa_alerts::{Origin, Rule};
+use sa_alerts::Rule;
 use sa_auth::{PermissionSet, Principal, Service};
 use sa_core::{
 	gbp::{Country, OnGoogle},
@@ -39,7 +39,7 @@ use sa_panel::{
 	tokens::User,
 };
 use sa_server::{
-	forward::{Services, Upstreams},
+	forward::{Forward, Services, Upstreams},
 	telegram::BotApi,
 	testing::{Browser, Log, SEED, upstream},
 };
@@ -191,6 +191,21 @@ impl FakeService {
 	}
 }
 
+/// What sites' document says of the operations its buttons call.
+static SITES_DOCUMENT: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
+	json!({
+		"openapi": "3.1.0",
+		"info": {"title": "sites", "version": "1"},
+		"servers": [{"url": "/api/v1"}],
+		"paths": {
+			"/leads": {"get": {"operationId": "list_leads"}},
+			"/leads/{brand}/{lead}/stage": {"post": {"operationId": "move_lead"}},
+			"/leads/{brand}/{lead}/no_answer": {"post": {"operationId": "no_answer"}},
+		},
+		"components": {"schemas": {}},
+	})
+});
+
 async fn serve(service: FakeService) -> (String, Log) {
 	let notes = service.clone();
 	let received = service.clone();
@@ -220,6 +235,7 @@ async fn serve(service: FakeService) -> (String, Log) {
 			}),
 		)
 		.route("/api/conductor/captures/{sha}", get(|| async { PNG }))
+		.route("/api/v1/openapi.json", get(|| async { Json(SITES_DOCUMENT.clone()) }))
 		.route(
 			"/api/v1/leads/{brand}/{lead}/{action}",
 			post(move || {
@@ -272,7 +288,7 @@ struct Setup {
 	seen: Log,
 	/// What review_archive was sent.
 	archive_seen: Log,
-	n: Hub<BotApi, FakeConcierge, Services>,
+	n: Hub<BotApi, FakeConcierge, Forward>,
 }
 impl Setup {
 	/// A user linked to `chat` at `now`, as the Alerts page and `/start` do it.
@@ -361,10 +377,10 @@ impl Setup {
 	}
 
 	/// One pass of the hub over the conductor's own rules and both feeds: how many were queued.
-	async fn fan_out(&self, n: &Hub<BotApi, FakeConcierge, Services>, now: Timestamp) -> eyre::Result<usize> {
+	async fn fan_out(&self, n: &Hub<BotApi, FakeConcierge, Forward>, now: Timestamp) -> eyre::Result<usize> {
 		let own = n.fan_out_own(now).await?;
-		let sites = n.take_feed(Origin::Sites, now).await?.unwrap();
-		let archive = n.take_feed(Origin::ReviewArchive, now).await?.unwrap_or(0);
+		let sites = n.take_feed(Service::Sites, now).await?.unwrap();
+		let archive = n.take_feed(Service::ReviewArchive, now).await?.unwrap_or(0);
 		Ok(own + sites + archive)
 	}
 
@@ -405,7 +421,7 @@ impl Setup {
 
 	/// The presses sites was sent.
 	fn presses(&self) -> Vec<sa_server::testing::Seen> {
-		self.seen.lock().unwrap().iter().filter(|s| s.path_and_query.starts_with("/api/v1/")).cloned().collect()
+		self.seen.lock().unwrap().iter().filter(|s| s.method == axum::http::Method::POST && s.path_and_query.starts_with("/api/v1/")).cloned().collect()
 	}
 
 	/// A user known to the conductor, with one gmail and a GMB under it: `(gmail, gmb)`.
@@ -444,17 +460,22 @@ async fn setup() -> Setup {
 	let (sites_base, seen) = serve(sites.clone()).await;
 	let (archive_base, archive_seen) = serve(archive.clone()).await;
 	let concierge = FakeConcierge::default();
+	let services = Services::new(Upstreams {
+		review_archive: archive_base.parse().unwrap(),
+		playbook: sites_base.parse().unwrap(),
+		sites: sites_base.parse().unwrap(),
+		placement: None,
+		signer: SEED.parse().unwrap(),
+	});
+	let (sign_in, _) = sa_server::testing::conductor(panel.clone(), std::iter::empty::<&str>().collect(), "hub@test", &sites_base);
+	let forward = Forward::new(sign_in, services.clone());
+	// one pull: a button resolves against sites' document
+	forward.catalog().follow(services, tokio::sync::watch::channel(true).1).await;
 	let n = Hub {
 		panel: panel.clone(),
 		bot: BotApi::try_new(&base, TOKEN).unwrap(),
 		concierge: concierge.clone(),
-		feeds: Services::new(Upstreams {
-			review_archive: archive_base.parse().unwrap(),
-			playbook: sites_base.parse().unwrap(),
-			sites: sites_base.parse().unwrap(),
-			placement: None,
-			signer: SEED.parse().unwrap(),
-		}),
+		feeds: forward,
 		locale: Locale::Ru,
 		cabinet: cabinet(),
 	};
@@ -490,9 +511,9 @@ fn private(id: i64) -> Chat {
 fn lead_buttons(lead: &str) -> Value {
 	json!([
 		{"id": "take", "label": "Взял", "pressed": "Взял",
-		 "call": {"method": "POST", "path": format!("/api/v1/leads/aquafix/{lead}/stage"), "body": {"stage": "contacted"}}, "leaves": []},
+		 "call": {"operation": "move_lead", "path": {"brand": "aquafix", "lead": lead}, "body": {"stage": "contacted"}}, "leaves": []},
 		{"id": "no_answer", "label": "Не дозвонился", "pressed": "Не дозвонился",
-		 "call": {"method": "POST", "path": format!("/api/v1/leads/aquafix/{lead}/no_answer"), "body": null}, "leaves": ["take"]},
+		 "call": {"operation": "no_answer", "path": {"brand": "aquafix", "lead": lead}, "body": null}, "leaves": ["take"]},
 	])
 }
 
@@ -696,7 +717,7 @@ async fn the_cursor_moves_only_once_the_notes_are_in_the_outbox() {
 	let e = s.fan_out(&s.n, t0()).await.unwrap_err();
 	assert!(format!("{e:#}").contains("review_low"), "{e:#}");
 	assert_eq!(s.outbox().await, [], "nothing of the page");
-	assert_eq!(s.panel.alerts_feed_after(Origin::Sites).await.unwrap(), 0);
+	assert_eq!(s.panel.alerts_feed_after(Service::Sites).await.unwrap(), 0);
 	assert!(s.fan_out(&s.n, t0()).await.is_err(), "and stopped there, pass after pass");
 
 	// A rule of another service's: not sites' to tell.
@@ -712,7 +733,7 @@ async fn the_cursor_moves_only_once_the_notes_are_in_the_outbox() {
 		sites.notes[1].as_object_mut().unwrap().remove("gmbs");
 	});
 	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 3);
-	assert_eq!(s.panel.alerts_feed_after(Origin::Sites).await.unwrap(), 3);
+	assert_eq!(s.panel.alerts_feed_after(Service::Sites).await.unwrap(), 3);
 	let asked: Vec<String> = s
 		.seen
 		.lock()
@@ -734,13 +755,17 @@ async fn the_cursor_moves_only_once_the_notes_are_in_the_outbox() {
 		text("x"),
 		Value::Null,
 		None,
-		json!([{"id": "t", "label": "T", "pressed": "T", "call": {"method": "POST", "path": "/api/v1/x", "body": null}, "leaves": []}]),
+		json!([{"id": "t", "label": "T", "pressed": "T", "call": {"operation": "no_answer", "path": {"brand": "a", "lead": "b"}, "body": null}, "leaves": []}]),
 	);
 	assert!(s.fan_out(&s.n, t0()).await.is_err(), "a button id that is no button id");
-	s.sites
-		.with(|sites| sites.notes[3]["buttons"] = json!([{"id": "go", "label": "Go", "pressed": "Go", "call": {"method": "POST", "path": "/api/v1/../admin", "body": null}, "leaves": []}]));
-	assert!(s.fan_out(&s.n, t0()).await.is_err(), "a call out of sites' API");
-	assert_eq!(s.panel.alerts_feed_after(Origin::Sites).await.unwrap(), 3);
+	let button = |call: Value| json!([{"id": "go", "label": "Go", "pressed": "Go", "call": call, "leaves": []}]);
+	s.sites.with(|sites| sites.notes[3]["buttons"] = button(json!({"operation": "admin", "path": {}, "body": null})));
+	assert!(s.fan_out(&s.n, t0()).await.is_err(), "an operation sites does not have");
+	s.sites.with(|sites| sites.notes[3]["buttons"] = button(json!({"operation": "no_answer", "path": {"brand": "a"}, "body": null})));
+	assert!(s.fan_out(&s.n, t0()).await.is_err(), "a path parameter missing");
+	s.sites.with(|sites| sites.notes[3]["buttons"] = button(json!({"operation": "list_leads", "path": {}, "body": null})));
+	assert!(s.fan_out(&s.n, t0()).await.is_err(), "a read is nothing a press does");
+	assert_eq!(s.panel.alerts_feed_after(Service::Sites).await.unwrap(), 3);
 }
 
 #[tokio::test]
@@ -827,7 +852,7 @@ async fn a_review_goes_to_its_gmbs_owners_only() {
 	s.review("review_gone", t0(), &[royat, scoped_gmb, off], None);
 	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 1, "review_new is off by default; review_gone to the owner alone");
 	assert_eq!(s.outbox().await, [(1, "review_gone".to_owned(), "pending".to_owned(), 0)]);
-	assert_eq!(s.panel.alerts_feed_after(Origin::ReviewArchive).await.unwrap(), 2);
+	assert_eq!(s.panel.alerts_feed_after(Service::ReviewArchive).await.unwrap(), 2);
 	let asked = s.archive_seen.lock().unwrap().last().cloned().unwrap();
 	assert!(matches!(asked.assertion(Service::ReviewArchive, None).principal, Principal::Conductor));
 
@@ -879,9 +904,9 @@ async fn a_feed_not_published_yet_is_waited_for() {
 	s.archive.with(|a| a.unpublished = true);
 	s.link(Uuid::now_v7(), aliases::operator(), 1, t0()).await;
 	s.lead("L-1", t0());
-	assert_eq!(s.n.take_feed(Origin::ReviewArchive, t0()).await.unwrap(), None);
+	assert_eq!(s.n.take_feed(Service::ReviewArchive, t0()).await.unwrap(), None);
 	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 1, "sites' lead all the same");
-	assert_eq!(s.panel.alerts_feed_after(Origin::ReviewArchive).await.unwrap(), 0);
+	assert_eq!(s.panel.alerts_feed_after(Service::ReviewArchive).await.unwrap(), 0);
 }
 
 // ── channels, groups, topics ─────────────────────────────────────────────────────────────

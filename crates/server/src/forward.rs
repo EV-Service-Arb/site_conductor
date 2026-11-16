@@ -275,11 +275,12 @@ impl Forward {
 	}
 
 	/// A GET Grafana makes for `viewer` to a service's API: the forward's, as that viewer.
-	pub(crate) async fn as_viewer(&self, viewer: Caller, req: Request) -> Response {
+	/// `req`, to a service's API under its prefix on this origin, as `user` tells that service of them.
+	pub(crate) async fn as_user(&self, req: Request, user: impl FnOnce(Service) -> User) -> Response {
 		match apis().find(|(_, prefix)| under(req.uri().path(), prefix)) {
 			Some((service, prefix)) => {
 				let route = ROUTES.iter().find(|r| r.prefix == prefix).expect("apis() are ROUTES");
-				self.pass(route, req, Some(Principal::User(user(viewer, service)))).await
+				self.pass(route, req, Some(Principal::User(user(service)))).await
 			}
 			None => ApiError::NotFound.into_response(),
 		}
@@ -389,10 +390,9 @@ pub(crate) fn apis() -> impl Iterator<Item = (Service, &'static str)> {
 }
 
 fn api_prefix(service: Service) -> String {
-	format!("/api/{}", name(service))
+	format!("/api/{service}")
 }
 
-/// The service's serde name: its API's path segment, its Grafana datasource's uid.
 /// Where `service`'s API under `upstream` is on this origin.
 pub(crate) fn prefix(service: Service, upstream: &str) -> Option<&'static str> {
 	ROUTES
@@ -401,13 +401,6 @@ pub(crate) fn prefix(service: Service, upstream: &str) -> Option<&'static str> {
 		.map(|r| r.prefix)
 }
 
-pub(crate) fn name(service: Service) -> String {
-	serde_json::to_value(service)
-		.expect("a unit variant serializes")
-		.as_str()
-		.expect("a unit variant is a string")
-		.to_owned()
-}
 
 async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 	let route = ROUTES.iter().find(|r| under(req.uri().path(), r.prefix)).expect("mounted under one of ROUTES");
@@ -461,7 +454,7 @@ fn pulled(path: &str) -> Option<&str> {
 }
 
 /// `caller`, as `service` is told of them: its slice of their permissions only.
-fn user(caller: Caller, service: Service) -> User {
+pub(crate) fn user(caller: Caller, service: Service) -> User {
 	User {
 		sub: caller.user_id.to_string(),
 		email: caller.email,

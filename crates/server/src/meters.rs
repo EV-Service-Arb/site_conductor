@@ -207,7 +207,7 @@ impl From<Synced> for ReadingDto {
 /// Every vendor meter this period, summed over the accounts and on each: the vendor's own count
 /// at its last reading, ours since, what is left of the free units and when buying stops; and each
 /// account's spend against its allowance.
-async fn meters(State(panel): State<Panel>) -> ApiResult<Json<MetersDto>> {
+pub(crate) async fn meters(State(panel): State<Panel>) -> ApiResult<Json<MetersDto>> {
 	let now = Timestamp::now();
 	let prices = panel.prices().await?;
 	let mut accounts = Vec::with_capacity(panel.accounts().len());
@@ -289,7 +289,7 @@ pub(crate) struct Window {
 
 /// The vendors' readings of their meters in a window, oldest first: what the sa-meters dashboard
 /// reads.
-async fn meter_readings(State(panel): State<Panel>, Params(q): Params<Window>) -> ApiResult<Json<ReadingsDto>> {
+pub(crate) async fn meter_readings(State(panel): State<Panel>, Params(q): Params<Window>) -> ApiResult<Json<ReadingsDto>> {
 	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| ApiError::BadRequest(format!("{ms}: {e}")));
 	let (from, to) = (at(q.from)?, at(q.to)?);
 	if from >= to || to.duration_since(from) > SPAN {

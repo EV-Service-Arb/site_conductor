@@ -50,16 +50,8 @@ use crate::{
 /// Carries a viewer's token on Grafana's fetches.
 pub const VIEWER_HEADER: &str = "x-sa-viewer";
 
-const INFINITY: &str = "yesoreyeram-infinity-datasource";
-
 /// The conductor's own API as a datasource: its uid, and its dashboards' directory.
-const CONDUCTOR: &str = "conductor";
-
-/// The conductor's own dashboards, over its `/api/v1`.
-const OWN_DASHBOARDS: [(&str, &str); 2] = [
-	("sa-tokens", include_str!("../dashboards/sa-tokens.json")),
-	("sa-meters", include_str!("../dashboards/sa-meters.json")),
-];
+pub(crate) const CONDUCTOR: &str = "conductor";
 
 /// How often each service is asked for its dashboards again: a conditional GET.
 const PULL_EVERY: Duration = Duration::from_secs(60);
@@ -177,19 +169,19 @@ impl Grafana {
 			std::fs::create_dir_all(root.join(section)).wrap_err_with(|| format!("creating {}", root.join(section).display()))?;
 		}
 		let datasources: Vec<Value> = forward::apis()
-			.map(|(service, prefix)| (forward::name(service), prefix.to_owned()))
+			.map(|(service, prefix)| (service.to_string(), prefix.to_owned()))
 			.chain([(CONDUCTOR.to_owned(), "/api/v1".to_owned())])
 			.map(|(name, prefix)| {
 				// Infinity joins the url and a query's url as strings: the queries' start with `/`
-				json!({"name": name, "uid": name, "type": INFINITY, "url": format!("http://{at}{prefix}"), "jsonData": {"allowedHosts": [format!("http://{at}{prefix}/")]}})
+				json!({"name": name, "uid": name, "type": sa_core::dashboards::INFINITY, "url": format!("http://{at}{prefix}"), "jsonData": {"allowedHosts": [format!("http://{at}{prefix}/")]}})
 			})
 			.collect();
 		let dashboards = self.dir.join("dashboards");
 		let own = dashboards.join(CONDUCTOR);
 		std::fs::create_dir_all(&own).wrap_err_with(|| format!("creating {}", own.display()))?;
-		for (uid, json) in OWN_DASHBOARDS {
+		for (uid, board) in crate::dashboards::own(&crate::http::document()) {
 			let path = own.join(format!("{uid}.json"));
-			std::fs::write(&path, json).wrap_err_with(|| format!("writing {}", path.display()))?;
+			std::fs::write(&path, serde_json::to_vec_pretty(&board).expect("a dashboard serializes")).wrap_err_with(|| format!("writing {}", path.display()))?;
 		}
 		// JSON is YAML
 		for (file, provisioned) in [
@@ -237,13 +229,13 @@ impl Grafana {
 	async fn pull(&self, etags: &Mutex<HashMap<String, HeaderValue>>) {
 		for service in DASHBOARDS {
 			if let Err(e) = self.pull_one(service, etags).await {
-				crate::report(&e.wrap_err(format!("{}'s dashboards kept as they were", forward::name(service))), "pulling the dashboards");
+				crate::report(&e.wrap_err(format!("{}'s dashboards kept as they were", service.to_string())), "pulling the dashboards");
 			}
 		}
 	}
 
 	async fn pull_one(&self, service: Service, etags: &Mutex<HashMap<String, HeaderValue>>) -> eyre::Result<()> {
-		let name = forward::name(service);
+		let name = service.to_string();
 		let mut headers = HeaderMap::new();
 		if let Some(etag) = etags.lock().expect("held for a lookup only").get(&name) {
 			headers.insert(header::IF_NONE_MATCH, etag.clone());
@@ -401,7 +393,7 @@ async fn query(State(g): State<Grafana>, req: Request) -> Response {
 
 async fn as_viewer(State(g): State<Grafana>, req: Request) -> Response {
 	match vouched(&g, &req) {
-		Some(viewer) => g.forward.as_viewer(viewer, req).await,
+		Some(viewer) => g.forward.as_user(req, |service| forward::user(viewer, service)).await,
 		None => ApiError::Unauthenticated.into_response(),
 	}
 }

@@ -4,34 +4,10 @@
 use std::{fmt, str::FromStr};
 
 use jiff::Timestamp;
-use sa_auth::{Leads, PermissionSet, SA_ADMIN, Sources};
+use sa_auth::{Leads, PermissionSet, SA_ADMIN, Service, Sources};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use uuid::Uuid;
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Origin {
-	Sites,
-	ReviewArchive,
-	Conductor,
-}
-
-impl Origin {
-	pub const fn as_str(self) -> &'static str {
-		match self {
-			Self::Sites => "sites",
-			Self::ReviewArchive => "review_archive",
-			Self::Conductor => "conductor",
-		}
-	}
-}
-
-impl fmt::Display for Origin {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(self.as_str())
-	}
-}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Audience {
@@ -86,11 +62,12 @@ impl Rule {
 		}
 	}
 
-	pub const fn origin(self) -> Origin {
+	/// The service whose feed publishes it; `None`: the conductor's own.
+	pub const fn feed(self) -> Option<Service> {
 		match self {
-			Self::NewLead | Self::ContactOverdue | Self::PaymentReceived | Self::Booked => Origin::Sites,
-			Self::ReviewNew | Self::ReviewChanged | Self::ReviewGone | Self::ReviewReappeared | Self::ScanFailed => Origin::ReviewArchive,
-			Self::SourceSilent | Self::AccessRequested => Origin::Conductor,
+			Self::NewLead | Self::ContactOverdue | Self::PaymentReceived | Self::Booked => Some(Service::Sites),
+			Self::ReviewNew | Self::ReviewChanged | Self::ReviewGone | Self::ReviewReappeared | Self::ScanFailed => Some(Service::ReviewArchive),
+			Self::SourceSilent | Self::AccessRequested => None,
 		}
 	}
 
@@ -133,11 +110,14 @@ impl FromStr for Rule {
 	}
 }
 
+/// What pressing a button does: an operation of the note's service, as the user who pressed.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Call {
-	pub method: String,
-	pub path: String,
+	/// `op_id(handler)` of the service's table: the conductor resolves it in its catalog.
+	pub operation: String,
+	/// The operation path's parameters by name.
+	pub path: Map<String, Value>,
 	pub body: Value,
 }
 
@@ -175,7 +155,8 @@ pub struct Note {
 	pub photo: Option<String>,
 }
 impl Note {
-	pub fn check(&self, feed: Origin) -> Result<(), InvalidNote> {
+	/// Its shape, against the feed it came from; its buttons' calls are the conductor's to resolve.
+	pub fn check(&self, feed: Service) -> Result<(), InvalidNote> {
 		let fail = |reason: String| InvalidNote {
 			seq: self.seq,
 			rule: self.rule,
@@ -184,8 +165,8 @@ impl Note {
 		if self.seq <= 0 {
 			return Err(fail("seq is not positive".into()));
 		}
-		if self.rule.origin() != feed {
-			return Err(fail(format!("rule belongs to {}, not {feed}", self.rule.origin())));
+		if self.rule.feed() != Some(feed) {
+			return Err(fail(format!("rule belongs to {}, not {}", self.rule.feed().map_or("the conductor", Service::as_str), feed)));
 		}
 		match self.rule.audience() {
 			Audience::GmbOwners if self.gmbs.is_empty() => return Err(fail("GMB-owned rule has no GMBs".into())),
@@ -212,9 +193,6 @@ impl Note {
 			}
 			if let Some(missing) = button.leaves.iter().find(|left| !self.buttons.iter().any(|other| other.id == **left)) {
 				return Err(fail(format!("button {} leaves {missing:?}, which is not one of the note's", button.id)));
-			}
-			if !matches!(button.call.method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE") || !valid_call_path(&button.call.path) {
-				return Err(fail(format!("button {} calls {} {}", button.id, button.call.method, button.call.path)));
 			}
 		}
 		for text in std::iter::once(&self.text).chain(&self.text_pii) {
@@ -247,12 +225,6 @@ pub struct InvalidNote {
 
 pub fn is_button_id(value: &str) -> bool {
 	(2..=16).contains(&value.len()) && value.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
-}
-
-fn valid_call_path(path: &str) -> bool {
-	path.strip_prefix("/api/v1/")
-		.is_some_and(|rest| rest.split('/').all(|part| !part.is_empty() && part != "." && part != ".."))
-		&& path.bytes().all(|byte| byte.is_ascii_graphic() && byte != b'?' && byte != b'#')
 }
 
 fn valid_path(path: &str) -> bool {
@@ -290,7 +262,8 @@ mod tests {
 			assert_eq!(rule.as_str().parse::<Rule>().unwrap(), rule);
 		}
 		assert!("review_low".parse::<Rule>().is_err());
-		assert_eq!(Rule::ReviewGone.origin(), Origin::ReviewArchive);
+		assert_eq!(Rule::ReviewGone.feed(), Some(Service::ReviewArchive));
+		assert_eq!(Rule::SourceSilent.feed(), None);
 		assert_eq!(Rule::ReviewGone.audience(), Audience::GmbOwners);
 		assert!(Rule::ReviewGone.on_by_default());
 		assert!(!Rule::ReviewNew.on_by_default());
@@ -317,14 +290,14 @@ mod tests {
 	#[test]
 	fn note_validation_binds_a_note_to_its_feed_and_audience() {
 		let mut review = note(Rule::ReviewGone);
-		assert_eq!(review.check(Origin::ReviewArchive).unwrap_err().reason, "GMB-owned rule has no GMBs");
+		assert_eq!(review.check(Service::ReviewArchive).unwrap_err().reason, "GMB-owned rule has no GMBs");
 		review.gmbs.push(7);
-		assert!(review.check(Origin::ReviewArchive).is_ok());
-		assert_eq!(review.check(Origin::Sites).unwrap_err().reason, "rule belongs to review_archive, not sites");
+		assert!(review.check(Service::ReviewArchive).is_ok());
+		assert_eq!(review.check(Service::Sites).unwrap_err().reason, "rule belongs to review_archive, not sites");
 
 		let mut sites = note(Rule::NewLead);
 		sites.gmbs.push(7);
-		assert_eq!(sites.check(Origin::Sites).unwrap_err().reason, "permission rule carries GMBs");
+		assert_eq!(sites.check(Service::Sites).unwrap_err().reason, "permission rule carries GMBs");
 	}
 
 	#[test]
@@ -332,8 +305,8 @@ mod tests {
 		let mut review = note(Rule::ReviewGone);
 		review.gmbs.push(7);
 		review.photo = Some("/api/conductor/captures/abc.png".into());
-		assert!(review.check(Origin::ReviewArchive).is_ok());
+		assert!(review.check(Service::ReviewArchive).is_ok());
 		review.text.text = "x".repeat(1025);
-		assert_eq!(review.check(Origin::ReviewArchive).unwrap_err().reason, "photo caption exceeds 1024 UTF-16 code units");
+		assert_eq!(review.check(Service::ReviewArchive).unwrap_err().reason, "photo caption exceeds 1024 UTF-16 code units");
 	}
 }

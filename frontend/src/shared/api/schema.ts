@@ -2147,7 +2147,10 @@ export interface components {
             set_at: string;
             username: string;
         };
-        /** @description sites' `/api/conductor/internal-reads`: an endpoint is absent when not read since `since`. */
+        /**
+         * @description The last `/api/internal` read per brand since `since` (the service's boot); an endpoint is absent
+         *     when not read since.
+         */
         InternalReads: {
             reads: {
                 [key: string]: components["schemas"]["BrandReads"];
@@ -2591,7 +2594,7 @@ export interface components {
             unit: string;
         };
         /** @enum {string} */
-        PricedItem: "places.details" | "places.search" | "places.autocomplete" | "places.geocode" | "street_view.panorama" | "map.map" | "walk.open" | "walk.reviews" | "walk.sort" | "walk.sort_retry" | "walk.step" | "phone.running" | "placement.search" | "ads.location" | "ads.keyword_ideas" | "ads.historical_metrics" | "dataforseo.keywords_for_keywords" | "dataforseo.search_volume" | "browser.gologin" | "browser.mimic";
+        PricedItem: "places.details" | "places.search" | "places.autocomplete" | "places.geocode" | "street_view.panorama" | "map.map" | "walk.open" | "walk.reviews" | "walk.sort" | "walk.sort_retry" | "walk.step" | "phone.running" | "placement.search" | "ads.location" | "ads.keyword_ideas" | "ads.historical_metrics" | "dataforseo.keywords_for_keywords" | "dataforseo.search_volume" | "browser.gologin" | "browser.mimic" | "claude.input" | "claude.cache_write" | "claude.cache_read" | "claude.output";
         /** @description Every item, in the catalog's order. */
         Prices: {
             prices: components["schemas"]["Price"][];
@@ -2771,6 +2774,14 @@ export interface components {
                 /** Format: int64 */
                 "browser.mimic"?: number | null;
                 /** Format: int64 */
+                "claude.cache_read"?: number | null;
+                /** Format: int64 */
+                "claude.cache_write"?: number | null;
+                /** Format: int64 */
+                "claude.input"?: number | null;
+                /** Format: int64 */
+                "claude.output"?: number | null;
+                /** Format: int64 */
                 "dataforseo.keywords_for_keywords"?: number | null;
                 /** Format: int64 */
                 "dataforseo.search_volume"?: number | null;
@@ -2812,6 +2823,14 @@ export interface components {
                 "browser.gologin"?: number | null;
                 /** Format: int64 */
                 "browser.mimic"?: number | null;
+                /** Format: int64 */
+                "claude.cache_read"?: number | null;
+                /** Format: int64 */
+                "claude.cache_write"?: number | null;
+                /** Format: int64 */
+                "claude.input"?: number | null;
+                /** Format: int64 */
+                "claude.output"?: number | null;
                 /** Format: int64 */
                 "dataforseo.keywords_for_keywords"?: number | null;
                 /** Format: int64 */
@@ -3116,6 +3135,14 @@ export interface components {
                 "browser.gologin"?: number;
                 /** Format: int64 */
                 "browser.mimic"?: number;
+                /** Format: int64 */
+                "claude.cache_read"?: number;
+                /** Format: int64 */
+                "claude.cache_write"?: number;
+                /** Format: int64 */
+                "claude.input"?: number;
+                /** Format: int64 */
+                "claude.output"?: number;
                 /** Format: int64 */
                 "dataforseo.keywords_for_keywords"?: number;
                 /** Format: int64 */
@@ -6993,7 +7020,7 @@ export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>[
 export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
 export const onGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OnGoogle"]> = ["verifying", "verified", "suspended"];
 export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Permission"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
-export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "placement.search", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic"];
+export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "placement.search", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic", "claude.input", "claude.cache_write", "claude.cache_read", "claude.output"];
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
 export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "payment_received", "source_silent", "booked", "access_requested", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed"];

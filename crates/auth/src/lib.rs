@@ -152,8 +152,9 @@ alias!(
 );
 
 /// A service behind the panel: the assertion's audience, and the permission slice it gets.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, strum::Display, strum::IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum Service {
 	ReviewArchive,
 	Playbook,
@@ -164,6 +165,11 @@ pub enum Service {
 }
 
 impl Service {
+	/// Its serde name: its API's path segment on the conductor's origin, its Grafana datasource's uid.
+	pub fn as_str(self) -> &'static str {
+		self.into()
+	}
+
 	/// `sa:<service>:`, the prefix of every permission the service is told about.
 	pub fn prefix(self) -> &'static str {
 		match self {

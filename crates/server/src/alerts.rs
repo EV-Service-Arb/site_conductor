@@ -8,13 +8,14 @@ use axum::{
 	Extension, Json,
 	body::Body as RawBody,
 	extract::{FromRef, State},
-	http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header},
+	http::{HeaderName, HeaderValue, Method, Request, StatusCode, header},
 	response::NoContent,
 };
 use ev_lib::api::{Created, JsonSchema};
 use jiff::Timestamp;
-use sa_alerts::{Call, NotePage, Origin, Rule};
-use sa_auth::{Principal, Service, User};
+use sa_alerts::{Call, NotePage, Rule};
+use sa_auth::{Service, User};
+use sa_core::feeds;
 use sa_panel::{
 	Panel, Refused,
 	alerts::{Destination, Directory, DirectoryError, Feeds, Hub, Identity},
@@ -27,7 +28,7 @@ use tokio::sync::watch;
 use crate::{
 	api::{ApiError, ApiResult, Body, Id, Ids},
 	concierge::Concierge,
-	forward::{SITES_TIMEOUT, Services},
+	forward::{Forward, SITES_TIMEOUT},
 	http::{ApiRoute, ApiState, Gate},
 	signin::Caller,
 	telegram::{self, BotApi, BotName},
@@ -43,7 +44,7 @@ const LOOK_AGAIN: Duration = Duration::from_secs(60);
 /// The hub with its Telegram bot, as `serve` runs it.
 #[derive(Clone)]
 pub struct Telegram {
-	pub hub: Hub<BotApi, Concierge, Services>,
+	pub hub: Hub<BotApi, Concierge, Forward>,
 	pub name: BotName,
 }
 
@@ -95,8 +96,8 @@ pub async fn run(t: Telegram, shutdown: watch::Receiver<bool>) {
 		crate::every(FAN_OUT_EVERY, shutdown.clone(), "alerts: the conductor's own", || async {
 			hub.fan_out_own(Timestamp::now()).await.map(drop)
 		}),
-		feed(hub, Origin::Sites, shutdown.clone()),
-		feed(hub, Origin::ReviewArchive, shutdown.clone()),
+		feed(hub, Service::Sites, shutdown.clone()),
+		feed(hub, Service::ReviewArchive, shutdown.clone()),
 		crate::every(DELIVER_EVERY, shutdown.clone(), "alerts: telegram delivery", || async {
 			hub.deliver(Timestamp::now()).await.map(drop)
 		}),
@@ -257,7 +258,7 @@ async fn remove_destination(State(panel): State<Panel>, Extension(caller): Exten
 
 /// Follows `service`'s feed: a page every [`FAN_OUT_EVERY`]; while it publishes none, said once
 /// and asked again after [`LOOK_AGAIN`].
-async fn feed(hub: &Hub<BotApi, Concierge, Services>, service: Origin, mut shutdown: watch::Receiver<bool>) {
+async fn feed(hub: &Hub<BotApi, Concierge, Forward>, service: Service, mut shutdown: watch::Receiver<bool>) {
 	let mut absent = false;
 	while !*shutdown.borrow() {
 		let wait = match hub.take_feed(service, Timestamp::now()).await {
@@ -302,60 +303,57 @@ impl Directory for Concierge {
 	}
 }
 
-fn service(origin: Origin) -> Service {
-	match origin {
-		Origin::Sites => Service::Sites,
-		Origin::ReviewArchive => Service::ReviewArchive,
-		Origin::Conductor => unreachable!("the conductor has no feed of its own"),
-	}
-}
-
-impl Feeds for Services {
-	async fn notes(&self, origin: Origin, after: i64, limit: usize) -> eyre::Result<Option<NotePage>> {
-		let path = format!("/api/conductor/notifications?after={after}&limit={limit}");
-		let (status, body) = self.conductor_fetch(service(origin), &path).await?;
+impl Feeds for Forward {
+	async fn notes(&self, service: Service, after: i64, limit: usize) -> eyre::Result<Option<NotePage>> {
+		let path = format!("{}?after={after}&limit={limit}", feeds::NOTIFICATIONS);
+		let (status, body) = self.services().conductor_fetch(service, &path).await?;
 		match status {
 			StatusCode::NOT_FOUND => Ok(None),
-			StatusCode::OK => serde_json::from_slice(&body).map(Some).map_err(|e| eyre::eyre!("{origin}'s notes: {e}")),
-			other => eyre::bail!("{origin} answered its notes with {other}: {}", String::from_utf8_lossy(&body)),
+			StatusCode::OK => serde_json::from_slice(&body).map(Some).map_err(|e| eyre::eyre!("{service}'s notes: {e}")),
+			other => eyre::bail!("{service} answered its notes with {other}: {}", String::from_utf8_lossy(&body)),
 		}
 	}
 
-	async fn received(&self) -> eyre::Result<BTreeMap<String, Timestamp>> {
-		self.conductor_get("/api/conductor/sources/received").await
+	async fn received(&self) -> eyre::Result<feeds::Received> {
+		self.services().conductor_get(feeds::SOURCES_RECEIVED).await
 	}
 
-	async fn photo(&self, origin: Origin, path: &str) -> eyre::Result<Vec<u8>> {
-		let (status, body) = self.conductor_fetch(service(origin), path).await?;
-		eyre::ensure!(status == StatusCode::OK, "{origin} answered {path} with {status}");
+	async fn photo(&self, service: Service, path: &str) -> eyre::Result<Vec<u8>> {
+		let (status, body) = self.services().conductor_fetch(service, path).await?;
+		eyre::ensure!(status == StatusCode::OK, "{service} answered {path} with {status}");
 		Ok(body.into())
 	}
 
-	async fn press(&self, who: &Identity, call: &Call, idempotency_key: &str) -> eyre::Result<u16> {
-		let method: Method = call.method.parse().map_err(|_| eyre::eyre!("a button's method {}", call.method))?;
-		let mut headers = HeaderMap::new();
-		headers.insert(
+	fn callable(&self, service: Service, call: &Call) -> eyre::Result<()> {
+		let (method, _) = self.catalog().resolve(&format!("{service}.{}", call.operation), &call.path).map_err(|e| eyre::eyre!(e))?;
+		eyre::ensure!(!method.is_safe(), "{} is a read, nothing a press does", call.operation);
+		Ok(())
+	}
+
+	async fn press(&self, who: &Identity, service: Service, call: &Call, idempotency_key: &str) -> eyre::Result<u16> {
+		let (method, path) = self.catalog().resolve(&format!("{service}.{}", call.operation), &call.path).map_err(|e| eyre::eyre!(e))?;
+		let mut req = Request::builder().method(method).uri(path).header(
 			HeaderName::from_static("idempotency-key"),
 			HeaderValue::from_str(idempotency_key).expect("tg/<outbox>/<button id> is visible ASCII"),
 		);
 		let body = match &call.body {
 			Value::Null => RawBody::empty(),
 			body => {
-				headers.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
+				req = req.header(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
 				RawBody::from(serde_json::to_vec(body).expect("a JSON value serializes"))
 			}
 		};
-		let user = User {
+		let user = |service: Service| User {
 			sub: who.user_id.to_string(),
 			email: who.email.clone(),
 			email_verified: who.email_verified,
 			name: who.preferred_name.clone(),
-			permissions: who.permissions.iter().filter(|p| p.starts_with(Service::Sites.prefix())).collect(),
+			permissions: who.permissions.iter().filter(|p| p.starts_with(service.prefix())).collect(),
 		};
-		let sent = self.send(Service::Sites, method, &call.path, headers, Some(Principal::User(user)), body);
+		let sent = self.as_user(req.body(body).expect("a request from parts that parsed"), user);
 		let res = tokio::time::timeout(SITES_TIMEOUT, sent)
 			.await
-			.map_err(|_| eyre::eyre!("sites did not answer a press in time"))??;
+			.map_err(|_| eyre::eyre!("{service} did not answer a press in time"))?;
 		Ok(res.status().as_u16())
 	}
 }

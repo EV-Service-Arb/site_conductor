@@ -28,7 +28,8 @@ use std::{collections::BTreeMap, future::Future};
 
 use eyre::WrapErr;
 use jiff::{SignedDuration, Timestamp};
-use sa_alerts::{Audience, Call, NotePage, Origin, Rule};
+use sa_alerts::{Audience, Call, NotePage, Rule};
+use sa_auth::Service;
 use sa_auth::{PermissionSet, Pii};
 use sa_core::notify::{self, Locale, Note, Rendered};
 use sha2::{Digest, Sha256};
@@ -70,13 +71,15 @@ pub trait Directory: Sync {
 /// The services, as the hub needs them; each call under the conductor's assertion.
 pub trait Feeds: Sync {
 	/// Up to `limit` of `service`'s notes after `after`; `None` while it publishes none (404).
-	fn notes(&self, service: Origin, after: i64, limit: usize) -> impl Future<Output = eyre::Result<Option<NotePage>>> + Send;
+	fn notes(&self, service: Service, after: i64, limit: usize) -> impl Future<Output = eyre::Result<Option<NotePage>>> + Send;
 	/// When each source key's last event arrived at sites.
 	fn received(&self) -> impl Future<Output = eyre::Result<BTreeMap<String, Timestamp>>> + Send;
-	/// `call` made to sites as `who`, under `idempotency_key`: the status sites answered.
-	fn press(&self, who: &Identity, call: &Call, idempotency_key: &str) -> impl Future<Output = eyre::Result<u16>> + Send;
+	/// Whether `call` is a write of `service`'s that a press can make: refused, the note fails its page.
+	fn callable(&self, service: Service, call: &Call) -> eyre::Result<()>;
+	/// `call` made to `service` as `who`, under `idempotency_key`: the status it answered.
+	fn press(&self, who: &Identity, service: Service, call: &Call, idempotency_key: &str) -> impl Future<Output = eyre::Result<u16>> + Send;
 	/// The photo at `path` of `service`, as a note named it.
-	fn photo(&self, service: Origin, path: &str) -> impl Future<Output = eyre::Result<Vec<u8>>> + Send;
+	fn photo(&self, service: Service, path: &str) -> impl Future<Output = eyre::Result<Vec<u8>>> + Send;
 }
 
 /// Who concierge says the holder of an access token is.
@@ -147,11 +150,18 @@ impl<B, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 
 	/// A page of `service`'s notes into the outbox: how many messages were queued, `None` while it
 	/// publishes none.
-	pub async fn take_feed(&self, service: Origin, now: Timestamp) -> eyre::Result<Option<usize>> {
+	pub async fn take_feed(&self, service: Service, now: Timestamp) -> eyre::Result<Option<usize>> {
 		let after = self.panel.alerts_feed_after(service).await?;
 		let Some(page) = self.feeds.notes(service, after, NOTES_PAGE).await? else {
 			return Ok(None);
 		};
+		for note in &page.notes {
+			for button in &note.buttons {
+				self.feeds
+					.callable(service, &button.call)
+					.wrap_err_with(|| format!("{service}'s note {}: button {}", note.seq, button.id))?;
+			}
+		}
 		self.panel.alerts_take_notes(service, page, after, now).await.map(Some)
 	}
 
@@ -353,7 +363,7 @@ impl Panel {
 	}
 
 	/// The last of a service's notes already fanned out: where its next page starts.
-	pub async fn alerts_feed_after(&self, service: Origin) -> eyre::Result<i64> {
+	pub async fn alerts_feed_after(&self, service: Service) -> eyre::Result<i64> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a feed's cursor")?;
 		db::feed_after(&mut conn, service).await
 	}
@@ -363,7 +373,7 @@ impl Panel {
 	/// `next`, in one transaction — taken only while the cursor still stands at `after`. A note the
 	/// hub cannot send fails the page whole: the cursor stays, and the next pass stops on it again.
 	/// How many messages were queued.
-	pub async fn alerts_take_notes(&self, service: Origin, page: NotePage, after: i64, now: Timestamp) -> eyre::Result<usize> {
+	pub async fn alerts_take_notes(&self, service: Service, page: NotePage, after: i64, now: Timestamp) -> eyre::Result<usize> {
 		eyre::ensure!(page.next >= after, "{service} answered next {} for notes after {after}", page.next);
 		for note in &page.notes {
 			note.check(service).wrap_err_with(|| format!("{service}'s feed"))?;

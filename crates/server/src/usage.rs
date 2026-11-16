@@ -153,7 +153,7 @@ pub(crate) struct Window {
 
 /// What our tools spent on vendors per UTC day, item, bill and source, in units and each use at its
 /// unit's cost when it was done: what Grafana's sa-tokens dashboard reads.
-async fn spend(State(panel): State<Panel>, Params(q): Params<Window>) -> ApiResult<Json<UsageDto>> {
+pub(crate) async fn spend(State(panel): State<Panel>, Params(q): Params<Window>) -> ApiResult<Json<UsageDto>> {
 	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| ApiError::BadRequest(format!("{ms}: {e}")));
 	let (from, to) = (at(q.from)?, at(q.to)?);
 	if from >= to || to.duration_since(from) > SPAN {
@@ -203,7 +203,7 @@ impl Feed {
 	async fn page(&self, after: i64) -> eyre::Result<Option<UsagePage>> {
 		let (status, answer) = match &self.from {
 			From::ReviewArchive(services) => {
-				let path = format!("/api/conductor/usage?after={after}&limit={PAGE}");
+				let path = format!("{}?after={after}&limit={PAGE}", sa_core::feeds::USAGE);
 				let sent = services.send(Service::ReviewArchive, Method::GET, &path, HeaderMap::new(), Some(Principal::Conductor), Body::empty());
 				let res = tokio::time::timeout(CALL_TIMEOUT, sent)
 					.await

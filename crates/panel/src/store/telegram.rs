@@ -530,17 +530,26 @@ pub async fn dead(conn: &mut SqliteConnection, id: i64, error: &str) -> eyre::Re
 pub struct SentMessage {
 	pub user_id: Uuid,
 	pub chat_id: i64,
+	pub rule: Rule,
 	pub buttons: Vec<Button>,
 }
 
 pub async fn message(conn: &mut SqliteConnection, id: i64) -> eyre::Result<Option<SentMessage>> {
-	type Row = (Uuid, i64, Json<Vec<Button>>);
-	let row: Option<Row> = sqlx::query_as("SELECT user_id, chat_id, buttons FROM telegram_outbox WHERE id = $1 AND state = 'sent'")
+	type Row = (Uuid, i64, String, Json<Vec<Button>>);
+	let row: Option<Row> = sqlx::query_as("SELECT user_id, chat_id, rule, buttons FROM telegram_outbox WHERE id = $1 AND state = 'sent'")
 		.bind(id)
 		.fetch_optional(&mut *conn)
 		.await
 		.wrap_err("reading a sent message")?;
-	Ok(row.map(|(user_id, chat_id, Json(buttons))| SentMessage { user_id, chat_id, buttons }))
+	row.map(|(user_id, chat_id, rule, Json(buttons))| {
+		Ok(SentMessage {
+			user_id,
+			chat_id,
+			rule: rule.parse().wrap_err_with(|| format!("message {id}'s rule"))?,
+			buttons,
+		})
+	})
+	.transpose()
 }
 
 /// Takes or renews the poller's lease for `holder` until `until`: the next update id to ask

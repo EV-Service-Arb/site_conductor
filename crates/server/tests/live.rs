@@ -326,10 +326,11 @@ async fn the_conductors_own_changes_go_to_who_may_read_them() {
 	assert_eq!(op.text().await["topic"], "alerts");
 }
 
-/// sites' feed: each change to whoever holds the permission it names, `resync` to everyone, and
-/// a feed that broke off is followed again — opening with `resync`, so what was missed is read.
+/// sites' feed: each table it committed to is told to everyone signed in (what they may read is
+/// judged when they read it), `resync` to everyone, and a feed that broke off is followed again —
+/// opening with `resync`, so what was missed is read.
 #[tokio::test]
-async fn sites_changes_reach_only_their_readers_and_the_feed_comes_back() {
+async fn sites_changes_reach_every_reader_and_the_feed_comes_back() {
 	let db = TestDb::create().await;
 	let panel = panel(&db).await;
 	let (base, lines) = sites().await;
@@ -342,24 +343,22 @@ async fn sites_changes_reach_only_their_readers_and_the_feed_comes_back() {
 	let _following = follow(&base, panel.bus());
 	assert_eq!(op.text().await, json!({"type": "resync"}), "the feed's first line");
 	assert_eq!(an.text().await, json!({"type": "resync"}));
-	let line =
-		|topic: &str, permission: &str| json!({"type": "changed", "topic": topic, "brand_id": "aquafix", "id": "L-1", "at": "2026-11-02T10:00:00Z", "permission": permission}).to_string();
-	lines.send(Some(line("leads", "sa:sites:work:read"))).unwrap();
+	let line = |topic: &str| json!({"type": "changed", "topic": topic}).to_string();
+	lines.send(Some(line("sites.leads"))).unwrap();
 	lines.send(Some(json!({"type": "ping"}).to_string())).unwrap();
-	lines.send(Some(line("experiments", "sa:sites:analysis:read"))).unwrap();
-	assert_eq!(
-		op.text().await,
-		json!({"type": "changed", "topic": "leads", "brand_id": "aquafix", "id": "L-1", "at": "2026-11-02T10:00:00Z"}),
-		"the frame as the screens know it, without the permission"
-	);
-	assert_eq!(op.text().await["topic"], "experiments");
-	assert_eq!(an.text().await["topic"], "experiments", "the work topic was never the analyst's");
+	lines.send(Some(line("sites.experiments"))).unwrap();
+	let frame = op.text().await;
+	assert_eq!((&frame["type"], &frame["topic"]), (&json!("changed"), &json!("sites.leads")));
+	assert_eq!(frame.as_object().unwrap().len(), 3, "a type, the topic and when the conductor heard it: {frame}");
+	assert_eq!(op.text().await["topic"], "sites.experiments");
+	assert_eq!(an.text().await["topic"], "sites.leads");
+	assert_eq!(an.text().await["topic"], "sites.experiments");
 
 	lines.send(None).unwrap();
 	assert_eq!(op.text().await, json!({"type": "resync"}), "followed again");
 	assert_eq!(an.text().await, json!({"type": "resync"}));
-	lines.send(Some(line("leads", "sa:sites:work:read"))).unwrap();
-	assert_eq!(op.text().await["topic"], "leads");
+	lines.send(Some(line("sites.leads"))).unwrap();
+	assert_eq!(op.text().await["topic"], "sites.leads");
 }
 
 #[tokio::test]
@@ -374,10 +373,10 @@ async fn signing_out_closes_a_socket_the_feed_was_telling() {
 	assert_eq!(ws.text().await, json!({"type": "resync"}));
 	lines
 		.send(Some(
-			json!({"type": "changed", "topic": "leads", "at": "2026-11-02T10:00:00Z", "permission": "sa:sites:work:read"}).to_string(),
+			json!({"type": "changed", "topic": "sites.leads"}).to_string(),
 		))
 		.unwrap();
-	assert_eq!(ws.text().await["topic"], "leads");
+	assert_eq!(ws.text().await["topic"], "sites.leads");
 	assert_eq!(b.send(&app, Method::POST, "/auth/logout").await.0, StatusCode::NO_CONTENT);
 	assert_eq!(ws.next().await, Frame::Close(CLOSE_SESSION_ENDED));
 }

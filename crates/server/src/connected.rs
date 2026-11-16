@@ -9,7 +9,10 @@ use ev_lib::api::JsonSchema;
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_auth::SourceKind;
-use sa_core::ids::SiteOrigin;
+use sa_core::{
+	feeds::{self, InternalReads, Received},
+	ids::SiteOrigin,
+};
 use sa_panel::store::sources::SourceRow;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -72,20 +75,6 @@ struct Site {
 	report: Probe,
 }
 
-/// sites' `/api/conductor/internal-reads`: an endpoint is absent when not read since `since`.
-#[derive(Debug, Deserialize, JsonSchema, Serialize)]
-struct InternalReads {
-	since: Timestamp,
-	reads: BTreeMap<String, BrandReads>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema, Serialize)]
-struct BrandReads {
-	locations: Option<Timestamp>,
-	pricing: Option<Timestamp>,
-	experiments: Option<Timestamp>,
-}
-
 #[derive(Debug, JsonSchema, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 #[schemars(rename = "Read{T}")]
@@ -97,7 +86,7 @@ enum Read<T> {
 #[derive(Debug, JsonSchema, Serialize)]
 pub(crate) struct ConnectedSites {
 	sites: Vec<Site>,
-	received: Read<BTreeMap<String, Timestamp>>,
+	received: Read<Received>,
 	internal_reads: Read<InternalReads>,
 }
 
@@ -115,8 +104,8 @@ pub(crate) async fn sites(State(s): State<ApiState>) -> ApiResult<Json<Connected
 		.filter(|k| k.grant.kind == SourceKind::Site && k.revoked_at.is_none())
 		.collect();
 	let reports = futures::future::join_all(keys.iter().map(|k| probe(&s.probe, k)));
-	let received = sites_read(s.sites.as_ref(), "/api/conductor/sources/received");
-	let internal_reads = sites_read(s.sites.as_ref(), "/api/conductor/internal-reads");
+	let received = sites_read(s.sites.as_ref(), feeds::SOURCES_RECEIVED);
+	let internal_reads = sites_read(s.sites.as_ref(), feeds::INTERNAL_READS);
 	let (reports, received, internal_reads) = tokio::join!(reports, received, internal_reads);
 	let sites = keys
 		.into_iter()

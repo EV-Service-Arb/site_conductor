@@ -742,7 +742,7 @@ async fn the_alerts_page_links_telegram_and_chooses_rules() {
 			panel: panel.clone(),
 			bot: BotApi::try_new("http://127.0.0.1:9", "1:unused").unwrap(),
 			concierge,
-			feeds: sa_server::testing::services("http://127.0.0.1:9"),
+			feeds: sa_server::forward::Forward::new(sign_in.clone(), sa_server::testing::services("http://127.0.0.1:9")),
 			locale: Locale::Ru,
 			cabinet: "http://concierge.test".parse().unwrap(),
 		},

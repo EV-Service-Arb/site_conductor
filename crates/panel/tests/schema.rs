@@ -5,7 +5,8 @@
 use std::collections::BTreeMap;
 
 use jiff::{SignedDuration, Timestamp};
-use sa_alerts::{Call, NotePage, Origin, Rule};
+use sa_alerts::{Call, NotePage, Rule};
+use sa_auth::Service;
 use sa_auth::{PermissionSet, SA_OPERATOR, SourceKind};
 use sa_core::{
 	ids::{BrandId, SiteOrigin},
@@ -97,8 +98,8 @@ impl Directory for Operators {
 struct TwoLeads;
 
 impl Feeds for TwoLeads {
-	async fn notes(&self, service: Origin, after: i64, _: usize) -> eyre::Result<Option<NotePage>> {
-		if service == Origin::ReviewArchive {
+	async fn notes(&self, service: Service, after: i64, _: usize) -> eyre::Result<Option<NotePage>> {
+		if service == Service::ReviewArchive {
 			return Ok(None);
 		}
 		let note = |seq: i64| {
@@ -109,7 +110,7 @@ impl Feeds for TwoLeads {
 		Ok(Some(serde_json::from_value(json!({"notes": notes, "next": after.max(2)}))?))
 	}
 
-	async fn photo(&self, _: Origin, _: &str) -> eyre::Result<Vec<u8>> {
+	async fn photo(&self, _: Service, _: &str) -> eyre::Result<Vec<u8>> {
 		unreachable!("no photo here")
 	}
 
@@ -117,7 +118,11 @@ impl Feeds for TwoLeads {
 		Ok(BTreeMap::new())
 	}
 
-	async fn press(&self, _: &Identity, _: &Call, _: &str) -> eyre::Result<u16> {
+	fn callable(&self, _: Service, _: &Call) -> eyre::Result<()> {
+		unreachable!("no button here")
+	}
+
+	async fn press(&self, _: &Identity, _: Service, _: &Call, _: &str) -> eyre::Result<u16> {
 		unreachable!("no button here")
 	}
 }
@@ -189,9 +194,9 @@ async fn the_runtime_does_its_work_on_a_fresh_database() {
 		panel.alerts_set_rules(user, &operator, destination, &[(Rule::NewLead, true)]).await.unwrap().unwrap();
 		panel.alerts_access_seen(user, &operator, "Olga", now).await.unwrap();
 		assert_eq!(hub(false).fan_out_own(now).await.unwrap(), 0, "an operator is not told of access requests");
-		assert_eq!(hub(false).take_feed(Origin::Sites, now).await.unwrap(), Some(2), "sites' two leads");
-		assert_eq!(hub(false).take_feed(Origin::ReviewArchive, now).await.unwrap(), None);
-		assert_eq!(panel.alerts_feed_after(Origin::Sites).await.unwrap(), 2);
+		assert_eq!(hub(false).take_feed(Service::Sites, now).await.unwrap(), Some(2), "sites' two leads");
+		assert_eq!(hub(false).take_feed(Service::ReviewArchive, now).await.unwrap(), None);
+		assert_eq!(panel.alerts_feed_after(Service::Sites).await.unwrap(), 2);
 		assert_eq!(hub(false).deliver(now).await.unwrap().sent, 1);
 		assert_eq!(hub(true).deliver(now + SignedDuration::from_secs(2)).await.unwrap().dead, 1);
 		assert_eq!(
@@ -290,17 +295,32 @@ async fn the_sites_tables_go_and_sent_buttons_name_their_calls() {
 	let sources: i64 = sqlx::query_scalar("SELECT count(*) FROM sources").fetch_one(&pool).await.unwrap();
 	assert_eq!(sources, 1);
 	let rows: Vec<(String, Option<String>)> = sqlx::query_as("SELECT buttons, last_error FROM telegram_outbox ORDER BY id").fetch_all(&pool).await.unwrap();
-	let sent: Vec<sa_alerts::Button> = serde_json::from_str(&rows[0].0).unwrap();
+	let sent: serde_json::Value = serde_json::from_str(&rows[0].0).unwrap();
+	let call = |b: &serde_json::Value| (b["id"].clone(), b["call"].clone(), b["leaves"].clone());
 	assert_eq!(
-		sent.iter()
-			.map(|b| (b.id.as_str(), b.call.method.as_str(), b.call.path.as_str(), &b.call.body, b.leaves.clone()))
-			.collect::<Vec<_>>(),
+		sent.as_array().unwrap().iter().map(call).collect::<Vec<_>>(),
 		[
-			("take", "POST", "/api/v1/leads/aquafix/L-1/stage", &json!({"stage": "contacted"}), vec![]),
-			("no_answer", "POST", "/api/v1/leads/aquafix/L-1/no_answer", &json!(null), vec!["take".to_owned()]),
+			(json!("take"), json!({"method": "POST", "path": "/api/v1/leads/aquafix/L-1/stage", "body": {"stage": "contacted"}}), json!([])),
+			(json!("no_answer"), json!({"method": "POST", "path": "/api/v1/leads/aquafix/L-1/no_answer", "body": null}), json!(["take"])),
 		]
 	);
 	assert_eq!(rows[1].1.as_deref(), Some("cut-over"), "what was queued is given up: its text is of the earlier shape");
+
+	// Later migrations empty the outbox; a button's shape is moved by this one alone.
+	let buttons = || async { sqlx::query_scalar::<_, String>("SELECT buttons FROM telegram_outbox ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap() };
+	let before = buttons().await;
+	sqlx::raw_sql(include_str!("../migrations/20261117090000_buttons_by_operation.up.sql")).execute(&pool).await.unwrap();
+	let sent: Vec<sa_alerts::Button> = serde_json::from_str(&buttons().await).unwrap();
+	assert_eq!(
+		sent.iter().map(|b| (b.id.as_str(), b.call.operation.as_str(), json!(b.call.path), &b.call.body)).collect::<Vec<_>>(),
+		[
+			("take", "move_lead", json!({"brand": "aquafix", "lead": "L-1"}), &json!({"stage": "contacted"})),
+			("no_answer", "no_answer", json!({"brand": "aquafix", "lead": "L-1"}), &json!(null)),
+		],
+		"a button names its operation and that path's parameters"
+	);
+	sqlx::raw_sql(include_str!("../migrations/20261117090000_buttons_by_operation.down.sql")).execute(&pool).await.unwrap();
+	assert_eq!(buttons().await, before);
 
 	migrator.undo(&pool, MOVED_OUT - 1).await.unwrap();
 	let back: (String, Option<String>, Option<String>) = sqlx::query_as("SELECT buttons, brand_id, lead_id FROM telegram_outbox ORDER BY id LIMIT 1")

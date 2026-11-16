@@ -59,7 +59,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/access/requests/mine": {
@@ -90,7 +91,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/admin/meters": {
@@ -119,6 +121,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-permission": "sa:admin:tokens:grant"
       }
     },
@@ -177,6 +180,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-permission": "sa:admin:tokens:grant"
       }
     },
@@ -209,6 +213,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-permission": "sa:admin:tokens:grant"
       }
     },
@@ -267,6 +272,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-permission": "sa:admin:tokens:grant"
       }
     },
@@ -299,6 +305,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-permission": "sa:admin:tokens:grant"
       },
       "put": {
@@ -341,6 +348,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-permission": "sa:admin:tokens:grant"
       }
     },
@@ -396,6 +404,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-permission": "sa:admin:tokens:grant"
       }
     },
@@ -454,6 +463,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-permission": "sa:admin:tokens:grant"
       }
     },
@@ -482,7 +492,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/alerts/destinations/{id}": {
@@ -518,7 +529,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/alerts/destinations/{id}/gmail": {
@@ -571,7 +583,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/alerts/destinations/{id}/rules": {
@@ -624,7 +637,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/alerts/destinations/{id}/test": {
@@ -660,7 +674,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/alerts/telegram/chats": {
@@ -702,7 +717,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/alerts/telegram/link": {
@@ -734,7 +750,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/areas": {
@@ -762,7 +779,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/areas/{slug}": {
@@ -804,7 +822,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       },
       "put": {
         "tags": [
@@ -856,6 +875,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-spends": [
           "places.details",
           "places.search",
@@ -885,7 +905,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/assistant/chats": {
@@ -916,7 +937,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       },
       "post": {
         "tags": [
@@ -955,7 +977,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/assistant/chats/{id}": {
@@ -998,7 +1021,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       },
       "delete": {
         "tags": [
@@ -1032,7 +1056,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/assistant/chats/{id}/access": {
@@ -1075,7 +1100,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/assistant/chats/{id}/act": {
@@ -1129,7 +1155,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/assistant/chats/{id}/archived": {
@@ -1175,7 +1202,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/assistant/chats/{id}/ask": {
@@ -1227,6 +1255,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-spends": [
           "claude.input",
           "claude.cache_write",
@@ -1285,7 +1314,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/assistant/chats/{id}/members": {
@@ -1338,7 +1368,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/assistant/chats/{id}/members/{user}": {
@@ -1384,7 +1415,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/assistant/chats/{id}/pinned": {
@@ -1430,7 +1462,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/assistant/chats/{id}/title": {
@@ -1483,7 +1516,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/assistant/chats/{id}/turns": {
@@ -1537,7 +1571,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/assistant/people": {
@@ -1581,7 +1616,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmails": {
@@ -1613,7 +1649,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       },
       "post": {
         "tags": [
@@ -1652,7 +1689,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmails/{id}": {
@@ -1688,7 +1726,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       },
       "patch": {
         "tags": [
@@ -1739,7 +1778,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmails/{id}/browser": {
@@ -1793,7 +1833,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       },
       "delete": {
         "tags": [
@@ -1827,7 +1868,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmails/{id}/browser/film": {
@@ -1870,7 +1912,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       },
       "delete": {
         "tags": [
@@ -1904,7 +1947,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmails/{id}/browser/start": {
@@ -1952,6 +1996,7 @@
             "description": "no content"
           }
         },
+        "x-errors": {},
         "x-spends": [
           "phone.running",
           "browser.gologin",
@@ -1992,7 +2037,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmails/{id}/browser/test": {
@@ -2035,7 +2081,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmails/{id}/connections": {
@@ -2078,7 +2125,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmails/{id}/gmbs": {
@@ -2133,6 +2181,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-spends": [
           "places.details",
           "places.search",
@@ -2192,7 +2241,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       },
       "delete": {
         "tags": [
@@ -2226,7 +2276,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmails/{id}/imap/test": {
@@ -2269,7 +2320,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmails/{id}/maps_key": {
@@ -2323,7 +2375,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       },
       "delete": {
         "tags": [
@@ -2357,7 +2410,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmails/{id}/maps_key/test": {
@@ -2400,7 +2454,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmbs": {
@@ -2442,7 +2497,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmbs/enabled": {
@@ -2476,7 +2532,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmbs/resolve": {
@@ -2536,6 +2593,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-spends": [
           "places.details",
           "places.search",
@@ -2600,6 +2658,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-spends": [
           "places.details",
           "places.search",
@@ -2639,7 +2698,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmbs/{id}": {
@@ -2675,7 +2735,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       },
       "patch": {
         "tags": [
@@ -2728,7 +2789,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmbs/{id}/country": {
@@ -2774,7 +2836,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmbs/{id}/kit": {
@@ -2817,7 +2880,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       },
       "put": {
         "tags": [
@@ -2870,6 +2934,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-spends": [
           "places.details",
           "places.search",
@@ -2911,7 +2976,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmbs/{id}/location": {
@@ -2957,7 +3023,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       },
       "delete": {
         "tags": [
@@ -2991,7 +3058,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmbs/{id}/spots": {
@@ -3044,7 +3112,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/gmbs/{id}/state": {
@@ -3098,6 +3167,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-spends": [
           "places.details",
           "places.search",
@@ -3145,7 +3215,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/kit/areas/{slug}/gmbs": {
@@ -3187,7 +3258,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/kit/cities": {
@@ -3232,6 +3304,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-spends": [
           "places.details",
           "places.search",
@@ -3280,6 +3353,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-spends": [
           "places.details",
           "places.search",
@@ -3339,6 +3413,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-spends": [
           "places.details",
           "places.search",
@@ -3375,7 +3450,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/map/loaded": {
@@ -3410,7 +3486,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/map/street_view": {
@@ -3454,6 +3531,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-spends": [
           "street_view.panorama"
         ]
@@ -3477,7 +3555,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/openapi.json": {
@@ -3499,7 +3578,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/sources": {
@@ -3531,6 +3611,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-permission": "sa:admin:sources:manage"
       },
       "post": {
@@ -3572,6 +3653,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-permission": "sa:admin:sources:manage"
       }
     },
@@ -3605,6 +3687,7 @@
             }
           }
         },
+        "x-errors": {},
         "x-permission": "sa:admin:sources:manage"
       }
     },
@@ -3641,6 +3724,7 @@
             "description": "no content"
           }
         },
+        "x-errors": {},
         "x-permission": "sa:admin:sources:manage"
       }
     },
@@ -3669,7 +3753,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/tokens/claim": {
@@ -3700,7 +3785,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/tokens/ledger": {
@@ -3759,7 +3845,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/tokens/settings": {
@@ -3794,7 +3881,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/tokens/usage": {
@@ -3825,7 +3913,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/trades": {
@@ -3856,7 +3945,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       },
       "post": {
         "tags": [
@@ -3895,7 +3985,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/trades/{id}": {
@@ -3931,7 +4022,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       },
       "patch": {
         "tags": [
@@ -3982,7 +4074,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/trades/{id}/{country}": {
@@ -4045,7 +4138,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       },
       "delete": {
         "tags": [
@@ -4088,7 +4182,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/trades/{id}/{country}/kit": {
@@ -4140,7 +4235,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/trades/{id}/{country}/kit/drafts": {
@@ -4202,7 +4298,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/trades/{id}/{country}/kit/drafts/{draft}": {
@@ -4257,7 +4354,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       },
       "patch": {
         "tags": [
@@ -4328,7 +4426,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/trades/{id}/{country}/kit/photos": {
@@ -4388,7 +4487,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/trades/{id}/{country}/kit/photos/{file}": {
@@ -4447,7 +4547,8 @@
               "image/jpeg": {}
             }
           }
-        }
+        },
+        "x-errors": {}
       },
       "delete": {
         "tags": [
@@ -4500,7 +4601,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/trash": {
@@ -4529,7 +4631,8 @@
               }
             }
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/trash/gmails/{id}/restore": {
@@ -4566,7 +4669,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/trash/gmbs/{id}/restore": {
@@ -4603,7 +4707,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     },
     "/trash/settings": {
@@ -4638,7 +4743,8 @@
           "204": {
             "description": "no content"
           }
-        }
+        },
+        "x-errors": {}
       }
     }
   },
@@ -5194,6 +5300,7 @@
             "format": "date-time"
           }
         },
+        "additionalProperties": false,
         "required": [
           "locations",
           "pricing",
@@ -6347,7 +6454,7 @@
         ]
       },
       "InternalReads": {
-        "description": "sites' `/api/conductor/internal-reads`: an endpoint is absent when not read since `since`.",
+        "description": "The last `/api/internal` read per brand since `since` (the service's boot); an endpoint is absent\nwhen not read since.",
         "type": "object",
         "properties": {
           "reads": {
@@ -6361,6 +6468,7 @@
             "format": "date-time"
           }
         },
+        "additionalProperties": false,
         "required": [
           "since",
           "reads"
@@ -9427,6 +9535,22 @@
                 "format": "int64"
               },
               "browser.mimic": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "claude.cache_read": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "claude.cache_write": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "claude.input": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "claude.output": {
                 "type": "integer",
                 "format": "int64"
               },

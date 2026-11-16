@@ -4,7 +4,8 @@
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_alerts::{Origin, Rule};
+use sa_alerts::Rule;
+use sa_auth::Service;
 use sa_auth::PermissionSet;
 use sqlx::{SqliteConnection, types::Json};
 use uuid::Uuid;
@@ -290,7 +291,7 @@ pub async fn prune(conn: &mut SqliteConnection, before: Timestamp) -> eyre::Resu
 }
 
 /// The last of a service's notes already fanned out.
-pub async fn feed_after(conn: &mut SqliteConnection, service: Origin) -> eyre::Result<i64> {
+pub async fn feed_after(conn: &mut SqliteConnection, service: Service) -> eyre::Result<i64> {
 	sqlx::query_scalar("SELECT after FROM alert_feeds WHERE service = $1")
 		.bind(service.as_str())
 		.fetch_one(&mut *conn)
@@ -300,7 +301,7 @@ pub async fn feed_after(conn: &mut SqliteConnection, service: Origin) -> eyre::R
 
 /// Moves a service's cursor from `after` to `next`; `false` when it no longer stood at `after`
 /// (another replica took the page).
-pub async fn move_feed(conn: &mut SqliteConnection, service: Origin, after: i64, next: i64) -> eyre::Result<bool> {
+pub async fn move_feed(conn: &mut SqliteConnection, service: Service, after: i64, next: i64) -> eyre::Result<bool> {
 	let moved = sqlx::query("UPDATE alert_feeds SET after = $3 WHERE service = $1 AND after = $2")
 		.bind(service.as_str())
 		.bind(after)

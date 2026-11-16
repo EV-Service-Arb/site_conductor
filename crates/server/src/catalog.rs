@@ -20,7 +20,8 @@ use ev_lib::api::{
 };
 use eyre::WrapErr;
 use sa_auth::{PermissionSet, Principal, Service};
-use serde_json::Value;
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
+use serde_json::{Map, Value};
 use tokio::sync::watch;
 
 use crate::forward::{self, Services};
@@ -30,6 +31,8 @@ const DOCUMENTS: [(Service, &str); 2] = [(Service::Sites, "/api/v1/openapi.json"
 const PULL_EVERY: Duration = Duration::from_secs(60);
 const PULL_TIMEOUT: Duration = Duration::from_secs(10);
 const DOCUMENT_ANSWER: usize = 16 * 1024 * 1024;
+/// What a path segment may hold as it is: RFC 3986's unreserved, but `.` (no value is a `..` segment).
+const SEGMENT: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'_').remove(b'~');
 
 #[derive(Clone)]
 pub struct Catalog {
@@ -63,6 +66,28 @@ impl Catalog {
 		self.merged.read().expect("never held across a panic").clone()
 	}
 
+	/// The method of the operation `id` and its absolute path, `path`'s parameters put in by name:
+	/// refused for an unknown operation or a parameter missing.
+	pub(crate) fn resolve(&self, id: &str, path: &Map<String, Value>) -> Result<(Method, String), String> {
+		let doc = self.document();
+		let (template, method, _) = doc
+			.operations()
+			.find(|(_, _, op)| op.operation_id.as_deref() == Some(id))
+			.ok_or_else(|| format!("no operation {id:?}: search for one"))?;
+		let mut uri = String::new();
+		for segment in template.split('/').filter(|s| !s.is_empty()) {
+			uri.push('/');
+			match segment.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
+				Some(name) => {
+					let value = path.get(name).ok_or_else(|| format!("{id} needs the path parameter {name:?}"))?;
+					uri.push_str(&utf8_percent_encode(&scalar(value), SEGMENT).to_string());
+				}
+				None => uri.push_str(segment),
+			}
+		}
+		Ok((Method::from_bytes(method.to_uppercase().as_bytes()).expect("the document's methods are standard"), uri))
+	}
+
 	/// Only the operations `permissions` open.
 	pub(crate) fn opened(&self, permissions: &PermissionSet) -> OpenApi {
 		let mut doc = (*self.document()).clone();
@@ -94,7 +119,7 @@ impl Catalog {
 
 	async fn pull(&self, services: &Services, etags: &Mutex<BTreeMap<String, HeaderValue>>) {
 		for (service, path) in DOCUMENTS {
-			let name = forward::name(service);
+			let name = service.to_string();
 			match self.pull_one(services, service, path, etags).await {
 				Ok(None) => {}
 				Ok(Some(doc)) => {
@@ -109,7 +134,7 @@ impl Catalog {
 
 	/// The service's document, prefixed and named; `None` when it has not changed.
 	async fn pull_one(&self, services: &Services, service: Service, path: &str, etags: &Mutex<BTreeMap<String, HeaderValue>>) -> eyre::Result<Option<OpenApi>> {
-		let name = forward::name(service);
+		let name = service.to_string();
 		let mut headers = HeaderMap::new();
 		if let Some(etag) = etags.lock().expect("held for a lookup only").get(&name) {
 			headers.insert(header::IF_NONE_MATCH, etag.clone());
@@ -204,4 +229,9 @@ fn merge(own: &OpenApi, services: &BTreeMap<String, OpenApi>) -> OpenApi {
 		paths: Some(paths),
 		..doc
 	}
+}
+
+/// A string as it is, anything else as JSON writes it.
+pub(crate) fn scalar(v: &Value) -> String {
+	v.as_str().map_or_else(|| v.to_string(), str::to_owned)
 }

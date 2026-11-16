@@ -503,15 +503,30 @@ async fn serve(
 	};
 	let (stop, stopped) = tokio::sync::watch::channel(false);
 	let bus = panel.bus().clone();
-	let bot = match (telegram, &services) {
-		(Some(tg), Some(services)) => {
+	let cabinet = config.concierge_origin.clone();
+	let hub_panel = panel.clone();
+	let hub_concierge = concierge.clone();
+	let engine = panel.clone();
+	let metered = panel.clone();
+	let purger = panel.clone();
+	let grafana_root = format!("{}/grafana/", config.panel_origin.trim_end_matches('/'));
+	let sign_in = SignIn::new(panel, concierge, config);
+	let forward = match &services {
+		Some(services) => Some(Forward::new(sign_in.clone(), services.clone())),
+		None => {
+			tracing::warn!("forward not configured: no ingest, no /api/sites, /api/review_archive or /playbook_mcp, no live updates from sites");
+			None
+		}
+	};
+	let bot = match (telegram, &forward) {
+		(Some(tg), Some(forward)) => {
 			let hub = Hub {
-				panel: panel.clone(),
+				panel: hub_panel,
 				bot: BotApi::try_new(telegram::API_BASE, &tg.token)?,
-				concierge: concierge.clone(),
-				feeds: services.clone(),
+				concierge: hub_concierge,
+				feeds: forward.clone(),
 				locale: tg.locale,
-				cabinet: config.concierge_origin.parse().wrap_err("the concierge origin is not a URL")?,
+				cabinet: cabinet.parse().wrap_err("the concierge origin is not a URL")?,
 			};
 			tracing::info!("alerts on, by Telegram");
 			Some(Telegram {
@@ -522,18 +537,6 @@ async fn serve(
 		(Some(_), None) => unreachable!("refused before serve"),
 		(None, _) => {
 			tracing::warn!("TELEGRAM_BOT_TOKEN unset: alerts off");
-			None
-		}
-	};
-	let engine = panel.clone();
-	let metered = panel.clone();
-	let purger = panel.clone();
-	let grafana_root = format!("{}/grafana/", config.panel_origin.trim_end_matches('/'));
-	let sign_in = SignIn::new(panel, concierge, config);
-	let forward = match &services {
-		Some(services) => Some(Forward::new(sign_in.clone(), services.clone())),
-		None => {
-			tracing::warn!("forward not configured: no ingest, no /api/sites, /api/review_archive or /playbook_mcp, no live updates from sites");
 			None
 		}
 	};

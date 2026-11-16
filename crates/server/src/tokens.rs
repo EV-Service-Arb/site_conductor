@@ -175,7 +175,7 @@ pub struct BalanceDto {
 pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<bool>) {
 	let follow = repeat("following review_archive's charges", FOLLOW_EVERY, std::future::pending, shutdown.clone(), || async {
 		let Some(after) = panel.charges_after().await? else { return Ok(Pass::Closed) };
-		let (status, answer) = call(&services, Method::GET, &format!("/api/conductor/charges?after={after}&limit={CHARGES_PAGE}"), None).await?;
+		let (status, answer) = call(&services, Method::GET, &format!("{}?after={after}&limit={CHARGES_PAGE}", sa_core::feeds::CHARGES), None).await?;
 		match status {
 			StatusCode::NOT_FOUND => return Ok(Pass::NotCutOver),
 			StatusCode::OK => {}
@@ -192,7 +192,7 @@ pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<boo
 		|| async {
 			let Some(snapshot) = panel.snapshot(Timestamp::now()).await? else { return Ok(Pass::Closed) };
 			let body = serde_json::to_vec(&snapshot).expect("a snapshot serializes");
-			let (status, answer) = call(&services, Method::PUT, "/api/conductor/gmbs", Some(body)).await?;
+			let (status, answer) = call(&services, Method::PUT, sa_core::feeds::GMBS, Some(body)).await?;
 			match status {
 				StatusCode::NOT_FOUND => Ok(Pass::NotCutOver),
 				StatusCode::NO_CONTENT => Ok(Pass::Done(0)),
@@ -547,7 +547,7 @@ pub(crate) struct FlowsQuery {
 }
 
 /// Everyone's ledger and grants in a window, oldest first: what Grafana's sa-tokens dashboard reads.
-async fn token_flows(State(panel): State<Panel>, Params(q): Params<FlowsQuery>) -> ApiResult<Json<FlowsDto>> {
+pub(crate) async fn token_flows(State(panel): State<Panel>, Params(q): Params<FlowsQuery>) -> ApiResult<Json<FlowsDto>> {
 	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| ApiError::BadRequest(format!("{ms}: {e}")));
 	let (from, to) = (at(q.from)?, at(q.to)?);
 	if from >= to || to.duration_since(from) > FLOWS_SPAN {

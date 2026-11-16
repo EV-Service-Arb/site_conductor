@@ -5,7 +5,7 @@
 //! channel. What publishes:
 //!
 //! ```text
-//! sites' change feed    whatever sites committed, with the permission that reads it   → its topic
+//! sites' change feed    a table sites committed to (`sites.<table>`), to everyone      → its topic
 //!                       a rebuild there, a reconnect, the feed lagging                → resync
 //! add_source, revoke,   the signing keys, a site's origin                             → sources
 //!   set_site_origin
@@ -42,6 +42,8 @@ pub enum Audience {
 	Holders(String),
 	/// One user: their alerts, their chats.
 	User(Uuid),
+	/// Everyone signed in: a table a service committed to.
+	Everyone,
 }
 
 /// Something committed that a screen reads.
@@ -62,6 +64,7 @@ impl Change {
 		match &self.audience {
 			Audience::Holders(p) => permissions.iter().any(|q| q == p),
 			Audience::User(u) => *u == user,
+			Audience::Everyone => true,
 		}
 	}
 }
