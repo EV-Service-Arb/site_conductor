@@ -317,7 +317,7 @@ pub(crate) struct ApiState {
 	pub(crate) telegram: Option<Telegram>,
 	/// With GOLOGIN_TOKEN and PANEL_BROWSERS_URL.
 	pub(crate) browsers: Option<browser::Connected>,
-	/// With ANTHROPIC_API_KEY: the assistant's.
+	/// With CLAUDE_CODE_OAUTH_TOKEN: the assistant's.
 	pub(crate) model: Option<Model>,
 	/// With the forward: which landing page is which GBP.
 	pub(crate) pages: Option<kit::Pages>,

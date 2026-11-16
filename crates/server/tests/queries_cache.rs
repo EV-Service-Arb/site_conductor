@@ -59,7 +59,7 @@ async fn two_machines_asking_at_once_pay_once_and_a_third_reads_it_for_free() {
 	let db = TestDb::create().await;
 	let url = conductor(housed(&db).await).await;
 	let (base, asked) = places().await;
-	let on = |keys: Vec<(String, String)>| Google::try_new(Keys::new(keys), Arc::new(InOrder), Arc::new(Remote::try_new(&url).unwrap())).unwrap().at(&base);
+	let on = |keys: Vec<(String, String)>| Google::try_new(Keys::new(keys), Arc::new(InOrder), Arc::new(Remote::try_new(&url).unwrap())).unwrap().spend(true).at(&base);
 	let house = || vec![("house".to_owned(), "k".to_owned())];
 	let (a, b) = (on(house()), on(house()));
 	let house = Payer::house();

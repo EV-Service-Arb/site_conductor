@@ -36,6 +36,7 @@ nix run .#local-stack -- --no-sites    # the conductor and sites_panel, no landi
 nix run .#local-stack -- --role operator
 nix run .#local-stack -- --watch       # every part rebuilt and restarted as its checkout is edited
 nix run .#local-stack -- --port-offset <n>   # every port moved by n: a second stack, in .local-<n>/
+nix run .#local-stack -- --spend-real-quota-i-am-certain   # buy the Google answers the caches lack, on real quota; never in tests
 ```
 
 A stack already up on the ports is reported, and the command exits: use it. The URLs to open

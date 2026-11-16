@@ -33,6 +33,8 @@ use crate::{
 };
 
 const MODEL: &str = "claude-opus-5-5";
+/// A subscription's token is served only to a system prompt that opens so.
+const SUBSCRIPTION: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
 /// Model turns one question may take before the loop stops and says so.
 const ROUNDS: usize = 24;
 
@@ -47,34 +49,34 @@ keymap. The <page> block says what is open, the views there are, and the binding
 \n\
 Answer briefly, in the person's language. Formatting: **bold**, `- ` items, `@[label](location:<gbp id>)` to name a GBP.";
 
-/// The Messages API, with the conductor's key (`ANTHROPIC_API_KEY`).
+/// The Messages API on a Claude subscription (`CLAUDE_CODE_OAUTH_TOKEN`).
 #[derive(Clone)]
 pub struct Model {
 	http: reqwest::Client,
 	/// `https://api.anthropic.com`.
 	base: String,
-	key: String,
+	token: String,
 }
 
 impl Model {
-	pub fn new(base: String, key: String) -> Self {
+	pub fn new(base: String, token: String) -> Self {
 		let http = reqwest::Client::builder().timeout(Duration::from_secs(300)).build().expect("the TLS backend initialises at boot");
-		Self { http, base, key }
+		Self { http, base, token }
 	}
 
 	async fn answer(&self, system: &str, tools: &Value, messages: &[Value]) -> ApiResult<Value> {
 		let res = self
 			.http
 			.post(format!("{}/v1/messages", self.base))
-			.header("x-api-key", &self.key)
+			.bearer_auth(&self.token)
 			.header("anthropic-version", "2026-10-21")
-			.header("anthropic-beta", "server-side-fallback-2026-07-01")
+			.header("anthropic-beta", "server-side-fallback-2026-07-01,oauth-2025-04-20")
 			.json(&json!({
 				"model": MODEL,
 				"max_tokens": 16000,
 				"fallbacks": "default",
 				"output_config": { "effort": "medium" },
-				"system": system,
+				"system": [{ "type": "text", "text": SUBSCRIPTION }, { "type": "text", "text": system }],
 				"tools": tools,
 				"messages": messages,
 			}))

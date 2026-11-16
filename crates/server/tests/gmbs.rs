@@ -73,7 +73,7 @@ async fn places() -> (Arc<Mutex<Vec<String>>>, String) {
 /// A panel on `db` asking `base` with a key (`None`: keyless), its answers in `db`, its requests free.
 async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
 	let keys = Keys::new(base.map(|_| vec![("house".to_owned(), "k".to_owned())]).unwrap_or_default());
-	let google = Google::try_new(keys, Arc::new(sa_places::InOrder), Arc::new(db.store().await)).unwrap();
+	let google = Google::try_new(keys, Arc::new(sa_places::InOrder), Arc::new(db.store().await)).unwrap().spend(true);
 	let google = match base {
 		Some(b) => google.at(b),
 		None => google,

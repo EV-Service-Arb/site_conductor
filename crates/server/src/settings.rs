@@ -77,9 +77,10 @@ ev_lib::settings! {
 		/// `migrate`: there is no first balance by default.
 		#[required_in("production")]
 		tokens_start_cap_multiple: Option<f64>,
-		/// The in-page assistant's model (the Claude API). Unset: asking the assistant answers 503.
+		/// The in-page assistant's model: a Claude subscription's token (`claude setup-token`). Unset:
+		/// asking the assistant answers 503.
 		#[secret]
-		anthropic_api_key: Option<String>,
+		claude_code_oauth_token: Option<String>,
 		/// Where the Claude API is.
 		anthropic_base_url: String = "https://api.anthropic.com",
 		/// GoLogin's API token (app.gologin.com → Settings → API; a paid plan): its browsers'
@@ -133,8 +134,8 @@ impl Settings {
 
 	/// The assistant's model.
 	pub fn model(&self) -> Option<sa_server::ask::Model> {
-		let key = self.anthropic_api_key.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
-		Some(sa_server::ask::Model::new(self.anthropic_base_url.clone(), key.to_owned()))
+		let token = self.claude_code_oauth_token.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
+		Some(sa_server::ask::Model::new(self.anthropic_base_url.clone(), token.to_owned()))
 	}
 
 	/// The front end's files, when `PANEL_WEB_DIR` names them.
@@ -440,7 +441,7 @@ mod tests {
 				"TOKENS_DAILY",
 				"TOKENS_CAP",
 				"TOKENS_START_CAP_MULTIPLE",
-				"ANTHROPIC_API_KEY",
+				"CLAUDE_CODE_OAUTH_TOKEN",
 				"ANTHROPIC_BASE_URL",
 				"GOLOGIN_TOKEN",
 				"MULTILOGIN_TOKEN",

@@ -127,6 +127,7 @@ pub(crate) fn places_error(e: sa_places::Error) -> eyre::Result<Refused> {
 		sa_places::Error::Invalid(why) => Ok(Refused::Invalid(why)),
 		e @ sa_places::Error::OwnKey { .. } => Ok(Refused::Invalid(format!("{e}; replace it on its gmail's Connections"))),
 		sa_places::Error::Unpaid(why) => Ok(Refused::Conflict(why)),
+		e @ sa_places::Error::Unbought => Ok(Refused::Conflict(e.to_string())),
 		e => Err(eyre::eyre!(e).wrap_err("asking the Places API")),
 	}
 }

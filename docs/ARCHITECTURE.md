@@ -521,7 +521,7 @@ POST   /assistant/chats/{id}/act
 ```
 
 An id in a path that is not the caller's is a 404.
-**The assistant** answers on the conductor (`ask.rs`, the model's key from the environment): its
+**The assistant** answers on the conductor (`ask.rs`, a Claude subscription's token from the environment): its
 calls take the `/api/v1` gate on the asker's own session, never a side door to `Panel`. An
 answer's action is a view (`href`), an operation of the catalog (`call`: its id and arguments, run
 when the person confirms it) or a binding of the page's keymap (`binding`), nothing else; the page
@@ -975,7 +975,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   enforced, timestamps INTEGER microseconds since the epoch, UUIDs 16-byte blobs.
 - **The conductor's secrets come from the environment only** (`PANEL_DATA_KEY`, `SENTRY_DSN`,
   `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOLOGIN_TOKEN`,
-  `MULTILOGIN_TOKEN`, `ANTHROPIC_API_KEY`), through
+  `MULTILOGIN_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`), through
   `ev_lib::settings`, and the Google accounts' keys and readers, which the config file names
   (`{ env = "…" }`); a person's (a gmail's IMAP password, its Maps key, its proxy) through the API, sealed at
   once; with `APP_ENV=production` the database, the data key, the four sign-in
@@ -1025,7 +1025,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   one Google says is spent for a quota window sits out until the window resets, one whose billing
   is off until restart (a person's, until it answers a test). Every answer is kept in the queries
   cache, in the database. Set the prices (`/admin/tokens`) after the first deploy: until then a
-  person without a key of their own is refused.
+  person without a key of their own is refused. Only a conductor started with
+  `--spend-real-quota-i-am-certain` (the image's entrypoint) buys one: without it a miss is refused.
 - **The billing exports, outbound.** `bigquery.googleapis.com:443` and `oauth2.googleapis.com:443`:
   each account's `export` (`project.dataset.table`, its Cloud Billing "detailed usage cost" export)
   read with its `reader`, a service account's JSON key (BigQuery Data Viewer on the dataset, Job

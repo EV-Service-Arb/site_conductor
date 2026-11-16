@@ -153,6 +153,9 @@ pub enum Error {
 	/// The purse refused a buy on the rotation: why, as the payer reads it.
 	#[error("{0}")]
 	Unpaid(String),
+	/// This process buys no Google answer: it was started without `--spend-real-quota-i-am-certain`.
+	#[error("this server buys no Google answer: it was started without --spend-real-quota-i-am-certain")]
+	Unbought,
 	/// The purse failed to answer.
 	#[error("the purse: {0}")]
 	Purse(String),
@@ -188,6 +191,8 @@ pub struct Google {
 	keys: Keys,
 	rank: Arc<dyn Rank>,
 	cache: Arc<dyn QueriesCache>,
+	/// Buy what the queries cache lacks; off, only cached answers are served.
+	spend: bool,
 	/// `…/v1/places`.
 	base: String,
 	/// `…/v4/geocode/location`.
@@ -203,9 +208,14 @@ impl Google {
 			keys,
 			rank,
 			cache,
+			spend: false,
 			base: "https://places.googleapis.com/v1/places".to_owned(),
 			geocode: "https://geocode.googleapis.com/v4/geocode/location".to_owned(),
 		})
+	}
+
+	pub fn spend(self, yes: bool) -> Self {
+		Self { spend: yes, ..self }
 	}
 
 	/// Places at `base` (`…/v1/places`), its geocoding at `base/geocode`, in place of Google's own: a stub's.
@@ -544,6 +554,9 @@ impl Google {
 		}
 		if self.keyless(payer) {
 			return Err(Error::Invalid("asking Google Places needs an API key, and none is set".into()));
+		}
+		if !self.spend {
+			return Err(Error::Unbought);
 		}
 		loop {
 			match self.cache.claim(key, fresh_since).await? {

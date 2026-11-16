@@ -42,6 +42,7 @@ async fn an_area_has_the_country_its_place_or_its_centre_lies_in() {
 	let db = TestDb::create().await;
 	let google = Google::try_new(Keys::new(vec![("house".to_owned(), "k".to_owned())]), Arc::new(sa_places::InOrder), Arc::new(db.store().await))
 		.unwrap()
+		.spend(true)
 		.at(format!("{base}/v1/places"));
 	let panel = panel_on(db.store().await, DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(), google, sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some("k"), None)]));
 	panel

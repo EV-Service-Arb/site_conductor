@@ -44,6 +44,9 @@ struct Cli {
 	cmd: Cmd,
 	#[command(flatten)]
 	config: config::SettingsFlags,
+	/// Buy the Google answers the queries cache lacks, on real quota; without it only cached ones are served.
+	#[arg(long, global = true)]
+	spend_real_quota_i_am_certain: bool,
 }
 
 #[derive(Subcommand)]
@@ -247,6 +250,7 @@ fn init_tracing() -> eyre::Result<()> {
 
 async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSignIn>) -> eyre::Result<()> {
 	let flags = cli.config;
+	let spend = cli.spend_real_quota_i_am_certain;
 	let accounts = || -> eyre::Result<Arc<sa_places::Accounts>> {
 		let config = config::Config::try_build(flags.clone()).map_err(|e| eyre::eyre!("the config file: {e}"))?;
 		eyre::ensure!(
@@ -263,7 +267,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 			store: store.clone(),
 			accounts: accounts.clone(),
 		};
-		let google = sa_places::Google::try_new(keys, Arc::new(rank), Arc::new(store.clone()))?;
+		let google = sa_places::Google::try_new(keys, Arc::new(rank), Arc::new(store.clone()))?.spend(spend);
 		eyre::Ok(Panel::new(store, settings.data_key()?, settings.renewal()?, google, accounts))
 	};
 	match cli.cmd {
@@ -529,7 +533,7 @@ async fn serve(
 		tracing::warn!("PANEL_BROWSERS_URL unset: no browsers, their routes answer 503");
 	}
 	if model.is_none() {
-		tracing::warn!("ANTHROPIC_API_KEY unset: no assistant, asking it answers 503");
+		tracing::warn!("CLAUDE_CODE_OAUTH_TOKEN unset: no assistant, asking it answers 503");
 	}
 	let catalog = forward.as_ref().map(|f| f.catalog().clone());
 	let panel_for_pages = sign_in.panel.clone();

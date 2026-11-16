@@ -201,7 +201,7 @@ async fn google_ranked(keys: &[&str], rank: Arc<dyn Rank>, cache: Arc<dyn Querie
 	let base = format!("http://{}/v1/places", listener.local_addr().unwrap());
 	let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
 	let keys = Keys::new(keys.iter().map(|k| (format!("account of {k}"), k.to_string())).collect());
-	let google = Google::try_new(keys, rank, cache).unwrap().at(base);
+	let google = Google::try_new(keys, rank, cache).unwrap().spend(true).at(base);
 	(s, google, server)
 }
 

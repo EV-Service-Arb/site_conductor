@@ -42,6 +42,8 @@ VIFNET_PLACES=(vifnet)
 reset=0
 sites=1
 watch=0
+# Google answers the caches lack are bought only with it: tests and agents never pass it
+spend_flag=""
 dev=0
 own_port=""
 from_prod=0
@@ -51,6 +53,7 @@ while [ $# -gt 0 ]; do
 	--reset) reset=1 ;;
 	--no-sites) sites=0 ;;
 	--watch) watch=1 ;;
+	--spend-real-quota-i-am-certain) spend_flag="--spend-real-quota-i-am-certain" ;;
 	--from-prod) from_prod=1 ;;
 	--dev) dev=1 ;;
 	--port)
@@ -75,7 +78,7 @@ while [ $# -gt 0 ]; do
 		;;
 	-h | --help)
 		cat <<'EOF'
-local-stack [--reset] [--no-sites] [--watch] [--role admin|operator] [--port-offset <n>] [--from-prod]
+local-stack [--reset] [--no-sites] [--watch] [--role admin|operator] [--port-offset <n>] [--from-prod] [--spend-real-quota-i-am-certain]
 dev [--port <n>] [--reset] [--role admin|operator] [--from-prod]
 
   The conductor (dev sign-in, its Grafana at /grafana/), sites_panel, review_archive, aquafix and
@@ -451,7 +454,7 @@ panel() {
 		PANEL_GRAFANA_DIR="$state/grafana" \
 		PANEL_PLAYBOOK_URL="http://127.0.0.1:9" \
 		TOKENS_START_CAP_MULTIPLE=1 \
-		"$PANEL_BIN" --config "$conductor_config" "$@"
+		"$PANEL_BIN" --config "$conductor_config" ${spend_flag:+"$spend_flag"} "$@"
 }
 sites_panel() {
 	env -u POSTHOG_PROJECT_API_KEY -u POSTHOG_PROJECT_ID -u SENTRY_DSN \
@@ -602,7 +605,7 @@ browsers() {
 		"$root/target/debug/sa_browsers" "$@"
 }
 export -f panel sites_panel review_archive browsers
-export state conductor_config public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_origin browsers_origin \
+export state conductor_config spend_flag public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_origin browsers_origin \
 	PANEL_GRAFANA_SERVER PANEL_BIN SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR REVIEW_ARCHIVE_DATA_DIR REVIEW_ARCHIVE_PORT \
 	PANEL_PORT SITES_PORT BROWSERS_PORT root
 watched() {
@@ -670,7 +673,7 @@ if [ "$run_placement" = 1 ]; then
 	# its settings' `queries_cache`, through their environment: `serve` takes no settings flag
 	(cd "$PLACEMENT_DIR" && PANEL_ASSERTION_KEYS="$assertion_public" GMAPS_OPTIMAL_PLACEMENT_QUERIES_CACHE="$origin/api/queries_cache" \
 		prefixed placement bash -c \
-		"${DEV_COMMAND_gmaps_optimal_placement:-nix run .#conductor -- --port $PLACEMENT_PORT -t examples/trades -l examples/locations}") &
+		"${DEV_COMMAND_gmaps_optimal_placement:-nix run .#conductor -- $spend_flag --port $PLACEMENT_PORT -t examples/trades -l examples/locations}") &
 	placement_pid=$!
 fi
 

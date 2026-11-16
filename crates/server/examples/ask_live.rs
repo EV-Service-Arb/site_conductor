@@ -1,4 +1,4 @@
-//! The in-page assistant against the real Claude API: `ANTHROPIC_API_KEY=… cargo r --example ask_live -- "<question>"`.
+//! The in-page assistant against the real Claude API on a subscription: `CLAUDE_CODE_OAUTH_TOKEN=… cargo r --example ask_live -- "<question>"`.
 
 use axum::{body::Body, http::Method};
 use sa_panel::testing::{TestDb, operator, panel};
@@ -15,7 +15,7 @@ use uuid::Uuid;
 #[tokio::main]
 async fn main() {
 	let question = std::env::args().nth(1).expect("the question is the first argument");
-	let key = std::env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY is the model's key");
+	let token = std::env::var("CLAUDE_CODE_OAUTH_TOKEN").expect("CLAUDE_CODE_OAUTH_TOKEN is the subscription's token");
 	let db = TestDb::create().await;
 	let p = panel(&db).await;
 	let email = "asker@x.com";
@@ -28,7 +28,7 @@ async fn main() {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: ORIGIN.to_owned(),
 	};
-	let model = Model::new("https://api.anthropic.com".into(), key);
+	let model = Model::new("https://api.anthropic.com".into(), token);
 	let app = http::app(SignIn::new(p, Concierge::dev(who), config), None, None, Default::default(), None, None, None, Some(model));
 	let mut b = Browser::default();
 	b.sign_in(&app).await;

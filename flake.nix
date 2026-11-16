@@ -243,7 +243,7 @@
             "TELEGRAM_BOT_TOKEN"
             "GOLOGIN_TOKEN"
             "MULTILOGIN_TOKEN"
-            "ANTHROPIC_API_KEY"
+            "CLAUDE_CODE_OAUTH_TOKEN"
           ];
           # TELEGRAM_BOT_TOKEN needs the forward (it sends sites' notes).
           optionalEnv = [
@@ -259,8 +259,8 @@
             "GOLOGIN_TOKEN"
             "MULTILOGIN_TOKEN"
             "PANEL_BROWSERS_URL"
-            # the in-page assistant's model; unset, asking it answers 503
-            "ANTHROPIC_API_KEY"
+            # the in-page assistant's model (a Claude subscription); unset, asking it answers 503
+            "CLAUDE_CODE_OAUTH_TOKEN"
           ];
           ingress = {
             # in-cluster only, by service DNS: the landings' and bots' ingest, the landings' review kit
@@ -275,7 +275,7 @@
             # concierge's gRPC, at the address it names
             grpcEnv = [ "CONCIERGE_GRPC_ADDR" ];
             # the Bot API; the Places API (the accounts' Places keys); GoLogin's (GOLOGIN_TOKEN) and
-            # Multilogin's (MULTILOGIN_TOKEN) APIs; the Claude API (ANTHROPIC_API_KEY)
+            # Multilogin's (MULTILOGIN_TOKEN) APIs; the Claude API (CLAUDE_CODE_OAUTH_TOKEN)
             # the meters' baseline: each account's billing export, its service account's token
             hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "geocode.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" "bigquery.googleapis.com:443" "oauth2.googleapis.com:443" "api.anthropic.com:443" ];
           };
@@ -309,7 +309,7 @@
             healthPath = "/health";
             # a source that gets a 5xx retries from its outbox; nothing is lost while down
             criticality = "normal";
-            entrypoint = [ "${bin}/bin/${pname}" "--config" configPath "serve" "--bind" "0.0.0.0:${toString port}" ];
+            entrypoint = [ "${bin}/bin/${pname}" "--config" configPath "--spend-real-quota-i-am-certain" "serve" "--bind" "0.0.0.0:${toString port}" ];
             # /bin/panel, for `kubectl exec … panel source add` and the like
             contents = [ bin ];
             # the production guards (`#[required_in("production")]`) are armed wherever it runs
