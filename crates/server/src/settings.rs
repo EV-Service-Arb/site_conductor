@@ -89,6 +89,16 @@ ev_lib::settings! {
 		google_maps_keys: Option<String>,
 		/// The key the browser loads Maps JS with: referrer-restricted, public by nature. Unset: no map.
 		google_maps_browser_key: Option<String>,
+		/// The Cloud Billing export of the account the Maps keys bill on, `project.dataset.table`:
+		/// the meters' baseline, read at start and daily. With GOOGLE_BILLING_KEY, or neither;
+		/// neither: no reading, so Street View is not bought.
+		#[required_in("production")]
+		google_billing_export: Option<String>,
+		/// A service account's JSON key (the whole document) that may query GOOGLE_BILLING_EXPORT:
+		/// BigQuery Data Viewer on its dataset, Job User on its project.
+		#[secret]
+		#[required_in("production")]
+		google_billing_key: Option<String>,
 		/// GoLogin's API token (app.gologin.com → Settings → API; a paid plan): its browsers'
 		/// profiles. It or MULTILOGIN_TOKEN with PANEL_BROWSERS_URL; none of the three: no browsers.
 		#[secret]
@@ -152,6 +162,17 @@ impl Settings {
 	pub fn map(&self) -> Option<MapDto> {
 		let key = self.google_maps_browser_key.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
 		Some(MapDto { key: key.to_owned() })
+	}
+
+	/// The billing export's reader; a mistake if only one of its two is set.
+	pub fn billing(&self) -> eyre::Result<Option<sa_panel::meters::google::Google>> {
+		let export = self.google_billing_export.as_deref().map(str::trim).filter(|v| !v.is_empty());
+		let key = self.google_billing_key.as_deref().map(str::trim).filter(|v| !v.is_empty());
+		match (export, key) {
+			(None, None) => Ok(None),
+			(Some(export), Some(key)) => Ok(Some(sa_panel::meters::google::Google::try_new(export, key)?)),
+			_ => eyre::bail!("GOOGLE_BILLING_EXPORT and GOOGLE_BILLING_KEY go together"),
+		}
 	}
 
 	/// The front end's files, when `PANEL_WEB_DIR` names them.
@@ -459,6 +480,8 @@ mod tests {
 				"TOKENS_START_CAP_MULTIPLE",
 				"GOOGLE_MAPS_KEYS",
 				"GOOGLE_MAPS_BROWSER_KEY",
+				"GOOGLE_BILLING_EXPORT",
+				"GOOGLE_BILLING_KEY",
 				"GOLOGIN_TOKEN",
 				"MULTILOGIN_TOKEN",
 				"PANEL_BROWSERS_URL",
@@ -483,7 +506,9 @@ mod tests {
 				"PANEL_REVIEW_ARCHIVE_URL",
 				"PANEL_PLAYBOOK_URL",
 				"PANEL_SITES_URL",
-				"TOKENS_START_CAP_MULTIPLE"
+				"TOKENS_START_CAP_MULTIPLE",
+				"GOOGLE_BILLING_EXPORT",
+				"GOOGLE_BILLING_KEY"
 			]
 		);
 		assert!(Settings::required_var_names("development").is_empty());
@@ -571,6 +596,8 @@ mod tests {
 				("PANEL_PLAYBOOK_URL", "http://playbook-web.personal:59082"),
 				("PANEL_SITES_URL", "http://sites-panel:59121"),
 				("TOKENS_START_CAP_MULTIPLE", "1"),
+				("GOOGLE_BILLING_EXPORT", "project.billing.export"),
+				("GOOGLE_BILLING_KEY", "{}"),
 			])
 			.unwrap()
 			.sign_in()
@@ -699,6 +726,8 @@ mod tests {
 				("PANEL_PLAYBOOK_URL", "http://playbook-web.personal:59082"),
 				("PANEL_SITES_URL", "http://sites-panel:59121"),
 				("TOKENS_START_CAP_MULTIPLE", "1"),
+				("GOOGLE_BILLING_EXPORT", "project.billing.export"),
+				("GOOGLE_BILLING_KEY", "{}"),
 				("PANEL_DEV_SIGN_IN", "sa:admin"),
 			])
 			.unwrap()

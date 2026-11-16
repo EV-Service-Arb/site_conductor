@@ -9,7 +9,7 @@
 //! [`tokens`] their balances and review_archive's charges, and [`import`] both from there;
 //! [`alerts`] the hub: users' destinations and rules, the feeds fanned out to them; [`telegram`]
 //! the method that reaches them; [`live`] the bus that tells the server's sockets what changed;
-//! [`assistant`] the assistant's chats; [`trash`] what was removed, until it is purged; [`kit`] the
+//! [`meters`] the vendors' own counts of what they bill, and ours since; [`assistant`] the assistant's chats; [`trash`] what was removed, until it is purged; [`kit`] the
 //! review kit; [`areas`] the geography it and placement studies share.
 
 pub mod access;
@@ -24,6 +24,7 @@ mod imap;
 pub mod import;
 pub mod kit;
 pub mod live;
+pub mod meters;
 pub mod seal;
 pub mod session;
 pub mod store;

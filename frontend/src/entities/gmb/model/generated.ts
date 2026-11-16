@@ -460,7 +460,7 @@ export type Device = (typeof DEVICES)[number];
 export const PROVIDERS = ["multilogin", "multilogin_browser", "gologin"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
-export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "ads.location", "ads.keyword_ideas", "dataforseo.keywords_for_keywords", "browser.gologin", "browser.mimic"] as const;
+export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic"] as const;
 export type PricedItem = (typeof PRICED_ITEMS)[number];
 
 export const SCOPES = ["conductor", "review_archive", "browsers", "placement"] as const;

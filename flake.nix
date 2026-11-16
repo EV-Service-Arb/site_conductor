@@ -226,7 +226,7 @@
         deploy = {
           # Settings::required_var_names("production"): the pod exits 78 without any of them.
           # PANEL_DB_PATH is the container's own env (below); the rest the deploy supplies.
-          requiredEnv = [ "PANEL_DB_PATH" "PANEL_DATA_KEY" "PANEL_PUBLIC_ORIGIN" "CONCIERGE_PUBLIC_ORIGIN" "CONCIERGE_GRPC_ADDR" "RP_CLIENT_SECRET_SA" "PANEL_ASSERTION_KEY" "PANEL_REVIEW_ARCHIVE_URL" "PANEL_PLAYBOOK_URL" "PANEL_SITES_URL" "TOKENS_START_CAP_MULTIPLE" ];
+          requiredEnv = [ "PANEL_DB_PATH" "PANEL_DATA_KEY" "PANEL_PUBLIC_ORIGIN" "CONCIERGE_PUBLIC_ORIGIN" "CONCIERGE_GRPC_ADDR" "RP_CLIENT_SECRET_SA" "PANEL_ASSERTION_KEY" "PANEL_REVIEW_ARCHIVE_URL" "PANEL_PLAYBOOK_URL" "PANEL_SITES_URL" "TOKENS_START_CAP_MULTIPLE" "GOOGLE_BILLING_EXPORT" "GOOGLE_BILLING_KEY" ];
           # from the sops-backed Secret, never literal env
           secretEnv = [
             "PANEL_DATA_KEY"
@@ -235,6 +235,7 @@
             "PANEL_ASSERTION_KEY"
             "TELEGRAM_BOT_TOKEN"
             "GOOGLE_MAPS_KEYS"
+            "GOOGLE_BILLING_KEY"
             "GOLOGIN_TOKEN"
             "MULTILOGIN_TOKEN"
           ];
@@ -272,7 +273,8 @@
             grpcEnv = [ "CONCIERGE_GRPC_ADDR" ];
             # the Bot API; the Places API (GOOGLE_MAPS_KEYS); GoLogin's (GOLOGIN_TOKEN) and Multilogin's
             # (MULTILOGIN_TOKEN) APIs
-            hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "geocode.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" ];
+            # the meters' baseline: the billing export (GOOGLE_BILLING_EXPORT), its service account's token
+            hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "geocode.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" "bigquery.googleapis.com:443" "oauth2.googleapis.com:443" ];
           };
         };
 

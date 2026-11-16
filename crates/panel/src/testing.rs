@@ -138,3 +138,29 @@ pub fn operator() -> sa_auth::PermissionSet {
 pub fn admin() -> sa_auth::PermissionSet {
 	sa_auth::SA_ADMIN.members.iter().copied().collect()
 }
+
+/// A vendor that counts `units` of every one of its meters, its record reaching `through`.
+pub struct Told {
+	pub units: i64,
+	pub through: Timestamp,
+}
+
+impl crate::meters::Reader for Told {
+	fn vendor(&self) -> sa_core::meters::Vendor {
+		sa_core::meters::Vendor::Google
+	}
+
+	async fn read(&self, meters: &[&'static sa_core::meters::Meter], now: Timestamp) -> eyre::Result<Vec<crate::meters::Reading>> {
+		Ok(meters
+			.iter()
+			.map(|m| crate::meters::Reading {
+				meter: m,
+				period_start: m.vendor.period(now).0,
+				units: self.units,
+				cost_micros: 0,
+				currency: "EUR".to_owned(),
+				through: self.through,
+			})
+			.collect())
+	}
+}

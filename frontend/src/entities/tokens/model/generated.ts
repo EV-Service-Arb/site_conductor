@@ -52,6 +52,50 @@ at: string, delta: number, kind: LedgerKind, service: string | null, key: string
  */
 by: string | null, note: string | null, };
 /**
+ * The vendor's count of a meter, as last read.
+ */
+export type MeterReading = { meter: string, 
+/**
+ * RFC 3339: the period it counts from.
+ */
+period_start: string, units: number, 
+/**
+ * Gross, before credits, in `currency`.
+ */
+cost: number, currency: string, 
+/**
+ * RFC 3339: how far the vendor's record reaches.
+ */
+through: string, 
+/**
+ * RFC 3339.
+ */
+synced_at: string, };
+/**
+ * A meter's use this period: `used` is the vendor's `baseline` plus our `delta` after `since`.
+ */
+export type MeterUse = { meter: string, vendor: "google", name: string, free: number, stop: "at_free" | "never", items: PricedItem[], 
+/**
+ * RFC 3339, `[start, end)`.
+ */
+period_start: string, period_end: string, 
+/**
+ * The latest reading, of whichever period; `null` before a first one.
+ */
+reading: MeterReading | null, baseline: number, 
+/**
+ * RFC 3339: ours are counted after it.
+ */
+since: string, delta: number, used: number, left: number, 
+/**
+ * `delta` at the admin's cost of a unit; `null` while its items' costs are unknown or differ.
+ */
+delta_usd: number | null, };
+/**
+ * `GET /admin/meters`: every meter, in the catalog's order.
+ */
+export type Meters = { meters: Array<MeterUse>, };
+/**
  * A catalog item, its price (`null`: not sold, or metered) and what a unit costs us (`null`: unknown).
  */
 export type Price = { item: PricedItem, scope: Scope, sale: Sale, 
@@ -113,7 +157,7 @@ export type UsageDay = {
  */
 day: string, charges: number, tokens: number, };
 
-export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "ads.location", "ads.keyword_ideas", "dataforseo.keywords_for_keywords", "browser.gologin", "browser.mimic"] as const;
+export const PRICED_ITEMS = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic"] as const;
 export type PricedItem = (typeof PRICED_ITEMS)[number];
 
 export const SCOPES = ["conductor", "review_archive", "browsers", "placement"] as const;

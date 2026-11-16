@@ -20,6 +20,7 @@ use sa_server::{
 	browser::{SetBrowser, StartBrowser},
 	connections::ConnectionsDto,
 	gmbs::{CandidatesDto, GmailsDto, GoogleCategoriesDto, MapDto, SuggestionsDto, TradesDto},
+	meters::MetersDto,
 	kit::{AreaGmbsDto, EditDraftDto, GmbKitDto, NewDraftDto, PoolDto, SetKitDto},
 	signin::Caller,
 	tokens::{BalanceChangeDto, BalanceDto, FLOW_KINDS, FlowsDto, LedgerDto, PricesDto, SetPricesDto, TokenHoldersDto, TokensDto, UsageDto},
@@ -97,7 +98,7 @@ fn main() {
 	Ts::write(
 		&root.join("entities/tokens/model/generated.ts"),
 		&[
-			Ts::types::<(TokensDto, LedgerDto, UsageDto, TokenHoldersDto, BalanceChangeDto, BalanceDto, (PricesDto, SetPricesDto, FlowsDto))>(),
+			Ts::types::<(TokensDto, LedgerDto, UsageDto, TokenHoldersDto, BalanceChangeDto, BalanceDto, (PricesDto, SetPricesDto, FlowsDto, MetersDto))>(),
 			priced_items(),
 			scopes(),
 			sales(),

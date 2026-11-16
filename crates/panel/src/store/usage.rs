@@ -66,16 +66,6 @@ pub(crate) async fn record(conn: &mut SqliteConnection, u: &Use) -> eyre::Result
 	Ok(())
 }
 
-/// Units of `item` from `since` on.
-pub(crate) async fn units_since(conn: &mut SqliteConnection, item: Item, since: Timestamp) -> eyre::Result<i64> {
-	sqlx::query_scalar("SELECT COALESCE(SUM(units), 0) FROM usage WHERE item = $1 AND at >= $2")
-		.bind(item.to_string())
-		.bind(to_db(since))
-		.fetch_one(conn)
-		.await
-		.wrap_err_with(|| format!("summing {item} since {since}"))
-}
-
 /// Where `source`'s feed is read up to; 0, nothing taken from it yet.
 pub(crate) async fn cursor(conn: &mut SqliteConnection, source: &str) -> eyre::Result<i64> {
 	let at: Option<i64> = sqlx::query_scalar("SELECT after FROM usage_cursors WHERE source = $1")

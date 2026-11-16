@@ -4,7 +4,7 @@ import { Button, Card, CardContent, PageFrame, Settled, Skeleton, Table, TableBo
 import { useState } from "react";
 
 import { may, useMe } from "@/entities/session";
-import { type Holder, fetchHolders, fetchPrices, tokens } from "@/entities/tokens";
+import { type Holder, fetchHolders, fetchMeters, fetchPrices, tokens } from "@/entities/tokens";
 import { GrantDialog } from "@/features/grant-tokens";
 import { PricesCard } from "@/features/price-tokens";
 import { ROUTES } from "@/shared/config/routes";
@@ -14,6 +14,7 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorState } from "@/shared/ui/error-state";
 import { EDGE_CELL, TABLE_HEAD } from "@/shared/ui/table";
 import { useButtonSize } from "@/shared/ui/touch";
+import { MetersCard } from "./meters-card";
 
 const HEAD = cn(TABLE_HEAD, EDGE_CELL);
 
@@ -24,6 +25,7 @@ export function AdminTokensView() {
   const button = useButtonSize();
   const holders = useResource("admin.tokens", fetchHolders);
   const prices = useResource("admin.prices", fetchPrices);
+  const meters = useResource("admin.meters", fetchMeters);
   const [changing, setChanging] = useState<Holder | null>(null);
 
   if (!may(me, "sa:admin:tokens:grant")) {
@@ -37,6 +39,8 @@ export function AdminTokensView() {
   return (
     <PageFrame breakpoint="md" title={t(tokens.admin.title, "Tokens of everyone")}>
       {prices.status === "error" && <ErrorState failure={prices.failure} onRetry={prices.reload} />}
+      {meters.status === "error" && <ErrorState failure={meters.failure} onRetry={meters.reload} />}
+      {meters.status === "ok" && <MetersCard meters={meters.data} />}
       {prices.status === "ok" && <PricesCard prices={prices.data} onSaved={prices.reload} />}
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-ink">{t(tokens.admin.spending, "Spending")}</h2>

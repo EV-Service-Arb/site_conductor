@@ -16,6 +16,7 @@ pub mod connections;
 pub mod gmbs;
 pub mod areas;
 pub mod kit;
+pub mod meters;
 mod queries_cache;
 pub mod sessions;
 pub mod sources;

@@ -22,6 +22,7 @@ pub mod http;
 mod ingest;
 pub mod kit;
 pub mod live;
+pub mod meters;
 mod queries_cache;
 pub mod signin;
 pub mod telegram;

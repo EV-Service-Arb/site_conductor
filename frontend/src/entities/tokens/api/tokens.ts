@@ -4,6 +4,7 @@ import type { Ledger } from "../model/generated";
 import {
   type Change,
   type Holder,
+  type MeterUse,
   type Price,
   type SetPrices,
   type Tokens,
@@ -11,6 +12,7 @@ import {
   balanceParser,
   holdersParser,
   ledgerParser,
+  metersParser,
   pricesParser,
   tokensParser,
   usageParser,
@@ -48,4 +50,9 @@ export async function fetchPrices(): Promise<Price[]> {
 /** Only the items given change: a price `null` takes one off sale, a cost `null` makes it unknown. */
 export async function setPrices(prices: SetPrices["prices"], costs: SetPrices["costs"]): Promise<Price[]> {
   return (await http.send("PUT", "/api/v1/admin/tokens/prices", { prices, costs }, pricesParser)).prices;
+}
+
+/** Every vendor meter this period, in the catalog's order. */
+export async function fetchMeters(): Promise<MeterUse[]> {
+  return (await http.get("/api/v1/admin/meters", metersParser)).meters;
 }

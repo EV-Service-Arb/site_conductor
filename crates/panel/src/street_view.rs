@@ -1,16 +1,13 @@
 //! Street View on the browser's Maps key: each panorama opened is bought here first, at the
-//! admin's price of [`StreetViewLoad::Panorama`], and none past Google's free ones in its billing month.
+//! admin's price of [`StreetViewLoad::Panorama`], and none past its meter's free ones.
 //!
 //! ```text
-//! the pegman dropped ─ a panorama there? (free) ─ open(user): month < FREE, price set, balance ≥ price,
-//!   recorded and charged in one write ─ the panorama opened in the browser
+//! the pegman dropped ─ a panorama there? (free) ─ open(user): its meter not stopped, price set,
+//!   balance ≥ price, recorded and charged in one write ─ the panorama opened in the browser
 //! ```
 
 use eyre::WrapErr;
-use jiff::{
-	Timestamp,
-	tz::{TimeZone, offset},
-};
+use jiff::Timestamp;
 use sa_core::{
 	prices::{Item, StreetViewLoad},
 	usage::Bill,
@@ -18,22 +15,13 @@ use sa_core::{
 use uuid::Uuid;
 
 use crate::{
-	Panel, Refused,
+	Panel, Refused, meters,
 	store::{
 		tokens::{self as ledger, Charged, Entry, Kind},
 		usage::{self, CONDUCTOR, Use},
 	},
 	tokens::is_open,
 };
-
-/// Dynamic Street View's free loads a month, per billing account.
-pub const FREE: i64 = 5_000;
-
-/// Google's billing month starts at Pacific midnight; PDT's, the earlier, is counted from.
-fn month_start(now: Timestamp) -> eyre::Result<Timestamp> {
-	let pacific = TimeZone::fixed(offset(-7));
-	Ok(now.to_zoned(pacific.clone()).date().first_of_month().to_zoned(pacific).wrap_err("a month's start")?.timestamp())
-}
 
 impl Panel {
 	/// The user opens a panorama at `lat, lng`: bought, or refused before anything loads. Their balance then.
@@ -46,10 +34,9 @@ impl Panel {
 			return Ok(Err(Refused::Closed));
 		}
 		let item = Item::from(StreetViewLoad::Panorama);
-		if usage::units_since(&mut tx, item, month_start(now)?).await? >= FREE {
-			return Ok(Err(Refused::Conflict(format!(
-				"Street View's free {FREE} this month are used: the map shows where it is, until the month is out"
-			))));
+		let meter = item.meter().expect("a panorama is on Google's meter");
+		if let Some(why) = meters::gauge(&mut tx, meter, now).await?.refuses(1) {
+			return Ok(Err(Refused::Conflict(why)));
 		}
 		let Some(price) = ledger::price(&mut tx, item).await? else {
 			return Ok(Err(Refused::Conflict("Street View is not priced yet: ask an admin to price it".to_owned())));

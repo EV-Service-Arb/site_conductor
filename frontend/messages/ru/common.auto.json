@@ -2163,6 +2163,18 @@
     "en": "Wallet",
     "t": "Кошелёк"
   },
+  "placement.age": {
+    "en": "Data age · oldest {days} d",
+    "t": "Возраст данных · самые старые {days} дн."
+  },
+  "placement.area": {
+    "en": "Area",
+    "t": "Область"
+  },
+  "placement.areaWindow": {
+    "en": "A new area for the study",
+    "t": "Новая область для исследования"
+  },
   "placement.base": {
     "en": "Base",
     "t": "Подложка"
@@ -2175,13 +2187,29 @@
     "en": "Schematic",
     "t": "Схема"
   },
+  "placement.categories": {
+    "en": "Categories: where a study is linked",
+    "t": "Категории: где связано исследование"
+  },
+  "placement.category": {
+    "en": "{category}: keywords, Google's categories, study",
+    "t": "{category}: ключевые слова, категории Google, исследование"
+  },
   "placement.competitors": {
     "en": "Competitors",
     "t": "Конкуренты"
   },
-  "placement.demand": {
-    "en": "Demand",
-    "t": "Спрос"
+  "placement.data": {
+    "en": "Data",
+    "t": "Данные"
+  },
+  "placement.drawArea": {
+    "en": "Draw a new area",
+    "t": "Нарисовать новую область"
+  },
+  "placement.drawing": {
+    "en": "drawing one…",
+    "t": "рисуем…"
   },
   "placement.from.pick": {
     "en": "your pick",
@@ -2191,29 +2219,77 @@
     "en": "scope",
     "t": "область"
   },
+  "placement.googleCategories": {
+    "en": "Google categories",
+    "t": "Категории Google"
+  },
+  "placement.gridOnly": {
+    "en": "none · the grid alone",
+    "t": "нет · только сетка"
+  },
   "placement.heat": {
     "en": "Heat",
     "t": "Тепловая карта"
+  },
+  "placement.imputed": {
+    "en": "Imputed cells · {n} of {cells}",
+    "t": "Расчётные ячейки · {n} из {cells}"
+  },
+  "placement.keywords": {
+    "en": "Keywords · by search volume",
+    "t": "Ключевые слова · по объёму поиска"
+  },
+  "placement.legend.linear": {
+    "en": "{n} cells in view · colour by magnitude",
+    "t": "{n} ячеек в области просмотра · цвет показывает величину"
+  },
+  "placement.legend.percentile": {
+    "en": "{n} cells in view · colour by percentile",
+    "t": "{n} ячеек в области просмотра · цвет показывает процентиль"
   },
   "placement.more": {
     "en": "More",
     "t": "Ещё"
   },
-  "placement.noGrid": {
-    "en": "No grid here",
-    "t": "Здесь нет сетки"
+  "placement.noArea": {
+    "en": "no area picked",
+    "t": "область не выбрана"
+  },
+  "placement.noCells": {
+    "en": "no cell of the area in view",
+    "t": "в области просмотра нет ячеек этой области"
+  },
+  "placement.noCompetitors": {
+    "en": "no competitor bought yet",
+    "t": "конкуренты ещё не куплены"
   },
   "placement.noHeat": {
     "en": "No heat",
     "t": "Без тепловой карты"
   },
-  "placement.notices": {
-    "en": "Data",
-    "t": "Данные"
+  "placement.noPressure": {
+    "en": "nothing in view under pressure",
+    "t": "в области просмотра нет объектов под давлением"
+  },
+  "placement.noneInView": {
+    "en": "none in view",
+    "t": "в области просмотра ничего нет"
+  },
+  "placement.opacity": {
+    "en": "Opacity {pct}%",
+    "t": "Непрозрачность {pct}%"
   },
   "placement.overlays": {
     "en": "Overlays",
     "t": "Слои"
+  },
+  "placement.pickArea": {
+    "en": "Pick an area, or draw one: a study is bought and kept per area",
+    "t": "Выберите область или нарисуйте её: для каждой области покупается и сохраняется отдельное исследование"
+  },
+  "placement.pickAreaShort": {
+    "en": "pick an area",
+    "t": "выберите область"
   },
   "placement.pickTrade": {
     "en": "pick a trade",
@@ -2231,9 +2307,33 @@
     "en": "Pull latest · {n} searches",
     "t": "Загрузить свежее · {n} запросов"
   },
+  "placement.pull.what": {
+    "en": "re-asks Google the Places searches this map was built from",
+    "t": "заново запрашивает у Google поисковые запросы Places, на основе которых построена эта карта"
+  },
+  "placement.queries": {
+    "en": "Search queries · {n}",
+    "t": "Поисковые запросы · {n}"
+  },
   "placement.radius": {
     "en": "Radius λ {km} km",
     "t": "Радиус λ {km} км"
+  },
+  "placement.refused.country": {
+    "en": "The area is in another country than the category",
+    "t": "Область находится в другой стране, чем категория"
+  },
+  "placement.refused.google": {
+    "en": "The category has no Google category: it names the competitors",
+    "t": "У категории нет категории Google: она обозначает конкурентов"
+  },
+  "placement.refused.keywords": {
+    "en": "The category has no keywords: they weigh the competitors",
+    "t": "У категории нет ключевых слов: они определяют вес конкурентов"
+  },
+  "placement.refused.study": {
+    "en": "The category links no study",
+    "t": "С категорией не связано ни одного исследования"
   },
   "placement.studies.category": {
     "en": "Categories with a study",
@@ -2243,9 +2343,17 @@
     "en": "In scope",
     "t": "В области"
   },
-  "placement.studies.stem": {
-    "en": "Studies no category links",
-    "t": "Исследования без категории"
+  "placement.study": {
+    "en": "Study",
+    "t": "Исследование"
+  },
+  "placement.tier.show": {
+    "en": "Show {tier}",
+    "t": "Показать {tier}"
+  },
+  "placement.tier.weight": {
+    "en": "Weight of one {tier}",
+    "t": "Вес одного объекта уровня {tier}"
   },
   "placement.title": {
     "en": "Map",
@@ -2259,9 +2367,9 @@
     "en": "Placement not connected",
     "t": "Размещение не подключено"
   },
-  "placement.zoomIn": {
-    "en": "Zoom in to see the grid",
-    "t": "Приблизьте, чтобы увидеть сетку"
+  "placement.unweighted": {
+    "en": "No search volume for it: left out of the ranking",
+    "t": "Нет данных об объёме поиска: исключено из рейтинга"
   },
   "prices.cost.label": {
     "en": "{item}: dollars a {unit}",
@@ -2710,6 +2818,34 @@
   "tokens.ledger.more": {
     "en": "More",
     "t": "Ещё"
+  },
+  "tokens.meters.near": {
+    "en": "{p}% of free",
+    "t": "{p}% бесплатных"
+  },
+  "tokens.meters.split": {
+    "en": "{vendor} {baseline} as of {at}, ours {delta} since",
+    "t": "{vendor}: {baseline} на {at}, наших с тех пор {delta}"
+  },
+  "tokens.meters.stale": {
+    "en": "read {at}",
+    "t": "прочитан {at}"
+  },
+  "tokens.meters.stops": {
+    "en": "stops at free",
+    "t": "стоп на бесплатных"
+  },
+  "tokens.meters.title": {
+    "en": "Vendors this month",
+    "t": "Поставщики в этом месяце"
+  },
+  "tokens.meters.unread": {
+    "en": "never read",
+    "t": "ни разу не прочитан"
+  },
+  "tokens.meters.why": {
+    "en": "Each one's count is the vendor's own (every project on its billing account, hours behind), plus ours since. Street View stops at its free ones.",
+    "t": "Счёт каждого — собственный счёт поставщика (все проекты его платёжного аккаунта, с отставанием в часы) плюс наш с тех пор. Street View останавливается на бесплатных."
   },
   "tokens.title": {
     "en": "Tokens",

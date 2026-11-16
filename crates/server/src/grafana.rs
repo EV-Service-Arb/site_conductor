@@ -55,7 +55,10 @@ const INFINITY: &str = "yesoreyeram-infinity-datasource";
 const CONDUCTOR: &str = "conductor";
 
 /// The conductor's own dashboards, over its `/api/v1`.
-const OWN_DASHBOARDS: [(&str, &str); 1] = [("sa-tokens", include_str!("../dashboards/sa-tokens.json"))];
+const OWN_DASHBOARDS: [(&str, &str); 2] = [
+	("sa-tokens", include_str!("../dashboards/sa-tokens.json")),
+	("sa-meters", include_str!("../dashboards/sa-meters.json")),
+];
 
 /// How often each service is asked for its dashboards again: a conditional GET.
 const PULL_EVERY: Duration = Duration::from_secs(60);

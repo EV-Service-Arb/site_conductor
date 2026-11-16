@@ -9,7 +9,9 @@
 use std::{collections::BTreeMap, fmt, str::FromStr};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use strum::{EnumMessage, VariantArray};
+use strum::{EnumMessage, EnumProperty, VariantArray};
+
+use crate::meters::Meter;
 
 /// What each item costs, in tokens; an item absent is not sold.
 pub type Prices = BTreeMap<Item, i64>;
@@ -42,44 +44,44 @@ pub enum Sale {
 
 /// A Places request on the shared keys, by how Google bills it: both masks ask a display name,
 /// which makes them the Pro SKUs.
-#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum PlacesRequest {
 	/// Place Details Pro: a place by its id, with its address and point.
-	#[strum(message = "Lookup (details)")]
+	#[strum(message = "Lookup (details)", props(meter = "google:4ED6-464A-2AFC"))]
 	Details,
 	/// Text Search Pro: places by a name or an address.
-	#[strum(message = "Search")]
+	#[strum(message = "Search", props(meter = "google:4FDA-34B1-A910"))]
 	Search,
 	/// Autocomplete, per request (no session token): suggestions while an address is typed.
-	#[strum(message = "Suggestions (as typed)")]
+	#[strum(message = "Suggestions (as typed)", props(meter = "google:4EF4-B17C-B31A"))]
 	Autocomplete,
 	/// Geocoding: the town a point on the map lies in, when a review kit's area is drawn.
-	#[strum(message = "Town by a point")]
+	#[strum(message = "Town by a point", props(meter = "google:BAC8-4E68-E261"))]
 	Geocode,
 }
 
 /// What Street View on the browser's Maps key loads: Google bills each panorama opened (Dynamic
 /// Street View), past its free ones a month.
-#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum StreetViewLoad {
 	/// The pegman dropped on the map: one panorama opened, walked around in for free.
-	#[strum(message = "Panorama")]
+	#[strum(message = "Panorama", props(meter = "google:658E-F885-E11A"))]
 	Panorama,
 }
 
 /// What the map in a person's browser loads on the browser's Maps key.
-#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum MapLoad {
 	/// A `google.maps.Map` built: one a page session, kept while the page is away.
-	#[strum(message = "Map")]
+	#[strum(message = "Map", props(meter = "google:FAF4-3B2D-51B2"))]
 	Map,
 }
 
 /// A gmail's cloud phone running: Multilogin bills it by the minute.
-#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum PhoneTime {
 	/// Each minute a cloud phone runs, from its start to its stop, a started one whole.
@@ -88,7 +90,7 @@ pub enum PhoneTime {
 }
 
 /// A gmail's antidetect browser started: the providers bill a plan, a start is what it is spent on.
-#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum BrowserStart {
 	/// GoLogin's Orbita, headless on the runner.
@@ -101,7 +103,7 @@ pub enum BrowserStart {
 
 /// What a study asks the Google Ads API for: free per request, within the developer token's
 /// daily quota.
-#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum AdsRequest {
 	/// `geoTargetConstants:suggest`: the Ads location a study's place is.
@@ -116,7 +118,7 @@ pub enum AdsRequest {
 }
 
 /// What a study buys of DataForSEO, by the task.
-#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum DataForSeoTask {
 	/// `keywords_for_keywords/live`: keyword ideas and their volumes from Google Ads' data.
@@ -128,7 +130,7 @@ pub enum DataForSeoTask {
 }
 
 /// What a walk down a place's reviews does in its browser, each time it does it.
-#[derive(Clone, Copy, Debug, EnumMessage, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum WalkStep {
 	/// Opening the place's page, and answering the consent page.
@@ -193,6 +195,14 @@ macro_rules! priced {
 				match self {
 					$(Self::$tool(_) => $title,)+
 				}
+			}
+
+			/// The vendor's meter it draws on, if it has one.
+			pub fn meter(self) -> Option<&'static Meter> {
+				let key = match self {
+					$(Self::$tool(v) => v.get_str("meter"),)+
+				};
+				key.map(|k| k.parse().expect("a meter prop names one of meters::ALL"))
 			}
 
 			fn variant(self) -> (&'static str, Option<&'static str>, Option<&'static str>) {
@@ -274,6 +284,7 @@ mod tests {
 			assert!(!item.title().is_empty(), "{item}");
 			assert!(!item.description().is_empty(), "{item}");
 			assert_eq!(item.to_string().parse::<Item>(), Ok(item));
+			item.meter();
 		}
 	}
 }

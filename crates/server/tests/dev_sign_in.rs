@@ -52,6 +52,8 @@ fn production(db: &str) -> Vec<(&'static str, String)> {
 		("PANEL_PLAYBOOK_URL", "http://playbook-web.personal:59082".to_owned()),
 		("PANEL_SITES_URL", "http://sites-panel:59121".to_owned()),
 		("TOKENS_START_CAP_MULTIPLE", "1".to_owned()),
+		("GOOGLE_BILLING_EXPORT", "project.billing.gcp_billing_export_v1_0".to_owned()),
+		("GOOGLE_BILLING_KEY", "{}".to_owned()),
 	]
 }
 

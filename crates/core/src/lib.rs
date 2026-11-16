@@ -9,11 +9,13 @@
 //! - [`notify`]: the Telegram rules, the conductor's own messages, the buttons' signed data, and
 //!   how a delivery is retried;
 //! - [`prices`]: what costs tokens, tool by tool;
+//! - [`meters`]: a vendor's own count of what it bills, and its free units;
 //! - [`tokens`]: how a balance renews and a charge falls on its payers;
 //! - [`usage`]: what was spent on vendors, as a service's feed tells it.
 
 pub mod gbp;
 pub mod ids;
+pub mod meters;
 pub mod notify;
 pub mod prices;
 pub mod queries_cache;

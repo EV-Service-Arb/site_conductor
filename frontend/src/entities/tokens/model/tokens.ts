@@ -1,8 +1,8 @@
 import { type Parser, arrayOf, isoDay, nullable, num, object, oneOf, str } from "@/shared/lib/parse";
 
-import { type Balance, type Kickback, LEDGER_KINDS, type Ledger, type LedgerEntry, PRICED_ITEMS, type Price, type Prices, SALES, SCOPES, type TokenHolders, type Tokens, type Usage } from "./generated";
+import { type Balance, type Kickback, LEDGER_KINDS, type Ledger, type LedgerEntry, type MeterReading, type Meters, PRICED_ITEMS, type Price, type Prices, SALES, SCOPES, type TokenHolders, type Tokens, type Usage } from "./generated";
 
-export type { BalanceChange as Change, Kickback, LedgerEntry, Price, PricedItem, Scope, SetPrices, TokenHolder as Holder, Tokens, UsageDay } from "./generated";
+export type { BalanceChange as Change, Kickback, LedgerEntry, MeterUse, Price, PricedItem, Scope, SetPrices, TokenHolder as Holder, Tokens, UsageDay } from "./generated";
 export { LEDGER_KINDS };
 
 const kickbackParser: Parser<Kickback> = object({
@@ -51,3 +51,35 @@ export const priceParser: Parser<Price> = object({
 });
 
 export const pricesParser: Parser<Prices> = object({ prices: arrayOf(priceParser) });
+
+const readingParser: Parser<MeterReading> = object({
+  meter: str,
+  period_start: str,
+  units: num,
+  cost: num,
+  currency: str,
+  through: str,
+  synced_at: str,
+});
+
+export const metersParser: Parser<Meters> = object({
+  meters: arrayOf(
+    object({
+      meter: str,
+      vendor: oneOf(["google"] as const),
+      name: str,
+      free: num,
+      stop: oneOf(["at_free", "never"] as const),
+      items: arrayOf(oneOf(PRICED_ITEMS)),
+      period_start: str,
+      period_end: str,
+      reading: nullable(readingParser),
+      baseline: num,
+      since: str,
+      delta: num,
+      used: num,
+      left: num,
+      delta_usd: nullable(num),
+    }),
+  ),
+});
