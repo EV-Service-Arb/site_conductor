@@ -38,6 +38,7 @@ pub mod tokens;
 pub mod tools;
 pub mod trash;
 pub mod usage;
+pub mod view;
 pub mod web;
 
 /// What the contract's `provides` names, as the router mounts it (`--print-provided-paths`).
