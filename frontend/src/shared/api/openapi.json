@@ -2,6 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Service-Arb conductor",
+    "description": "The Service-Arb panel, as the signed-in user: `search` for an operation, then `call` it. What removes or spends runs only once the user agreed to it.",
     "version": "0.1.0"
   },
   "servers": [
