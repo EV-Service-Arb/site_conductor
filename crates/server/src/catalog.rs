@@ -24,10 +24,17 @@ use sa_auth::{PermissionSet, Principal, Service};
 use serde_json::{Map, Value};
 use tokio::sync::watch;
 
-use crate::forward::{self, Services};
+use crate::{
+	forward::{self, Services},
+	tools,
+};
 
 /// The services that serve their document, and where (docs/ARCHITECTURE.md, The catalog).
-const DOCUMENTS: [(Service, &str); 2] = [(Service::Sites, "/api/v1/openapi.json"), (Service::ReviewArchive, "/openapi.json")];
+const DOCUMENTS: [(Service, &str); 3] = [
+	(Service::Sites, "/api/v1/openapi.json"),
+	(Service::ReviewArchive, "/openapi.json"),
+	(Service::Playbook, "/openapi.json"),
+];
 const PULL_EVERY: Duration = Duration::from_secs(60);
 const PULL_TIMEOUT: Duration = Duration::from_secs(10);
 const DOCUMENT_ANSWER: usize = 16 * 1024 * 1024;
@@ -86,6 +93,17 @@ impl Catalog {
 			}
 		}
 		Ok((Method::from_bytes(method.to_uppercase().as_bytes()).expect("the document's methods are standard"), uri))
+	}
+
+	/// What an agent is told of the panel before anything: the conductor's document's description,
+	/// then each service's, as their documents say.
+	pub(crate) fn instructions(&self) -> String {
+		let services = self.services.read().expect("never held across a panic");
+		std::iter::once(&*self.own)
+			.chain(services.values())
+			.filter_map(|doc| doc.info.description.as_deref())
+			.collect::<Vec<_>>()
+			.join("\n\n")
 	}
 
 	/// Only the operations `permissions` open.
@@ -216,6 +234,19 @@ fn merge(own: &OpenApi, services: &BTreeMap<String, OpenApi>) -> OpenApi {
 	for theirs in services.values() {
 		paths.paths.extend(theirs.paths.iter().flat_map(|p| p.paths.clone()));
 		schemas.extend(theirs.components.iter().flat_map(|c| c.schemas.clone()));
+	}
+	let mut tools = BTreeMap::new();
+	let operations = paths.paths.values().flat_map(|item| {
+		let ReferenceOr::Item(item) = item else { unreachable!("the document holds items only") };
+		[&item.get, &item.post, &item.put, &item.patch, &item.delete].into_iter().flatten()
+	});
+	for op in operations.filter(|op| op.extensions.get("x-tool") == Some(&Value::Bool(true))) {
+		let id = op.operation_id.as_deref().expect("every operation has an id");
+		let name = tools::tool_name(id);
+		assert!(!tools::BUILT_IN.contains(&name.as_str()), "{id} would be the agents' own tool {name}");
+		if let Some(other) = tools.insert(name.clone(), id) {
+			panic!("{id} and {other} would both be the tool {name}");
+		}
 	}
 	OpenApi {
 		info: Info {

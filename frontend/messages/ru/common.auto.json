@@ -31,10 +31,6 @@
     "en": "This link is not valid",
     "t": "Ссылка недействительна"
   },
-  "access.playbook.title": {
-    "en": "No access to the playbook yet",
-    "t": "Доступа к плейбуку пока нет"
-  },
   "access.request": {
     "en": "Request access",
     "t": "Запросить доступ"

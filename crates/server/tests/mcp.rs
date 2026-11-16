@@ -52,23 +52,10 @@ async fn tool(app: &Router, bearer: &str, name: &str, arguments: Value) -> (Valu
 	)
 }
 
-#[tokio::test]
-async fn a_client_signs_in_and_acts_as_its_user() {
-	let db = TestDb::create().await;
-	let panel = panel(&db).await;
-	let (base, upstream) = testing::upstream(Router::new()).await;
-	let app = testing::app(panel.clone(), operator(), &base);
-	panel
-		.import_review_archive(Export {
-			people: vec![],
-			gmails: vec![],
-			gmbs: vec![],
-			ledger: vec![],
-			kickbacks: vec![],
-		})
-		.await
-		.unwrap();
-
+/// A client registered and authorized through the whole OAuth dance: its bearer, the browser of the
+/// user who consented, and that browser's own session.
+async fn signed_in_client(app: &Router) -> (String, Browser, String) {
+	let app = app.clone();
 	let mut client = Browser::default();
 	let (status, _, body) = client.send_body(&app, Method::GET, "/.well-known/oauth-protected-resource/mcp", &[], false, Body::empty()).await;
 	assert_eq!(status, StatusCode::OK);
@@ -149,6 +136,28 @@ async fn a_client_signs_in_and_acts_as_its_user() {
 	let (status, _, _) = client.send_body(&app, Method::POST, "/mcp/token", &urlencoded, false, Body::from(exchange(VERIFIER))).await;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "a code redeems once");
 
+	(bearer, user, session)
+}
+
+#[tokio::test]
+async fn a_client_signs_in_and_acts_as_its_user() {
+	let db = TestDb::create().await;
+	let panel = panel(&db).await;
+	let (base, upstream) = testing::upstream(Router::new()).await;
+	let app = testing::app(panel.clone(), operator(), &base);
+	panel
+		.import_review_archive(Export {
+			people: vec![],
+			gmails: vec![],
+			gmbs: vec![],
+			ledger: vec![],
+			kickbacks: vec![],
+		})
+		.await
+		.unwrap();
+
+	let (bearer, mut user, session) = signed_in_client(&app).await;
+
 	let (status, init) = rpc(
 		&app,
 		&bearer,
@@ -211,4 +220,54 @@ async fn a_client_signs_in_and_acts_as_its_user() {
 	let (status, _) = user.send(&app, Method::POST, "/auth/logout", &[], true).await;
 	assert_eq!(status, StatusCode::NO_CONTENT);
 	assert_eq!(gate(format!("Bearer {bearer}")).await, StatusCode::UNAUTHORIZED);
+}
+
+/// An operation a service marks its own tool is one on `/mcp`, `<service>_<operation_id>`: its
+/// parameters its input, its text answer handed on as it came; the service's description joins the
+/// instructions.
+#[tokio::test]
+async fn a_services_own_tool_is_listed_and_answers_as_it_came() {
+	let db = TestDb::create().await;
+	let panel = panel(&db).await;
+	let document = json!({
+		"openapi": "3.1.0",
+		"info": { "title": "playbook", "version": "1", "description": "Answers from the service-arb skill." },
+		"servers": [{ "url": "/" }],
+		"paths": { "/search": { "get": {
+			"operationId": "search",
+			"summary": "Searches the playbook.",
+			"parameters": [{ "name": "q", "in": "query", "required": true, "schema": { "type": "string" } }],
+			"x-tool": true,
+		} } },
+		"components": { "schemas": {} },
+	});
+	let routes = Router::new()
+		.route("/openapi.json", axum::routing::get(move || std::future::ready(axum::Json(document.clone()))))
+		.route(
+			"/search",
+			axum::routing::get(|axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>| async move {
+				([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], format!("# Found\n\n\"{}\" is in chapter 3.", q["q"]))
+			}),
+		);
+	let (base, seen) = testing::upstream(routes).await;
+	let (sign_in, forward) = testing::conductor(panel.clone(), operator(), "dev@localhost", &base);
+	forward.catalog().follow(testing::services(&base), tokio::sync::watch::channel(true).1).await;
+	let app = sa_server::http::app(sign_in, Some(forward), None, sa_server::http::Limits::default(), None, None, None, None);
+	let (bearer, _, _) = signed_in_client(&app).await;
+
+	let (_, init) = rpc(&app, &bearer, "initialize", json!({ "protocolVersion": "2025-06-18" })).await;
+	let instructions = init["result"]["instructions"].as_str().unwrap();
+	assert!(instructions.starts_with("The Service-Arb panel"), "{instructions}");
+	assert!(instructions.contains("Answers from the service-arb skill."), "{instructions}");
+	let (_, listed) = rpc(&app, &bearer, "tools/list", json!({})).await;
+	let own = listed["result"]["tools"].as_array().unwrap().iter().find(|t| t["name"] == "playbook_search").cloned().unwrap();
+	assert_eq!(own["inputSchema"]["required"], json!(["q"]), "{own}");
+	assert_eq!(own["annotations"]["readOnlyHint"], true);
+
+	let (status, res) = rpc(&app, &bearer, "tools/call", json!({ "name": "playbook_search", "arguments": { "q": "a GBP's name" } })).await;
+	assert_eq!(status, StatusCode::OK);
+	assert_eq!(res["result"]["content"][0]["text"], "# Found\n\n\"a GBP's name\" is in chapter 3.", "{res}");
+	let asked = seen.lock().unwrap().iter().rev().find(|s| s.path_and_query.starts_with("/search")).cloned().unwrap();
+	assert_eq!(asked.path_and_query, "/search?q=a+GBP%27s+name");
+	assert!(matches!(asked.assertion(Service::Playbook, None).principal, Principal::User(u) if u.email == "dev@localhost"));
 }

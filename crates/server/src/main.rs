@@ -514,7 +514,7 @@ async fn serve(
 	let forward = match &services {
 		Some(services) => Some(Forward::new(sign_in.clone(), services.clone())),
 		None => {
-			tracing::warn!("forward not configured: no ingest, no /api/sites, /api/review_archive or /playbook_mcp, no live updates from sites");
+			tracing::warn!("forward not configured: no ingest, no /api/sites, /api/review_archive or /api/playbook, no live updates from sites");
 			None
 		}
 	};

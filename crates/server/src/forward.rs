@@ -8,9 +8,7 @@
 //! /mfe/sites/*                     → sites /mfe/*               open: the sites page's bundle
 //! /api/review_archive/*            → review_archive /*          session + assertion; CSRF on writes
 //! /mfe/review_archive/*            → review_archive /mfe/*      open: the dashboard's bundle
-//! /playbook_mcp/authorize          → playbook (same path)       session + assertion; its consent form
-//!                                                               POST carries playbook's own nonce
-//! /playbook_mcp/*, two .well-known → playbook (same path)       open: OAuth and bearer, no cookie
+//! /api/playbook/*                  → playbook /*                session + assertion; CSRF on writes
 //! /api/placement/*                 → placement /*               session + assertion; CSRF on writes
 //! /mfe/placement/*                 → placement /mfe/*           open: the map overlay's module
 //! ```
@@ -25,7 +23,7 @@ use axum::{
 	body::{Body, to_bytes},
 	extract::{Request, State},
 	http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header},
-	response::{IntoResponse, Redirect, Response},
+	response::{IntoResponse, Response},
 	routing::any,
 };
 use hyper_util::client::legacy::{Client, connect::HttpConnector};
@@ -35,16 +33,16 @@ use crate::{
 	api::ApiError,
 	catalog::Catalog,
 	cookies,
-	signin::{self, Caller, Denied, Freshness, SignIn},
+	signin::{self, Caller, Freshness, SignIn},
 };
 
 /// Longest prefixes first: the first match wins.
-const ROUTES: [Route; 11] = [
+const ROUTES: [Route; 8] = [
 	Route {
 		prefix: "/api/sites",
 		upstream: "/api/v1",
 		service: Service::Sites,
-		gate: Gate::Session(Writes::Csrf),
+		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/api/hooks/booking",
@@ -62,7 +60,7 @@ const ROUTES: [Route; 11] = [
 		prefix: "/api/review_archive",
 		upstream: "",
 		service: Service::ReviewArchive,
-		gate: Gate::Session(Writes::Csrf),
+		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/mfe/review_archive",
@@ -71,34 +69,16 @@ const ROUTES: [Route; 11] = [
 		gate: Gate::Open,
 	},
 	Route {
-		prefix: "/playbook_mcp/authorize",
-		upstream: "/playbook_mcp/authorize",
+		prefix: "/api/playbook",
+		upstream: "",
 		service: Service::Playbook,
-		gate: Gate::Session(Writes::ServiceNonce),
-	},
-	Route {
-		prefix: "/playbook_mcp",
-		upstream: "/playbook_mcp",
-		service: Service::Playbook,
-		gate: Gate::Open,
-	},
-	Route {
-		prefix: "/.well-known/oauth-authorization-server/playbook_mcp",
-		upstream: "/.well-known/oauth-authorization-server/playbook_mcp",
-		service: Service::Playbook,
-		gate: Gate::Open,
-	},
-	Route {
-		prefix: "/.well-known/oauth-protected-resource/playbook_mcp",
-		upstream: "/.well-known/oauth-protected-resource/playbook_mcp",
-		service: Service::Playbook,
-		gate: Gate::Open,
+		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/api/placement",
 		upstream: "",
 		service: Service::Placement,
-		gate: Gate::Session(Writes::Csrf),
+		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/mfe/placement",
@@ -361,18 +341,9 @@ impl Forward {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Gate {
-	/// Signed in, and the assertion added.
-	Session(Writes),
+	/// Signed in, and the assertion added; a write with the panel's CSRF header (or a bearer).
+	Session,
 	Open,
-}
-
-/// What a write — a method but GET, HEAD and OPTIONS — needs besides concierge asked afresh.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum Writes {
-	/// The panel's CSRF header.
-	Csrf,
-	/// Nothing: the service guards it with a nonce of its own.
-	ServiceNonce,
 }
 
 struct Route {
@@ -397,7 +368,7 @@ fn api_prefix(service: Service) -> String {
 pub(crate) fn prefix(service: Service, upstream: &str) -> Option<&'static str> {
 	ROUTES
 		.iter()
-		.find(|r| r.service == service && r.upstream == upstream && matches!(r.gate, Gate::Session(Writes::Csrf)))
+		.find(|r| r.service == service && r.upstream == upstream && r.gate == Gate::Session)
 		.map(|r| r.prefix)
 }
 
@@ -406,17 +377,17 @@ async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 	let mut puller = None;
 	let principal = match route.gate {
 		Gate::Open => None,
-		Gate::Session(writes) => {
+		Gate::Session => {
 			let write = !matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
 			// a write must not outlive a revoked grant by even the cached GetMe's minute
 			let freshness = if write { Freshness::Fresh } else { Freshness::Cached };
 			// an MCP client's bearer: no cookie for a cross-site request to ride on, and ours, so it never goes up
-			let caller = if writes == Writes::Csrf && req.headers().contains_key(header::AUTHORIZATION) {
+			let caller = if req.headers().contains_key(header::AUTHORIZATION) {
 				let caller = signin::bearer(&f.sign_in, req.headers(), freshness).await;
 				req.headers_mut().remove(header::AUTHORIZATION);
 				caller
 			} else {
-				if write && writes == Writes::Csrf && !f.sign_in.cookies().csrf_ok(req.headers()) {
+				if write && !f.sign_in.cookies().csrf_ok(req.headers()) {
 					return ApiError::Csrf.into_response();
 				}
 				signin::check(&f.sign_in, req.headers(), freshness).await
@@ -425,11 +396,6 @@ async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 				Ok(caller) => {
 					puller = Some(caller.user_id);
 					Some(Principal::User(user(caller, route.service)))
-				}
-				// a page the browser navigated to goes to sign in and comes back; a call is told
-				Err(Denied::Unauthenticated) if route.service == Service::Playbook && *req.method() == Method::GET => {
-					let back = req.uri().path_and_query().map_or(req.uri().path(), |pq| pq.as_str());
-					return Redirect::to(&format!("/auth/login?return_to={}", signin::encode(back))).into_response();
 				}
 				Err(denied) => return denied.into_response(&f.sign_in),
 			}
@@ -485,17 +451,16 @@ mod tests {
 	#[test]
 	fn the_first_route_matching_by_whole_segments_wins() {
 		let route = |p: &str| ROUTES.iter().find(|r| under(p, r.prefix)).map(|r| (r.prefix, r.gate));
-		assert_eq!(route("/playbook_mcp/authorize"), Some(("/playbook_mcp/authorize", Gate::Session(Writes::ServiceNonce))));
-		assert_eq!(route("/playbook_mcp/token"), Some(("/playbook_mcp", Gate::Open)));
-		assert_eq!(route("/playbook_mcp/authorizer"), Some(("/playbook_mcp", Gate::Open)));
-		assert_eq!(route("/api/review_archive/me"), Some(("/api/review_archive", Gate::Session(Writes::Csrf))));
-		assert_eq!(route("/api/review_archive/grafana/api/ds/query"), Some(("/api/review_archive", Gate::Session(Writes::Csrf))));
+		assert_eq!(route("/api/playbook/search"), Some(("/api/playbook", Gate::Session)));
+		assert_eq!(route("/playbook_mcp/token"), None, "playbook is reached at /mcp, not through a forward of its own");
+		assert_eq!(route("/api/review_archive/me"), Some(("/api/review_archive", Gate::Session)));
+		assert_eq!(route("/api/review_archive/grafana/api/ds/query"), Some(("/api/review_archive", Gate::Session)));
 		assert_eq!(route("/api/review_archived"), None);
 		assert_eq!(route("/review_archive"), None, "the page is the front end's");
-		assert_eq!(route("/api/sites/leads"), Some(("/api/sites", Gate::Session(Writes::Csrf))));
+		assert_eq!(route("/api/sites/leads"), Some(("/api/sites", Gate::Session)));
 		assert_eq!(route("/mfe/sites/mfe-sites.js"), Some(("/mfe/sites", Gate::Open)));
 		assert_eq!(route("/sites/leads"), None, "the page is the front end's");
-		assert_eq!(route("/api/placement/payload/cleaning/Lyon"), Some(("/api/placement", Gate::Session(Writes::Csrf))));
+		assert_eq!(route("/api/placement/payload/cleaning/Lyon"), Some(("/api/placement", Gate::Session)));
 		assert_eq!(route("/mfe/placement/overlay.js"), Some(("/mfe/placement", Gate::Open)));
 		assert_eq!(route("/mfe/review_archive/mfe-review-archive-dashboard.js"), Some(("/mfe/review_archive", Gate::Open)));
 		assert_eq!(route("/mfe/banking/wallet.js"), None, "banking's bundle is not forwarded");

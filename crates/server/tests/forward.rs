@@ -53,7 +53,7 @@ async fn a_signed_in_call_reaches_the_service_with_an_assertion_and_without_the_
 }
 
 #[tokio::test]
-async fn a_forwarded_write_needs_the_panels_csrf_header_but_playbooks_consent_form_does_not() {
+async fn a_forwarded_write_needs_the_panels_csrf_header() {
 	let db = TestDb::create().await;
 	let (app, seen) = setup(&db).await;
 	let mut b = Browser::default();
@@ -62,34 +62,23 @@ async fn a_forwarded_write_needs_the_panels_csrf_header_but_playbooks_consent_fo
 	assert_eq!(b.send(&app, Method::POST, "/api/review_archive/me/gmails", &[], false).await.0, StatusCode::FORBIDDEN);
 	assert!(seen.lock().unwrap().is_empty());
 	assert_eq!(b.send(&app, Method::POST, "/api/review_archive/me/gmails", &[], true).await.0, StatusCode::OK);
-
-	assert_eq!(
-		b.send(&app, Method::POST, "/playbook_mcp/authorize", &[], false).await.0,
-		StatusCode::OK,
-		"its own nonce guards it"
-	);
-	let got = seen.lock().unwrap().pop().unwrap();
-	assert_eq!((got.method, got.path_and_query.as_str()), (Method::POST, "/playbook_mcp/authorize"));
-	assert!(got.headers.contains_key("x-sa-assertion"));
+	assert_eq!(b.send(&app, Method::POST, "/api/playbook/search", &[], false).await.0, StatusCode::FORBIDDEN, "playbook's too");
 }
 
 #[tokio::test]
-async fn playbooks_open_paths_pass_without_a_session_and_its_consent_page_sends_one_to_sign_in() {
+async fn an_open_path_passes_without_a_session_and_nobody_vouched_for() {
 	let db = TestDb::create().await;
 	let (app, seen) = setup(&db).await;
 	let mut b = Browser::default();
 
-	for path in ["/playbook_mcp/token", "/.well-known/oauth-authorization-server/playbook_mcp", "/mfe/review_archive/x.js"] {
-		assert_eq!(b.send(&app, Method::GET, path, &[("authorization", "Bearer t")], false).await.0, StatusCode::OK, "{path}");
-		let got = seen.lock().unwrap().pop().unwrap();
-		assert!(!got.headers.contains_key("x-sa-assertion"), "{path}: nobody vouched for");
-		assert_eq!(got.headers["authorization"], "Bearer t", "{path}: a bearer is the client's");
-	}
-	assert_eq!(seen.lock().unwrap().len(), 0);
-
-	let (status, headers) = b.send(&app, Method::GET, "/playbook_mcp/authorize?client_id=c&state=s", &[], false).await;
-	assert_eq!(status, StatusCode::SEE_OTHER);
-	assert_eq!(headers[header::LOCATION], "/auth/login?return_to=%2Fplaybook_mcp%2Fauthorize%3Fclient_id%3Dc%26state%3Ds");
+	assert_eq!(b.send(&app, Method::GET, "/mfe/review_archive/x.js", &[], false).await.0, StatusCode::OK);
+	let got = seen.lock().unwrap().pop().unwrap();
+	assert!(!got.headers.contains_key("x-sa-assertion"));
+	assert_eq!(
+		b.send(&app, Method::GET, "/playbook_mcp/token", &[], false).await.0,
+		StatusCode::NOT_FOUND,
+		"playbook's own OAuth is not forwarded"
+	);
 }
 
 #[tokio::test]

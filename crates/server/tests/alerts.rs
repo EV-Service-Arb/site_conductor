@@ -1596,9 +1596,9 @@ async fn an_access_request_reaches_the_admins_with_the_grant_link() {
 	let (app, mut b) = requester(&s.panel, "ann@example.com", &["sa:sites:work:read"]).await;
 	let n = Hub { locale: Locale::En, ..s.n.clone() };
 
-	let (status, asked) = ask(&mut b, &app, "sa:playbook:mcp:use").await;
+	let (status, asked) = ask(&mut b, &app, "sa:placement:study:read").await;
 	assert_eq!(status, StatusCode::CREATED, "{asked}");
-	assert_eq!(asked["need"], "sa:playbook:mcp:use");
+	assert_eq!(asked["need"], "sa:placement:study:read");
 	assert_eq!(mine(&mut b, &app).await, json!({ "requests": [asked] }));
 	assert_eq!(s.fan_out(&n, now).await.unwrap(), 1, "the admin's own chat, not the operator's, not a channel");
 	assert_eq!(n.deliver(now).await.unwrap().sent, 1);
@@ -1606,15 +1606,15 @@ async fn an_access_request_reaches_the_admins_with_the_grant_link() {
 	assert_eq!(sent[0]["chat_id"], 1);
 	assert_eq!(
 		sent[0]["text"],
-		"🔑 Playbook access request\nann@example.com wants to connect Claude Code to the playbook.\nName: Dev sign-in (ann@example.com)"
+		"🔑 Access request\nann@example.com asks for sa:placement:study:read.\nName: Dev sign-in (ann@example.com)"
 	);
 	assert_eq!(
 		sent[0]["reply_markup"]["inline_keyboard"],
-		json!([[{"text": "Grant access", "url": "https://evinvest.test/admin/scopes/sa?email=ann%40example.com&target=sa%3Aplaybook%3Amcp%3Ause"}]])
+		json!([[{"text": "Grant access", "url": "https://evinvest.test/admin/scopes/sa?email=ann%40example.com&target=sa%3Aplacement%3Astudy%3Aread"}]])
 	);
 
 	assert_eq!(
-		ask(&mut b, &app, "sa:playbook:mcp:use").await,
+		ask(&mut b, &app, "sa:placement:study:read").await,
 		(StatusCode::OK, asked.clone()),
 		"asked again within the day: the same request"
 	);

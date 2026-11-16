@@ -202,9 +202,7 @@ reserved paths (`web.rs`) are derived from it.
 /mfe/sites/*                     → sites /mfe/*                 open: the sites page's bundle
 /api/review_archive/*            → review_archive /*            session + User; CSRF on writes
 /mfe/review_archive/*            → review_archive /mfe/*        open: the dashboard's bundle
-/playbook_mcp/authorize          → playbook (same path)         session + User; no conductor CSRF
-/playbook_mcp/*, /.well-known/oauth-{authorization-server,protected-resource}/playbook_mcp
-                                 → playbook (same path)         open: OAuth and bearer clients
+/api/playbook/*                  → playbook /*                  session + User; CSRF on writes
 /api/placement/*                 → placement /*                 session + User; CSRF on writes
 /mfe/placement/*                 → placement /mfe/*             open: the map overlay's module
 ```
@@ -219,12 +217,9 @@ reserved paths (`web.rs`) are derived from it.
 - **Hygiene:** the browser's `Cookie`, any inbound `x-sa-assertion` and `x-sa-csrf`, an MCP
   client's bearer, and hop-by-hop headers (`Upgrade` included: nothing is upgraded through the
   forward) never go up; `Set-Cookie` never comes down. Everything else passes (`Idempotency-Key`,
-  `X-Member`, playbook's clients' `Authorization`).
+  `X-Member`).
 - **Gates:** a gated read takes the cached `GetMe`, a gated write asks concierge afresh. A write
-  under `/api/sites` and `/api/review_archive` needs the conductor's CSRF header. playbook's
-  consent form at `/playbook_mcp/authorize` posts without it: the `SameSite=Lax` session and
-  playbook's own single-use nonce guard it; a signed-out `GET` of that page goes to
-  `/auth/login?return_to=` and comes back.
+  under a service's API needs the conductor's CSRF header, or an MCP client's bearer.
 - **A path stays under its upstream prefix:** a `.` or `..` segment, `%2e`, `%2f`, `%5c` and `\`
   decoded, is a 400.
 - **The outline.** Every signed-in page sits beside it: the open service's own views (the sites:
@@ -427,8 +422,8 @@ an agent's tools read it. Below, the overview (a test holds it to the table); wh
 is in the document. Slow: 8 at once, 10 min each, not the bounds above. The browser viewer's
 socket (`GET /gmails/{id}/browser`) is outside the gate, as `/live` is.
 
-**The catalog** (`catalog.rs`): sites (`/api/v1/openapi.json`) and review_archive (`/openapi.json`)
-derive theirs the same way; the conductor pulls each as it pulls `/dashboards` (Conductor, every
+**The catalog** (`catalog.rs`): sites (`/api/v1/openapi.json`), review_archive and playbook
+(`/openapi.json`) derive theirs the same way; the conductor pulls each as it pulls `/dashboards` (Conductor, every
 60 s, conditional; a failed pull reported, the last kept), puts its paths under its forward
 prefix and its ids and schemas under `<service>.`, and merges them with its own. `GET
 /openapi.json` and an agent's `search` show a caller only what their permissions open: context,
@@ -570,10 +565,14 @@ lacking `need`: it asks, then reads `/me` every 30 s and goes on to `continue` (
 
 ## Agents over MCP
 
-`<origin>/mcp` serves MCP (Streamable HTTP, JSON answers, no MCP session) as the signed-in user:
-two tools over the catalog, `search` and `call` (`tools.rs`). A call runs as their own request
-would, through the gate or the forward; one whose hints say destructive or spends answers what it
-would do until it comes with `confirmed: true`, which the client sets once its user agreed.
+`<origin>/mcp` serves MCP (Streamable HTTP, JSON answers, no MCP session) as the signed-in user,
+the only MCP of the services: `search` and `call` over the catalog (`tools.rs`), and each operation
+a service marks its own tool (`x-tool`, `sa_core::agent::Tool`) as `<service>_<operation_id>`
+(`playbook_search`), its parameters and body the tool's input, a text answer handed on as it
+came. Its instructions are the documents' descriptions, the conductor's then each service's. A
+call runs as their own request would, through the gate or the forward; one whose hints say
+destructive or spends answers what it would do until it comes with `confirmed: true`, which the
+client sets once its user agreed.
 
 ```text
 POST /mcp/register    open (RFC 7591): redirect_uris (https, or http on loopback, any port), a name

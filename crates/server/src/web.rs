@@ -211,13 +211,7 @@ mod tests {
 		] {
 			assert!(!reserved(p), "{p}");
 		}
-		for p in [
-			"/mfe/review_archive/x.js",
-			"/mfe/sites/mfe-sites.js",
-			"/api/sites/leads",
-			"/playbook_mcp/token",
-			"/.well-known/oauth-protected-resource/playbook_mcp",
-		] {
+		for p in ["/mfe/review_archive/x.js", "/mfe/sites/mfe-sites.js", "/api/sites/leads", "/api/playbook/search"] {
 			assert!(reserved(p), "{p}");
 		}
 	}

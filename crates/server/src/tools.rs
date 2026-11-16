@@ -137,15 +137,113 @@ impl Tools {
 		let app = self.app.get().expect("calls come after the app is built").clone();
 		let res = app.oneshot(req.body(body).expect("a request from parts that parsed")).await.expect("the router is infallible");
 		let status = res.status().as_u16();
+		let kind = res.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or_default().to_owned(); // none: an empty answer, below
 		let bytes = to_bytes(res.into_body(), ANSWER)
 			.await
 			.map_err(|e| format!("the answer broke off or ran past {ANSWER} bytes: {e}"))?;
-		let body = if bytes.is_empty() {
-			Value::Null
-		} else {
-			serde_json::from_slice(&bytes).unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned()))
+		let body = match kind.split(';').next().unwrap_or_default().trim() {
+			_ if bytes.is_empty() => Value::Null,
+			"application/json" => serde_json::from_slice(&bytes).map_err(|e| format!("{} answered JSON that does not parse: {e}", call.operation))?,
+			text if text.starts_with("text/") => Value::String(String::from_utf8(bytes.to_vec()).map_err(|_| format!("{} answered text that is not UTF-8", call.operation))?),
+			other => return Err(format!("{} answered {other:?}, which an agent does not read", call.operation)),
 		};
 		Ok(Answer { status, body })
+	}
+
+	/// The operations that are their own tools (`x-tool`) and that `may` opens, as an agent is given them.
+	pub fn own(&self, may: impl Fn(Option<&str>) -> bool) -> Vec<Own> {
+		let doc = self.catalog.document();
+		let components = serde_json::to_value(&doc.components).expect("components serialize")["schemas"].take();
+		doc.operations()
+			.filter(|(_, _, op)| op.extensions.get("x-tool") == Some(&Value::Bool(true)))
+			.filter(|(_, _, op)| may(op.extensions.get("x-permission").and_then(Value::as_str)))
+			.map(|(_, method, op)| {
+				let id = op.operation_id.clone().expect("every operation has an id");
+				let raw = serde_json::to_value(op).expect("an operation serializes");
+				let mut properties = Map::new();
+				let mut required = Vec::new();
+				let mut path = Vec::new();
+				for p in raw["parameters"].as_array().into_iter().flatten() {
+					let name = p["name"].as_str().expect("a parameter has a name").to_owned();
+					if p["in"] == "path" {
+						path.push(name.clone());
+					}
+					if p["required"] == true {
+						required.push(Value::String(name.clone()));
+					}
+					let mut schema = inline(&p["schema"], &components, &mut Vec::new());
+					if let Some(d) = p["description"].as_str() {
+						schema["description"] = Value::String(d.to_owned());
+					}
+					properties.insert(name, schema);
+				}
+				let body = raw["requestBody"]["content"]["application/json"]["schema"].clone();
+				if !body.is_null() {
+					properties.insert("body".into(), inline(&body, &components, &mut Vec::new()));
+					required.push(Value::String("body".into()));
+				}
+				Own {
+					name: tool_name(&id),
+					description: [op.summary.as_deref(), op.description.as_deref()].into_iter().flatten().collect::<Vec<_>>().join("\n\n"),
+					input: serde_json::json!({ "type": "object", "properties": properties, "required": required, "additionalProperties": false }),
+					hints: hints(method, op),
+					operation: id,
+					path,
+				}
+			})
+			.collect()
+	}
+}
+
+/// What an agent is named an operation by when it is its own tool: `playbook.search` is `playbook_search`.
+pub(crate) fn tool_name(operation: &str) -> String {
+	operation.replacen('.', "_", 1)
+}
+
+/// The tools every agent has, whatever the catalog holds: an operation's own tool may not take their names.
+pub(crate) const BUILT_IN: [&str; 4] = ["search", "call", "open", "run"];
+
+/// An operation that is its own tool.
+pub struct Own {
+	pub name: String,
+	pub description: String,
+	/// Its parameters by name, and its JSON body as `body`: a JSON Schema with nothing to resolve.
+	pub input: Value,
+	pub hints: Hints,
+	operation: String,
+	/// Which of the input's names are the path's.
+	path: Vec<String>,
+}
+
+impl Own {
+	/// The call its input stands for: the path's parameters, the query's, and the body.
+	pub fn call(&self, mut input: Map<String, Value>) -> Call {
+		let body = input.remove("body");
+		let (path, query) = input.into_iter().partition(|(k, _)| self.path.contains(k));
+		Call {
+			operation: self.operation.clone(),
+			path: Some(path),
+			query: Some(query),
+			body,
+		}
+	}
+}
+
+/// `schema` with every `$ref` to `components` put in place.
+fn inline(schema: &Value, components: &Value, within: &mut Vec<String>) -> Value {
+	match schema {
+		Value::Object(o) => {
+			if let Some(name) = o.get("$ref").and_then(Value::as_str).and_then(|r| r.strip_prefix("#/components/schemas/")) {
+				assert!(!within.iter().any(|n| n == name), "{name} holds itself: a tool's input is no recursive schema");
+				within.push(name.to_owned());
+				let inlined = inline(&components[name], components, within);
+				within.pop();
+				return inlined;
+			}
+			Value::Object(o.iter().map(|(k, v)| (k.clone(), inline(v, components, within))).collect())
+		}
+		Value::Array(a) => Value::Array(a.iter().map(|v| inline(v, components, within)).collect()),
+		v => v.clone(),
 	}
 }
 

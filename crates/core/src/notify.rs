@@ -161,20 +161,9 @@ impl Note {
 				out.push(&format!(" ({kind}): {since}"));
 			}
 			Self::AccessRequested { email, name, need } => {
-				let playbook = need == sa_auth::Mcp::Use.as_str();
-				out.push(match (playbook, ru) {
-					(true, true) => "🔑 Запрос доступа к плейбуку\n",
-					(true, false) => "🔑 Playbook access request\n",
-					(false, true) => "🔑 Запрос доступа\n",
-					(false, false) => "🔑 Access request\n",
-				});
+				out.push(if ru { "🔑 Запрос доступа\n" } else { "🔑 Access request\n" });
 				out.code(&one_line(email, MAX_NAME));
-				out.push(&match (playbook, ru) {
-					(true, true) => " хочет подключить Claude Code к плейбуку.".to_owned(),
-					(true, false) => " wants to connect Claude Code to the playbook.".to_owned(),
-					(false, true) => format!(" просит {need}."),
-					(false, false) => format!(" asks for {need}."),
-				});
+				out.push(&if ru { format!(" просит {need}.") } else { format!(" asks for {need}.") });
 				let name = one_line(name, MAX_NAME);
 				if !name.is_empty() {
 					out.push(if ru { "\nИмя: " } else { "\nName: " });

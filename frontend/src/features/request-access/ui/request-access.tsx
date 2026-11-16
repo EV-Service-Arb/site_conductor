@@ -13,7 +13,7 @@ import { ErrorState } from "@/shared/ui/error-state";
 import { failureText } from "@/shared/ui/failure-text";
 import { useButtonSize } from "@/shared/ui/touch";
 
-import { PLAYBOOK_NEED, holds } from "../model/access";
+import { holds } from "../model/access";
 
 const RECHECK_MS = 30_000;
 
@@ -100,7 +100,6 @@ function Asking({
   const button = useButtonSize();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const playbook = need === PLAYBOOK_NEED;
 
   const ask = () => {
     setBusy(true);
@@ -121,7 +120,7 @@ function Asking({
   const at = pending && new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(pending.requested_at));
   const [title, body] = pending
     ? [t(access.sent.title, "Request sent"), t(access.sent.body, "The Service-Arb admins have your email.")]
-    : [playbook ? t(access.playbook.title, "No access to the playbook yet") : t(access.title, "No access yet"), t(access.body, "Your EV account is ready — it just needs access.")];
+    : [t(access.title, "No access yet"), t(access.body, "Your EV account is ready — it just needs access.")];
   const here = window.location.pathname + window.location.search;
 
   return (

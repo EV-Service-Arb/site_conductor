@@ -167,8 +167,8 @@ pub(crate) async fn ask(
 	written.write(&turns, &answer, AnswerState::Working, None).await?;
 
 	history.push(json!({ "role": "user", "content": question(&q) }));
-	let tools = tool_definitions();
 	let permissions = caller.permissions.clone();
+	let tools = tool_definitions(&state.tools.own(|p| p.is_none_or(|p| permissions.iter().any(|h| h == p))));
 	let mut rounds = 0;
 	let end = loop {
 		rounds += 1;
@@ -208,7 +208,12 @@ pub(crate) async fn ask(
 				Some("tool_use") => {
 					let (result, step) = use_tool(&state, &headers, &permissions, &q, &mut answer, &block["name"], &block["input"]).await;
 					answer.steps.push(Step { label: step, done: true });
-					results.push(json!({ "type": "tool_result", "tool_use_id": block["id"], "content": result.to_string() }));
+					// a text answer is the model's as it came; anything else, its JSON
+					let content = match result {
+						Value::String(text) => text,
+						other => other.to_string(),
+					};
+					results.push(json!({ "type": "tool_result", "tool_use_id": block["id"], "content": content }));
 				}
 				_ => {}
 			}
@@ -369,15 +374,18 @@ fn question(q: &Question) -> String {
 	)
 }
 
-fn tool_definitions() -> Value {
+fn tool_definitions(own: &[tools::Own]) -> Value {
 	let schema = |s: ev_lib::api::schemars::Schema| serde_json::to_value(s).expect("a schema serializes");
 	let call = SchemaSettings::draft07().into_generator().into_root_schema_for::<tools::Call>();
-	json!([
+	let mut tools = json!([
 		{ "name": "search", "description": "Finds the panel's operations matching what you need: their ids, parameters, body schemas and whether they destroy or spend.", "input_schema": schema(schema_for!(Search)) },
 		{ "name": "call", "description": "Runs one operation by its id, as the person asking. One that destroys or spends becomes a proposal they confirm.", "input_schema": schema(call) },
 		{ "name": "open", "description": "Offers a view as a link: a URL of this site, from the page's views.", "input_schema": { "type": "object", "properties": { "url": { "type": "string" }, "label": { "type": "string" } }, "required": ["url", "label"] } },
 		{ "name": "run", "description": "Offers a binding of the page's keymap, by its id, as a button.", "input_schema": { "type": "object", "properties": { "binding": { "type": "string" }, "label": { "type": "string" } }, "required": ["binding", "label"] } },
-	])
+	]);
+	let list = tools.as_array_mut().expect("a list");
+	list.extend(own.iter().map(|t| json!({ "name": t.name, "description": t.description, "input_schema": t.input })));
+	tools
 }
 
 #[derive(Deserialize)]
@@ -415,20 +423,7 @@ async fn use_tool(state: &ApiState, headers: &HeaderMap, permissions: &sa_auth::
 				Ok(c) => c,
 				Err(e) => return (json!({ "error": e.to_string() }), "Called".to_owned()),
 			};
-			let Some(hints) = state.tools.hints(&c.operation) else {
-				return (json!({ "error": format!("no operation {:?}: search for one", c.operation) }), format!("Called {}", c.operation));
-			};
-			if hints.proposed() {
-				let label = c.operation.replace('_', " ");
-				answer.actions.push(action(&label, Target::Call(c)));
-				return (json!({ "proposed": "the person confirms it from the answer; say what it will do" }), format!("Proposed {label}"));
-			}
-			let step = format!("Called {}", c.operation);
-			match state.tools.call(headers, c).await {
-				Ok(a) if StatusCode::from_u16(a.status).is_ok_and(|s| s.is_success()) => (a.body, step),
-				Ok(a) => (json!({ "status": a.status, "error": a.body }), step),
-				Err(e) => (json!({ "error": e }), step),
-			}
+			call(state, headers, c, answer, action).await
 		}
 		Some("open") => match serde_json::from_value::<Open>(input.clone()) {
 			Ok(o) if o.url.starts_with('/') && !o.url.starts_with("//") => {
@@ -448,6 +443,32 @@ async fn use_tool(state: &ApiState, headers: &HeaderMap, permissions: &sa_auth::
 			Ok(r) => (json!({ "error": format!("no binding {:?} is bound now", r.binding) }), "Offered a key".to_owned()),
 			Err(e) => (json!({ "error": e.to_string() }), "Offered a key".to_owned()),
 		},
-		other => (json!({ "error": format!("no tool {other:?}") }), "Asked for an unknown tool".to_owned()),
+		Some(name) => match (
+			state.tools.own(|p| p.is_none_or(|p| permissions.iter().any(|h| h == p))).into_iter().find(|t| t.name == name),
+			input,
+		) {
+			(Some(t), Value::Object(input)) => call(state, headers, t.call(input.clone()), answer, action).await,
+			(Some(_), _) => (json!({ "error": "its input is an object" }), format!("Called {name}")),
+			(None, _) => (json!({ "error": format!("no tool {name:?}") }), "Asked for an unknown tool".to_owned()),
+		},
+		None => (json!({ "error": "a tool use without a name" }), "Asked for an unknown tool".to_owned()),
+	}
+}
+
+/// Runs `c` as the person asking, or proposes it for them to confirm when it destroys or spends.
+async fn call(state: &ApiState, headers: &HeaderMap, c: tools::Call, answer: &mut Answer, action: impl Fn(&str, Target) -> Action) -> (Value, String) {
+	let Some(hints) = state.tools.hints(&c.operation) else {
+		return (json!({ "error": format!("no operation {:?}: search for one", c.operation) }), format!("Called {}", c.operation));
+	};
+	if hints.proposed() {
+		let label = c.operation.replace('_', " ");
+		answer.actions.push(action(&label, Target::Call(c)));
+		return (json!({ "proposed": "the person confirms it from the answer; say what it will do" }), format!("Proposed {label}"));
+	}
+	let step = format!("Called {}", c.operation);
+	match state.tools.call(headers, c).await {
+		Ok(a) if StatusCode::from_u16(a.status).is_ok_and(|s| s.is_success()) => (a.body, step),
+		Ok(a) => (json!({ "status": a.status, "error": a.body }), step),
+		Err(e) => (json!({ "error": e }), step),
 	}
 }
