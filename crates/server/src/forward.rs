@@ -39,7 +39,7 @@ use crate::{
 };
 
 /// Longest prefixes first: the first match wins.
-const ROUTES: [Route; 14] = [
+const ROUTES: [Route; 11] = [
 	Route {
 		prefix: "/api/sites",
 		upstream: "/api/v1",
@@ -59,12 +59,6 @@ const ROUTES: [Route; 14] = [
 		gate: Gate::Open,
 	},
 	Route {
-		prefix: "/sites/mfe",
-		upstream: "/mfe",
-		service: Service::Sites,
-		gate: Gate::Open,
-	},
-	Route {
 		prefix: "/api/review_archive",
 		upstream: "",
 		service: Service::ReviewArchive,
@@ -72,12 +66,6 @@ const ROUTES: [Route; 14] = [
 	},
 	Route {
 		prefix: "/mfe/review_archive",
-		upstream: "/mfe",
-		service: Service::ReviewArchive,
-		gate: Gate::Open,
-	},
-	Route {
-		prefix: "/review_archive/mfe",
 		upstream: "/mfe",
 		service: Service::ReviewArchive,
 		gate: Gate::Open,
@@ -114,12 +102,6 @@ const ROUTES: [Route; 14] = [
 	},
 	Route {
 		prefix: "/mfe/placement",
-		upstream: "/mfe",
-		service: Service::Placement,
-		gate: Gate::Open,
-	},
-	Route {
-		prefix: "/placement/mfe",
 		upstream: "/mfe",
 		service: Service::Placement,
 		gate: Gate::Open,
