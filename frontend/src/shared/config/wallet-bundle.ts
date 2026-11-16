@@ -15,9 +15,9 @@ export const WALLET_SCRIPT = `${WALLET_ORIGIN}/wallet/mfe/wallet.js`;
 
 /**
  * The bytes of `WALLET_SCRIPT` this panel runs (banking WALLET-INPAGE-SPEC control (g): the
- * in-page pay form runs in this page). The sha256 of banking's `npm run --silent mfe:pins --
- * wallet` (`wallet.js=<hex>`) as SRI. banking's registry carries no integrity, so a release that
- * changes wallet.js turns the wallet and the pay buttons "unavailable" until this is updated.
+ * in-page pay form runs in this page), as SRI. `.github/workflows/wallet-pin.yml` repins it by PR
+ * from banking's source, never from what evinvest.ltd serves: its latest release and its main,
+ * space-separated, so the next bundle is accepted before banking rolls it out (banking#601).
  */
 export const WALLET_SCRIPT_INTEGRITY = "sha256-dTHZ9KONZftLYVv+aqUdkS0o8kCqt7O/d2MPeHxvQ0U=";
 
