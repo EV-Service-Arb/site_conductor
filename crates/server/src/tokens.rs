@@ -81,6 +81,19 @@ pub struct TokensDto {
 	pub daily: i64,
 	pub cap: i64,
 	pub kickbacks: Vec<KickbackDto>,
+	/// Each sold, priced item: its tokens.
+	pub prices: BTreeMap<Item, i64>,
+	/// An action costing more asks first.
+	pub confirm_above: i64,
+}
+
+/// `PUT /tokens/settings`.
+#[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "SpendingSettings")]
+#[serde(deny_unknown_fields)]
+pub struct SpendingSettingsDto {
+	/// 0 or more.
+	pub confirm_above: i64,
 }
 
 #[derive(Clone, Debug, JsonSchema, Serialize)]
@@ -293,6 +306,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/tokens/ledger", user, ledger),
 		ApiRoute::new(M::GET, "/tokens/usage", user, token_usage),
 		ApiRoute::new(M::POST, "/tokens/claim", user, claim_tokens),
+		ApiRoute::new(M::PUT, "/tokens/settings", user, set_spending),
 		ApiRoute::new(M::GET, "/admin/tokens", admin, token_holders),
 		// Tokens must not be handed out on a permission revoked a moment ago.
 		ApiRoute::new(M::POST, "/admin/tokens/{user_id}", admin.fresh(), change_balance),
@@ -358,26 +372,36 @@ impl From<BalanceChangeDto> for Change {
 	}
 }
 
-fn tokens_dto(panel: &Panel, (balance, kickbacks): (i64, Vec<Kickback>)) -> TokensDto {
-	TokensDto {
+async fn tokens_dto(panel: &Panel, user: Uuid, (balance, kickbacks): (i64, Vec<Kickback>)) -> ApiResult<TokensDto> {
+	let (prices, confirm_above) = panel.spending(user).await?;
+	Ok(TokensDto {
 		balance,
 		daily: panel.renewal().daily,
 		cap: panel.renewal().cap,
 		kickbacks: kickbacks.into_iter().map(KickbackDto::from).collect(),
-	}
+		prices,
+		confirm_above,
+	})
 }
 
-/// The caller's balance, renewed a day's worth when read, and the kick-backs not claimed.
+/// The caller's balance, renewed a day's worth when read, the kick-backs not claimed, and what
+/// they read before spending.
 async fn tokens(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<TokensDto>> {
 	let held = panel.tokens(caller.user_id, Timestamp::now()).await??;
-	Ok(Json(tokens_dto(&panel, held)))
+	Ok(Json(tokens_dto(&panel, caller.user_id, held).await?))
 }
 
 /// Claims every kick-back and grant owed to the caller into their balance.
 async fn claim_tokens(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<TokensDto>> {
 	let held = panel.claim(caller.user_id, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, balance = held.0, "kick-backs claimed");
-	Ok(Json(tokens_dto(&panel, held)))
+	Ok(Json(tokens_dto(&panel, caller.user_id, held).await?))
+}
+
+/// Above how many tokens an action asks the caller first.
+async fn set_spending(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<SpendingSettingsDto>) -> ApiResult<axum::response::NoContent> {
+	panel.set_confirm_above(caller.user_id, b.confirm_above).await??;
+	Ok(axum::response::NoContent)
 }
 
 #[derive(Deserialize, JsonSchema)]

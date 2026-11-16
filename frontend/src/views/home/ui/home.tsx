@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { type Listed, TABS, type Tags, fetchMapConfig, issueOf, narrowed, openAccount, openOrFocus, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useAddWindow, move, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useKitWindow, useTradeWindow, useTrades } from "@/entities/gmb";
 import { AddPanel } from "@/features/add-gmb";
 import { PlacingBar } from "@/features/place-gmb";
+import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { PlacementOverlay, StudyAreaWindow } from "@/features/placement-overlay";
 import type { LatLng, MapConfig, State } from "@/shared/api/schema";
 import { takeReturnPage } from "@/shared/api";
@@ -268,11 +269,15 @@ function GmbMap({ config }: { config: MapConfig }) {
   }, [map, numberedKey]);
 
   const windows = placed === undefined && picking === null;
+  const held = useTokens();
+  const spend = useSpendConfirm();
+  const panorama = held.status === "ok" ? held.data.prices["street_view.panorama"] : undefined;
   return (
     <>
       <div ref={host} className="absolute inset-0" />
       {map.status === "ok" && <PlacementOverlay map={map.map} />}
-      {map.status === "ok" && <StreetView map={map.map} account={map.account} />}
+      {map.status === "ok" && <StreetView map={map.map} account={map.account} spend={(open) => spend.ask(panorama, open)} />}
+      {spend.dialog}
       {map.status === "ok" && <Locate map={map.map} />}
       {map.status === "error" && (
         <div className="absolute inset-x-6 top-6">

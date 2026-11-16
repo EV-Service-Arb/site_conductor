@@ -261,8 +261,9 @@ reserved paths (`web.rs`) are derived from it.
   `serve --behind-conductor`. The home map imports its `/mfe/placement/overlay.js` once per page
   session and hands it the map: the heat, the pressure field and the competitors are its drawing,
   the model's wasm shipped with the payload it reads. A GET there never spends; a POST (Pull
-  latest, `sa:placement:study:spend`) buys the Places searches it lacks. Unset, `/api/placement`
-  answers 503 and the map says placement is not connected.
+  latest, `sa:placement:study:spend`) buys the Places searches it lacks, at the puller's tokens
+  (Tokens and GBPs). Unset, `/api/placement` answers 503 and the map says placement is not
+  connected.
 
 ## Browsers
 
@@ -499,6 +500,7 @@ GET    /tokens
 GET    /tokens/ledger
 GET    /tokens/usage
 POST   /tokens/claim
+PUT    /tokens/settings
 GET    /admin/tokens                        Tokens
 POST   /admin/tokens/{user_id}              Tokens, fresh
 GET    /admin/tokens/prices                 Tokens
@@ -632,7 +634,20 @@ other gmails' keys, free; then the Google accounts' Places keys (below) at the a
 request kind (Places' SKU), held under one lock per person from the balance read to the charge, so a
 request below the price, or unpriced, is refused before Google is asked. A cached answer costs
 nothing. The operator's commands (`gmb add`, `locate`) try the gmail's keys, then the house pays.
-review_archive's lookups and placement's sweeps are the house's for now.
+review_archive's lookups are the house's for now.
+
+**A study's pull is sold per search** (`placement.search`), charged by the forward, under the same
+lock:
+
+```text
+POST /api/placement/studies/{sha}/pull ─ price set, budget = balance ÷ price ─▶ placement …/pull?budget=<n>
+  ├─ the sweep needs more than n: 402 {need}, nothing bought ─▶ the person told the tokens it needs
+  └─ x-billed: <k> on any answer, k ≤ n ─▶ the ledger: −k × price; a pull that failed owes it all back,
+                                          as a failed walk does: the failure is the house's
+```
+
+A person's front end reads the sold prices with their balance, and an action costing more than
+their `confirm_above` (100 unsaid) asks them first.
 
 **Prices are the admin's.** Every costly action is an item of `sa_core::prices`: each tool declares
 its items there once (an enum, a variant's message its name and its doc what it is) with where it
@@ -948,9 +963,10 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   admin's price; no cost is written where it is spent.
 - **A use is counted once, where it happens**: a Google answer bought in the write that keeps it, a
   service's through its feed, taken only from where its cursor stands.
-- **No buy on credit.** A Places request on the shared keys or a Street View panorama for a person
-  is charged at its price, and refused before it is sent when their balance is below it; their own
-  keys and the queries cache cost nothing.
+- **No buy on credit.** A Places request on the shared keys, a Street View panorama or a study's
+  pull for a person is charged at its price, and refused before it is sent when their balance is
+  below it; a pull buys no search past what the balance affords. Their own keys and the queries
+  cache cost nothing.
 - **No Street View past the free ones.** No panorama opens on a browser key but one
   `POST /map/street_view` bought, and none is bought past its meter's free ones on that key's
   account.

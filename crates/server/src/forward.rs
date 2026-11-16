@@ -285,6 +285,52 @@ impl Forward {
 		}
 	}
 
+	/// A study's pull, on what `user` affords, charged what placement says it bought; owed back when it failed.
+	async fn pull(&self, route: &Route, mut req: Request, principal: Option<Principal>, user: uuid::Uuid, sha: &str) -> Response {
+		let held = match self.panel().pull(user).await {
+			Ok(Ok(held)) => held,
+			Ok(Err(refused)) => return ApiError::from(refused).into_response(),
+			Err(e) => return ApiError::from(e).into_response(),
+		};
+		*req.uri_mut() = format!("{}?budget={}", req.uri().path(), held.budget())
+			.parse()
+			.expect("a path that arrived in a URI, and a number");
+		let res = self.pass(route, req, principal).await;
+		let billed = match res.headers().get("x-billed") {
+			Some(v) => match v.to_str().ok().and_then(|v| v.parse::<u64>().ok()) {
+				Some(n) => n,
+				None => return ApiError::Internal(eyre::eyre!("placement's x-billed of {sha} is {v:?}, not a count")).into_response(),
+			},
+			// placement says it on every pull it ran: a refusal without it never reached one
+			None if !res.status().is_success() => 0,
+			None => return ApiError::Internal(eyre::eyre!("placement answered the pull of {sha} without x-billed")).into_response(),
+		};
+		let failed = !res.status().is_success();
+		if res.status() != StatusCode::PAYMENT_REQUIRED {
+			return match held.paid(billed, sha, failed).await {
+				Ok(()) => res,
+				Err(e) => ApiError::from(e).into_response(),
+			};
+		}
+		#[derive(serde::Deserialize)]
+		struct Unaffordable {
+			need: u64,
+		}
+		let body = match to_bytes(res.into_body(), ANSWER).await {
+			Ok(body) => body,
+			Err(e) => return ApiError::BadGateway(format!("reading placement's refusal: {e}")).into_response(),
+		};
+		let need = match serde_json::from_slice::<Unaffordable>(&body) {
+			Ok(u) => u.need,
+			Err(e) => return ApiError::Internal(eyre::eyre!("placement's 402 for {sha}, {:?}: {e}", String::from_utf8_lossy(&body))).into_response(),
+		};
+		let why = held.unaffordable(need);
+		if let Err(e) = held.paid(billed, sha, failed).await {
+			return ApiError::from(e).into_response();
+		}
+		(StatusCode::PAYMENT_REQUIRED, why).into_response()
+	}
+
 	async fn pass(&self, route: &Route, req: Request, principal: Option<Principal>) -> Response {
 		if route.service == Service::Placement && self.services.upstreams.placement.is_none() {
 			return ApiError::Unavailable("placement not connected".to_owned()).into_response();
@@ -365,6 +411,7 @@ pub(crate) fn name(service: Service) -> String {
 
 async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 	let route = ROUTES.iter().find(|r| under(req.uri().path(), r.prefix)).expect("mounted under one of ROUTES");
+	let mut puller = None;
 	let principal = match route.gate {
 		Gate::Open => None,
 		Gate::Session(writes) => {
@@ -383,7 +430,10 @@ async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 				signin::check(&f.sign_in, req.headers(), freshness).await
 			};
 			match caller {
-				Ok(caller) => Some(Principal::User(user(caller, route.service))),
+				Ok(caller) => {
+					puller = Some(caller.user_id);
+					Some(Principal::User(user(caller, route.service)))
+				}
 				// a page the browser navigated to goes to sign in and comes back; a call is told
 				Err(Denied::Unauthenticated) if route.service == Service::Playbook && *req.method() == Method::GET => {
 					let back = req.uri().path_and_query().map_or(req.uri().path(), |pq| pq.as_str());
@@ -393,7 +443,21 @@ async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 			}
 		}
 	};
+	if *req.method() == Method::POST
+		&& let Some(user) = puller
+		&& let Some(sha) = pulled(req.uri().path())
+	{
+		let sha = sha.to_owned();
+		return f.pull(route, req, principal, user, &sha).await;
+	}
 	f.pass(route, req, principal).await
+}
+
+/// The study of `POST /api/placement/studies/{sha}/pull`.
+fn pulled(path: &str) -> Option<&str> {
+	path.strip_prefix("/api/placement/studies/")?
+		.strip_suffix("/pull")
+		.filter(|sha| !sha.is_empty() && !sha.contains('/'))
 }
 
 /// `caller`, as `service` is told of them: its slice of their permissions only.
