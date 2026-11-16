@@ -1639,17 +1639,19 @@ dependencies = [
 [[package]]
 name = "ev_lib"
 version = "0.33.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "562d5db20f34579aac60e6b217460a3493278fa12ae3a0923d68285f38006f87"
 dependencies = [
  "aide",
  "axum",
+ "ev_lib_macros",
+ "form_urlencoded",
  "js-sys",
+ "percent-encoding",
  "reqwest",
  "schemars",
  "sentry",
  "serde",
  "serde_json",
+ "strum",
  "syn 2.0.119",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -1664,6 +1666,15 @@ checksum = "e4f7f13e0f258566f17780646873ee3f8124610c089087ec811c852f21b52265"
 dependencies = [
  "strum",
  "tailwind_fuse",
+]
+
+[[package]]
+name = "ev_lib_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -4397,8 +4408,10 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "ev_lib 0.33.0",
+ "futures",
  "hex",
  "hmac 0.13.0",
+ "http-body-util",
  "jiff",
  "sa_alerts",
  "sa_auth",
@@ -4409,6 +4422,7 @@ dependencies = [
  "strum",
  "subtle",
  "thiserror 2.0.21",
+ "tokio",
  "url",
  "uuid",
 ]
@@ -6156,8 +6170,6 @@ dependencies = [
 [[package]]
 name = "v_utils"
 version = "2.24.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "763460688cb958bf467ca140122109dd2f9a2ec2b0cafbee26521b14ee34c185"
 dependencies = [
  "ahash",
  "bon",
@@ -6190,8 +6202,6 @@ dependencies = [
 [[package]]
 name = "v_utils_macros"
 version = "2.16.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7530357746c9a98f791caa4dacc46e767de5924dcca96584fd10a002c9d7f16"
 dependencies = [
  "heck",
  "proc-macro2",

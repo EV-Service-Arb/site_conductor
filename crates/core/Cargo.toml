@@ -9,12 +9,13 @@ repository.workspace = true
 readme.workspace = true
 
 [features]
-# what an operation spends, in a service's route table (`prices::Spends`)
-api = ["dep:axum", "dep:ev_lib"]
+# a service's end of the conductor's wire, in its router: what an operation spends (`prices::Spends`), an agent tool (`agent::Tool`), the change feed (`feeds::changes`)
+api = ["dep:axum", "dep:ev_lib", "dep:futures", "dep:tokio"]
 
 [dependencies]
 axum = { workspace = true, optional = true }
 ev_lib = { workspace = true, features = ["api"], optional = true }
+futures = { workspace = true, optional = true }
 hex.workspace = true
 hmac.workspace = true
 jiff = { workspace = true, features = ["serde", "tzdb-bundle-always"] }
@@ -27,8 +28,25 @@ sha2.workspace = true
 strum.workspace = true
 subtle.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, optional = true }
 url.workspace = true
 uuid = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+http-body-util.workspace = true
+tokio.workspace = true
+
+[[test]]
+name = "feeds"
+required-features = ["api"]
+
+[[test]]
+name = "agent"
+required-features = ["api"]
+
+[[test]]
+name = "dashboards"
+required-features = ["api"]
 
 [lints]
 workspace = true
