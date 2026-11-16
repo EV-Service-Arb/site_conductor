@@ -106,7 +106,7 @@ where
 	const REFUSALS: &'static [Denied] = &[Denied::Unauthenticated];
 
 	fn vouch(&self, _: &Gate<F>, parts: &mut Parts) -> impl Future<Output = Result<Principal, Refusal<Denied>>> + Send {
-		ready(Verifier::from_ref(self).assertion(parts, None).map(|a| a.principal))
+		ready(Verifier::from_ref(self).principal(parts))
 	}
 }
 
@@ -154,6 +154,11 @@ impl Verifier {
 		Self { keys: Arc::new(keys), aud }
 	}
 
+	/// Who the request's assertion vouches for: what a service's own [`Vouch`] starts from.
+	pub fn principal<C: ErrorCode + From<Denied>>(&self, parts: &Parts) -> Result<Principal, Refusal<C>> {
+		self.assertion(parts, None).map(|a| a.principal)
+	}
+
 	/// The source the conductor checked the MAC of over `body`, which this request carries.
 	pub fn source(&self, parts: &Parts, body: &[u8]) -> Result<Source, Refusal<Denied>> {
 		match self.assertion(parts, Some(body))?.principal {
@@ -164,7 +169,7 @@ impl Verifier {
 
 	/// The assertion on the request, for this service and for exactly its method and the path the
 	/// conductor asked (a nested router sees it stripped).
-	fn assertion(&self, parts: &Parts, body: Option<&[u8]>) -> Result<Assertion, Refusal<Denied>> {
+	fn assertion<C: ErrorCode + From<Denied>>(&self, parts: &Parts, body: Option<&[u8]>) -> Result<Assertion, Refusal<C>> {
 		let token = parts.headers.get(HEADER).ok_or_else(|| unauthenticated(format!("no {HEADER}")))?;
 		let token = token.to_str().map_err(|_| unauthenticated(format!("{HEADER} is not ASCII")))?;
 		let path = parts.extensions.get::<OriginalUri>().expect("the router records the URI it was asked").path();
@@ -204,20 +209,17 @@ impl OperationInput for User {}
 #[derive(Clone, Copy, Debug)]
 pub struct Conductor;
 
-impl<S: Send + Sync> FromRequestParts<S> for Conductor
-where
-	Verifier: FromRef<S>,
-{
-	type Rejection = Refusal<Denied>;
+impl<S: Vouch<()> + Send + Sync> FromRequestParts<S> for Conductor {
+	type Rejection = Refusal<S::Refusal>;
 
-	async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Refusal<Denied>> {
-		match Verifier::from_ref(state).assertion(parts, None)?.principal {
+	async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Refusal<S::Refusal>> {
+		match state.vouch(&Gate::CONDUCTOR, parts).await? {
 			Principal::Conductor => Ok(Self),
 			_ => Err(unauthenticated("only the conductor's own assertion opens this route".into())),
 		}
 	}
 }
 
-fn unauthenticated(error: String) -> Refusal<Denied> {
-	Refusal::new(Denied::Unauthenticated, error)
+fn unauthenticated<C: ErrorCode + From<Denied>>(error: String) -> Refusal<C> {
+	Refusal::new(Denied::Unauthenticated.into(), error)
 }

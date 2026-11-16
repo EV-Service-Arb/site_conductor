@@ -7,7 +7,7 @@
 use std::{fs, path::PathBuf};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	let proto_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../contracts/proto");
+	let proto_root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?).join("../../contracts/proto");
 	let dir = proto_root.join("concierge/v1");
 	println!("cargo:rerun-if-changed={}", dir.display());
 	let mut protos = Vec::new();

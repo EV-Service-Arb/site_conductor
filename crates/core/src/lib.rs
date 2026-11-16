@@ -7,6 +7,8 @@
 //! - [`dashboards`] (feature `api`): a service's Grafana dashboards, over its document;
 //! - [`feeds`]: what the conductor's hubs read of a service and push to it, path and page;
 //! - [`ids`]: what a source key may name (brands), how its key id looks, and a site key's origin;
+//! - [`geo`]: points and rectangles, as Google draws them;
+//! - [`placement`]: the study the conductor hands placement, and its address;
 //! - [`signature`]: how a source signs a batch, and how the conductor checks it;
 //! - [`queries_cache`]: the queries cache's wire;
 //! - [`notify`]: the Telegram rules, the conductor's own messages, the buttons' signed data, and
@@ -22,9 +24,11 @@ pub mod agent;
 pub mod dashboards;
 pub mod feeds;
 pub mod gbp;
+pub mod geo;
 pub mod ids;
 pub mod meters;
 pub mod notify;
+pub mod placement;
 pub mod prices;
 pub mod queries_cache;
 pub mod signature;

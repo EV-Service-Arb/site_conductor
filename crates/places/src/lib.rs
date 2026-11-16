@@ -16,6 +16,7 @@ pub use keys::{Keys, Spent};
 use parse::Parsed;
 use queries_cache::Request;
 pub use queries_cache::{Pending, QueriesCache, Remote};
+pub use sa_core::geo::{LatLng, Viewport};
 use sa_core::{
 	prices::PlacesRequest,
 	queries_cache::{Claim, Put},
@@ -114,12 +115,6 @@ pub struct Suggestion {
 	pub secondary: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, schemars::JsonSchema)]
-pub struct LatLng {
-	pub lat: f64,
-	pub lng: f64,
-}
-
 /// A city or town, as Google draws it: a point and the rectangle that frames it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Locality {
@@ -129,14 +124,6 @@ pub struct Locality {
 	pub viewport: Viewport,
 	/// ISO 3166-1 alpha-2.
 	pub country: String,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Viewport {
-	pub south: f64,
-	pub west: f64,
-	pub north: f64,
-	pub east: f64,
 }
 
 #[derive(Debug, thiserror::Error)]

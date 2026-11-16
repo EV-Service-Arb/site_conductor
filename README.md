@@ -1,8 +1,8 @@
-# panel
+# site_conductor
 ![Minimum Supported Rust Version](https://img.shields.io/badge/nightly-1.100+-ab6000.svg)
-![Lines Of Code](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/panel-loc.json)
-![Build time](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/panel-build.json)
-![Test time](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/panel-test.json)
+![Lines Of Code](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/site_conductor-loc.json)
+![Build time](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/site_conductor-build.json)
+![Test time](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/site_conductor-test.json)
 <br>
 [<img alt="ci errors" src="https://img.shields.io/github/actions/workflow/status/EV-Service-Arb/site_conductor/errors.yml?branch=main&style=for-the-badge&style=flat-square&label=errors&labelColor=420d09" height="20">](https://github.com/EV-Service-Arb/site_conductor/actions?query=branch%3Amain) <!--NB: Won't find it if repo is private-->
 [<img alt="ci warnings" src="https://img.shields.io/github/actions/workflow/status/EV-Service-Arb/site_conductor/warnings.yml?branch=main&style=for-the-badge&style=flat-square&label=warnings&labelColor=d16002" height="20">](https://github.com/EV-Service-Arb/site_conductor/actions?query=branch%3Amain) <!--NB: Won't find it if repo is private-->
@@ -102,6 +102,7 @@ troubleshooting are in [docs/LOCAL.md](docs/LOCAL.md).
 `cargo test` runs everything, here and in CI: each database test gets its own throwaway SQLite
 file in the temp directory (`panel_test_*.db`), removed when it ends; the services behind the
 conductor, concierge and Telegram are stand-ins on loopback ports. Nothing to set up.
+`test-timeline` (dev shell; args go to `cargo nextest run`) runs them and lays every compile unit and test on one timeline, `target/test-timeline.json` for [ui.perfetto.dev](https://ui.perfetto.dev).
 
 
 <br>

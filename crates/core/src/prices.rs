@@ -322,6 +322,14 @@ mod spends {
 		fn payer(&self) -> Self::Who;
 	}
 
+	impl Payer for sa_auth::User {
+		type Who = uuid::Uuid;
+
+		fn payer(&self) -> uuid::Uuid {
+			self.sub.parse().expect("the conductor asserts a concierge user id")
+		}
+	}
+
 	/// A handler's caller `E`, and the [`Spender`] its buys of `T`'s items are made for: the
 	/// operation's `x-spends` is those items.
 	pub struct Spends<T, E: Payer>(pub E, pub Spender<T, E::Who>);
