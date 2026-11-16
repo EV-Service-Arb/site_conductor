@@ -5,7 +5,7 @@ import { type T, links, nav } from "@/shared/i18n";
 type PanelConfig = {
   /** The sign-in dialog over the panel, the platform's account chip and sign-in; concierge's bundle from /api/auth/mfe/*. Off: a 401 redirects to sign in. */
   signinOverlay: boolean;
-  /** The wallet page, its bundle from /wallet/mfe/*. Off: no menu entry, the route says the wallet is unavailable. */
+  /** The wallet page, its bundle from /api/wallet/mfe/*. Off: no menu entry, the route says the wallet is unavailable. */
   walletPage: boolean;
   /** What review_archive opens as; `?grafana=true|false` switches a browser tab. */
   reviewArchiveUi: "grafana" | "legacy";

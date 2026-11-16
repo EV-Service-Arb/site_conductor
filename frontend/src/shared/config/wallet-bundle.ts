@@ -6,12 +6,12 @@
 const WALLET_ORIGIN = "https://evinvest.ltd";
 
 /**
- * Where banking publishes the bundle (`/wallet/mfe/wallet.js`, as its registry.json says).
+ * Where banking publishes the bundle (`/api/wallet/mfe/wallet.js`, as its registry.json says).
  * Not served by the panel on purpose: the elements talk to the origin they were loaded from
  * (balances, history, action pages), so a copy under the panel's origin would ask the panel for
  * `/api/wallet`.
  */
-export const WALLET_SCRIPT = `${WALLET_ORIGIN}/wallet/mfe/wallet.js`;
+export const WALLET_SCRIPT = `${WALLET_ORIGIN}/api/wallet/mfe/wallet.js`;
 
 /**
  * The bytes of `WALLET_SCRIPT` this panel runs (banking WALLET-INPAGE-SPEC control (g): the
