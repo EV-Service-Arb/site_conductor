@@ -239,6 +239,27 @@ impl Panel {
 			.collect())
 	}
 
+	/// What `user` reads before they spend: the sold items' prices, and above what an action asks them first.
+	pub async fn spending(&self, user: Uuid) -> eyre::Result<(BTreeMap<Item, i64>, i64)> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a person's spending")?;
+		let prices = db::prices(&mut conn)
+			.await?
+			.into_iter()
+			.filter(|(item, _)| item.sale() == Sale::Sold)
+			.map(|(item, p)| (item, p.tokens))
+			.collect();
+		Ok((prices, db::confirm_above(&mut conn, user).await?))
+	}
+
+	pub async fn set_confirm_above(&self, user: Uuid, tokens: i64) -> eyre::Result<Result<(), Refused>> {
+		if tokens < 0 {
+			return Ok(Err(Refused::Invalid(format!("{tokens} tokens: ask above 0 or more"))));
+		}
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a person's settings")?;
+		db::set_confirm_above(&mut conn, user, tokens).await?;
+		Ok(Ok(()))
+	}
+
 	/// An admin (`by`, their email) prices each item given at 0 tokens or more, `None` taking it
 	/// off sale, and costs each at 0 µ$ or more, `None` unknown: every one, or none. Only a sold
 	/// item has a price.

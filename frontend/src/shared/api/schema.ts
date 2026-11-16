@@ -1290,7 +1290,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The caller's balance, renewed a day's worth when read, and the kick-backs not claimed. */
+        /** The caller's balance, renewed a day's worth when read, the kick-backs not claimed, and what they read before spending. */
         get: operations["tokens"];
         put?: never;
         post?: never;
@@ -1327,6 +1327,23 @@ export interface paths {
         /** The caller's ledger, newest first. */
         get: operations["ledger"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tokens/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Above how many tokens an action asks the caller first. */
+        put: operations["set_spending"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2574,7 +2591,7 @@ export interface components {
             unit: string;
         };
         /** @enum {string} */
-        PricedItem: "places.details" | "places.search" | "places.autocomplete" | "places.geocode" | "street_view.panorama" | "map.map" | "walk.open" | "walk.reviews" | "walk.sort" | "walk.sort_retry" | "walk.step" | "phone.running" | "ads.location" | "ads.keyword_ideas" | "ads.historical_metrics" | "dataforseo.keywords_for_keywords" | "dataforseo.search_volume" | "browser.gologin" | "browser.mimic";
+        PricedItem: "places.details" | "places.search" | "places.autocomplete" | "places.geocode" | "street_view.panorama" | "map.map" | "walk.open" | "walk.reviews" | "walk.sort" | "walk.sort_retry" | "walk.step" | "phone.running" | "placement.search" | "ads.location" | "ads.keyword_ideas" | "ads.historical_metrics" | "dataforseo.keywords_for_keywords" | "dataforseo.search_volume" | "browser.gologin" | "browser.mimic";
         /** @description Every item, in the catalog's order. */
         Prices: {
             prices: components["schemas"]["Price"][];
@@ -2709,7 +2726,7 @@ export interface components {
          *     - `conductor`: At the buy, before Google is asked.
          *     - `review_archive`: After the fact, through its charge feed.
          *     - `browsers`: sa_browsers' runner: nobody is charged.
-         *     - `placement`: gmaps_optimal_placement's studies: the house's for now.
+         *     - `placement`: gmaps_optimal_placement's studies: a pull's searches charged at the conductor's forward.
          * @enum {string}
          */
         Scope: "conductor" | "review_archive" | "browsers" | "placement";
@@ -2762,6 +2779,8 @@ export interface components {
                 /** Format: int64 */
                 "phone.running"?: number | null;
                 /** Format: int64 */
+                "placement.search"?: number | null;
+                /** Format: int64 */
                 "places.autocomplete"?: number | null;
                 /** Format: int64 */
                 "places.details"?: number | null;
@@ -2801,6 +2820,8 @@ export interface components {
                 "map.map"?: number | null;
                 /** Format: int64 */
                 "phone.running"?: number | null;
+                /** Format: int64 */
+                "placement.search"?: number | null;
                 /** Format: int64 */
                 "places.autocomplete"?: number | null;
                 /** Format: int64 */
@@ -2954,6 +2975,14 @@ export interface components {
             /** Format: double */
             usd: number | null;
         };
+        /** @description `PUT /tokens/settings`. */
+        SpendingSettings: {
+            /**
+             * Format: int64
+             * @description 0 or more.
+             */
+            confirm_above: number;
+        };
         Spot: {
             /** @description What it was picked by: an address, a business nearby. */
             label: string | null;
@@ -3066,10 +3095,58 @@ export interface components {
             cap: number;
             /**
              * Format: int64
+             * @description An action costing more asks first.
+             */
+            confirm_above: number;
+            /**
+             * Format: int64
              * @description Renewal: added per day while under `cap`.
              */
             daily: number;
             kickbacks: components["schemas"]["Kickback"][];
+            /** @description Each sold, priced item: its tokens. */
+            prices: {
+                /** Format: int64 */
+                "ads.historical_metrics"?: number;
+                /** Format: int64 */
+                "ads.keyword_ideas"?: number;
+                /** Format: int64 */
+                "ads.location"?: number;
+                /** Format: int64 */
+                "browser.gologin"?: number;
+                /** Format: int64 */
+                "browser.mimic"?: number;
+                /** Format: int64 */
+                "dataforseo.keywords_for_keywords"?: number;
+                /** Format: int64 */
+                "dataforseo.search_volume"?: number;
+                /** Format: int64 */
+                "map.map"?: number;
+                /** Format: int64 */
+                "phone.running"?: number;
+                /** Format: int64 */
+                "placement.search"?: number;
+                /** Format: int64 */
+                "places.autocomplete"?: number;
+                /** Format: int64 */
+                "places.details"?: number;
+                /** Format: int64 */
+                "places.geocode"?: number;
+                /** Format: int64 */
+                "places.search"?: number;
+                /** Format: int64 */
+                "street_view.panorama"?: number;
+                /** Format: int64 */
+                "walk.open"?: number;
+                /** Format: int64 */
+                "walk.reviews"?: number;
+                /** Format: int64 */
+                "walk.sort"?: number;
+                /** Format: int64 */
+                "walk.sort_retry"?: number;
+                /** Format: int64 */
+                "walk.step"?: number;
+            };
         };
         /** @description A trade of the caller's: Plumbing, set up in some countries. */
         Trade: {
@@ -3492,6 +3569,7 @@ export type SourceKind = components['schemas']['SourceKind'];
 export type SourceState = components['schemas']['SourceState'];
 export type Spend = components['schemas']['Spend'];
 export type SpendDay = components['schemas']['SpendDay'];
+export type SpendingSettings = components['schemas']['SpendingSettings'];
 export type Spot = components['schemas']['Spot'];
 export type SpotInput = components['schemas']['SpotInput'];
 export type StartBrowser = components['schemas']['StartBrowser'];
@@ -6277,6 +6355,38 @@ export interface operations {
             };
         };
     };
+    set_spending: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `PUT /tokens/settings`. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendingSettings"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers: `error` is for a person. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     token_usage: {
         parameters: {
             query?: never;
@@ -6883,7 +6993,7 @@ export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>[
 export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
 export const onGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OnGoogle"]> = ["verifying", "verified", "suspended"];
 export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Permission"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
-export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic"];
+export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "placement.search", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic"];
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
 export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "payment_received", "source_silent", "booked", "access_requested", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed"];

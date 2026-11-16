@@ -411,3 +411,25 @@ fn charged(service: Option<String>, key: Option<String>, label: Option<String>) 
 		other => unreachable!("the table's CHECK: service and key together; got {other:?}"),
 	}
 }
+
+/// Above what an action costing tokens asks its person first, when they never said.
+pub const CONFIRM_ABOVE: i64 = 100;
+
+pub async fn confirm_above(conn: &mut SqliteConnection, user: Uuid) -> eyre::Result<i64> {
+	let set: Option<i64> = sqlx::query_scalar("SELECT confirm_above FROM user_settings WHERE user_id = $1")
+		.bind(user)
+		.fetch_optional(&mut *conn)
+		.await
+		.wrap_err("reading a person's settings")?;
+	Ok(set.unwrap_or(CONFIRM_ABOVE))
+}
+
+pub async fn set_confirm_above(conn: &mut SqliteConnection, user: Uuid, tokens: i64) -> eyre::Result<()> {
+	sqlx::query("INSERT INTO user_settings (user_id, confirm_above) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET confirm_above = excluded.confirm_above")
+		.bind(user)
+		.bind(tokens)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("setting a person's settings")?;
+	Ok(())
+}

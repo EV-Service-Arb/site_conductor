@@ -924,6 +924,7 @@ async fn no_permission_opens_no_section() {
 			"/tokens/ledger",
 			"/tokens/usage",
 			"/tokens/claim",
+			"/tokens/settings",
 			"/trash",
 			"/trash/gmails/{id}/restore",
 			"/trash/gmbs/{id}/restore",

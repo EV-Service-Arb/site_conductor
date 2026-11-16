@@ -28,6 +28,7 @@ pub mod kit;
 pub mod live;
 pub mod meters;
 pub mod oauth;
+pub mod placement;
 pub mod seal;
 pub mod session;
 pub mod store;
