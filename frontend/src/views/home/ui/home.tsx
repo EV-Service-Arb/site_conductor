@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { type Listed, TABS, type Tags, fetchMapConfig, issueOf, narrowed, openAccount, openOrFocus, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useAddWindow, move, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useKitWindow, useTradeWindow, useTrades } from "@/entities/gmb";
 import { AddPanel } from "@/features/add-gmb";
 import { PlacingBar } from "@/features/place-gmb";
-import { PlacementOverlay } from "@/features/placement-overlay";
+import { PlacementOverlay, StudyAreaWindow } from "@/features/placement-overlay";
 import type { LatLng, MapConfig, State } from "@/shared/api/schema";
 import { takeReturnPage } from "@/shared/api";
 import { useT, home } from "@/shared/i18n";
@@ -290,6 +290,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       {trashWindow && trash.status === "ok" && windows && <TrashWindow trash={trash.data} />}
       {account && accountWindow && gmails.status === "ok" && windows && <AccountWindow gmail={account} tab={accountWindow.tab} gbps={under(gmails.data, account.id).length} />}
       {kitWindow !== null && map.status === "ok" && windows && <KitWindow map={map.map} area={kitWindow} />}
+      {map.status === "ok" && windows && <StudyAreaWindow map={map.map} />}
       {add && placed === undefined && <AddPanel key={add.raw} {...add.adding} />}
       {picking !== null && (
         <div className="absolute bottom-4 left-4 flex items-center gap-3 rounded-lg border border-border bg-background py-2 pr-2 pl-4 shadow-overlay">

@@ -41,7 +41,8 @@ crates/core/             no I/O: the queries cache's wire, a GBP's states and mo
                          pacing, tokens' renewal and a charge's split, the charge feed's
                          page (`tokens::ChargePage`; review_archive takes it too), and what
                          costs (`prices`: every tool a vendor bills us or we bill a person for, its
-                         items) and a service's feed of what it spent (`usage`)
+                         items), a service's feed of what it spent (`usage`), and the vendors'
+                         meters each item draws on, their free units and stops (`meters`)
 crates/panel/            the engine: `Panel` (sources and their authentication, sessions, access
                          requests, the hubs' state), `seal` (XChaCha20-Poly1305 at rest), `store`
                          (SQLite, migrations/ applied on open, writes BEGIN IMMEDIATE; the queries
@@ -53,7 +54,8 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          `browsers` (a gmail's browser: its proxy checked and sealed, Multilogin and
                          GoLogin, a launch),
                          `tokens` (the ledger, review_archive's charges, the snapshot), `street_view`
-                         (a panorama bought, the month's free ones counted), `import`
+                         (a panorama bought), `meters` (the vendors' readings, synced; a meter's
+                         use; Google's billing export read), `import`
                          (review_archive's, once), `assistant` (the assistant's chats), `trash`
                          (what was removed, restored until purged), `oauth` (MCP clients, the
                          sessions granted them), `kit` (the review kit: a category's drafts and
@@ -101,6 +103,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
   src/trash.rs           /api/v1/trash; the hourly purge
   src/usage.rs           /api/v1/map/loaded, /api/v1/admin/usage; the services' usage feeds followed
+  src/meters.rs          /api/v1/admin/meters{,/readings}; the vendors' meters read at start and daily
   src/assistant.rs       /api/v1/assistant; the turns' shape
   src/kit.rs             the review kit: its /api/v1 routes, the landings' /api/kit/v1
   src/catalog.rs         every operation behind the origin: the conductor's own and the services'
@@ -497,6 +500,8 @@ GET    /admin/tokens/prices                 Tokens
 PUT    /admin/tokens/prices                 Tokens, fresh
 GET    /admin/tokens/flows                  Tokens
 GET    /admin/usage                         Tokens
+GET    /admin/meters                        Tokens
+GET    /admin/meters/readings               Tokens
 GET    /assistant/chats
 POST   /assistant/chats
 GET    /assistant/chats/{id}
@@ -645,8 +650,24 @@ the runner's phone minutes, browser starts ─ GET /usage ┘ cursor in one writ
 (Dynamic Street View) past 5 000 free a month. The map has no Google pegman: its own shows the
 coverage (a press toggles it, a drag shows it while held), and dropped on a panorama Street View
 finds (free) asks `POST /map/street_view`, which records it and charges `street_view.panorama` in
-one write, and refuses whoever asks once the month's free ones are recorded (counted from the
-1st at 00:00 UTC−7). Only then does the browser open it.
+one write, and refuses whoever asks once its meter stops (below). Only then does the browser open
+it.
+
+**A meter is the vendor's count, plus ours since it.** Google's free units are per billing account:
+dev, prod, placement and anything else billed there draw on them, and each database sees only its
+own. The vendor's own record (the account's Cloud Billing export in BigQuery, `GOOGLE_BILLING_EXPORT`)
+holds them all, hours behind. A meter (`sa_core::meters`: a SKU, its free units a period, whether
+it stops there) is named by the items drawing on it; nothing is reconciled between databases.
+
+```text
+used = baseline   the export's count this period (Google's: the calendar month, Pacific time), as of
+                  `through`, the export's own progress; read at boot and daily into `meter_readings`
+     + delta      `usage` of the meter's items on our bill after `through`, in the buy's write
+a reading of a period before: baseline 0, ours from the period's start
+```
+
+Only Dynamic Street View stops, at its free ones; the rest are watched (Places is paid back in
+tokens). The cost shown is gross: the free units are a count, never money.
 
 **A GBP's life** (`sa_core::gbp::State::nexts`; the schema checks each move again):
 
@@ -900,7 +921,9 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   is charged at its price, and refused before it is sent when their balance is below it; their own
   keys and the queries cache cost nothing.
 - **No Street View past the free ones.** No panorama opens on the browser's key but one
-  `POST /map/street_view` bought, and none is bought once the month's 5 000 are recorded.
+  `POST /map/street_view` bought, and none is bought past its meter's free ones.
+- **A meter's use is the vendor's count plus ours since it; a stop never opens without a
+  reading.**
 - **Alerts are the conductor's.** A service publishes notes and never reaches a person itself;
   who is told, where and how is decided here.
 - **A note is in the outbox before the cursor passes it**: the page and the cursor move in one
@@ -925,11 +948,11 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   only that). A migration newer than the build is let be. Tables are STRICT, foreign keys
   enforced, timestamps INTEGER microseconds since the epoch, UUIDs 16-byte blobs.
 - **The conductor's secrets come from the environment only** (`PANEL_DATA_KEY`, `SENTRY_DSN`,
-  `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOOGLE_MAPS_KEYS`, `GOLOGIN_TOKEN`,
+  `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOOGLE_MAPS_KEYS`, `GOOGLE_BILLING_KEY`, `GOLOGIN_TOKEN`,
   `MULTILOGIN_TOKEN`, `ANTHROPIC_API_KEY`), through
   `ev_lib::settings`; a person's (a gmail's IMAP password, its Maps key, its proxy) through the API, sealed at
   once; with `APP_ENV=production` the database, the data key, the four sign-in
-  variables, the forward's four and `TOKENS_START_CAP_MULTIPLE` are required at boot
+  variables, the forward's four, `TOKENS_START_CAP_MULTIPLE` and the billing export's two are required at boot
   (`panel --print-required-vars` lists them).
 
 ## Deploy requirements
@@ -973,6 +996,10 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   is off until restart (a person's, until it answers a test). Every answer is kept in the queries
   cache, in the database. Set the prices (`/admin/tokens`) after the first deploy: until then a
   person without a key of their own is refused.
+- **The billing export, outbound.** `bigquery.googleapis.com:443` and `oauth2.googleapis.com:443`:
+  `GOOGLE_BILLING_EXPORT` (`project.dataset.table`, the account the Maps keys bill on) read with
+  `GOOGLE_BILLING_KEY`, a service account's JSON key (BigQuery Data Viewer on the dataset, Job User
+  on its project).
 - **IMAP, outbound.** A gmail's inbox is dialled on :993 at a public address when it is set or
   tested: egress to public :993. The browser loads Maps JS straight
   from Google with `GOOGLE_MAPS_BROWSER_KEY` (referrer-restricted to the public origin); the

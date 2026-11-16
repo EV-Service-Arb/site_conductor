@@ -33,6 +33,10 @@ export function arrayOf<T>(p: Parser<T>): Parser<T[]> {
   return (v, path) => (Array.isArray(v) ? v.map((item, i) => p(item, `${path}[${i}]`)) : fail(path, "an array", v));
 }
 
+export function recordOf<T>(p: Parser<T>): Parser<Record<string, T>> {
+  return (v, path) => Object.fromEntries(Object.entries(record(v, path)).map(([k, item]) => [k, p(item, `${path}.${k}`)]));
+}
+
 export function oneOf<const L extends readonly string[]>(values: L): Parser<L[number]> {
   return (v, path) =>
     typeof v === "string" && (values as readonly string[]).includes(v)

@@ -7,6 +7,7 @@ import { may, useMe } from "@/entities/session";
 import { tokens } from "@/entities/tokens";
 import { api, ok } from "@/shared/api";
 import type { TokenHolder } from "@/shared/api/schema";
+import { MetersCard } from "./meters-card";
 import { GrantDialog } from "@/features/grant-tokens";
 import { PricesCard } from "@/features/price-tokens";
 import { ROUTES } from "@/shared/config/routes";
@@ -26,6 +27,7 @@ export function AdminTokensView() {
   const button = useButtonSize();
   const holders = useResource("admin.tokens", async () => (await ok(api.GET("/admin/tokens"))).users, "admin.tokens", { live: ["admin"] });
   const prices = useResource("admin.prices", async () => (await ok(api.GET("/admin/tokens/prices"))).prices, "admin.prices", { live: ["admin"] });
+  const meters = useResource("admin.meters", async () => (await ok(api.GET("/admin/meters"))).meters);
   const [changing, setChanging] = useState<TokenHolder | null>(null);
 
   if (!may(me, "sa:admin:tokens:grant")) {
@@ -39,6 +41,8 @@ export function AdminTokensView() {
   return (
     <PageFrame breakpoint="md" title={t(tokens.admin.title, "Tokens of everyone")}>
       {prices.status === "error" && <ErrorState failure={prices.failure} onRetry={prices.reload} />}
+      {meters.status === "error" && <ErrorState failure={meters.failure} onRetry={meters.reload} />}
+      {meters.status === "ok" && <MetersCard meters={meters.data} />}
       {prices.status === "ok" && <PricesCard prices={prices.data} onSaved={prices.reload} />}
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-ink">{t(tokens.admin.spending, "Spending")}</h2>

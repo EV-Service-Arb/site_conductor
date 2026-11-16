@@ -24,7 +24,8 @@ icu_locale.workspace = true
 image.workspace = true
 jiff = { workspace = true, features = ["serde"] }
 percent-encoding.workspace = true
-reqwest = { workspace = true, features = ["multipart", "socks"] }
+reqwest = { workspace = true, features = ["form", "multipart", "query", "socks"] }
+ring.workspace = true
 rustls-platform-verifier.workspace = true
 sa_alerts.workspace = true
 sa_auth.workspace = true

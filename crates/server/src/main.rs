@@ -283,6 +283,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				settings.map(),
 				settings.browsers()?,
 				settings.model(),
+				settings.billing()?,
 				bind,
 			)
 			.await
@@ -425,6 +426,7 @@ async fn serve(
 	map: Option<MapDto>,
 	browsers: Option<sa_server::browser::Connected>,
 	model: Option<sa_server::ask::Model>,
+	billing: Option<sa_panel::meters::google::Google>,
 	bind: SocketAddr,
 ) -> eyre::Result<()> {
 	let keep_by_default = matches!(identity, Identity::Dev(_));
@@ -489,6 +491,7 @@ async fn serve(
 		}
 	};
 	let engine = panel.clone();
+	let metered = panel.clone();
 	let purger = panel.clone();
 	let grafana_root = format!("{}/grafana/", config.panel_origin.trim_end_matches('/'));
 	let sign_in = SignIn::new(panel, concierge, config);
@@ -580,7 +583,13 @@ async fn serve(
 				catalog.follow(services.clone(), stopped.clone()).await;
 			}
 		};
-		tokio::join!(bot, feed, usage, tokens, grafana, purge, catalog);
+		let meters = async {
+			match billing {
+				Some(google) => sa_server::meters::run(metered, google, stopped.clone()).await,
+				None => tracing::warn!("GOOGLE_BILLING_EXPORT unset: no meter is read, so Street View is not bought"),
+			}
+		};
+		tokio::join!(bot, feed, usage, tokens, grafana, purge, meters, catalog);
 	};
 	let (served, ()) = tokio::join!(server, hubs);
 	served

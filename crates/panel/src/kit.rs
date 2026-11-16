@@ -20,8 +20,7 @@ use crate::{
 	Panel, Refused,
 	areas::Shape,
 	store::{
-		areas as areas_db,
-		gmbs as gmbs_db,
+		areas as areas_db, gmbs as gmbs_db,
 		kit::{self as db, Removable},
 	},
 	tokens::is_open,
@@ -39,7 +38,7 @@ const PHOTO_SIDE: u32 = 2048;
 const PHOTOS_PER_DRAFT: usize = 10;
 
 /// Where a GBP's QR leads.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, strum::EnumString, strum::IntoStaticStr, serde::Serialize, schemars::JsonSchema)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 #[schemars(rename = "KitTarget")]

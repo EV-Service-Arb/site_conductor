@@ -1,0 +1,343 @@
+{
+  "uid": "sa-meters",
+  "title": "Vendors' meters \u00b7 everyone",
+  "tags": [
+    "conductor"
+  ],
+  "timezone": "utc",
+  "editable": false,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "refresh": "",
+  "schemaVersion": 39,
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "This period, every meter",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "conductor"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "conductor"
+          },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/admin/meters",
+          "url_options": {
+            "method": "GET",
+            "params": []
+          },
+          "root_selector": "[meters.{\"meter\": name, \"used\": used, \"free\": free, \"left\": left, \"stops\": stop = \"at_free\" ? \"at free\" : \"never\", \"google's count\": baseline, \"as of\": since, \"ours since\": delta, \"synced\": reading ? reading.synced_at : \"never\", \"vendor's cost\": reading ? reading.cost : null, \"currency\": reading ? reading.currency : null, \"ours since, $\": delta_usd}]",
+          "columns": [
+            {
+              "selector": "meter",
+              "text": "meter",
+              "type": "string"
+            },
+            {
+              "selector": "used",
+              "text": "used",
+              "type": "number"
+            },
+            {
+              "selector": "free",
+              "text": "free",
+              "type": "number"
+            },
+            {
+              "selector": "left",
+              "text": "left",
+              "type": "number"
+            },
+            {
+              "selector": "stops",
+              "text": "stops",
+              "type": "string"
+            },
+            {
+              "selector": "google's count",
+              "text": "google's count",
+              "type": "number"
+            },
+            {
+              "selector": "as of",
+              "text": "as of",
+              "type": "timestamp"
+            },
+            {
+              "selector": "ours since",
+              "text": "ours since",
+              "type": "number"
+            },
+            {
+              "selector": "synced",
+              "text": "synced",
+              "type": "string"
+            },
+            {
+              "selector": "vendor's cost",
+              "text": "vendor's cost",
+              "type": "number"
+            },
+            {
+              "selector": "currency",
+              "text": "currency",
+              "type": "string"
+            },
+            {
+              "selector": "ours since, $",
+              "text": "ours since, $",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "left"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "type": "bargauge",
+      "title": "Used of the free ones",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "conductor"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "conductor"
+          },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/admin/meters",
+          "url_options": {
+            "method": "GET",
+            "params": []
+          },
+          "root_selector": "[meters.{\"meter\": name, \"used\": used / free * 100}]",
+          "columns": [
+            {
+              "selector": "meter",
+              "text": "meter",
+              "type": "string"
+            },
+            {
+              "selector": "used",
+              "text": "used",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "displayName": "${__data.fields.meter}",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Google's count, at each reading",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "conductor"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "conductor"
+          },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "/admin/meters/readings",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "from",
+                "value": "${__from}"
+              },
+              {
+                "key": "to",
+                "value": "${__to}"
+              }
+            ]
+          },
+          "root_selector": "[readings.{\"at\": synced_at, \"series\": meter, \"units\": units}]",
+          "columns": [
+            {
+              "selector": "at",
+              "text": "at",
+              "type": "timestamp"
+            },
+            {
+              "selector": "series",
+              "text": "series",
+              "type": "string"
+            },
+            {
+              "selector": "units",
+              "text": "units",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "transformations": [
+        {
+          "id": "prepareTimeSeries",
+          "options": {
+            "format": "multi"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "showPoints": "always",
+            "pointSize": 4,
+            "axisLabel": "units"
+          },
+          "unit": "none",
+          "decimals": 0,
+          "displayName": "${__field.labels.series}"
+        },
+        "overrides": []
+      }
+    }
+  ]
+}

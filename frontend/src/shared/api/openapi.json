@@ -93,6 +93,93 @@
         }
       }
     },
+    "/admin/meters": {
+      "get": {
+        "summary": "Every vendor meter this period: the vendor's own count at its last reading, ours since, what is left of the free units and when buying stops.",
+        "operationId": "meters",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /admin/meters`: every meter, in the catalog's order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meters"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "sa:admin:tokens:grant"
+      }
+    },
+    "/admin/meters/readings": {
+      "get": {
+        "tags": [
+          "meters"
+        ],
+        "summary": "The vendors' readings of their meters in a window, oldest first: what the sa-meters dashboard reads.",
+        "operationId": "meter_readings",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "description": "Unix milliseconds.",
+            "required": true,
+            "schema": {
+              "description": "Unix milliseconds.",
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "description": "Unix milliseconds, at most 400 days after `from`.",
+            "required": true,
+            "schema": {
+              "description": "Unix milliseconds, at most 400 days after `from`.",
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "`GET /admin/meters/readings`: oldest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeterReadings"
+                }
+              }
+            }
+          }
+        },
+        "x-permission": "sa:admin:tokens:grant"
+      }
+    },
     "/admin/tokens": {
       "get": {
         "tags": [
@@ -3266,7 +3353,7 @@
           "gmbs"
         ],
         "summary": "Buys the Street View panorama at a point: recorded and charged (`street_view.panorama`, the admin's price) in one write.",
-        "description": "404 without a map; 409 not priced, past the balance, or the month's free ones used.",
+        "description": "404 without a map; 409 not priced, past the balance, or its meter stopped.",
         "operationId": "street_view",
         "requestBody": {
           "content": {
@@ -6704,6 +6791,171 @@
           "location"
         ]
       },
+      "MeterReading": {
+        "description": "The vendor's count of a meter, as last read.",
+        "type": "object",
+        "properties": {
+          "cost": {
+            "description": "Gross, before credits, in `currency`.",
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "meter": {
+            "description": "Its id, `<vendor>.<name>`.",
+            "type": "string"
+          },
+          "period_start": {
+            "description": "RFC 3339: the period it counts from.",
+            "type": "string"
+          },
+          "synced_at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
+          "through": {
+            "description": "RFC 3339: how far the vendor's record reaches.",
+            "type": "string"
+          },
+          "units": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "meter",
+          "period_start",
+          "units",
+          "cost",
+          "currency",
+          "through",
+          "synced_at"
+        ]
+      },
+      "MeterReadings": {
+        "description": "`GET /admin/meters/readings`: oldest first.",
+        "type": "object",
+        "properties": {
+          "readings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MeterReading"
+            }
+          }
+        },
+        "required": [
+          "readings"
+        ]
+      },
+      "MeterUse": {
+        "description": "A meter's use this period: `used` is the vendor's `baseline` plus our `delta` after `since`.",
+        "type": "object",
+        "properties": {
+          "baseline": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "delta": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "delta_usd": {
+            "description": "`delta` at the admin's cost of a unit; `null` while its items' costs are unknown or differ.",
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "free": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PricedItem"
+            }
+          },
+          "left": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "meter": {
+            "description": "Its id, `<vendor>.<name>`.",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "period_end": {
+            "type": "string"
+          },
+          "period_start": {
+            "description": "RFC 3339, `[start, end)`.",
+            "type": "string"
+          },
+          "reading": {
+            "description": "The latest reading, of whichever period; `null` before a first one.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeterReading"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "since": {
+            "description": "RFC 3339: ours are counted after it.",
+            "type": "string"
+          },
+          "stop": {
+            "$ref": "#/components/schemas/Stop"
+          },
+          "used": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "vendor": {
+            "$ref": "#/components/schemas/Vendor"
+          }
+        },
+        "required": [
+          "meter",
+          "vendor",
+          "name",
+          "free",
+          "stop",
+          "items",
+          "period_start",
+          "period_end",
+          "reading",
+          "baseline",
+          "since",
+          "delta",
+          "used",
+          "left",
+          "delta_usd"
+        ]
+      },
+      "Meters": {
+        "description": "`GET /admin/meters`: every meter, in the catalog's order.",
+        "type": "object",
+        "properties": {
+          "meters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MeterUse"
+            }
+          }
+        },
+        "required": [
+          "meters"
+        ]
+      },
       "Need": {
         "type": "string",
         "enum": [
@@ -7166,7 +7418,9 @@
           "phone.running",
           "ads.location",
           "ads.keyword_ideas",
+          "ads.historical_metrics",
           "dataforseo.keywords_for_keywords",
+          "dataforseo.search_volume",
           "browser.gologin",
           "browser.mimic"
         ]
@@ -7678,6 +7932,13 @@
           "costs": {
             "type": "object",
             "properties": {
+              "ads.historical_metrics": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
               "ads.keyword_ideas": {
                 "type": [
                   "integer",
@@ -7707,6 +7968,13 @@
                 "format": "int64"
               },
               "dataforseo.keywords_for_keywords": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "dataforseo.search_volume": {
                 "type": [
                   "integer",
                   "null"
@@ -7803,6 +8071,13 @@
           "prices": {
             "type": "object",
             "properties": {
+              "ads.historical_metrics": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
               "ads.keyword_ideas": {
                 "type": [
                   "integer",
@@ -7832,6 +8107,13 @@
                 "format": "int64"
               },
               "dataforseo.keywords_for_keywords": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "dataforseo.search_volume": {
                 "type": [
                   "integer",
                   "null"
@@ -8456,6 +8738,14 @@
         "required": [
           "label",
           "done"
+        ]
+      },
+      "Stop": {
+        "description": "What happens once the free units are used.\n\n- `at_free`: Nothing more is bought.\n- `never`: Watched only.",
+        "type": "string",
+        "enum": [
+          "at_free",
+          "never"
         ]
       },
       "Suggestion": {
@@ -9210,6 +9500,13 @@
           "day",
           "charges",
           "tokens"
+        ]
+      },
+      "Vendor": {
+        "description": "- `google`: Its Cloud Billing export: a billing account's every project and service, hours behind.",
+        "type": "string",
+        "enum": [
+          "google"
         ]
       },
       "Viewport": {

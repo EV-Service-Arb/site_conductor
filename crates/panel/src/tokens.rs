@@ -34,8 +34,7 @@ use crate::{
 	store::{
 		gmbs as gmbs_db,
 		tokens::{self as db, REVIEW_ARCHIVE},
-		usage,
-		users,
+		usage, users,
 	},
 };
 

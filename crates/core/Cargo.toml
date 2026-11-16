@@ -11,7 +11,7 @@ readme.workspace = true
 [dependencies]
 hex.workspace = true
 hmac.workspace = true
-jiff = { workspace = true, features = ["serde"] }
+jiff = { workspace = true, features = ["serde", "tzdb-bundle-always"] }
 sa_alerts.workspace = true
 sa_auth.workspace = true
 schemars.workspace = true

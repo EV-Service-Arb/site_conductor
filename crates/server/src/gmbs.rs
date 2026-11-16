@@ -406,7 +406,7 @@ async fn map_key(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
 /// Buys the Street View panorama at a point: recorded and charged (`street_view.panorama`, the
 /// admin's price) in one write.
 ///
-/// 404 without a map; 409 not priced, past the balance, or the month's free ones used.
+/// 404 without a map; 409 not priced, past the balance, or its meter stopped.
 async fn street_view(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Body(at): Body<sa_places::LatLng>) -> ApiResult<Json<BalanceDto>> {
 	if s.map.is_none() {
 		return Err(ApiError::NotFound);

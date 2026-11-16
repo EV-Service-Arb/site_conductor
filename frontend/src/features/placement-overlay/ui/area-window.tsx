@@ -1,0 +1,32 @@
+"use client";
+
+import { Button } from "@evinvest/uikit";
+import { SquareDashed, X } from "lucide-react";
+
+import { AreaDraw, windowKeys } from "@/entities/gmb";
+import { useT, placement as placementKeys } from "@/shared/i18n";
+import { useButtonSize } from "@/shared/ui/touch";
+
+import { setMapView, useMapView } from "../model/placement";
+
+/** The window over the map's left while `?area=` is empty: an area drawn for the study, picked once saved. */
+export function StudyAreaWindow({ map }: { map: google.maps.Map }) {
+  const t = useT();
+  const button = useButtonSize();
+  if (useMapView().area !== "") return null;
+  return (
+    // the map stays clickable beside it and below it
+    <div className="pointer-events-none absolute inset-4 flex items-start">
+      <section aria-label={t(placementKeys.areaWindow, "A new area for the study")} className="pointer-events-auto flex max-h-full w-full flex-col overflow-y-auto rounded-lg border border-border bg-background shadow-overlay md:w-104">
+        <header className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <SquareDashed aria-hidden className="size-4 text-ink-soft" />
+          <h2 className="flex-1 text-sm font-semibold text-ink">{t(placementKeys.areaWindow, "A new area for the study")}</h2>
+          <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => setMapView({ area: null })}>
+            <X aria-hidden />
+          </Button>
+        </header>
+        <AreaDraw map={map} left={window.matchMedia("(min-width: 48rem)").matches ? 16 + 416 : 0} onSaved={(a) => setMapView({ area: a.slug })} />
+      </section>
+    </div>
+  );
+}

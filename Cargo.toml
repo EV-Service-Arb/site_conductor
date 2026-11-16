@@ -43,6 +43,7 @@ percent-encoding = "2"
 prost = "0.14"
 protox = "0.9"
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+ring = "0.17"
 rustix = { version = "1", features = ["process"] }
 rustls-platform-verifier = "0.7"
 schemars = { version = "1", features = ["uuid1", "jiff02"] }

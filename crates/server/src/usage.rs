@@ -40,7 +40,7 @@ const SPAN: jiff::SignedDuration = jiff::SignedDuration::from_hours(24 * 400);
 
 /// A UTC day's units of one item, by whose bill and who told; `usd` at today's cost of a unit,
 /// `null` while it is unknown.
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "SpendDay")]
 pub struct UsageDayDto {
 	/// `YYYY-MM-DD`.
@@ -59,7 +59,7 @@ pub struct UsageDayDto {
 }
 
 /// Everyone's usage by day, oldest first.
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Spend")]
 pub struct UsageDto {
 	pub days: Vec<UsageDayDto>,
@@ -167,9 +167,13 @@ impl Feed {
 			From::ReviewArchive(services) => {
 				let path = format!("/api/conductor/usage?after={after}&limit={PAGE}");
 				let sent = services.send(Service::ReviewArchive, Method::GET, &path, HeaderMap::new(), Some(Principal::Conductor), Body::empty());
-				let res = tokio::time::timeout(CALL_TIMEOUT, sent).await.map_err(|_| eyre::eyre!("review_archive did not answer {path} in time"))??;
+				let res = tokio::time::timeout(CALL_TIMEOUT, sent)
+					.await
+					.map_err(|_| eyre::eyre!("review_archive did not answer {path} in time"))??;
 				let status = res.status();
-				let answer = to_bytes(res.into_body(), 16 * 1024 * 1024).await.map_err(|e| eyre::eyre!("reading review_archive's usage: {e}"))?;
+				let answer = to_bytes(res.into_body(), 16 * 1024 * 1024)
+					.await
+					.map_err(|e| eyre::eyre!("reading review_archive's usage: {e}"))?;
 				(status, answer.to_vec())
 			}
 			From::Browsers(b) => b.usage(after, PAGE).await?,

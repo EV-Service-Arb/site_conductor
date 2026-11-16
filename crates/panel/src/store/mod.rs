@@ -10,20 +10,21 @@
 
 pub mod access;
 pub mod alerts;
+pub mod areas;
 pub mod assistant;
 pub mod browsers;
 pub mod connections;
 pub mod gmbs;
-pub mod areas;
 pub mod kit;
+pub mod meters;
 pub mod oauth;
 mod queries_cache;
 pub mod sessions;
 pub mod sources;
 pub mod telegram;
 pub mod tokens;
-pub mod usage;
 pub(crate) mod trash;
+pub mod usage;
 pub mod users;
 
 use std::{path::Path, time::Duration};

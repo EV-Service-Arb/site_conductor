@@ -7,8 +7,8 @@
 
 pub mod access;
 pub mod alerts;
-pub mod areas;
 pub mod api;
+pub mod areas;
 pub mod ask;
 pub mod assistant;
 pub mod browser;
@@ -25,6 +25,7 @@ mod ingest;
 pub mod kit;
 pub mod live;
 mod mcp;
+pub mod meters;
 mod oauth;
 mod queries_cache;
 pub mod signin;

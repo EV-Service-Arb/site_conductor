@@ -130,9 +130,16 @@ impl sa_places::QueriesCache for Store {
 
 	fn put(&self, key: Key, put: Put) -> sa_places::Pending<'_, ()> {
 		Box::pin(async move {
-			self.keep_query(Scheme::Places, key, &put.answer.to_string(), Some(&put.request), put.bought.map(|b| (b, CONDUCTOR)), Timestamp::now())
-				.await
-				.map_err(store_error)
+			self.keep_query(
+				Scheme::Places,
+				key,
+				&put.answer.to_string(),
+				Some(&put.request),
+				put.bought.map(|b| (b, CONDUCTOR)),
+				Timestamp::now(),
+			)
+			.await
+			.map_err(store_error)
 		})
 	}
 

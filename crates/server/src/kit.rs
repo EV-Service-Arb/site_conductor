@@ -43,9 +43,9 @@ use tower_http::timeout::{RequestBodyTimeoutLayer, TimeoutLayer};
 use uuid::Uuid;
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Id, Ids, Params},
-	forward::Services,
+	api::{ApiError, ApiResult, Body, Id, Ids},
 	areas::{AreaDto, SlugIn},
+	forward::Services,
 	gmbs::TradeIn,
 	http::{ApiRoute, ApiState, Gate, Limits},
 	ingest,
@@ -61,7 +61,7 @@ const PAGES_FOR: Duration = Duration::from_secs(60);
 /// The landing's path a GBP's page is at, under its site key's origin.
 const PAGE: &str = "/avis/";
 
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitDraft")]
 pub(crate) struct DraftDto {
 	pub id: i64,
@@ -72,7 +72,7 @@ pub(crate) struct DraftDto {
 	pub created_at: String,
 }
 
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitPhoto")]
 pub(crate) struct PhotoDto {
 	pub id: i64,
@@ -84,7 +84,7 @@ pub(crate) struct PhotoDto {
 }
 
 /// A category's drafts and photos.
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitPool")]
 pub(crate) struct PoolDto {
 	pub drafts: Vec<DraftDto>,
@@ -108,7 +108,7 @@ pub(crate) struct EditDraftDto {
 	pub photos: Option<Vec<i64>>,
 }
 
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitRankedPhoto")]
 pub(crate) struct RankedPhotoDto {
 	pub id: i64,
@@ -120,7 +120,7 @@ pub(crate) struct RankedPhotoDto {
 }
 
 /// A draft as the offer weighs it for one GBP.
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitRanked")]
 pub(crate) struct RankedDto {
 	pub id: i64,
@@ -136,7 +136,7 @@ pub(crate) struct RankedDto {
 }
 
 /// The last 30 days.
-#[derive(Clone, Copy, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitFunnel")]
 pub(crate) struct FunnelDto {
 	pub shown: i64,
@@ -147,7 +147,7 @@ pub(crate) struct FunnelDto {
 }
 
 /// A GBP's kit.
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "GmbKit")]
 pub(crate) struct GmbKitDto {
 	/// `null`: off.
@@ -169,7 +169,7 @@ pub(crate) struct SetKitDto {
 }
 
 /// One of the caller's GBPs by an area.
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitNearby")]
 pub(crate) struct NearbyDto {
 	pub id: i64,
@@ -184,7 +184,7 @@ pub(crate) struct NearbyDto {
 	pub last_shown: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitAreaGmbs")]
 pub(crate) struct AreaGmbsDto {
 	pub area: AreaDto,
@@ -454,7 +454,12 @@ async fn kit_pool(State(panel): State<Panel>, Extension(caller): Extension<Calle
 
 /// Adds a draft to the category, selecting some of its photos; answers the category's drafts and
 /// photos.
-async fn add_kit_draft(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(TradeIn { id: trade, country }): Ids<TradeIn>, Body(b): Body<NewDraftDto>) -> ApiResult<Created<PoolDto>> {
+async fn add_kit_draft(
+	State(panel): State<Panel>,
+	Extension(caller): Extension<Caller>,
+	Ids(TradeIn { id: trade, country }): Ids<TradeIn>,
+	Body(b): Body<NewDraftDto>,
+) -> ApiResult<Created<PoolDto>> {
 	let draft = panel.add_draft(caller.user_id, trade, country, &b.text, &b.photos, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, trade_id = trade, %country, draft, "kit draft added");
 	Ok(Created(panel.kit_pool(caller.user_id, trade, country).await??.into()))
@@ -463,7 +468,12 @@ async fn add_kit_draft(State(panel): State<Panel>, Extension(caller): Extension<
 /// Edits a draft's text or the photos it selects; answers the category's drafts and photos.
 ///
 /// 409 the text of one already copied: a use is of the text it had.
-async fn edit_kit_draft(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(DraftIn { id: trade, country, draft }): Ids<DraftIn>, Body(b): Body<EditDraftDto>) -> ApiResult<Json<PoolDto>> {
+async fn edit_kit_draft(
+	State(panel): State<Panel>,
+	Extension(caller): Extension<Caller>,
+	Ids(DraftIn { id: trade, country, draft }): Ids<DraftIn>,
+	Body(b): Body<EditDraftDto>,
+) -> ApiResult<Json<PoolDto>> {
 	panel.edit_draft(caller.user_id, trade, country, draft, b.text.as_deref(), b.photos.as_deref()).await??;
 	Ok(Json(panel.kit_pool(caller.user_id, trade, country).await??.into()))
 }
@@ -477,7 +487,12 @@ async fn remove_kit_draft(State(panel): State<Panel>, Extension(caller): Extensi
 /// Adds a photo to the category, ≤ 10 MiB: re-encoded as a JPEG, its EXIF (GPS with it) gone,
 /// turned upright; the same bytes again are the same photo, back if removed. Answers the
 /// category's drafts and photos.
-async fn add_kit_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(TradeIn { id: trade, country }): Ids<TradeIn>, Image(bytes): Image) -> ApiResult<Created<PoolDto>> {
+async fn add_kit_photo(
+	State(panel): State<Panel>,
+	Extension(caller): Extension<Caller>,
+	Ids(TradeIn { id: trade, country }): Ids<TradeIn>,
+	Image(bytes): Image,
+) -> ApiResult<Created<PoolDto>> {
 	let photo = panel.add_photo(caller.user_id, trade, country, bytes.to_vec(), Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, trade_id = trade, %country, photo, "kit photo added");
 	Ok(Created(panel.kit_pool(caller.user_id, trade, country).await??.into()))
@@ -555,7 +570,12 @@ async fn gmb_kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>
 /// Places once (a Place Details, paid as a lookup).
 ///
 /// 409 no place on Google yet, or `drafts` / `one_tap` without a landing page of its.
-async fn set_gmb_kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>, Body(SetKitDto { target }): Body<SetKitDto>) -> ApiResult<Json<GmbKitDto>> {
+async fn set_gmb_kit(
+	State(s): State<ApiState>,
+	Extension(caller): Extension<Caller>,
+	Ids(Id { id: gmb }): Ids<Id<i64>>,
+	Body(SetKitDto { target }): Body<SetKitDto>,
+) -> ApiResult<Json<GmbKitDto>> {
 	if matches!(target, Some(Target::Drafts | Target::OneTap)) && page_of(&s, gmb).await?.is_none() {
 		return Err(ApiError::Conflict("no landing page of its: only Google's form".to_owned()));
 	}

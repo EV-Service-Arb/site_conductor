@@ -18,7 +18,7 @@ use crate::{
 	signin::Caller,
 };
 
-#[derive(Clone, Copy, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Viewport")]
 pub(crate) struct ViewportDto {
 	pub south: f64,
@@ -27,20 +27,15 @@ pub(crate) struct ViewportDto {
 	pub east: f64,
 }
 
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "AreaShape")]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(crate) enum ShapeDto {
-	City {
-		place_id: String,
-		viewport: ViewportDto,
-	},
-	Circle {
-		radius_m: i64,
-	},
+	City { place_id: String, viewport: ViewportDto },
+	Circle { radius_m: i64 },
 }
 
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Area")]
 pub(crate) struct AreaDto {
 	pub slug: String,
@@ -52,7 +47,7 @@ pub(crate) struct AreaDto {
 	pub margin_m: i64,
 }
 
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Areas")]
 pub(crate) struct AreasDto {
 	pub areas: Vec<AreaDto>,
@@ -62,20 +57,11 @@ pub(crate) struct AreasDto {
 #[schemars(rename = "PutArea")]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum PutAreaDto {
-	City {
-		place_id: String,
-		margin_m: i64,
-	},
-	Circle {
-		name: String,
-		lat: f64,
-		lng: f64,
-		radius_m: i64,
-		margin_m: i64,
-	},
+	City { place_id: String, margin_m: i64 },
+	Circle { name: String, lat: f64, lng: f64, radius_m: i64, margin_m: i64 },
 }
 
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Locality")]
 pub(crate) struct LocalityDto {
 	pub place_id: String,
@@ -219,4 +205,3 @@ async fn city(State(panel): State<Panel>, Extension(caller): Extension<Caller>, 
 async fn locality(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(at): Params<LatLng>) -> ApiResult<Json<LocalityDto>> {
 	Ok(Json(panel.locality_at(caller.user_id, at).await??.ok_or(ApiError::NotFound)?.into()))
 }
-

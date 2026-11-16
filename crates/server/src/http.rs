@@ -40,7 +40,7 @@ use crate::{
 	grafana::Grafana,
 	ingest, kit,
 	live::{self, Live, LiveLimits},
-	mcp, oauth, queries_cache,
+	mcp, meters, oauth, queries_cache,
 	signin::{self, Caller, Freshness, Gatekeeper, SignIn},
 	tokens,
 	tools::Tools,
@@ -260,6 +260,7 @@ pub(crate) fn api_routes() -> Vec<ApiRoute> {
 		assistant::routes(),
 		kit::routes(),
 		areas::routes(),
+		meters::routes(),
 	]
 	.into_iter()
 	.flatten()

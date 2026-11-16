@@ -41,6 +41,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/meters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every vendor meter this period: the vendor's own count at its last reading, ours since, what is left of the free units and when buying stops. */
+        get: operations["meters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/meters/readings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The vendors' readings of their meters in a window, oldest first: what the sa-meters dashboard reads. */
+        get: operations["meter_readings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/tokens": {
         parameters: {
             query?: never;
@@ -1143,7 +1177,7 @@ export interface paths {
         put?: never;
         /**
          * Buys the Street View panorama at a point: recorded and charged (`street_view.panorama`, the admin's price) in one write.
-         * @description 404 without a map; 409 not priced, past the balance, or the month's free ones used.
+         * @description 404 without a map; 409 not priced, past the balance, or its meter stopped.
          */
         post: operations["street_view"];
         delete?: never;
@@ -2265,6 +2299,64 @@ export interface components {
         };
         /** @enum {string} */
         MentionKind: "location";
+        /** @description The vendor's count of a meter, as last read. */
+        MeterReading: {
+            /**
+             * Format: double
+             * @description Gross, before credits, in `currency`.
+             */
+            cost: number;
+            currency: string;
+            /** @description Its id, `<vendor>.<name>`. */
+            meter: string;
+            /** @description RFC 3339: the period it counts from. */
+            period_start: string;
+            /** @description RFC 3339. */
+            synced_at: string;
+            /** @description RFC 3339: how far the vendor's record reaches. */
+            through: string;
+            /** Format: int64 */
+            units: number;
+        };
+        /** @description `GET /admin/meters/readings`: oldest first. */
+        MeterReadings: {
+            readings: components["schemas"]["MeterReading"][];
+        };
+        /** @description A meter's use this period: `used` is the vendor's `baseline` plus our `delta` after `since`. */
+        MeterUse: {
+            /** Format: int64 */
+            baseline: number;
+            /** Format: int64 */
+            delta: number;
+            /**
+             * Format: double
+             * @description `delta` at the admin's cost of a unit; `null` while its items' costs are unknown or differ.
+             */
+            delta_usd: number | null;
+            /** Format: int64 */
+            free: number;
+            items: components["schemas"]["PricedItem"][];
+            /** Format: int64 */
+            left: number;
+            /** @description Its id, `<vendor>.<name>`. */
+            meter: string;
+            name: string;
+            period_end: string;
+            /** @description RFC 3339, `[start, end)`. */
+            period_start: string;
+            /** @description The latest reading, of whichever period; `null` before a first one. */
+            reading: components["schemas"]["MeterReading"] | null;
+            /** @description RFC 3339: ours are counted after it. */
+            since: string;
+            stop: components["schemas"]["Stop"];
+            /** Format: int64 */
+            used: number;
+            vendor: components["schemas"]["Vendor"];
+        };
+        /** @description `GET /admin/meters`: every meter, in the catalog's order. */
+        Meters: {
+            meters: components["schemas"]["MeterUse"][];
+        };
         /** @enum {string} */
         Need: "sa:admin:sources:manage" | "sa:admin:tokens:grant" | "sa:admin:trash:keep" | "sa:placement:study:read" | "sa:placement:study:spend" | "sa:playbook:mcp:use" | "sa:review_archive:archive:operate" | "sa:review_archive:members:act_as" | "sa:sites:analysis:experiments:edit" | "sa:sites:analysis:read" | "sa:sites:work:invoices:create" | "sa:sites:work:leads:edit" | "sa:sites:work:pii:see" | "sa:sites:work:places:edit" | "sa:sites:work:pricing:edit" | "sa:sites:work:read" | "sa:admin" | "sa:everyone" | "sa:operator";
         NewChat: {
@@ -2388,7 +2480,7 @@ export interface components {
             unit: string;
         };
         /** @enum {string} */
-        PricedItem: "places.details" | "places.search" | "places.autocomplete" | "places.geocode" | "street_view.panorama" | "map.map" | "walk.open" | "walk.reviews" | "walk.sort" | "walk.sort_retry" | "walk.step" | "phone.running" | "ads.location" | "ads.keyword_ideas" | "dataforseo.keywords_for_keywords" | "browser.gologin" | "browser.mimic";
+        PricedItem: "places.details" | "places.search" | "places.autocomplete" | "places.geocode" | "street_view.panorama" | "map.map" | "walk.open" | "walk.reviews" | "walk.sort" | "walk.sort_retry" | "walk.step" | "phone.running" | "ads.location" | "ads.keyword_ideas" | "ads.historical_metrics" | "dataforseo.keywords_for_keywords" | "dataforseo.search_volume" | "browser.gologin" | "browser.mimic";
         /** @description Every item, in the catalog's order. */
         Prices: {
             prices: components["schemas"]["Price"][];
@@ -2558,6 +2650,8 @@ export interface components {
         SetPrices: {
             costs: {
                 /** Format: int64 */
+                "ads.historical_metrics"?: number | null;
+                /** Format: int64 */
                 "ads.keyword_ideas"?: number | null;
                 /** Format: int64 */
                 "ads.location"?: number | null;
@@ -2567,6 +2661,8 @@ export interface components {
                 "browser.mimic"?: number | null;
                 /** Format: int64 */
                 "dataforseo.keywords_for_keywords"?: number | null;
+                /** Format: int64 */
+                "dataforseo.search_volume"?: number | null;
                 /** Format: int64 */
                 "map.map"?: number | null;
                 /** Format: int64 */
@@ -2594,6 +2690,8 @@ export interface components {
             };
             prices: {
                 /** Format: int64 */
+                "ads.historical_metrics"?: number | null;
+                /** Format: int64 */
                 "ads.keyword_ideas"?: number | null;
                 /** Format: int64 */
                 "ads.location"?: number | null;
@@ -2603,6 +2701,8 @@ export interface components {
                 "browser.mimic"?: number | null;
                 /** Format: int64 */
                 "dataforseo.keywords_for_keywords"?: number | null;
+                /** Format: int64 */
+                "dataforseo.search_volume"?: number | null;
                 /** Format: int64 */
                 "map.map"?: number | null;
                 /** Format: int64 */
@@ -2801,6 +2901,14 @@ export interface components {
             done: boolean;
             label: string;
         };
+        /**
+         * @description What happens once the free units are used.
+         *
+         *     - `at_free`: Nothing more is bought.
+         *     - `never`: Watched only.
+         * @enum {string}
+         */
+        Stop: "at_free" | "never";
         /** @description A place what is being typed may be heading for. */
         Suggestion: {
             /** @description Its name, or the address's first line. */
@@ -3033,6 +3141,11 @@ export interface components {
             /** Format: int64 */
             tokens: number;
         };
+        /**
+         * @description - `google`: Its Cloud Billing export: a billing account's every project and service, hours behind.
+         * @enum {string}
+         */
+        Vendor: "google";
         Viewport: {
             /** Format: double */
             east: number;
@@ -3218,6 +3331,10 @@ export type MapConfig = components['schemas']['MapConfig'];
 export type MapsKey = components['schemas']['MapsKey'];
 export type Mention = components['schemas']['Mention'];
 export type MentionKind = components['schemas']['MentionKind'];
+export type MeterReading = components['schemas']['MeterReading'];
+export type MeterReadings = components['schemas']['MeterReadings'];
+export type MeterUse = components['schemas']['MeterUse'];
+export type Meters = components['schemas']['Meters'];
 export type Need = components['schemas']['Need'];
 export type NewChat = components['schemas']['NewChat'];
 export type NewGmail = components['schemas']['NewGmail'];
@@ -3277,6 +3394,7 @@ export type SpotInput = components['schemas']['SpotInput'];
 export type StartBrowser = components['schemas']['StartBrowser'];
 export type State = components['schemas']['State'];
 export type Step = components['schemas']['Step'];
+export type Stop = components['schemas']['Stop'];
 export type Suggestion = components['schemas']['Suggestion'];
 export type Suggestions = components['schemas']['Suggestions'];
 export type Switch = components['schemas']['Switch'];
@@ -3300,6 +3418,7 @@ export type TurnsWrite = components['schemas']['TurnsWrite'];
 export type UnitCost = components['schemas']['UnitCost'];
 export type Usage = components['schemas']['Usage'];
 export type UsageDay = components['schemas']['UsageDay'];
+export type Vendor = components['schemas']['Vendor'];
 export type Viewport = components['schemas']['Viewport'];
 export type BrowserIn = components['schemas']['BrowserIn'];
 export type BrowserOut = components['schemas']['BrowserOut'];
@@ -3364,6 +3483,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccessRequests"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    meters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /admin/meters`: every meter, in the catalog's order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Meters"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    meter_readings: {
+        parameters: {
+            query: {
+                /** @description Unix milliseconds. */
+                from: number;
+                /** @description Unix milliseconds, at most 400 days after `from`. */
+                to: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /admin/meters/readings`: oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeterReadings"];
                 };
             };
             /** @description What every failed operation answers, its status saying which failure. */
@@ -6588,7 +6770,7 @@ export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>[
 export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
 export const onGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OnGoogle"]> = ["verifying", "verified", "suspended"];
 export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Permission"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
-export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "ads.location", "ads.keyword_ideas", "dataforseo.keywords_for_keywords", "browser.gologin", "browser.mimic"];
+export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic"];
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
 export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "payment_received", "source_silent", "booked", "access_requested", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed"];
@@ -6596,4 +6778,6 @@ export const saleValues: ReadonlyArray<FlattenedDeepRequired<components>["schema
 export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scope"]> = ["conductor", "review_archive", "browsers", "placement"];
 export const sourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "panel", "booking", "bot"];
 export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["State"]> = ["draft", "verifying", "verified", "suspended"];
+export const stopValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Stop"]> = ["at_free", "never"];
+export const vendorValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Vendor"]> = ["google"];
 export const touchPhaseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["TouchPhase"]> = ["start", "move", "end"];

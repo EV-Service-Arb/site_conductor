@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::prices::Item;
 
 /// Whose bill it lands on.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, strum::EnumString, strum::IntoStaticStr, strum::VariantArray, schemars::JsonSchema)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema, strum::VariantArray)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum Bill {
@@ -27,8 +27,7 @@ pub struct Billed {
 }
 
 /// `units` of `item`, done at `at`.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[derive(schemars::JsonSchema)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Used {
 	/// Ascending, never reused.
@@ -40,8 +39,7 @@ pub struct Used {
 }
 
 /// A page of a usage feed.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[derive(schemars::JsonSchema)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UsagePage {
 	/// Ascending by id.
