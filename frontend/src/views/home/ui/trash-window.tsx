@@ -1,21 +1,19 @@
 "use client";
 
-import { Badge, Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch } from "@evinvest/uikit";
+import { Badge, Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch, type Tone } from "@evinvest/uikit";
 import { RotateCcw, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import { openTrash, STATE_NAME, useGmails, trash as trashKeys, windowKeys } from "@/entities/gmb";
+import { openTrash, STATE_NAME, STATE_TONE, useGmails, trash as trashKeys, windowKeys } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { api, ok } from "@/shared/api";
-import type { State, Trash } from "@/shared/api/schema";
+import type { Trash } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 const DAY_MS = 86_400_000;
 const KEEP_DAYS = [1, 7, 30, 90] as const; // as the server accepts
-/** As the outline colours the states. */
-const TONE: Partial<Record<State, string>> = { verifying: "text-accent-warn", suspended: "text-accent-error" };
 const SECTION = "flex flex-col gap-2";
 const SECTION_HEAD = "flex items-baseline gap-2 text-xs font-semibold tracking-wide text-ink-soft uppercase";
 
@@ -45,13 +43,13 @@ export function TrashWindow({ trash }: { trash: Trash }) {
       reload();
     }
   };
-  const row = (key: string, primary: string, secondary: string | null, badge: string | null, badgeTone: string | undefined, removed: string, purge: string | null, blocked: string | null, restore: () => Promise<void>) => (
+  const row = (key: string, primary: string, secondary: string | null, badge: { name: string; tone: Tone } | null, removed: string, purge: string | null, blocked: string | null, restore: () => Promise<void>) => (
     <li key={key} className="flex items-start gap-3 rounded-md px-2 py-2 hover:bg-hover/50">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <p className="flex items-center gap-2 text-sm">
           <span className="truncate font-medium text-ink">{primary}</span>
           {secondary !== null && <span className="truncate text-ink-soft">{secondary}</span>}
-          {badge !== null && <Badge className={badgeTone}>{badge}</Badge>}
+          {badge !== null && <Badge tone={badge.tone}>{badge.name}</Badge>}
         </p>
         <p className="text-xs text-ink-soft tabular-nums">{meta(removed, purge)}</p>
         {blocked !== null && <p className="text-xs text-accent-warn">{blocked}</p>}
@@ -89,7 +87,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
                   {t(trashKeys.gmails, "Gmails")} <span className="font-normal tabular-nums">{trash.gmails.length}</span>
                 </h3>
                 <ul className="flex flex-col">
-                  {trash.gmails.map((g) => row(`g${g.id}`, g.gmail, t(trashKeys.with, "{n} GBPs with it", { n: g.gmbs }), null, undefined, g.removed_at, g.purge_at, g.blocked, () => ok(api.POST("/trash/gmails/{id}/restore", { params: { path: { id: g.id } } }))))}
+                  {trash.gmails.map((g) => row(`g${g.id}`, g.gmail, t(trashKeys.with, "{n} GBPs with it", { n: g.gmbs }), null, g.removed_at, g.purge_at, g.blocked, () => ok(api.POST("/trash/gmails/{id}/restore", { params: { path: { id: g.id } } }))))}
                 </ul>
               </section>
             )}
@@ -99,7 +97,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
                   {t(trashKeys.gmbs, "GBPs removed on their own")} <span className="font-normal tabular-nums">{trash.gmbs.length}</span>
                 </h3>
                 <ul className="flex flex-col">
-                  {trash.gmbs.map((b) => row(`b${b.id}`, b.name, b.gmail, STATE_NAME[b.state](t), TONE[b.state], b.removed_at, b.purge_at, b.blocked, () => ok(api.POST("/trash/gmbs/{id}/restore", { params: { path: { id: b.id } } }))))}
+                  {trash.gmbs.map((b) => row(`b${b.id}`, b.name, b.gmail, { name: STATE_NAME[b.state](t), tone: STATE_TONE[b.state] }, b.removed_at, b.purge_at, b.blocked, () => ok(api.POST("/trash/gmbs/{id}/restore", { params: { path: { id: b.id } } }))))}
                 </ul>
               </section>
             )}

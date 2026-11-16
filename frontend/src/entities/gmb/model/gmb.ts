@@ -1,3 +1,5 @@
+import type { Tone } from "@evinvest/uikit";
+
 import type { GmailRole, GoogleCategory, State } from "@/shared/api/schema";
 import type { T } from "@/shared/i18n";
 import { type Infer, type Parser, arrayOf, bool, nullable, num, object, str } from "@/shared/lib/parse";
@@ -15,6 +17,8 @@ export const STATE_NAME = {
   verified: (t) => t(gmbs.state.verified, "Verified"),
   suspended: (t) => t(gmbs.state.suspended, "Suspended"),
 } satisfies Record<State, (t: T) => string>;
+
+export const STATE_TONE: Record<State, Tone> = { draft: "neutral", verifying: "warn", verified: "positive", suspended: "error" };
 
 /** `g`'s name in `lang`: the reader's, or its country's, which Google's form there reads. */
 export function googleName(g: GoogleCategory, lang: string): string {

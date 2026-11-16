@@ -99,8 +99,8 @@ function Drafts({ drafts, src }: { drafts: readonly KitRanked[]; src: (photo: nu
           </span>
           <span className="flex w-28 shrink-0 flex-col items-end gap-0.5">
             <span className="font-mono text-sm text-ink tabular-nums">{t(kit.uses, "{n} uses", { n: d.uses })}</span>
-            {d.offered && <Badge className="text-positive">{t(kit.offered, "offered now")}</Badge>}
-            {d.held && <Badge className="text-accent-warn">{t(kit.held, "held by an open page")}</Badge>}
+            {d.offered && <Badge tone="positive">{t(kit.offered, "offered now")}</Badge>}
+            {d.held && <Badge tone="warn">{t(kit.held, "held by an open page")}</Badge>}
           </span>
         </li>
       ))}

@@ -4,7 +4,7 @@ import { Badge, Button, cn } from "@evinvest/uikit";
 import { ChevronDown, ChevronUp, Globe, Hash, Mail, MapPin, Phone, QrCode, Send, Smartphone, X } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { CategoryChip, type Listed, MUST_HAVES, TABS, type Tab, open, openAccount, readiness, useGmbTags, useSelection, windowKeys, STATE_NAME } from "@/entities/gmb";
+import { CategoryChip, type Listed, MUST_HAVES, TABS, type Tab, open, openAccount, readiness, useGmbTags, useSelection, windowKeys, STATE_NAME, STATE_TONE } from "@/entities/gmb";
 import { type T, useT, account } from "@/shared/i18n";
 import { setQuery } from "@/shared/lib/query";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -51,7 +51,7 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
       <header className="flex flex-col gap-1 px-6 pt-4">
         <div className="flex items-center gap-3">
           <h2 className="min-w-0 truncate text-lg font-semibold text-ink">{gmb.name}</h2>
-          <Badge>{STATE_NAME[gmb.state](t)}</Badge>
+          <Badge tone={STATE_TONE[gmb.state]}>{STATE_NAME[gmb.state](t)}</Badge>
           <CategoryChip gmb={gmb} />
           {ready !== null && (
             <span className="text-sm text-ink-soft">
