@@ -404,7 +404,7 @@
         "tags": [
           "usage"
         ],
-        "summary": "What our tools spent on vendors per UTC day, item, bill and source, in units and at today's cost of a unit: what Grafana's sa-tokens dashboard reads.",
+        "summary": "What our tools spent on vendors per UTC day, item, bill and source, in units and each use at its unit's cost when it was done: what Grafana's sa-tokens dashboard reads.",
         "operationId": "spend",
         "parameters": [
           {
@@ -8579,7 +8579,7 @@
         ]
       },
       "SpendDay": {
-        "description": "A UTC day's units of one item, by whose bill and who told; `usd` at today's cost of a unit,\n`null` while it is unknown.",
+        "description": "A UTC day's units of one item, by whose bill and who told; `usd` each use at the cost in effect\nwhen it was done, `null` when none had one, `uncosted` the units done without one.",
         "type": "object",
         "properties": {
           "bill": {
@@ -8609,6 +8609,10 @@
           "tool_title": {
             "type": "string"
           },
+          "uncosted": {
+            "type": "integer",
+            "format": "int64"
+          },
           "unit": {
             "type": "string"
           },
@@ -8635,7 +8639,8 @@
           "source",
           "units",
           "times",
-          "usd"
+          "usd",
+          "uncosted"
         ]
       },
       "Spot": {

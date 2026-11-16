@@ -154,7 +154,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** What our tools spent on vendors per UTC day, item, bill and source, in units and at today's cost of a unit: what Grafana's sa-tokens dashboard reads. */
+        /** What our tools spent on vendors per UTC day, item, bill and source, in units and each use at its unit's cost when it was done: what Grafana's sa-tokens dashboard reads. */
         get: operations["spend"];
         put?: never;
         post?: never;
@@ -2835,8 +2835,8 @@ export interface components {
             days: components["schemas"]["SpendDay"][];
         };
         /**
-         * @description A UTC day's units of one item, by whose bill and who told; `usd` at today's cost of a unit,
-         *     `null` while it is unknown.
+         * @description A UTC day's units of one item, by whose bill and who told; `usd` each use at the cost in effect
+         *     when it was done, `null` when none had one, `uncosted` the units done without one.
          */
         SpendDay: {
             bill: components["schemas"]["Bill"];
@@ -2852,6 +2852,8 @@ export interface components {
             times: number;
             title: string;
             tool_title: string;
+            /** Format: int64 */
+            uncosted: number;
             unit: string;
             /** Format: int64 */
             units: number;

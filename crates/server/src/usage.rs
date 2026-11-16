@@ -32,14 +32,16 @@ use crate::{
 
 /// Each feed is asked this often while it has no more.
 const FOLLOW_EVERY: Duration = Duration::from_secs(10);
+/// A failing feed is asked again after a wait doubling up to this.
+const BACKOFF_CAP: Duration = Duration::from_secs(300);
 /// Uses asked of a feed at once.
 const PAGE: usize = 500;
 const CALL_TIMEOUT: Duration = Duration::from_secs(10);
 /// The widest window `/admin/usage` reads.
 const SPAN: jiff::SignedDuration = jiff::SignedDuration::from_hours(24 * 400);
 
-/// A UTC day's units of one item, by whose bill and who told; `usd` at today's cost of a unit,
-/// `null` while it is unknown.
+/// A UTC day's units of one item, by whose bill and who told; `usd` each use at the cost in effect
+/// when it was done, `null` when none had one, `uncosted` the units done without one.
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "SpendDay")]
 pub struct UsageDayDto {
@@ -56,6 +58,7 @@ pub struct UsageDayDto {
 	/// How many times it was recorded: a phone's run is one time of many minutes.
 	pub times: i64,
 	pub usd: Option<f64>,
+	pub uncosted: i64,
 }
 
 /// Everyone's usage by day, oldest first.
@@ -84,15 +87,34 @@ pub async fn run(panel: Panel, services: Option<Services>, browsers: Option<Conn
 	.flatten()
 	.collect();
 	let follow = feeds.iter().map(|feed| {
-		crate::every(FOLLOW_EVERY, shutdown.clone(), "following a usage feed", || async {
-			loop {
-				let after = panel.usage_after(feed.name).await?;
-				let Some(page) = feed.page(after).await? else { return Ok(()) };
-				if panel.take_usage(feed.name, &feed.items, page, after).await? < PAGE {
-					return Ok(());
+		let (panel, mut shutdown) = (&panel, shutdown.clone());
+		async move {
+			// a service restarting fails every pass until it is back: said when it starts and ends
+			let mut failing = false;
+			let mut wait = FOLLOW_EVERY;
+			while !*shutdown.borrow() {
+				match feed.follow(panel).await {
+					Ok(()) => {
+						if failing {
+							tracing::info!(feed = feed.name, "its usage feed answers again");
+						}
+						(failing, wait) = (false, FOLLOW_EVERY);
+					}
+					Err(e) => {
+						if failing {
+							tracing::debug!(feed = feed.name, error = %e, "its usage feed still fails");
+						} else {
+							crate::report(&e.wrap_err(format!("{}'s usage feed, asked again with a growing wait", feed.name)), "following a usage feed");
+						}
+						(failing, wait) = (true, (wait * 2).min(BACKOFF_CAP));
+					}
+				}
+				tokio::select! {
+					() = tokio::time::sleep(wait) => {}
+					_ = shutdown.changed() => return,
 				}
 			}
-		})
+		}
 	});
 	futures::future::join_all(follow).await;
 }
@@ -121,34 +143,31 @@ pub(crate) struct Window {
 	to: i64,
 }
 
-/// What our tools spent on vendors per UTC day, item, bill and source, in units and at today's
-/// cost of a unit: what Grafana's sa-tokens dashboard reads.
+/// What our tools spent on vendors per UTC day, item, bill and source, in units and each use at its
+/// unit's cost when it was done: what Grafana's sa-tokens dashboard reads.
 async fn spend(State(panel): State<Panel>, Params(q): Params<Window>) -> ApiResult<Json<UsageDto>> {
 	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| ApiError::BadRequest(format!("{ms}: {e}")));
 	let (from, to) = (at(q.from)?, at(q.to)?);
 	if from >= to || to.duration_since(from) > SPAN {
 		return Err(ApiError::BadRequest(format!("from is before to, at most {} days", SPAN.as_hours() / 24)));
 	}
-	let costs = panel.prices().await?;
 	let days = panel.used(from, to).await?;
 	Ok(Json(UsageDto {
 		days: days
 			.into_iter()
-			.map(|d: Day| {
-				let cost = costs.iter().find(|p| p.item == d.item).expect("the catalog prices every item").cost.as_ref();
-				UsageDayDto {
-					day: Timestamp::from_second(d.day * 86_400).expect("a stored day").strftime("%Y-%m-%d").to_string(),
-					item: d.item,
-					scope: d.item.scope(),
-					tool_title: d.item.tool_title(),
-					title: d.item.title(),
-					unit: d.item.unit(),
-					bill: d.bill,
-					source: d.source,
-					units: d.units,
-					times: d.times,
-					usd: cost.map(|c| (d.units * c.usd_micros) as f64 / 1e6),
-				}
+			.map(|d: Day| UsageDayDto {
+				day: Timestamp::from_second(d.day * 86_400).expect("a stored day").strftime("%Y-%m-%d").to_string(),
+				item: d.item,
+				scope: d.item.scope(),
+				tool_title: d.item.tool_title(),
+				title: d.item.title(),
+				unit: d.item.unit(),
+				bill: d.bill,
+				source: d.source,
+				units: d.units,
+				times: d.times,
+				usd: d.usd_micros.map(|u| u as f64 / 1e6),
+				uncosted: d.uncosted,
 			})
 			.collect(),
 	}))
@@ -161,6 +180,17 @@ struct Feed {
 	from: From,
 }
 impl Feed {
+	/// Every page there is after the cursor, taken.
+	async fn follow(&self, panel: &Panel) -> eyre::Result<()> {
+		loop {
+			let after = panel.usage_after(self.name).await?;
+			let Some(page) = self.page(after).await? else { return Ok(()) };
+			if panel.take_usage(self.name, &self.items, page, after).await? < PAGE {
+				return Ok(());
+			}
+		}
+	}
+
 	/// The page after `after`; `None` while the service serves no feed yet (404).
 	async fn page(&self, after: i64) -> eyre::Result<Option<UsagePage>> {
 		let (status, answer) = match &self.from {
