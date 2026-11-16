@@ -25,7 +25,7 @@
         "x": 0,
         "y": 0,
         "w": 24,
-        "h": 8
+        "h": 10
       },
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
@@ -186,7 +186,7 @@
       "title": "Used of the free ones",
       "gridPos": {
         "x": 0,
-        "y": 8,
+        "y": 10,
         "w": 12,
         "h": 9
       },
@@ -272,7 +272,7 @@
       "title": "Google's count, at each reading",
       "gridPos": {
         "x": 12,
-        "y": 8,
+        "y": 10,
         "w": 12,
         "h": 9
       },
