@@ -302,10 +302,11 @@ function DataSection({ view, data, notice, pulling, pullFailed }: { view: MapVie
           <AgeChart ages={ages} />
         </Fold>
       )}
-      {trade !== null && may(me, "sa:placement:study:spend") && (
+      {/* a sweep never bought has no trade yet: what it lacks is the notice's */}
+      {(trade !== null || notice?.missing != null) && may(me, "sa:placement:study:spend") && (
         <div className="px-2 py-1">
           <Button size="sm" variant="secondary" className="w-full" disabled={pulling} onClick={() => void pull()} title={t(placementKeys.pull.what, "re-asks Google the Places searches this map was built from")}>
-            {t(placementKeys.pull, "Pull latest · {n} searches", { n: trade.searches })}
+            {t(placementKeys.pull, "Pull latest · {n} searches", { n: trade?.searches ?? notice!.missing! })}
           </Button>
         </div>
       )}

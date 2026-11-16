@@ -21,6 +21,8 @@ export default function config(phase: string): NextConfig {
       agentRules: false,
       // A trailing-slash redirect would run before the rewrite and bounce /api/v1/me.
       skipTrailingSlashRedirect: true,
+      // a study's Pull buys its whole sweep in one request, minutes long; Next's proxy cuts at 30 s
+      experimental: { proxyTimeout: 15 * 60_000 },
       async rewrites() {
         const afterFiles = [
           { source: "/api/:path*", destination: `${backend}/api/:path*` },
