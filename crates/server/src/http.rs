@@ -129,7 +129,7 @@ impl Guard<ApiState> for Gate {
 
 /// The conductor's own `/api/v1` document, derived from its table.
 pub fn document() -> OpenApi {
-	ev_lib::api::document("Service-Arb conductor", env!("CARGO_PKG_VERSION"), "/api/v1", &api_routes(), ev_lib::api_docs!())
+	ev_lib::api::document("Service-Arb conductor", env!("CARGO_PKG_VERSION"), "/api/v1", &api_routes(), ev_lib::api_docs!(), None)
 }
 
 /// What a request may cost.
