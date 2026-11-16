@@ -1,0 +1,143 @@
+# Hand-written; v_flakes leaves it alone. Keeps WALLET_SCRIPT_INTEGRITY on the wallet.js of banking's
+# latest release and main, built here from banking's source (banking#601). evinvest.ltd's bytes may
+# keep a pin main already has, never add one.
+name: wallet-pin
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - .github/workflows/wallet-pin.yml
+permissions: {}
+concurrency:
+  group: wallet-pin-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+jobs:
+  pins:
+    # banking's code runs here, so this job holds no write token.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      release: ${{ steps.pins.outputs.release }}
+      release_pin: ${{ steps.pins.outputs.release_pin }}
+      main_sha: ${{ steps.pins.outputs.main_sha }}
+      main_pin: ${{ steps.pins.outputs.main_pin }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: EV-Main/banking
+          ref: main
+          fetch-depth: 0
+          path: banking
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: pins
+        working-directory: banking
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s inherit_errexit
+          pin() {
+            git checkout -q --detach "$1"
+            npm ci --ignore-scripts --no-audit --no-fund >&2
+            (cd wallet/frontend && npm run --silent build:mfe >&2 && npm run --silent mfe:pins -- wallet) \
+              | sed -nE 's/^wallet\.js=([0-9a-f]{64}),wallet\.css=[0-9a-f]{64}$/\1/p'
+          }
+          main_sha="$(git rev-parse HEAD)"
+          # Flux deploys the highest vX.Y.Z image tag.
+          release="$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)"
+          [ -n "$release" ] || { echo "::error::banking has no vX.Y.Z tag"; exit 1; }
+          release_pin="$(pin "$release")"
+          main_pin="$(pin "$main_sha")"
+          for p in "$release_pin" "$main_pin"; do
+            [[ "$p" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::mfe:pins printed no wallet.js pin"; exit 1; }
+          done
+          echo "$release: $release_pin, main $main_sha: $main_pin"
+          { echo "release=$release"; echo "release_pin=$release_pin"; echo "main_sha=$main_sha"; echo "main_pin=$main_pin"; } >> "$GITHUB_OUTPUT"
+  repin:
+    needs: pins
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      FILE: frontend/src/shared/config/wallet-bundle.ts
+      BRANCH: bot/wallet-pin
+      GH_TOKEN: ${{ github.token }}
+      EVENT: ${{ github.event_name }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      RELEASE: ${{ needs.pins.outputs.release }}
+      RELEASE_PIN: ${{ needs.pins.outputs.release_pin }}
+      MAIN_SHA: ${{ needs.pins.outputs.main_sha }}
+      MAIN_PIN: ${{ needs.pins.outputs.main_pin }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+      - shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s inherit_errexit
+          for p in "$RELEASE_PIN" "$MAIN_PIN"; do [[ "$p" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::bad pin from the pins job: $p"; exit 1; }; done
+          [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ && "$RELEASE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::bad refs from the pins job"; exit 1; }
+          sri() {
+            local b64
+            b64="$(printf '%s' "$1" | tr a-f A-F | basenc --base16 -d | base64)"
+            [[ "$b64" =~ ^[A-Za-z0-9+/]{43}=$ ]] || { echo "::error::no SRI for $1"; exit 1; }
+            printf 'sha256-%s' "$b64"
+          }
+          release_sri="$(sri "$RELEASE_PIN")"
+          main_sri="$(sri "$MAIN_PIN")"
+
+          line='^export const WALLET_SCRIPT_INTEGRITY = "([^"]*)";$'
+          [ "$(grep -cE "$line" "$FILE")" = 1 ] || { echo "::error::$FILE has no single WALLET_SCRIPT_INTEGRITY line"; exit 1; }
+          current="$(sed -nE "s/$line/\1/p" "$FILE")"
+          origin="$(sed -nE 's/^const WALLET_ORIGIN = "(https:[^"]+)";$/\1/p' "$FILE")"
+          # shellcheck disable=SC2016 # the TS template literal, matched as text
+          path="$(sed -nE 's/^export const WALLET_SCRIPT = `\$\{WALLET_ORIGIN\}(\/[^`]+)`;$/\1/p' "$FILE")"
+          [ -n "$origin" ] && [ -n "$path" ] || { echo "::error::$FILE: WALLET_ORIGIN or WALLET_SCRIPT moved"; exit 1; }
+          url="$origin$path"
+          prod_hex="$(curl -fsS --proto '=https' --max-redirs 0 "$url" | sha256sum | cut -d' ' -f1)"
+          prod="$(sri "$prod_hex")"
+
+          want=("$release_sri" "$main_sri")
+          for h in $current; do [ "$h" != "$prod" ] || want+=("$prod"); done
+          next="$(printf '%s\n' "${want[@]}" | sort -u | paste -sd' ')"
+          # shellcheck disable=SC2086 # split into its hashes
+          [ "$(printf '%s\n' $current | sort -u | paste -sd' ')" != "$next" ] || next="$current"
+          echo "main pins: $current"
+          echo "wanted:    $next ($RELEASE, main ${MAIN_SHA::8}; $url serves $prod)"
+          sed -i -E "s|$line|export const WALLET_SCRIPT_INTEGRITY = \"$next\";|" "$FILE"
+
+          pr="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if git diff --quiet; then
+            if [ -n "$pr" ] && [ "$EVENT" != pull_request ]; then
+              gh pr close "$pr" --delete-branch --comment "main already pins what [this run]($RUN_URL) wants."
+            fi
+          elif [ "$EVENT" = pull_request ]; then
+            git diff
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            title="fix(wallet): pin wallet.js of banking $RELEASE and main ${MAIN_SHA::8}"
+            git switch -q -c "$BRANCH"
+            git commit -qam "$title"
+            git push -qf origin "$BRANCH"
+            body="$(printf '%s\n' \
+              "WALLET_SCRIPT_INTEGRITY from banking's source, built by [this run]($RUN_URL):" \
+              "" \
+              "- [$RELEASE](https://github.com/EV-Main/banking/tree/$RELEASE) (what Flux deploys): \`$release_sri\`" \
+              "- main [${MAIN_SHA::8}](https://github.com/EV-Main/banking/commit/$MAIN_SHA): \`$main_sri\`" \
+              "" \
+              "$url serves \`$prod\` now; it stays pinned only if main pins it already." \
+              "Merge and release before banking tags the new bundle, and SA's wallet and Pay never go unavailable.")"
+            if [ -n "$pr" ]; then gh pr edit "$pr" --title "$title" --body "$body"; else gh pr create --base main --head "$BRANCH" --title "$title" --body "$body"; fi
+          fi
+
+          case " $current " in
+            *" $prod "*) ;;
+            *) echo "::error::$url serves $prod, which main does not pin ($current): SA's wallet and Pay are unavailable until the repin PR is released"; exit 1 ;;
+          esac
