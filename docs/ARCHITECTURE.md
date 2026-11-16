@@ -562,8 +562,8 @@ PUT    /admin/tokens/prices  Tokens, fresh  {prices: {item: n | null}, costs: {i
                                             more; the others stay) → 200 as GET; 400 an item not in the
                                             catalog, or a metered one priced
 GET    /admin/usage?from=&to=  Tokens       {days: [{day, item, scope, tool_title, title, unit, bill,
-                                            source, units, times, usd | null}]}: Unix ms, ≤ 400 days;
-                                            usd at today's cost of a unit
+                                            source, units, times, usd | null, uncosted}]}: Unix ms,
+                                            ≤ 400 days; each use at its unit's cost when it was done
 GET    /admin/meters  Tokens                {meters: [{meter, vendor, name, free, stop, items,
                                             period_start, period_end, reading: {meter, period_start,
                                             units, cost, currency, through, synced_at} | null,
@@ -682,7 +682,8 @@ its items there once (an enum, a variant's message its name and its doc what it 
 happens, its unit, and whether it is sold (a person pays tokens for it) or metered (counted only).
 The admin's page, `token_prices`, `unit_costs` and the snapshot are walked from it. A sold item
 without a price is not sold: a Places request is refused, a walk step not walked. A unit's cost to
-us is the admin's too, unknown until set.
+us is the admin's too, dated (`unit_costs`, append-only): a use costs what its unit did when it was
+done, the first cost ever set for a use before it, none after one set back to unknown.
 
 **Usage is what vendors bill us.** Each use is a row of `usage` (append-only: item, units, whose
 bill, who told), counted where it happens:

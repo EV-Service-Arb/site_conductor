@@ -349,3 +349,29 @@ async fn every_paid_answer_and_map_is_counted_once_on_whose_bill() {
 	let mut op = World::new().await;
 	assert_eq!(op.call(Method::GET, &format!("/api/v1/admin/usage?from={}&to={now}", now - 1), None).await.0, StatusCode::FORBIDDEN);
 }
+
+#[tokio::test]
+async fn a_use_is_costed_at_the_cost_it_had_when_done() {
+	let mut w = World::holding(admin()).await;
+	let load = async |w: &mut World| assert_eq!(w.call(Method::POST, "/api/v1/map/loaded", None).await.0, StatusCode::NO_CONTENT);
+	let cost = async |w: &mut World, usd_micros: Value| {
+		let (status, set) = w.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(json!({ "prices": {}, "costs": { "map.map": usd_micros } }))).await;
+		assert_eq!(status, StatusCode::OK, "{set}");
+	};
+	load(&mut w).await;
+	cost(&mut w, json!(7_000)).await;
+	load(&mut w).await;
+	cost(&mut w, json!(14_000)).await;
+	load(&mut w).await;
+	cost(&mut w, Value::Null).await;
+	load(&mut w).await;
+
+	let now = jiff::Timestamp::now().as_millisecond();
+	let (status, usage) = w.call(Method::GET, &format!("/api/v1/admin/usage?from={}&to={}", now - 3_600_000, now + 60_000), None).await;
+	assert_eq!(status, StatusCode::OK, "{usage}");
+	let maps: Vec<&Value> = usage["days"].as_array().unwrap().iter().filter(|d| d["item"] == "map.map").collect();
+	let sum = |field: &str| maps.iter().map(|d| d[field].as_f64().unwrap_or(0.)).sum::<f64>();
+	assert_eq!(sum("units"), 4.);
+	assert!((sum("usd") - 0.028).abs() < 1e-9, "the first before any cost and the second at 7000 µ$, the third at 14000, the last uncosted: {usage}");
+	assert_eq!(sum("uncosted"), 1., "{usage}");
+}

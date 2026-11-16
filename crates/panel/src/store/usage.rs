@@ -48,6 +48,10 @@ pub struct Day {
 	pub source: String,
 	pub units: i64,
 	pub times: i64,
+	/// Millionths of a dollar, each use at the cost in effect when it was done; `None`, none had one.
+	pub usd_micros: Option<i64>,
+	/// Units done while the item had no cost.
+	pub uncosted: i64,
 }
 
 pub(crate) async fn record(conn: &mut SqliteConnection, u: &Use) -> eyre::Result<()> {
@@ -91,11 +95,15 @@ pub(crate) async fn move_cursor(conn: &mut SqliteConnection, source: &str, from:
 	Ok(true)
 }
 
+/// Each item's cost in effect now; an item last set back to unknown has none.
 pub(crate) async fn costs(conn: &mut SqliteConnection) -> eyre::Result<BTreeMap<Item, Cost>> {
-	let rows: Vec<(String, i64, String, i64)> = sqlx::query_as("SELECT item, usd_micros, set_by, set_at FROM unit_costs")
-		.fetch_all(&mut *conn)
-		.await
-		.wrap_err("reading the costs")?;
+	let rows: Vec<(String, i64, String, i64)> = sqlx::query_as(
+		"SELECT item, usd_micros, set_by, set_at FROM unit_costs c \
+		 WHERE id = (SELECT MAX(id) FROM unit_costs WHERE item = c.item) AND usd_micros IS NOT NULL",
+	)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("reading the costs")?;
 	rows.into_iter()
 		.map(|(item, usd_micros, set_by, set_at)| {
 			Ok((
@@ -106,28 +114,33 @@ pub(crate) async fn costs(conn: &mut SqliteConnection) -> eyre::Result<BTreeMap<
 		.collect()
 }
 
-/// `item`'s unit costs `usd_micros`, 0 or more; `None` takes the cost back to unknown.
+/// `item`'s unit costs `usd_micros` from `now` on, 0 or more; `None`, unknown from now on.
 pub(crate) async fn set_cost(conn: &mut SqliteConnection, item: Item, usd_micros: Option<i64>, by: &str, now: Timestamp) -> eyre::Result<()> {
-	let q = match usd_micros {
-		Some(n) => sqlx::query(
-			"INSERT INTO unit_costs (item, usd_micros, set_by, set_at) VALUES ($1, $2, $3, $4) \
-			 ON CONFLICT (item) DO UPDATE SET usd_micros = excluded.usd_micros, set_by = excluded.set_by, set_at = excluded.set_at",
-		)
+	sqlx::query("INSERT INTO unit_costs (item, usd_micros, set_by, set_at) VALUES ($1, $2, $3, $4)")
 		.bind(item.to_string())
-		.bind(n)
+		.bind(usd_micros)
 		.bind(by)
-		.bind(to_db(now)),
-		None => sqlx::query("DELETE FROM unit_costs WHERE item = $1").bind(item.to_string()),
-	};
-	q.execute(&mut *conn).await.wrap_err_with(|| format!("costing {item}"))?;
+		.bind(to_db(now))
+		.execute(conn)
+		.await
+		.wrap_err_with(|| format!("costing {item}"))?;
 	Ok(())
 }
 
-/// Every day's usage between `from` and `to`, oldest first.
+/// Every day's usage between `from` and `to`, oldest first. A use before its item's first cost
+/// takes that first one: the vendor charged it all along, nobody had typed it in yet.
 pub(crate) async fn by_day(conn: &mut SqliteConnection, from: Timestamp, to: Timestamp) -> eyre::Result<Vec<Day>> {
-	let rows: Vec<(i64, String, String, String, i64, i64)> = sqlx::query_as(
-		"SELECT at / 86400000000 AS day, item, bill, source, SUM(units), COUNT(*) FROM usage \
-		 WHERE at >= $1 AND at < $2 GROUP BY day, item, bill, source ORDER BY day",
+	let rows: Vec<(i64, String, String, String, i64, i64, Option<i64>, i64)> = sqlx::query_as(
+		"WITH costed AS ( \
+		   SELECT u.at, u.item, u.bill, u.source, u.units, CASE \
+		     WHEN EXISTS (SELECT 1 FROM unit_costs c WHERE c.item = u.item AND c.set_at <= u.at) \
+		     THEN (SELECT c.usd_micros FROM unit_costs c WHERE c.item = u.item AND c.set_at <= u.at ORDER BY c.id DESC LIMIT 1) \
+		     ELSE (SELECT c.usd_micros FROM unit_costs c WHERE c.item = u.item ORDER BY c.id LIMIT 1) \
+		   END AS cost FROM usage u WHERE u.at >= $1 AND u.at < $2 \
+		 ) \
+		 SELECT at / 86400000000 AS day, item, bill, source, SUM(units), COUNT(*), SUM(units * cost), \
+		   SUM(CASE WHEN cost IS NULL THEN units ELSE 0 END) \
+		 FROM costed GROUP BY day, item, bill, source ORDER BY day",
 	)
 	.bind(to_db(from))
 	.bind(to_db(to))
@@ -135,7 +148,7 @@ pub(crate) async fn by_day(conn: &mut SqliteConnection, from: Timestamp, to: Tim
 	.await
 	.wrap_err("summing usage by day")?;
 	rows.into_iter()
-		.map(|(day, item, bill, source, units, times)| {
+		.map(|(day, item, bill, source, units, times, usd_micros, uncosted)| {
 			Ok(Day {
 				day,
 				item: item.parse().wrap_err("a usage row names an item the catalog lacks: a migration renames it")?,
@@ -143,6 +156,8 @@ pub(crate) async fn by_day(conn: &mut SqliteConnection, from: Timestamp, to: Tim
 				source,
 				units,
 				times,
+				usd_micros,
+				uncosted,
 			})
 		})
 		.collect()
