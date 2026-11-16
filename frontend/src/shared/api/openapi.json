@@ -3589,7 +3589,7 @@
     },
     "/tokens": {
       "get": {
-        "summary": "The caller's balance, renewed a day's worth when read, and the kick-backs not claimed.",
+        "summary": "The caller's balance, renewed a day's worth when read, the kick-backs not claimed, and what they read before spending.",
         "operationId": "tokens",
         "responses": {
           "default": {
@@ -3701,6 +3701,41 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/tokens/settings": {
+      "put": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Above how many tokens an action asks the caller first.",
+        "operationId": "set_spending",
+        "requestBody": {
+          "description": "`PUT /tokens/settings`.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpendingSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers: `error` is for a person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
           }
         }
       }
@@ -7667,6 +7702,7 @@
           "walk.sort_retry",
           "walk.step",
           "phone.running",
+          "placement.search",
           "ads.location",
           "ads.keyword_ideas",
           "ads.historical_metrics",
@@ -8067,7 +8103,7 @@
         ]
       },
       "Scope": {
-        "description": "Where it happens: who counts it, and charges for it if it is sold.\n\n- `conductor`: At the buy, before Google is asked.\n- `review_archive`: After the fact, through its charge feed.\n- `browsers`: sa_browsers' runner: nobody is charged.\n- `placement`: gmaps_optimal_placement's studies: the house's for now.",
+        "description": "Where it happens: who counts it, and charges for it if it is sold.\n\n- `conductor`: At the buy, before Google is asked.\n- `review_archive`: After the fact, through its charge feed.\n- `browsers`: sa_browsers' runner: nobody is charged.\n- `placement`: gmaps_optimal_placement's studies: a pull's searches charged at the conductor's forward.",
         "type": "string",
         "enum": [
           "conductor",
@@ -8246,6 +8282,13 @@
                 ],
                 "format": "int64"
               },
+              "placement.search": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
               "places.autocomplete": {
                 "type": [
                   "integer",
@@ -8379,6 +8422,13 @@
                 "format": "int64"
               },
               "phone.running": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "placement.search": {
                 "type": [
                   "integer",
                   "null"
@@ -8894,6 +8944,21 @@
           "uncosted"
         ]
       },
+      "SpendingSettings": {
+        "description": "`PUT /tokens/settings`.",
+        "type": "object",
+        "properties": {
+          "confirm_above": {
+            "description": "0 or more.",
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "confirm_above"
+        ]
+      },
       "Spot": {
         "type": "object",
         "properties": {
@@ -9208,6 +9273,11 @@
             "type": "integer",
             "format": "int64"
           },
+          "confirm_above": {
+            "description": "An action costing more asks first.",
+            "type": "integer",
+            "format": "int64"
+          },
           "daily": {
             "description": "Renewal: added per day while under `cap`.",
             "type": "integer",
@@ -9218,13 +9288,102 @@
             "items": {
               "$ref": "#/components/schemas/Kickback"
             }
+          },
+          "prices": {
+            "description": "Each sold, priced item: its tokens.",
+            "type": "object",
+            "properties": {
+              "ads.historical_metrics": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "ads.keyword_ideas": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "ads.location": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "browser.gologin": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "browser.mimic": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "dataforseo.keywords_for_keywords": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "dataforseo.search_volume": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "map.map": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "phone.running": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "placement.search": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "places.autocomplete": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "places.details": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "places.geocode": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "places.search": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "street_view.panorama": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "walk.open": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "walk.reviews": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "walk.sort": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "walk.sort_retry": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "walk.step": {
+                "type": "integer",
+                "format": "int64"
+              }
+            },
+            "additionalProperties": false
           }
         },
         "required": [
           "balance",
           "daily",
           "cap",
-          "kickbacks"
+          "kickbacks",
+          "prices",
+          "confirm_above"
         ]
       },
       "Trade": {

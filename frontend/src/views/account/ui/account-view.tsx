@@ -13,6 +13,8 @@ import { ROUTES } from "@/shared/config/routes";
 import { useLocale, useT, nav, account } from "@/shared/i18n";
 import { EmptyState } from "@/shared/ui/empty-state";
 
+import { SpendingCard } from "./spending-card";
+
 const TIMEOUT_MS = 8000;
 
 /**
@@ -64,6 +66,7 @@ export function AccountView() {
           fallback={loading}
         />
       )}
+      <SpendingCard />
     </PageFrame>
   );
 }

@@ -8,6 +8,7 @@ import { PANEL } from "@config";
 import { covers, openCategories, openTrade, useScope, useTrades } from "@/entities/gmb";
 import type { Country } from "@/shared/api/schema";
 import { may, useMe } from "@/entities/session";
+import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { type T, useT, placement as placementKeys, state, hotbar } from "@/shared/i18n";
 import { type Base, setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
 
@@ -287,6 +288,21 @@ function Tiers({ view, trade }: { view: MapView; trade: TradeData }) {
   );
 }
 
+function PullButton({ searches, pulling }: { searches: number; pulling: boolean }) {
+  const t = useT();
+  const held = useTokens();
+  const spend = useSpendConfirm();
+  const price = held.status === "ok" ? held.data.prices["placement.search"] : undefined;
+  return (
+    <div className="px-2 py-1">
+      <Button size="sm" variant="secondary" className="w-full" disabled={pulling || held.status !== "ok"} onClick={() => void spend.ask(price === undefined ? undefined : searches * price, pull)} title={t(placementKeys.pull.what, "re-asks Google the Places searches this map was built from")}>
+        {price === undefined ? t(placementKeys.pull, "Pull latest · {n} searches", { n: searches }) : t(placementKeys.pull.priced, "Pull latest · {n} searches · ≈ {tokens} tokens", { n: searches, tokens: searches * price })}
+      </Button>
+      {spend.dialog}
+    </div>
+  );
+}
+
 function DataSection({ view, data, notice, pulling, pullFailed }: { view: MapView; data: Data; notice: { text: string; missing: number | null } | null; pulling: boolean; pullFailed: string | null }) {
   const t = useT();
   const me = useMe();
@@ -304,11 +320,7 @@ function DataSection({ view, data, notice, pulling, pullFailed }: { view: MapVie
       )}
       {/* a sweep never bought has no trade yet: what it lacks is the notice's */}
       {(trade !== null || notice?.missing != null) && may(me, "sa:placement:study:spend") && (
-        <div className="px-2 py-1">
-          <Button size="sm" variant="secondary" className="w-full" disabled={pulling} onClick={() => void pull()} title={t(placementKeys.pull.what, "re-asks Google the Places searches this map was built from")}>
-            {t(placementKeys.pull, "Pull latest · {n} searches", { n: trade?.searches ?? notice!.missing! })}
-          </Button>
-        </div>
+        <PullButton searches={trade?.searches ?? notice!.missing!} pulling={pulling} />
       )}
       {pullFailed !== null && <Note tone="error">{pullFailed}</Note>}
       {trade !== null && trade.categories.length > 0 && (

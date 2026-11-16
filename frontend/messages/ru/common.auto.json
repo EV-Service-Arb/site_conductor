@@ -2315,6 +2315,10 @@
     "en": "Pull latest · {n} searches",
     "t": "Загрузить свежее · {n} запросов"
   },
+  "placement.pull.priced": {
+    "en": "Pull latest · {n} searches · ≈ {tokens} tokens",
+    "t": "Загрузить последние данные · {n} поисковых запросов · ≈ {tokens} токенов"
+  },
   "placement.pull.what": {
     "en": "re-asks Google the Places searches this map was built from",
     "t": "заново запрашивает у Google поисковые запросы Places, на основе которых построена эта карта"
@@ -2743,6 +2747,30 @@
     "en": "{n} tokens claimed",
     "t": "Получено токенов: {n}"
   },
+  "tokens.confirm": {
+    "en": "Spend ≈ {cost} tokens?",
+    "t": "Потратить ≈ {cost} токенов?"
+  },
+  "tokens.confirm.body": {
+    "en": "This costs ≈ {cost} tokens of your {balance}.",
+    "t": "Это стоит ≈ {cost} токенов из вашего баланса {balance}."
+  },
+  "tokens.confirm.cancel": {
+    "en": "Cancel",
+    "t": "Отмена"
+  },
+  "tokens.confirm.spend": {
+    "en": "Spend",
+    "t": "Потратить"
+  },
+  "tokens.confirmAbove.after": {
+    "en": "tokens",
+    "t": "токенов"
+  },
+  "tokens.confirmAbove.before": {
+    "en": "Ask before an action costing more than",
+    "t": "Спрашивать перед действием, стоимость которого превышает"
+  },
   "tokens.count": {
     "en": "{n} tokens",
     "t": "Токенов: {n}"
@@ -2862,6 +2890,10 @@
   "tokens.meters.why": {
     "en": "Each account's count is the vendor's own (every project on that billing account, hours behind), plus ours on its keys since. A buy goes to an account with free units left, then one within its allowance. Street View stops at each account's free ones.",
     "t": "Количество для каждого аккаунта — это собственные данные поставщика (по всем проектам этого платёжного аккаунта, с задержкой в несколько часов), дополненные нашими данными по его ключам с этого момента. Покупка направляется на аккаунт со свободными единицами, а затем — на аккаунт, в пределах которого ещё не исчерпан лимит. Просмотр улиц прекращается для каждого аккаунта после использования его бесплатных единиц."
+  },
+  "tokens.spending": {
+    "en": "Spending",
+    "t": "Расходование"
   },
   "tokens.title": {
     "en": "Tokens",

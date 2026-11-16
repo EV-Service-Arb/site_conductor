@@ -27,7 +27,7 @@ pub enum Scope {
 	ReviewArchive,
 	/// sa_browsers' runner: nobody is charged.
 	Browsers,
-	/// gmaps_optimal_placement's studies: the house's for now.
+	/// gmaps_optimal_placement's studies: a pull's searches charged at the conductor's forward.
 	Placement,
 }
 
@@ -99,6 +99,15 @@ pub enum BrowserStart {
 	/// Multilogin's Mimic, through the Multilogin app on the runner.
 	#[strum(message = "Multilogin browser")]
 	Mimic,
+}
+
+/// What a study's pull buys, charged to whoever pulls it.
+#[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum PlacementRequest {
+	/// A Places search a study's pull buys.
+	#[strum(message = "Search")]
+	Search,
 }
 
 /// What a study asks the Google Ads API for: free per request, within the developer token's
@@ -226,6 +235,7 @@ priced! {
 	Map(MapLoad) = "map", Conductor, Metered, "load", "Google Maps in the browser";
 	Walk(WalkStep) = "walk", ReviewArchive, Sold, "step", "A walk down a place's reviews";
 	Phone(PhoneTime) = "phone", Browsers, Metered, "minute", "Multilogin's cloud phones";
+	Placement(PlacementRequest) = "placement", Placement, Sold, "search", "A study's pull";
 	Ads(AdsRequest) = "ads", Placement, Metered, "request", "Google Ads API";
 	DataForSeo(DataForSeoTask) = "dataforseo", Placement, Metered, "task", "DataForSEO";
 	Browser(BrowserStart) = "browser", Browsers, Metered, "start", "Antidetect browsers";
