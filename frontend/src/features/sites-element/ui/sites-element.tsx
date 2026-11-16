@@ -7,7 +7,7 @@ import { useLocale } from "@/shared/i18n";
 import { RemoteElement } from "@/shared/mfe";
 
 /** sites_panel's bundle, forwarded by the conductor; one script defines both elements (CONTRACT §7, §8). */
-const SCRIPT = "/sites/mfe/mfe-sites.js";
+const SCRIPT = "/mfe/sites/mfe-sites.js";
 
 const never = () => () => {};
 

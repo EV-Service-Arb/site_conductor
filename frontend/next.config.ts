@@ -30,9 +30,7 @@ export default function config(phase: string): NextConfig {
           { source: "/mcp", destination: `${backend}/mcp` },
           { source: "/mcp/:path*", destination: `${backend}/mcp/:path*` },
           { source: "/.well-known/:path*", destination: `${backend}/.well-known/:path*` },
-          { source: "/sites/mfe/:path*", destination: `${backend}/sites/mfe/:path*` },
-          { source: "/review_archive/mfe/:path*", destination: `${backend}/review_archive/mfe/:path*` },
-          { source: "/placement/mfe/:path*", destination: `${backend}/placement/mfe/:path*` },
+          { source: "/mfe/:path*", destination: `${backend}/mfe/:path*` },
           { source: "/grafana/", destination: `${backend}/grafana/` }, // `:path*` empty drops the slash: /grafana, unrouted
           { source: "/grafana/:path*", destination: `${backend}/grafana/:path*` },
           // an element's views are its page, as `panel serve` answers them (web.rs, ELEMENT_PAGES)

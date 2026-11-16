@@ -5,14 +5,14 @@
 //! ```text
 //! /api/sites/*                     → sites /api/v1/*            session + assertion; CSRF on writes
 //! /api/hooks/booking/*             → sites (same path)          open: the providers' webhooks
-//! /sites/mfe/*                     → sites /mfe/*               open: the sites page's bundle
+//! /mfe/sites/*                     → sites /mfe/*               open: the sites page's bundle
 //! /api/review_archive/*            → review_archive /*          session + assertion; CSRF on writes
-//! /review_archive/mfe/*            → review_archive /mfe/*      open: the dashboard's bundle
+//! /mfe/review_archive/*            → review_archive /mfe/*      open: the dashboard's bundle
 //! /playbook_mcp/authorize          → playbook (same path)       session + assertion; its consent form
 //!                                                               POST carries playbook's own nonce
 //! /playbook_mcp/*, two .well-known → playbook (same path)       open: OAuth and bearer, no cookie
 //! /api/placement/*                 → placement /*               session + assertion; CSRF on writes
-//! /placement/mfe/*                 → placement /mfe/*           open: the map overlay's module
+//! /mfe/placement/*                 → placement /mfe/*           open: the map overlay's module
 //! ```
 //!
 //! [`Services`] is the one client and signing key every call to a service goes through: the
@@ -39,7 +39,7 @@ use crate::{
 };
 
 /// Longest prefixes first: the first match wins.
-const ROUTES: [Route; 11] = [
+const ROUTES: [Route; 14] = [
 	Route {
 		prefix: "/api/sites",
 		upstream: "/api/v1",
@@ -49,6 +49,12 @@ const ROUTES: [Route; 11] = [
 	Route {
 		prefix: "/api/hooks/booking",
 		upstream: "/api/hooks/booking",
+		service: Service::Sites,
+		gate: Gate::Open,
+	},
+	Route {
+		prefix: "/mfe/sites",
+		upstream: "/mfe",
 		service: Service::Sites,
 		gate: Gate::Open,
 	},
@@ -63,6 +69,12 @@ const ROUTES: [Route; 11] = [
 		upstream: "",
 		service: Service::ReviewArchive,
 		gate: Gate::Session(Writes::Csrf),
+	},
+	Route {
+		prefix: "/mfe/review_archive",
+		upstream: "/mfe",
+		service: Service::ReviewArchive,
+		gate: Gate::Open,
 	},
 	Route {
 		prefix: "/review_archive/mfe",
@@ -99,6 +111,12 @@ const ROUTES: [Route; 11] = [
 		upstream: "",
 		service: Service::Placement,
 		gate: Gate::Session(Writes::Csrf),
+	},
+	Route {
+		prefix: "/mfe/placement",
+		upstream: "/mfe",
+		service: Service::Placement,
+		gate: Gate::Open,
 	},
 	Route {
 		prefix: "/placement/mfe",
@@ -437,10 +455,12 @@ mod tests {
 		assert_eq!(route("/api/review_archived"), None);
 		assert_eq!(route("/review_archive"), None, "the page is the front end's");
 		assert_eq!(route("/api/sites/leads"), Some(("/api/sites", Gate::Session(Writes::Csrf))));
-		assert_eq!(route("/sites/mfe/mfe-sites.js"), Some(("/sites/mfe", Gate::Open)));
+		assert_eq!(route("/mfe/sites/mfe-sites.js"), Some(("/mfe/sites", Gate::Open)));
 		assert_eq!(route("/sites/leads"), None, "the page is the front end's");
 		assert_eq!(route("/api/placement/payload/cleaning/Lyon"), Some(("/api/placement", Gate::Session(Writes::Csrf))));
-		assert_eq!(route("/placement/mfe/overlay.js"), Some(("/placement/mfe", Gate::Open)));
+		assert_eq!(route("/mfe/placement/overlay.js"), Some(("/mfe/placement", Gate::Open)));
+		assert_eq!(route("/mfe/review_archive/mfe-review-archive-dashboard.js"), Some(("/mfe/review_archive", Gate::Open)));
+		assert_eq!(route("/mfe/banking/wallet.js"), None, "banking's bundle is not forwarded");
 		assert_eq!(route("/placement"), None, "no page of its own");
 	}
 }

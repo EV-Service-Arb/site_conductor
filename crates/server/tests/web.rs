@@ -155,7 +155,7 @@ async fn hashed_assets_are_immutable_and_nothing_revalidates_by_date() {
 
 /// Any view of the sites page loads the page, and the payload Next's client-side navigation asks
 /// for under a view is the page's: a click from a conductor screen to `/sites/leads` stays soft.
-/// The bundle the page loads is the forward's (`/sites/mfe`), never a page.
+/// The bundle the page loads is the forward's (`/mfe/sites`), never a page.
 #[tokio::test]
 async fn the_sites_page_serves_every_view_of_it() {
 	let export = Export::new();
@@ -175,8 +175,12 @@ async fn the_sites_page_serves_every_view_of_it() {
 		assert_eq!((status, got.as_str()), (StatusCode::OK, body), "{uri}");
 	}
 	assert_eq!(get_(&app, "/sites/leads/nothing.txt").await.0, StatusCode::NOT_FOUND);
-	let (status, h, body) = get_(&app, "/sites/mfe/mfe-sites.js").await;
-	assert_eq!((status, body.as_str()), (StatusCode::NOT_FOUND, r#"{"code":"not_found","error":"not found"}"#), "the forward's, not the export's");
+	let (status, h, body) = get_(&app, "/mfe/sites/mfe-sites.js").await;
+	assert_eq!(
+		(status, body.as_str()),
+		(StatusCode::NOT_FOUND, r#"{"code":"not_found","error":"not found"}"#),
+		"the forward's, not the export's"
+	);
 	assert!(!is_page(&h));
 }
 

@@ -30,7 +30,7 @@ npm ci
 npm run dev:stub     # on STUB_PORT — /api/v1 (me, sources, access) and /auth; STUB_ROLE=admin, STUB_ME=401|503,
                      # STUB_LIVE=off for no socket, STUB_LIVE_EVERY=5 for busier live activity
 PANEL_DEV_BACKEND=http://127.0.0.1:$STUB_PORT npm run dev
-                     # on PANEL_WEB_PORT — proxies /api, /auth and /sites/mfe to PANEL_DEV_BACKEND
+                     # on PANEL_WEB_PORT — proxies /api, /auth and /mfe to PANEL_DEV_BACKEND
 ```
 
 The ports are the dev shell's (`nix develop`). Against the real backend, point `PANEL_DEV_BACKEND`

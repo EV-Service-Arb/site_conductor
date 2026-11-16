@@ -79,7 +79,7 @@ async fn playbooks_open_paths_pass_without_a_session_and_its_consent_page_sends_
 	let (app, seen) = setup(&db).await;
 	let mut b = Browser::default();
 
-	for path in ["/playbook_mcp/token", "/.well-known/oauth-authorization-server/playbook_mcp", "/review_archive/mfe/x.js"] {
+	for path in ["/playbook_mcp/token", "/.well-known/oauth-authorization-server/playbook_mcp", "/mfe/review_archive/x.js"] {
 		assert_eq!(b.send(&app, Method::GET, path, &[("authorization", "Bearer t")], false).await.0, StatusCode::OK, "{path}");
 		let got = seen.lock().unwrap().pop().unwrap();
 		assert!(!got.headers.contains_key("x-sa-assertion"), "{path}: nobody vouched for");
@@ -107,7 +107,7 @@ async fn a_forwarded_path_never_climbs_out_of_its_prefix() {
 		"/api/review_archive/me/..%2f..%2fx",
 		"/api/review_archive/..%5cx",
 		"/api/review_archive/..",
-		"/review_archive/mfe/%2e%2e/me",
+		"/mfe/review_archive/%2e%2e/me",
 	] {
 		assert_eq!(b.send(&app, Method::GET, path, &[], false).await.0, StatusCode::BAD_REQUEST, "{path}");
 	}
@@ -158,7 +158,7 @@ async fn the_sites_bundle_and_the_booking_hooks_pass_without_a_session() {
 	let (app, seen) = setup(&db).await;
 	let mut b = Browser::default();
 	for (ours, theirs) in [
-		("/sites/mfe/mfe-sites.js", "/mfe/mfe-sites.js"),
+		("/mfe/sites/mfe-sites.js", "/mfe/mfe-sites.js"),
 		("/api/hooks/booking/cal_com/aquafix", "/api/hooks/booking/cal_com/aquafix"),
 	] {
 		let method = if ours.starts_with("/api") { Method::POST } else { Method::GET };
@@ -167,6 +167,6 @@ async fn the_sites_bundle_and_the_booking_hooks_pass_without_a_session() {
 		assert_eq!(got.path_and_query, theirs);
 		assert!(!got.headers.contains_key(sa_auth::HEADER), "{ours}: nobody vouched for");
 	}
-	assert_eq!(b.send(&app, Method::GET, "/sites/mfe/%2e%2e/api/v1/leads", &[], false).await.0, StatusCode::BAD_REQUEST);
+	assert_eq!(b.send(&app, Method::GET, "/mfe/sites/%2e%2e/api/v1/leads", &[], false).await.0, StatusCode::BAD_REQUEST);
 	assert!(seen.lock().unwrap().is_empty());
 }

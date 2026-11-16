@@ -49,10 +49,11 @@ const CSP: &str = "frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 const HASHED: &str = "/_next/static/";
 
 /// Paths that belong to the API side, whether or not a route of theirs is mounted: an unknown
-/// one is a JSON 404, never the front end's page. `/grafana` is Grafana's, run or not;
+/// one is a JSON 404, never the front end's page. `/grafana` is Grafana's, run or not; `/mfe`
+/// the producers' bundles, forwarded or not;
 /// `/cabinet` once served the cabinet's account chip here, and a tab still on an earlier
 /// build may ask for `/cabinet/mfe/*`: a script request must get a 404, not the panel's HTML.
-const RESERVED: [&str; 6] = ["/api", "/auth", "/mcp", "/health", "/grafana", "/cabinet"];
+const RESERVED: [&str; 7] = ["/api", "/auth", "/mcp", "/mfe", "/health", "/grafana", "/cabinet"];
 
 /// The pages a mounted element routes inside of: a link to one of its views loads its page.
 const ELEMENT_PAGES: [&str; 2] = ["/review_archive", "/sites"];
@@ -191,7 +192,9 @@ mod tests {
 
 	#[test]
 	fn reserved_prefixes_are_whole_segments() {
-		for p in ["/api", "/api/", "/api/v1/nope", "/auth/x", "/health", "/grafana", "/grafana/d/1", "/cabinet", "/cabinet/mfe/x.js"] {
+		for p in [
+			"/api", "/api/", "/api/v1/nope", "/auth/x", "/health", "/grafana", "/grafana/d/1", "/cabinet", "/cabinet/mfe/x.js", "/mfe/banking/x.js",
+		] {
 			assert!(reserved(p), "{p}");
 		}
 		for p in [
@@ -209,8 +212,8 @@ mod tests {
 			assert!(!reserved(p), "{p}");
 		}
 		for p in [
-			"/review_archive/mfe/x.js",
-			"/sites/mfe/mfe-sites.js",
+			"/mfe/review_archive/x.js",
+			"/mfe/sites/mfe-sites.js",
 			"/api/sites/leads",
 			"/playbook_mcp/token",
 			"/.well-known/oauth-protected-resource/playbook_mcp",

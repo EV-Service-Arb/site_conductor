@@ -197,14 +197,14 @@ reserved paths (`web.rs`) are derived from it.
 ```text
 /api/sites/*                     → sites /api/v1/*              session + User; CSRF on writes (a bearer: none)
 /api/hooks/booking/*             → sites (same path)            open: the providers' webhooks
-/sites/mfe/*                     → sites /mfe/*                 open: the sites page's bundle
+/mfe/sites/*                     → sites /mfe/*                 open: the sites page's bundle
 /api/review_archive/*            → review_archive /*            session + User; CSRF on writes
-/review_archive/mfe/*            → review_archive /mfe/*        open: the dashboard's bundle
+/mfe/review_archive/*            → review_archive /mfe/*        open: the dashboard's bundle
 /playbook_mcp/authorize          → playbook (same path)         session + User; no conductor CSRF
 /playbook_mcp/*, /.well-known/oauth-{authorization-server,protected-resource}/playbook_mcp
                                  → playbook (same path)         open: OAuth and bearer clients
 /api/placement/*                 → placement /*                 session + User; CSRF on writes
-/placement/mfe/*                 → placement /mfe/*             open: the map overlay's module
+/mfe/placement/*                 → placement /mfe/*             open: the map overlay's module
 ```
 
 - **The assertion** (`sa_auth`, header `x-sa-assertion`) is signed for one request: Ed25519
@@ -233,8 +233,8 @@ reserved paths (`web.rs`) are derived from it.
   one Google map per page session, kept while the page is away (each built is a billed load), its
   viewport splitting the outline's list; placing a GMB's point is a mode of it.
 - **The pages.** `/sites` mounts `<mfe-sites-panel api="/api/sites" base="/sites" csrf-cookie>`
-  from `/sites/mfe/`; `/review_archive` mounts
-  `<mfe-review-archive-dashboard grafana="/grafana/" ui>` from `/review_archive/mfe/`, `ui` its
+  from `/mfe/sites/`; `/review_archive` mounts
+  `<mfe-review-archive-dashboard grafana="/grafana/" ui>` from `/mfe/review_archive/`, `ui` its
   default (`reviewArchiveUi` in `frontend/panel.config.ts`). Any `/sites/<view>` or
   `/review_archive/<view>` without a dot in its last segment is that page, for the element to
   route, and a file below a view (`/sites/<view>/index.txt`, `…/__next.*.txt`) is the page's
@@ -258,7 +258,7 @@ reserved paths (`web.rs`) are derived from it.
   `PANEL_SITES_URL` (all four, or none), nothing is forwarded, nothing ingested, the hubs hear
   nothing of sites, and review_archive is neither followed nor told.
 - **Placement** (`PANEL_PLACEMENT_URL`, optional, needs the four) is gmaps_optimal_placement's
-  `serve --behind-conductor`. The home map imports its `/placement/mfe/overlay.js` once per page
+  `serve --behind-conductor`. The home map imports its `/mfe/placement/overlay.js` once per page
   session and hands it the map: the heat, the pressure field and the competitors are its drawing,
   the model's wasm shipped with the payload it reads. A GET there never spends; a POST (Pull
   latest, `sa:placement:study:spend`) buys the Places searches it lacks. Unset, `/api/placement`

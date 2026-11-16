@@ -12,7 +12,7 @@ import { useResource } from "@/shared/lib/use-resource";
 // gmaps_optimal_placement behind the forward (docs/ARCHITECTURE.md, Forward): its overlay module
 // builds a category's study over an area and draws it on the map it is handed.
 const API = "/api/placement";
-const MODULE = "/placement/mfe/overlay.js";
+const MODULE = "/mfe/placement/overlay.js";
 
 const servedParser = object({ trades: arrayOf(str), countries: arrayOf(str) });
 
