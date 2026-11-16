@@ -4,8 +4,12 @@ use std::fmt;
 
 use crate::Invalid;
 
+/// [`is_slug`] as a JSON Schema `pattern`.
+const SLUG_PATTERN: &str = "^[a-z0-9][a-z0-9_-]{0,63}$";
+
 /// A brand: aquafix, vifnet, … Lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct BrandId(String);
 
 impl BrandId {
@@ -19,6 +23,30 @@ impl BrandId {
 
 	pub fn as_str(&self) -> &str {
 		&self.0
+	}
+}
+
+impl TryFrom<String> for BrandId {
+	type Error = Invalid;
+
+	fn try_from(raw: String) -> Result<Self, Invalid> {
+		Self::parse(&raw)
+	}
+}
+
+impl From<BrandId> for String {
+	fn from(b: BrandId) -> Self {
+		b.0
+	}
+}
+
+impl schemars::JsonSchema for BrandId {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"BrandId".into()
+	}
+
+	fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		schemars::json_schema!({ "type": "string", "pattern": SLUG_PATTERN, "description": "A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric." })
 	}
 }
 
@@ -76,6 +104,12 @@ mod tests {
 		for bad in ["", "Aquafix", "-x", "a b", &"a".repeat(65)] {
 			assert!(BrandId::parse(bad).is_err(), "{bad:?}");
 		}
+	}
+
+	#[test]
+	fn a_brand_is_its_slug_on_the_wire() {
+		assert_eq!(serde_json::to_string(&BrandId::parse("aquafix").unwrap()).unwrap(), r#""aquafix""#);
+		assert!(serde_json::from_str::<BrandId>(r#""Aquafix""#).is_err());
 	}
 
 	#[test]
