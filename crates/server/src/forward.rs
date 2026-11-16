@@ -401,7 +401,6 @@ pub(crate) fn prefix(service: Service, upstream: &str) -> Option<&'static str> {
 		.map(|r| r.prefix)
 }
 
-
 async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 	let route = ROUTES.iter().find(|r| under(req.uri().path(), r.prefix)).expect("mounted under one of ROUTES");
 	let mut puller = None;

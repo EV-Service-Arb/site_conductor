@@ -45,11 +45,11 @@ use axum::{
 	http::{HeaderMap, StatusCode, header},
 	response::{IntoResponse, Response},
 };
+use sa_core::feeds::Line;
 use sa_panel::{
 	live::{Change, Ended, Signal},
 	session::SessionKey,
 };
-use sa_core::feeds::Line;
 use serde::Serialize;
 use tokio::sync::broadcast::{self, error::RecvError};
 use tracing::Instrument;
@@ -275,7 +275,6 @@ impl<'a> Out<'a> {
 		Message::Text(serde_json::to_string(self).unwrap_or_default().into())
 	}
 }
-
 
 /// Whether the handshake comes from the panel's own pages. Browsers send `Origin` on every
 /// WebSocket handshake and scripts cannot forge it; its absence is something other than our

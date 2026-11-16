@@ -421,7 +421,13 @@ impl Setup {
 
 	/// The presses sites was sent.
 	fn presses(&self) -> Vec<sa_server::testing::Seen> {
-		self.seen.lock().unwrap().iter().filter(|s| s.method == axum::http::Method::POST && s.path_and_query.starts_with("/api/v1/")).cloned().collect()
+		self.seen
+			.lock()
+			.unwrap()
+			.iter()
+			.filter(|s| s.method == axum::http::Method::POST && s.path_and_query.starts_with("/api/v1/"))
+			.cloned()
+			.collect()
 	}
 
 	/// A user known to the conductor, with one gmail and a GMB under it: `(gmail, gmb)`.
@@ -761,9 +767,11 @@ async fn the_cursor_moves_only_once_the_notes_are_in_the_outbox() {
 	let button = |call: Value| json!([{"id": "go", "label": "Go", "pressed": "Go", "call": call, "leaves": []}]);
 	s.sites.with(|sites| sites.notes[3]["buttons"] = button(json!({"operation": "admin", "path": {}, "body": null})));
 	assert!(s.fan_out(&s.n, t0()).await.is_err(), "an operation sites does not have");
-	s.sites.with(|sites| sites.notes[3]["buttons"] = button(json!({"operation": "no_answer", "path": {"brand": "a"}, "body": null})));
+	s.sites
+		.with(|sites| sites.notes[3]["buttons"] = button(json!({"operation": "no_answer", "path": {"brand": "a"}, "body": null})));
 	assert!(s.fan_out(&s.n, t0()).await.is_err(), "a path parameter missing");
-	s.sites.with(|sites| sites.notes[3]["buttons"] = button(json!({"operation": "list_leads", "path": {}, "body": null})));
+	s.sites
+		.with(|sites| sites.notes[3]["buttons"] = button(json!({"operation": "list_leads", "path": {}, "body": null})));
 	assert!(s.fan_out(&s.n, t0()).await.is_err(), "a read is nothing a press does");
 	assert_eq!(s.panel.alerts_feed_after(Service::Sites).await.unwrap(), 3);
 }

@@ -371,11 +371,7 @@ async fn signing_out_closes_a_socket_the_feed_was_telling() {
 	let mut ws = open(addr, &b).await;
 	let _following = follow(&base, panel.bus());
 	assert_eq!(ws.text().await, json!({"type": "resync"}));
-	lines
-		.send(Some(
-			json!({"type": "changed", "topic": "sites.leads"}).to_string(),
-		))
-		.unwrap();
+	lines.send(Some(json!({"type": "changed", "topic": "sites.leads"}).to_string())).unwrap();
 	assert_eq!(ws.text().await["topic"], "sites.leads");
 	assert_eq!(b.send(&app, Method::POST, "/auth/logout").await.0, StatusCode::NO_CONTENT);
 	assert_eq!(ws.next().await, Frame::Close(CLOSE_SESSION_ENDED));

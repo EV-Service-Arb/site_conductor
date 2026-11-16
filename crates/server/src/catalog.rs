@@ -19,8 +19,8 @@ use ev_lib::api::{
 	openapi::{Info, Paths, ReferenceOr, Server},
 };
 use eyre::WrapErr;
-use sa_auth::{PermissionSet, Principal, Service};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
+use sa_auth::{PermissionSet, Principal, Service};
 use serde_json::{Map, Value};
 use tokio::sync::watch;
 

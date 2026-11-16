@@ -6,8 +6,7 @@ use std::collections::BTreeMap;
 
 use jiff::{SignedDuration, Timestamp};
 use sa_alerts::{Call, NotePage, Rule};
-use sa_auth::Service;
-use sa_auth::{PermissionSet, SA_OPERATOR, SourceKind};
+use sa_auth::{PermissionSet, SA_OPERATOR, Service, SourceKind};
 use sa_core::{
 	ids::{BrandId, SiteOrigin},
 	notify::{Failure, Locale, Rendered},
@@ -300,26 +299,47 @@ async fn the_sites_tables_go_and_sent_buttons_name_their_calls() {
 	assert_eq!(
 		sent.as_array().unwrap().iter().map(call).collect::<Vec<_>>(),
 		[
-			(json!("take"), json!({"method": "POST", "path": "/api/v1/leads/aquafix/L-1/stage", "body": {"stage": "contacted"}}), json!([])),
-			(json!("no_answer"), json!({"method": "POST", "path": "/api/v1/leads/aquafix/L-1/no_answer", "body": null}), json!(["take"])),
+			(
+				json!("take"),
+				json!({"method": "POST", "path": "/api/v1/leads/aquafix/L-1/stage", "body": {"stage": "contacted"}}),
+				json!([])
+			),
+			(
+				json!("no_answer"),
+				json!({"method": "POST", "path": "/api/v1/leads/aquafix/L-1/no_answer", "body": null}),
+				json!(["take"])
+			),
 		]
 	);
 	assert_eq!(rows[1].1.as_deref(), Some("cut-over"), "what was queued is given up: its text is of the earlier shape");
 
 	// Later migrations empty the outbox; a button's shape is moved by this one alone.
-	let buttons = || async { sqlx::query_scalar::<_, String>("SELECT buttons FROM telegram_outbox ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap() };
+	let buttons = || async {
+		sqlx::query_scalar::<_, String>("SELECT buttons FROM telegram_outbox ORDER BY id LIMIT 1")
+			.fetch_one(&pool)
+			.await
+			.unwrap()
+	};
 	let before = buttons().await;
-	sqlx::raw_sql(include_str!("../migrations/20261117090000_buttons_by_operation.up.sql")).execute(&pool).await.unwrap();
+	sqlx::raw_sql(include_str!("../migrations/20261117090000_buttons_by_operation.up.sql"))
+		.execute(&pool)
+		.await
+		.unwrap();
 	let sent: Vec<sa_alerts::Button> = serde_json::from_str(&buttons().await).unwrap();
 	assert_eq!(
-		sent.iter().map(|b| (b.id.as_str(), b.call.operation.as_str(), json!(b.call.path), &b.call.body)).collect::<Vec<_>>(),
+		sent.iter()
+			.map(|b| (b.id.as_str(), b.call.operation.as_str(), json!(b.call.path), &b.call.body))
+			.collect::<Vec<_>>(),
 		[
 			("take", "move_lead", json!({"brand": "aquafix", "lead": "L-1"}), &json!({"stage": "contacted"})),
 			("no_answer", "no_answer", json!({"brand": "aquafix", "lead": "L-1"}), &json!(null)),
 		],
 		"a button names its operation and that path's parameters"
 	);
-	sqlx::raw_sql(include_str!("../migrations/20261117090000_buttons_by_operation.down.sql")).execute(&pool).await.unwrap();
+	sqlx::raw_sql(include_str!("../migrations/20261117090000_buttons_by_operation.down.sql"))
+		.execute(&pool)
+		.await
+		.unwrap();
 	assert_eq!(buttons().await, before);
 
 	migrator.undo(&pool, MOVED_OUT - 1).await.unwrap();

@@ -5,8 +5,7 @@
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_alerts::Rule;
-use sa_auth::Service;
-use sa_auth::PermissionSet;
+use sa_auth::{PermissionSet, Service};
 use sqlx::{SqliteConnection, types::Json};
 use uuid::Uuid;
 

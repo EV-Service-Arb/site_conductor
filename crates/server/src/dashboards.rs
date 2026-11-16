@@ -11,7 +11,6 @@ pub(crate) fn own(doc: &OpenApi) -> [(&'static str, Value); 2] {
 	[("sa-tokens", tokens(doc)), ("sa-meters", meters(doc))]
 }
 
-
 fn tokens(doc: &OpenApi) -> Value {
 	Board::new(doc, CONDUCTOR)
 		.panel(
@@ -325,7 +324,14 @@ fn tokens(doc: &OpenApi) -> Value {
 				root_selector: r##"[flows[kind in ["purchase", "granted", "grant_claimed", "set"]].{
   "at": at, "who": name ? name : email, "kind": kind, "tokens": tokens, "by": by, "note": note
 }]^(>at)"##,
-				columns: &[("at", Column::Timestamp), ("who", Column::String), ("kind", Column::String), ("tokens", Column::Number), ("by", Column::String), ("note", Column::String)],
+				columns: &[
+					("at", Column::Timestamp),
+					("who", Column::String),
+					("kind", Column::String),
+					("tokens", Column::Number),
+					("by", Column::String),
+					("note", Column::String),
+				],
 			},
 			json!({
 				"options": {
@@ -582,7 +588,15 @@ fn tokens(doc: &OpenApi) -> Value {
     }
   )]^(>$."$", >ours)
 )"##,
-				columns: &[("what", Column::String), ("unit", Column::String), ("ours", Column::Number), ("their keys", Column::Number), ("times", Column::Number), ("$", Column::Number), ("by", Column::String)],
+				columns: &[
+					("what", Column::String),
+					("unit", Column::String),
+					("ours", Column::Number),
+					("their keys", Column::Number),
+					("times", Column::Number),
+					("$", Column::Number),
+					("by", Column::String),
+				],
 			},
 			json!({
 				"transformations": [
