@@ -23,14 +23,23 @@ use crate::{Assertion, HEADER, Keys, Principal, Service, Source, User};
 #[derive(Clone, Copy, Debug)]
 pub struct Gate<F = ()> {
 	needs: Option<&'static str>,
+	user: bool,
 	conductor: bool,
 	/// What else the service decides per route (a timeout, a budget).
 	pub flags: F,
 }
 
 impl Gate {
+	/// The conductor's own assertion, and nobody else's.
+	pub const CONDUCTOR: Self = Self {
+		needs: None,
+		user: false,
+		conductor: true,
+		flags: (),
+	};
 	pub const USER: Self = Self {
 		needs: None,
+		user: true,
 		conductor: false,
 		flags: (),
 	};
@@ -38,6 +47,7 @@ impl Gate {
 	pub const fn with<F>(self, flags: F) -> Gate<F> {
 		Gate {
 			needs: self.needs,
+			user: self.user,
 			conductor: self.conductor,
 			flags,
 		}
@@ -47,6 +57,7 @@ impl Gate {
 impl<F> Gate<F> {
 	pub fn needs(self, permission: impl Permission) -> Self {
 		let permission = permission.as_str();
+		assert!(self.user, "{permission}: the conductor holds no permissions");
 		assert!(self.needs.is_none(), "a gate names one permission: {permission} after {:?}", self.needs);
 		Self { needs: Some(permission), ..self }
 	}
@@ -114,6 +125,7 @@ impl<S: Vouch<F> + Send + Sync, F: Clone + Send + Sync + 'static> Guard<S> for G
 	async fn admit(&self, parts: &mut Parts, state: &S) -> Result<(), Refusal<S::Refusal>> {
 		let refuse = |code: Denied, error: String| Refusal::new(code.into(), error);
 		match state.vouch(self, parts).await? {
+			Principal::User(user) if !self.user => Err(refuse(Denied::Unauthenticated, format!("{} does not open a route of the conductor's", user.email))),
 			Principal::User(user) => {
 				if let Some(needs) = self.needs
 					&& !user.permissions.iter().any(|held| held == needs)

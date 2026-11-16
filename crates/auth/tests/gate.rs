@@ -99,6 +99,7 @@ async fn an_assertion_opens_its_one_request_and_the_rows_permission_opens_the_ro
 	let app: Router = Router::new()
 		.nest("/api/v1", mount(table()))
 		.route("/api/conductor/feed", axum::routing::get(feed))
+		.route("/dashboards", ev_lib::api::serve(&["a dashboard"], Gate::CONDUCTOR))
 		.with_state(state);
 	let worker = || user(&[Work::Read.as_str()]);
 	let check = |principal: Principal, aud, method: &'static str, signed: &'static str, exp, asked: &'static str| {
@@ -146,6 +147,9 @@ async fn an_assertion_opens_its_one_request_and_the_rows_permission_opens_the_ro
 	let feed = "/api/conductor/feed";
 	assert_eq!(check(Principal::Conductor, s, "GET", feed, n + TTL, feed).await, StatusCode::OK);
 	assert_eq!(check(worker(), s, "GET", feed, n + TTL, feed).await, StatusCode::UNAUTHORIZED);
+	let dashboards = "/dashboards";
+	assert_eq!(check(Principal::Conductor, s, "GET", dashboards, n + TTL, dashboards).await, StatusCode::OK);
+	assert_eq!(check(worker(), s, "GET", dashboards, n + TTL, dashboards).await, StatusCode::UNAUTHORIZED);
 }
 
 /// The conductor's case: its own session says who is calling, the gate is the same.
