@@ -1,7 +1,7 @@
 //! The conductor's own Grafana dashboards, over its `/api/v1` (`sa_core::dashboards`).
 
 use ev_lib::api::{OpenApi, op_id};
-use sa_core::dashboards::{Board, Column, Query};
+use sa_core::dashboards::{Board, Column, Query, Select};
 use serde_json::{Value, json};
 
 use crate::grafana::CONDUCTOR;
@@ -14,20 +14,25 @@ pub(crate) fn own(doc: &OpenApi) -> [(&'static str, Value); 2] {
 fn tokens(doc: &OpenApi) -> Value {
 	Board::new(doc, CONDUCTOR)
 		.panel(
+			1,
 			"stat",
 			"In the range",
 			[0, 0, 24, 5],
 			Query {
 				operation: op_id(crate::tokens::token_flows),
+				path: &[],
 				params: &[("from", "${__from}"), ("to", "${__to}")],
-				root_selector: r##"(
+				headers: &[],
+				select: Some(Select {
+					root_selector: r##"(
   $rows := flows[kind in ["spend", "purchase", "granted", "renewal", "refund"]];
   [$distinct($rows.kind).(
     $k := $;
     {"kind": $k, "tokens": $abs($sum($rows[kind = $k].tokens))}
   )]
 )"##,
-				columns: &[("kind", Column::String), ("tokens", Column::Number)],
+					columns: &[("kind", Column::String), ("tokens", Column::Number)],
+				}),
 			},
 			json!({
 				"options": {
@@ -59,13 +64,17 @@ fn tokens(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
+			2,
 			"timeseries",
 			"Spent per day, by service",
 			[0, 5, 12, 9],
 			Query {
 				operation: op_id(crate::tokens::token_flows),
+				path: &[],
 				params: &[("from", "${__from}"), ("to", "${__to}")],
-				root_selector: r##"(
+				headers: &[],
+				select: Some(Select {
+					root_selector: r##"(
   $rows := flows[kind in ["spend"]];
   $keys := $distinct($rows.($substring(at, 0, 10) & "|" & service));
   [$keys.(
@@ -73,7 +82,8 @@ fn tokens(doc: &OpenApi) -> Value {
     {"day": $substringBefore($k, "|") & "T00:00:00Z", "series": $substringAfter($k, "|"), "tokens": -$sum($rows[$substring(at, 0, 10) & "|" & service = $k].tokens)}
   )]
 )"##,
-				columns: &[("day", Column::Timestamp), ("series", Column::String), ("tokens", Column::Number)],
+					columns: &[("day", Column::Timestamp), ("series", Column::String), ("tokens", Column::Number)],
+				}),
 			},
 			json!({
 				"transformations": [
@@ -118,13 +128,17 @@ fn tokens(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
+			3,
 			"timeseries",
 			"Given per day: bought, granted, renewed, refunded",
 			[12, 5, 12, 9],
 			Query {
 				operation: op_id(crate::tokens::token_flows),
+				path: &[],
 				params: &[("from", "${__from}"), ("to", "${__to}")],
-				root_selector: r##"(
+				headers: &[],
+				select: Some(Select {
+					root_selector: r##"(
   $rows := flows[kind in ["purchase", "granted", "renewal", "refund"]];
   $keys := $distinct($rows.($substring(at, 0, 10) & "|" & kind));
   [$keys.(
@@ -132,7 +146,8 @@ fn tokens(doc: &OpenApi) -> Value {
     {"day": $substringBefore($k, "|") & "T00:00:00Z", "series": $substringAfter($k, "|"), "tokens": $sum($rows[$substring(at, 0, 10) & "|" & kind = $k].tokens)}
   )]
 )"##,
-				columns: &[("day", Column::Timestamp), ("series", Column::String), ("tokens", Column::Number)],
+					columns: &[("day", Column::Timestamp), ("series", Column::String), ("tokens", Column::Number)],
+				}),
 			},
 			json!({
 				"transformations": [
@@ -177,13 +192,17 @@ fn tokens(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
+			4,
 			"bargauge",
 			"Spent by person",
 			[0, 14, 12, 10],
 			Query {
 				operation: op_id(crate::tokens::token_flows),
+				path: &[],
 				params: &[("from", "${__from}"), ("to", "${__to}")],
-				root_selector: r##"(
+				headers: &[],
+				select: Some(Select {
+					root_selector: r##"(
   $rows := flows[kind = "spend"];
   [$distinct($rows.email).(
     $e := $;
@@ -191,7 +210,8 @@ fn tokens(doc: &OpenApi) -> Value {
     {"who": $r[0].name ? $r[0].name : $e, "spent": -$sum($r.tokens)}
   )]^(>spent)
 )"##,
-				columns: &[("who", Column::String), ("spent", Column::Number)],
+					columns: &[("who", Column::String), ("spent", Column::Number)],
+				}),
 			},
 			json!({
 				"options": {
@@ -230,13 +250,17 @@ fn tokens(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
+			5,
 			"table",
 			"Spent on",
 			[12, 14, 12, 10],
 			Query {
 				operation: op_id(crate::tokens::token_flows),
+				path: &[],
 				params: &[("from", "${__from}"), ("to", "${__to}")],
-				root_selector: r##"(
+				headers: &[],
+				select: Some(Select {
+					root_selector: r##"(
   $rows := flows[kind = "spend"];
   [$distinct($rows.(service & "|" & label)).(
     $k := $;
@@ -244,7 +268,8 @@ fn tokens(doc: &OpenApi) -> Value {
     {"service": $r[0].service, "what": $r[0].label, "times": $count($r), "tokens": -$sum($r.tokens)}
   )]^(>tokens)
 )"##,
-				columns: &[("service", Column::String), ("what", Column::String), ("times", Column::Number), ("tokens", Column::Number)],
+					columns: &[("service", Column::String), ("what", Column::String), ("times", Column::Number), ("tokens", Column::Number)],
+				}),
 			},
 			json!({
 				"options": {
@@ -315,23 +340,28 @@ fn tokens(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
+			6,
 			"table",
 			"Purchases, grants and balances set",
 			[0, 24, 24, 9],
 			Query {
 				operation: op_id(crate::tokens::token_flows),
+				path: &[],
 				params: &[("from", "${__from}"), ("to", "${__to}")],
-				root_selector: r##"[flows[kind in ["purchase", "granted", "grant_claimed", "set"]].{
+				headers: &[],
+				select: Some(Select {
+					root_selector: r##"[flows[kind in ["purchase", "granted", "grant_claimed", "set"]].{
   "at": at, "who": name ? name : email, "kind": kind, "tokens": tokens, "by": by, "note": note
 }]^(>at)"##,
-				columns: &[
-					("at", Column::Timestamp),
-					("who", Column::String),
-					("kind", Column::String),
-					("tokens", Column::Number),
-					("by", Column::String),
-					("note", Column::String),
-				],
+					columns: &[
+						("at", Column::Timestamp),
+						("who", Column::String),
+						("kind", Column::String),
+						("tokens", Column::Number),
+						("by", Column::String),
+						("note", Column::String),
+					],
+				}),
 			},
 			json!({
 				"options": {
@@ -403,22 +433,27 @@ fn tokens(doc: &OpenApi) -> Value {
 				]
 			}),
 		)
-		.row("What it costs us", [0, 33, 24, 1])
+		.row(7, "What it costs us", [0, 33, 24, 1])
 		.panel(
+			8,
 			"stat",
 			"Our bill in the range",
 			[0, 34, 24, 4],
 			Query {
 				operation: op_id(crate::usage::spend),
+				path: &[],
 				params: &[("from", "${__from}"), ("to", "${__to}")],
-				root_selector: r##"(
+				headers: &[],
+				select: Some(Select {
+					root_selector: r##"(
   $rows := days[bill = "ours" and $type(usd) = "number"];
   [$distinct($rows.(day & "|" & tool_title)).(
     $k := $;
     {"day": $substringBefore($k, "|") & "T00:00:00Z", "series": $substringAfter($k, "|"), "value": $sum($rows[day & "|" & tool_title = $k].usd)}
   )]
 )"##,
-				columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
+					columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
+				}),
 			},
 			json!({
 				"options": {
@@ -450,20 +485,25 @@ fn tokens(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
+			9,
 			"timeseries",
 			"$ per day, by tool (our keys and accounts)",
 			[0, 38, 12, 9],
 			Query {
 				operation: op_id(crate::usage::spend),
+				path: &[],
 				params: &[("from", "${__from}"), ("to", "${__to}")],
-				root_selector: r##"(
+				headers: &[],
+				select: Some(Select {
+					root_selector: r##"(
   $rows := days[bill = "ours" and $type(usd) = "number"];
   [$distinct($rows.(day & "|" & tool_title)).(
     $k := $;
     {"day": $substringBefore($k, "|") & "T00:00:00Z", "series": $substringAfter($k, "|"), "value": $sum($rows[day & "|" & tool_title = $k].usd)}
   )]
 )"##,
-				columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
+					columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
+				}),
 			},
 			json!({
 				"transformations": [
@@ -508,20 +548,25 @@ fn tokens(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
+			10,
 			"timeseries",
 			"Actions per day, by tool (in its unit)",
 			[12, 38, 12, 9],
 			Query {
 				operation: op_id(crate::usage::spend),
+				path: &[],
 				params: &[("from", "${__from}"), ("to", "${__to}")],
-				root_selector: r##"(
+				headers: &[],
+				select: Some(Select {
+					root_selector: r##"(
   $rows := days[true];
   [$distinct($rows.(day & "|" & (tool_title & " · " & unit & "s"))).(
     $k := $;
     {"day": $substringBefore($k, "|") & "T00:00:00Z", "series": $substringAfter($k, "|"), "value": $sum($rows[day & "|" & (tool_title & " · " & unit & "s") = $k].units)}
   )]
 )"##,
-				columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
+					columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
+				}),
 			},
 			json!({
 				"transformations": [
@@ -566,13 +611,17 @@ fn tokens(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
+			11,
 			"table",
 			"Every costly action in the range",
 			[0, 47, 24, 10],
 			Query {
 				operation: op_id(crate::usage::spend),
+				path: &[],
 				params: &[("from", "${__from}"), ("to", "${__to}")],
-				root_selector: r##"(
+				headers: &[],
+				select: Some(Select {
+					root_selector: r##"(
   $d := days;
   $count($d) = 0 ? [] : [$append([], $distinct($d.item)).(
     $i := $;
@@ -588,15 +637,16 @@ fn tokens(doc: &OpenApi) -> Value {
     }
   )]^(>$."$", >ours)
 )"##,
-				columns: &[
-					("what", Column::String),
-					("unit", Column::String),
-					("ours", Column::Number),
-					("their keys", Column::Number),
-					("times", Column::Number),
-					("$", Column::Number),
-					("by", Column::String),
-				],
+					columns: &[
+						("what", Column::String),
+						("unit", Column::String),
+						("ours", Column::Number),
+						("their keys", Column::Number),
+						("times", Column::Number),
+						("$", Column::Number),
+						("by", Column::String),
+					],
+				}),
 			},
 			json!({
 				"transformations": [
@@ -731,14 +781,19 @@ fn tokens(doc: &OpenApi) -> Value {
 fn meters(doc: &OpenApi) -> Value {
 	Board::new(doc, CONDUCTOR)
 		.panel(
+			1,
 			"table",
 			"This period, every meter on each account",
 			[0, 0, 24, 10],
 			Query {
 				operation: op_id(crate::meters::meters),
+				path: &[],
 				params: &[],
-				root_selector: r##"$map(meters, function($m) { $map($m.accounts, function($a) { {"meter": $m.name, "account": $a.account, "used": $a.used, "free": $m.free, "left": $a.left, "stops": $m.stop = "at_free" ? "at free" : "never", "google's count": $a.baseline, "as of": $a.since, "ours since": $a.delta, "synced": $a.reading = null ? "never" : $a.reading.synced_at, "vendor's cost": $a.reading = null ? null : $a.reading.cost, "net": $a.reading = null ? null : $a.reading.net, "currency": $a.reading = null ? null : $a.reading.currency} }) })"##,
-				columns: &[("meter", Column::String), ("account", Column::String), ("used", Column::Number), ("free", Column::Number), ("left", Column::Number), ("stops", Column::String), ("google's count", Column::Number), ("as of", Column::Timestamp), ("ours since", Column::Number), ("synced", Column::String), ("vendor's cost", Column::Number), ("net", Column::Number), ("currency", Column::String)],
+				headers: &[],
+				select: Some(Select {
+					root_selector: r##"$map(meters, function($m) { $map($m.accounts, function($a) { {"meter": $m.name, "account": $a.account, "used": $a.used, "free": $m.free, "left": $a.left, "stops": $m.stop = "at_free" ? "at free" : "never", "google's count": $a.baseline, "as of": $a.since, "ours since": $a.delta, "synced": $a.reading = null ? "never" : $a.reading.synced_at, "vendor's cost": $a.reading = null ? null : $a.reading.cost, "net": $a.reading = null ? null : $a.reading.net, "currency": $a.reading = null ? null : $a.reading.currency} }) })"##,
+					columns: &[("meter", Column::String), ("account", Column::String), ("used", Column::Number), ("free", Column::Number), ("left", Column::Number), ("stops", Column::String), ("google's count", Column::Number), ("as of", Column::Timestamp), ("ours since", Column::Number), ("synced", Column::String), ("vendor's cost", Column::Number), ("net", Column::Number), ("currency", Column::String)],
+				}),
 			},
 			json!({
 				"options": {
@@ -812,14 +867,19 @@ fn meters(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
+			2,
 			"bargauge",
 			"Used of the free ones, every account",
 			[0, 10, 12, 9],
 			Query {
 				operation: op_id(crate::meters::meters),
+				path: &[],
 				params: &[],
-				root_selector: r##"$map(meters, function($m) { {"meter": $m.name, "used": $m.total.used / $m.total.free * 100} })"##,
-				columns: &[("meter", Column::String), ("used", Column::Number)],
+				headers: &[],
+				select: Some(Select {
+					root_selector: r##"$map(meters, function($m) { {"meter": $m.name, "used": $m.total.used / $m.total.free * 100} })"##,
+					columns: &[("meter", Column::String), ("used", Column::Number)],
+				}),
 			},
 			json!({
 				"options": {
@@ -865,14 +925,19 @@ fn meters(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
+			3,
 			"timeseries",
 			"Google's count on each account, at each reading",
 			[12, 10, 12, 9],
 			Query {
 				operation: op_id(crate::meters::meter_readings),
+				path: &[],
 				params: &[("from", "${__from}"), ("to", "${__to}")],
-				root_selector: r##"$map(readings, function($r) { {"at": $r.synced_at, "series": $r.account & " · " & $r.meter, "units": $r.units} })"##,
-				columns: &[("at", Column::Timestamp), ("series", Column::String), ("units", Column::Number)],
+				headers: &[],
+				select: Some(Select {
+					root_selector: r##"$map(readings, function($r) { {"at": $r.synced_at, "series": $r.account & " · " & $r.meter, "units": $r.units} })"##,
+					columns: &[("at", Column::Timestamp), ("series", Column::String), ("units", Column::Number)],
+				}),
 			},
 			json!({
 				"transformations": [
