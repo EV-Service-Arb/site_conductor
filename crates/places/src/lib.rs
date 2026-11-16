@@ -28,7 +28,7 @@ const DETAILS_MASK: &str = "id,displayName,formattedAddress,location,addressComp
 
 const AUTOCOMPLETE_MASK: &str = "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat";
 
-const LOCALITY_MASK: &str = "id,displayName,location,viewport";
+const LOCALITY_MASK: &str = "id,displayName,location,viewport,addressComponents";
 
 const REVIEW_LINK_MASK: &str = "googleMapsLinks.writeAReviewUri";
 
@@ -109,6 +109,8 @@ pub struct Locality {
 	pub name: String,
 	pub location: LatLng,
 	pub viewport: Viewport,
+	/// ISO 3166-1 alpha-2.
+	pub country: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -183,9 +185,10 @@ impl Google {
 		})
 	}
 
-	/// Places at `base` (`…/v1/places`) in place of Google's own: a stub's.
+	/// Places at `base` (`…/v1/places`), its geocoding at `base/geocode`, in place of Google's own: a stub's.
 	pub fn at(self, base: impl Into<String>) -> Self {
-		Self { base: base.into(), ..self }
+		let base = base.into();
+		Self { geocode: format!("{base}/geocode"), base, ..self }
 	}
 
 	/// The place id in `input`, and the place unless there is no key: one place only, an
@@ -244,6 +247,8 @@ impl Google {
 			display_name: Text,
 			location: Location,
 			viewport: Bounds,
+			#[serde(default)]
+			address_components: Vec<Component>,
 		}
 		let url = format!("{}/{place_id}", self.base);
 		let req = Request {
@@ -255,11 +260,22 @@ impl Google {
 			r => r?,
 		};
 		let r: Resp = serde_json::from_value(json)?;
+		let country = r
+			.address_components
+			.into_iter()
+			.find(|c| c.types.iter().any(|t| t == "country"))
+			.map(|c| c.short_text)
+			.ok_or_else(|| Error::Api {
+				asked: format!("GET {url}"),
+				status: 200,
+				body: "a locality without a country component".to_owned(),
+			})?;
 		Ok(Locality {
 			place_id: r.id,
 			name: r.display_name.text,
 			location: r.location.into(),
 			viewport: r.viewport.into(),
+			country,
 		})
 	}
 
@@ -284,6 +300,7 @@ impl Google {
 		#[serde(rename_all = "camelCase")]
 		struct Named {
 			long_text: String,
+			short_text: String,
 			types: Vec<String>,
 		}
 		let point = format!("{:.4},{:.4}", at.lat, at.lng);
@@ -300,22 +317,60 @@ impl Google {
 		let Some(g) = serde_json::from_value::<Resp>(json)?.results.into_iter().next() else {
 			return Ok(None);
 		};
-		let name = g
-			.address_components
-			.into_iter()
-			.find(|c| c.types.iter().any(|t| t == "locality"))
-			.map(|c| c.long_text)
-			.ok_or_else(|| Error::Api {
+		let component = |kind: &str| {
+			g.address_components.iter().find(|c| c.types.iter().any(|t| t == kind)).ok_or_else(|| Error::Api {
 				asked: format!("GET {url}"),
 				status: 200,
-				body: "a locality without a locality component".to_owned(),
-			})?;
+				body: format!("a locality without a {kind} component"),
+			})
+		};
 		Ok(Some(Locality {
+			name: component("locality")?.long_text.clone(),
+			country: component("country")?.short_text.clone(),
 			place_id: g.place_id,
-			name,
 			location: g.location.into(),
 			viewport: g.viewport.into(),
 		}))
+	}
+
+	/// The ISO 3166-1 alpha-2 code of the country the point lies in; `None` outside any (at sea).
+	pub async fn country_at(&self, at: LatLng, payer: &Payer<'_>) -> Result<Option<String>, Error> {
+		#[derive(Deserialize)]
+		struct Resp {
+			#[serde(default)]
+			results: Vec<Geocoded>,
+		}
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct Geocoded {
+			#[serde(default)]
+			address_components: Vec<Component>,
+		}
+		let point = format!("{:.4},{:.4}", at.lat, at.lng);
+		let url = format!("{}/{point}?types=country", self.geocode);
+		let req = Request {
+			method: "GET",
+			url: &url,
+			mask: GEOCODE_MASK,
+			body: "",
+			sku: PlacesRequest::Geocode,
+			subject: &point,
+		};
+		let (json, _) = self.ask(&req, None, Ask::Cached, payer).await?;
+		let Some(g) = serde_json::from_value::<Resp>(json)?.results.into_iter().next() else {
+			return Ok(None);
+		};
+		let country = g
+			.address_components
+			.into_iter()
+			.find(|c| c.types.iter().any(|t| t == "country"))
+			.map(|c| c.short_text)
+			.ok_or_else(|| Error::Api {
+				asked: format!("GET {url}"),
+				status: 200,
+				body: "a country without a country component".to_owned(),
+			})?;
+		Ok(Some(country))
 	}
 
 	/// The link that opens Google's review form for `place_id` (`googleMapsLinks.writeAReviewUri`).

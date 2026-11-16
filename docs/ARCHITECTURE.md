@@ -57,7 +57,8 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          (review_archive's, once), `assistant` (the assistant's chats), `trash`
                          (what was removed, restored until purged), `oauth` (MCP clients, the
                          sessions granted them), `kit` (the review kit: a category's drafts and
-                         photos, the offer, the areas)
+                         photos, the offer, the caller's GBPs by an area), `areas` (geography,
+                         everyone's: the kit's links and studies' frames)
 crates/alerts/           no I/O: the alert rules, and the notes a service publishes to the
                          conductor and their check; sites and review_archive take it too
 crates/auth/             the `sa` permissions (concierge_iam derives), the aliases `sa:operator` /
@@ -109,6 +110,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/ask.rs             the in-page assistant's loop (`POST /assistant/chats/{id}/ask`): Claude with
                          `search`/`call`, `open` (a view) and `run` (a binding); what destroys or
                          spends is proposed, the user confirms it
+  src/areas.rs           /api/v1/areas, and the cities and localities they are drawn from
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
                          work in `serve`
   src/telegram.rs        the Bot API, its long poll
@@ -474,10 +476,10 @@ DELETE /trades/{id}/{country}/kit/photos/{file}
 GET    /gmbs/{id}/kit
 PUT    /gmbs/{id}/kit
 POST   /gmbs/{id}/kit/shown
-GET    /kit/areas
-GET    /kit/areas/{slug}
-PUT    /kit/areas/{slug}
 GET    /kit/areas/{slug}/gmbs
+GET    /areas
+GET    /areas/{slug}
+PUT    /areas/{slug}
 GET    /kit/cities
 GET    /kit/cities/{place_id}
 GET    /kit/locality
@@ -779,7 +781,7 @@ photos saved  → a use (photo, g), once
   download works.
 - **Photos** are re-encoded on the way in (JPEG, ≤ 2048 px, upright, no EXIF): what a reviewer
   saves carries nothing of where it was taken.
-- **Areas** are geography, everyone's: a city (Google's locality: inside its viewport is in) or a
+- **Areas** are geography, everyone's, and carry their country (ISO 3166-1 alpha-2, Places'): a city (Google's locality: inside its viewport is in) or a
   circle, and a margin around it that is "next to it". `/<slug>/` is the kit's page when the slug is
   an area's; a slug never takes a path of the conductor's own (the front end's directories, the
   reserved and forwarded prefixes).

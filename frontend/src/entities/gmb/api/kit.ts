@@ -1,5 +1,5 @@
-import { ApiError, api, http, ok } from "@/shared/api";
-import type { Country, LatLng, Locality, paths } from "@/shared/api/schema";
+import { http } from "@/shared/api";
+import type { Country, paths } from "@/shared/api/schema";
 
 /** A photo's largest size, as the server takes it. */
 export const PHOTO_MAX = 10 << 20;
@@ -13,13 +13,3 @@ export function uploadPhoto(trade: number, country: Country, photo: Blob, onProg
 }
 
 export const photoSrc = (trade: number, country: Country, photo: number) => `${photos(trade, country)}/${photo}.jpg`;
-
-/** `null`: the point is in no locality. */
-export async function localityAt(at: LatLng): Promise<Locality | null> {
-  try {
-    return await ok(api.GET("/kit/locality", { params: { query: { lat: at.lat, lng: at.lng } } }));
-  } catch (e) {
-    if (e instanceof ApiError && e.failure.kind === "not_found") return null;
-    throw e;
-  }
-}

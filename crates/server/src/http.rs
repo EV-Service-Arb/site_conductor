@@ -30,7 +30,7 @@ use tower_http::timeout::TimeoutLayer;
 use crate::{
 	access,
 	alerts::{self, Telegram},
-	api,
+	api, areas,
 	ask::Model,
 	assistant, browser,
 	catalog::Catalog,
@@ -259,6 +259,7 @@ pub(crate) fn api_routes() -> Vec<ApiRoute> {
 		usage::routes(),
 		assistant::routes(),
 		kit::routes(),
+		areas::routes(),
 	]
 	.into_iter()
 	.flatten()

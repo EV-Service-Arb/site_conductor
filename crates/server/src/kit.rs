@@ -33,10 +33,10 @@ use sa_auth::SourceKind;
 use sa_core::gbp::{Country, State as GbpState};
 use sa_panel::{
 	Grant, Panel, SignedBatch,
-	kit::{Area, Event, Kit, Nearby, NewArea, Offer, PHOTO_MAX, Pool, Ranked, Shape, Target},
+	kit::{Event, Kit, Nearby, Offer, PHOTO_MAX, Pool, Ranked, Target},
 	store::kit::Removable,
 };
-use sa_places::{LatLng, Locality, Viewport};
+use sa_places::LatLng;
 use serde::{Deserialize, Serialize};
 use tower::{BoxError, ServiceBuilder};
 use tower_http::timeout::{RequestBodyTimeoutLayer, TimeoutLayer};
@@ -45,7 +45,8 @@ use uuid::Uuid;
 use crate::{
 	api::{ApiError, ApiResult, Body, Id, Ids, Params},
 	forward::Services,
-	gmbs::{SuggestionDto, SuggestionsDto, TradeIn},
+	areas::{AreaDto, SlugIn},
+	gmbs::TradeIn,
 	http::{ApiRoute, ApiState, Gate, Limits},
 	ingest,
 	signin::Caller,
@@ -167,61 +168,6 @@ pub(crate) struct SetKitDto {
 	pub target: Option<Target>,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, JsonSchema)]
-#[schemars(rename = "Viewport")]
-pub(crate) struct ViewportDto {
-	pub south: f64,
-	pub west: f64,
-	pub north: f64,
-	pub east: f64,
-}
-
-#[derive(Clone, Debug, Serialize, JsonSchema)]
-#[schemars(rename = "KitShape")]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub(crate) enum ShapeDto {
-	City {
-		place_id: String,
-		viewport: ViewportDto,
-	},
-	Circle {
-		radius_m: i64,
-	},
-}
-
-#[derive(Clone, Debug, Serialize, JsonSchema)]
-#[schemars(rename = "KitArea")]
-pub(crate) struct AreaDto {
-	pub slug: String,
-	pub name: String,
-	pub center: LatLng,
-	pub shape: ShapeDto,
-	pub margin_m: i64,
-}
-
-#[derive(Clone, Debug, Serialize, JsonSchema)]
-#[schemars(rename = "KitAreas")]
-pub(crate) struct AreasDto {
-	pub areas: Vec<AreaDto>,
-}
-
-#[derive(Deserialize, JsonSchema)]
-#[schemars(rename = "PutKitArea")]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub(crate) enum PutAreaDto {
-	City {
-		place_id: String,
-		margin_m: i64,
-	},
-	Circle {
-		name: String,
-		lat: f64,
-		lng: f64,
-		radius_m: i64,
-		margin_m: i64,
-	},
-}
-
 /// One of the caller's GBPs by an area.
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 #[schemars(rename = "KitNearby")]
@@ -243,15 +189,6 @@ pub(crate) struct NearbyDto {
 pub(crate) struct AreaGmbsDto {
 	pub area: AreaDto,
 	pub gmbs: Vec<NearbyDto>,
-}
-
-#[derive(Clone, Debug, Serialize, JsonSchema)]
-#[schemars(rename = "Locality")]
-pub(crate) struct LocalityDto {
-	pub place_id: String,
-	pub name: String,
-	pub location: LatLng,
-	pub viewport: ViewportDto,
 }
 
 /// What a reviewer's page shows (`/api/kit/v1/offer`).
@@ -365,46 +302,6 @@ impl From<Pool> for PoolDto {
 	}
 }
 
-impl From<Viewport> for ViewportDto {
-	fn from(v: Viewport) -> Self {
-		Self {
-			south: v.south,
-			west: v.west,
-			north: v.north,
-			east: v.east,
-		}
-	}
-}
-
-impl From<Area> for AreaDto {
-	fn from(a: Area) -> Self {
-		Self {
-			slug: a.slug,
-			name: a.name,
-			center: a.center,
-			shape: match a.shape {
-				Shape::City { place_id, viewport } => ShapeDto::City {
-					place_id,
-					viewport: viewport.into(),
-				},
-				Shape::Circle { radius_m } => ShapeDto::Circle { radius_m },
-			},
-			margin_m: a.margin_m,
-		}
-	}
-}
-
-impl From<Locality> for LocalityDto {
-	fn from(l: Locality) -> Self {
-		Self {
-			place_id: l.place_id,
-			name: l.name,
-			location: l.location,
-			viewport: l.viewport.into(),
-		}
-	}
-}
-
 impl From<Nearby> for NearbyDto {
 	fn from(n: Nearby) -> Self {
 		Self {
@@ -470,13 +367,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/gmbs/{id}/kit", user, gmb_kit),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/kit", user, set_gmb_kit).spends(),
 		ApiRoute::new(M::POST, "/gmbs/{id}/kit/shown", user, kit_shown),
-		ApiRoute::new(M::GET, "/kit/areas", user, kit_areas),
-		ApiRoute::new(M::GET, "/kit/areas/{slug}", user, kit_area),
-		ApiRoute::new(M::PUT, "/kit/areas/{slug}", user, put_kit_area).spends(),
 		ApiRoute::new(M::GET, "/kit/areas/{slug}/gmbs", user, kit_area_gmbs),
-		ApiRoute::new(M::GET, "/kit/cities", user, kit_cities).spends(),
-		ApiRoute::new(M::GET, "/kit/cities/{place_id}", user, kit_city).spends(),
-		ApiRoute::new(M::GET, "/kit/locality", user, kit_locality).spends(),
 	]
 }
 
@@ -500,16 +391,6 @@ struct JpgIn {
 	country: Country,
 	/// `<photo>.jpg`.
 	file: String,
-}
-
-#[derive(Deserialize, JsonSchema)]
-struct SlugIn {
-	slug: String,
-}
-
-#[derive(Deserialize, JsonSchema)]
-struct PlaceIn {
-	place_id: String,
 }
 
 /// `<id>.jpg` → id.
@@ -689,83 +570,15 @@ async fn kit_shown(State(panel): State<Panel>, Extension(caller): Extension<Call
 	Ok(NoContent)
 }
 
-/// Every kit area, everyone's.
-async fn kit_areas(State(panel): State<Panel>) -> ApiResult<Json<AreasDto>> {
-	Ok(Json(AreasDto {
-		areas: panel.kit_areas().await?.into_iter().map(Into::into).collect(),
-	}))
-}
-
-/// The area at `/<slug>/`.
-async fn kit_area(State(panel): State<Panel>, Ids(SlugIn { slug }): Ids<SlugIn>) -> ApiResult<Json<AreaDto>> {
-	Ok(Json(panel.kit_area(&slug).await?.ok_or(ApiError::NotFound)?.into()))
-}
-
-/// Draws the area at `/<slug>/`: a city (its outline asked of Places, paid by the caller) or a
-/// circle, with a margin around it that is "next to it"; over what it was if the caller drew it.
-///
-/// 400 a link the conductor's own pages hold; 409 someone else's area.
-async fn put_kit_area(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>, Body(b): Body<PutAreaDto>) -> ApiResult<Json<AreaDto>> {
-	if crate::web::taken(&slug, s.web.as_ref()) {
-		return Err(ApiError::BadRequest(format!("/{slug}/ is one of the conductor's own pages")));
-	}
-	let new = match b {
-		PutAreaDto::City { place_id, margin_m } => NewArea::City { place_id, margin_m },
-		PutAreaDto::Circle { name, lat, lng, radius_m, margin_m } => NewArea::Circle {
-			name,
-			center: LatLng { lat, lng },
-			radius_m,
-			margin_m,
-		},
-	};
-	let area = s.panel.put_kit_area(caller.user_id, &slug, new, Timestamp::now()).await??;
-	tracing::info!(user_id = %caller.user_id, slug, "kit area drawn");
-	Ok(Json(area.into()))
-}
-
 /// The area and the caller's GBPs with a point in it or within its margin, nearest its centre
 /// first.
 async fn kit_area_gmbs(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>) -> ApiResult<Json<AreaGmbsDto>> {
 	let gmbs = panel.area_gmbs(caller.user_id, &slug).await??;
-	let area = panel.kit_area(&slug).await?.ok_or(ApiError::NotFound)?;
+	let area = panel.area(&slug).await?.ok_or(ApiError::NotFound)?;
 	Ok(Json(AreaGmbsDto {
 		area: area.into(),
 		gmbs: gmbs.into_iter().map(Into::into).collect(),
 	}))
-}
-
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-struct Typed {
-	/// What is typed so far.
-	input: String,
-}
-
-/// Cities and towns what is typed may be heading for, in the countries served (Places
-/// Autocomplete, paid by the caller).
-async fn kit_cities(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(q): Params<Typed>) -> ApiResult<Json<SuggestionsDto>> {
-	let found = panel.cities(caller.user_id, &q.input).await??;
-	Ok(Json(SuggestionsDto {
-		suggestions: found
-			.into_iter()
-			.map(|s| SuggestionDto {
-				place_id: s.place_id,
-				main: s.main,
-				secondary: s.secondary,
-			})
-			.collect(),
-	}))
-}
-
-/// The city or town a suggestion is: its point and the rectangle that frames it (Places, paid by
-/// the caller).
-async fn kit_city(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PlaceIn { place_id }): Ids<PlaceIn>) -> ApiResult<Json<LocalityDto>> {
-	Ok(Json(panel.locality(caller.user_id, &place_id).await??.into()))
-}
-
-/// The city or town a point lies in (Geocoding, paid by the caller). 404 outside any.
-async fn kit_locality(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(at): Params<LatLng>) -> ApiResult<Json<LocalityDto>> {
-	Ok(Json(panel.locality_at(caller.user_id, at).await??.ok_or(ApiError::NotFound)?.into()))
 }
 
 /// What the landings' routes are served on.

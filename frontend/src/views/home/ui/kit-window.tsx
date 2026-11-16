@@ -15,7 +15,7 @@ import {
   windowKeys,
 } from "@/entities/gmb";
 import { ApiError, api, ok } from "@/shared/api";
-import type { KitArea, KitNearby, LatLng, Locality, PutKitArea, Suggestion } from "@/shared/api/schema";
+import type { Area as AreaDto, KitNearby, LatLng, Locality, PutArea, Suggestion } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDistance } from "@/shared/lib/format";
 import { useResource } from "@/shared/lib/use-resource";
@@ -134,13 +134,13 @@ function Draw({ map }: { map: google.maps.Map }) {
   const slug = slugTyped ?? (city !== null ? slugOf(city.name) : name === "" ? "" : `${slugOf(name)}-${radius / 1000}km`);
   const outline: Outline | null = city !== null ? { kind: "city", viewport: city.viewport, margin_m: margin } : circleAt !== null ? { kind: "circle", center: circleAt, radius_m: radius, margin_m: margin } : null;
   useOutline(map, outline);
-  const body: PutKitArea | null = city !== null ? { kind: "city", place_id: city.place_id, margin_m: margin } : circleAt !== null && name.trim() !== "" ? { kind: "circle", name: name.trim(), lat: circleAt.lat, lng: circleAt.lng, radius_m: radius, margin_m: margin } : null;
+  const body: PutArea | null = city !== null ? { kind: "city", place_id: city.place_id, margin_m: margin } : circleAt !== null && name.trim() !== "" ? { kind: "circle", name: name.trim(), lat: circleAt.lat, lng: circleAt.lng, radius_m: radius, margin_m: margin } : null;
 
   const save = async () => {
     if (body === null) throw new Error("saved with nothing drawn");
     setBusy(true);
     try {
-      const saved = await ok(api.PUT("/kit/areas/{slug}", { params: { path: { slug } }, body }));
+      const saved = await ok(api.PUT("/areas/{slug}", { params: { path: { slug } }, body }));
       openKit(saved.slug);
     } catch (e) {
       if (!(e instanceof ApiError)) throw e;
@@ -309,7 +309,7 @@ function CitySearch({ onPick }: { onPick: (placeId: string) => void }) {
 /** Every area drawn, anyone's: areas are geography. */
 function Areas() {
   const t = useT();
-  const areas = useResource("kit.areas", async () => (await ok(api.GET("/kit/areas"))).areas);
+  const areas = useResource("kit.areas", async () => (await ok(api.GET("/areas"))).areas);
   if (areas.status !== "ok" || areas.data.length === 0) return null;
   return (
     <section className="flex flex-col gap-2 border-t border-border pt-3">
@@ -400,7 +400,7 @@ function NewArea() {
   );
 }
 
-const outlineOf = (a: KitArea): Outline => (a.shape.kind === "city" ? { kind: "city", viewport: a.shape.viewport, margin_m: a.margin_m } : { kind: "circle", center: a.center, radius_m: a.shape.radius_m, margin_m: a.margin_m });
+const outlineOf = (a: AreaDto): Outline => (a.shape.kind === "city" ? { kind: "city", viewport: a.shape.viewport, margin_m: a.margin_m } : { kind: "circle", center: a.center, radius_m: a.shape.radius_m, margin_m: a.margin_m });
 
 function Group({ title, gmbs, locale }: { title: string; gmbs: readonly KitNearby[]; locale: string }) {
   const t = useT();

@@ -102,7 +102,7 @@ async fn area_page(panel: &Panel, path: &str) -> eyre::Result<Option<String>> {
 		Some(f) if f.contains('.') && !f.contains('/') => f,
 		Some(_) => return Ok(None),
 	};
-	if !sa_core::ids::is_slug(slug) || panel.kit_area(slug).await?.is_none() {
+	if !sa_core::ids::is_slug(slug) || panel.area(slug).await?.is_none() {
 		return Ok(None);
 	}
 	Ok(Some(format!("/kit/{file}")))

@@ -255,6 +255,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every area, everyone's. */
+        get: operations["areas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/areas/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The area at `/<slug>/`. */
+        get: operations["area"];
+        /**
+         * Draws the area at `/<slug>/`: a city (its outline and country asked of Places, paid by the caller) or a circle (its centre's country reverse-geocoded), with a margin around it that is "next to it"; over what it was if the caller drew it.
+         * @description 400 a link the conductor's own pages hold, or a centre in no country; 409 someone else's area.
+         */
+        put: operations["put_area"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/assistant/archived": {
         parameters: {
             query?: never;
@@ -992,44 +1030,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/kit/areas": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Every kit area, everyone's. */
-        get: operations["kit_areas"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/kit/areas/{slug}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The area at `/<slug>/`. */
-        get: operations["kit_area"];
-        /**
-         * Draws the area at `/<slug>/`: a city (its outline asked of Places, paid by the caller) or a circle, with a margin around it that is "next to it"; over what it was if the caller drew it.
-         * @description 400 a link the conductor's own pages hold; 409 someone else's area.
-         */
-        put: operations["put_kit_area"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/kit/areas/{slug}/gmbs": {
         parameters: {
             query?: never;
@@ -1055,7 +1055,7 @@ export interface paths {
             cookie?: never;
         };
         /** Cities and towns what is typed may be heading for, in the countries served (Places Autocomplete, paid by the caller). */
-        get: operations["kit_cities"];
+        get: operations["cities"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1072,7 +1072,7 @@ export interface paths {
             cookie?: never;
         };
         /** The city or town a suggestion is: its point and the rectangle that frames it (Places, paid by the caller). */
-        get: operations["kit_city"];
+        get: operations["city"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1089,7 +1089,7 @@ export interface paths {
             cookie?: never;
         };
         /** The city or town a point lies in (Geocoding, paid by the caller). 404 outside any. */
-        get: operations["kit_locality"];
+        get: operations["locality"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1614,6 +1614,30 @@ export interface components {
         };
         /** @enum {string} */
         AnswerState: "working" | "writing" | "done" | "stopped";
+        Area: {
+            center: components["schemas"]["LatLng"];
+            /** @description ISO 3166-1 alpha-2. */
+            country: string;
+            /** Format: int64 */
+            margin_m: number;
+            name: string;
+            shape: components["schemas"]["AreaShape"];
+            slug: string;
+        };
+        AreaShape: {
+            /** @constant */
+            kind: "city";
+            place_id: string;
+            viewport: components["schemas"]["Viewport"];
+        } | {
+            /** @constant */
+            kind: "circle";
+            /** Format: int64 */
+            radius_m: number;
+        };
+        Areas: {
+            areas: components["schemas"]["Area"][];
+        };
         Ask: {
             need: components["schemas"]["Need"];
         };
@@ -2080,20 +2104,9 @@ export interface components {
             note: string | null;
             service: string | null;
         };
-        KitArea: {
-            center: components["schemas"]["LatLng"];
-            /** Format: int64 */
-            margin_m: number;
-            name: string;
-            shape: components["schemas"]["KitShape"];
-            slug: string;
-        };
         KitAreaGmbs: {
-            area: components["schemas"]["KitArea"];
+            area: components["schemas"]["Area"];
             gmbs: components["schemas"]["KitNearby"][];
-        };
-        KitAreas: {
-            areas: components["schemas"]["KitArea"][];
         };
         KitDraft: {
             created_at: string;
@@ -2182,17 +2195,6 @@ export interface components {
             /** Format: int64 */
             width: number;
         };
-        KitShape: {
-            /** @constant */
-            kind: "city";
-            place_id: string;
-            viewport: components["schemas"]["Viewport"];
-        } | {
-            /** @constant */
-            kind: "circle";
-            /** Format: int64 */
-            radius_m: number;
-        };
         /**
          * @description Where a GBP's QR leads.
          *
@@ -2236,6 +2238,8 @@ export interface components {
          */
         LedgerKind: "add" | "set" | "charge" | "accrual" | "kickback";
         Locality: {
+            /** @description ISO 3166-1 alpha-2. */
+            country: string;
             location: components["schemas"]["LatLng"];
             name: string;
             place_id: string;
@@ -2410,7 +2414,7 @@ export interface components {
          * @enum {string}
          */
         Provider: "multilogin" | "multilogin_browser" | "gologin";
-        PutKitArea: {
+        PutArea: {
             /** @constant */
             kind: "city";
             /** Format: int64 */
@@ -3147,6 +3151,9 @@ export type AddSource = components['schemas']['AddSource'];
 export type Advance = components['schemas']['Advance'];
 export type Alerts = components['schemas']['Alerts'];
 export type AnswerState = components['schemas']['AnswerState'];
+export type Area = components['schemas']['Area'];
+export type AreaShape = components['schemas']['AreaShape'];
+export type Areas = components['schemas']['Areas'];
 export type Ask = components['schemas']['Ask'];
 export type Attachment = components['schemas']['Attachment'];
 export type AttachmentInput = components['schemas']['AttachmentInput'];
@@ -3193,9 +3200,7 @@ export type InternalReads = components['schemas']['InternalReads'];
 export type Invite = components['schemas']['Invite'];
 export type KeyedSourceKind = components['schemas']['KeyedSourceKind'];
 export type Kickback = components['schemas']['Kickback'];
-export type KitArea = components['schemas']['KitArea'];
 export type KitAreaGmbs = components['schemas']['KitAreaGmbs'];
-export type KitAreas = components['schemas']['KitAreas'];
 export type KitDraft = components['schemas']['KitDraft'];
 export type KitFunnel = components['schemas']['KitFunnel'];
 export type KitNearby = components['schemas']['KitNearby'];
@@ -3203,7 +3208,6 @@ export type KitPhoto = components['schemas']['KitPhoto'];
 export type KitPool = components['schemas']['KitPool'];
 export type KitRanked = components['schemas']['KitRanked'];
 export type KitRankedPhoto = components['schemas']['KitRankedPhoto'];
-export type KitShape = components['schemas']['KitShape'];
 export type KitTarget = components['schemas']['KitTarget'];
 export type LatLng = components['schemas']['LatLng'];
 export type Ledger = components['schemas']['Ledger'];
@@ -3235,7 +3239,7 @@ export type PricedItem = components['schemas']['PricedItem'];
 export type Prices = components['schemas']['Prices'];
 export type Probe = components['schemas']['Probe'];
 export type Provider = components['schemas']['Provider'];
-export type PutKitArea = components['schemas']['PutKitArea'];
+export type PutArea = components['schemas']['PutArea'];
 export type Question = components['schemas']['Question'];
 export type ReadInternalReads = components['schemas']['ReadInternalReads'];
 export type ReadMapOfTimestamp = components['schemas']['ReadMap_of_Timestamp'];
@@ -3781,6 +3785,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TelegramLink"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    areas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Areas"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    area: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Area"];
+                };
+            };
+            /** @description What every failed operation answers, its status saying which failure. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_area: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutArea"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Area"];
                 };
             };
             /** @description What every failed operation answers, its status saying which failure. */
@@ -5425,98 +5521,6 @@ export interface operations {
             };
         };
     };
-    kit_areas: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KitAreas"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    kit_area: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KitArea"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    put_kit_area: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PutKitArea"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KitArea"];
-                };
-            };
-            /** @description What every failed operation answers, its status saying which failure. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     kit_area_gmbs: {
         parameters: {
             query?: never;
@@ -5547,7 +5551,7 @@ export interface operations {
             };
         };
     };
-    kit_cities: {
+    cities: {
         parameters: {
             query: {
                 /** @description What is typed so far. */
@@ -5579,7 +5583,7 @@ export interface operations {
             };
         };
     };
-    kit_city: {
+    city: {
         parameters: {
             query?: never;
             header?: never;
@@ -5609,7 +5613,7 @@ export interface operations {
             };
         };
     };
-    kit_locality: {
+    locality: {
         parameters: {
             query: {
                 lat: number;

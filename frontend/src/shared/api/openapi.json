@@ -650,6 +650,128 @@
         }
       }
     },
+    "/areas": {
+      "get": {
+        "summary": "Every area, everyone's.",
+        "operationId": "areas",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Areas"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/areas/{slug}": {
+      "get": {
+        "tags": [
+          "areas"
+        ],
+        "summary": "The area at `/<slug>/`.",
+        "operationId": "area",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Area"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "areas"
+        ],
+        "summary": "Draws the area at `/<slug>/`: a city (its outline and country asked of Places, paid by the caller) or a circle (its centre's country reverse-geocoded), with a margin around it that is \"next to it\"; over what it was if the caller drew it.",
+        "description": "400 a link the conductor's own pages hold, or a centre in no country; 409 someone else's area.",
+        "operationId": "put_area",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutArea"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers, its status saying which failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Area"
+                }
+              }
+            }
+          }
+        },
+        "x-spends": true
+      }
+    },
     "/assistant/archived": {
       "delete": {
         "tags": [
@@ -2899,131 +3021,6 @@
         }
       }
     },
-    "/kit/areas": {
-      "get": {
-        "tags": [
-          "kit"
-        ],
-        "summary": "Every kit area, everyone's.",
-        "operationId": "kit_areas",
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/KitAreas"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/kit/areas/{slug}": {
-      "get": {
-        "tags": [
-          "kit"
-        ],
-        "summary": "The area at `/<slug>/`.",
-        "operationId": "kit_area",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "slug",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/KitArea"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "kit"
-        ],
-        "summary": "Draws the area at `/<slug>/`: a city (its outline asked of Places, paid by the caller) or a circle, with a margin around it that is \"next to it\"; over what it was if the caller drew it.",
-        "description": "400 a link the conductor's own pages hold; 409 someone else's area.",
-        "operationId": "put_kit_area",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "slug",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PutKitArea"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "default": {
-            "description": "What every failed operation answers, its status saying which failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/KitArea"
-                }
-              }
-            }
-          }
-        },
-        "x-spends": true
-      }
-    },
     "/kit/areas/{slug}/gmbs": {
       "get": {
         "tags": [
@@ -3069,10 +3066,10 @@
     "/kit/cities": {
       "get": {
         "tags": [
-          "kit"
+          "areas"
         ],
         "summary": "Cities and towns what is typed may be heading for, in the countries served (Places Autocomplete, paid by the caller).",
-        "operationId": "kit_cities",
+        "operationId": "cities",
         "parameters": [
           {
             "in": "query",
@@ -3114,10 +3111,10 @@
     "/kit/cities/{place_id}": {
       "get": {
         "tags": [
-          "kit"
+          "areas"
         ],
         "summary": "The city or town a suggestion is: its point and the rectangle that frames it (Places, paid by the caller).",
-        "operationId": "kit_city",
+        "operationId": "city",
         "parameters": [
           {
             "in": "path",
@@ -3157,10 +3154,10 @@
     "/kit/locality": {
       "get": {
         "tags": [
-          "kit"
+          "areas"
         ],
         "summary": "The city or town a point lies in (Geocoding, paid by the caller). 404 outside any.",
-        "operationId": "kit_locality",
+        "operationId": "locality",
         "parameters": [
           {
             "in": "query",
@@ -4691,6 +4688,94 @@
           "stopped"
         ]
       },
+      "Area": {
+        "type": "object",
+        "properties": {
+          "center": {
+            "$ref": "#/components/schemas/LatLng"
+          },
+          "country": {
+            "description": "ISO 3166-1 alpha-2.",
+            "type": "string"
+          },
+          "margin_m": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shape": {
+            "$ref": "#/components/schemas/AreaShape"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "country",
+          "center",
+          "shape",
+          "margin_m"
+        ]
+      },
+      "AreaShape": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "city"
+              },
+              "place_id": {
+                "type": "string"
+              },
+              "viewport": {
+                "$ref": "#/components/schemas/Viewport"
+              }
+            },
+            "required": [
+              "kind",
+              "place_id",
+              "viewport"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "circle"
+              },
+              "radius_m": {
+                "type": "integer",
+                "format": "int64"
+              }
+            },
+            "required": [
+              "kind",
+              "radius_m"
+            ]
+          }
+        ]
+      },
+      "Areas": {
+        "type": "object",
+        "properties": {
+          "areas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Area"
+            }
+          }
+        },
+        "required": [
+          "areas"
+        ]
+      },
       "Ask": {
         "type": "object",
         "properties": {
@@ -6126,39 +6211,11 @@
           "note"
         ]
       },
-      "KitArea": {
-        "type": "object",
-        "properties": {
-          "center": {
-            "$ref": "#/components/schemas/LatLng"
-          },
-          "margin_m": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "name": {
-            "type": "string"
-          },
-          "shape": {
-            "$ref": "#/components/schemas/KitShape"
-          },
-          "slug": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "slug",
-          "name",
-          "center",
-          "shape",
-          "margin_m"
-        ]
-      },
       "KitAreaGmbs": {
         "type": "object",
         "properties": {
           "area": {
-            "$ref": "#/components/schemas/KitArea"
+            "$ref": "#/components/schemas/Area"
           },
           "gmbs": {
             "type": "array",
@@ -6170,20 +6227,6 @@
         "required": [
           "area",
           "gmbs"
-        ]
-      },
-      "KitAreas": {
-        "type": "object",
-        "properties": {
-          "areas": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/KitArea"
-            }
-          }
-        },
-        "required": [
-          "areas"
         ]
       },
       "KitDraft": {
@@ -6444,47 +6487,6 @@
           "went_here"
         ]
       },
-      "KitShape": {
-        "oneOf": [
-          {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "city"
-              },
-              "place_id": {
-                "type": "string"
-              },
-              "viewport": {
-                "$ref": "#/components/schemas/Viewport"
-              }
-            },
-            "required": [
-              "kind",
-              "place_id",
-              "viewport"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "circle"
-              },
-              "radius_m": {
-                "type": "integer",
-                "format": "int64"
-              }
-            },
-            "required": [
-              "kind",
-              "radius_m"
-            ]
-          }
-        ]
-      },
       "KitTarget": {
         "description": "Where a GBP's QR leads.\n\n- `google`: Google's form, no draft.\n- `drafts`: Our page: the drafts to pick from.\n- `one_tap`: Our page: the top draft, one tap.",
         "type": "string",
@@ -6610,6 +6612,10 @@
       "Locality": {
         "type": "object",
         "properties": {
+          "country": {
+            "description": "ISO 3166-1 alpha-2.",
+            "type": "string"
+          },
           "location": {
             "$ref": "#/components/schemas/LatLng"
           },
@@ -6627,7 +6633,8 @@
           "place_id",
           "name",
           "location",
-          "viewport"
+          "viewport",
+          "country"
         ]
       },
       "MapConfig": {
@@ -7236,7 +7243,7 @@
           "gologin"
         ]
       },
-      "PutKitArea": {
+      "PutArea": {
         "oneOf": [
           {
             "type": "object",

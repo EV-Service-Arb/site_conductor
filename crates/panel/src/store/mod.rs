@@ -14,6 +14,7 @@ pub mod assistant;
 pub mod browsers;
 pub mod connections;
 pub mod gmbs;
+pub mod areas;
 pub mod kit;
 pub mod oauth;
 mod queries_cache;
