@@ -14,7 +14,7 @@ import { takeReturnPage } from "@/shared/api";
 import { useT, home } from "@/shared/i18n";
 import { setQuery, useQuery } from "@/shared/lib/query";
 import { useResource } from "@/shared/lib/use-resource";
-import { StreetView, pin, useTheMap } from "@/shared/map";
+import { Locate, StreetView, pin, useTheMap } from "@/shared/map";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { useButtonSize } from "@/shared/ui/touch";
 import { ErrorState } from "@/shared/ui/error-state";
@@ -273,6 +273,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       <div ref={host} className="absolute inset-0" />
       {map.status === "ok" && <PlacementOverlay map={map.map} />}
       {map.status === "ok" && <StreetView map={map.map} />}
+      {map.status === "ok" && <Locate map={map.map} />}
       {map.status === "error" && (
         <div className="absolute inset-x-6 top-6">
           <ErrorState failure={{ kind: "invalid", message: map.message }} />
