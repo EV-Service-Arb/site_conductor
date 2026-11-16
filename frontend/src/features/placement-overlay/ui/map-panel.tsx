@@ -151,13 +151,13 @@ function StudyPicker({ view, studied, trades: served }: { view: MapView; studied
   const picked = studied.picked;
   return (
     <label className="flex h-(--control-h-sm) items-center gap-2 px-2">
-      <span className="flex flex-1 items-center gap-1.5 text-ink-mid">
+      <span className="flex shrink-0 items-center gap-1.5 text-ink-mid">
         {t(placementKeys.trade, "Trade")}
         {view.from !== null && <span className="rounded bg-hover px-1 text-caption text-ink-soft">{FROM_NAME[view.from](t)}</span>}
       </span>
       <NativeSelect
         size="sm"
-        wrapperClassName="w-40"
+        wrapperClassName="min-w-0 flex-1"
         value={view.study ?? ""}
         onChange={(e) => {
           const study = e.currentTarget.value === "" ? null : (e.currentTarget.value as CategoryKey);
@@ -203,8 +203,8 @@ function AreaPicker({ view, studied }: { view: MapView; studied: Extract<Studied
   const areas = studied.areas.filter((a) => country === null || a.country === country || a.slug === view.area).toSorted((a, b) => a.name.localeCompare(b.name));
   return (
     <label className="flex h-(--control-h-sm) items-center gap-2 px-2">
-      <span className="flex-1 text-ink-mid">{t(placementKeys.area, "Area")}</span>
-      <NativeSelect size="sm" wrapperClassName="w-40" value={view.area === null || view.area === "" ? "-" : view.area} onChange={(e) => setMapView({ area: e.currentTarget.value === "-" ? null : e.currentTarget.value })}>
+      <span className="shrink-0 text-ink-mid">{t(placementKeys.area, "Area")}</span>
+      <NativeSelect size="sm" wrapperClassName="min-w-0 flex-1" value={view.area === null || view.area === "" ? "-" : view.area} onChange={(e) => setMapView({ area: e.currentTarget.value === "-" ? null : e.currentTarget.value })}>
         <NativeSelectOption value="-">{view.area === "" ? t(placementKeys.drawing, "drawing one…") : t(placementKeys.pickAreaShort, "pick an area")}</NativeSelectOption>
         {areas.map((a) => (
           <NativeSelectOption key={a.slug} value={a.slug}>
