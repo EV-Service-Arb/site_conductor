@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use axum::{Router, extract::State, routing::get};
 use jiff::{SignedDuration, Timestamp};
 use sa_core::{
-	prices::{Item, PlacesRequest},
+	prices::{DataForSeoTask, Item, PlacesRequest},
 	queries_cache::{self, Claim, Key, Put, Scheme},
 	usage::{Bill, Billed},
 };
@@ -128,5 +128,25 @@ async fn a_write_is_kept_only_under_its_querys_digest() {
 	}
 	assert_eq!(cache.get(k).await.unwrap(), None, "nothing refused is kept");
 	cache.put(k, put).await.unwrap();
+	assert_eq!(cache.get(k).await.unwrap().unwrap().answer, json!({}));
+}
+
+#[tokio::test]
+async fn a_buy_off_the_google_meters_names_no_account() {
+	let db = TestDb::create().await;
+	let cache = Remote::try_new(&conductor(housed(&db).await).await).unwrap();
+	let k = Key(Sha256::digest("POST volumes").into());
+	let bought = |account: Option<&str>| Put {
+		answer: json!({}),
+		request: "POST volumes".into(),
+		bought: Some(Billed {
+			item: Item::DataForSeo(DataForSeoTask::SearchVolume),
+			bill: Bill::Ours,
+			account: account.map(str::to_owned),
+		}),
+	};
+	let refused = cache.put(k, bought(Some("house"))).await.unwrap_err();
+	assert!(refused.to_string().contains("400"), "{refused:#}");
+	cache.put(k, bought(None)).await.unwrap();
 	assert_eq!(cache.get(k).await.unwrap().unwrap().answer, json!({}));
 }

@@ -78,12 +78,13 @@ async fn query(State(panel): State<Panel>, Path((scheme, key)): Path<(String, St
 				return error(StatusCode::BAD_REQUEST, "the key is not the SHA-256 of the request");
 			}
 			if let Some(b) = &put.bought {
-				match (b.bill, &b.account) {
-					(Bill::Theirs, None) => {}
-					(Bill::Ours, Some(a)) if panel.accounts().get(a).is_some() => {}
-					(Bill::Ours, Some(a)) => return error(StatusCode::BAD_REQUEST, format!("{a:?} is no Google account of the conductor's")),
-					(Bill::Ours, None) => return error(StatusCode::BAD_REQUEST, "a buy on our bill names the Google account that paid"),
-					(Bill::Theirs, Some(_)) => return error(StatusCode::BAD_REQUEST, "a buy on a person's own key names no account"),
+				match (b.bill, b.item.meter().is_some(), &b.account) {
+					(Bill::Theirs, _, None) | (Bill::Ours, false, None) => {}
+					(Bill::Ours, true, Some(a)) if panel.accounts().get(a).is_some() => {}
+					(Bill::Ours, true, Some(a)) => return error(StatusCode::BAD_REQUEST, format!("{a:?} is no Google account of the conductor's")),
+					(Bill::Ours, true, None) => return error(StatusCode::BAD_REQUEST, "a buy on our bill names the Google account that paid"),
+					(Bill::Ours, false, Some(_)) => return error(StatusCode::BAD_REQUEST, format!("{} draws on no Google account", b.item.tool_title())),
+					(Bill::Theirs, _, Some(_)) => return error(StatusCode::BAD_REQUEST, "a buy on a person's own key names no account"),
 				}
 			}
 			store
