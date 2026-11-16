@@ -5,7 +5,7 @@ import { createPlatformMfe } from "@/shared/api/platform-mfe";
 
 // Which URL a bundle loads from: the one concierge's registry.json names, or null.
 
-const PREFIX = "https://evinvest.ltd/api/auth/mfe/";
+const PREFIX = "https://evinvest.ltd/mfe/concierge/";
 const entries: MfeEntry[] = [
   { name: "concierge.sign-in", tag: "mfe-concierge-sign-in", kind: "component", scriptUrl: `${PREFIX}sign-in.3fa9c1.js` },
   { name: "concierge.account-chip", tag: "mfe-concierge-account-chip", kind: "component", scriptUrl: `${PREFIX}account-chip.77be20.js` },

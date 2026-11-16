@@ -3,7 +3,7 @@ import { type T, links, nav } from "@/shared/i18n";
 // The front end's switches, compiled into the bundle: the image and `nix run .#dev` build the same one.
 
 type PanelConfig = {
-  /** The sign-in dialog over the panel, the platform's account chip and sign-in; concierge's bundle from /api/auth/mfe/*. Off: a 401 redirects to sign in. */
+  /** The sign-in dialog over the panel, the platform's account chip and sign-in; concierge's bundle from /mfe/concierge/*. Off: a 401 redirects to sign in. */
   signinOverlay: boolean;
   /** The wallet page, its bundle from /mfe/banking/*. Off: no menu entry, the route says the wallet is unavailable. */
   walletPage: boolean;
