@@ -9,10 +9,11 @@ use std::ops::Deref;
 pub struct Account {
 	/// Stable: stored with each use and reading.
 	pub name: String,
-	/// Its Cloud Billing export, `project.dataset.table`.
-	pub export: String,
+	/// Its Cloud Billing export, `project.dataset.table`; none for a demo key's project, which has no
+	/// billing account and which Google holds to its free units.
+	pub export: Option<String>,
 	/// The JSON key of a service account that may query `export`.
-	pub reader: String,
+	pub reader: Option<String>,
 	/// Its server key (Places, Geocoding).
 	pub places: Option<String>,
 	/// Its Maps JS key, referrer-restricted.
@@ -43,6 +44,8 @@ impl Accounts {
 		for (i, a) in accounts.iter().enumerate() {
 			assert!(!a.name.is_empty(), "a Google account without a name");
 			assert!(a.allow >= 0.0 && a.allow.is_finite(), "{}'s allow is {}", a.name, a.allow);
+			assert_eq!(a.export.is_some(), a.reader.is_some(), "{}'s export is read with its reader", a.name);
+			assert!(a.export.is_some() || a.allow == 0.0, "{} has no export to hold its allow against", a.name);
 			let earlier = &accounts[..i];
 			assert!(earlier.iter().all(|e| e.name != a.name), "the Google account {} is listed twice", a.name);
 			for key in [&a.places, &a.browser].into_iter().flatten() {

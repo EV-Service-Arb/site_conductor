@@ -1096,7 +1096,7 @@ async fn serve_publishes_the_catalog_first() {
 	let addr = serve_fake(fake.clone()).await;
 	let path = db.path().display().to_string();
 	let config = tempfile::NamedTempFile::with_suffix(".json").unwrap();
-	std::fs::write(config.path(), r#"{ "google": [] }"#).unwrap();
+	std::fs::write(config.path(), r#"{ "google": [{ "name": "demo", "places": "k", "allow": 0 }] }"#).unwrap(); // a demo key's project: no billing account, so no export
 	let config = config.path().display().to_string();
 	let serve = || {
 		tokio::process::Command::new(env!("CARGO_BIN_EXE_panel"))

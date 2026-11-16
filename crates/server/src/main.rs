@@ -291,9 +291,9 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				"PANEL_GRAFANA_SERVER needs the forward (PANEL_ASSERTION_KEY and the services' URLs): Grafana reads the services through it"
 			);
 			let panel = connect().await?;
-			let readers = panel.accounts().iter().map(sa_panel::meters::google::Google::try_new).collect::<eyre::Result<Vec<_>>>()?;
+			let readers = panel.accounts().iter().filter_map(|a| sa_panel::meters::google::Google::try_new(a).transpose()).collect::<eyre::Result<Vec<_>>>()?;
 			for a in panel.accounts().iter() {
-				tracing::info!(account = a.name, places = a.places.is_some(), browser = a.browser.is_some(), allow = a.allow, "Google account");
+				tracing::info!(account = a.name, exported = a.export.is_some(), places = a.places.is_some(), browser = a.browser.is_some(), allow = a.allow, "Google account");
 			}
 			serve(panel, identity, forward, telegram, grafana, settings.web()?, settings.browsers()?, settings.model(), readers, bind).await
 		}

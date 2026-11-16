@@ -92,8 +92,8 @@ pub fn panel_on(store: Store, key: DataKey, google: sa_places::Google, accounts:
 pub fn account(name: &str, places: Option<&str>, browser: Option<&str>) -> sa_places::Account {
 	sa_places::Account {
 		name: name.to_owned(),
-		export: format!("{name}.billing.export"),
-		reader: "{}".to_owned(),
+		export: Some(format!("{name}.billing.export")),
+		reader: Some("{}".to_owned()),
 		places: places.map(str::to_owned),
 		browser: browser.map(str::to_owned),
 		allow: 0.0,

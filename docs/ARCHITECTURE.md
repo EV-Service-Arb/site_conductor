@@ -660,13 +660,14 @@ Only then does the browser open it.
 
 **Google accounts.** Free units, credits and the money kept are per billing account, so each is
 declared once in the config file (`--config`, `google`: `sa_places::Account`) with the slots we
-recognize: its export, its reader, its Places key, its browser key (each optional), and `allow`,
-what it may spend a month past its free units and credits. Every key bills on its account; each
-use of ours is stored with the account that paid (`usage.account`). N accounts are one with N×
-the free units, the money capped per account.
+recognize: its export and its reader, its Places key, its browser key (each optional), and `allow`,
+what it may spend a month past its free units and credits. A demo key's project has no billing
+account, so no export: Google holds it to its free units, and we count it by ours alone. Every
+key bills on its account; each use of ours is stored with the account that paid
+(`usage.account`). N accounts are one with N× the free units, the money capped per account.
 
 ```text
-config google = [ { name, export, reader, places?, browser?, allow } … ]
+config google = [ { name, export?, reader?, places?, browser?, allow } … ]
   each account ─ its Cloud Billing export, read at boot and daily ─▶ meter_readings (account, meter)
 a buy of an item on a meter ─ each account's standing (`meters::standing`):
      0  its free units of that meter left
