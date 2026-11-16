@@ -172,7 +172,7 @@ async fn a_state_that_vouches_by_itself_is_gated_by_the_same_rows() {
 #[test]
 fn the_document_names_what_opens_a_route_and_what_its_gate_answers() {
 	let docs: ev_lib::api::Docs = &[("gate::leads", "Says who reads leads."), ("gate::document", "Says who reads the document.")];
-	let doc = serde_json::to_value(ev_lib::api::document::<Sites, _>("sites", "0", "/api/v1", &table(), docs)).unwrap();
+	let doc = serde_json::to_value(ev_lib::api::document::<Sites, _>("sites", "0", "/api/v1", &table(), docs, None)).unwrap();
 	let op = |path: &str| doc["paths"][path]["get"].clone();
 	assert_eq!(op("/leads")["x-permission"], Work::Read.as_str());
 	assert_eq!(op("/leads")["x-errors"], serde_json::json!({ "unauthenticated": 401, "forbidden": 403 }));
