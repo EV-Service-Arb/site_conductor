@@ -111,9 +111,19 @@ impl Gate {
 	}
 }
 
-impl Guard for Gate {
-	fn permission(&self) -> Option<String> {
-		self.section.map(|s| s.permission().to_owned())
+impl Guard<ApiState> for Gate {
+	type Refusal = sa_auth::Denied;
+
+	fn permission(&self) -> Option<&'static str> {
+		self.section.map(Section::permission)
+	}
+
+	fn refusals(&self) -> Vec<sa_auth::Denied> {
+		Vec::new()
+	}
+
+	async fn admit(&self, _: &mut axum::http::request::Parts, _: &ApiState) -> Result<(), ev_lib::api::Refusal<sa_auth::Denied>> {
+		Ok(()) // `signin::gate`, layered by `app`'s `mount` and the Grafana mount's `viewer_gate`, is the check
 	}
 }
 

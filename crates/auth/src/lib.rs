@@ -19,6 +19,11 @@ use ed25519_dalek::{Signature, Signer as _, SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 
+#[cfg(feature = "axum")]
+mod gate;
+#[cfg(feature = "axum")]
+pub use gate::{Conductor, Denied, Gate, Verifier, Vouch};
+
 /// The request header the assertion rides in, panel → service.
 pub const HEADER: &str = "x-sa-assertion";
 

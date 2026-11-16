@@ -35,7 +35,7 @@ percent-encoding.workspace = true
 reqwest = { workspace = true, features = ["multipart", "stream"] }
 rustix.workspace = true
 sa_alerts.workspace = true
-sa_auth = { workspace = true, features = ["catalog"] }
+sa_auth = { workspace = true, features = ["axum", "catalog"] }
 sa_browsers.workspace = true
 sa_contracts.workspace = true
 sa_core = { workspace = true, features = ["api"] }
