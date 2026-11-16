@@ -92,6 +92,7 @@
           containerRelease = { registry = "ghcr.io/ev-service-arb"; };
           figma = { };
           jobs.default = true;
+          jobs.errors.install.packages = [ "ffmpeg" ]; # crates/browsers/tests/runner.rs cuts its films with it
           lfs = false;
         };
         readme = v_flakes.readme-fw {
