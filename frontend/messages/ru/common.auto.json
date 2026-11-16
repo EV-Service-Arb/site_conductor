@@ -2079,6 +2079,22 @@
     "en": "Reconnecting",
     "t": "Переподключение"
   },
+  "locate": {
+    "en": "Centre on my location",
+    "t": "Центрировать по моему местоположению"
+  },
+  "locate.denied": {
+    "en": "Location is blocked for this site: allow it in the browser's site settings",
+    "t": "Доступ к местоположению заблокирован для этого сайта: разрешите его в настройках сайта браузера"
+  },
+  "locate.failed": {
+    "en": "Could not find your location. {detail}",
+    "t": "Не удалось определить ваше местоположение. {detail}"
+  },
+  "locate.unavailable": {
+    "en": "This browser gives no location here",
+    "t": "Этот браузер не предоставляет данные о местоположении здесь"
+  },
   "move.cancel": {
     "en": "Cancel",
     "t": "Отмена"
