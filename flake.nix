@@ -95,7 +95,8 @@
           lfs = false;
         };
         readme = v_flakes.readme-fw {
-          inherit pkgs pname;
+          inherit pkgs;
+          pname = "site_conductor"; # CI keys the badge gist by the repo name, not the binary's
           defaults = true;
           lastSupportedVersion = "nightly-1.100";
           rootDir = ./.;
@@ -367,6 +368,12 @@
             exec playwright test -c tests/e2e --grep-invert @figma "$@"
           '';
         };
+        # In the devShell, not an app: built in another environment, every crate's fingerprint is stale.
+        testTimeline = pkgs.writeShellApplication {
+          name = "test-timeline";
+          runtimeInputs = with pkgs; [ coreutils gawk gnugrep gnused git jq cargo-nextest ];
+          text = builtins.readFile ./scripts/test.sh;
+        };
 
         # The conductor (dev sign-in), sites_panel and the landings beside its checkout, wired
         # together on this machine; the script is the source, shellchecked here (docs/LOCAL.md). It builds the
@@ -443,6 +450,7 @@
               openssl # sentry's native-tls
               sqlite # inspecting the database
               rust
+              testTimeline
               (v_flakes.js-local { inherit pkgs; }) # frontend/_.js-local.json: our npm packages from their checkouts
             ] ++ pre-commit-check.enabledPackages ++ combined.enabledPackages;
 

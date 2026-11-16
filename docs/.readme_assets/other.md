@@ -33,3 +33,4 @@ troubleshooting are in [docs/LOCAL.md](docs/LOCAL.md).
 `cargo test` runs everything, here and in CI: each database test gets its own throwaway SQLite
 file in the temp directory (`panel_test_*.db`), removed when it ends; the services behind the
 conductor, concierge and Telegram are stand-ins on loopback ports. Nothing to set up.
+`test-timeline` (dev shell; args go to `cargo nextest run`) runs them and lays every compile unit and test on one timeline, `target/test-timeline.json` for [ui.perfetto.dev](https://ui.perfetto.dev).
