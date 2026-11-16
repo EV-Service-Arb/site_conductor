@@ -45,7 +45,14 @@ async fn token_flows() -> Json<Flows> {
 }
 
 fn doc() -> OpenApi {
-	document("t", "1", "/api/v1", &[Route::new(Method::GET, "/admin/flows", Open, token_flows)], &[("dashboards::token_flows", "Flows.")], None)
+	document(
+		"t",
+		"1",
+		"/api/v1",
+		&[Route::new(Method::GET, "/admin/flows", Open, token_flows)],
+		&[("dashboards::token_flows", "Flows.")],
+		None,
+	)
 }
 
 fn board(doc: &OpenApi, selector: &str) -> serde_json::Value {
@@ -55,12 +62,17 @@ fn board(doc: &OpenApi, selector: &str) -> serde_json::Value {
 		root_selector: selector,
 		columns: &[("kind", Column::String), ("tokens", Column::Number)],
 	};
-	Board::new(doc, "conductor").panel("table", "Flows", [0, 0, 24, 8], query, json!({ "options": {} })).build(json!({ "uid": "t-flows" }))
+	Board::new(doc, "conductor")
+		.panel("table", "Flows", [0, 0, 24, 8], query, json!({ "options": {} }))
+		.build(json!({ "uid": "t-flows" }))
 }
 
 #[test]
 fn a_panel_queries_its_operations_path() {
-	let built = board(&doc(), r#"($r := flows[kind in ["spend", "it's"]].{"kind": kind, "spent": $abs(tokens) * 1e3}; $r.{"kind": kind, "tokens": spent})"#);
+	let built = board(
+		&doc(),
+		r#"($r := flows[kind in ["spend", "it's"]].{"kind": kind, "spent": $abs(tokens) * 1e3}; $r.{"kind": kind, "tokens": spent})"#,
+	);
 	let target = &built["panels"][0]["targets"][0];
 	assert_eq!(target["url"], "/admin/flows");
 	assert_eq!(target["datasource"]["uid"], "conductor");

@@ -23,7 +23,10 @@ async fn the_feed_opens_with_resync_streams_topics_and_ends_with_its_stop() {
 			lines.push(serde_json::from_slice::<Line>(&line).unwrap());
 		}
 	}
-	assert_eq!(lines, [Line::Resync, Line::Changed { topic: "sites.leads".into() }, Line::Changed { topic: "sites.places".into() }]);
+	assert_eq!(
+		lines,
+		[Line::Resync, Line::Changed { topic: "sites.leads".into() }, Line::Changed { topic: "sites.places".into() }]
+	);
 	stop.send(()).unwrap();
 	assert!(body.frame().await.is_none(), "the stop ends the stream");
 }
@@ -39,7 +42,11 @@ async fn a_reader_behind_the_channel_is_told_to_resync() {
 		text.push_str(std::str::from_utf8(&body.frame().await.unwrap().unwrap().into_data().unwrap()).unwrap());
 	}
 	let lines: Vec<Line> = text.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
-	assert_eq!(lines, [Line::Resync, Line::Resync, Line::Changed { topic: "a.y".into() }], "a.x was missed: the reader re-reads all");
+	assert_eq!(
+		lines,
+		[Line::Resync, Line::Resync, Line::Changed { topic: "a.y".into() }],
+		"a.x was missed: the reader re-reads all"
+	);
 	drop(tx);
 	assert!(body.frame().await.is_none(), "a closed channel ends the stream");
 }

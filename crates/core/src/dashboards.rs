@@ -41,7 +41,11 @@ pub struct Board<'a> {
 
 impl<'a> Board<'a> {
 	pub fn new(doc: &'a OpenApi, datasource: &'a str) -> Self {
-		Self { doc, datasource, panels: Vec::new() }
+		Self {
+			doc,
+			datasource,
+			panels: Vec::new(),
+		}
 	}
 
 	/// A panel of `kind` at `grid` (`x, y, w, h`); `display` (its `options`, `fieldConfig`,
@@ -96,7 +100,8 @@ impl<'a> Board<'a> {
 	pub fn row(mut self, title: &str, grid: [u32; 4]) -> Self {
 		let [x, y, w, h] = grid;
 		let id = self.panels.len() + 1;
-		self.panels.push(json!({ "id": id, "type": "row", "title": title, "collapsed": false, "gridPos": { "x": x, "y": y, "w": w, "h": h }, "panels": [] }));
+		self.panels
+			.push(json!({ "id": id, "type": "row", "title": title, "collapsed": false, "gridPos": { "x": x, "y": y, "w": w, "h": h }, "panels": [] }));
 		self
 	}
 
@@ -150,11 +155,10 @@ fn names(selector: &str) -> (BTreeSet<&str>, BTreeSet<&str>) {
 					built.insert(literal);
 				}
 			}
-			b'0'..=b'9' => {
+			b'0'..=b'9' =>
 				while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'.') {
 					i += 1;
-				}
-			}
+				},
 			b'$' => {
 				i += 1;
 				while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {

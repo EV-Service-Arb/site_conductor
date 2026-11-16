@@ -1,6 +1,9 @@
 //! A handler taking `agent::Tool` is marked an agent tool in its service's document, and no other is.
 
-use axum::{Json, http::{Method, request::Parts}};
+use axum::{
+	Json,
+	http::{Method, request::Parts},
+};
 use ev_lib::api::{Guard, Malformed, Refusal, Route, document};
 use sa_core::agent::Tool;
 
