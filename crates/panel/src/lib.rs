@@ -5,7 +5,7 @@
 //! not sit in the clear. [`session`] is signing in through concierge and the sessions that
 //! follow; [`access`] the access requests; [`gmbs`] people's gmails and the GMBs they manage;
 //! [`connections`] a gmail's inbox and Maps key, and who pays for a Places request; [`browsers`]
-//! a gmail's antidetect browser;
+//! a gmail's antidetect browser; [`claude`] a person's own Claude, which their assistant runs on;
 //! [`tokens`] their balances and review_archive's charges, and [`import`] both from there;
 //! [`alerts`] the hub: users' destinations and rules, the feeds fanned out to them; [`telegram`]
 //! the method that reaches them; [`live`] the bus that tells the server's sockets what changed;
@@ -19,6 +19,7 @@ pub mod alerts;
 pub mod areas;
 pub mod assistant;
 pub mod browsers;
+pub mod claude;
 pub mod connections;
 pub mod gmbs;
 mod google_categories;

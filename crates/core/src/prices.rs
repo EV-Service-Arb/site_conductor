@@ -4,7 +4,8 @@
 //! admin's prices page, the conductor's tables, the snapshot and the usage all walk [`Item::all`],
 //! so a variant added here is priced, costed and counted there with nothing else written.
 //!
-//! A price is the admin's; a sold item without one is not sold. A cost per unit is the admin's too.
+//! A price is the admin's; a sold item without one is not sold. A cost is the admin's too. Both are
+//! for [`Item::per`] units: a model's tokens are priced by the million.
 
 use std::{collections::BTreeMap, fmt, marker::PhantomData, str::FromStr};
 
@@ -187,7 +188,7 @@ pub enum WalkStep {
 }
 
 macro_rules! priced {
-	($($tool:ident($ty:ident) = $key:literal, $scope:ident, $sale:ident, $unit:literal, $title:literal;)+) => {
+	($($tool:ident($ty:ident) = $key:literal, $scope:ident, $sale:ident, $per:literal $unit:literal, $title:literal;)+) => {
 		/// One costly action: `<tool>.<variant>` on the wire.
 		#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 		pub enum Item {
@@ -216,6 +217,13 @@ macro_rules! priced {
 			pub fn unit(self) -> &'static str {
 				match self {
 					$(Self::$tool(_) => $unit,)+
+				}
+			}
+
+			/// How many units its price and cost are for.
+			pub fn per(self) -> i64 {
+				match self {
+					$(Self::$tool(_) => $per,)+
 				}
 			}
 
@@ -263,16 +271,16 @@ macro_rules! priced {
 }
 
 priced! {
-	Places(PlacesRequest) = "places", Conductor, Sold, "request", "Google Places on the shared keys";
-	StreetView(StreetViewLoad) = "street_view", Conductor, Sold, "panorama", "Google Street View on the map";
-	Map(MapLoad) = "map", Conductor, Metered, "load", "Google Maps in the browser";
-	Walk(WalkStep) = "walk", ReviewArchive, Sold, "step", "A walk down a place's reviews";
-	Phone(PhoneTime) = "phone", Browsers, Metered, "minute", "Multilogin's cloud phones";
-	Placement(PlacementRequest) = "placement", Placement, Sold, "search", "A study's pull";
-	Ads(AdsRequest) = "ads", Placement, Metered, "request", "Google Ads API";
-	DataForSeo(DataForSeoTask) = "dataforseo", Placement, Metered, "task", "DataForSEO";
-	Browser(BrowserStart) = "browser", Browsers, Metered, "start", "Antidetect browsers";
-	Claude(ModelTokens) = "claude", Conductor, Metered, "token", "Claude, the assistant's model";
+	Places(PlacesRequest) = "places", Conductor, Sold, 1 "request", "Google Places on the shared keys";
+	StreetView(StreetViewLoad) = "street_view", Conductor, Sold, 1 "panorama", "Google Street View on the map";
+	Map(MapLoad) = "map", Conductor, Metered, 1 "load", "Google Maps in the browser";
+	Walk(WalkStep) = "walk", ReviewArchive, Sold, 1 "step", "A walk down a place's reviews";
+	Phone(PhoneTime) = "phone", Browsers, Metered, 1 "minute", "Multilogin's cloud phones";
+	Placement(PlacementRequest) = "placement", Placement, Sold, 1 "search", "A study's pull";
+	Ads(AdsRequest) = "ads", Placement, Metered, 1 "request", "Google Ads API";
+	DataForSeo(DataForSeoTask) = "dataforseo", Placement, Metered, 1 "task", "DataForSEO";
+	Browser(BrowserStart) = "browser", Browsers, Metered, 1 "start", "Antidetect browsers";
+	Claude(ModelTokens) = "claude", Conductor, Sold, 1_000_000 "token", "Claude, the assistant's model";
 }
 
 impl<A: Tool, B: Tool> Tool for (A, B) {

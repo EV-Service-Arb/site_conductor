@@ -1,11 +1,12 @@
 "use client";
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, IconButton, Input, Kbd, KbdGroup, Popover, PopoverContent, PopoverTrigger, cn } from "@evinvest/uikit";
-import { BookOpen, ChevronDown, ChevronsRight, Ellipsis, FileText, MapPin, MessageCirclePlus, Minus, PanelRight, Pin, PinOff, Share as ShareIcon, Sparkles } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, IconButton, Input, Kbd, KbdGroup, Popover, PopoverContent, PopoverTrigger, cn } from "@evinvest/uikit";
+import { BookOpen, ChevronDown, ChevronsRight, Ellipsis, FileText, KeyRound, MapPin, MessageCirclePlus, Minus, PanelRight, Pin, PinOff, Share as ShareIcon, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 import { assistant } from "@/entities/assistant";
+import { ConnectClaudeDialog, useClaude } from "@/features/connect-claude";
 import { api, ok } from "@/shared/api";
 import type { ChatSummary, Mention, Source, Turn } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
@@ -41,6 +42,8 @@ export function Header({
   const t = useT();
   const { display, onChanged } = useControls();
   const [renaming, setRenaming] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const mine = useClaude();
   const full = display === "full";
   const interacts = chat !== null && chat.role !== "viewer";
   const title = chat?.title ?? t(assistant.newChat, "New chat");
@@ -143,14 +146,21 @@ export function Header({
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <IconButton size="sm" aria-label={t(assistant.more, "More")} tooltip={t(assistant.more, "More")} disabled={chat === null} className="aria-expanded:bg-active">
+          <IconButton size="sm" aria-label={t(assistant.more, "More")} tooltip={t(assistant.more, "More")} className="aria-expanded:bg-active">
             <Ellipsis />
           </IconButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           {chat !== null && <ChatActions chat={chat} onRename={() => setRenaming(true)} pinOutside={full} />}
+          {chat !== null && <DropdownMenuSeparator />}
+          <DropdownMenuItem onSelect={() => setConnecting(true)}>
+            <KeyRound />
+            <span className="flex-1">{t(assistant.claude, "Your Claude")}</span>
+            <span className="text-caption text-ink-soft">{mine.status === "ok" ? (mine.data === null ? t(assistant.claude.none, "not connected") : mine.data.checked.error === null ? t(assistant.claude.on, "connected") : t(assistant.claude.refused, "refused")) : null}</span>
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <ConnectClaudeDialog open={connecting} onOpenChange={setConnecting} />
       {onHide !== null && (
         <IconButton
           size="sm"

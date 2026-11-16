@@ -13,6 +13,7 @@ pub mod ask;
 pub mod assistant;
 pub mod browser;
 pub mod catalog;
+pub mod claude;
 pub mod concierge;
 mod connected;
 pub mod connections;

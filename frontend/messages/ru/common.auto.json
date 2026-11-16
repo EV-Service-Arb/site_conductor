@@ -611,6 +611,22 @@
     "en": "Attach files",
     "t": "Приложить файлы"
   },
+  "assistant.claude": {
+    "en": "Your Claude",
+    "t": "Ваш Claude"
+  },
+  "assistant.claude.none": {
+    "en": "not connected",
+    "t": "не подключён"
+  },
+  "assistant.claude.on": {
+    "en": "connected",
+    "t": "подключён"
+  },
+  "assistant.claude.refused": {
+    "en": "refused",
+    "t": "отказано"
+  },
   "assistant.clear.description": {
     "en": "Your archived chats are deleted; the archived ones shared with you, left.",
     "t": "Ваши чаты из архива будут удалены; из чатов, которыми с вами поделились, вы выйдете."
@@ -682,6 +698,30 @@
   "assistant.copyLink": {
     "en": "Copy link",
     "t": "Скопировать ссылку"
+  },
+  "assistant.cost.charged": {
+    "en": "{n} tokens",
+    "t": "{n} токенов"
+  },
+  "assistant.cost.connect": {
+    "en": "Connect your Claude",
+    "t": "Подключите свой Claude"
+  },
+  "assistant.cost.free": {
+    "en": "Connect your own Claude and it costs nothing here.",
+    "t": "Подключите своего Claude — здесь это ничего не стоит."
+  },
+  "assistant.cost.onTheirs": {
+    "en": "Ran on your Claude: {input} in, {output} out model tokens, nothing charged here.",
+    "t": "Запущено на вашем Claude: входящих токенов модели — {input}, исходящих — {output}; здесь ничего не списано."
+  },
+  "assistant.cost.ours": {
+    "en": "Ran on the panel's Claude: {input} in, {output} out model tokens, {n} of your tokens.",
+    "t": "Запущено на Claude панели: входящих токенов модели — {input}, исходящих — {output}; списано ваших токенов: {n}."
+  },
+  "assistant.cost.theirs": {
+    "en": "your Claude",
+    "t": "ваш Claude"
   },
   "assistant.delete": {
     "en": "Delete",
@@ -1346,6 +1386,70 @@
   "categories.untraded.show": {
     "en": "Show them · No category {n}",
     "t": "Показать · Без категории {n}"
+  },
+  "claude.code": {
+    "en": "The code Claude shows",
+    "t": "Код, который показывает Claude"
+  },
+  "claude.connect": {
+    "en": "Connect",
+    "t": "Подключить"
+  },
+  "claude.connected": {
+    "en": "Your Claude is connected: your answers run on it",
+    "t": "Ваш Claude подключён: ответы выполняются на нём"
+  },
+  "claude.disconnect": {
+    "en": "Disconnect",
+    "t": "Отключить"
+  },
+  "claude.expires": {
+    "en": "Expires",
+    "t": "Истекает"
+  },
+  "claude.failing": {
+    "en": "Refused",
+    "t": "Отклонено"
+  },
+  "claude.open": {
+    "en": "Open Claude's page",
+    "t": "Открыть страницу Claude"
+  },
+  "claude.paste": {
+    "en": "Paste",
+    "t": "Вставить"
+  },
+  "claude.reconnect": {
+    "en": "Reconnect",
+    "t": "Переподключить"
+  },
+  "claude.send": {
+    "en": "Connect with this code",
+    "t": "Подключиться с этим кодом"
+  },
+  "claude.since": {
+    "en": "Since",
+    "t": "С"
+  },
+  "claude.state": {
+    "en": "State",
+    "t": "Состояние"
+  },
+  "claude.steps": {
+    "en": "Authorize on Claude's page, press Copy there, then Paste here.",
+    "t": "Авторизуйтесь на странице Claude, нажмите там «Копировать», затем вставьте код сюда."
+  },
+  "claude.title": {
+    "en": "Your Claude",
+    "t": "Ваш Claude"
+  },
+  "claude.why": {
+    "en": "The assistant runs on the panel's Claude and costs tokens. Connect your own Claude subscription and its answers cost nothing here.",
+    "t": "Ассистент работает на Claude панели и расходует токены. Подключите собственную подписку Claude — здесь ответы будут бесплатными."
+  },
+  "claude.works": {
+    "en": "Connected",
+    "t": "Подключено"
   },
   "connected.empty": {
     "en": "No site keys",
@@ -2380,8 +2484,8 @@
     "t": "Нет данных об объёме поиска: исключено из рейтинга"
   },
   "prices.cost.label": {
-    "en": "{item}: dollars a {unit}",
-    "t": "{item}: долларов за {unit}"
+    "en": "{item}: dollars {per}",
+    "t": "{item}: долларов {per}"
   },
   "prices.cost.unknown": {
     "en": "unknown",
@@ -2394,6 +2498,10 @@
   "prices.per": {
     "en": "a {unit}",
     "t": "за {unit}"
+  },
+  "prices.perMany": {
+    "en": "per {n} {unit}",
+    "t": "за {n} {unit}"
   },
   "prices.reset": {
     "en": "Undo changes",
@@ -2432,8 +2540,8 @@
     "t": "токенов"
   },
   "prices.tokens.label": {
-    "en": "{item}: tokens a {unit}",
-    "t": "{item}: токенов за {unit}"
+    "en": "{item}: tokens {per}",
+    "t": "{item}: токенов {per}"
   },
   "prices.uncosted.count": {
     "en": "{n} without a cost",

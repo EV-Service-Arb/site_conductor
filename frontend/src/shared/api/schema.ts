@@ -444,8 +444,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done.
-         * @description 503 without the assistant's model, or when it does not answer.
+         * Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done. It runs on the asker's own Claude if they connected one, else on the panel's, each round charged to them at its prices.
+         * @description 503 without either Claude, or when the model does not answer.
          */
         post: operations["ask"];
         delete?: never;
@@ -1204,6 +1204,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/claude": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own Claude, which their assistant's answers run on; `null`, they run on the panel's. */
+        get: operations["claude"];
+        /**
+         * Connects the caller's own Claude from the code its page showed, kept only once Claude answers on it.
+         * @description 400 the code is not their last Connect's, it expired, or Claude refused it or its token.
+         */
+        put: operations["set_claude"];
+        post?: never;
+        /** Disconnects the caller's own Claude: their answers run on the panel's again. 404 none. */
+        delete: operations["remove_claude"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/claude/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Starts connecting the caller's own Claude: open `url`, authorize, and paste the code it shows into `PUT /me/claude` within 10 minutes. */
+        post: operations["connect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/openapi.json": {
         parameters: {
             query?: never;
@@ -1869,6 +1908,19 @@ export interface components {
             /** @description `null`: it went through. */
             error: string | null;
         };
+        /** @description A person's Claude: never its token. */
+        Claude: {
+            /** @description The last time Claude took it or refused it. */
+            checked: components["schemas"]["Checked"];
+            /** @description RFC 3339. */
+            expires_at: string;
+            /** @description RFC 3339. */
+            set_at: string;
+        };
+        /** @description Where the person authorizes the panel on claude.ai. */
+        ClaudeConnect: {
+            url: string;
+        };
         ConnectedSites: {
             internal_reads: components["schemas"]["ReadInternalReads"];
             received: components["schemas"]["ReadMap_of_Timestamp"];
@@ -1880,6 +1932,14 @@ export interface components {
             maps_key: components["schemas"]["MapsKey"] | null;
             /** @description What a Places request on the shared keys costs. */
             prices: components["schemas"]["Price"][];
+        };
+        /** @description What an answer cost: the model's tokens, on whose Claude, and the tokens it charged its asker. */
+        Cost: {
+            /** @description `ours`: the panel's Claude, charged; `theirs`: the asker's own, free here. */
+            bill: components["schemas"]["Bill"];
+            /** Format: int64 */
+            charged: number;
+            tokens: components["schemas"]["ModelUsed"];
         };
         /**
          * @description ISO 3166-1 alpha-2, of the countries GBPs are in.
@@ -2443,6 +2503,17 @@ export interface components {
             accounts: components["schemas"]["MeterAccount"][];
             meters: components["schemas"]["MeterUse"][];
         };
+        /** @description The model's tokens, by how Anthropic bills them ([`sa_core::prices::ModelTokens`]). */
+        ModelUsed: {
+            /** Format: int64 */
+            cache_read: number;
+            /** Format: int64 */
+            cache_write: number;
+            /** Format: int64 */
+            input: number;
+            /** Format: int64 */
+            output: number;
+        };
         /** @enum {string} */
         Need: "sa:admin:sources:manage" | "sa:admin:tokens:grant" | "sa:admin:trash:keep" | "sa:placement:study:read" | "sa:placement:study:spend" | "sa:playbook:mcp:use" | "sa:review_archive:archive:operate" | "sa:review_archive:members:act_as" | "sa:sites:analysis:experiments:edit" | "sa:sites:analysis:read" | "sa:sites:work:invoices:create" | "sa:sites:work:leads:edit" | "sa:sites:work:pii:see" | "sa:sites:work:places:edit" | "sa:sites:work:pricing:edit" | "sa:sites:work:read" | "sa:admin" | "sa:everyone" | "sa:operator";
         NewChat: {
@@ -2519,6 +2590,10 @@ export interface components {
             /** Format: double */
             lng: number;
         };
+        Pasted: {
+            /** @description What Claude's page shows once authorized: `code#state`. */
+            code: string;
+        };
         /** @description `GET /assistant/people?q=`: whom the caller may invite. */
         People: {
             people: components["schemas"]["Person"][];
@@ -2559,11 +2634,16 @@ export interface components {
             /** Format: uint32 */
             width: number;
         };
-        /** @description A catalog item, its price (`null`: not sold, or metered) and what a unit costs us (`null`: unknown). */
+        /** @description A catalog item, its price (`null`: not sold, or metered) and what `per` units cost us (`null`: unknown). */
         Price: {
             cost: components["schemas"]["UnitCost"] | null;
             description: string;
             item: components["schemas"]["PricedItem"];
+            /**
+             * Format: int64
+             * @description How many units the price and the cost are for.
+             */
+            per: number;
             price: components["schemas"]["TokenPrice"] | null;
             sale: components["schemas"]["Sale"];
             scope: components["schemas"]["Scope"];
@@ -3167,6 +3247,8 @@ export interface components {
             actions: components["schemas"]["Action"][];
             /** Format: int64 */
             at: number;
+            /** @description What it cost, as it grows; `null` on answers from before it was told. */
+            cost: components["schemas"]["Cost"] | null;
             /**
              * Format: int64
              * @description When the answer stopped growing; `null` while it runs.
@@ -3201,6 +3283,8 @@ export interface components {
             actions: components["schemas"]["Action"][];
             /** Format: int64 */
             at: number;
+            /** @description What it cost, as it grows; `null` on answers from before it was told. */
+            cost?: components["schemas"]["Cost"] | null;
             /**
              * Format: int64
              * @description When the answer stopped growing; `null` while it runs.
@@ -3241,7 +3325,7 @@ export interface components {
             set_by: string;
             /**
              * Format: int64
-             * @description Millionths of a dollar a unit.
+             * @description Millionths of a dollar per `per` units.
              */
             usd_micros: number;
         };
@@ -3401,8 +3485,11 @@ export type Chat = components['schemas']['Chat'];
 export type ChatSummary = components['schemas']['ChatSummary'];
 export type Chats = components['schemas']['Chats'];
 export type Checked = components['schemas']['Checked'];
+export type Claude = components['schemas']['Claude'];
+export type ClaudeConnect = components['schemas']['ClaudeConnect'];
 export type ConnectedSites = components['schemas']['ConnectedSites'];
 export type Connections = components['schemas']['Connections'];
+export type Cost = components['schemas']['Cost'];
 export type Country = components['schemas']['Country'];
 export type Destination = components['schemas']['Destination'];
 export type DestinationKind = components['schemas']['DestinationKind'];
@@ -3457,6 +3544,7 @@ export type MeterReadings = components['schemas']['MeterReadings'];
 export type MeterTotal = components['schemas']['MeterTotal'];
 export type MeterUse = components['schemas']['MeterUse'];
 export type Meters = components['schemas']['Meters'];
+export type ModelUsed = components['schemas']['ModelUsed'];
 export type Need = components['schemas']['Need'];
 export type NewChat = components['schemas']['NewChat'];
 export type NewGmail = components['schemas']['NewGmail'];
@@ -3468,6 +3556,7 @@ export type On = components['schemas']['On'];
 export type OnGoogle = components['schemas']['OnGoogle'];
 export type OpenApi = components['schemas']['OpenApi'];
 export type PanoramaAt = components['schemas']['PanoramaAt'];
+export type Pasted = components['schemas']['Pasted'];
 export type People = components['schemas']['People'];
 export type Permission = components['schemas']['Permission'];
 export type Person = components['schemas']['Person'];
@@ -6063,6 +6152,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Caller"];
+                };
+            };
+        };
+    };
+    claude: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Claude"] | null;
+                };
+            };
+            /** @description What every failed operation answers: `error` is for a person. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_claude: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Pasted"];
+            };
+        };
+        responses: {
+            /** @description A person's Claude: never its token. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Claude"];
+                };
+            };
+            /** @description What every failed operation answers: `error` is for a person. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    remove_claude: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers: `error` is for a person. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    connect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Where the person authorizes the panel on claude.ai. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaudeConnect"];
+                };
+            };
+            /** @description What every failed operation answers: `error` is for a person. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };

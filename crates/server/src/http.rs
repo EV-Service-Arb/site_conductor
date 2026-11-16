@@ -29,10 +29,9 @@ use tower_http::timeout::TimeoutLayer;
 use crate::{
 	access,
 	alerts::{self, Telegram},
-	api, areas,
-	ask::Model,
-	assistant, browser,
+	api, areas, assistant, browser,
 	catalog::Catalog,
+	claude::{self, Model},
 	connected, connections,
 	forward::{Forward, Services},
 	gmbs,
@@ -265,6 +264,7 @@ pub(crate) fn api_routes() -> Vec<ApiRoute> {
 		trash::routes(),
 		usage::routes(),
 		assistant::routes(),
+		claude::routes(),
 		kit::routes(),
 		areas::routes(),
 		meters::routes(),
@@ -327,7 +327,7 @@ pub(crate) struct ApiState {
 	pub(crate) telegram: Option<Telegram>,
 	/// With GOLOGIN_TOKEN and PANEL_BROWSERS_URL.
 	pub(crate) browsers: Option<browser::Connected>,
-	/// With CLAUDE_CODE_OAUTH_TOKEN: the assistant's.
+	/// The assistant's Claude.
 	pub(crate) model: Option<Model>,
 	/// With the forward: which landing page is which GBP.
 	pub(crate) pages: Option<kit::Pages>,

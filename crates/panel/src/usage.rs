@@ -10,7 +10,7 @@
 //! **A use is counted before the cursor passes it**, and a page is taken only from where its
 //! service's cursor stands.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
@@ -18,13 +18,38 @@ use sa_core::{
 	prices::{Item, MapLoad, ModelTokens, Spender},
 	usage::{Bill, UsagePage},
 };
+use strum::VariantArray;
 use uuid::Uuid;
 
 pub use crate::store::usage::{Cost, Day};
 use crate::{
 	Panel, Refused,
-	store::usage::{self as db, CONDUCTOR, Use},
+	store::{
+		tokens::{self as ledger, Charged, Entry, Kind},
+		usage::{self as db, CONDUCTOR, Use},
+	},
+	tokens::is_open,
 };
+
+/// The ledger's name for what the panel's Claude charges.
+const CLAUDE: &str = "claude";
+
+/// What an answer on our Claude has run up for its asker.
+#[derive(Debug)]
+pub struct Tab {
+	/// The answer's turn id: its charges' key.
+	answer: String,
+	prices: BTreeMap<ModelTokens, i64>,
+	/// Tokens × price, in [`Item::per`]ths of a token.
+	owed: i64,
+	/// `owed` rounded up, to tokens: what was charged, and let go past a spent balance.
+	billed: i64,
+	pub charged: i64,
+}
+
+fn spent(balance: i64) -> String {
+	format!("you hold {balance} tokens: connect your own Claude and answers cost nothing here, or ask for tokens")
+}
 
 impl Panel {
 	/// The user's browser built a map on `account`'s browser key.
@@ -48,15 +73,44 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
-	/// The assistant's `model` answered `by`, reading and writing `used`.
-	pub async fn model_used(&self, by: Spender<ModelTokens>, model: &str, used: &[(ModelTokens, i64)], now: Timestamp) -> eyre::Result<()> {
+	/// The tab `by`'s answer `answer` runs up on our Claude, at the prices in effect now; refused
+	/// while one of its items is unpriced or their balance is spent.
+	pub async fn model_tab(&self, by: Spender<ModelTokens>, answer: &str, now: Timestamp) -> eyre::Result<Result<Tab, String>> {
+		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed.to_string()));
+		}
+		let mut prices = BTreeMap::new();
+		for &tokens in ModelTokens::VARIANTS {
+			let Some(price) = ledger::price(&mut tx, tokens.into()).await? else {
+				return Ok(Err("the panel's Claude is not priced yet: connect your own Claude, or ask an admin to price it".to_owned()));
+			};
+			prices.insert(tokens, price);
+		}
+		let balance = ledger::renewed(&mut tx, by.user(), now, &self.renewal).await?;
+		tx.commit().await.wrap_err("committing a renewal")?;
+		if balance <= 0 {
+			return Ok(Err(spent(balance)));
+		}
+		Ok(Ok(Tab {
+			answer: answer.to_owned(),
+			prices,
+			owed: 0,
+			billed: 0,
+			charged: 0,
+		}))
+	}
+
+	/// The assistant's `model` answered `by`, reading and writing `used`: on our Claude (`tab`),
+	/// charged in the same write. Why no further round runs on ours, once their balance is spent.
+	pub async fn model_used(&self, by: Spender<ModelTokens>, model: &str, used: &[(ModelTokens, i64)], tab: Option<&mut Tab>, now: Timestamp) -> eyre::Result<Option<String>> {
 		let mut tx = self.store.begin_write().await?;
 		for &(tokens, units) in used.iter().filter(|(_, n)| *n > 0) {
 			let used = Use {
 				at: now,
 				item: tokens.into(),
 				units,
-				bill: Bill::Ours,
+				bill: if tab.is_some() { Bill::Ours } else { Bill::Theirs },
 				account: None,
 				source: CONDUCTOR.to_owned(),
 				user: Some(by.user()),
@@ -64,7 +118,39 @@ impl Panel {
 			};
 			db::record(&mut tx, &used).await?;
 		}
-		tx.commit().await.wrap_err("committing a model's tokens")
+		let Some(tab) = tab else {
+			tx.commit().await.wrap_err("committing a model's tokens")?;
+			return Ok(None);
+		};
+		tab.owed += used.iter().map(|(tokens, units)| tab.prices[tokens] * units).sum::<i64>();
+		let per = Item::from(ModelTokens::Input).per();
+		let due = (tab.owed + per - 1) / per - tab.billed;
+		let balance = ledger::renewed(&mut tx, by.user(), now, &self.renewal).await?;
+		// a round's cost is known only once it is done: what it costs past the balance is let go
+		let charge = due.min(balance.max(0));
+		if charge > 0 {
+			let entry = Entry {
+				at: now,
+				delta: -charge,
+				kind: Kind::Charge,
+				charged: Some(Charged {
+					service: CLAUDE.to_owned(),
+					key: tab.answer.clone(),
+					label: Some("The assistant's answer".to_owned()),
+				}),
+				by: None,
+				note: None,
+			};
+			ledger::append(&mut tx, by.user(), &entry).await?;
+		}
+		tx.commit().await.wrap_err("committing a model's tokens and their charge")?;
+		tab.billed += due;
+		tab.charged += charge;
+		if charge > 0 {
+			tracing::info!(user_id = %by.user(), tokens = charge, "the assistant's answer charged");
+			self.snapshot_due.notify_one();
+		}
+		Ok((balance - charge <= 0).then(|| spent(balance - charge)))
 	}
 
 	/// Where `service`'s usage feed is read up to.

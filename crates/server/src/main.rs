@@ -460,7 +460,7 @@ async fn serve(
 	grafana: Option<settings::GrafanaSettings>,
 	files: Option<Files>,
 	browsers: Option<sa_server::browser::Connected>,
-	model: Option<sa_server::ask::Model>,
+	model: sa_server::claude::Model,
 	readers: Vec<sa_panel::meters::google::Google>,
 	bind: SocketAddr,
 ) -> eyre::Result<()> {
@@ -554,8 +554,8 @@ async fn serve(
 	if browsers.is_none() {
 		tracing::warn!("PANEL_BROWSERS_URL unset: no browsers, their routes answer 503");
 	}
-	if model.is_none() {
-		tracing::warn!("CLAUDE_CODE_OAUTH_TOKEN unset: no assistant, asking it answers 503");
+	if model.owner().is_none() {
+		tracing::warn!("CLAUDE_CODE_OAUTH_TOKEN unset: the assistant answers only on a person's own Claude");
 	}
 	let catalog = forward.as_ref().map(|f| f.catalog().clone());
 	let panel_for_pages = sign_in.panel.clone();
@@ -568,7 +568,7 @@ async fn serve(
 		bot.clone(),
 		browsers,
 		files.as_ref(),
-		model,
+		Some(model),
 	);
 	let app = match files {
 		Some(files) => web::serve(app, files, panel_for_pages),

@@ -4,7 +4,7 @@
 //! proposed, never done: the user confirms it from the answer's actions. The turns are written
 //! through the chats' versioned store as the loop goes, each write told to the caller's screens.
 
-use std::{collections::BTreeMap, time::Duration};
+use std::collections::BTreeMap;
 
 use axum::{
 	Extension, Json,
@@ -16,7 +16,10 @@ use ev_lib::api::{
 	schemars::{generate::SchemaSettings, schema_for},
 };
 use jiff::Timestamp;
-use sa_core::prices::{ModelTokens, Spends};
+use sa_core::{
+	prices::{ModelTokens, Spends},
+	usage::Bill,
+};
 use sa_panel::{
 	assistant::Chat,
 	live::{Audience, Change},
@@ -27,15 +30,13 @@ use uuid::Uuid;
 
 use crate::{
 	api::{ApiError, ApiResult, Body, Id, Ids},
-	assistant::{Action, ActionState, AnswerState, Attachment, ChatDto, Mention, Step, Target, Turn},
+	assistant::{Action, ActionState, AnswerState, Attachment, ChatDto, Cost, Mention, Step, Target, Turn, Used},
+	claude::{MODEL, SUBSCRIPTION},
 	http::ApiState,
 	signin::Caller,
 	tools::{self, Search},
 };
 
-const MODEL: &str = "claude-opus-5-5";
-/// A subscription's token is served only to a system prompt that opens so.
-const SUBSCRIPTION: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
 /// Model turns one question may take before the loop stops and says so.
 const ROUNDS: usize = 24;
 
@@ -49,49 +50,6 @@ so say what it will do. `open` offers a view (a URL of this site) as a link; `ru
 keymap. The <page> block says what is open, the views there are, and the bindings bound now.\n\
 \n\
 Answer briefly, in the person's language. Formatting: **bold**, `- ` items, `@[label](location:<gbp id>)` to name a GBP.";
-
-/// The Messages API on a Claude subscription (`CLAUDE_CODE_OAUTH_TOKEN`).
-#[derive(Clone)]
-pub struct Model {
-	http: reqwest::Client,
-	/// `https://api.anthropic.com`.
-	base: String,
-	token: String,
-}
-
-impl Model {
-	pub fn new(base: String, token: String) -> Self {
-		let http = reqwest::Client::builder().timeout(Duration::from_secs(300)).build().expect("the TLS backend initialises at boot");
-		Self { http, base, token }
-	}
-
-	async fn answer(&self, system: &str, tools: &Value, messages: &[Value]) -> ApiResult<Value> {
-		let res = self
-			.http
-			.post(format!("{}/v1/messages", self.base))
-			.bearer_auth(&self.token)
-			.header("anthropic-version", "2026-10-21")
-			.header("anthropic-beta", "server-side-fallback-2026-07-01,oauth-2025-04-20")
-			.json(&json!({
-				"model": MODEL,
-				"max_tokens": 16000,
-				"fallbacks": "default",
-				"output_config": { "effort": "medium" },
-				"system": [{ "type": "text", "text": SUBSCRIPTION }, { "type": "text", "text": system }],
-				"tools": tools,
-				"messages": messages,
-			}))
-			.send()
-			.await
-			.map_err(|e| ApiError::Unavailable(format!("the assistant's model did not answer: {e}")))?;
-		let status = res.status();
-		let body: Value = res.json().await.map_err(|e| ApiError::Unavailable(format!("the assistant's model answered no JSON: {e}")))?;
-		if !status.is_success() {
-			return Err(ApiError::Unavailable(format!("the assistant's model refused with {status}: {body}")));
-		}
-		Ok(body)
-	}
-}
 
 /// The model that answered: a fallback's, when it stood in.
 fn answered_by(reply: &Value) -> eyre::Result<&str> {
@@ -136,9 +94,10 @@ pub(crate) struct Question {
 }
 
 /// Asks the assistant in a chat: the question and the answer join its turns, the answer written as
-/// it grows; answered with the chat once the answer is done.
+/// it grows; answered with the chat once the answer is done. It runs on the asker's own Claude if
+/// they connected one, else on the panel's, each round charged to them at its prices.
 ///
-/// 503 without the assistant's model, or when it does not answer.
+/// 503 without either Claude, or when the model does not answer.
 pub(crate) async fn ask(
 	State(state): State<ApiState>,
 	Spends(caller, by): Spends<ModelTokens, Caller>,
@@ -147,6 +106,11 @@ pub(crate) async fn ask(
 	Body(q): Body<Question>,
 ) -> ApiResult<Json<ChatDto>> {
 	let model = state.model.clone().ok_or_else(|| ApiError::Unavailable("the assistant is not connected".into()))?;
+	let (token, bill) = match (state.panel.claude_token(caller.user_id).await?, model.owner()) {
+		(Some(own), _) => (own, Bill::Theirs),
+		(None, Some(owner)) => (owner.clone(), Bill::Ours),
+		(None, None) => return Err(ApiError::Unavailable("the assistant runs on your own Claude here: connect it".into())),
+	};
 	let reader = (&caller).into();
 	let read: Chat<Turn> = state.panel.assistant_chat(reader, chat).await??;
 	let started = Timestamp::now();
@@ -169,6 +133,16 @@ pub(crate) async fn ask(
 		steps: Vec::new(),
 		text: String::new(),
 		actions: Vec::new(),
+		cost: Cost {
+			bill,
+			tokens: Used {
+				input: 0,
+				cache_write: 0,
+				cache_read: 0,
+				output: 0,
+			},
+			charged: 0,
+		},
 	};
 	let from = q.from;
 	turns.push(asked);
@@ -178,6 +152,17 @@ pub(crate) async fn ask(
 		chat,
 		base: read.summary.version,
 		from,
+	};
+	let mut tab = match bill {
+		Bill::Ours => match state.panel.model_tab(by, &answer.id, started).await? {
+			Ok(tab) => Some(tab),
+			Err(why) => {
+				answer.text = format!("I can't answer on the panel's Claude: {why}.");
+				let done = written.write(&turns, &answer, AnswerState::Stopped, Some(started)).await?;
+				return Ok(Json(done));
+			}
+		},
+		Bill::Theirs => None,
 	};
 	written.write(&turns, &answer, AnswerState::Working, None).await?;
 
@@ -191,8 +176,30 @@ pub(crate) async fn ask(
 			answer.text.push_str("\n\nI stopped here: this took more steps than one answer may.");
 			break AnswerState::Stopped;
 		}
-		let reply = model.answer(SYSTEM, &tools, &history).await?;
-		state.panel.model_used(by, answered_by(&reply)?, &tokens(&reply)?, Timestamp::now()).await?;
+		let asked = json!({
+			"model": MODEL,
+			"max_tokens": 16000,
+			"fallbacks": "default",
+			"output_config": { "effort": "medium" },
+			"system": [{ "type": "text", "text": SUBSCRIPTION }, { "type": "text", "text": SYSTEM }],
+			"tools": tools,
+			"messages": history,
+		});
+		let reply = match model.answer(&token, &asked).await? {
+			Ok(reply) => reply,
+			Err(said) if bill == Bill::Theirs => {
+				state.panel.claude_refused(caller.user_id, said, Timestamp::now()).await?;
+				answer
+					.text
+					.push_str("\n\nYour Claude connection was refused: reconnect it, or disconnect it to ask on the panel's.");
+				break AnswerState::Stopped;
+			}
+			Err(said) => return Err(ApiError::Unavailable(format!("the panel's Claude refused its token: {said}"))),
+		};
+		let used = tokens(&reply)?;
+		answer.cost.tokens.add(&used);
+		let spent = state.panel.model_used(by, answered_by(&reply)?, &used, tab.as_mut(), Timestamp::now()).await?;
+		answer.cost.charged = tab.as_ref().map_or(0, |t| t.charged);
 		let content = reply["content"].as_array().cloned().ok_or_else(|| eyre::eyre!("the model answered no content: {reply}"))?;
 		let mut results = Vec::new();
 		for block in &content {
@@ -208,10 +215,16 @@ pub(crate) async fn ask(
 		}
 		history.push(json!({ "role": "assistant", "content": content }));
 		match reply["stop_reason"].as_str() {
-			Some("tool_use") => {
-				history.push(json!({ "role": "user", "content": results }));
-				written.write(&turns, &answer, AnswerState::Working, None).await?;
-			}
+			Some("tool_use") => match spent {
+				Some(why) => {
+					answer.text.push_str(&format!("\n\nI stopped here: {why}."));
+					break AnswerState::Stopped;
+				}
+				None => {
+					history.push(json!({ "role": "user", "content": results }));
+					written.write(&turns, &answer, AnswerState::Working, None).await?;
+				}
+			},
 			Some("refusal") => {
 				answer.text = "I can't help with that.".to_owned();
 				break AnswerState::Done;
@@ -285,6 +298,7 @@ struct Answer {
 	steps: Vec<Step>,
 	text: String,
 	actions: Vec<Action>,
+	cost: Cost,
 }
 
 /// Where the loop's writes go: the chat at the version last written.
@@ -310,6 +324,7 @@ impl Written<'_> {
 			actions: answer.actions.clone(),
 			state,
 			feedback: None,
+			cost: Some(answer.cost.clone()),
 		};
 		let turns: Vec<Turn> = asked[self.from..].iter().cloned().chain([turn]).collect();
 		let chat = self.state.panel.assistant_turns(self.caller.into(), self.chat, self.base, self.from, turns, now).await??;

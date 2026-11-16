@@ -8,7 +8,7 @@ use axum::{Json, Router, body::Body, http::Method, routing::post};
 use jiff::Timestamp;
 use sa_panel::testing::{TestDb, operator, panel};
 use sa_server::{
-	ask::Model,
+	claude::Model,
 	concierge::{Concierge, DevIdentity},
 	http,
 	signin::{SignIn, SignInConfig},
@@ -70,7 +70,7 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: ORIGIN.to_owned(),
 	};
-	let model = Model::new(base, "test".into());
+	let model = Model::new(base.clone(), base, Some("owner".to_owned().into()));
 	let app = http::app(SignIn::new(p.clone(), Concierge::dev(who), config), None, None, Default::default(), None, None, None, Some(model));
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
@@ -79,6 +79,8 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 	let made = json!({ "id": chat, "title": null, "turns": [] });
 	let (status, ..) = b.send_body(&app, Method::POST, "/api/v1/assistant/chats", &json, true, Body::from(made.to_string())).await;
 	assert_eq!(status, 201);
+	let year = Timestamp::now() + jiff::SignedDuration::from_hours(24 * 365);
+	p.set_claude(DevIdentity::named(email), "theirs", year, Timestamp::now()).await.unwrap();
 
 	let question = json!({ "from": 0, "text": "delete my trade 7", "mentions": [], "files": [], "url": "/", "views": { "trash": "/?trash" }, "bindings": [] });
 	let (status, _, answer) = b

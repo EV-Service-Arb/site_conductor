@@ -18,6 +18,9 @@ const SCOPE_NAME = {
 } satisfies Record<Scope, (t: T) => string>;
 
 /** In first-seen order. */
+/** "a request", or "per 1,000,000 token" for what is priced by the million. */
+const perUnit = (t: T, p: Price) => (p.per === 1 ? t(pricesKeys.per, "a {unit}", { unit: p.unit }) : t(pricesKeys.perMany, "per {n} {unit}", { n: p.per.toLocaleString(), unit: p.unit }));
+
 function grouped<K>(prices: Price[], by: (p: Price) => K): [K, Price[]][] {
   const groups = new Map<K, Price[]>();
   for (const p of prices) groups.set(by(p), [...(groups.get(by(p)) ?? []), p]);
@@ -113,7 +116,7 @@ export function PricesCard({ prices, onSaved }: { prices: Price[]; onSaved: (pri
                             min={0}
                             size={size}
                             className="w-24 tabular-nums"
-                            aria-label={t(pricesKeys.tokens.label, "{item}: tokens a {unit}", { item: p.title, unit: p.unit })}
+                            aria-label={t(pricesKeys.tokens.label, "{item}: tokens {per}", { item: p.title, per: perUnit(t, p) })}
                             aria-invalid={tokens(shownPrice(p)) === undefined || undefined}
                             value={shownPrice(p)}
                             placeholder={t(pricesKeys.unsold, "not sold")}
@@ -133,13 +136,13 @@ export function PricesCard({ prices, onSaved }: { prices: Price[]; onSaved: (pri
                           step="any"
                           size={size}
                           className="w-28 tabular-nums"
-                          aria-label={t(pricesKeys.cost.label, "{item}: dollars a {unit}", { item: p.title, unit: p.unit })}
+                          aria-label={t(pricesKeys.cost.label, "{item}: dollars {per}", { item: p.title, per: perUnit(t, p) })}
                           aria-invalid={usdMicros(shownCost(p)) === undefined || undefined}
                           value={shownCost(p)}
                           placeholder={t(pricesKeys.cost.unknown, "unknown")}
                           onChange={edit(p.item, "cost")}
                         />
-                        <span className="w-16">{t(pricesKeys.per, "a {unit}", { unit: p.unit })}</span>
+                        <span className="w-16">{perUnit(t, p)}</span>
                       </label>
                     </li>
                   ))}

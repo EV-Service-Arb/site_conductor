@@ -141,7 +141,44 @@ pub enum Turn {
 		actions: Vec<Action>,
 		state: AnswerState,
 		feedback: Option<Feedback>,
+		/// What it cost, as it grows; `null` on answers from before it was told.
+		cost: Option<Cost>,
 	},
+}
+
+/// What an answer cost: the model's tokens, on whose Claude, and the tokens it charged its asker.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Cost {
+	/// `ours`: the panel's Claude, charged; `theirs`: the asker's own, free here.
+	pub bill: sa_core::usage::Bill,
+	pub tokens: Used,
+	pub charged: i64,
+}
+
+/// The model's tokens, by how Anthropic bills them ([`sa_core::prices::ModelTokens`]).
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+#[schemars(rename = "ModelUsed")]
+pub struct Used {
+	pub input: i64,
+	pub cache_write: i64,
+	pub cache_read: i64,
+	pub output: i64,
+}
+
+impl Used {
+	pub(crate) fn add(&mut self, used: &[(sa_core::prices::ModelTokens, i64)]) {
+		use sa_core::prices::ModelTokens as T;
+		for &(tokens, n) in used {
+			*match tokens {
+				T::Input => &mut self.input,
+				T::CacheWrite => &mut self.cache_write,
+				T::CacheRead => &mut self.cache_read,
+				T::Output => &mut self.output,
+			} += n;
+		}
+	}
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
