@@ -19,7 +19,7 @@ export const WALLET_SCRIPT = `${WALLET_ORIGIN}/mfe/banking/wallet.js`;
  * from banking's source, never from what evinvest.ltd serves: its latest release and its main,
  * space-separated, so the next bundle is accepted before banking rolls it out (banking#601).
  */
-export const WALLET_SCRIPT_INTEGRITY = "sha256-NvQ6pdlqRPM7NilMiUDPhHBblVeTEDpqHI6Zy9+8ZIM= sha256-dTHZ9KONZftLYVv+aqUdkS0o8kCqt7O/d2MPeHxvQ0U=";
+export const WALLET_SCRIPT_INTEGRITY = "sha256-zadW4JcniiNqexYM9sDrnZYhH06zTT5b2yWTitX30Dw= sha256-dTHZ9KONZftLYVv+aqUdkS0o8kCqt7O/d2MPeHxvQ0U=";
 
 /** The lowest `static apiVersion` of the bundle's elements that speaks this contract. */
 export const WALLET_API_VERSION = 2;
