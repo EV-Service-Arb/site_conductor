@@ -9,7 +9,10 @@ use std::collections::BTreeSet;
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::gbp::{Country, GmailRole, OnGoogle, State};
+use sa_core::{
+	gbp::{Country, GmailRole, OnGoogle, State},
+	prices::{PlacesRequest, Spender},
+};
 use sa_places::{Ask, LatLng, Place, Suggestion};
 use uuid::Uuid;
 
@@ -264,11 +267,12 @@ impl Panel {
 	/// their `gmail`'s key first, if they name one of theirs.
 	/// Each with Google's country of it: one in a country not served refuses them all, as adding it
 	/// would.
-	pub async fn place_candidates(&self, owner: Uuid, gmail: Option<i64>, input: &str) -> eyre::Result<Result<Vec<(String, Option<Place>, Option<Country>)>, Refused>> {
+	pub async fn place_candidates(&self, by: Spender<PlacesRequest>, gmail: Option<i64>, input: &str) -> eyre::Result<Result<Vec<(String, Option<Place>, Option<Country>)>, Refused>> {
+		let owner = by.user();
 		if !self.gmail_is(owner, gmail).await? {
 			return Ok(Err(Refused::NotFound));
 		}
-		let purse = self.purse(owner);
+		let purse = self.purse(by);
 		let payer = self.payer(owner, gmail, Some(&purse)).await?;
 		let places = match self.google.candidates(input, &payer).await {
 			Ok(places) => places,
@@ -279,11 +283,12 @@ impl Panel {
 
 	/// The places `input` may be heading for, in the countries served (see
 	/// [`sa_places::Google::suggest`]), paid for as [`Self::place_candidates`].
-	pub async fn suggest(&self, owner: Uuid, gmail: Option<i64>, input: &str) -> eyre::Result<Result<Vec<Suggestion>, Refused>> {
+	pub async fn suggest(&self, by: Spender<PlacesRequest>, gmail: Option<i64>, input: &str) -> eyre::Result<Result<Vec<Suggestion>, Refused>> {
+		let owner = by.user();
 		if !self.gmail_is(owner, gmail).await? {
 			return Ok(Err(Refused::NotFound));
 		}
-		let purse = self.purse(owner);
+		let purse = self.purse(by);
 		let payer = self.payer(owner, gmail, Some(&purse)).await?;
 		let regions: Vec<&str> = <Country as strum::VariantArray>::VARIANTS.iter().map(|c| c.as_str()).collect();
 		match self.google.suggest(input, &regions, &[], &payer).await {
@@ -371,15 +376,16 @@ impl Panel {
 	}
 
 	/// A GBP on Google already, under the gmail `e` names: named, addressed, located and put in
-	/// its country by Places when there is a key, `e` filling what Google lacks. `owner` is whose
-	/// the gmail must be; `None`, the operator's CLI.
-	pub async fn add_gmb(&self, owner: Option<Uuid>, e: Existing, now: Timestamp) -> eyre::Result<Result<Gmb, Refused>> {
+	/// its country by Places when there is a key, `e` filling what Google lacks. `by` is whose
+	/// the gmail must be; `None`, the operator's CLI, the house paying.
+	pub async fn add_gmb(&self, by: Option<Spender<PlacesRequest>>, e: Existing, now: Timestamp) -> eyre::Result<Result<Gmb, Refused>> {
+		let owner = by.map(|b| b.user());
 		let gmail_owner = match db::gmail_owner(&mut *self.store.pool().acquire().await.wrap_err("a connection for a gmail")?, e.gmail_id).await? {
 			Some(o) if owner.is_none_or(|owner| owner == o) => o,
 			_ => return Ok(Err(Refused::NotFound)),
 		};
-		let purse = self.purse(gmail_owner);
-		let payer = self.payer(gmail_owner, Some(e.gmail_id), owner.map(|_| &purse as &dyn sa_places::Purse)).await?;
+		let purse = by.map(|b| self.purse(b));
+		let payer = self.payer(gmail_owner, Some(e.gmail_id), purse.as_ref().map(|p| p as &dyn sa_places::Purse)).await?;
 		let (place_id, place) = match self.google.resolve(&e.place, &payer).await {
 			Ok(found) => found,
 			Err(err) => return Ok(Err(places_error(err)?)),
@@ -488,8 +494,9 @@ impl Panel {
 
 	/// GBP `id` in `to`, as [`State::next`] allows; past a draft, with its gmail and its country.
 	/// One without a place takes it (`place`, as a person pastes it) on any move onto Google, and
-	/// must on one to verified. `owner` is whose it must be; `None`, the operator's CLI.
-	pub async fn advance(&self, owner: Option<Uuid>, id: i64, to: State, place: Option<&str>) -> eyre::Result<Result<Gmb, Refused>> {
+	/// must on one to verified. `by` is whose it must be; `None`, the operator's CLI, the house paying.
+	pub async fn advance(&self, by: Option<Spender<PlacesRequest>>, id: i64, to: State, place: Option<&str>) -> eyre::Result<Result<Gmb, Refused>> {
+		let owner = by.map(|b| b.user());
 		let Some(read) = db::gmb_of(&mut *self.store.pool().acquire().await.wrap_err("a connection for a GMB")?, owner, id).await? else {
 			return Ok(Err(Refused::NotFound));
 		};
@@ -508,8 +515,8 @@ impl Panel {
 				let Some(gmail_owner) = db::gmail_owner(&mut *self.store.pool().acquire().await.wrap_err("a connection for a gmail")?, gmail).await? else {
 					return Ok(Err(Refused::NotFound)); // its gmail removed since it was read, and the GBP with it
 				};
-				let purse = self.purse(gmail_owner);
-				let payer = self.payer(gmail_owner, Some(gmail), owner.map(|_| &purse as &dyn sa_places::Purse)).await?;
+				let purse = by.map(|b| self.purse(b));
+				let payer = self.payer(gmail_owner, Some(gmail), purse.as_ref().map(|p| p as &dyn sa_places::Purse)).await?;
 				match self.google.resolve(input, &payer).await {
 					Ok(found) => Some(found),
 					Err(e) => return Ok(Err(places_error(e)?)),

@@ -1,7 +1,10 @@
 //! What is removed waits in its owner's trash, restorable, until it is purged.
 
 use jiff::{SignedDuration, Timestamp};
-use sa_core::gbp::{Country, OnGoogle};
+use sa_core::{
+	gbp::{Country, OnGoogle},
+	prices::Spender,
+};
 use sa_panel::{
 	Panel, Refused,
 	gmbs::Existing,
@@ -94,9 +97,9 @@ async fn a_removed_gmail_waits_in_the_trash_and_comes_back_with_what_went_with_i
 	let (p, owner) = opened(&db).await;
 	let trade = p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap().id;
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
-	let one = p.add_gmb(Some(owner), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();
-	let two = p.add_gmb(Some(owner), existing(trade, gmail.id, TWO, "Two"), now()).await.unwrap().unwrap();
-	let loose = p.add_gmb(Some(owner), existing(trade, gmail.id, LOOSE, "Loose"), now()).await.unwrap().unwrap();
+	let one = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();
+	let two = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, TWO, "Two"), now()).await.unwrap().unwrap();
+	let loose = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, LOOSE, "Loose"), now()).await.unwrap().unwrap();
 	connect(&db, gmail.id).await;
 
 	p.remove_gmb(owner, loose.id, now()).await.unwrap().unwrap();
@@ -133,9 +136,9 @@ async fn a_restore_is_refused_while_a_live_gbp_holds_its_place_or_a_live_gmail_i
 	let (p, owner) = opened(&db).await;
 	let trade = p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap().id;
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
-	let one = p.add_gmb(Some(owner), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();
+	let one = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();
 	p.remove_gmb(owner, one.id, now()).await.unwrap().unwrap();
-	p.add_gmb(Some(owner), existing(trade, gmail.id, ONE, "One again"), now()).await.unwrap().unwrap();
+	p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, ONE, "One again"), now()).await.unwrap().unwrap();
 
 	let trash = p.trash(owner, false).await.unwrap();
 	assert!(trash.gmbs[0].blocked.as_deref().is_some_and(|b| b.contains(ONE)), "{:?}", trash.gmbs[0].blocked);
@@ -153,7 +156,7 @@ async fn the_purge_ends_a_restore_once_the_kept_days_pass() {
 	let (p, owner) = opened(&db).await;
 	let trade = p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap().id;
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
-	let one = p.add_gmb(Some(owner), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();
+	let one = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();
 	connect(&db, gmail.id).await;
 	p.remove_gmail(owner, gmail.id, now()).await.unwrap().unwrap();
 	p.set_trash_settings(owner, 7, None).await.unwrap().unwrap();

@@ -8,7 +8,13 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 
+[features]
+# what an operation spends, in a service's route table (`prices::Spends`)
+api = ["dep:axum", "dep:ev_lib"]
+
 [dependencies]
+axum = { workspace = true, optional = true }
+ev_lib = { workspace = true, features = ["api"], optional = true }
 hex.workspace = true
 hmac.workspace = true
 jiff = { workspace = true, features = ["serde", "tzdb-bundle-always"] }

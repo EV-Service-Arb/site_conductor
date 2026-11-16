@@ -14,6 +14,7 @@ use ev_lib::api::{
 	openapi::{Operation, ReferenceOr},
 };
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+use sa_core::prices::Item;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use tower::ServiceExt;
@@ -203,19 +204,19 @@ pub struct Found {
 }
 
 /// What an operation does to the world, from its method and what its author said of it.
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Hints {
 	pub read_only: bool,
 	pub idempotent: bool,
 	pub destructive: bool,
-	/// Costs the caller money: a Places request, a cloud phone's minutes.
-	pub spends: bool,
+	/// The priced items it may buy: a Places request, a cloud phone's minutes.
+	pub spends: Vec<Item>,
 }
 
 impl Hints {
 	/// What the user confirms before it runs.
-	pub fn proposed(self) -> bool {
-		self.destructive || self.spends
+	pub fn proposed(&self) -> bool {
+		self.destructive || !self.spends.is_empty()
 	}
 }
 
@@ -231,7 +232,10 @@ fn hints(method: &str, op: &Operation) -> Hints {
 		read_only: method == "get",
 		idempotent: matches!(method, "get" | "put" | "delete"),
 		destructive: method == "delete",
-		spends: op.extensions.get("x-spends").is_some_and(|v| v == &Value::Bool(true)),
+		spends: op
+			.extensions
+			.get("x-spends")
+			.map_or_else(Vec::new, |v| serde_json::from_value(v.clone()).expect("x-spends names priced items")),
 	}
 }
 

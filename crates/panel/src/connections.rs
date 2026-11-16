@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::prices::{Item, PlacesRequest};
+use sa_core::prices::{Item, PlacesRequest, Spender};
 use sa_places::{Bought, Hold, Payer, Pending, Purse};
 use uuid::Uuid;
 use zeroize::Zeroizing;
@@ -183,9 +183,12 @@ impl Panel {
 		Ok(Payer { own, purse })
 	}
 
-	/// The tokens of `user` paying for buys on the rotation.
-	pub(crate) fn purse(&self, user: Uuid) -> Tokens {
-		Tokens { panel: self.clone(), user }
+	/// The tokens of `by` paying for buys on the rotation.
+	pub(crate) fn purse(&self, by: Spender<PlacesRequest>) -> Tokens {
+		Tokens {
+			panel: self.clone(),
+			user: by.user(),
+		}
 	}
 
 	pub(crate) async fn gmail_of(&self, owner: Uuid, id: i64) -> eyre::Result<Result<(), Refused>> {

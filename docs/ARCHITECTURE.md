@@ -414,8 +414,9 @@ person.
 
 **One table, everything derived** (ev_lib `api`): `http::api_routes` is what the router is built
 from; each operation's request and answer are its handler's signature, its description the
-handler's `///`, its id the handler's name, its permission its section, and whether it spends
-said by hand. `GET /openapi.json` is that document, narrowed to the operations the caller's
+handler's `///`, its id the handler's name, its permission its section, and what it spends its
+`sa_core::prices::Spends<Tool, _>` (`x-spends`: the tool's items), which hands the handler the
+`Spender` that whatever buys takes. `GET /openapi.json` is that document, narrowed to the operations the caller's
 permissions open; the front end's client and types are generated from it (`nix run .#gen`), and
 an agent's tools read it. Below, the overview (a test holds it to the table); what each answers
 is in the document. Slow: 8 at once, 10 min each, not the bounds above. The browser viewer's
@@ -649,6 +650,7 @@ a Google answer bought, any service ─ PUT /api/queries_cache, `bought` ─ in 
 a map built in a browser ─ POST /map/loaded        a panorama ─ POST /map/street_view
 review_archive's walk steps ─ GET /api/conductor/usage ┐ followed every 10 s, a page and its
 the runner's phone minutes, browser starts ─ GET /usage ┘ cursor in one write (`sa_core::usage`)
+the assistant's model tokens, by kind ─ each answer of POST /assistant/chats/{id}/ask, its model the key
 ```
 
 **Street View is bought before it opens.** Google bills each panorama opened on a browser key

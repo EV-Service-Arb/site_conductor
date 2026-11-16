@@ -18,6 +18,7 @@ use sa_auth::SourceKind;
 use sa_core::{
 	gbp::{Country, OnGoogle},
 	ids::{BrandId, SiteOrigin},
+	prices::{Item, PlacesRequest, Spender},
 };
 use sa_panel::{
 	Panel,
@@ -28,7 +29,6 @@ use sa_panel::{
 	store::users::User,
 	testing::{TestDb, operator, panel_on, sign, sign_get},
 };
-use sa_core::prices::{Item, PlacesRequest};
 use sa_places::{Google, Keys};
 use sa_server::{
 	concierge::DevIdentity,
@@ -138,7 +138,12 @@ async fn kit(db: &TestDb) -> Kit {
 		.unwrap()
 		.spend(true)
 		.at(format!("{base}/v1/places"));
-	let panel = panel_on(db.store().await, DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(), google, sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some("k"), None)]));
+	let panel = panel_on(
+		db.store().await,
+		DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(),
+		google,
+		sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some("k"), None)]),
+	);
 	let now = Timestamp::now();
 	panel
 		.import_review_archive(Export {
@@ -198,7 +203,7 @@ async fn kit(db: &TestDb) -> Kit {
 			country: Some(Country::FR),
 			trade,
 		};
-		panel.add_gmb(Some(owner), e, now).await.unwrap().unwrap().id
+		panel.add_gmb(Some(Spender::new(owner)), e, now).await.unwrap().unwrap().id
 	};
 	let (seven, three) = (gmb(SEVEN, "Lyon 7").await, gmb(THREE, "Lyon 3").await);
 	pages.lock().unwrap().extend([(seven, "lyon-7"), (three, "lyon-3")]);
@@ -319,12 +324,16 @@ async fn the_kit_off_and_another_brands_key_find_nothing() {
 	let k = kit(&db).await;
 	let owner = DevIdentity::named("dev@localhost");
 
-	k.panel.set_kit_target(owner, k.seven, None, Timestamp::now()).await.unwrap().unwrap();
+	k.panel.set_kit_target(Spender::new(owner), k.seven, None, Timestamp::now()).await.unwrap().unwrap();
 	let (status, _) = k.get("/api/kit/v1/offer?brand=aquafix&slug=lyon-7").await;
 	assert_eq!(status, StatusCode::NOT_FOUND, "the kit is off");
 	let (status, _) = k.get("/api/kit/v1/offer?brand=vifnet&slug=lyon-3").await;
 	assert_eq!(status, StatusCode::NOT_FOUND, "the key writes for aquafix only");
-	k.panel.set_kit_target(owner, k.seven, Some(Target::OneTap), Timestamp::now()).await.unwrap().unwrap();
+	k.panel
+		.set_kit_target(Spender::new(owner), k.seven, Some(Target::OneTap), Timestamp::now())
+		.await
+		.unwrap()
+		.unwrap();
 	let (_, offered) = k.offer("lyon-7").await;
 	assert_eq!(k.numbers(&offered), [1], "one tap: the top draft");
 }

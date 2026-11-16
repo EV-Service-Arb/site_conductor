@@ -8,7 +8,10 @@ use std::collections::BTreeMap;
 use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
 use ev_lib::api::{Created, JsonSchema};
 use jiff::Timestamp;
-use sa_core::gbp::{Country, GmailRole, OnGoogle, State as GbpState};
+use sa_core::{
+	gbp::{Country, GmailRole, OnGoogle, State as GbpState},
+	prices::{PlacesRequest, Spends, StreetViewLoad},
+};
 use sa_panel::{
 	Panel, Refused,
 	gmbs::{Category, Edit, Existing, Gmail, Gmb, GoogleCategory, Trade, Unplaced},
@@ -211,12 +214,12 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::POST, "/gmails", user, add_gmail),
 		ApiRoute::new(M::PATCH, "/gmails/{id}", user, set_gmail_role),
 		ApiRoute::new(M::DELETE, "/gmails/{id}", user, remove_gmail),
-		ApiRoute::new(M::GET, "/gmbs/resolve", user, resolve_place).spends(),
-		ApiRoute::new(M::GET, "/gmbs/suggest", user, suggest_places).spends(),
+		ApiRoute::new(M::GET, "/gmbs/resolve", user, resolve_place),
+		ApiRoute::new(M::GET, "/gmbs/suggest", user, suggest_places),
 		ApiRoute::new(M::POST, "/gmbs", user, create_gmb),
-		ApiRoute::new(M::POST, "/gmails/{id}/gmbs", user, add_gmb).spends(),
+		ApiRoute::new(M::POST, "/gmails/{id}/gmbs", user, add_gmb),
 		ApiRoute::new(M::PATCH, "/gmbs/{id}", user, edit_gmb),
-		ApiRoute::new(M::PUT, "/gmbs/{id}/state", user, move_gmb).spends(),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/state", user, move_gmb),
 		ApiRoute::new(M::DELETE, "/gmbs/{id}", user, remove_gmb),
 		ApiRoute::new(M::PUT, "/gmbs/enabled", user, switch_gmbs),
 		ApiRoute::new(M::PUT, "/gmbs/trade", user, set_gmb_trades),
@@ -225,7 +228,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::DELETE, "/gmbs/{id}/location", user, unplace_gmb),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/country", user, set_gmb_country),
 		ApiRoute::new(M::GET, "/map", user, map_key),
-		ApiRoute::new(M::POST, "/map/street_view", user, street_view).spends(),
+		ApiRoute::new(M::POST, "/map/street_view", user, street_view),
 		ApiRoute::new(M::GET, "/trades", user, trades),
 		ApiRoute::new(M::POST, "/trades", user, add_trade),
 		ApiRoute::new(M::PATCH, "/trades/{id}", user, rename_trade),
@@ -369,8 +372,8 @@ pub(crate) struct Resolve {
 ///
 /// Paid with `gmail`'s Maps key first, then the caller's others', then the shared keys their
 /// tokens pay for. 400 one in a country not served.
-async fn resolve_place(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(q): Params<Resolve>) -> ApiResult<Json<CandidatesDto>> {
-	let candidates = panel.place_candidates(caller.user_id, q.gmail, &q.place).await??;
+async fn resolve_place(State(panel): State<Panel>, Spends(_, by): Spends<PlacesRequest, Caller>, Params(q): Params<Resolve>) -> ApiResult<Json<CandidatesDto>> {
+	let candidates = panel.place_candidates(by, q.gmail, &q.place).await??;
 	Ok(Json(CandidatesDto {
 		candidates: candidates
 			.into_iter()
@@ -395,8 +398,8 @@ pub(crate) struct Suggest {
 }
 
 /// Places Autocomplete in the countries served, paid as `resolve`: each distinct input is a request.
-async fn suggest_places(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(q): Params<Suggest>) -> ApiResult<Json<SuggestionsDto>> {
-	let found = panel.suggest(caller.user_id, q.gmail, &q.input).await??;
+async fn suggest_places(State(panel): State<Panel>, Spends(_, by): Spends<PlacesRequest, Caller>, Params(q): Params<Suggest>) -> ApiResult<Json<SuggestionsDto>> {
+	let found = panel.suggest(by, q.gmail, &q.input).await??;
 	Ok(Json(SuggestionsDto {
 		suggestions: found
 			.into_iter()
@@ -432,9 +435,9 @@ async fn map_key(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
 ///
 /// 400 an account without a browser key; 409 not priced, past the balance, or its meter there
 /// stopped (with the account a reload would load on, when another has room).
-async fn street_view(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Body(at): Body<PanoramaAt>) -> ApiResult<Json<BalanceDto>> {
+async fn street_view(State(s): State<ApiState>, Spends(_, by): Spends<StreetViewLoad, Caller>, Body(at): Body<PanoramaAt>) -> ApiResult<Json<BalanceDto>> {
 	let now = Timestamp::now();
-	match s.panel.open_street_view(caller.user_id, &at.account, at.lat, at.lng, now).await? {
+	match s.panel.open_street_view(by, &at.account, at.lat, at.lng, now).await? {
 		Ok(balance) => Ok(Json(BalanceDto { balance })),
 		Err(Refused::Conflict(why)) => match s.panel.map_account(now).await? {
 			Some(other) if other.name != at.account => Err(ApiError::Conflict(format!("{why}; reload the page: it then loads on {}, which has room", other.name))),
@@ -497,7 +500,7 @@ pub(crate) struct NewGmb {
 ///
 /// `name` and `country` fill what Google lacks (400 when still missing); 409 the name or the place
 /// taken.
-async fn add_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>, Body(b): Body<NewGmb>) -> ApiResult<Created<GmbDto>> {
+async fn add_gmb(State(panel): State<Panel>, Spends(caller, by): Spends<PlacesRequest, Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>, Body(b): Body<NewGmb>) -> ApiResult<Created<GmbDto>> {
 	let NewGmb {
 		place_id,
 		state,
@@ -516,7 +519,7 @@ async fn add_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller
 		country,
 		trade,
 	};
-	let added = panel.add_gmb(Some(caller.user_id), existing, Timestamp::now()).await??;
+	let added = panel.add_gmb(Some(by), existing, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, gmb_id = added.id, "GBP added");
 	Ok(Created(GmbDto::from(added)))
 }
@@ -591,11 +594,11 @@ pub(crate) struct Advance {
 /// Moves a GBP to another state. 400 a move its `next` lacks.
 async fn move_gmb(
 	State(panel): State<Panel>,
-	Extension(caller): Extension<Caller>,
+	Spends(caller, by): Spends<PlacesRequest, Caller>,
 	Ids(Id { id: gmb }): Ids<Id<i64>>,
 	Body(Advance { state: to, place }): Body<Advance>,
 ) -> ApiResult<Json<GmbDto>> {
-	let moved = panel.advance(Some(caller.user_id), gmb, to, place.as_deref()).await??;
+	let moved = panel.advance(Some(by), gmb, to, place.as_deref()).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, %to, "GBP's state moved");
 	Ok(Json(GmbDto::from(moved)))
 }

@@ -5,6 +5,7 @@
 use std::sync::{Arc, Mutex};
 
 use axum::{Json, Router, body::Body, http::Method, routing::post};
+use jiff::Timestamp;
 use sa_panel::testing::{TestDb, operator, panel};
 use sa_server::{
 	ask::Model,
@@ -27,7 +28,10 @@ async fn claude(script: Vec<Value>) -> (String, Arc<Mutex<Vec<Value>>>) {
 			let (seen, script) = (seen.clone(), script.clone());
 			async move {
 				seen.lock().unwrap().push(req);
-				Json(script.lock().unwrap().next().expect("the script ran out"))
+				let mut reply = script.lock().unwrap().next().expect("the script ran out");
+				reply["model"] = json!("claude-opus-5-5");
+				reply["usage"] = json!({ "input_tokens": 100, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 900, "output_tokens": 40 });
+				Json(reply)
 			}
 		}),
 	);
@@ -95,6 +99,19 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 	assert_eq!(said["actions"][0]["state"], "proposed");
 	assert_eq!(said["actions"][1]["target"], json!({ "href": "/trash" }));
 	assert_eq!(said["steps"].as_array().unwrap().len(), 4);
+	let used: Vec<(String, i64, i64)> = p
+		.used(Timestamp::from_second(0).unwrap(), Timestamp::now())
+		.await
+		.unwrap()
+		.into_iter()
+		.filter(|d| d.item.tool() == "claude")
+		.map(|d| (d.item.to_string(), d.units, d.times))
+		.collect();
+	assert_eq!(
+		used,
+		[("claude.cache_read".into(), 2700, 3), ("claude.input".into(), 300, 3), ("claude.output".into(), 120, 3)],
+		"every answer's tokens, an empty kind not counted"
+	);
 
 	let sent = sent.lock().unwrap();
 	let results = |n: usize| sent[n]["messages"].as_array().unwrap().last().unwrap()["content"].as_array().unwrap().clone();

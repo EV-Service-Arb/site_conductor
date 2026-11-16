@@ -15,7 +15,7 @@ use std::collections::BTreeSet;
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_core::{
-	prices::{Item, MapLoad},
+	prices::{Item, MapLoad, ModelTokens, Spender},
 	usage::{Bill, UsagePage},
 };
 use uuid::Uuid;
@@ -46,6 +46,25 @@ impl Panel {
 		db::record(&mut tx, &used).await?;
 		tx.commit().await.wrap_err("committing a map load")?;
 		Ok(Ok(()))
+	}
+
+	/// The assistant's `model` answered `by`, reading and writing `used`.
+	pub async fn model_used(&self, by: Spender<ModelTokens>, model: &str, used: &[(ModelTokens, i64)], now: Timestamp) -> eyre::Result<()> {
+		let mut tx = self.store.begin_write().await?;
+		for &(tokens, units) in used.iter().filter(|(_, n)| *n > 0) {
+			let used = Use {
+				at: now,
+				item: tokens.into(),
+				units,
+				bill: Bill::Ours,
+				account: None,
+				source: CONDUCTOR.to_owned(),
+				user: Some(by.user()),
+				key: Some(model.to_owned()),
+			};
+			db::record(&mut tx, &used).await?;
+		}
+		tx.commit().await.wrap_err("committing a model's tokens")
 	}
 
 	/// Where `service`'s usage feed is read up to.

@@ -30,7 +30,10 @@ use ev_lib::api::{
 };
 use jiff::Timestamp;
 use sa_auth::SourceKind;
-use sa_core::gbp::{Country, State as GbpState};
+use sa_core::{
+	gbp::{Country, State as GbpState},
+	prices::{PlacesRequest, Spends},
+};
 use sa_panel::{
 	Grant, Panel, SignedBatch,
 	kit::{Event, Kit, Nearby, Offer, PHOTO_MAX, Pool, Ranked, Target},
@@ -365,7 +368,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit/photos/{file}", user, kit_photo),
 		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/photos/{file}", user, remove_kit_photo),
 		ApiRoute::new(M::GET, "/gmbs/{id}/kit", user, gmb_kit),
-		ApiRoute::new(M::PUT, "/gmbs/{id}/kit", user, set_gmb_kit).spends(),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/kit", user, set_gmb_kit),
 		ApiRoute::new(M::POST, "/gmbs/{id}/kit/shown", user, kit_shown),
 		ApiRoute::new(M::GET, "/kit/areas/{slug}/gmbs", user, kit_area_gmbs),
 	]
@@ -572,14 +575,14 @@ async fn gmb_kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>
 /// 409 no place on Google yet, or `drafts` / `one_tap` without a landing page of its.
 async fn set_gmb_kit(
 	State(s): State<ApiState>,
-	Extension(caller): Extension<Caller>,
+	Spends(caller, by): Spends<PlacesRequest, Caller>,
 	Ids(Id { id: gmb }): Ids<Id<i64>>,
 	Body(SetKitDto { target }): Body<SetKitDto>,
 ) -> ApiResult<Json<GmbKitDto>> {
 	if matches!(target, Some(Target::Drafts | Target::OneTap)) && page_of(&s, gmb).await?.is_none() {
 		return Err(ApiError::Conflict("no landing page of its: only Google's form".to_owned()));
 	}
-	s.panel.set_kit_target(caller.user_id, gmb, target, Timestamp::now()).await??;
+	s.panel.set_kit_target(by, gmb, target, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, ?target, "kit target set");
 	Ok(Json(kit_dto(&s, &caller, gmb).await?))
 }

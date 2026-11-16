@@ -39,12 +39,12 @@ use std::{
 };
 
 use axum::{
-	extract::{Query, Request, State},
-	http::{HeaderMap, HeaderValue, Method, StatusCode, header},
+	extract::{FromRequestParts, Query, Request, State},
+	http::{HeaderMap, HeaderValue, Method, StatusCode, header, request::Parts},
 	middleware::Next,
 	response::{Html, IntoResponse, Response},
 };
-use ev_lib::api::JsonSchema;
+use ev_lib::api::{JsonSchema, OperationInput};
 use jiff::Timestamp;
 use sa_auth::PermissionSet;
 use sa_panel::{
@@ -160,6 +160,24 @@ pub struct Caller {
 	pub permissions: PermissionSet,
 	/// Signed in by `PANEL_DEV_SIGN_IN`, not concierge: `/me` says so, for the UI to show.
 	pub dev_sign_in: bool,
+}
+
+impl<S: Send + Sync> FromRequestParts<S> for Caller {
+	type Rejection = std::convert::Infallible;
+
+	async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
+		Ok(parts.extensions.get::<Self>().expect("routed under the /api/v1 gate").clone())
+	}
+}
+
+impl OperationInput for Caller {}
+
+impl sa_core::prices::Payer for Caller {
+	type Who = Uuid;
+
+	fn payer(&self) -> Uuid {
+		self.user_id
+	}
 }
 
 #[derive(Deserialize)]

@@ -6,15 +6,24 @@
 //!
 //! A price is the admin's; a sold item without one is not sold. A cost per unit is the admin's too.
 
-use std::{collections::BTreeMap, fmt, str::FromStr};
+use std::{collections::BTreeMap, fmt, marker::PhantomData, str::FromStr};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use strum::{EnumMessage, EnumProperty, VariantArray};
+use uuid::Uuid;
 
 use crate::meters::Meter;
 
 /// What each item costs, in tokens; an item absent is not sold.
 pub type Prices = BTreeMap<Item, i64>;
+
+#[cfg(feature = "api")]
+pub use spends::{Payer, Spends};
+
+/// What one operation may buy: a tool's items, or several tools'.
+pub trait Tool {
+	fn items() -> Vec<Item>;
+}
 
 /// Where it happens: who counts it, and charges for it if it is sold.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, VariantArray, strum::IntoStaticStr, schemars::JsonSchema)]
@@ -27,7 +36,7 @@ pub enum Scope {
 	ReviewArchive,
 	/// sa_browsers' runner: nobody is charged.
 	Browsers,
-	/// gmaps_optimal_placement's studies: the house's for now.
+	/// gmaps_optimal_placement's studies: a pull's searches charged at the conductor's forward.
 	Placement,
 }
 
@@ -101,6 +110,15 @@ pub enum BrowserStart {
 	Mimic,
 }
 
+/// What a study's pull buys, charged to whoever pulls it.
+#[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum PlacementRequest {
+	/// A Places search a study's pull buys.
+	#[strum(message = "Search")]
+	Search,
+}
+
 /// What a study asks the Google Ads API for: free per request, within the developer token's
 /// daily quota.
 #[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
@@ -127,6 +145,24 @@ pub enum DataForSeoTask {
 	/// `search_volume/live`: a category's keywords' volumes, which weigh its terms.
 	#[strum(message = "Search volume")]
 	SearchVolume,
+}
+
+/// What the assistant's model reads and writes, by how Anthropic bills it.
+#[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum ModelTokens {
+	/// The prompt's tokens not read from its cache.
+	#[strum(message = "Input")]
+	Input,
+	/// The prompt's tokens written to its cache.
+	#[strum(message = "Cache write")]
+	CacheWrite,
+	/// The prompt's tokens read from its cache.
+	#[strum(message = "Cache read")]
+	CacheRead,
+	/// What the model wrote, its thinking with it.
+	#[strum(message = "Output")]
+	Output,
 }
 
 /// What a walk down a place's reviews does in its browser, each time it does it.
@@ -216,6 +252,12 @@ macro_rules! priced {
 			fn from(v: $ty) -> Self {
 				Self::$tool(v)
 			}
+		}
+
+		impl Tool for $ty {
+			fn items() -> Vec<Item> {
+				$ty::VARIANTS.iter().map(|v| Item::$tool(*v)).collect()
+			}
 		})+
 	};
 }
@@ -226,9 +268,85 @@ priced! {
 	Map(MapLoad) = "map", Conductor, Metered, "load", "Google Maps in the browser";
 	Walk(WalkStep) = "walk", ReviewArchive, Sold, "step", "A walk down a place's reviews";
 	Phone(PhoneTime) = "phone", Browsers, Metered, "minute", "Multilogin's cloud phones";
+	Placement(PlacementRequest) = "placement", Placement, Sold, "search", "A study's pull";
 	Ads(AdsRequest) = "ads", Placement, Metered, "request", "Google Ads API";
 	DataForSeo(DataForSeoTask) = "dataforseo", Placement, Metered, "task", "DataForSEO";
 	Browser(BrowserStart) = "browser", Browsers, Metered, "start", "Antidetect browsers";
+	Claude(ModelTokens) = "claude", Conductor, Metered, "token", "Claude, the assistant's model";
+}
+
+impl<A: Tool, B: Tool> Tool for (A, B) {
+	fn items() -> Vec<Item> {
+		[A::items(), B::items()].concat()
+	}
+}
+
+/// Who buys of `T`'s items are made for (`W`, as their service names a person), charged for those
+/// sold. What spends takes one, so a handler gets it from its `Spends` and its operation says what
+/// it spends.
+pub struct Spender<T, W = Uuid> {
+	who: W,
+	tool: PhantomData<fn() -> T>,
+}
+
+impl<T, W: Copy> Spender<T, W> {
+	pub fn new(who: W) -> Self {
+		Self { who, tool: PhantomData }
+	}
+
+	pub fn user(&self) -> W {
+		self.who
+	}
+}
+
+impl<T, W: Copy> Clone for Spender<T, W> {
+	fn clone(&self) -> Self {
+		*self
+	}
+}
+impl<T, W: Copy> Copy for Spender<T, W> {}
+
+#[cfg(feature = "api")]
+mod spends {
+	use axum::{extract::FromRequestParts, http::request::Parts};
+	use ev_lib::api::{
+		GenContext, OperationInput,
+		openapi::{Operation, Response, StatusCode},
+	};
+
+	use super::{Spender, Tool};
+
+	/// A service's caller, as whom they pay.
+	pub trait Payer {
+		type Who: Copy;
+		fn payer(&self) -> Self::Who;
+	}
+
+	/// A handler's caller `E`, and the [`Spender`] its buys of `T`'s items are made for: the
+	/// operation's `x-spends` is those items.
+	pub struct Spends<T, E: Payer>(pub E, pub Spender<T, E::Who>);
+
+	impl<S: Send + Sync, T, E: FromRequestParts<S> + Payer + Send> FromRequestParts<S> for Spends<T, E> {
+		type Rejection = E::Rejection;
+
+		async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+			let caller = E::from_request_parts(parts, state).await?;
+			let by = Spender::new(caller.payer());
+			Ok(Self(caller, by))
+		}
+	}
+
+	impl<T: Tool, E: OperationInput + Payer> OperationInput for Spends<T, E> {
+		fn operation_input(ctx: &mut GenContext, op: &mut Operation) {
+			E::operation_input(ctx, op);
+			let items = T::items().iter().map(|i| serde_json::Value::String(i.to_string())).collect();
+			assert!(op.extensions.insert("x-spends".into(), serde_json::Value::Array(items)).is_none(), "one Spends a handler");
+		}
+
+		fn inferred_early_responses(ctx: &mut GenContext, op: &mut Operation) -> Vec<(Option<StatusCode>, Response)> {
+			E::inferred_early_responses(ctx, op)
+		}
+	}
 }
 
 impl Item {

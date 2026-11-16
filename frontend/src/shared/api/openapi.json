@@ -856,7 +856,12 @@
             }
           }
         },
-        "x-spends": true
+        "x-spends": [
+          "places.details",
+          "places.search",
+          "places.autocomplete",
+          "places.geocode"
+        ]
       }
     },
     "/assistant/archived": {
@@ -1221,7 +1226,13 @@
               }
             }
           }
-        }
+        },
+        "x-spends": [
+          "claude.input",
+          "claude.cache_write",
+          "claude.cache_read",
+          "claude.output"
+        ]
       }
     },
     "/assistant/chats/{id}/general": {
@@ -1941,7 +1952,11 @@
             "description": "no content"
           }
         },
-        "x-spends": true
+        "x-spends": [
+          "phone.running",
+          "browser.gologin",
+          "browser.mimic"
+        ]
       }
     },
     "/gmails/{id}/browser/stop": {
@@ -2118,7 +2133,12 @@
             }
           }
         },
-        "x-spends": true
+        "x-spends": [
+          "places.details",
+          "places.search",
+          "places.autocomplete",
+          "places.geocode"
+        ]
       }
     },
     "/gmails/{id}/imap": {
@@ -2516,7 +2536,12 @@
             }
           }
         },
-        "x-spends": true
+        "x-spends": [
+          "places.details",
+          "places.search",
+          "places.autocomplete",
+          "places.geocode"
+        ]
       }
     },
     "/gmbs/suggest": {
@@ -2575,7 +2600,12 @@
             }
           }
         },
-        "x-spends": true
+        "x-spends": [
+          "places.details",
+          "places.search",
+          "places.autocomplete",
+          "places.geocode"
+        ]
       }
     },
     "/gmbs/trade": {
@@ -2840,7 +2870,12 @@
             }
           }
         },
-        "x-spends": true
+        "x-spends": [
+          "places.details",
+          "places.search",
+          "places.autocomplete",
+          "places.geocode"
+        ]
       }
     },
     "/gmbs/{id}/kit/shown": {
@@ -3063,7 +3098,12 @@
             }
           }
         },
-        "x-spends": true
+        "x-spends": [
+          "places.details",
+          "places.search",
+          "places.autocomplete",
+          "places.geocode"
+        ]
       }
     },
     "/google-categories/{country}": {
@@ -3192,7 +3232,12 @@
             }
           }
         },
-        "x-spends": true
+        "x-spends": [
+          "places.details",
+          "places.search",
+          "places.autocomplete",
+          "places.geocode"
+        ]
       }
     },
     "/kit/cities/{place_id}": {
@@ -3235,7 +3280,12 @@
             }
           }
         },
-        "x-spends": true
+        "x-spends": [
+          "places.details",
+          "places.search",
+          "places.autocomplete",
+          "places.geocode"
+        ]
       }
     },
     "/kit/locality": {
@@ -3289,7 +3339,12 @@
             }
           }
         },
-        "x-spends": true
+        "x-spends": [
+          "places.details",
+          "places.search",
+          "places.autocomplete",
+          "places.geocode"
+        ]
       }
     },
     "/map": {
@@ -3399,7 +3454,9 @@
             }
           }
         },
-        "x-spends": true
+        "x-spends": [
+          "street_view.panorama"
+        ]
       }
     },
     "/me": {
@@ -7667,13 +7724,18 @@
           "walk.sort_retry",
           "walk.step",
           "phone.running",
+          "placement.search",
           "ads.location",
           "ads.keyword_ideas",
           "ads.historical_metrics",
           "dataforseo.keywords_for_keywords",
           "dataforseo.search_volume",
           "browser.gologin",
-          "browser.mimic"
+          "browser.mimic",
+          "claude.input",
+          "claude.cache_write",
+          "claude.cache_read",
+          "claude.output"
         ]
       },
       "Prices": {
@@ -8067,7 +8129,7 @@
         ]
       },
       "Scope": {
-        "description": "Where it happens: who counts it, and charges for it if it is sold.\n\n- `conductor`: At the buy, before Google is asked.\n- `review_archive`: After the fact, through its charge feed.\n- `browsers`: sa_browsers' runner: nobody is charged.\n- `placement`: gmaps_optimal_placement's studies: the house's for now.",
+        "description": "Where it happens: who counts it, and charges for it if it is sold.\n\n- `conductor`: At the buy, before Google is asked.\n- `review_archive`: After the fact, through its charge feed.\n- `browsers`: sa_browsers' runner: nobody is charged.\n- `placement`: gmaps_optimal_placement's studies: a pull's searches charged at the conductor's forward.",
         "type": "string",
         "enum": [
           "conductor",
@@ -8218,6 +8280,34 @@
                 ],
                 "format": "int64"
               },
+              "claude.cache_read": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "claude.cache_write": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "claude.input": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "claude.output": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
               "dataforseo.keywords_for_keywords": {
                 "type": [
                   "integer",
@@ -8240,6 +8330,13 @@
                 "format": "int64"
               },
               "phone.running": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "placement.search": {
                 "type": [
                   "integer",
                   "null"
@@ -8357,6 +8454,34 @@
                 ],
                 "format": "int64"
               },
+              "claude.cache_read": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "claude.cache_write": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "claude.input": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "claude.output": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
               "dataforseo.keywords_for_keywords": {
                 "type": [
                   "integer",
@@ -8379,6 +8504,13 @@
                 "format": "int64"
               },
               "phone.running": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "placement.search": {
                 "type": [
                   "integer",
                   "null"

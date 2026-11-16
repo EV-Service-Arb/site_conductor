@@ -1,7 +1,7 @@
 //! A GMB's switch: its owner's to turn, and what review_archive's snapshot carries.
 
 use jiff::Timestamp;
-use sa_core::gbp::Country;
+use sa_core::{gbp::Country, prices::Spender};
 use sa_panel::{
 	Refused,
 	gmbs::Existing,
@@ -59,8 +59,16 @@ async fn a_gmb_is_switched_by_its_owner_and_review_archive_is_told() {
 		country: Some(Country::FR),
 		trade,
 	};
-	let one = p.add_gmb(Some(owner), existing("ChIJLU7jZClu5kcR4PcOOO6p3I0", "One"), now()).await.unwrap().unwrap();
-	let two = p.add_gmb(Some(owner), existing("ChIJD7fiBh9u5kcRYJSMaMOCCwQ", "Two"), now()).await.unwrap().unwrap();
+	let one = p
+		.add_gmb(Some(Spender::new(owner)), existing("ChIJLU7jZClu5kcR4PcOOO6p3I0", "One"), now())
+		.await
+		.unwrap()
+		.unwrap();
+	let two = p
+		.add_gmb(Some(Spender::new(owner)), existing("ChIJD7fiBh9u5kcRYJSMaMOCCwQ", "Two"), now())
+		.await
+		.unwrap()
+		.unwrap();
 	assert!(snapshot_switch(&p, one.id).await, "a GMB starts on");
 
 	p.switch_gmbs(owner, &[one.id, two.id], false).await.unwrap().unwrap();

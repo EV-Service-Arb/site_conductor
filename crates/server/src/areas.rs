@@ -1,9 +1,10 @@
 //! Areas (`sa_panel::areas`): geography, everyone's, under `/api/v1`. The kit's list of the
 //! caller's GBPs by one stays `kit`'s.
 
-use axum::{Extension, Json, extract::State, http::Method};
+use axum::{Json, extract::State, http::Method};
 use ev_lib::api::JsonSchema;
 use jiff::Timestamp;
+use sa_core::prices::{PlacesRequest, Spends};
 use sa_panel::{
 	Panel,
 	areas::{Area, NewArea, Shape},
@@ -120,10 +121,10 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 	vec![
 		ApiRoute::new(M::GET, "/areas", user, areas),
 		ApiRoute::new(M::GET, "/areas/{slug}", user, area),
-		ApiRoute::new(M::PUT, "/areas/{slug}", user, put_area).spends(),
-		ApiRoute::new(M::GET, "/kit/cities", user, cities).spends(),
-		ApiRoute::new(M::GET, "/kit/cities/{place_id}", user, city).spends(),
-		ApiRoute::new(M::GET, "/kit/locality", user, locality).spends(),
+		ApiRoute::new(M::PUT, "/areas/{slug}", user, put_area),
+		ApiRoute::new(M::GET, "/kit/cities", user, cities),
+		ApiRoute::new(M::GET, "/kit/cities/{place_id}", user, city),
+		ApiRoute::new(M::GET, "/kit/locality", user, locality),
 	]
 }
 
@@ -154,7 +155,7 @@ async fn area(State(panel): State<Panel>, Ids(SlugIn { slug }): Ids<SlugIn>) -> 
 /// caller) or a circle (its centre's country reverse-geocoded), with a margin around it that is "next to it"; over what it was if the caller drew it.
 ///
 /// 400 a link the conductor's own pages hold, or a centre in no country; 409 someone else's area.
-async fn put_area(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>, Body(b): Body<PutAreaDto>) -> ApiResult<Json<AreaDto>> {
+async fn put_area(State(s): State<ApiState>, Spends(caller, by): Spends<PlacesRequest, Caller>, Ids(SlugIn { slug }): Ids<SlugIn>, Body(b): Body<PutAreaDto>) -> ApiResult<Json<AreaDto>> {
 	if crate::web::taken(&slug, s.web.as_ref()) {
 		return Err(ApiError::BadRequest(format!("/{slug}/ is one of the conductor's own pages")));
 	}
@@ -167,7 +168,7 @@ async fn put_area(State(s): State<ApiState>, Extension(caller): Extension<Caller
 			margin_m,
 		},
 	};
-	let area = s.panel.put_area(caller.user_id, &slug, new, Timestamp::now()).await??;
+	let area = s.panel.put_area(by, &slug, new, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, slug, "area drawn");
 	Ok(Json(area.into()))
 }
@@ -181,8 +182,8 @@ struct Typed {
 
 /// Cities and towns what is typed may be heading for, in the countries served (Places
 /// Autocomplete, paid by the caller).
-async fn cities(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(q): Params<Typed>) -> ApiResult<Json<SuggestionsDto>> {
-	let found = panel.cities(caller.user_id, &q.input).await??;
+async fn cities(State(panel): State<Panel>, Spends(_, by): Spends<PlacesRequest, Caller>, Params(q): Params<Typed>) -> ApiResult<Json<SuggestionsDto>> {
+	let found = panel.cities(by, &q.input).await??;
 	Ok(Json(SuggestionsDto {
 		suggestions: found
 			.into_iter()
@@ -197,11 +198,11 @@ async fn cities(State(panel): State<Panel>, Extension(caller): Extension<Caller>
 
 /// The city or town a suggestion is: its point and the rectangle that frames it (Places, paid by
 /// the caller).
-async fn city(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PlaceIn { place_id }): Ids<PlaceIn>) -> ApiResult<Json<LocalityDto>> {
-	Ok(Json(panel.locality(caller.user_id, &place_id).await??.into()))
+async fn city(State(panel): State<Panel>, Spends(_, by): Spends<PlacesRequest, Caller>, Ids(PlaceIn { place_id }): Ids<PlaceIn>) -> ApiResult<Json<LocalityDto>> {
+	Ok(Json(panel.locality(by, &place_id).await??.into()))
 }
 
 /// The city or town a point lies in (Geocoding, paid by the caller). 404 outside any.
-async fn locality(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(at): Params<LatLng>) -> ApiResult<Json<LocalityDto>> {
-	Ok(Json(panel.locality_at(caller.user_id, at).await??.ok_or(ApiError::NotFound)?.into()))
+async fn locality(State(panel): State<Panel>, Spends(_, by): Spends<PlacesRequest, Caller>, Params(at): Params<LatLng>) -> ApiResult<Json<LocalityDto>> {
+	Ok(Json(panel.locality_at(by, at).await??.ok_or(ApiError::NotFound)?.into()))
 }

@@ -9,10 +9,9 @@
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_core::{
-	prices::{Item, StreetViewLoad},
+	prices::{Item, Spender, StreetViewLoad},
 	usage::Bill,
 };
-use uuid::Uuid;
 
 use crate::{
 	Panel, Refused, meters,
@@ -26,7 +25,8 @@ use crate::{
 impl Panel {
 	/// The user opens a panorama at `lat, lng` on `account`'s browser key: bought, or refused before
 	/// anything loads. Their balance then.
-	pub async fn open_street_view(&self, user: Uuid, account: &str, lat: f64, lng: f64, now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
+	pub async fn open_street_view(&self, by: Spender<StreetViewLoad>, account: &str, lat: f64, lng: f64, now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
+		let user = by.user();
 		if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lng) {
 			return Ok(Err(Refused::Invalid(format!("{lat}, {lng} is no point on Earth"))));
 		}

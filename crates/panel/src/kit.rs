@@ -11,7 +11,10 @@ use std::{
 use eyre::WrapErr;
 use image::{DynamicImage, ImageDecoder, ImageReader, codecs::jpeg::JpegEncoder};
 use jiff::{SignedDuration, Timestamp};
-use sa_core::gbp::Country;
+use sa_core::{
+	gbp::Country,
+	prices::{PlacesRequest, Spender},
+};
 use sa_places::{LatLng, Viewport};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -324,7 +327,8 @@ impl Panel {
 
 	/// The owner's GBP `gmb`'s QR leads to `target`; `None` turns the kit off. On, it needs a
 	/// place on Google: its review link is asked once (a Place Details, paid as a lookup).
-	pub async fn set_kit_target(&self, owner: Uuid, gmb: i64, target: Option<Target>, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+	pub async fn set_kit_target(&self, by: Spender<PlacesRequest>, gmb: i64, target: Option<Target>, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+		let owner = by.user();
 		let g = {
 			let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a kit")?;
 			match gmbs_db::gmb_of(&mut conn, Some(owner), gmb).await? {
@@ -336,7 +340,7 @@ impl Panel {
 			(None, _) => None,
 			(Some(_), None) => return Ok(Err(Refused::Conflict(format!("{} has no place on Google yet", g.name)))),
 			(Some(t), Some(place)) => {
-				let purse = self.purse(owner);
+				let purse = self.purse(by);
 				let payer = self.payer(owner, g.gmail_id, Some(&purse)).await?;
 				match self.google.review_link(place, &payer).await {
 					Ok(uri) => Some((t, uri)),

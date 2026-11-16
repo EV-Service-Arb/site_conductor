@@ -13,7 +13,7 @@ use axum::{
 };
 use sa_core::{
 	gbp::{Country, OnGoogle},
-	prices::{Item, PlacesRequest},
+	prices::{Item, PlacesRequest, Spender},
 };
 use sa_panel::{
 	Panel,
@@ -203,7 +203,7 @@ async fn add(p: &Panel, owner: uuid::Uuid, gmail_id: i64, place: &str) -> Gmb {
 		country: Some(Country::FR),
 		trade,
 	};
-	p.add_gmb(Some(owner), existing, jiff::Timestamp::now()).await.unwrap().unwrap()
+	p.add_gmb(Some(Spender::new(owner)), existing, jiff::Timestamp::now()).await.unwrap().unwrap()
 }
 
 fn located(n: usize, no_point: &[&str], no_country: &[&str]) -> Located {
@@ -311,7 +311,10 @@ async fn a_point_is_placed_and_taken_back_only_on_the_callers_gmb_without_google
 async fn the_map_is_told_only_when_configured() {
 	let db = TestDb::create().await;
 	for (accounts, want) in [
-		(vec![account("server", Some("k"), None)], (StatusCode::NOT_FOUND, json!({ "code": "not_found", "error": "not found" }))),
+		(
+			vec![account("server", Some("k"), None)],
+			(StatusCode::NOT_FOUND, json!({ "code": "not_found", "error": "not found" })),
+		),
 		(
 			vec![account("server", Some("k"), None), account("browser", None, Some("browser-key"))],
 			(StatusCode::OK, json!({ "key": "browser-key", "account": "browser" })),

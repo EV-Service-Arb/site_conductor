@@ -25,6 +25,7 @@ use sa_auth::{PermissionSet, Principal, Service};
 use sa_core::{
 	gbp::{Country, OnGoogle},
 	notify::{Locale, Rendered},
+	prices::Spender,
 };
 use sa_panel::{
 	Panel, Refused,
@@ -430,7 +431,7 @@ impl Setup {
 			country: Some(Country::FR),
 			trade,
 		};
-		let gmb = self.panel.add_gmb(Some(user), existing, t0()).await.unwrap().unwrap();
+		let gmb = self.panel.add_gmb(Some(Spender::new(user)), existing, t0()).await.unwrap().unwrap();
 		(gmail.id, gmb.id)
 	}
 }

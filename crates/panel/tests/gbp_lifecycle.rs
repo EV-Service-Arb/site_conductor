@@ -3,7 +3,10 @@
 //! place.
 
 use jiff::Timestamp;
-use sa_core::gbp::{Country, OnGoogle, State};
+use sa_core::{
+	gbp::{Country, OnGoogle, State},
+	prices::Spender,
+};
 use sa_panel::{
 	Panel, Refused,
 	gmbs::{Edit, Existing, Gmb, Unplaced},
@@ -62,7 +65,7 @@ async fn add(p: &Panel, owner: Uuid, gmail_id: i64, place: &str, name: &str, cou
 		country,
 		trade: trade(p, owner).await,
 	};
-	p.add_gmb(Some(owner), existing, now()).await.unwrap()
+	p.add_gmb(Some(Spender::new(owner)), existing, now()).await.unwrap()
 }
 
 async fn create(p: &Panel, owner: Uuid, name: &str, state: State, gmail_id: Option<i64>, country: Option<Country>) -> Result<Gmb, Refused> {
@@ -73,7 +76,15 @@ async fn create(p: &Panel, owner: Uuid, name: &str, state: State, gmail_id: Opti
 		gmail_id,
 		country,
 		at: None,
-		spots: if state == State::Draft { vec![sa_panel::gmbs::Spot { at: sa_places::LatLng { lat: 45.76, lng: 4.84 }, label: None, note: None }] } else { Vec::new() },
+		spots: if state == State::Draft {
+			vec![sa_panel::gmbs::Spot {
+				at: sa_places::LatLng { lat: 45.76, lng: 4.84 },
+				label: None,
+				note: None,
+			}]
+		} else {
+			Vec::new()
+		},
 	};
 	p.create_gmb(owner, unplaced, now()).await.unwrap()
 }
@@ -95,17 +106,17 @@ async fn past_a_draft_a_gbp_has_a_gmail_and_a_country() {
 	assert_eq!((added.state, added.country.map(|c| c.code)), (State::Verified, Some(Country::FR)));
 
 	let draft = draft(&p, owner, "Café de Flore").await.unwrap();
-	let no_gmail = p.advance(Some(owner), draft.id, State::Verifying, Some(FLORE)).await.unwrap();
+	let no_gmail = p.advance(Some(Spender::new(owner)), draft.id, State::Verifying, Some(FLORE)).await.unwrap();
 	assert!(matches!(no_gmail, Err(Refused::Invalid(_))), "{no_gmail:?}");
 	let edit = Edit {
 		gmail_id: Some(gmail.id),
 		..Edit::default()
 	};
 	p.edit_gmb(owner, draft.id, edit).await.unwrap().unwrap();
-	let no_country = p.advance(Some(owner), draft.id, State::Verifying, Some(FLORE)).await.unwrap();
+	let no_country = p.advance(Some(Spender::new(owner)), draft.id, State::Verifying, Some(FLORE)).await.unwrap();
 	assert!(matches!(no_country, Err(Refused::Invalid(_))), "{no_country:?}");
 	p.set_country(Some(owner), draft.id, Country::FR).await.unwrap().unwrap();
-	let verifying = p.advance(Some(owner), draft.id, State::Verifying, Some(FLORE)).await.unwrap().unwrap();
+	let verifying = p.advance(Some(Spender::new(owner)), draft.id, State::Verifying, Some(FLORE)).await.unwrap().unwrap();
 	assert_eq!((verifying.state, verifying.place_id.as_deref()), (State::Verifying, Some(FLORE)));
 }
 
@@ -154,10 +165,10 @@ async fn a_state_moves_only_along_its_transitions_and_a_place_is_set_once() {
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
 	let draft = draft(&p, owner, "Draft").await.unwrap();
 	for to in [Draft, Verified, Suspended] {
-		let got = p.advance(Some(owner), draft.id, to, None).await.unwrap();
+		let got = p.advance(Some(Spender::new(owner)), draft.id, to, None).await.unwrap();
 		assert!(matches!(got, Err(Refused::Invalid(_))), "draft → {to}: {got:?}");
 	}
-	let no_gmail = p.advance(Some(owner), draft.id, Verifying, None).await.unwrap();
+	let no_gmail = p.advance(Some(Spender::new(owner)), draft.id, Verifying, None).await.unwrap();
 	assert!(matches!(no_gmail, Err(Refused::Invalid(_))), "a draft goes to Google under a gmail: {no_gmail:?}");
 
 	let gbp = add(&p, owner, gmail.id, PROCOPE, "Procope", Some(Country::FR)).await.unwrap();
@@ -176,10 +187,10 @@ async fn a_state_moves_only_along_its_transitions_and_a_place_is_set_once() {
 		(Verified, true),
 	];
 	for (to, allowed) in walk {
-		let got = p.advance(Some(owner), gbp.id, to, None).await.unwrap();
+		let got = p.advance(Some(Spender::new(owner)), gbp.id, to, None).await.unwrap();
 		assert_eq!(got.is_ok(), allowed, "→ {to}: {got:?}");
 	}
-	let replaced = p.advance(Some(owner), gbp.id, Suspended, Some(FLORE)).await.unwrap();
+	let replaced = p.advance(Some(Spender::new(owner)), gbp.id, Suspended, Some(FLORE)).await.unwrap();
 	assert!(matches!(replaced, Err(Refused::Invalid(_))), "a place is set once: {replaced:?}");
 	let renamed = p
 		.edit_gmb(
@@ -222,7 +233,7 @@ async fn a_place_is_certain_only_once_verified() {
 	let verifying = create(&p, owner, "Verifying", Verifying, Some(gmail.id), Some(Country::FR)).await.unwrap();
 	assert_eq!((verifying.place_id.as_deref(), verifying.country.map(|c| (c.code, c.by_hand))), (None, Some((Country::FR, true))));
 	let suspended = create(&p, owner, "Suspended", Suspended, Some(gmail.id), Some(Country::FR)).await.unwrap();
-	p.advance(Some(owner), suspended.id, Verifying, None).await.unwrap().unwrap();
+	p.advance(Some(Spender::new(owner)), suspended.id, Verifying, None).await.unwrap().unwrap();
 
 	let draft = draft(&p, owner, "Draft").await.unwrap();
 	let edit = Edit {
@@ -231,10 +242,10 @@ async fn a_place_is_certain_only_once_verified() {
 	};
 	p.edit_gmb(owner, draft.id, edit).await.unwrap().unwrap();
 	p.set_country(Some(owner), draft.id, Country::FR).await.unwrap().unwrap();
-	let onto = p.advance(Some(owner), draft.id, Verifying, None).await.unwrap().unwrap();
+	let onto = p.advance(Some(Spender::new(owner)), draft.id, Verifying, None).await.unwrap().unwrap();
 	assert_eq!((onto.state, onto.place_id), (Verifying, None), "a draft goes onto Google without its place");
 
-	let unplaced = p.advance(Some(owner), verifying.id, Verified, None).await.unwrap();
+	let unplaced = p.advance(Some(Spender::new(owner)), verifying.id, Verified, None).await.unwrap();
 	assert!(matches!(unplaced, Err(Refused::Invalid(_))), "verified with its place: {unplaced:?}");
 	assert!(p.snapshot(now()).await.unwrap().unwrap().gmbs.is_empty(), "the archive tracks no GBP without a place");
 	let pool = db.pool().await;
@@ -243,7 +254,7 @@ async fn a_place_is_certain_only_once_verified() {
 		.await;
 	assert!(refused.is_err(), "the schema refuses it too");
 
-	let placed = p.advance(Some(owner), verifying.id, Verified, Some(PROCOPE)).await.unwrap().unwrap();
+	let placed = p.advance(Some(Spender::new(owner)), verifying.id, Verified, Some(PROCOPE)).await.unwrap().unwrap();
 	assert_eq!((placed.state, placed.place_id.as_deref()), (Verified, Some(PROCOPE)));
 	let [tracked] = p.snapshot(now()).await.unwrap().unwrap().gmbs.try_into().unwrap();
 	assert_eq!((tracked.id, tracked.state), (verifying.id, OnGoogle::Verified));
@@ -258,7 +269,7 @@ async fn the_snapshot_carries_placed_gbps_with_their_state_and_country() {
 	let other = p.add_gmail(owner, "b@gmail.com", now()).await.unwrap().unwrap();
 	draft(&p, owner, "Draft").await.unwrap();
 	let gbp = add(&p, owner, gmail.id, PROCOPE, "Procope", Some(Country::US)).await.unwrap();
-	p.advance(Some(owner), gbp.id, State::Suspended, None).await.unwrap().unwrap();
+	p.advance(Some(Spender::new(owner)), gbp.id, State::Suspended, None).await.unwrap().unwrap();
 	p.edit_gmb(
 		owner,
 		gbp.id,

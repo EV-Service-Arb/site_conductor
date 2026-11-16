@@ -16,6 +16,7 @@ use ev_lib::api::{
 	schemars::{generate::SchemaSettings, schema_for},
 };
 use jiff::Timestamp;
+use sa_core::prices::{ModelTokens, Spends};
 use sa_panel::{
 	assistant::Chat,
 	live::{Audience, Change},
@@ -92,6 +93,23 @@ impl Model {
 	}
 }
 
+/// The model that answered: a fallback's, when it stood in.
+fn answered_by(reply: &Value) -> eyre::Result<&str> {
+	reply["model"].as_str().ok_or_else(|| eyre::eyre!("the model answered without its name: {reply}"))
+}
+
+/// What an answer read and wrote, as its `usage` says.
+fn tokens(reply: &Value) -> eyre::Result<[(ModelTokens, i64); 4]> {
+	let usage = &reply["usage"];
+	let n = |field: &str| usage[field].as_i64().ok_or_else(|| eyre::eyre!("the model's usage has no {field}: {usage}"));
+	Ok([
+		(ModelTokens::Input, n("input_tokens")?),
+		(ModelTokens::CacheWrite, n("cache_creation_input_tokens")?),
+		(ModelTokens::CacheRead, n("cache_read_input_tokens")?),
+		(ModelTokens::Output, n("output_tokens")?),
+	])
+}
+
 /// A binding of the page's keymap, as the page has it bound now.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -123,7 +141,7 @@ pub(crate) struct Question {
 /// 503 without the assistant's model, or when it does not answer.
 pub(crate) async fn ask(
 	State(state): State<ApiState>,
-	Extension(caller): Extension<Caller>,
+	Spends(caller, by): Spends<ModelTokens, Caller>,
 	headers: HeaderMap,
 	Ids(Id { id: chat }): Ids<Id<Uuid>>,
 	Body(q): Body<Question>,
@@ -174,6 +192,7 @@ pub(crate) async fn ask(
 			break AnswerState::Stopped;
 		}
 		let reply = model.answer(SYSTEM, &tools, &history).await?;
+		state.panel.model_used(by, answered_by(&reply)?, &tokens(&reply)?, Timestamp::now()).await?;
 		let content = reply["content"].as_array().cloned().ok_or_else(|| eyre::eyre!("the model answered no content: {reply}"))?;
 		let mut results = Vec::new();
 		for block in &content {
