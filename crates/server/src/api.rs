@@ -261,7 +261,7 @@ async fn add_source(State(panel): State<Panel>, Extension(caller): Extension<Cal
 
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct KeyId {
-	key_id: String,
+	pub(crate) key_id: String,
 }
 
 /// Revokes a source key for good: its id is never issued again.

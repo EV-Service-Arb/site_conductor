@@ -21,7 +21,7 @@ use tower::{BoxError, ServiceBuilder, limit::GlobalConcurrencyLimitLayer};
 use tower_http::timeout::TimeoutLayer;
 
 use crate::{
-	access,
+	access, admin,
 	alerts::{self, Telegram},
 	api::{self, Code},
 	areas, assistant, browser,
@@ -213,6 +213,7 @@ pub fn app(
 pub(crate) fn api_routes() -> Vec<ApiRoute> {
 	[
 		api::routes(),
+		admin::routes(),
 		access::routes(),
 		alerts::routes(),
 		gmbs::routes(),
