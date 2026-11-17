@@ -336,7 +336,7 @@ async fn grafana_is_provisioned_with_a_datasource_per_services_api_on_its_loopba
 		let datasources = provisioned["datasources"].as_array().unwrap();
 		assert_eq!(
 			datasources.iter().map(|d| d["uid"].as_str().unwrap()).collect::<Vec<_>>(),
-			["sites", "review_archive", "playbook", "placement", "conductor"]
+			["sites", "review_archive", "playbook", "conductor"]
 		);
 		for d in datasources {
 			let url = d["url"].as_str().unwrap();

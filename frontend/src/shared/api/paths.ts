@@ -6,8 +6,6 @@ export const PATHS = [
   "/api/review_archive",
   "/mfe/review_archive",
   "/api/playbook",
-  "/api/placement",
-  "/mfe/placement",
   "/api",
   "/api/v1",
   "/api/queries_cache",

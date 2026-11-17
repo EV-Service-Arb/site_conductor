@@ -189,8 +189,8 @@ impl Service {
 	pub fn document(self) -> Option<&'static str> {
 		match self {
 			Self::Sites => Some("/api/v1/openapi.json"),
-			Self::ReviewArchive | Self::Playbook | Self::Placement => Some("/openapi.json"),
-			Self::Browsers => None,
+			Self::ReviewArchive | Self::Playbook => Some("/openapi.json"),
+			Self::Browsers | Self::Placement => None,
 		}
 	}
 

@@ -4441,6 +4441,7 @@ dependencies = [
  "sa_browsers",
  "sa_server",
  "serde_json",
+ "strum",
 ]
 
 [[package]]

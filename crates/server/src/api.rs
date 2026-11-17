@@ -44,19 +44,6 @@ pub enum Code {
 	Conflict,
 	TooLarge,
 	TooMany,
-	/// A pull needs more than the balance affords.
-	Unaffordable,
-	/// The category names no placement trade to study it by.
-	NoStudy,
-	/// The category has no primary Google category.
-	NoGoogleCategory,
-	/// The category has no keyword.
-	NoKeywords,
-	/// The category is set up for another country than the area's.
-	AnotherCountry,
-	/// Nothing placement serves studies it: no such trade file, no base for the country, or the
-	/// trade refuses it.
-	Unstudied,
 	/// Not now: the message says until when.
 	Unavailable,
 	/// No browser provider is configured: no browser route answers anything else.
@@ -76,8 +63,6 @@ impl ErrorCode for Code {
 			Self::Conflict => StatusCode::CONFLICT,
 			Self::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
 			Self::TooMany => StatusCode::TOO_MANY_REQUESTS,
-			Self::Unaffordable => StatusCode::PAYMENT_REQUIRED,
-			Self::NoStudy | Self::NoGoogleCategory | Self::NoKeywords | Self::AnotherCountry | Self::Unstudied => StatusCode::UNPROCESSABLE_ENTITY,
 			Self::Unavailable | Self::BrowsersNotConnected => StatusCode::SERVICE_UNAVAILABLE,
 			Self::BadGateway => StatusCode::BAD_GATEWAY,
 			Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,

@@ -27,6 +27,7 @@ async fn opened(db: &TestDb) -> Panel {
 		kickbacks: vec![],
 	})
 	.await
+	.unwrap()
 	.unwrap();
 	let prices = [
 		(Item::from(PhoneTime::Running), Some(4)),
