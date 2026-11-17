@@ -156,7 +156,7 @@ alias!(
 );
 
 /// A service behind the panel: the assertion's audience, and the permission slice it gets.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, strum::Display, strum::IntoStaticStr)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, strum::Display, strum::IntoStaticStr, strum::VariantArray)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum Service {
@@ -183,6 +183,20 @@ impl Service {
 			Self::Placement => "sa:placement:",
 			Self::Browsers => "sa:browsers:",
 		}
+	}
+
+	/// Where it serves its OpenAPI document, which the conductor's catalog pulls.
+	pub fn document(self) -> Option<&'static str> {
+		match self {
+			Self::Sites => Some("/api/v1/openapi.json"),
+			Self::ReviewArchive | Self::Playbook | Self::Placement => Some("/openapi.json"),
+			Self::Browsers => None,
+		}
+	}
+
+	/// It serves its Grafana dashboards at `GET /dashboards` (docs/ARCHITECTURE.md, Grafana).
+	pub fn dashboards(self) -> bool {
+		matches!(self, Self::ReviewArchive)
 	}
 }
 

@@ -7,7 +7,7 @@
 //!                           or the conductor's
 //! Grafana → 127.0.0.1:<any>/api/<service>/*, GET + the token → the forward, as that viewer
 //! Grafana → 127.0.0.1:<any>/api/v1/*, GET + the token → the conductor's own API, as that viewer
-//! the services in DASHBOARDS → GET /dashboards → <dir>/dashboards/<service>/<uid>.json
+//! each service whose dashboards() → GET /dashboards → <dir>/dashboards/<service>/<uid>.json
 //! the conductor's own, compiled in → <dir>/dashboards/conductor/<uid>.json
 //! ```
 
@@ -37,12 +37,13 @@ use hyper_util::{
 	rt::{TokioExecutor, TokioIo},
 };
 use sa_auth::{Principal, Service};
+use strum::VariantArray;
 use serde_json::{Value, json};
 use tokio::sync::watch;
 
 use crate::{
 	api::Code,
-	forward::{self, DASHBOARDS, Forward},
+	forward::{self, Forward},
 	signin::{self, Caller, Freshness},
 };
 
@@ -227,7 +228,7 @@ impl Grafana {
 
 	/// Each service's dashboards, a failure reported per service: what it served before stays.
 	async fn pull(&self, etags: &Mutex<HashMap<String, HeaderValue>>) {
-		for service in DASHBOARDS {
+		for service in Service::VARIANTS.iter().copied().filter(|s| s.dashboards()) {
 			if let Err(e) = self.pull_one(service, etags).await {
 				crate::report(&e.wrap_err(format!("{}'s dashboards kept as they were", service.to_string())), "pulling the dashboards");
 			}

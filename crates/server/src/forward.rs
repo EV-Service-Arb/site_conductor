@@ -41,61 +41,117 @@ use crate::{
 /// forwarded operation's refusals beside the service's own.
 pub const REFUSALS: [Code; 6] = [Code::BadRequest, Code::Unauthenticated, Code::Csrf, Code::Unavailable, Code::BadGateway, Code::Internal];
 
-/// Longest prefixes first: the first match wins.
+/// The services' paths on the conductor's origin, longest prefixes first: the first match wins.
+/// With [`OWN`], every prefix of the origin (docs/ARCHITECTURE.md, Forward).
 const ROUTES: [Route; 8] = [
 	Route {
 		prefix: "/api/sites",
 		upstream: "/api/v1",
 		service: Service::Sites,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/api/hooks/booking",
 		upstream: "/api/hooks/booking",
 		service: Service::Sites,
+		rate_limited: true,
+		published: true,
 		gate: Gate::Open,
 	},
 	Route {
 		prefix: "/mfe/sites",
 		upstream: "/mfe",
 		service: Service::Sites,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Open,
 	},
 	Route {
 		prefix: "/api/review_archive",
 		upstream: "",
 		service: Service::ReviewArchive,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/mfe/review_archive",
 		upstream: "/mfe",
 		service: Service::ReviewArchive,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Open,
 	},
 	Route {
 		prefix: "/api/playbook",
 		upstream: "",
 		service: Service::Playbook,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/api/placement",
 		upstream: "",
 		service: Service::Placement,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/mfe/placement",
 		upstream: "/mfe",
 		service: Service::Placement,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Open,
 	},
 ];
 
-/// The services that serve their Grafana dashboards at `GET /dashboards` (docs/ARCHITECTURE.md,
-/// Grafana).
-pub(crate) const DASHBOARDS: [Service; 1] = [Service::ReviewArchive];
+/// The conductor's own prefixes: never a page's, nor a kit area's.
+const OWN: [Path; 14] = [
+	Path::new("/api", false, true),
+	Path::new("/api/v1", false, true),
+	// open to everyone: the edge's limit is its only guard
+	Path::new("/api/queries_cache", true, true),
+	// in-cluster only: the landings' and bots' ingest, the landings' review kit
+	Path::new("/api/ingest", false, false),
+	Path::new("/api/kit", false, false),
+	Path::new("/auth", true, true),
+	Path::new("/mcp", false, true),
+	// open (RFC 7591), or a sign-in's every step
+	Path::new("/mcp/register", true, true),
+	Path::new("/mcp/authorize", true, true),
+	Path::new("/mcp/token", true, true),
+	Path::new("/grafana", false, true),
+	Path::new("/mfe", false, true),
+	Path::new("/health", false, true),
+	// once the cabinet's account chip: a tab on an earlier build may still ask for its script
+	Path::new("/cabinet", false, true),
+];
+
+/// A prefix of the conductor's origin, and what the edge does with it.
+#[derive(Clone, Copy, Debug)]
+pub struct Path {
+	pub prefix: &'static str,
+	/// Per client IP at the edge.
+	pub rate_limited: bool,
+	/// The public ingress may route it; else in-cluster only.
+	pub published: bool,
+}
+
+impl Path {
+	const fn new(prefix: &'static str, rate_limited: bool, published: bool) -> Self {
+		Self { prefix, rate_limited, published }
+	}
+}
+
+/// Every prefix of the origin: the services' and the conductor's own.
+pub fn paths() -> impl Iterator<Item = Path> {
+	ROUTES.iter().map(|r| Path::new(r.prefix, r.rate_limited, r.published)).chain(OWN)
+}
 
 /// Hop-by-hop headers (RFC 9110 §7.6.1) and what only the panel may say: never passed on.
 pub(crate) const DROPPED_UP: [&str; 11] = [
@@ -118,11 +174,6 @@ pub(crate) const SITES_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The most of a service's answer the conductor reads: a page of notes or a photo, with room.
 const ANSWER: usize = 16 * 1024 * 1024;
-
-/// Every path the forward owns: never the front end's.
-pub fn prefixes() -> impl Iterator<Item = &'static str> {
-	ROUTES.iter().map(|r| r.prefix)
-}
 
 /// Whether `path` is `prefix` or below it, by whole segments.
 pub fn under(path: &str, prefix: &str) -> bool {
@@ -357,6 +408,8 @@ struct Route {
 	/// What replaces `prefix` upstream.
 	upstream: &'static str,
 	service: Service,
+	rate_limited: bool,
+	published: bool,
 	gate: Gate,
 }
 

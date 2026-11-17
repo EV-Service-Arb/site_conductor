@@ -44,13 +44,6 @@ const CSP: &str = "frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 /// Where the build puts what it names by content hash.
 const HASHED: &str = "/_next/static/";
 
-/// Paths that belong to the API side, whether or not a route of theirs is mounted: an unknown
-/// one is a JSON 404, never the front end's page. `/grafana` is Grafana's, run or not; `/mfe`
-/// the producers' bundles, forwarded or not;
-/// `/cabinet` once served the cabinet's account chip here, and a tab still on an earlier
-/// build may ask for `/cabinet/mfe/*`: a script request must get a 404, not the panel's HTML.
-const RESERVED: [&str; 7] = ["/api", "/auth", "/mcp", "/mfe", "/health", "/grafana", "/cabinet"];
-
 /// The export's files.
 #[derive(Clone, Debug)]
 pub struct Files {
@@ -78,8 +71,10 @@ pub fn serve(app: Router, files: Files, panel: Panel) -> Router {
 	app.fallback(move |req: Request| page(files.clone(), panel.clone(), req))
 }
 
+/// The origin's prefixes are the API side's, whether or not a route of theirs is mounted: an
+/// unknown path below one is a JSON 404, never the front end's page.
 fn reserved(path: &str) -> bool {
-	RESERVED.iter().copied().chain(crate::forward::prefixes()).any(|r| crate::forward::under(path, r))
+	crate::forward::paths().any(|p| crate::forward::under(path, p.prefix))
 }
 
 /// Whether `/<slug>` is one of the conductor's own paths or pages, which no kit area may take.

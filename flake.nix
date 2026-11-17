@@ -266,10 +266,11 @@
             # in-cluster only, by service DNS: the landings' and bots' ingest, the landings' review kit
             # (docs/ARCHITECTURE.md, Deploy requirements)
             excludePathPrefixes = [ "/api/ingest" "/api/kit" ];
-            # per client IP at the edge; the conductor bounds concurrency, not who calls. /api/hooks:
+            # per client IP at the edge; the conductor bounds concurrency, not who calls. /api/hooks/booking:
             # the booking providers' webhooks, forwarded to sites (public, signature-checked there).
-            # /api/queries_cache: open to everyone, so this is its only guard. /mcp/register: open too
-            rateLimitPathPrefixes = [ "/auth" "/api/hooks" "/api/queries_cache" "/mcp/register" "/mcp/authorize" "/mcp/token" ];
+            # /api/queries_cache: open to everyone, so this is its only guard. /mcp/register: open too.
+            # `checks.paths` holds both lists to the binary's path table (forward::ROUTES and OWN).
+            rateLimitPathPrefixes = [ "/auth" "/api/hooks/booking" "/api/queries_cache" "/mcp/register" "/mcp/authorize" "/mcp/token" ];
           };
           egress = {
             # concierge's gRPC, at the address it names
@@ -296,6 +297,7 @@
           PANEL_SITES_URL = "sites_panel";
           PANEL_REVIEW_ARCHIVE_URL = "review_archive";
           PANEL_PLAYBOOK_URL = "playbook_web";
+          PANEL_PLACEMENT_URL = "gmaps_optimal_placement";
         };
 
         containerStd = v_flakes.container.implement {
@@ -337,6 +339,18 @@
           ${bin}/bin/${pname} --print-provided-paths | sort > got
           printf '%s\n' ${lib.escapeShellArgs (lib.attrValues provides)} | sort > want
           diff -u want got || { echo "flake.nix provides disagrees with the routes the binary mounts" >&2; exit 1; }
+          touch "$out"
+        '';
+
+        paths = pkgs.runCommand "${pname}-paths" { } ''
+          check() {
+            ${bin}/bin/${pname} --print-paths "$1" | sort > got
+            printf '%s\n' $2 | sort > want
+            diff -u want got || { echo "flake.nix $3 disagrees with the binary's --print-paths $1" >&2; exit 1; }
+          }
+          check rate-limited ${lib.escapeShellArg (lib.concatStringsSep " " deploy.ingress.rateLimitPathPrefixes)} ingress.rateLimitPathPrefixes
+          check unpublished ${lib.escapeShellArg (lib.concatStringsSep " " deploy.ingress.excludePathPrefixes)} ingress.excludePathPrefixes
+          check consumed ${lib.escapeShellArg (lib.concatStringsSep " " (lib.attrNames consumes))} consumes
           touch "$out"
         '';
 
@@ -428,6 +442,7 @@
 
         checks.contract-env = contractEnv;
         checks.provided-paths = providedPaths;
+        checks.paths = paths;
 
         devShells.default =
           with pkgs;

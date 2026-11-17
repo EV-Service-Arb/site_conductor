@@ -6,6 +6,9 @@ use sa_auth::{Catalog, PermissionSet};
 use sa_core::{notify::Locale, tokens::Renewal};
 use sa_panel::seal::DataKey;
 
+/// The services' in-cluster origins the forward reaches, by variable: the flake's `consumes`.
+pub const CONSUMED: [&str; 4] = ["PANEL_SITES_URL", "PANEL_REVIEW_ARCHIVE_URL", "PANEL_PLAYBOOK_URL", "PANEL_PLACEMENT_URL"];
+
 ev_lib::settings! {
 	/// Each secret is needed only by what uses it; a missing one fails that, with an error
 	/// naming it, rather than the boot — except in production, where the only thing this
@@ -201,11 +204,12 @@ impl Settings {
 	/// The services behind the conductor (docs/ARCHITECTURE.md, Forward): `None` when none of their
 	/// variables is set; some but not all is a mistake, named.
 	pub fn forward(&self) -> eyre::Result<Option<sa_server::forward::Upstreams>> {
+		let [sites, review_archive, playbook, placement_url] = CONSUMED;
 		let vars = [
 			("PANEL_ASSERTION_KEY", &self.panel_assertion_key),
-			("PANEL_REVIEW_ARCHIVE_URL", &self.panel_review_archive_url),
-			("PANEL_PLAYBOOK_URL", &self.panel_playbook_url),
-			("PANEL_SITES_URL", &self.panel_sites_url),
+			(review_archive, &self.panel_review_archive_url),
+			(playbook, &self.panel_playbook_url),
+			(sites, &self.panel_sites_url),
 		];
 		let missing: Vec<&str> = vars.iter().filter(|(_, v)| v.as_deref().is_none_or(|v| v.trim().is_empty())).map(|(name, _)| *name).collect();
 		let placement = self.panel_placement_url.as_deref().map(str::trim).filter(|v| !v.is_empty());
@@ -216,10 +220,10 @@ impl Settings {
 		eyre::ensure!(missing.is_empty(), "the forward needs {} too", missing.join(", "));
 		let uri = |name: &str, v: &Option<String>| bare_http_origin(name, v.as_deref().expect("checked above"));
 		Ok(Some(sa_server::forward::Upstreams {
-			review_archive: uri("PANEL_REVIEW_ARCHIVE_URL", &self.panel_review_archive_url)?,
-			playbook: uri("PANEL_PLAYBOOK_URL", &self.panel_playbook_url)?,
-			sites: uri("PANEL_SITES_URL", &self.panel_sites_url)?,
-			placement: placement.map(|v| bare_http_origin("PANEL_PLACEMENT_URL", v)).transpose()?,
+			review_archive: uri(review_archive, &self.panel_review_archive_url)?,
+			playbook: uri(playbook, &self.panel_playbook_url)?,
+			sites: uri(sites, &self.panel_sites_url)?,
+			placement: placement.map(|v| bare_http_origin(placement_url, v)).transpose()?,
 			signer: self
 				.panel_assertion_key
 				.as_deref()

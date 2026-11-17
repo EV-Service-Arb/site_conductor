@@ -195,8 +195,11 @@ POST /auth/logout    CSRF; every session of the user is closed
 ## Forward
 
 The services live under the conductor's origin; `forward.rs` streams each prefix to its
-service, both ways (hyper-util, no buffering), one table for all of it — the front end's
-reserved paths (`web.rs`) are derived from it.
+service, both ways (hyper-util, no buffering), one table for all of it (`ROUTES`).
+With the conductor's own prefixes (`OWN`) it is every prefix of the origin and what the edge does
+with each: the front end's reserved paths (`web.rs`, a JSON 404 below any of them) and the flake's
+ingress lists (`checks.paths`, by `--print-paths`) are derived from it, and a test holds the
+second block below to it.
 
 ```text
 /api/sites/*                     → sites /api/v1/*              session + User; CSRF on writes (a bearer: none)
@@ -207,6 +210,31 @@ reserved paths (`web.rs`) are derived from it.
 /api/playbook/*                  → playbook /*                  session + User; CSRF on writes
 /api/placement/*                 → placement /*                 session + User; CSRF on writes
 /mfe/placement/*                 → placement /mfe/*             open: the map overlay's module
+```
+
+```text
+/api/sites                public
+/api/hooks/booking        public, rate-limited
+/mfe/sites                public
+/api/review_archive       public
+/mfe/review_archive       public
+/api/playbook             public
+/api/placement            public
+/mfe/placement            public
+/api                      public                  the conductor's own, and nothing else's
+/api/v1                   public
+/api/queries_cache        public, rate-limited    open to everyone
+/api/ingest               in-cluster
+/api/kit                  in-cluster
+/auth                     public, rate-limited
+/mcp                      public
+/mcp/register             public, rate-limited    open (RFC 7591)
+/mcp/authorize            public, rate-limited
+/mcp/token                public, rate-limited
+/grafana                  public
+/mfe                      public                  the services' bundles, forwarded or not
+/health                   public
+/cabinet                  public                  once the cabinet's account chip
 ```
 
 - **The assertion** (`sa_auth`, header `x-sa-assertion`) is signed for one request: Ed25519
@@ -331,7 +359,7 @@ browser ── /grafana/api/ds/query ─▶ conductor: a viewer token into each 
 Grafana (Infinity) ── GET 127.0.0.1:<any>/api/<service>/… + token ──▶ the forward, as that viewer
 Grafana (Infinity) ── GET 127.0.0.1:<any>/api/v1/… + token ──▶ the conductor's own GETs, as that viewer
 conductor ── GET /dashboards (Conductor), every 60 s, conditional ──▶ each service of
-             forward::DASHBOARDS ──▶ <dir>/dashboards/<service>/<uid>.json ──▶ Grafana
+             Service::dashboards ──▶ <dir>/dashboards/<service>/<uid>.json ──▶ Grafana
 ```
 
 - **Datasources are derived:** one Infinity datasource per service's API (`/api/<service>`), its
@@ -343,7 +371,7 @@ conductor ── GET /dashboards (Conductor), every 60 s, conditional ──▶ 
 - **Dashboards are the services':** coupled to a service's API, they ship with its release, built
   over its document (`sa_core::dashboards`): a query names an operation, and a field its JSONata
   reads that the answer lacks fails the build. A
-  service that has them is in `forward::DASHBOARDS`, and its `GET /dashboards` answers a JSON
+  service that has them says so (`sa_auth::Service::dashboards`), and its `GET /dashboards` answers a JSON
   array of them, each with its `uid`, and an ETag. A pull that fails — no answer, a 404, a uid
   another service serves or Grafana refuses — is reported, and what was served before stays.
 - Grafana's dashboards query by POST, so every method under `/grafana/` takes the cached `GetMe`
@@ -1051,10 +1079,14 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   `/health`, `APP_ENV=production`, the variables required, secret and optional,
   `PANEL_DB_PATH`, the volume (`/data`) and the SQLite file on it to replicate, what the ingress
   must not publish or must rate-limit, and the egress. `checks.contract-env` fails the flake
-  when its required variables and the binary's `--print-required-vars` disagree.
+  when its required variables and the binary's `--print-required-vars` disagree; `checks.paths`
+  when its `ingress.rateLimitPathPrefixes`, `ingress.excludePathPrefixes` or `consumes` and the
+  binary's `--print-paths rate-limited|unpublished|consumed` (the path table, the forward's
+  variables) do.
 - **What it provides and consumes, by contract name.** `provides.ingest` is
   `/api/ingest/v1/events`, `provides.kit` `/api/kit/v1`, `provides.queries_cache` `/api/queries_cache`; `consumes` names the peers behind `PANEL_SITES_URL` (`sites_panel`),
-  `PANEL_REVIEW_ARCHIVE_URL` (`review_archive`) and `PANEL_PLAYBOOK_URL` (`playbook_web`), whose
+  `PANEL_REVIEW_ARCHIVE_URL` (`review_archive`), `PANEL_PLAYBOOK_URL` (`playbook_web`) and
+  `PANEL_PLACEMENT_URL` (`gmaps_optimal_placement`), whose
   URLs and egress devops derives. `checks.provided-paths` fails the flake when `provides` and the
   binary's `--print-provided-paths` (the constants its router mounts) disagree.
 - **The landings, outbound on :443.** The Connected sites page asks each site key's origin; the
