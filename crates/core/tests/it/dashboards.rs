@@ -73,7 +73,7 @@ fn doc() -> OpenApi {
 			Route::new(Method::GET, "/admin/flows", Open, token_flows),
 			Route::new(Method::GET, "/gmbs/{gmb}/board", Open, board_of),
 		],
-		&[("dashboards::token_flows", "Flows."), ("dashboards::board_of", "A GMB's board.")],
+		&[("it::dashboards::token_flows", "Flows."), ("it::dashboards::board_of", "A GMB's board.")],
 		None,
 	)
 }

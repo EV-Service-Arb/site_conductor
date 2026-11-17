@@ -37,15 +37,8 @@ http-body-util.workspace = true
 tokio.workspace = true
 
 [[test]]
-name = "feeds"
-required-features = ["api"]
-
-[[test]]
-name = "agent"
-required-features = ["api"]
-
-[[test]]
-name = "dashboards"
+name = "it"
+path = "tests/it/main.rs"
 required-features = ["api"]
 
 [lints]
