@@ -285,10 +285,13 @@ second block below to it.
 - Without `PANEL_ASSERTION_KEY`, `PANEL_REVIEW_ARCHIVE_URL`, `PANEL_PLAYBOOK_URL` and
   `PANEL_SITES_URL` (all four, or none), nothing is forwarded, nothing ingested, the hubs hear
   nothing of sites, and review_archive is neither followed nor told.
-- **Placement** (`PANEL_PLACEMENT_URL`, optional, needs the four) is gmaps_optimal_placement's
-  `serve`, which nothing forwards: the conductor is its one client (`placement.rs`), as the caller.
-  The browser never speaks placement's protocol; what crosses repos is placement's core (a Cargo
-  dependency of `crates/placement_overlay`) and `sa_core::placement`.
+- **Placement** (`PANEL_PLACEMENT_URL`, optional, needs the four) is not forwarded: see Placement.
+
+## Placement
+
+gmaps_optimal_placement's `serve`, behind `PANEL_PLACEMENT_URL`, has one client: the conductor
+(`placement.rs`), as the caller. The browser never speaks placement's protocol; what crosses repos
+is placement's core (a Cargo dependency of `crates/placement_overlay`) and `sa_core::placement`.
 
 ```text
 GET  /placement/study?area&category ─ the area, the caller's category (or none) → Definition ─▶ placement POST /studies
@@ -297,11 +300,12 @@ POST /placement/study/pull?…        ─ the same Definition ─▶ placement P
      each Ask bought into the queries cache (`gop`), asked again until none ─▶ POST /studies/pull ◀── the payload
 ```
 
-  The conductor decides what cannot be studied, by why (`no_study`, `no_google_category`,
-  `no_keywords`, `another_country`; placement's `unstudied`); the front end only renders it. A study
-  never spends; a pull (`sa:placement:study:spend`) buys the Places searches it lacks at the
-  puller's tokens. Placement buys nothing: the conductor is the one center of data ingestion, and
-  what placement derives, for a map or for training, it derives from what the conductor holds. Unset, those routes answer 503 and the map says placement is not connected.
+The conductor decides what cannot be studied, by why (`no_study`, `no_google_category`,
+`no_keywords`, `another_country`; placement's `unstudied`); the front end only renders it. A study
+never spends; a pull (`sa:placement:study:spend`) buys the Places searches it lacks at the puller's
+tokens (Tokens and GBPs). Placement buys nothing: the conductor is the one center of data
+ingestion, and what placement derives, for a map or for training, it derives from what the
+conductor holds. Unset, those routes answer 503 and the map says placement is not connected.
 
 ## Browsers
 
@@ -540,9 +544,9 @@ GET    /kit/areas/{slug}/gmbs
 GET    /areas
 GET    /areas/{slug}
 PUT    /areas/{slug}
-GET    /placement/catalog                   Study
-GET    /placement/study                     Study, slow
-POST   /placement/study/pull                Pull, fresh, slow
+GET    /placement/catalog                   study:read
+GET    /placement/study                     study:read, slow
+POST   /placement/study/pull                study:spend, fresh, slow
 GET    /kit/cities
 GET    /kit/cities/{place_id}
 GET    /kit/locality

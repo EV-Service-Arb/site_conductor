@@ -19,6 +19,7 @@ mod mcp;
 mod meters;
 mod operations;
 mod paths;
+mod placement;
 mod queries_cache;
 mod signin;
 mod web;

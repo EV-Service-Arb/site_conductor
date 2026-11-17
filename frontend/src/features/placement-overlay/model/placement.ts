@@ -4,7 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 
 import { Refused, api, ok } from "@/shared/api";
 import { covers, useScope, useTrades } from "@/entities/gmb";
-import type { Area, Category, Trade, components } from "@/shared/api/schema";
+import type { Area, Category, Trade } from "@/shared/api/schema";
 import type { Event, Legend, Notice, Overlay, Summary, Tune } from "@/shared/placement_overlay/placement_overlay";
 import { type Home, setHome, useHome } from "@/shared/lib/location";
 import { useResource } from "@evinvest/api/react";
@@ -162,7 +162,7 @@ export function setMapView(change: Partial<MapView>): void {
 }
 
 /** Why the conductor would not build a study: its own words for it. */
-export type Refusal = Extract<components["schemas"]["Code"], "no_study" | "no_google_category" | "no_keywords" | "another_country" | "unstudied">;
+export type Refusal = "no_study" | "no_google_category" | "no_keywords" | "another_country" | "unstudied";
 const REFUSALS: readonly string[] = ["no_study", "no_google_category", "no_keywords", "another_country", "unstudied"] satisfies Refusal[];
 
 export type Studied =

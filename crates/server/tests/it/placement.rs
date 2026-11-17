@@ -142,6 +142,7 @@ impl Conductor {
 			kickbacks: vec![],
 		})
 		.await
+		.unwrap()
 		.unwrap();
 		let now = jiff::Timestamp::now();
 		p.set_prices(&[(Item::Placement(PlacementRequest::Search), price)], &[], "admin@localhost", now).await.unwrap().unwrap();

@@ -17,7 +17,7 @@ use axum::{
 };
 use ev_lib::api::{
 	GenContext, JsonSchema, OperationOutput, Params, Refusal,
-	openapi::{MediaType, Operation, Response as Answer, StatusCode as Status},
+	openapi::{MediaType, Operation, Response as Answer, SchemaObject, StatusCode as Status},
 };
 use sa_auth::{Principal, Service, Study};
 use sa_core::{
@@ -79,7 +79,20 @@ impl OperationOutput for Payload {
 	fn operation_response(_: &mut GenContext, _: &mut Operation) -> Option<Answer> {
 		Some(Answer {
 			description: "placement's payload, for the map's overlay.".to_owned(),
-			content: [("application/json".into(), MediaType::default())].into_iter().collect(),
+			// any JSON: the overlay reads it, against the core it was built with
+			content: [(
+				"application/json".into(),
+				MediaType {
+					schema: Some(SchemaObject {
+						json_schema: ev_lib::api::schemars::json_schema!({}),
+						example: None,
+						external_docs: None,
+					}),
+					..MediaType::default()
+				},
+			)]
+			.into_iter()
+			.collect(),
 			..Answer::default()
 		})
 	}
@@ -121,7 +134,7 @@ async fn study(State(s): State<ApiState>, Extension(caller): Extension<Caller>, 
 /// unpriced. What it bought is charged, and owed back when the pull failed.
 async fn pull(State(s): State<ApiState>, Spends(caller, _): Spends<PlacementRequest, Caller>, Params(at): Params<StudyIn>) -> ApiResult<Payload> {
 	let def = define(&s, &caller, at).await?;
-	let held = s.panel.pull(caller.user_id).await??;
+	let held = s.sign_in.panel.pull(caller.user_id).await??;
 	let pulled = match bought(&s, &caller, &def, &held).await {
 		Ok(()) => ask(&s, &caller, Method::POST, "/studies/pull", json(&def)).await,
 		Err(e) => Err(e),
@@ -170,7 +183,7 @@ async fn bought(s: &ApiState, caller: &Caller, def: &Definition, held: &sa_panel
 
 /// The study of `at`, as the conductor's own areas and the caller's trades say it.
 async fn define(s: &ApiState, caller: &Caller, at: StudyIn) -> ApiResult<Definition> {
-	let area = s.panel.area(&at.area).await?.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
+	let area = s.sign_in.panel.area(&at.area).await?.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
 	let country: Country = area
 		.country
 		.parse()
@@ -182,7 +195,7 @@ async fn define(s: &ApiState, caller: &Caller, at: StudyIn) -> ApiResult<Definit
 				.split_once('.')
 				.and_then(|(t, c)| Some((t.parse::<i64>().ok()?, c.parse::<Country>().ok()?)))
 				.ok_or_else(|| Refusal::new(Code::BadRequest, format!("category {key:?}: not <trade id>.<country>")))?;
-			let trades = s.panel.trades(caller.user_id).await?;
+			let trades = s.sign_in.panel.trades(caller.user_id).await?;
 			let (trade, c) = trades
 				.iter()
 				.find(|t| t.id == trade)
