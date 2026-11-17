@@ -234,7 +234,7 @@ impl Pages {
 		Self { services, kept: Arc::default() }
 	}
 
-	async fn all(&self) -> Result<Arc<Vec<Place>>, Refusal<Code>> {
+	pub(crate) async fn all(&self) -> Result<Arc<Vec<Place>>, Refusal<Code>> {
 		if let Some((at, places)) = self.kept.lock().expect("never poisoned: no panic while held").as_ref()
 			&& at.elapsed() < PAGES_FOR
 		{

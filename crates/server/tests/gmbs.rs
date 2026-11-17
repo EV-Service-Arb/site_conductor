@@ -499,6 +499,12 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 		Some(json!({ "name": "Lyon 8", "trade": heating["id"], "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] })),
 	)
 	.await;
+	assert_eq!(first["tabs"], json!(["launch", "browser"]), "a draft's window");
+	assert_eq!(
+		first["readiness"],
+		json!({ "missing": ["category", "areas", "phone", "hidden_address", "film", "gmail", "profile"], "unknown": ["site"] }),
+		"its trade has no country yet, and with no sites to ask a landing page is unknown"
+	);
 	let first = format!("/api/v1/gmbs/{}", first["id"]);
 	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
 
@@ -514,6 +520,7 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 		};
 		assert_eq!(&edited[field], want, "{field}");
 	}
+	assert_eq!(edited["readiness"], json!({ "missing": ["category", "gmail", "profile"], "unknown": ["site"] }), "{edited}");
 	let (_, cleared) = call(&mut b, &app, Method::PATCH, &first, Some(json!({ "areas": null, "customers_visit": null }))).await;
 	assert_eq!((&cleared["areas"], &cleared["customers_visit"], &cleared["trade_id"]), (&json!([]), &Value::Null, &trade["id"]));
 	let (status, _) = call(
