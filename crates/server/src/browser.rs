@@ -42,7 +42,7 @@ use axum::{
 	routing::get,
 };
 use ev_lib::api::{
-	GenContext, JsonSchema, OperationInput,
+	Body, GenContext, Ids, JsonSchema, OperationInput, Refusal,
 	openapi::{MediaType, Operation, ReferenceOr, RequestBody},
 };
 use eyre::WrapErr;
@@ -67,7 +67,7 @@ use tracing::Instrument;
 use zeroize::Zeroizing;
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Id, Ids},
+	api::{ApiResult, Code, Id},
 	connections::{self, CheckedDto, ConnectionsDto},
 	cookies,
 	http::{ApiRoute, ApiState, Gate},
@@ -188,7 +188,7 @@ impl Connected {
 	pub(crate) async fn state(&self, gmail: i64) -> ApiResult<(Option<RunningDto>, bool)> {
 		let (status, body) = self.runner.call(Method::GET, "/profiles", None).await?;
 		if status != StatusCode::OK {
-			return Err(ApiError::Unavailable(format!("the browsers' runner answered {status}: {body}")));
+			return Err(Refusal::new(Code::Unavailable, format!("the browsers' runner answered {status}: {body}")));
 		}
 		let profiles: Profiles = serde_json::from_str(&body).map_err(|e| eyre::eyre!("the runner's profiles: {e}"))?;
 		let running = match profiles.running.iter().find(|r| r.gmail == gmail) {
@@ -232,19 +232,26 @@ impl Runner {
 			Some(b) => req.json(b),
 			None => req,
 		};
-		let res = req.send().await.map_err(|e| ApiError::Unavailable(format!("the browsers' runner did not answer: {e}")))?;
+		let res = req
+			.send()
+			.await
+			.map_err(|e| Refusal::new(Code::Unavailable, format!("the browsers' runner did not answer: {e}")))?;
 		let status = res.status();
-		let text = res.text().await.map_err(|e| ApiError::Unavailable(format!("the browsers' runner's answer broke off: {e}")))?;
+		let text = res
+			.text()
+			.await
+			.map_err(|e| Refusal::new(Code::Unavailable, format!("the browsers' runner's answer broke off: {e}")))?;
 		Ok((status, text))
 	}
 
 	/// 204 expected, anything else said back as the runner put it.
-	async fn expect_done(&self, method: Method, path: &str, body: Option<&Launch>) -> ApiResult<()> {
+	/// The runner's 409 is the inner `Err`, its text.
+	async fn expect_done(&self, method: Method, path: &str, body: Option<&Launch>) -> ApiResult<Result<(), String>> {
 		let (status, text) = self.call(method, path, body).await?;
 		match status {
-			StatusCode::NO_CONTENT => Ok(()),
-			StatusCode::CONFLICT => Err(ApiError::Conflict(text)),
-			StatusCode::SERVICE_UNAVAILABLE | StatusCode::BAD_GATEWAY => Err(ApiError::Unavailable(text)),
+			StatusCode::NO_CONTENT => Ok(Ok(())),
+			StatusCode::CONFLICT => Ok(Err(text)),
+			StatusCode::SERVICE_UNAVAILABLE | StatusCode::BAD_GATEWAY => Err(Refusal::new(Code::Unavailable, text)),
 			s => Err(eyre::eyre!("the browsers' runner answered {path} with {s}: {text}").into()),
 		}
 	}
@@ -301,7 +308,7 @@ impl OperationInput for Mp4 {
 }
 
 fn connected(state: &ApiState) -> ApiResult<&Connected> {
-	state.browsers.as_ref().ok_or(ApiError::BrowsersNotConnected)
+	state.browsers.as_ref().ok_or(Refusal::new(Code::BrowsersNotConnected, "browsers not connected"))
 }
 
 /// Sets the gmail's browser up, kept only once its proxy comes out in the country of every GBP of
@@ -330,7 +337,10 @@ async fn test_browser(State(state): State<ApiState>, Extension(caller): Extensio
 async fn remove_browser(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>) -> ApiResult<NoContent> {
 	let c = connected(&state)?;
 	state.panel.browser_of(caller.user_id, gmail).await??;
-	c.runner.expect_done(Method::DELETE, &format!("/profiles/{gmail}"), None).await?;
+	c.runner
+		.expect_done(Method::DELETE, &format!("/profiles/{gmail}"), None)
+		.await?
+		.map_err(|t| Refusal::new(Code::Conflict, t))?;
 	state.panel.delete_browser(&c.browsers, caller.user_id, gmail).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail's browser removed");
 	Ok(NoContent)
@@ -350,11 +360,8 @@ async fn start_browser(
 	let launch = state.panel.launch(&c.browsers, by, gmail, b.gmb, Timestamp::now()).await??;
 	c.runner
 		.expect_done(Method::POST, &format!("/profiles/{gmail}/launch"), Some(&launch))
-		.await
-		.map_err(|e| match e {
-			ApiError::Conflict(_) => ApiError::Conflict("it runs for another GBP, or for the gmail alone: stop it first".to_owned()),
-			e => e,
-		})?;
+		.await?
+		.map_err(|_| Refusal::new(Code::Conflict, "it runs for another GBP, or for the gmail alone: stop it first"))?;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, run = launch.run, "gmail's browser up");
 	Ok(NoContent)
 }
@@ -363,7 +370,10 @@ async fn start_browser(
 async fn stop_browser(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>) -> ApiResult<NoContent> {
 	let c = connected(&state)?;
 	state.panel.browser_of(caller.user_id, gmail).await??;
-	c.runner.expect_done(Method::POST, &format!("/profiles/{gmail}/stop"), None).await?;
+	c.runner
+		.expect_done(Method::POST, &format!("/profiles/{gmail}/stop"), None)
+		.await?
+		.map_err(|t| Refusal::new(Code::Conflict, t))?;
 	Ok(NoContent)
 }
 
@@ -372,7 +382,11 @@ async fn remove_film(State(state): State<ApiState>, Extension(caller): Extension
 	let c = connected(&state)?;
 	match state.panel.browser_of(caller.user_id, gmail).await??.provider {
 		Provider::Multilogin => state.panel.remove_phone_film(&c.browsers, caller.user_id, gmail).await??,
-		Provider::MultiloginBrowser | Provider::Gologin => c.runner.expect_done(Method::DELETE, &format!("/profiles/{gmail}/film"), None).await?,
+		Provider::MultiloginBrowser | Provider::Gologin => c
+			.runner
+			.expect_done(Method::DELETE, &format!("/profiles/{gmail}/film"), None)
+			.await?
+			.map_err(|t| Refusal::new(Code::Conflict, t))?,
 	}
 	Ok(NoContent)
 }
@@ -385,11 +399,11 @@ async fn set_film(State(state): State<ApiState>, Extension(caller): Extension<Ca
 	let c = connected(&state)?;
 	match state.panel.browser_of(caller.user_id, gmail).await??.provider {
 		Provider::Gologin => {}
-		Provider::MultiloginBrowser => return Err(ApiError::Conflict("Multilogin's browser plays no film: its camera is the host's".to_owned())),
+		Provider::MultiloginBrowser => return Err(Refusal::new(Code::Conflict, "Multilogin's browser plays no film: its camera is the host's")),
 		Provider::Multilogin => {
 			let mp4 = axum::body::to_bytes(film, LIBRARY_MAX)
 				.await
-				.map_err(|_| ApiError::TooLarge(format!("a phone's film is {} MiB at most", LIBRARY_MAX >> 20)))?;
+				.map_err(|_| Refusal::new(Code::TooLarge, format!("a phone's film is {} MiB at most", LIBRARY_MAX >> 20)))?;
 			state.panel.set_phone_film(&c.browsers, caller.user_id, gmail, mp4.to_vec()).await??;
 			tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "phone's film in Multilogin's Library");
 			return Ok(NoContent);
@@ -405,17 +419,20 @@ async fn set_film(State(state): State<ApiState>, Extension(caller): Extension<Ca
 		.body(reqwest::Body::wrap_stream(film.into_data_stream()))
 		.send()
 		.await
-		.map_err(|e| ApiError::Unavailable(format!("the browsers' runner did not take the film: {e}")))?;
+		.map_err(|e| Refusal::new(Code::Unavailable, format!("the browsers' runner did not take the film: {e}")))?;
 	let status = sent.status();
-	let text = sent.text().await.map_err(|e| ApiError::Unavailable(format!("the browsers' runner's answer broke off: {e}")))?;
+	let text = sent
+		.text()
+		.await
+		.map_err(|e| Refusal::new(Code::Unavailable, format!("the browsers' runner's answer broke off: {e}")))?;
 	match status {
 		StatusCode::NO_CONTENT => {
 			tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail's film set");
 			Ok(NoContent)
 		}
-		StatusCode::BAD_REQUEST => Err(ApiError::BadRequest(text)),
-		StatusCode::CONFLICT => Err(ApiError::Conflict(text)),
-		StatusCode::PAYLOAD_TOO_LARGE => Err(ApiError::TooLarge(format!("a film is {} MiB at most", FILM_MAX >> 20))),
+		StatusCode::BAD_REQUEST => Err(Refusal::new(Code::BadRequest, text)),
+		StatusCode::CONFLICT => Err(Refusal::new(Code::Conflict, text)),
+		StatusCode::PAYLOAD_TOO_LARGE => Err(Refusal::new(Code::TooLarge, format!("a film is {} MiB at most", FILM_MAX >> 20))),
 		s => Err(eyre::eyre!("the browsers' runner answered a film with {s}: {text}").into()),
 	}
 }
@@ -469,22 +486,22 @@ impl Drop for Viewing {
 async fn upgrade(State(s): State<ViewerState>, Path(raw): Path<String>, headers: HeaderMap, ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>) -> Response {
 	if !live::same_origin(&headers, s.sign_in.panel_origin()) {
 		tracing::info!(origin = ?headers.get(header::ORIGIN), "browser: a handshake from another origin refused");
-		return ApiError::Forbidden.into_response();
+		return Refusal::new(Code::Forbidden, "your permissions do not allow this").into_response();
 	}
 	let caller = match signin::check(&s.sign_in, &headers, Freshness::Cached).await {
 		Ok(c) => c,
 		Err(denied) => return denied.into_response(&s.sign_in),
 	};
 	let Some(c) = s.browsers.clone() else {
-		return ApiError::BrowsersNotConnected.into_response();
+		return Refusal::new(Code::BrowsersNotConnected, "browsers not connected").into_response();
 	};
 	let Ok(gmail) = raw.parse::<i64>() else {
-		return ApiError::NotFound.into_response();
+		return Refusal::new(Code::NotFound, "not found").into_response();
 	};
 	let phone = match s.sign_in.panel.browser_of(caller.user_id, gmail).await {
 		Ok(Ok(b)) => b.provider == Provider::Multilogin,
-		Ok(Err(r)) => return ApiError::from(r).into_response(),
-		Err(e) => return ApiError::Internal(e).into_response(),
+		Ok(Err(r)) => return Refusal::<Code>::from(r).into_response(),
+		Err(e) => return Refusal::<Code>::from(e).into_response(),
 	};
 	let ws = match ws {
 		Ok(ws) => ws,
@@ -580,7 +597,7 @@ impl Watch {
 				},
 				_ = self.recheck.tick() => match signin::check(&self.sign_in, &self.cookie, Freshness::Cached).await {
 					Err(Denied::Unauthenticated) => return (live::CLOSE_SESSION_ENDED, "session ended"),
-					Err(Denied::Failed(ApiError::Internal(e))) => crate::report(&e, "a viewer's session asked again"),
+					Err(Denied::Internal(e)) => crate::report(&e, "a viewer's session asked again"),
 					Ok(_) | Err(_) => {}
 				},
 			}

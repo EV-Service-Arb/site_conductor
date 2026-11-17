@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
-use ev_lib::api::JsonSchema;
+use ev_lib::api::{Body, Ids, JsonSchema, Refusal};
 use jiff::Timestamp;
 use sa_auth::Trash as TrashPermission;
 use sa_core::gbp::State as GbpState;
@@ -17,7 +17,7 @@ use sa_panel::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Id, Ids},
+	api::{ApiResult, Code, Id},
 	http::{ApiRoute, Gate},
 	signin::Caller,
 };
@@ -177,7 +177,7 @@ async fn restore_gmb(State(panel): State<Panel>, Extension(caller): Extension<Ca
 /// `sa:admin:trash:keep` (403).
 async fn set_trash_settings(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(set): Body<SetSettingsDto>) -> ApiResult<NoContent> {
 	if set.never_purge.is_some() && !caller.permissions.may(TrashPermission::Keep) {
-		return Err(ApiError::Forbidden);
+		return Err(Refusal::new(Code::Forbidden, "your permissions do not allow this"));
 	}
 	panel.set_trash_settings(caller.user_id, set.keep_days, set.never_purge).await??;
 	Ok(NoContent)

@@ -32,13 +32,14 @@ use axum::{
 	http::{HeaderValue, StatusCode, header},
 	response::{IntoResponse, Response},
 };
+use ev_lib::api::Refusal;
 use sa_panel::Panel;
 use tower_http::{
 	services::{ServeDir, ServeFile},
 	set_status::SetStatus,
 };
 
-use crate::api::ApiError;
+use crate::api::Code;
 
 /// The pages' policy: never framed, no `<base>`, forms posted only here. What a page loads is
 /// left to the browser's defaults: Maps JS, the platform's elements and Turnstile come from
@@ -126,7 +127,7 @@ fn element_page(path: &str) -> Option<String> {
 
 async fn page(mut files: Files, panel: Panel, mut req: Request) -> Response {
 	if reserved(req.uri().path()) {
-		return dressed(ApiError::NotFound.into_response(), false);
+		return dressed(Refusal::new(Code::NotFound, "not found").into_response(), false);
 	}
 	if let Some(page) = element_page(req.uri().path()) {
 		let query = req.uri().query().map(|q| format!("?{q}")).unwrap_or_default();

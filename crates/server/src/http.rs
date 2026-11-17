@@ -16,7 +16,7 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::{get, post},
 };
-use ev_lib::api::{Guard, OpenApi, Route};
+use ev_lib::api::{Guard, OpenApi, Refusal, Route};
 use jiff::Timestamp;
 use sa_auth::{PermissionSet, Sources, Tokens};
 use sa_panel::{
@@ -29,7 +29,8 @@ use tower_http::timeout::TimeoutLayer;
 use crate::{
 	access,
 	alerts::{self, Telegram},
-	api, areas, assistant, browser,
+	api::{self, Code},
+	areas, assistant, browser,
 	catalog::Catalog,
 	claude::{self, Model},
 	connected, connections,
@@ -367,7 +368,7 @@ fn bounded<S: Clone + Send + Sync + 'static>(routes: Router<S>, concurrent: usiz
 	routes.layer(
 		ServiceBuilder::new()
 			// The only error the layers below raise is the shed: everything else is a response.
-			.layer(HandleErrorLayer::new(|_: BoxError| async { api::ApiError::Unavailable("busy, try again".to_owned()).into_response() }))
+			.layer(HandleErrorLayer::new(|_: BoxError| async { Refusal::new(Code::Unavailable, "busy, try again").into_response() }))
 			.load_shed()
 			.layer(GlobalConcurrencyLimitLayer::with_semaphore(permits))
 			.layer(TimeoutLayer::with_status_code(StatusCode::SERVICE_UNAVAILABLE, timeout)),

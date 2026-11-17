@@ -2,7 +2,7 @@
 //! key, checked before they are stored and never answered back; its browser is [`crate::browser`]'s.
 
 use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
-use ev_lib::api::JsonSchema;
+use ev_lib::api::{Body, Ids, JsonSchema};
 use jiff::Timestamp;
 use sa_panel::{
 	Panel,
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use crate::{
-	api::{ApiResult, Body, Id, Ids},
+	api::{ApiResult, Id},
 	browser::{BrowserDto, ExitDto},
 	http::{ApiRoute, ApiState, Gate},
 	signin::Caller,

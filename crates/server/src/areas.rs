@@ -2,7 +2,7 @@
 //! caller's GBPs by one stays `kit`'s.
 
 use axum::{Json, extract::State, http::Method};
-use ev_lib::api::JsonSchema;
+use ev_lib::api::{Body, Ids, JsonSchema, Params, Refusal};
 use jiff::Timestamp;
 use sa_core::prices::{PlacesRequest, Spends};
 use sa_panel::{
@@ -13,7 +13,7 @@ use sa_places::{LatLng, Locality, Viewport};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Ids, Params},
+	api::{ApiResult, Code},
 	gmbs::{SuggestionDto, SuggestionsDto},
 	http::{ApiRoute, ApiState, Gate},
 	signin::Caller,
@@ -148,7 +148,7 @@ async fn areas(State(panel): State<Panel>) -> ApiResult<Json<AreasDto>> {
 
 /// The area at `/<slug>/`.
 async fn area(State(panel): State<Panel>, Ids(SlugIn { slug }): Ids<SlugIn>) -> ApiResult<Json<AreaDto>> {
-	Ok(Json(panel.area(&slug).await?.ok_or(ApiError::NotFound)?.into()))
+	Ok(Json(panel.area(&slug).await?.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?.into()))
 }
 
 /// Draws the area at `/<slug>/`: a city (its outline and country asked of Places, paid by the
@@ -157,7 +157,7 @@ async fn area(State(panel): State<Panel>, Ids(SlugIn { slug }): Ids<SlugIn>) -> 
 /// 400 a link the conductor's own pages hold, or a centre in no country; 409 someone else's area.
 async fn put_area(State(s): State<ApiState>, Spends(caller, by): Spends<PlacesRequest, Caller>, Ids(SlugIn { slug }): Ids<SlugIn>, Body(b): Body<PutAreaDto>) -> ApiResult<Json<AreaDto>> {
 	if crate::web::taken(&slug, s.web.as_ref()) {
-		return Err(ApiError::BadRequest(format!("/{slug}/ is one of the conductor's own pages")));
+		return Err(Refusal::new(Code::BadRequest, format!("/{slug}/ is one of the conductor's own pages")));
 	}
 	let new = match b {
 		PutAreaDto::City { place_id, margin_m } => NewArea::City { place_id, margin_m },
@@ -204,5 +204,5 @@ async fn city(State(panel): State<Panel>, Spends(_, by): Spends<PlacesRequest, C
 
 /// The city or town a point lies in (Geocoding, paid by the caller). 404 outside any.
 async fn locality(State(panel): State<Panel>, Spends(_, by): Spends<PlacesRequest, Caller>, Params(at): Params<LatLng>) -> ApiResult<Json<LocalityDto>> {
-	Ok(Json(panel.locality_at(by, at).await??.ok_or(ApiError::NotFound)?.into()))
+	Ok(Json(panel.locality_at(by, at).await??.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?.into()))
 }

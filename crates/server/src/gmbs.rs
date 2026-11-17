@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
-use ev_lib::api::{Created, JsonSchema};
+use ev_lib::api::{Body, Created, Ids, JsonSchema, Params, Refusal};
 use jiff::Timestamp;
 use sa_core::{
 	gbp::{Country, GmailRole, OnGoogle, State as GbpState},
@@ -19,7 +19,7 @@ use sa_panel::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Id, Ids, Params},
+	api::{ApiResult, Code, Id},
 	http::{ApiRoute, ApiState, Gate},
 	signin::Caller,
 	tokens::BalanceDto,
@@ -417,13 +417,13 @@ async fn suggest_places(State(panel): State<Panel>, Spends(_, by): Spends<Places
 /// there is no map; 409 when none has room.
 async fn map_key(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
 	if s.panel.accounts().iter().all(|a| a.provides.browser.is_none()) {
-		return Err(ApiError::NotFound);
+		return Err(Refusal::new(Code::NotFound, "not found"));
 	}
 	let account = s
 		.panel
 		.map_account(Timestamp::now())
 		.await?
-		.ok_or_else(|| ApiError::Conflict("every Google account's free map loads and allowance this month are used".to_owned()))?;
+		.ok_or_else(|| Refusal::new(Code::Conflict, "every Google account's free map loads and allowance this month are used"))?;
 	Ok(Json(MapDto {
 		key: account.provides.browser.as_deref().expect("only an account with a browser key stands").to_owned(),
 		account: account.name.clone(),
@@ -440,8 +440,8 @@ async fn street_view(State(s): State<ApiState>, Spends(_, by): Spends<StreetView
 	match s.panel.open_street_view(by, &at.account, at.lat, at.lng, now).await? {
 		Ok(balance) => Ok(Json(BalanceDto { balance })),
 		Err(Refused::Conflict(why)) => match s.panel.map_account(now).await? {
-			Some(other) if other.name != at.account => Err(ApiError::Conflict(format!("{why}; reload the page: it then loads on {}, which has room", other.name))),
-			_ => Err(ApiError::Conflict(why)),
+			Some(other) if other.name != at.account => Err(Refusal::new(Code::Conflict, format!("{why}; reload the page: it then loads on {}, which has room", other.name))),
+			_ => Err(Refusal::new(Code::Conflict, why)),
 		},
 		Err(refused) => Err(refused.into()),
 	}
@@ -509,7 +509,7 @@ async fn add_gmb(State(panel): State<Panel>, Spends(caller, by): Spends<PlacesRe
 		trade,
 	} = b;
 	if !sa_places::parse::looks_like_place_id(&place_id) {
-		return Err(ApiError::BadRequest(format!("{place_id:?} is not a place id")));
+		return Err(Refusal::new(Code::BadRequest, format!("{place_id:?} is not a place id")));
 	}
 	let existing = Existing {
 		gmail_id: gmail,

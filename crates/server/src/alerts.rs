@@ -11,7 +11,7 @@ use axum::{
 	http::{HeaderName, HeaderValue, Method, Request, StatusCode, header},
 	response::NoContent,
 };
-use ev_lib::api::{Created, JsonSchema};
+use ev_lib::api::{Body, Created, Ids, JsonSchema, Refusal};
 use jiff::Timestamp;
 use sa_alerts::{Call, NotePage, Rule};
 use sa_auth::{Service, User};
@@ -26,7 +26,7 @@ use serde_json::Value;
 use tokio::sync::watch;
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Id, Ids},
+	api::{ApiResult, Code, Id},
 	concierge::Concierge,
 	forward::{Forward, SITES_TIMEOUT},
 	http::{ApiRoute, ApiState, Gate},
@@ -152,7 +152,7 @@ fn display(caller: &Caller) -> &str {
 }
 
 fn bot(t: Option<Telegram>) -> ApiResult<Telegram> {
-	t.ok_or_else(|| ApiError::Unavailable("Telegram is not configured".into()))
+	t.ok_or_else(|| Refusal::new(Code::Unavailable, "Telegram is not configured"))
 }
 
 /// A link to the bot whose `/start` makes the chat the caller's private destination.
@@ -169,7 +169,7 @@ pub(crate) struct LinkDto {
 async fn telegram_link(State(panel): State<Panel>, State(t): State<Option<Telegram>>, Extension(caller): Extension<Caller>) -> ApiResult<Created<LinkDto>> {
 	let t = bot(t)?;
 	let Some(name) = t.name.get() else {
-		return Err(ApiError::Unavailable("the bot is starting, try again in a minute".into()));
+		return Err(Refusal::new(Code::Unavailable, "the bot is starting, try again in a minute"));
 	};
 	let token = panel.telegram_link_token(caller.user_id, &caller.permissions, display(&caller), Timestamp::now()).await?;
 	tracing::info!(user_id = %caller.user_id, "telegram: link token issued");

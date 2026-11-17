@@ -45,6 +45,7 @@ use axum::{
 	http::{HeaderMap, StatusCode, header},
 	response::{IntoResponse, Response},
 };
+use ev_lib::api::Refusal;
 use sa_core::feeds::Line;
 use sa_panel::{
 	live::{Change, Ended, Signal},
@@ -56,7 +57,7 @@ use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::{
-	api::ApiError,
+	api::Code,
 	cookies,
 	forward::Services,
 	signin::{self, Caller, Denied, Freshness, SignIn},
@@ -134,7 +135,7 @@ impl Live {
 pub async fn upgrade(State(live): State<Live>, headers: HeaderMap, ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>) -> Response {
 	if !same_origin(&headers, live.sign_in.panel_origin()) {
 		tracing::info!(origin = ?headers.get(header::ORIGIN), "live: a handshake from another origin refused");
-		return ApiError::Csrf.into_response();
+		return Refusal::new(Code::Csrf, "the page is out of date: reload it").into_response();
 	}
 	let caller = match signin::check(&live.sign_in, &headers, Freshness::Cached).await {
 		Ok(c) => c,
@@ -150,7 +151,7 @@ pub async fn upgrade(State(live): State<Live>, headers: HeaderMap, ws: Result<We
 	};
 	let Some(slot) = live.slots.take(caller.user_id, &live.limits) else {
 		tracing::info!(user_id = %caller.user_id, "live: too many sockets");
-		return ApiError::TooMany("too many live connections".to_owned()).into_response();
+		return Refusal::new(Code::TooMany, "too many live connections").into_response();
 	};
 	// Only the cookie is kept, to ask for the session again.
 	let mut cookie = HeaderMap::new();
@@ -336,11 +337,11 @@ impl Connection {
 					Err(Denied::Unauthenticated) => Step::Close(CLOSE_SESSION_ENDED, "session ended"),
 					// The API would answer 503 and keep the session: so does the socket, and it
 					// asks again at the next tick.
-					Err(Denied::Failed(ApiError::Internal(e))) => {
+					Err(Denied::Internal(e)) => {
 						crate::report(&e, "live: the session asked again");
 						Step::Nothing
 					}
-					Err(Denied::Unavailable | Denied::Failed(_)) => Step::Nothing,
+					Err(Denied::Unavailable | Denied::BadGateway) => Step::Nothing,
 				},
 			};
 			match step {

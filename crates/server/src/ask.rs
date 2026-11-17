@@ -12,7 +12,7 @@ use axum::{
 	http::{HeaderMap, StatusCode},
 };
 use ev_lib::api::{
-	JsonSchema,
+	Body, ErrorCode, Ids, JsonSchema, Refusal,
 	schemars::{generate::SchemaSettings, schema_for},
 };
 use jiff::Timestamp;
@@ -29,7 +29,7 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Id, Ids},
+	api::{ApiResult, Code, Id},
 	assistant::{Action, ActionState, AnswerState, Attachment, ChatDto, Cost, Mention, Step, Target, Turn, Used},
 	claude::{MODEL, SUBSCRIPTION},
 	http::ApiState,
@@ -105,17 +105,17 @@ pub(crate) async fn ask(
 	Ids(Id { id: chat }): Ids<Id<Uuid>>,
 	Body(q): Body<Question>,
 ) -> ApiResult<Json<ChatDto>> {
-	let model = state.model.clone().ok_or_else(|| ApiError::Unavailable("the assistant is not connected".into()))?;
+	let model = state.model.clone().ok_or_else(|| Refusal::new(Code::Unavailable, "the assistant is not connected"))?;
 	let (token, bill) = match (state.panel.claude_token(caller.user_id).await?, model.owner()) {
 		(Some(own), _) => (own, Bill::Theirs),
 		(None, Some(owner)) => (owner.clone(), Bill::Ours),
-		(None, None) => return Err(ApiError::Unavailable("the assistant runs on your own Claude here: connect it".into())),
+		(None, None) => return Err(Refusal::new(Code::Unavailable, "the assistant runs on your own Claude here: connect it")),
 	};
 	let reader = (&caller).into();
 	let read: Chat<Turn> = state.panel.assistant_chat(reader, chat).await??;
 	let started = Timestamp::now();
 	if q.from > read.turns.len() {
-		return Err(ApiError::BadRequest(format!("from {} is past the chat's {} turns", q.from, read.turns.len())));
+		return Err(Refusal::new(Code::BadRequest, format!("from {} is past the chat's {} turns", q.from, read.turns.len())));
 	}
 	let mut turns = read.turns;
 	turns.truncate(q.from);
@@ -194,7 +194,7 @@ pub(crate) async fn ask(
 					.push_str("\n\nYour Claude connection was refused: reconnect it, or disconnect it to ask on the panel's.");
 				break AnswerState::Stopped;
 			}
-			Err(said) => return Err(ApiError::Unavailable(format!("the panel's Claude refused its token: {said}"))),
+			Err(said) => return Err(Refusal::new(Code::Unavailable, format!("the panel's Claude refused its token: {said}"))),
 		};
 		let used = tokens(&reply)?;
 		answer.cost.tokens.add(&used);
@@ -254,7 +254,8 @@ pub(crate) struct Act {
 /// Does an answer's proposed operation, as the caller and through the same gate as their own
 /// request; the action is marked done in the chat.
 ///
-/// 409 the action is not a proposed operation; the operation's own refusal answers as it refused.
+/// 409 the action is not a proposed operation; the operation's own refusal answers with its code, or
+/// `bad_gateway` for a service's word the conductor has none of.
 pub(crate) async fn act(
 	State(state): State<ApiState>,
 	Extension(caller): Extension<Caller>,
@@ -267,27 +268,24 @@ pub(crate) async fn act(
 		.turns
 		.iter()
 		.position(|t| matches!(t, Turn::Assistant { id, .. } if *id == a.turn))
-		.ok_or(ApiError::NotFound)?;
+		.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
 	let mut turns = read.turns;
 	let Turn::Assistant { actions, .. } = &mut turns[at] else {
 		unreachable!("found as an answer")
 	};
-	let action = actions.iter_mut().find(|x| x.id == a.action).ok_or(ApiError::NotFound)?;
+	let action = actions.iter_mut().find(|x| x.id == a.action).ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
 	let (ActionState::Proposed, Target::Call(call)) = (&action.state, &action.target) else {
-		return Err(ApiError::Conflict("only a proposed operation is done here: a view or a binding is the page's".into()));
+		return Err(Refusal::new(Code::Conflict, "only a proposed operation is done here: a view or a binding is the page's"));
 	};
-	let answer = state.tools.call(&headers, call.clone()).await.map_err(ApiError::BadRequest)?;
+	let answer = state.tools.call(&headers, call.clone()).await.map_err(|m| Refusal::new(Code::BadRequest, m))?;
 	let status = StatusCode::from_u16(answer.status).map_err(|e| eyre::eyre!("the app answered {}: {e}", answer.status))?;
 	if !status.is_success() {
-		let why = answer.body["error"].as_str().map_or_else(|| answer.body.to_string(), str::to_owned);
-		return Err(match status {
-			StatusCode::BAD_REQUEST => ApiError::BadRequest(why),
-			StatusCode::FORBIDDEN => ApiError::Forbidden,
-			StatusCode::NOT_FOUND => ApiError::NotFound,
-			StatusCode::CONFLICT => ApiError::Conflict(why),
-			StatusCode::PAYLOAD_TOO_LARGE => ApiError::TooLarge(why),
-			StatusCode::SERVICE_UNAVAILABLE => ApiError::Unavailable(why),
-			s => eyre::eyre!("{} answered {s}: {why}", call.operation).into(),
+		let error = answer.body["error"].as_str().map_or_else(|| answer.body.to_string(), str::to_owned);
+		let word = answer.body["code"].as_str();
+		return Err(match word.and_then(|w| serde_json::from_value::<Code>(w.into()).ok()).filter(|c| c.status() == status) {
+			Some(code) => Refusal::new(code, error),
+			// another service's word, which the conductor's codes do not hold
+			None => Refusal::new(Code::BadGateway, format!("{} refused ({}): {error}", call.operation, word.unwrap_or(status.as_str()))),
 		});
 	}
 	action.state = ActionState::Done;

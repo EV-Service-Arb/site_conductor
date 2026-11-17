@@ -44,7 +44,7 @@ use axum::{
 	middleware::Next,
 	response::{Html, IntoResponse, Response},
 };
-use ev_lib::api::{JsonSchema, OperationInput};
+use ev_lib::api::{JsonSchema, OperationInput, Refusal, Refuses};
 use jiff::Timestamp;
 use sa_auth::PermissionSet;
 use sa_panel::{
@@ -57,7 +57,7 @@ use uuid::Uuid;
 
 use crate::{
 	access::PermissionName,
-	api::ApiError,
+	api::Code,
 	concierge::{CLIENT_ID, Concierge, ConciergeError, DEV_CODE, DevIdentity, Me},
 	cookies::{self, Cookies},
 	http::Gate,
@@ -324,7 +324,7 @@ pub async fn callback(State(s): State<SignIn>, headers: HeaderMap, Query(q): Que
 /// meant to end access, not one browser's copy of it) and the cookies cleared.
 pub async fn logout(State(s): State<SignIn>, headers: HeaderMap) -> Response {
 	if !s.cookies.csrf_ok(&headers) {
-		return ApiError::Csrf.into_response();
+		return Refusal::new(Code::Csrf, "the page is out of date: reload it").into_response();
 	}
 	if let Some(key) = s.cookies.get(&headers, cookies::SESSION).and_then(SessionKey::of_cookie) {
 		s.forget_me(&key);
@@ -335,7 +335,7 @@ pub async fn logout(State(s): State<SignIn>, headers: HeaderMap) -> Response {
 			}
 			Ok(None) => {}
 			Err(e) => {
-				return ApiError::Internal(e.wrap_err("closing a user's sessions")).into_response();
+				return Refusal::<Code>::from(e.wrap_err("closing a user's sessions")).into_response();
 			}
 		}
 	}
@@ -460,7 +460,7 @@ pub(crate) async fn gate(State(g): State<Gatekeeper>, mut req: Request, next: Ne
 	} else {
 		let safe = matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
 		if !safe && !g.sign_in.cookies.csrf_ok(req.headers()) {
-			return ApiError::Csrf.into_response();
+			return Refusal::new(Code::Csrf, "the page is out of date: reload it").into_response();
 		}
 		check(&g.sign_in, req.headers(), g.gate.freshness).await
 	};
@@ -469,7 +469,7 @@ pub(crate) async fn gate(State(g): State<Gatekeeper>, mut req: Request, next: Ne
 		Err(denied) => return denied.into_response(&g.sign_in),
 	};
 	if g.gate.section.is_some_and(|section| !section.may(&caller.permissions)) {
-		return ApiError::Forbidden.into_response();
+		return Refusal::new(Code::Forbidden, "your permissions do not allow this").into_response();
 	}
 	req.extensions_mut().insert(caller);
 	let mut res = next.run(req).await;
@@ -492,23 +492,38 @@ async fn get_me(s: &SignIn, access: &str) -> Result<Me, ConciergeError> {
 
 /// Why a caller was not let in, before it is an answer: `/api/v1` answers it, a live socket
 /// closes on it.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum Denied {
 	/// No session, or one closed: sign in again (401, the cookies cleared).
+	#[error("sign in")]
 	Unauthenticated,
 	/// Concierge cannot be asked now; nothing is closed (503).
+	#[error("sign-in is unavailable, try again")]
 	Unavailable,
-	/// Our failure, or concierge's.
-	Failed(ApiError),
+	/// Concierge answered what the sign-in cannot stand on.
+	#[error("sign-in failed")]
+	BadGateway,
+	#[error(transparent)]
+	Internal(eyre::Report),
+}
+
+impl Refuses<Denied> for Code {
+	fn refusal(d: Denied) -> Refusal<Self> {
+		match d {
+			Denied::Unauthenticated => Refusal::new(Self::Unauthenticated, d.to_string()),
+			Denied::Unavailable => Refusal::new(Self::Unavailable, d.to_string()),
+			Denied::BadGateway => Refusal::new(Self::BadGateway, d.to_string()),
+			Denied::Internal(e) => e.into(),
+		}
+	}
 }
 
 impl Denied {
+	/// The answer of a route outside the table: the cookies cleared with a 401.
 	pub(crate) fn into_response(self, s: &SignIn) -> Response {
-		match self {
-			Self::Unauthenticated => signed_out(s, ApiError::Unauthenticated.into_response()),
-			Self::Unavailable => ApiError::Unavailable("sign-in is unavailable, try again".to_owned()).into_response(),
-			Self::Failed(e) => e.into_response(),
-		}
+		let signed_out_too = matches!(self, Self::Unauthenticated);
+		let res = Refusal::<Code>::from(self).into_response();
+		if signed_out_too { signed_out(s, res) } else { res }
 	}
 }
 
@@ -536,7 +551,7 @@ async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Res
 		Ok(session) => session,
 		Err(SessionError::Missing | SessionError::Rejected) => return Err(Denied::Unauthenticated),
 		Err(SessionError::Unavailable) => return Err(Denied::Unavailable),
-		Err(SessionError::Internal(e)) => return Err(Denied::Failed(ApiError::Internal(e.wrap_err("reading a session")))),
+		Err(SessionError::Internal(e)) => return Err(Denied::Internal(e.wrap_err("reading a session"))),
 	};
 	// The user is here: the bot may ask concierge with this session for another week.
 	if let Err(e) = s.panel.touch_session(&session.key, Timestamp::now()).await {
@@ -567,13 +582,13 @@ async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Res
 			}
 			Err(e @ ConciergeError::Failed(_)) => {
 				crate::report(&eyre::eyre!(e), "GetMe");
-				return Err(Denied::Failed(ApiError::BadGateway("sign-in failed".to_owned())));
+				return Err(Denied::BadGateway);
 			}
 		},
 	};
 	if me.user_id != session.user_id {
 		crate::report(&eyre::eyre!("GetMe answered another user than the session's"), "GetMe");
-		return Err(Denied::Failed(ApiError::BadGateway("sign-in failed".to_owned())));
+		return Err(Denied::BadGateway);
 	}
 	if fresh {
 		// Alerts go only on permissions concierge confirmed lately; every answer the gate gets is
@@ -589,7 +604,7 @@ async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Res
 			name: me.preferred_name.clone(),
 		};
 		if let Err(e) = s.panel.user_seen(&user, Timestamp::now()).await {
-			return Err(Denied::Failed(ApiError::Internal(e.wrap_err("recording a user seen"))));
+			return Err(Denied::Internal(e.wrap_err("recording a user seen")));
 		}
 	}
 	Ok(Caller {

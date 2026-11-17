@@ -11,7 +11,7 @@ use axum::{
 	http::{HeaderMap, Method, StatusCode},
 	response::NoContent,
 };
-use ev_lib::api::JsonSchema;
+use ev_lib::api::{JsonSchema, Params, Refusal};
 use jiff::Timestamp;
 use sa_auth::{Principal, Service};
 use sa_core::{
@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
 use crate::{
-	api::{self, ApiError, ApiResult, Params},
+	api::{ApiResult, Code},
 	browser::Connected,
 	forward::Services,
 	http::{ApiRoute, Gate, Section},
@@ -136,7 +136,7 @@ pub(crate) struct Loaded {
 
 /// Records that the caller's browser built a Google map on an account's browser key: a billed load
 /// of ours. 400 an account without one.
-async fn map_loaded(State(panel): State<Panel>, Extension(caller): Extension<Caller>, api::Body(on): api::Body<Loaded>) -> ApiResult<NoContent> {
+async fn map_loaded(State(panel): State<Panel>, Extension(caller): Extension<Caller>, ev_lib::api::Body(on): ev_lib::api::Body<Loaded>) -> ApiResult<NoContent> {
 	panel.map_loaded(caller.user_id, &on.account, Timestamp::now()).await??;
 	Ok(NoContent)
 }
@@ -154,10 +154,10 @@ pub(crate) struct Window {
 /// What our tools spent on vendors per UTC day, item, bill and source, in units and each use at its
 /// unit's cost when it was done: what Grafana's sa-tokens dashboard reads.
 pub(crate) async fn spend(State(panel): State<Panel>, Params(q): Params<Window>) -> ApiResult<Json<UsageDto>> {
-	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| ApiError::BadRequest(format!("{ms}: {e}")));
+	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| Refusal::new(Code::BadRequest, format!("{ms}: {e}")));
 	let (from, to) = (at(q.from)?, at(q.to)?);
 	if from >= to || to.duration_since(from) > SPAN {
-		return Err(ApiError::BadRequest(format!("from is before to, at most {} days", SPAN.as_hours() / 24)));
+		return Err(Refusal::new(Code::BadRequest, format!("from is before to, at most {} days", SPAN.as_hours() / 24)));
 	}
 	let days = panel.used(from, to).await?;
 	Ok(Json(UsageDto {
