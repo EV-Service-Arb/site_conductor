@@ -61,7 +61,8 @@ async fn an_area_has_the_country_its_place_or_its_centre_lies_in() {
 			kickbacks: vec![],
 		})
 		.await
-		.unwrap().unwrap();
+		.unwrap()
+		.unwrap();
 	panel
 		.set_prices(
 			&[PlacesRequest::Details, PlacesRequest::Geocode].map(|r| (Item::Places(r), Some(0))),
@@ -81,7 +82,7 @@ async fn an_area_has_the_country_its_place_or_its_centre_lies_in() {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: ORIGIN.to_owned(),
 	};
-	let app = http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, None, None, None);
+	let app = http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, None, None, None, None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 

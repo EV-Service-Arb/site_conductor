@@ -14,6 +14,7 @@ readme = "README.md"
 sa_alerts = { path = "crates/alerts", version = "0.1.0" }
 sa_auth = { path = "crates/auth", version = "0.1.0" }
 sa_browsers = { path = "crates/browsers", version = "0.1.0" }
+sa_sandbox = { path = "crates/sandbox", version = "0.1.0" }
 sa_contracts = { path = "crates/contracts", version = "0.1.0" }
 sa_core = { path = "crates/core", version = "0.1.0" }
 sa_panel = { path = "crates/panel", version = "0.1.0" }

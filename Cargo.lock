@@ -4511,6 +4511,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "sa_sandbox"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clap",
+ "color-eyre",
+ "eyre",
+ "jiff",
+ "reqwest",
+ "sa_auth",
+ "sa_panel",
+ "sa_server",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "sa_server"
 version = "0.1.0"
 dependencies = [
@@ -4538,6 +4561,7 @@ dependencies = [
  "sa_core",
  "sa_panel",
  "sa_places",
+ "sa_sandbox",
  "sa_server",
  "schemars",
  "serde",

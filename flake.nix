@@ -39,6 +39,7 @@
           FIGMA_STACK_PORT = local 3; # `nix run .#e2e`/`.#figma`'s own stack (`dev --port`), never a running one's
           FIGMA_WEB_PORT = local 4; # its next dev: FIGMA_STACK_PORT + 1
           BROWSERS_BIND = "127.0.0.1:${local 5}"; # sa_browsers' runner
+          SANDBOX_BIND = "127.0.0.1:${local 6}"; # sa_sandbox's runner
         };
 
         # `nix run .#gen`: the conductor's OpenAPI document (crates/gen) and the front end's client
@@ -92,7 +93,7 @@
           containerRelease = { registry = "ghcr.io/ev-service-arb"; };
           figma = { };
           jobs.default = true;
-          jobs.errors.install.packages = [ "ffmpeg" ]; # crates/browsers/tests/runner.rs cuts its films with it
+          jobs.errors.install.packages = [ "ffmpeg" "deno" ]; # crates/browsers/tests/runner.rs cuts its films with ffmpeg; crates/sandbox's tests run Deno
           jobs.errors.augment = [ e2e { name = "checks"; builds = checks; } ];
           lfs = false;
         };
@@ -132,6 +133,35 @@
           auditable = false; # cargo-auditable doesn't support edition 2024
           meta.description = "the panel binary";
         };
+        # sa_sandbox's runner, built alone: its image carries nothing of the conductor's
+        sandboxBin = rustPlatform.buildRustPackage {
+          pname = "sa_sandbox";
+          version = manifest.version;
+          src = pureSrc;
+          cargoLock.lockFile = ./Cargo.lock;
+          cargoBuildFlags = [ "-p" "sa_sandbox" ];
+          doCheck = false; # its tests run Deno against loopback stand-ins, in the devShell and CI
+          auditable = false;
+          meta.description = "the runner of the agents' code";
+        };
+        # what a run imports (crates/sandbox/js): the prelude, the catalog and its types, @evinvest/api installed
+        sandboxJs = pkgs.buildNpmPackage {
+          pname = "${pname}-sandbox-js";
+          version = manifest.version;
+          src = lib.cleanSourceWith {
+            src = lib.cleanSource ./crates/sandbox/js;
+            filter = path: _type: baseNameOf path != "node_modules";
+          };
+          # shortcut: no package-lock.json until @evinvest/api is published (the epic's release); `nix build` prints the hash then
+          npmDepsHash = lib.fakeHash;
+          dontNpmBuild = true;
+          installPhase = ''
+            runHook preInstall
+            cp -r . "$out"
+            runHook postInstall
+          '';
+        };
+        sandboxPort = 59121;
 
         # The front end's static export (`next build` → out/), served by `panel serve` from
         # PANEL_WEB_DIR on the same origin as /api and /auth.
@@ -262,13 +292,15 @@
             "GOLOGIN_TOKEN"
             "MULTILOGIN_TOKEN"
             "PANEL_BROWSERS_URL"
+            # the agents' `execute`: sa_sandbox's runner (below); unset, there is none
+            "PANEL_SANDBOX_URL"
             # the in-page assistant's model (a Claude subscription); unset, asking it answers 503
             "CLAUDE_CODE_OAUTH_TOKEN"
           ];
           ingress = {
-            # in-cluster only, by service DNS: the landings' and bots' ingest, the landings' review kit
+            # in-cluster only, by service DNS: the landings' and bots' ingest, the landings' review kit, the sandbox's runs
             # (docs/ARCHITECTURE.md, Deploy requirements)
-            excludePathPrefixes = [ "/api/ingest" "/api/kit" ];
+            excludePathPrefixes = [ "/api/ingest" "/api/kit" "/api/run" ];
             # per client IP at the edge; the conductor bounds concurrency, not who calls. /api/hooks/booking:
             # the booking providers' webhooks, forwarded to sites (public, signature-checked there).
             # /api/queries_cache: open to everyone, so this is its only guard. /mcp/register: open too.
@@ -293,6 +325,8 @@
           kit = "/api/kit/v1";
           # the queries cache (docs/ARCHITECTURE.md, Queries cache): review_archive's and placement's
           queries_cache = "/api/queries_cache";
+          # a sandbox's run, back to its caller's operations (docs/ARCHITECTURE.md, Code mode)
+          run = "/api/run";
         };
         # The services the forward reaches (docs/ARCHITECTURE.md, Forward), by contract name: devops
         # sets each variable to the peer's in-cluster origin and opens the egress to it.
@@ -301,6 +335,7 @@
           PANEL_REVIEW_ARCHIVE_URL = "review_archive";
           PANEL_PLAYBOOK_URL = "playbook_web";
           PANEL_PLACEMENT_URL = "gmaps_optimal_placement";
+          PANEL_SANDBOX_URL = "${pname}-sandbox";
         };
 
         containerStd = v_flakes.container.implement {
@@ -327,9 +362,31 @@
             # the build, or a tag whose catalog changed boots on the previous epoch and is refused
             imageEnv = [ "PANEL_WEB_DIR=${frontend}" "PANEL_GRAFANA_SERVER=${grafanaServer}" "PANEL_BUILD_EPOCH=${toString self.lastModified}" ];
           };
+          # the agents' code (docs/ARCHITECTURE.md, Code mode): stateless, reached by the conductor alone
+          containers.sandbox = {
+            port = sandboxPort;
+            healthPath = "/health";
+            criticality = "normal";
+            withCacert = false; # it dials the conductor alone, in plain http
+            entrypoint = [ "${sandboxBin}/bin/sa_sandbox" "serve" "--bind" "0.0.0.0:${toString sandboxPort}" ];
+            # each run's type check holds ~300 MB: the pod's memory is this many of them
+            env.SANDBOX_MAX = "2";
+            imageEnv = [ "SANDBOX_DENO=${pkgs.deno}/bin/deno" "SANDBOX_JS=${sandboxJs}" ];
+          };
         };
-        # `implement` knows no key for the above, and throws on one it does not know.
-        containers = lib.mapAttrs (_: c: c // { contract = c.contract // deploy // { inherit provides consumes; }; }) containerStd.containers;
+        # The sandbox's deploy: the conductor's public keys (its assertion is all it trusts), and the conductor's
+        # `/api/run` its only peer; no host off-cluster.
+        sandboxDeploy = {
+          requiredEnv = [ "PANEL_ASSERTION_KEYS" "SANDBOX_CONDUCTOR_URL" ];
+          egress.hosts = [ ];
+          consumes.SANDBOX_CONDUCTOR_URL = "${pname}.run";
+        };
+        # `implement` knows no key for these, and throws on one it does not know.
+        extra = {
+          ${pname} = deploy // { inherit provides consumes; };
+          "${pname}-sandbox" = sandboxDeploy;
+        };
+        containers = lib.mapAttrs (name: c: c // { contract = c.contract // extra.${name}; }) containerStd.containers;
 
         contractEnv = pkgs.runCommand "${pname}-contract-env" { } ''
           ${bin}/bin/${pname} --print-required-vars production | sort > got
@@ -460,6 +517,7 @@
               pkg-config
               openssl # sentry's native-tls
               sqlite # inspecting the database
+              deno # sa_sandbox's runs
               rust
               testTimeline
             ] ++ pre-commit-check.enabledPackages ++ combined.enabledPackages;

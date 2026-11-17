@@ -89,14 +89,15 @@ const ROUTES: [Route; 6] = [
 ];
 
 /// The conductor's own prefixes: never a page's, nor a kit area's.
-const OWN: [Path; 14] = [
+const OWN: [Path; 15] = [
 	Path::new("/api", false, true),
 	Path::new("/api/v1", false, true),
 	// open to everyone: the edge's limit is its only guard
 	Path::new("/api/queries_cache", true, true),
-	// in-cluster only: the landings' and bots' ingest, the landings' review kit
+	// in-cluster only: the landings' and bots' ingest, the landings' review kit, the sandbox's runs
 	Path::new("/api/ingest", false, false),
 	Path::new("/api/kit", false, false),
+	Path::new(crate::execute::PREFIX, false, false),
 	Path::new("/auth", true, true),
 	Path::new("/mcp", false, true),
 	// open (RFC 7591), or a sign-in's every step
@@ -208,6 +209,7 @@ impl Services {
 			Service::Sites => &self.upstreams.sites,
 			Service::Placement => self.upstreams.placement.as_ref().expect("sent to only where `serves` says so"),
 			Service::Browsers => panic!("the runner is not forwarded: `browser` calls it"),
+			Service::Sandbox => panic!("the runner is not forwarded: `execute` calls it"),
 		};
 		let uri: Uri = format!("{}{path_and_query}", base.to_string().trim_end_matches('/'))
 			.parse()

@@ -11,6 +11,7 @@ export const PATHS = [
   "/api/queries_cache",
   "/api/ingest",
   "/api/kit",
+  "/api/run",
   "/auth",
   "/mcp",
   "/mcp/register",

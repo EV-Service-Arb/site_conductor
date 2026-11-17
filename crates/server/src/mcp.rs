@@ -1,5 +1,5 @@
 //! `POST /mcp`: the operations to an MCP client (Streamable HTTP, JSON answers, no session),
-//! as tools over [`Tools`]: `search`, `call`, and each operation that is its own (`x-tool`). The bearer is a grant's session
+//! as tools over [`Tools`]: `search`, `call`, `execute`, and each operation that is its own (`x-tool`). The bearer is a grant's session
 //! ([`crate::oauth`]); a `call` runs through the `/api/v1` gate with it, as a click would.
 //! What removes or spends is not run until the client says the user confirmed it.
 
@@ -10,11 +10,13 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::post,
 };
+use sa_sandbox::Ended;
 use serde_json::{Value, json};
 
 use crate::{
 	api::Code,
 	catalog::Catalog,
+	execute::Executed,
 	oauth,
 	signin::{self, Caller, Freshness, SignIn},
 	tools::{self, Def, Tools},
@@ -119,6 +121,27 @@ async fn call(m: &Mcp, caller: &Caller, headers: &HeaderMap, params: Value) -> R
 		let s: tools::Search = serde_json::from_value(Value::Object(args)).map_err(invalid)?;
 		return Ok(text(&m.tools.search(&s.query, |p| may(caller, p)), false));
 	}
+	if name == "execute" {
+		let e: tools::Execute = serde_json::from_value(Value::Object(args)).map_err(invalid)?;
+		return Ok(match m.tools.execute(&bearer(headers), e.code).await {
+			Ok(Executed { ran, proposed: None }) => {
+				let failed = ran.ended != Ended::Exited(0);
+				text(&json!({ "ran": ran }), failed)
+			}
+			Ok(Executed { ran, proposed: Some(c) }) => match proposal(m, &c) {
+				Some(mut p) => {
+					p["ran"] = json!(ran);
+					p["not_run"] = json!("The run stopped at this call. Tell the user what it does and ask them; once they agree, `call` it with \"confirmed\": true.");
+					text(&p, false)
+				}
+				None => text(
+					&json!({ "ran": ran, "error": format!("the run stopped at {:?}, which the catalog no longer holds", c.operation) }),
+					true,
+				),
+			},
+			Err(e) => text(&json!({ "error": e }), true),
+		});
+	}
 	let confirmed = match args.remove("confirmed") {
 		None | Some(Value::Bool(false)) => false,
 		Some(Value::Bool(true)) => true,
@@ -135,28 +158,12 @@ async fn call(m: &Mcp, caller: &Caller, headers: &HeaderMap, params: Value) -> R
 		return Ok(text(&json!({ "error": format!("no operation {:?}: search for one", c.operation) }), true));
 	};
 	if hints.proposed() && !confirmed {
-		let doc = m.catalog.document();
-		// The catalog may have been pulled anew since the hints were read.
-		let Some((path, method, op)) = doc.operations().find(|(_, _, op)| op.operation_id.as_deref() == Some(c.operation.as_str())) else {
-			return Ok(text(&json!({ "error": format!("no operation {:?}: search for one", c.operation) }), true));
-		};
-		return Ok(text(
-			&json!({
-				"proposed": {
-					"operation": c.operation,
-					"method": method.to_uppercase(),
-					"path": path,
-					"summary": op.summary,
-					"hints": hints,
-					"with": { "path": c.path, "query": c.query, "body": c.body },
-				},
-				"not_run": "Tell the user what this does and ask them; once they agree, call it again with \"confirmed\": true.",
-			}),
-			false,
-		));
+		return Ok(match proposal(m, &c) {
+			Some(p) => text(&p, false),
+			None => text(&json!({ "error": format!("no operation {:?}: search for one", c.operation) }), true),
+		});
 	}
-	let mut credentials = HeaderMap::new();
-	credentials.insert(header::AUTHORIZATION, headers[header::AUTHORIZATION].clone());
+	let credentials = bearer(headers);
 	match m.tools.call(&credentials, c).await {
 		Ok(a) => {
 			let ok = StatusCode::from_u16(a.status).is_ok_and(|s| s.is_success());
@@ -168,6 +175,31 @@ async fn call(m: &Mcp, caller: &Caller, headers: &HeaderMap, params: Value) -> R
 		}
 		Err(e) => Ok(text(&json!({ "error": e }), true)),
 	}
+}
+
+/// What a proposed call answers in place of running: what it would do, for the user to agree to;
+/// `None` when the catalog, pulled anew, no longer holds it.
+fn proposal(m: &Mcp, c: &tools::Call) -> Option<Value> {
+	let doc = m.catalog.document();
+	let (path, method, op) = doc.operations().find(|(_, _, op)| op.operation_id.as_deref() == Some(c.operation.as_str()))?;
+	Some(json!({
+		"proposed": {
+			"operation": c.operation,
+			"method": method.to_uppercase(),
+			"path": path,
+			"summary": op.summary,
+			"hints": tools::hints(method, op),
+			"with": { "path": c.path, "query": c.query, "body": c.body },
+		},
+		"not_run": "Tell the user what this does and ask them; once they agree, call it again with \"confirmed\": true.",
+	}))
+}
+
+/// The grant's bearer, all a call made for an MCP client carries.
+fn bearer(headers: &HeaderMap) -> HeaderMap {
+	let mut credentials = HeaderMap::new();
+	credentials.insert(header::AUTHORIZATION, headers[header::AUTHORIZATION].clone());
+	credentials
 }
 
 /// Whether `caller` holds `permission`, an operation's; none is everyone's.

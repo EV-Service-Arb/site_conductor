@@ -71,6 +71,9 @@ crates/browsers/         sa_browsers: the devices a browser poses as, a launch's
                          frames (lib); the runner (`sa_browsers serve`): Orbita headless, Mimic through
                          the Multilogin app's launcher, a browser's devtools passed to the conductor
                          alone, a film made the camera; a cloud phone's life and its viewer over adb
+crates/sandbox/          sa_sandbox: a run of the agents' code and what it answers, its limits (lib); the
+                         runner (`sa_sandbox serve`): each run one Deno process, type-checked first, no
+                         permission but the net to the conductor's `/api/run`; `js/`, what a run imports
 crates/places/           Google Places: a place from what a person pastes (an id, a Maps URL, a
                          search), its point; suggestions as one types (Autocomplete, no session
                          token); a locality's viewport, the one around a point (Geocoding), a
@@ -83,7 +86,7 @@ crates/contracts/        concierge's gRPC contract (tonic, from contracts/proto)
 crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`; thin over `Panel`
   src/signin.rs          /auth/login, /auth/callback, /auth/logout; the /api/v1 gate
   src/oauth.rs           /mcp/{register,authorize,token} and their metadata: OAuth 2.1 for MCP clients
-  src/mcp.rs             POST /mcp: `search` and `call` to an MCP client
+  src/mcp.rs             POST /mcp: `search`, `call` and `execute` to an MCP client
   src/concierge.rs       concierge over gRPC: ExchangeCode, RefreshClientToken, GetMe,
                          PublishCatalog; its development stand-in (PANEL_DEV_SIGN_IN)
   src/cookies.rs         __Host- cookies, the double-submit CSRF check
@@ -112,11 +115,12 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
   src/kit.rs             the review kit: its /api/v1 routes, the landings' /api/kit/v1
   src/catalog.rs         every operation behind the origin: the conductor's own and the services'
                          documents, pulled and merged under their forward prefixes
-  src/tools.rs           an agent's `search` and `call` over the catalog: a call runs through the app
-                         with the caller's credentials, as their own request would
+  src/tools.rs           an agent's `search`, `call` and `execute` over the catalog: a call runs through
+                         the app with the caller's credentials, as their own request would
+  src/execute.rs         `execute`: a run in sa_sandbox, its token; /api/run, the run's way back
   src/claude.rs          the Claude API; /api/v1/me/claude: a person's own Claude, connected
   src/ask.rs             the in-page assistant's loop (`POST /assistant/chats/{id}/ask`): Claude with
-                         `search`/`call`, `open` (a view) and `run` (a binding); what destroys or
+                         `search`/`call`/`execute`, `open` (a view) and `run` (a binding); what destroys or
                          spends is proposed, the user confirms it
   src/areas.rs           /api/v1/areas, and the cities and localities they are drawn from
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
@@ -222,6 +226,7 @@ second block below to it.
 /api/queries_cache        public, rate-limited    open to everyone
 /api/ingest               in-cluster
 /api/kit                  in-cluster
+/api/run                  in-cluster              a sandbox's runs (Code mode)
 /auth                     public, rate-limited
 /mcp                      public
 /mcp/register             public, rate-limited    open (RFC 7591)
@@ -599,7 +604,8 @@ lacking `need`: it asks, then reads `/me` every 30 s and goes on to `continue` (
 ## Agents over MCP
 
 `<origin>/mcp` serves MCP (Streamable HTTP, JSON answers, no MCP session) as the signed-in user,
-the only MCP of the services: `search` and `call` over the catalog (`tools.rs`), and each operation
+the only MCP of the services: `search` and `call` over the catalog (`tools.rs`), `execute` (Code
+mode, below), and each operation
 a service marks its own tool (`x-tool`, `sa_core::agent::Tool`) as `<service>_<operation_id>`
 (`playbook_search`), its parameters and body the tool's input, a text answer handed on as it
 came. Its instructions are the documents' descriptions, the conductor's then each service's. A
@@ -624,6 +630,34 @@ POST /mcp             Bearer, else 401 with WWW-Authenticate's resource_metadata
   long as the session does: no refresh token. A browser's id is no bearer, nor a client's a cookie.
 - **Bounded:** the OAuth routes as `/auth/*`; `/mcp` 32 at once, 10 min each (a call waits on its
   operation).
+
+## Code mode
+
+`execute { code }`, on both transports where `PANEL_SANDBOX_URL` is set: TypeScript over the
+catalog's client, for work that takes several calls. It runs in sa_sandbox's pod, never here.
+
+```text
+agent ─execute─▶ conductor: a run's token → the caller's cookie+CSRF or bearer, while execute waits
+   POST /runs {code, token} (Conductor assertion, aud sandbox) ─▶ sa_sandbox
+      deno run --check: main.ts = the code + `import { api }` (crates/sandbox/js/prelude.ts)
+      api = createApi<paths>(catalog.json)  ── Bearer token ──▶ conductor /api/run/<path>
+   /api/run: a live run, under CALLS ─ one operation of the catalog (static segments before
+             parameters) ─ destroys or spends? the run's proposal, refused (x-sa-run-refused) : the
+             request through the app as the caller, its Set-Cookie dropped
+   ◀── Ran {ended, stdout, stderr, truncated} + the proposal, from the conductor's own record
+```
+
+- **The client is the catalog's**: gen writes `crates/sandbox/js/catalog.json` with the catalog's own
+  merge over the vendored documents, and its types (`catalog.ts`) beside it; the runner type-checks
+  every run against them first, and a type error runs nothing.
+- **A run is one Deno process** with no permission but the net to the conductor's `host:port`
+  (the runner's `SANDBOX_CONDUCTOR_URL`, never a request's) and the two run variables; its
+  environment emptied, killed at `LIMIT` (60 s), each stream kept to `OUTPUT` (64 KiB), `CALLS`
+  (100) operations at most, `SANDBOX_MAX` runs at once (past it, 503). The limits are
+  `sa_sandbox`'s, read by both ends.
+- **The first call that destroys or spends ends the run**: the prelude exits on the gate's
+  refusal, and that call is proposed as a `call` of it would be (an action in the answer; on MCP,
+  `proposed` until `call` comes with `confirmed: true`). The token dies with `execute`.
 
 ## Live updates, `/api/v1/live`
 
@@ -1034,6 +1068,10 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **A gmail's browser is driven only through the conductor**, its devtools no one else's, a phone's
   viewer only through it; the runner holds none of the conductor's secrets: a launch brings a token
   for that run alone (GoLogin's 3 minutes, Multilogin's 3 hours) and the proxy.
+- **Model-written code runs only in sa_sandbox**, its own pod: Deno with no permission but the net to
+  the conductor's `/api/run`, which is never public. It holds no secret but its run's token, which
+  opens only the catalog's operations, as their caller, while the run lasts, and none that destroys
+  or spends.
 - **A cloud phone bills while it runs**: nothing a test runs starts one, and one that started stops
   on every way its run ends (docs/spec/browsers.md).
 - **No two gmails share a proxy**: an exit two accounts share is a link Google can draw.
@@ -1083,9 +1121,9 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   binary's `--print-provided-paths` (the constants its router mounts) disagree.
 - **The landings, outbound on :443.** The Connected sites page asks each site key's origin; the
   origins are data, so the egress is public :443, not a host list.
-- **Ingest and the kit stay inside the cluster.** Their sources reach them by service DNS; the
-  IngressRoute that publishes `sa.evinvest.ltd` must not route `/api/ingest` nor `/api/kit`, and
-  the NetworkPolicy lets in only the pods that send.
+- **Ingest, the kit and the runs stay inside the cluster.** Their senders reach them by service DNS;
+  the IngressRoute that publishes `sa.evinvest.ltd` must not route `/api/ingest`, `/api/kit` nor
+  `/api/run`, and the NetworkPolicy lets in only the pods that send.
 - **sites_panel within reach, and only through here.** The conductor calls `PANEL_SITES_URL` for
   everything it forwards and for its hubs; sites has no public route of its own (the landings
   reach its `/api/internal` in-cluster).
@@ -1125,6 +1163,11 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   address. The conductor too dials those proxies (a set-up's check, to `ip-api.com:80` through them),
   `api.gologin.com:443` and `api.multilogin.com:443`. Multilogin's account auto-stop (Account
   settings) at 40 min is the backstop by hand.
+- **The sandbox.** sa_sandbox is its own pod (`panel-sandbox`; the conductor's `PANEL_SANDBOX_URL`,
+  in-cluster only), stateless: `SANDBOX_MAX` runs at once, each one's type check about 300 MB, the
+  conductor's public keys (`PANEL_ASSERTION_KEYS`), Deno and `crates/sandbox/js` with its packages
+  in the image. Its egress is DNS and the conductor's `/api/run` alone, which the public
+  IngressRoute must not route.
 - **Telegram, outbound only.** With `TELEGRAM_BOT_TOKEN` the pods need egress to
   `api.telegram.org:443`; no webhook is set on the bot (`getUpdates` refuses to run while one is).
 - **`/api/v1/live` through the public IngressRoute, as a WebSocket.** Nothing in front may buffer

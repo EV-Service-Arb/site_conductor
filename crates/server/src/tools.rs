@@ -7,7 +7,8 @@ use std::sync::{Arc, OnceLock};
 use axum::{
 	Router,
 	body::{Body, to_bytes},
-	http::{HeaderMap, HeaderValue, Request, header},
+	http::{HeaderMap, HeaderValue, Request, header, request},
+	response::Response,
 };
 use ev_lib::api::{
 	JsonSchema,
@@ -18,25 +19,39 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use tower::ServiceExt;
 
-use crate::catalog::{Catalog, scalar};
+use crate::{
+	catalog::{Catalog, scalar},
+	execute::{Executed, Sandbox},
+};
 
 /// The most operations one search answers whole.
 const FOUND: usize = 8;
 /// The most of an answer an agent is handed back.
-const ANSWER: usize = 1 << 20;
+pub(crate) const ANSWER: usize = 1 << 20;
 
 #[derive(Clone)]
 pub struct Tools {
 	catalog: Catalog,
 	/// The whole app, set once it is built: a call goes through it as a request would.
 	app: Arc<OnceLock<Router>>,
+	/// Where `execute` runs; without it there is no `execute`.
+	sandbox: Option<Sandbox>,
 }
 impl Tools {
-	pub(crate) fn new(catalog: Catalog) -> Self {
+	pub(crate) fn new(catalog: Catalog, sandbox: Option<Sandbox>) -> Self {
 		Self {
 			catalog,
 			app: Arc::new(OnceLock::new()),
+			sandbox,
 		}
+	}
+
+	pub(crate) fn catalog(&self) -> &Catalog {
+		&self.catalog
+	}
+
+	pub(crate) fn sandbox(&self) -> Option<&Sandbox> {
+		self.sandbox.as_ref()
 	}
 
 	pub(crate) fn serve(&self, app: Router) {
@@ -122,11 +137,6 @@ impl Tools {
 			uri.push_str(&q.finish());
 		}
 		let mut req = Request::builder().method(method).uri(uri);
-		for name in [header::COOKIE.as_str(), header::AUTHORIZATION.as_str(), crate::cookies::CSRF_HEADER] {
-			if let Some(v) = credentials.get(name) {
-				req = req.header(name, v);
-			}
-		}
 		let body = match call.body {
 			Some(b) => {
 				req = req.header(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -134,8 +144,7 @@ impl Tools {
 			}
 			None => Body::empty(),
 		};
-		let app = self.app.get().expect("calls come after the app is built").clone();
-		let res = app.oneshot(req.body(body).expect("a request from parts that parsed")).await.expect("the router is infallible");
+		let res = self.send(credentials, req, body).await;
 		let status = res.status().as_u16();
 		let kind = res.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or_default().to_owned(); // none: an empty answer, below
 		let bytes = to_bytes(res.into_body(), ANSWER)
@@ -148,6 +157,22 @@ impl Tools {
 			other => return Err(format!("{} answered {other:?}, which an agent does not read", call.operation)),
 		};
 		Ok(Answer { status, body })
+	}
+
+	/// `req` through the app as the caller `credentials` names (their session cookie and CSRF
+	/// header, or their bearer), as their own request would go.
+	pub(crate) async fn send(&self, credentials: &HeaderMap, mut req: request::Builder, body: Body) -> Response {
+		for (name, v) in &credentials_of(credentials) {
+			req = req.header(name, v);
+		}
+		let app = self.app.get().expect("calls come after the app is built").clone();
+		app.oneshot(req.body(body).expect("a request from parts that parsed")).await.expect("the router is infallible")
+	}
+
+	/// Runs `code` in the sandbox as the caller `credentials` names.
+	pub async fn execute(&self, credentials: &HeaderMap, code: String) -> Result<Executed, String> {
+		let sandbox = self.sandbox.as_ref().ok_or("no sandbox here: there is no execute")?;
+		sandbox.execute(credentials_of(credentials), code).await
 	}
 
 	/// The operations that are their own tools (`x-tool`) and that `may` opens, as an agent is given them.
@@ -201,7 +226,15 @@ pub(crate) fn tool_name(operation: &str) -> String {
 }
 
 /// The tools every agent has, whatever the catalog holds: an operation's own tool may not take their names.
-pub(crate) const BUILT_IN: [&str; 4] = ["search", "call", "open", "run"];
+pub(crate) const BUILT_IN: [&str; 5] = ["search", "call", "open", "run", "execute"];
+
+/// What of a request says who the caller is.
+fn credentials_of(headers: &HeaderMap) -> HeaderMap {
+	[header::COOKIE.as_str(), header::AUTHORIZATION.as_str(), crate::cookies::CSRF_HEADER]
+		.into_iter()
+		.filter_map(|name| headers.get(name).map(|v| (header::HeaderName::from_static(name), v.clone())))
+		.collect()
+}
 
 /// A tool as every transport gives it.
 pub struct Def {
@@ -221,6 +254,16 @@ pub struct Open {
 	/// Its params and query keys, by name.
 	pub params: Map<String, Value>,
 	pub label: String,
+}
+
+/// TypeScript over the catalog's client, run apart, as the caller.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Execute {
+	/// The code: `api` is in scope, the catalog's paths absolute, as `search` names them:
+	/// `const gmbs = await api.GET("/api/v1/gmbs"); if (gmbs.error) throw new Error(gmbs.error.code);`.
+	/// What it `console.log`s is what comes back.
+	pub code: String,
 }
 
 /// Offers a binding of the page's keymap as a button.
@@ -293,6 +336,27 @@ impl Tools {
 				description: "Offers a binding of the page's keymap, by its id, as a button: the <page> block lists those bound now.".into(),
 				input: schema(ev_lib::api::schemars::schema_for!(Run)),
 				hints: reads,
+			});
+		}
+		if self.sandbox.is_some() {
+			defs.push(Def {
+				name: "execute".into(),
+				description: format!(
+					"Runs TypeScript over the panel's operations as the person asking, apart from the panel: for work that takes several calls, or that would hand you more than you need. \
+`api` is the catalog's client (`api.GET(path, {{ params: {{ path, query }} }})`, `api.POST(path, {{ params, body }})`, …), every answer `{{ data }}` or `{{ error: {{ code, error }} }}`; the paths are absolute, as `search` names them. \
+The code is type-checked against them first: a type error runs nothing, and says what is wrong. What it `console.log`s comes back, {} KiB of each stream at most; it is stopped after {} s and {} calls. \
+An operation that destroys or spends is not run: the run stops there, and that call is proposed to the person.",
+					sa_sandbox::OUTPUT >> 10,
+					sa_sandbox::LIMIT.as_secs(),
+					sa_sandbox::CALLS
+				),
+				input: schema(ev_lib::api::schemars::schema_for!(Execute)),
+				hints: Hints {
+					read_only: false,
+					idempotent: false,
+					destructive: false,
+					spends: Vec::new(),
+				},
 			});
 		}
 		defs.extend(self.own(may).into_iter().map(|t| Def {
@@ -425,7 +489,7 @@ pub struct Answer {
 	pub body: Value,
 }
 
-fn hints(method: &str, op: &Operation) -> Hints {
+pub(crate) fn hints(method: &str, op: &Operation) -> Hints {
 	Hints {
 		read_only: method == "get",
 		idempotent: matches!(method, "get" | "put" | "delete"),

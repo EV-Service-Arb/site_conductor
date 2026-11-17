@@ -117,7 +117,7 @@ fn app(panel: Panel, permissions: PermissionSet) -> Router {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: ORIGIN.to_owned(),
 	};
-	http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, None, None, None)
+	http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, None, None, None, None)
 }
 
 async fn call(b: &mut Browser, app: &Router, method: Method, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
