@@ -20,10 +20,7 @@ use sa_core::{
 	prices::{ModelTokens, Spends},
 	usage::Bill,
 };
-use sa_panel::{
-	assistant::Chat,
-	live::{Audience, Change},
-};
+use sa_panel::assistant::Chat;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -332,16 +329,6 @@ impl Written<'_> {
 		let turns: Vec<Turn> = asked[self.from..].iter().cloned().chain([turn]).collect();
 		let chat = self.state.panel.assistant_turns(self.caller.into(), self.chat, self.base, self.from, turns, now).await??;
 		self.base = chat.summary.version;
-		// The asker's screens follow the answer as it grows; the route tells its end.
-		if started.is_none() {
-			self.state.panel.bus().changed(Change {
-				topic: "assistant".into(),
-				brand: None,
-				id: Some(self.chat.to_string()),
-				at: now,
-				audience: Audience::User(self.caller.user_id),
-			});
-		}
 		Ok(chat.into())
 	}
 }

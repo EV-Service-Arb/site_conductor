@@ -1,4 +1,5 @@
-import type { ConnectedSites as Answer, Probe } from "@/shared/api/schema";
+import openapi from "@/shared/api/openapi.json";
+import type { ConnectedSites as Answer, BrandReads, Probe } from "@/shared/api/schema";
 
 /** A site key's origin as `sa_core::ids::SiteOrigin` takes it; the backend has the last word. */
 export function isOrigin(s: string): boolean {
@@ -10,7 +11,8 @@ export function isOrigin(s: string): boolean {
   }
 }
 
-const ENDPOINTS = ["locations", "pricing", "experiments"] as const;
+/** What sites' `/api/internal` serves a brand, as the document's `BrandReads` names them. */
+const ENDPOINTS = Object.keys(openapi.components.schemas.BrandReads.properties) as (keyof BrandReads)[];
 
 /** `null`: not since sites began counting; `undefined`: sites could not be asked. */
 type Seen = string | null | undefined;
@@ -23,7 +25,7 @@ export interface ConnectedSite {
   lastIngest: Seen;
   /** The latest read of the key's brands from sites' `/api/internal`, and each one read. */
   lastRead: Seen;
-  reads: { brand: string; endpoint: (typeof ENDPOINTS)[number]; at: string }[];
+  reads: { brand: string; endpoint: keyof BrandReads; at: string }[];
 }
 
 export interface ConnectedSites {

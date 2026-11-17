@@ -603,23 +603,25 @@ GET /api/v1/live    Origin = PANEL_PUBLIC_ORIGIN exactly                     els
                     ≤ 5 sockets per user, ≤ 200 in all                       else 429
                     → 101; any signed-in user: what they are told is judged per message
 server → client     {"type":"hello","at","user_id"}                          at once
-                    {"type":"changed","topic","brand_id"?,"id"?,"at"}        a change they may read
+                    {"type":"changed","topic","at"}                          a table committed to
                     {"type":"resync"}                                        read everything again
                     WS Ping every 25 s; no Pong within 60 s → dropped
 closes              4401 the session ended   1001 the server is stopping
 ```
 
-- **What sites changed** comes from its feed, `GET /api/conductor/changes` (NDJSON, a Conductor
-  assertion): one follower per process puts each `changed` line (`sa_core::feeds::Line`: a table it
-  committed to, `sites.<table>`) on the bus, told to everyone signed in, and each `resync` to everyone. sites sends `resync`
-  first on every connection and a `ping` every 25 s; a feed that ends, fails, or says nothing
-  for 60 s is followed again after 1 s, doubling to 30 s, so what was missed meanwhile is read
-  again.
-- **The conductor's own writes:** every write through `/api/v1` that succeeds is told as
-  `changed`, its topic the path's first segment (`gmails` for `/gmails/{id}/browser/start`), its
-  id the path's first parameter; to the holders of the route's section, else to the caller, whose
-  own resource it is (`http::tell`). A shared chat's other people are told by the engine. What the
-  bot changes on its own (a chat linked by `/start`, `/stop`, one found dead) is told as `alerts`.
+- **A topic is a table** (`<service>.<table>`), and everyone signed in is told every one: what
+  they may read is judged when they read it. A screen follows the topics its GET's `x-sa-reads`
+  named.
+- **The conductor's own writes** are told by its store's pool (`ev_lib::sqlite`): every committed
+  write, a request's, the bot's or a background task's, as `conductor.<table>` once its connection
+  goes back; a rolled-back one never. A write is known when its statement is prepared, so one that
+  changed no row is told too (every request's session check tells `conductor.sessions`).
+- **What a service changed** comes from its feed, `GET /api/conductor/changes` (NDJSON, a
+  Conductor assertion; sites and review_archive): one follower per service puts each `changed`
+  line (`sa_core::feeds::Line`) on the bus as it came, and each `resync`. A service sends
+  `resync` first on every connection and a `ping` every 25 s; a feed that ends, fails, or says
+  nothing for 60 s is followed again after 1 s, doubling to 30 s, so what was missed meanwhile is
+  read again. One that answers 404 has none yet: said once, asked again every 60 s.
 - **The shell relays.** The front end holds the one socket and re-dispatches on `window`, as
   `CustomEvent`s: `sa:live` (each server message as is, and a `{type:"resync"}` after the shell
   reconnects), `sa:live-status` (`{status}`; answered to an element's

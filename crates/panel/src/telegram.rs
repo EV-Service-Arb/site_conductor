@@ -32,7 +32,7 @@ use zeroize::Zeroizing;
 pub use crate::store::telegram::{Account, Kind};
 use crate::{
 	Panel, Refused,
-	alerts::{Access, Directory, Feeds, Hub, Outgoing, alerts_changed, derived_event_id},
+	alerts::{Access, Directory, Feeds, Hub, Outgoing, derived_event_id},
 	seal::telegram_text_aad,
 	session::Refresher,
 	store::{
@@ -466,12 +466,9 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 				Outcome::Dead
 			}
 			Next::ChatDead => {
-				let users = db::chat_dead(&mut conn, d.chat_id, &error, now).await?;
+				db::chat_dead(&mut conn, d.chat_id, &error, now).await?;
 				db::dead(&mut conn, d.id, &error).await?;
 				tracing::info!(user_id = %d.user_id, "telegram: the chat is gone; marked dead");
-				for user in users {
-					self.panel.live.changed(alerts_changed(user));
-				}
 				Outcome::Dead
 			}
 		})
@@ -512,8 +509,7 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 				let mut conn = self.panel.store.pool().acquire().await.wrap_err("a connection to unlink")?;
 				let gone = db::unlink_private(&mut conn, chat.id).await?;
 				drop(conn);
-				if let Some(user) = gone {
-					self.panel.live.changed(alerts_changed(user));
+				if gone {
 					self.reply(chat.id, Reply::Unlinked).await;
 					Ok(())
 				} else {
@@ -566,7 +562,6 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 		tx.commit().await.wrap_err("committing a link")?;
 		drop(conn);
 		tracing::info!(user_id = %redeemed.user_id, "telegram: chat linked");
-		self.panel.live.changed(alerts_changed(redeemed.user_id));
 		self.say(chat, notify::linked_text(self.locale, &redeemed.display_name)).await;
 		Ok(())
 	}

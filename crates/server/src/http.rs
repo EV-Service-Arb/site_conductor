@@ -9,20 +9,15 @@ use std::{sync::Arc, time::Duration};
 use axum::{
 	Router,
 	error_handling::HandleErrorLayer,
-	extract::{FromRef, RawPathParams, Request, State},
+	extract::FromRef,
 	http::{HeaderValue, Method, StatusCode, header},
 	middleware,
-	middleware::Next,
 	response::{IntoResponse, Response},
 	routing::{get, post},
 };
 use ev_lib::api::{Guard, OpenApi, Refusal, Route};
-use jiff::Timestamp;
 use sa_auth::{PermissionSet, Sources, Tokens};
-use sa_panel::{
-	Panel,
-	live::{Audience, Change},
-};
+use sa_panel::Panel;
 use tower::{BoxError, ServiceBuilder, limit::GlobalConcurrencyLimitLayer};
 use tower_http::timeout::TimeoutLayer;
 
@@ -40,7 +35,7 @@ use crate::{
 	ingest, kit,
 	live::{self, Live, LiveLimits},
 	mcp, meters, oauth, queries_cache,
-	signin::{self, Caller, Freshness, Gatekeeper, SignIn},
+	signin::{self, Freshness, Gatekeeper, SignIn},
 	tokens,
 	tools::Tools,
 	trash, usage,
@@ -180,16 +175,10 @@ pub fn app(
 		middleware::from_fn_with_state(keeper, signin::gate)
 	};
 	let (slow, routes): (Vec<_>, Vec<_>) = api_routes().into_iter().partition(|r| r.guard.slow);
-	let panel = sign_in.panel.clone();
 	let mount = |routes: Vec<ApiRoute>| {
-		routes.into_iter().fold(Router::new(), |routes, r| {
-			let route = Router::new().route(r.path, r.handler());
-			let route = match r.method {
-				Method::GET => route,
-				_ => route.route_layer(middleware::from_fn_with_state(Told::of(&r, panel.clone()), tell)),
-			};
-			routes.merge(route.route_layer(gate(r.guard)))
-		})
+		routes
+			.into_iter()
+			.fold(Router::new(), |routes, r| routes.merge(Router::new().route(r.path, r.handler()).route_layer(gate(r.guard))))
 	};
 	let catalog = forward.as_ref().map_or_else(|| Catalog::new(document()), |f| f.catalog().clone());
 	let tools = Tools::new(catalog.clone());
@@ -276,44 +265,6 @@ pub(crate) fn api_routes() -> Vec<ApiRoute> {
 	.into_iter()
 	.flatten()
 	.collect()
-}
-
-/// Who is told of a route's writes, over `/api/v1/live`.
-#[derive(Clone)]
-struct Told {
-	panel: Panel,
-	/// The path's first segment: `gmails` for `/gmails/{id}/imap`.
-	topic: &'static str,
-	/// The section's: else the caller, whose own resource it is.
-	holders: Option<&'static str>,
-}
-
-impl Told {
-	fn of(r: &ApiRoute, panel: Panel) -> Self {
-		Self {
-			panel,
-			topic: r.path.split('/').nth(1).expect("an operation's path starts with /"),
-			holders: r.guard.section.map(Section::permission),
-		}
-	}
-}
-
-/// Every write that succeeds is told as `changed`, its topic the path's first segment and its id
-/// the path's first parameter: a screen re-reads what it follows, whoever wrote it.
-async fn tell(State(t): State<Told>, params: RawPathParams, req: Request, next: Next) -> Response {
-	let caller = req.extensions().get::<Caller>().expect("the gate lets no request through without its caller").user_id;
-	let id = params.iter().next().map(|(_, v)| v.to_owned());
-	let res = next.run(req).await;
-	if res.status().is_success() {
-		t.panel.bus().changed(Change {
-			topic: t.topic.to_owned(),
-			brand: None,
-			id,
-			at: Timestamp::now(),
-			audience: t.holders.map_or(Audience::User(caller), |p| Audience::Holders(p.to_owned())),
-		});
-	}
-	res
 }
 
 /// What the `/api/v1` routes are served on.

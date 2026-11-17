@@ -260,7 +260,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 		Ok(Arc::new(sa_places::Accounts::new(config.google)))
 	};
 	let connect = || async {
-		let store = Store::open(settings.db_path()?).await?;
+		let store = Store::open(settings.db_path()?, sa_panel::live::Bus::default()).await?;
 		let accounts = accounts()?;
 		let keys = sa_places::Keys::new(accounts.iter().filter_map(|a| Some((a.name.clone(), a.provides.places.as_deref()?.to_owned()))).collect());
 		let rank = sa_panel::meters::ByStanding {
@@ -272,7 +272,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 	};
 	match cli.cmd {
 		Cmd::Migrate => {
-			Store::open(settings.db_path()?).await?.pool().close().await;
+			Store::open(settings.db_path()?, sa_panel::live::Bus::default()).await?.pool().close().await;
 			Ok(())
 		}
 		Cmd::Serve { bind } => {
@@ -390,7 +390,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 		}
 		Cmd::Import(ImportCmd::QueriesCache { scheme, dir }) => {
 			let scheme: Scheme = scheme.parse()?;
-			let store = Store::open(settings.db_path()?).await?;
+			let store = Store::open(settings.db_path()?, sa_panel::live::Bus::default()).await?;
 			let (mut kept, mut skipped) = (0, 0);
 			for entry in std::fs::read_dir(&dir).wrap_err_with(|| format!("reading {}", dir.display()))? {
 				let path = entry?.path();

@@ -129,8 +129,8 @@ impl Feeds for TwoLeads {
 #[tokio::test]
 async fn the_runtime_does_its_work_on_a_fresh_database() {
 	let db = TestDb::create().await;
-	Store::open(db.path()).await.expect("created and migrated");
-	Store::open(db.path()).await.expect("again: nothing to do");
+	Store::open(db.path(), sa_panel::live::Bus::default()).await.expect("created and migrated");
+	Store::open(db.path(), sa_panel::live::Bus::default()).await.expect("again: nothing to do");
 	{
 		let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
 		let panel = panel_with(db.store().await, key);

@@ -6,17 +6,21 @@
 //! connection, and the tests open several pools on one database, as replicas would.
 
 use std::{
+	collections::BTreeSet,
 	path::{Path, PathBuf},
 	sync::Arc,
+	time::Duration,
 };
 
 use jiff::Timestamp;
 use sa_core::signature;
 use sqlx::sqlite::SqlitePoolOptions;
+use tokio::sync::broadcast::{Receiver, error::TryRecvError};
 use uuid::Uuid;
 
 use crate::{
 	Panel,
+	live::Signal,
 	seal::DataKey,
 	store::{self, Store},
 };
@@ -39,7 +43,7 @@ impl TestDb {
 
 	/// A store on this database, migrated (opening migrates).
 	pub async fn store(&self) -> Store {
-		Store::open(&self.path).await.expect("opening the test database")
+		Store::open(&self.path, crate::live::Bus::default()).await.expect("opening the test database")
 	}
 
 	/// A plain pool on this database, for assertions the engine has no API for. Migrated
@@ -67,6 +71,38 @@ impl Drop for TestDb {
 			}
 		}
 	}
+}
+
+/// Once every connection of `panel`'s pool is back in it: what each committed is told by then,
+/// a connection's writes being told as it goes back.
+pub async fn settled(panel: &Panel) {
+	let pool = panel.store().pool();
+	let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+	while pool.num_idle() < usize::try_from(pool.size()).expect("8 fits a usize") {
+		assert!(tokio::time::Instant::now() < deadline, "a connection stays out of the pool");
+		tokio::time::sleep(Duration::from_millis(1)).await;
+	}
+}
+
+/// The topics told on `rx` since it was last drained, once `panel`'s pool has [`settled`].
+pub async fn told(panel: &Panel, rx: &mut Receiver<Signal>) -> BTreeSet<String> {
+	settled(panel).await;
+	let mut topics = BTreeSet::new();
+	loop {
+		match rx.try_recv() {
+			Ok(Signal::Changed(c)) => {
+				topics.insert(c.topic);
+			}
+			Ok(_) => {}
+			Err(TryRecvError::Empty) => return topics,
+			Err(e) => panic!("the bus behind a test: {e}"),
+		}
+	}
+}
+
+/// `conductor.<table>` for each of `tables`.
+pub fn topics(tables: &[&str]) -> BTreeSet<String> {
+	tables.iter().map(|t| format!("conductor.{t}")).collect()
 }
 
 /// A panel on a fresh store with a fresh data key.

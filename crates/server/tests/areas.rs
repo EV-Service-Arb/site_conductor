@@ -2,6 +2,7 @@
 //! a reverse geocode of its centre; a centre at sea is refused.
 
 use std::sync::Arc;
+
 use axum::{
 	Json, Router,
 	body::Body,
@@ -40,11 +41,17 @@ async fn an_area_has_the_country_its_place_or_its_centre_lies_in() {
 	let (base, _) = upstream(Router::new().route("/v1/places/geocode/{point}", get(country)).route("/v1/places/{id}", get(locality))).await;
 
 	let db = TestDb::create().await;
-	let google = Google::try_new(Keys::new(vec![("house".to_owned(), "k".to_owned())]), Arc::new(sa_places::InOrder), Arc::new(db.store().await))
+	let store = db.store().await;
+	let google = Google::try_new(Keys::new(vec![("house".to_owned(), "k".to_owned())]), Arc::new(sa_places::InOrder), Arc::new(store.clone()))
 		.unwrap()
 		.spend(true)
 		.at(format!("{base}/v1/places"));
-	let panel = panel_on(db.store().await, DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(), google, sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some("k"), None)]));
+	let panel = panel_on(
+		store,
+		DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(),
+		google,
+		sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some("k"), None)]),
+	);
 	panel
 		.import_review_archive(Export {
 			people: vec![],
@@ -80,13 +87,24 @@ async fn an_area_has_the_country_its_place_or_its_centre_lies_in() {
 
 	let mut put = async |slug: &str, body: Value| {
 		let (status, _, bytes) = b
-			.send_body(&app, Method::PUT, &format!("/api/v1/areas/{slug}"), &[("content-type", "application/json")], true, Body::from(body.to_string()))
+			.send_body(
+				&app,
+				Method::PUT,
+				&format!("/api/v1/areas/{slug}"),
+				&[("content-type", "application/json")],
+				true,
+				Body::from(body.to_string()),
+			)
 			.await;
 		(status, serde_json::from_slice::<Value>(&bytes).unwrap_or(Value::Null))
 	};
 	let (status, city) = put("lyon", json!({ "kind": "city", "place_id": "ChIJlyonlyonlyonlyonly", "margin_m": 0 })).await;
 	assert_eq!((status, &city["country"]), (StatusCode::OK, &json!("FR")), "{city}");
-	let (status, circle) = put("berlin-5km", json!({ "kind": "circle", "name": "Berlin", "lat": 52.52, "lng": 13.4, "radius_m": 5000, "margin_m": 0 })).await;
+	let (status, circle) = put(
+		"berlin-5km",
+		json!({ "kind": "circle", "name": "Berlin", "lat": 52.52, "lng": 13.4, "radius_m": 5000, "margin_m": 0 }),
+	)
+	.await;
 	assert_eq!((status, &circle["country"]), (StatusCode::OK, &json!("DE")), "{circle}");
 	let (status, sea) = put("sea", json!({ "kind": "circle", "name": "Sea", "lat": 0.0, "lng": 0.0, "radius_m": 5000, "margin_m": 0 })).await;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{sea}");

@@ -40,7 +40,7 @@ const DELIVER_EVERY: Duration = Duration::from_millis(500);
 const FAN_OUT_EVERY: Duration = Duration::from_secs(2);
 const RECHECK_EVERY: Duration = Duration::from_secs(60);
 /// A service that publishes no feed yet (404) is asked again this often.
-const LOOK_AGAIN: Duration = Duration::from_secs(60);
+pub(crate) const LOOK_AGAIN: Duration = Duration::from_secs(60);
 /// The hub with its Telegram bot, as `serve` runs it.
 #[derive(Clone)]
 pub struct Telegram {

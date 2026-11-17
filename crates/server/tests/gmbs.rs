@@ -73,14 +73,15 @@ async fn places() -> (Arc<Mutex<Vec<String>>>, String) {
 /// A panel on `db` asking `base` with a key (`None`: keyless), its answers in `db`, its requests free.
 async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
 	let keys = Keys::new(base.map(|_| vec![("house".to_owned(), "k".to_owned())]).unwrap_or_default());
-	let google = Google::try_new(keys, Arc::new(sa_places::InOrder), Arc::new(db.store().await)).unwrap().spend(true);
+	let store = db.store().await;
+	let google = Google::try_new(keys, Arc::new(sa_places::InOrder), Arc::new(store.clone())).unwrap().spend(true);
 	let google = match base {
 		Some(b) => google.at(b),
 		None => google,
 	};
 	let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
 	let accounts = base.map(|_| vec![sa_panel::testing::account("house", Some("k"), None)]).unwrap_or_default();
-	let p = panel_on(db.store().await, key, google, sa_places::Accounts::new(accounts));
+	let p = panel_on(store, key, google, sa_places::Accounts::new(accounts));
 	// what a point costs is tests/connections.rs's
 	p.set_prices(
 		&[PlacesRequest::Details, PlacesRequest::Search, PlacesRequest::Autocomplete].map(|r| (Item::Places(r), Some(0))),
@@ -321,8 +322,9 @@ async fn the_map_is_told_only_when_configured() {
 		),
 	] {
 		let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
-		let keyless = Google::try_new(Keys::new(vec![]), Arc::new(sa_places::InOrder), Arc::new(db.store().await)).unwrap();
-		let app = app(panel_on(db.store().await, key, keyless, sa_places::Accounts::new(accounts)));
+		let store = db.store().await;
+		let keyless = Google::try_new(Keys::new(vec![]), Arc::new(sa_places::InOrder), Arc::new(store.clone())).unwrap();
+		let app = app(panel_on(store, key, keyless, sa_places::Accounts::new(accounts)));
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		assert_eq!(call(&mut b, &app, Method::GET, "/api/v1/map", None).await, want);
