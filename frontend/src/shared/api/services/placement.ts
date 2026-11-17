@@ -139,7 +139,7 @@ export interface components {
          * @description Which refusal, for a client to act on: its status follows from it.
          * @enum {string}
          */
-        ErrorCode: "bad_request" | "forbidden" | "internal" | "not_found" | "too_large" | "unaffordable" | "unauthenticated" | "unstudied" | "csrf" | "unavailable" | "bad_gateway";
+        ErrorCode: "bad_request" | "forbidden" | "internal" | "not_found" | "too_large" | "unaffordable" | "unauthenticated" | "unstudied" | "csrf" | "unavailable" | "bad_gateway" | "conflict";
         /** @description One of Google's Business Profile categories, named in the country's language. */
         Gcid: {
             id: string;
@@ -616,6 +616,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `unstudied` */
             422: {
                 headers: {
@@ -738,5 +747,5 @@ type ReadonlyArray<T> = [
     unknown[]
 ] ? Readonly<Exclude<T, undefined>> : Readonly<Exclude<T, undefined>[]>;
 export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Country"]> = ["FR", "US", "CA", "GB"];
-export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["bad_request", "forbidden", "internal", "not_found", "too_large", "unaffordable", "unauthenticated", "unstudied", "csrf", "unavailable", "bad_gateway"];
+export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["bad_request", "forbidden", "internal", "not_found", "too_large", "unaffordable", "unauthenticated", "unstudied", "csrf", "unavailable", "bad_gateway", "conflict"];
 export const scaleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scale"]> = ["linear", "percentile"];

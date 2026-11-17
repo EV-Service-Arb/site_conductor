@@ -200,7 +200,8 @@
           "unstudied",
           "csrf",
           "unavailable",
-          "bad_gateway"
+          "bad_gateway",
+          "conflict"
         ],
         "type": "string"
       },
@@ -1046,6 +1047,16 @@
             },
             "description": "`not_found`"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`conflict`"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -1094,6 +1105,7 @@
         "x-errors": {
           "bad_gateway": 502,
           "bad_request": 400,
+          "conflict": 409,
           "csrf": 403,
           "forbidden": 403,
           "internal": 500,
