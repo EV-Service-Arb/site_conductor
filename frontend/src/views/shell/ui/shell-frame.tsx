@@ -3,7 +3,6 @@
 import { KeymapProvider, UndoProvider } from "@evinvest/uikit";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
 
 import { PANEL } from "@config";
 
@@ -12,7 +11,8 @@ import { seesSites, useMe } from "@/entities/session";
 import { Assistant } from "@/features/assistant";
 import { goToSignIn } from "@/shared/api";
 import { useT, keys, nav } from "@/shared/i18n";
-import { ROUTES } from "@/shared/config/routes";
+import { VIEWS } from "@/shared/api/views";
+import { useAt } from "@/shared/lib/location";
 import { useLiveSocket } from "@/shared/lib/live";
 import { ResizeEdge } from "@/shared/ui/resize-edge";
 
@@ -34,7 +34,7 @@ const UNAUTHENTICATED_EVENT = "sa:unauthenticated";
 export function ShellFrame({ onForbidden, children }: { onForbidden: () => void; children: ReactNode }) {
   const t = useT();
   const me = useMe();
-  const pathname = usePathname();
+  const at = useAt();
   const folded = useSidebarFolded();
   const width = useSidebarWidth();
   const live = useLiveSocket({ onUnauthenticated: goToSignIn, onForbidden });
@@ -44,7 +44,7 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
     window.addEventListener(UNAUTHENTICATED_EVENT, goToSignIn);
     return () => window.removeEventListener(UNAUTHENTICATED_EVENT, goToSignIn);
   }, []);
-  const elements = Object.fromEntries(Object.entries(PANEL.elementKeys).map(([tag, k]) => [tag, { on: { key: k.key }, label: k.label(t) }]));
+  const elements = Object.fromEntries(Object.entries(PANEL.elementKeys).map(([tag, k]) => [tag, { on: { key: VIEWS.views[k.nest].scope }, label: k.label(t) }]));
   return (
     <KeymapProvider leader={LEADER} elements={elements} labels={{ title: t(keys.help, "Keybinds") }}>
       <UndoProvider labels={{ undo: t(undo.undo, "Undo"), redo: t(undo.redo, "Redo") }}>
@@ -60,7 +60,7 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
                 {!folded && <ResizeEdge side="right" width={width} bounds={WIDTH} onWidth={setSidebarWidth} label={t(nav.resizeOutline, "Resize the outline")} />}
               </div>
               <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
-              {PANEL.assistant && !`${pathname}/`.startsWith(ROUTES.assistant) && <Assistant />}
+              {PANEL.assistant && at.view !== "assistant" && <Assistant />}
             </div>
             <PanelHotbar live={live} />
           </div>

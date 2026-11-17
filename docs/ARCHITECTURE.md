@@ -232,14 +232,14 @@ reserved paths (`web.rs`) are derived from it.
 - **The pages.** `/sites` mounts `<mfe-sites-panel api="/api/sites" base="/sites" csrf-cookie>`
   from `/mfe/sites/`; `/review_archive` mounts
   `<mfe-review-archive-dashboard grafana="/grafana/" ui>` from `/mfe/review_archive/`, `ui` its
-  default (`reviewArchiveUi` in `frontend/panel.config.ts`). Any `/sites/<view>` or
-  `/review_archive/<view>` without a dot in its last segment is that page, for the element to
-  route, and a file below a view (`/sites/<view>/index.txt`, `…/__next.*.txt`) is the page's
-  own, so Next's client-side navigation to a view stays soft. The bundles run on this origin:
+  default (`reviewArchiveUi` in `frontend/panel.config.ts`). Every view (`View`, the services'
+  nested under their pages) is the front end's one page, which shows the view the location
+  parses as; below a nest the path is the element's to route. The bundles run on this origin:
   their builds are trusted as the conductor's own code is.
-- **The elements route by the location.** Next moves it with `pushState`, which fires nothing:
-  after each of its moves the shell dispatches a stateless `popstate`, as back and forward do
-  (Next's own handler ignores it). An element is created once per tag, attributes and language
+- **The elements route by the location.** The front end's location store moves it with
+  `pushState`, which fires nothing: after each move, its own or an element's (it wraps
+  `pushState`/`replaceState`), it dispatches a stateless `popstate`, as back and forward do
+  (Next's own handler ignores it), and puts back the carried keys a move dropped. An element is created once per tag, attributes and language
   and re-inserted after: a Dioxus one (ev_lib's `mfe`) cannot be torn down, so it keeps running
   while its page is not shown, and holds its last route while the location is not under its base.
 - **One keymap and one undo history per page, the shell's.** An element listens for no key: it

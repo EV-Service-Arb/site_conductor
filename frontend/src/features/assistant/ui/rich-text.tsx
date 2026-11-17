@@ -2,9 +2,9 @@
 
 import { cn } from "@evinvest/uikit";
 import { MapPin } from "lucide-react";
-import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 import type { Mention, Source } from "@/shared/api/schema";
+import { ViewLink } from "@/shared/lib/location";
 
 
 const INLINE = /(\*\*[^*]+\*\*|@\[[^\]]*\]\(location:\d+\)|\[\d+\])/g;
@@ -67,8 +67,8 @@ function Inline({ text, sources }: { text: string; sources: readonly Source[] })
 /** A location named in a turn: opens its card on the map. A link, not a button: a long name wraps like the words around it. */
 export function LocationToken({ mention, className }: { mention: Mention; className?: string }) {
   return (
-    <Link
-      href={`/?gmb=${mention.id}`}
+    <ViewLink
+      to={{ view: "home", params: { gmb: mention.id } }}
       title={mention.label}
       className={cn(
         "rounded-sm px-0.5 font-medium text-ink outline-none wrap-anywhere hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring",
@@ -77,7 +77,7 @@ export function LocationToken({ mention, className }: { mention: Mention; classN
     >
       <MapPin aria-hidden className="mr-1 inline size-3.5 -translate-y-px text-ink-soft" />
       {mention.label}
-    </Link>
+    </ViewLink>
   );
 }
 
@@ -90,8 +90,8 @@ function Citation({ n, source }: { n: number; source: Source }) {
       </span>
     );
   return (
-    <Link href={source.href} title={source.label} aria-label={source.label} className={cn(look, "outline-none hover:bg-primary hover:text-on-primary focus-visible:ring-2 focus-visible:ring-ring")}>
+    <ViewLink href={source.href} title={source.label} aria-label={source.label} className={cn(look, "outline-none hover:bg-primary hover:text-on-primary focus-visible:ring-2 focus-visible:ring-ring")}>
       {n}
-    </Link>
+    </ViewLink>
   );
 }

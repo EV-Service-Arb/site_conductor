@@ -104,8 +104,8 @@
     "t": "По адресу /{slug}/ зоны нет."
   },
   "kit.area.open": {
-    "en": "Open /{slug}/",
-    "t": "Открыть /{slug}/"
+    "en": "Open {page}",
+    "t": "Открыть {page}"
   },
   "kit.area.scan": {
     "en": "Scan with your phone to take it out; signed-in only.",
@@ -342,6 +342,10 @@
   "kit.window": {
     "en": "Review kit",
     "t": "Набор для отзывов"
+  },
+  "state.noView": {
+    "en": "Nothing is at this address",
+    "t": "По этому адресу ничего нет"
   },
   "window.tab.kit": {
     "en": "Review kit",

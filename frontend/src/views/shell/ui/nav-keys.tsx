@@ -1,36 +1,55 @@
 "use client";
 
 import { type KeyBinding, useBinding } from "@evinvest/uikit";
-import { useRouter } from "next/navigation";
 
 import { PANEL } from "@config";
 
 import { may, ownScreens, seesSites, useMe } from "@/entities/session";
-import { ROUTES } from "@/shared/config/routes";
-import { useT, admin, keys, nav, usage } from "@/shared/i18n";
+import { VIEWS } from "@/shared/api/views";
+import { type T, useT, admin, keys, nav, usage } from "@/shared/i18n";
+import { type At, go } from "@/shared/lib/location";
 
-/** `leader g …`: every screen the caller may open, by key. */
+type Keyed = { [N in keyof typeof VIEWS.views]: (typeof VIEWS.views)[N] extends { key: string } ? N : never }[keyof typeof VIEWS.views];
+
+const LABEL: Record<Keyed, (t: T) => string> = {
+  home: (t) => t(nav.home, "Home"),
+  sites: (t) => t(nav.sites, "Sites"),
+  review_archive: (t) => t(nav.reviewArchive, "Review Archive"),
+  sources: (t) => t(nav.sources, "Sources"),
+  admin_tokens: (t) => t(admin.tokens, "Tokens"),
+  tokens: (t) => t(nav.tokens, "Tokens"),
+  usage: (t) => t(usage.title, "Usage"),
+  wallet: (t) => t(nav.wallet, "Wallet"),
+  alerts: (t) => t(nav.alerts, "Alerts"),
+  account: (t) => t(nav.account, "Profile"),
+};
+
+/** `leader g …`: every screen the caller may open, by its view's key. */
 export function NavKeys() {
   const t = useT();
   const me = useMe();
-  const router = useRouter();
   const own = ownScreens(me, PANEL.walletPage);
-  const go = (key: string, label: string, href: string, may = true): KeyBinding => ({ on: { key }, id: href, run: { label, run: may ? () => router.push(href) : null } });
+  const opens: Record<Keyed, boolean> = {
+    home: true,
+    sites: seesSites(me),
+    review_archive: true,
+    sources: may(me, "sa:admin:sources:manage"),
+    admin_tokens: may(me, "sa:admin:tokens:grant"),
+    tokens: own.includes("tokens"),
+    usage: own.includes("usage"),
+    wallet: own.includes("wallet"),
+    alerts: true,
+    account: true,
+  };
   useBinding({
     on: { key: "g" },
     label: t(keys.go, "Go to"),
-    children: [
-      go("h", t(nav.home, "Home"), "/"),
-      go("s", t(nav.sites, "Sites"), ROUTES.sites, seesSites(me)),
-      go("r", t(nav.reviewArchive, "Review Archive"), ROUTES.reviewArchive),
-      go("c", t(nav.sources, "Sources"), ROUTES.sources, may(me, "sa:admin:sources:manage")),
-      go("k", t(admin.tokens, "Tokens"), ROUTES.adminTokens, may(me, "sa:admin:tokens:grant")),
-      go("t", t(nav.tokens, "Tokens"), ROUTES.tokens, own.includes("tokens")),
-      go("u", t(usage.title, "Usage"), ROUTES.usage, own.includes("usage")),
-      go("w", t(nav.wallet, "Wallet"), ROUTES.wallet, own.includes("wallet")),
-      go("e", t(nav.alerts, "Alerts"), ROUTES.alerts),
-      go("y", t(nav.account, "Profile"), ROUTES.account),
-    ],
+    children: (Object.keys(LABEL) as Keyed[]).map((view): KeyBinding => {
+      const entry = VIEWS.views[view];
+      // a nest's own page is the root of the service's views under it
+      const at = { view, params: "nest" in entry ? { below: "" } : {} } as At;
+      return { on: { key: entry.key }, id: view, run: { label: LABEL[view](t), run: opens[view] ? () => go(at) : null } };
+    }),
   });
   return null;
 }

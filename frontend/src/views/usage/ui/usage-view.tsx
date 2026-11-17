@@ -7,8 +7,8 @@ import type { Permission } from "@/shared/api/schema";
 import { fetchArchive } from "@/entities/gmb";
 import { UsageFigures } from "@/entities/tokens";
 import { api, ok } from "@/shared/api";
-import { ROUTES } from "@/shared/config/routes";
 import { type T, useT, usage as usageKeys, account, nav } from "@/shared/i18n";
+import { ViewLink } from "@/shared/lib/location";
 import { useResource } from "@/shared/lib/use-resource";
 
 /** Who grants it, by a permission's second segment: the service, or the conductor's own admin. */
@@ -33,9 +33,9 @@ export function UsageView() {
       <Access />
       <UsageCard />
       <Section title={t(account.integrations, "Integrations")}>
-        <a className="text-sm text-ink hover:underline" href={ROUTES.alerts}>
+        <ViewLink className="text-sm text-ink hover:underline" to={{ view: "alerts", params: {} }}>
           {t(account.alerts, "Alerts")}
-        </a>
+        </ViewLink>
         <p className="text-sm text-ink-soft">{t(account.alerts.hint, "Where your alerts go: your Telegram, channels and groups.")}</p>
       </Section>
     </PageFrame>

@@ -1,7 +1,6 @@
 "use client";
 
 import { Button, Card, CardContent, CardHeader, CardTitle, PageFrame, Skeleton } from "@evinvest/uikit";
-import Link from "next/link";
 import { useState } from "react";
 
 import { may, useMe } from "@/entities/session";
@@ -9,7 +8,7 @@ import { UsageFigures, useTokens, tokens as tokensKeys } from "@/entities/tokens
 import { api, ok } from "@/shared/api";
 import type { Ledger, LedgerKind } from "@/shared/api/schema";
 import { ClaimButton } from "@/features/claim-kickbacks";
-import { ROUTES } from "@/shared/config/routes";
+import { ViewLink } from "@/shared/lib/location";
 import { type T, useLocale, useT, account } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { useResource } from "@/shared/lib/use-resource";
@@ -47,9 +46,9 @@ export function TokensView() {
       width="content"
       actions={
         may(me, "sa:admin:tokens:grant") && (
-          <Link className="text-sm text-ink hover:underline" href={ROUTES.adminTokens}>
+          <ViewLink className="text-sm text-ink hover:underline" to={{ view: "admin_tokens", params: {} }}>
             {t(tokensKeys.admin, "All balances")}
-          </Link>
+          </ViewLink>
         )
       }
     >

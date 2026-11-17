@@ -2,7 +2,7 @@
 
 import { Hotbar, type HotbarAction, StatusItem, type StatusTone, useBinding } from "@evinvest/uikit";
 import { Layers, MapPin, Satellite } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { useAt } from "@/shared/lib/location";
 
 import { type T, useT, hotbar, placement } from "@/shared/i18n";
 import { live as liveKeys } from "../model/i18n";
@@ -25,9 +25,8 @@ const LIVE_TONE: Record<LiveStatus, StatusTone> = { live: "positive", connecting
 /** The strip along the bottom of every signed-in screen: the screen's actions, and how the tab is connected. */
 export function PanelHotbar({ live }: { live: LiveStatus }) {
   const t = useT();
-  const pathname = usePathname();
   const places = usePlacesShown();
-  const onMap = pathname === "/";
+  const onMap = useAt().view === "home";
   const satellite = useBase() === "satellite";
   const togglePlaces = () => showPlaces(!places);
   const toggleBase = () => setBase(satellite ? "schematic" : "satellite");

@@ -10,7 +10,6 @@ import type { TokenHolder } from "@/shared/api/schema";
 import { MetersCard } from "./meters-card";
 import { GrantDialog } from "@/features/grant-tokens";
 import { PricesCard } from "@/features/price-tokens";
-import { ROUTES } from "@/shared/config/routes";
 import { useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -48,7 +47,7 @@ export function AdminTokensView() {
         <h2 className="text-sm font-semibold text-ink">{t(tokens.admin.spending, "Spending")}</h2>
         <iframe
           title={t(tokens.admin.spending, "Spending")}
-          src={`${ROUTES.grafana}d/sa-tokens/?kiosk&hideLogo&_dash.hideLinks&theme=dark`}
+          src={`/grafana/d/sa-tokens/?kiosk&hideLogo&_dash.hideLinks&theme=dark`}
           className="h-screen w-full rounded-lg border border-border"
         />
       </section>

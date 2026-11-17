@@ -5,13 +5,13 @@ import { useSyncExternalStore } from "react";
 import type { AssistantTurn, UserTurn } from "@/entities/assistant";
 import type { Chat, Question, Turn } from "@/shared/api/schema";
 import { api, ok } from "@/shared/api";
-import { setQuery } from "@/shared/lib/query";
+import { type Carried, setCarried } from "@/shared/lib/location";
 
 /** `ask`: actions wait for a press; `act`: the first is taken at once, and can be undone. */
 export type Approval = "ask" | "act";
 
 /** Where the assistant sits beside the page; full screen is its own page, `/assistant/`. */
-export type Mode = "sidebar" | "floating";
+export type Mode = NonNullable<Carried["assistant"]>;
 export type Display = Mode | "full";
 
 /** The answer being written in this tab: its question and itself, from turn `from` of `chat`, until the server has both. */
@@ -76,7 +76,7 @@ export const newId = () => crypto.randomUUID();
 
 /** The sidebar or the floating window, else (`null`) folded. */
 export function show(mode: Mode | null): void {
-  setQuery({ assistant: mode });
+  setCarried({ assistant: mode ?? undefined });
   if (mode !== null) set((s) => ({ ...s, mode, unread: false }));
 }
 

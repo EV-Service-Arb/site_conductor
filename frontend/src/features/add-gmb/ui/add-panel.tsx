@@ -49,9 +49,9 @@ export function AddPanel({ gmail: scopedGmail, trade: scopedTrade }: Adding) {
   const gmails = useGmails();
   const picking = useOnMap((s) => s.picking !== null);
   const [state, setState] = useState<State>("draft");
-  const [trade, setTrade] = useState<number | null>(scopedTrade);
+  const [trade, setTrade] = useState<number | null>(scopedTrade ?? null);
   const [name, setName] = useState("");
-  const [gmail, setGmail] = useState<number | null>(scopedGmail);
+  const [gmail, setGmail] = useState<number | null>(scopedGmail ?? null);
   const [picked, setPicked] = useState<Place | null>(null);
   const [spots, setSpots] = useState<Spot[]>([]);
   // the country Google gave each spot added off its suggestions
@@ -194,7 +194,7 @@ export function AddPanel({ gmail: scopedGmail, trade: scopedTrade }: Adding) {
             <FieldDescription>{verified ? t(addKeys.country.none, "Google gives this place no country.") : t(addKeys.country.byHand, "Not on Maps: its country is said by hand.")}</FieldDescription>
           </Field>
         )}
-        {scopedGmail === null && (
+        {scopedGmail == null && (
           <Field className="flex flex-col gap-1">
             <FieldLabel>
               {t(gmbs.gbp.gmail, "Gmail")}

@@ -21,12 +21,6 @@ const subscribeHash = (onChange: () => void) => {
   return () => window.removeEventListener("hashchange", onChange);
 };
 
-/** `/<slug>/` is the page the server answers for an area's slug; `/kit/` itself names none. */
-const slugOfPath = () => {
-  const [first, ...rest] = window.location.pathname.split("/").filter(Boolean);
-  return first === undefined || first === "kit" || rest.length > 0 ? null : first;
-};
-
 /** The GBP shown full screen, `#<id>`: the phone's back returns to the list. */
 const shownOfHash = () => {
   const raw = window.location.hash.slice(1);
@@ -35,15 +29,6 @@ const shownOfHash = () => {
   if (!Number.isSafeInteger(id)) throw new Error(`#${raw}: not a GBP id`);
   return id;
 };
-
-/** An area's kit on the operator's phone (13b): its GBPs nearest first; one tapped fills the screen with its QR (13c). */
-export function KitView() {
-  // `undefined` while prerendered: the export has no path to read
-  const slug = useSyncExternalStore(subscribeHash, slugOfPath, () => undefined);
-  if (slug === undefined) return <Skeleton className="min-h-svh rounded-none" />;
-  if (slug === null) return <NoArea />;
-  return <AreaKit slug={slug} />;
-}
 
 function NoArea() {
   const t = useT();
@@ -57,7 +42,8 @@ function NoArea() {
   );
 }
 
-function AreaKit({ slug }: { slug: string }) {
+/** An area's kit on the operator's phone (13b): its GBPs nearest first; one tapped fills the screen with its QR (13c). */
+export function KitView({ slug }: { slug: string }) {
   const res = useResource(`kit.area.${slug}`, () => ok(api.GET("/kit/areas/{slug}/gmbs", { params: { path: { slug } } })), `kit.area.${slug}`, { focus: true });
   const shown = useSyncExternalStore(subscribeHash, shownOfHash, () => null);
   const [find, setFind] = useState("");

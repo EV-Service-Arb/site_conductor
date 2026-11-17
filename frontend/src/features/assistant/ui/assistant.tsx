@@ -7,11 +7,11 @@ import { useEffect, useRef } from "react";
 import { useChats, assistant } from "@/entities/assistant";
 import type { ChatSummary } from "@/shared/api/schema";
 import { useT, keys as keysKeys } from "@/shared/i18n";
-import { useQuery } from "@/shared/lib/query";
+import { useCarried } from "@/shared/lib/location";
 import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
 import { ResizeEdge } from "@/shared/ui/resize-edge";
 
-import { type Mode, WIDTH, notice, openChat, setWidth, show, useAssistant } from "../model/chat";
+import { WIDTH, notice, openChat, setWidth, show, useAssistant } from "../model/chat";
 import { hideOnEscape, useKeymap } from "../model/keymap";
 import { copyLink } from "./chat-actions";
 import { ChatView } from "./chat-view";
@@ -25,8 +25,7 @@ export function Assistant() {
   const t = useT();
   const s = useAssistant();
   const desktop = useMediaQuery(DESKTOP_QUERY);
-  const shown = useQuery("assistant") as Mode | null;
-  if (shown !== null && shown !== "sidebar" && shown !== "floating") throw new Error(`?assistant=${String(shown)}: not sidebar or floating`);
+  const shown = useCarried().assistant ?? null;
   // A link's display is the last shown, and whatever happens while open is seen.
   useEffect(() => {
     if (shown !== null) show(shown);
@@ -67,7 +66,7 @@ export function Assistant() {
 export function AssistantToggle() {
   const t = useT();
   const s = useAssistant();
-  const shown = useQuery("assistant");
+  const shown = useCarried().assistant ?? null;
   const running = s.running !== null && (s.running.answer.state === "working" || s.running.answer.state === "writing");
   const button = useRef<HTMLButtonElement>(null);
   const keys = usePageKeymap().bound.get("assistant")?.sequence;

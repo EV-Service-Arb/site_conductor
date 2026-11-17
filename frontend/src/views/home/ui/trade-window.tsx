@@ -31,7 +31,6 @@ import { usePlacement } from "@/features/placement-overlay";
 import { type Category, type Country, type Gmail, type Gmb, type Trade, countryValues } from "@/shared/api/schema";
 import { ApiError, api, ok } from "@/shared/api";
 import { useLocale, useT, state, placement as placementKeys } from "@/shared/i18n";
-import { setQuery } from "@/shared/lib/query";
 import { useResource } from "@/shared/lib/use-resource";
 import { failureText } from "@/shared/ui/failure-text";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -44,7 +43,7 @@ import { categories } from "../model/i18n";
 const MAX_KEYWORDS = 50;
 
 /** A trade's window over the map, shaped as a GBP's: its countries as tabs, side by side; the outline stays the one list of its GBPs. */
-export function TradeWindow({ trade, tab, gmbs, gmails }: { trade: Trade; tab: Country | null; gmbs: readonly Gmb[]; gmails: readonly Gmail[] }) {
+export function TradeWindow({ trade, country: tab, gmbs, gmails }: { trade: Trade; country: Country | null; gmbs: readonly Gmb[]; gmails: readonly Gmail[] }) {
   const t = useT();
   const button = useButtonSize();
   const [renaming, setRenaming] = useState(false);
@@ -84,7 +83,7 @@ export function TradeWindow({ trade, tab, gmbs, gmails }: { trade: Trade; tab: C
           {t(tradesKeys.window.scope, "Scope the outline to it")}
         </Button>
         <More trade={trade} tab={category === undefined ? null : tab} holders={held.length} onRename={() => setRenaming(true)} />
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => setQuery({ trade: null, tab: null })}>
+        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => openTrade(null)}>
           <X aria-hidden />
         </Button>
       </header>
@@ -406,7 +405,7 @@ function More({ trade, tab, holders, onRename }: { trade: Trade; tab: Country | 
             <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t(move.cancel, "Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className={buttonVariants({ variant: "destructive", size: button() })}
-              onClick={() => void act(() => ok(api.DELETE("/trades/{id}", { params: { path: { id: trade.id } } })), () => setQuery({ trade: null, tab: null }))()}
+              onClick={() => void act(() => ok(api.DELETE("/trades/{id}", { params: { path: { id: trade.id } } })), () => openTrade(null))()}
             >
               {t(gmbsKeys.remove, "Remove")}
             </AlertDialogAction>

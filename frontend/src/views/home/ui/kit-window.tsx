@@ -1,11 +1,13 @@
 "use client";
 
 import { Button, Skeleton, buttonVariants, toast } from "@evinvest/uikit";
+import { href } from "@evinvest/views";
 import { Copy, ExternalLink, Plus, QrCode, X } from "lucide-react";
 
 import { AreaDraw, TARGET_NAME, kit, open, openKit, outlineOf, useOutline, windowKeys } from "@/entities/gmb";
 import { api, ok } from "@/shared/api";
 import type { KitNearby } from "@/shared/api/schema";
+import { VIEWS } from "@/shared/api/views";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDistance } from "@/shared/lib/format";
 import { useResource } from "@/shared/lib/use-resource";
@@ -88,7 +90,8 @@ function Area({ map, slug }: { map: google.maps.Map; slug: string }) {
     );
   const { gmbs } = res.data;
   const a = res.data.area;
-  const link = `${window.location.origin}/${a.slug}/`;
+  const page = href(VIEWS, { view: "area", params: { area: a.slug } });
+  const link = `${window.location.origin}${page}`;
   const inside = gmbs.filter((g) => g.inside);
   const near = gmbs.filter((g) => !g.inside);
   const shape = a.shape.kind === "city" ? t(kit.area.isCity, "the city") : t(kit.area.isCircle, "a circle of {radius}", { radius: formatDistance(a.shape.radius_m, locale) });
@@ -110,9 +113,9 @@ function Area({ map, slug }: { map: google.maps.Map; slug: string }) {
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <a href={`/${a.slug}/`} target="_blank" rel="noreferrer" className={buttonVariants({ size: button("sm") })}>
+        <a href={page} target="_blank" rel="noreferrer" className={buttonVariants({ size: button("sm") })}>
           <ExternalLink aria-hidden />
-          {t(kit.area.open, "Open /{slug}/", { slug: a.slug })}
+          {t(kit.area.open, "Open {page}", { page })}
         </a>
         <Button
           variant="outline"

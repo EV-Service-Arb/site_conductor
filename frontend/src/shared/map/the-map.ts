@@ -9,7 +9,7 @@ import { type RefObject, useEffect, useRef, useState, useSyncExternalStore } fro
 
 import { api, ok } from "@/shared/api";
 import type { MapConfig } from "@/shared/api/schema";
-import { setQuery, useQuery } from "@/shared/lib/query";
+import { setHome, useHome } from "@/shared/lib/location";
 
 const PLACES_KEY = "sa:map-places";
 const CHOSEN_EVENT = "sa:map-view-chosen";
@@ -113,15 +113,13 @@ export function showPlaces(shown: boolean): void {
   chosen();
 }
 
-/** Google's imagery or its roads under everything drawn: `?base=schematic`, satellite without it. */
+/** Google's imagery or its roads under everything drawn: `?schematic`, satellite without it. */
 export function useBase(): Base {
-  const base = useQuery("base");
-  if (base !== null && base !== "schematic") throw new Error(`?base=${base}: schematic, or no ?base for satellite`);
-  return base ?? "satellite";
+  return useHome()?.schematic === true ? "schematic" : "satellite";
 }
 
 export function setBase(base: Base): void {
-  setQuery({ base: base === "satellite" ? null : "schematic" });
+  setHome({ schematic: base === "schematic" });
 }
 
 /** `element` centred on a point of `map` (or standing on it by its bottom tip) until removed, its clicks the map's no more; dragged where `onDrag` is given. */

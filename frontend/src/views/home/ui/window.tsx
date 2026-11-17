@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 
 import { CategoryChip, type Listed, MUST_HAVES, TABS, type Tab, open, openAccount, readiness, useGmbTags, useSelection, windowKeys, STATE_NAME, STATE_TONE } from "@/entities/gmb";
 import { type T, useT, account } from "@/shared/i18n";
-import { setQuery } from "@/shared/lib/query";
+import { setHome } from "@/shared/lib/location";
 import { useButtonSize } from "@/shared/ui/touch";
 
 import { BrowserTab } from "./browser-tab";
@@ -73,7 +73,7 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
               </Button>
             </span>
           )}
-          <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => setQuery({ tab: null })}>
+          <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => setHome({ tab: undefined })}>
             <X aria-hidden />
           </Button>
         </div>
@@ -103,7 +103,7 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
             // a GBP's browser is its gmail's
             disabled={k === "browser" && gmail === null}
             title={k === "browser" && gmail === null ? t(windowKeys.browser.needsGmail, "Needs a gmail") : undefined}
-            onClick={() => setQuery({ tab: k })}
+            onClick={() => setHome({ tab: k })}
             className={cn(
               "-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
               k === tab ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink disabled:opacity-50 disabled:hover:text-ink-soft",

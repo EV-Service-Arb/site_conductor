@@ -36,7 +36,7 @@ export function PlacementOverlay({ map }: { map: google.maps.Map }) {
     live?.heat(heat);
   }, [live, heat, data]);
   const traded = data?.trade != null;
-  const tuning = JSON.stringify({ lambda_m: view.pressure?.lambda ?? null, tiers: view.tiers });
+  const tuning = JSON.stringify({ lambda_m: view.pressure, tiers: view.tiers });
   useEffect(() => {
     if (traded) live?.tune(JSON.parse(tuning) as Parameters<Handle["tune"]>[0]);
   }, [live, traded, tuning, data]);

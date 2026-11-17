@@ -3,10 +3,10 @@
 import { useSyncExternalStore } from "react";
 
 import { ApiError, api, http, ok, readCsrf } from "@/shared/api";
-import { type Infer, arrayOf, bool, nullable, num, object, oneOf, parse, recordOf, str } from "@/shared/lib/parse";
+import { type Infer, arrayOf, bool, nullable, num, object, oneOf, parse, str } from "@/shared/lib/parse";
 import { covers, useScope, useTrades } from "@/entities/gmb";
 import type { Area, Category, Trade } from "@/shared/api/schema";
-import { setQuery, useQuery } from "@/shared/lib/query";
+import { type Home, setHome, useHome } from "@/shared/lib/location";
 import { useResource } from "@/shared/lib/use-resource";
 
 // gmaps_optimal_placement behind the forward (docs/ARCHITECTURE.md, Forward): its overlay module
@@ -168,43 +168,31 @@ export interface MapView {
   from: "pick" | "scope" | null;
   /** The area it is drawn over, by slug; `""`: one being drawn. */
   area: string | null;
-  /** On, at its radius in metres or at the trade's own. */
-  pressure: { lambda?: number } | null;
+  /** On, at this radius in metres. */
+  pressure: number | null;
   competitors: boolean;
   /** Tiers whose weight or visibility was moved off the study's own. */
-  tiers: Record<string, { weight: number; show: boolean }> | null;
+  tiers: NonNullable<Home["tiers"]> | null;
   opacity: number | null;
   hideImputed: boolean;
 }
 
-const tiersParser = recordOf(object({ weight: num, show: bool }));
-
-/** The panel's state, in the URL of `/` as `?at` is; `?study=` empty: none picked, whatever the scope. */
+/** The panel's state, in Home's URL as `?at` is; `?study=` empty: none picked, whatever the scope. */
 export function useMapView(): MapView {
-  const heat = useQuery("heat");
-  const study = useQuery("study");
-  const area = useQuery("area");
-  const pressure = useQuery("pressure");
-  const competitors = useQuery("competitors");
-  const tiers = useQuery("tiers");
-  const opacity = useQuery("opacity");
-  const imputed = useQuery("imputed");
+  const home = useHome();
+  if (home === null) throw new Error("the map's panel off Home");
+  const { study } = home;
   const scoped = useScopedStudy();
-  const lambda = pressure === null || pressure === "" ? undefined : Number(pressure);
-  if (lambda !== undefined && !(Number.isFinite(lambda) && lambda > 0)) throw new Error(`?pressure=${pressure}: not a radius in metres`);
-  if (study !== null && study !== "" && !/^\d+\.[A-Z]{2}$/.test(study)) throw new Error(`?study=${study}: not <trade id>.<country>`);
-  const alpha = opacity === null ? null : Number(opacity);
-  if (alpha !== null && !(alpha >= 0 && alpha <= 1)) throw new Error(`?opacity=${opacity}: not within 0..1`);
   return {
-    heat,
-    study: study === null ? scoped : study === "" ? null : (study as CategoryKey),
-    from: study !== null && study !== "" ? "pick" : study === null && scoped !== null ? "scope" : null,
-    area,
-    pressure: pressure === null ? null : lambda === undefined ? {} : { lambda },
-    competitors: competitors !== null,
-    tiers: tiers === null ? null : parse(tiersParser, JSON.parse(tiers)),
-    opacity: alpha,
-    hideImputed: imputed !== null,
+    heat: home.heat ?? null,
+    study: study === undefined ? scoped : study === "" ? null : (study as CategoryKey),
+    from: study !== undefined && study !== "" ? "pick" : study === undefined && scoped !== null ? "scope" : null,
+    area: home.area ?? null,
+    pressure: home.pressure ?? null,
+    competitors: home.competitors === true,
+    tiers: home.tiers ?? null,
+    opacity: home.opacity ?? null,
+    hideImputed: home.hide_imputed === true,
   };
 }
 
@@ -218,15 +206,15 @@ function useScopedStudy(): CategoryKey | null {
 }
 
 export function setMapView(change: Partial<MapView>): void {
-  setQuery({
-    ...(change.heat !== undefined && { heat: change.heat }),
+  setHome({
+    ...(change.heat !== undefined && { heat: change.heat ?? undefined }),
     ...(change.study !== undefined && { study: change.study ?? "" }),
-    ...(change.area !== undefined && { area: change.area }),
-    ...(change.pressure !== undefined && { pressure: change.pressure === null ? null : change.pressure.lambda === undefined ? "" : String(Math.round(change.pressure.lambda)) }),
-    ...(change.competitors !== undefined && { competitors: change.competitors ? "" : null }),
-    ...(change.tiers !== undefined && { tiers: change.tiers === null ? null : JSON.stringify(change.tiers) }),
-    ...(change.opacity !== undefined && { opacity: change.opacity === null ? null : String(change.opacity) }),
-    ...(change.hideImputed !== undefined && { imputed: change.hideImputed ? "" : null }),
+    ...(change.area !== undefined && { area: change.area ?? undefined }),
+    ...(change.pressure !== undefined && { pressure: change.pressure === null ? undefined : Math.round(change.pressure) }),
+    ...(change.competitors !== undefined && { competitors: change.competitors }),
+    ...(change.tiers !== undefined && { tiers: change.tiers ?? undefined }),
+    ...(change.opacity !== undefined && { opacity: change.opacity ?? undefined }),
+    ...(change.hideImputed !== undefined && { hide_imputed: change.hideImputed }),
   });
 }
 

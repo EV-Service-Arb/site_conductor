@@ -3,7 +3,9 @@
 import { seesSites, useMe } from "@/entities/session";
 import { RequestAccess } from "@/features/request-access";
 import { SitesElement } from "@/features/sites-element";
-import { ROUTES } from "@/shared/config/routes";
+import { href } from "@evinvest/views";
+
+import { VIEWS } from "@/shared/api/views";
 import { useT } from "@/shared/i18n";
 import { sites } from "../model/i18n";
 
@@ -11,6 +13,6 @@ import { sites } from "../model/i18n";
 export function SitesView() {
   const t = useT();
   const me = useMe();
-  if (!seesSites(me)) return <RequestAccess need="sa:operator" continueTo={ROUTES.sites} />;
+  if (!seesSites(me)) return <RequestAccess need="sa:operator" continueTo={href(VIEWS, { view: "sites", params: { below: "" } })} />;
   return <SitesElement tag="mfe-sites-panel" className="h-full" fallback={<p className="p-6 text-muted-foreground">{t(sites.loading, "Loading the sites…")}</p>} />;
 }

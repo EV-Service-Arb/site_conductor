@@ -2,8 +2,8 @@
 
 import { useSyncExternalStore } from "react";
 
-import { type Country, type Gmb, type LatLng, type State, countryValues } from "@/shared/api/schema";
-import { setQuery, useQuery } from "@/shared/lib/query";
+import type { Country, Gmb, LatLng, State } from "@/shared/api/schema";
+import { type Home, setHome, useHome } from "@/shared/lib/location";
 
 /** What the map and the outline beside it share about the GMBs. */
 export interface OnMap {
@@ -40,130 +40,107 @@ export function setOnMap(change: Partial<OnMap>): void {
   for (const l of listeners) l();
 }
 
+/** One window at a time over the map: opening one closes the rest. */
+const NO_WINDOW = { gmb: undefined, trade: undefined, country: undefined, account: undefined, tab: undefined, categories: undefined, trash: undefined, add: undefined, kit: undefined } as const;
+
 /** The GMB whose card is open on the map. */
 export function usePeeked(): number | null {
-  const raw = useQuery("gmb");
-  if (raw === null) return null;
-  const id = Number(raw);
-  if (!Number.isSafeInteger(id)) throw new Error(`?gmb=${raw}: not a GMB id`);
-  return id;
+  return useHome()?.gmb ?? null;
 }
 
 export function peek(gmb: number | null): void {
-  setQuery({ gmb: gmb === null ? null : String(gmb) });
+  setHome({ gmb: gmb ?? undefined });
 }
 
-export type Tab = "launch" | "browser" | "kit";
+/** A GBP window's tab; a gmail's window has its own (`AccountTab`), both in `?tab`. */
+export type Tab = Exclude<NonNullable<Home["tab"]>, "connections">;
 
 /** The location window's tabs by state, in order; a GBP whose state has none opens as its card only. */
 export const TABS: Record<State, readonly Tab[]> = { draft: ["launch", "browser"], verifying: ["browser"], verified: ["kit"], suspended: [] };
 
-/** The tab the GBP's window is open on; `null`: no window, the card only, or the trade's or a gmail's window holds `?tab`. */
+/** The tab the GBP's window is open on; `null`: no window, the card only, or a gmail's window holds `?tab`. */
 export function useTab(): Tab | null {
-  const raw = useQuery("tab");
-  const trade = useQuery("trade");
-  const account = useQuery("account");
-  if (trade !== null || account !== null) return null;
-  if (raw !== null && !Object.values(TABS).some((tabs) => tabs.includes(raw as Tab))) throw new Error(`?tab=${raw}: no state has it`);
-  return raw as Tab | null;
+  const home = useHome();
+  if (home === null || home.account !== undefined || home.tab === undefined) return null;
+  if (home.tab === "connections") throw new Error("?tab=connections: a gmail's tab, with no ?account");
+  return home.tab;
 }
 
 /** The GBP's window, on the open tab while its state has it, else on its state's first; its card alone where it has none. */
 export function open(gmb: Pick<Gmb, "id" | "state">): void {
   const tabs = TABS[gmb.state];
-  setQuery((now) => ({ gmb: String(gmb.id), trade: null, categories: null, account: null, trash: null, add: null, kit: null, tab: now.trade === null && tabs.includes(now.tab as Tab) ? now.tab : (tabs[0] ?? null) }));
+  setHome((now) => ({ ...NO_WINDOW, gmb: gmb.id, tab: now.account === undefined && tabs.find((t) => t === now.tab) !== undefined ? now.tab : tabs[0] }));
 }
 
 /** A GBP clicked on the map or in the outline beside it: the first click opens it, the next goes to it on the map, out of its window. */
 export function openOrFocus(gmb: Gmb, peeked: boolean): void {
   if (!peeked || gmb.location === null) return open(gmb);
-  setQuery({ tab: null });
+  setHome({ tab: undefined });
   setOnMap({ focus: gmb.id });
 }
 
-/** The trade whose window is open, on a country's tab; `null` tab: the trade has none set up yet, or none picked. One window at a time: it and a GBP's share `?tab`. */
-export function useTradeWindow(): { trade: number; tab: Country | null } | null {
-  const raw = useQuery("trade");
-  const tab = useQuery("tab");
-  if (raw === null) return null;
-  const trade = Number(raw);
-  if (!Number.isSafeInteger(trade)) throw new Error(`?trade=${raw}: not a trade id`);
-  if (tab !== null && !(countryValues as readonly string[]).includes(tab)) throw new Error(`?tab=${tab}: not a country of trade ${trade}`);
-  return { trade, tab: tab as Country | null };
+/** The trade whose window is open, on a country's tab; `null` country: the trade has none set up yet, or none picked. */
+export function useTradeWindow(): { trade: number; country: Country | null } | null {
+  const home = useHome();
+  if (home?.trade === undefined) return null;
+  return { trade: home.trade, country: home.country ?? null };
 }
 
-export function openTrade(trade: number | null, tab?: Country): void {
-  setQuery({ trade: trade === null ? null : String(trade), tab: tab ?? null, categories: null, gmb: null, account: null, trash: null, add: null, kit: null });
+export function openTrade(trade: number | null, country?: Country): void {
+  setHome({ ...NO_WINDOW, trade: trade ?? undefined, country });
 }
 
 /** Every trade by country, the level a trade's window sits under (`?categories`). */
 export function useCategoriesWindow(): boolean {
-  return useQuery("categories") !== null;
+  return useHome()?.categories === true;
 }
 
 export function openCategories(on: boolean): void {
-  setQuery({ categories: on ? "" : null, trade: null, tab: null, gmb: null, account: null, trash: null, add: null, kit: null });
+  setHome({ ...NO_WINDOW, categories: on });
 }
 
-export const ACCOUNT_TABS = ["connections", "browser"] as const;
+export const ACCOUNT_TABS = ["connections", "browser"] as const satisfies readonly NonNullable<Home["tab"]>[];
 export type AccountTab = (typeof ACCOUNT_TABS)[number];
 
 /** The gmail whose own window is open (`?account`, apart from the outline's `?gmail` scope), on its tab. */
 export function useAccountWindow(): { gmail: number; tab: AccountTab } | null {
-  const raw = useQuery("account");
-  const tab = useQuery("tab");
-  if (raw === null) return null;
-  const gmail = Number(raw);
-  if (!Number.isSafeInteger(gmail)) throw new Error(`?account=${raw}: not a gmail id`);
-  if (!ACCOUNT_TABS.includes(tab as AccountTab)) throw new Error(`?tab=${tab}: not a tab of gmail ${gmail}'s window`);
-  return { gmail, tab: tab as AccountTab };
+  const home = useHome();
+  if (home?.account === undefined) return null;
+  const tab = ACCOUNT_TABS.find((t) => t === home.tab);
+  if (tab === undefined) throw new Error(`?tab=${home.tab}: not a tab of gmail ${home.account}'s window`);
+  return { gmail: home.account, tab };
 }
 
 export function openAccount(at: { gmail: number; tab: AccountTab } | null): void {
-  setQuery({ account: at === null ? null : String(at.gmail), tab: at?.tab ?? null, gmb: null, trade: null, categories: null, trash: null, add: null, kit: null });
+  setHome({ ...NO_WINDOW, account: at?.gmail, tab: at?.tab });
 }
 
 /** What the caller removed (`?trash`), restorable until purged. */
 export function useTrashWindow(): boolean {
-  return useQuery("trash") !== null;
+  return useHome()?.trash === true;
 }
 
 export function openTrash(on: boolean): void {
-  setQuery({ trash: on ? "" : null, add: null, kit: null, trade: null, tab: null, gmb: null, account: null, categories: null });
+  setHome({ ...NO_WINDOW, trash: on });
 }
 
 /** The review kit's area window (`?kit`): `""` draws a new area, a slug shows that one. */
 export function useKitWindow(): string | null {
-  return useQuery("kit");
+  return useHome()?.kit ?? null;
 }
 
 export function openKit(area: string | null): void {
-  setQuery({ kit: area, add: null, trade: null, tab: null, gmb: null, account: null, categories: null, trash: null });
+  setHome({ ...NO_WINDOW, kit: area ?? undefined });
 }
 
 /** What the Add a GBP panel opens with: the outline's gmail and trade, when it is scoped to one. */
-export type Adding = { gmail: number | null; trade: number | null };
+export type Adding = NonNullable<Home["add"]>;
 
-const addValue = ({ gmail, trade }: Adding) => `${gmail ?? ""},${trade ?? ""}`;
-
-/** The Add a GBP panel over the map (`?add=<gmail>,<trade>`, each empty for none). */
-export function useAddWindow(): { raw: string; adding: Adding } | null {
-  const raw = useQuery("add");
-  if (raw === null) return null;
-  const parts = raw.split(",");
-  if (parts.length !== 2) throw new Error(`?add=${raw}: not <gmail>,<trade>`);
-  const id = (p: string) => {
-    if (p === "") return null;
-    const n = Number(p);
-    if (!Number.isSafeInteger(n)) throw new Error(`?add=${raw}: ${p} is no id`);
-    return n;
-  };
-  return { raw, adding: { gmail: id(parts[0]!), trade: id(parts[1]!) } };
+/** The Add a GBP panel over the map (`?add`). */
+export function useAddWindow(): Adding | null {
+  return useHome()?.add ?? null;
 }
 
 export function openAdd(at: Adding | null): void {
-  setQuery({ add: at === null ? null : addValue(at), kit: null, gmb: null, trade: null, tab: null, categories: null, account: null, trash: null });
+  setHome({ ...NO_WINDOW, add: at ?? undefined });
 }
-
-/** The home page with the panel open, from another page. */
-export const addHref = (at: Adding) => `/?add=${addValue(at)}`;

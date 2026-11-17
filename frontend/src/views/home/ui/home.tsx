@@ -1,11 +1,10 @@
 "use client";
 
 import { Button, Skeleton, cn } from "@evinvest/uikit";
-import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { type Listed, TABS, type Tags, fetchMapConfig, issueOf, narrowed, openAccount, openOrFocus, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useAddWindow, move, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useKitWindow, useTradeWindow, useTrades } from "@/entities/gmb";
+import { type Listed, TABS, type Tags, fetchMapConfig, issueOf, narrowed, openAccount, openOrFocus, openTrade, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useAddWindow, move, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useKitWindow, useTradeWindow, useTrades } from "@/entities/gmb";
 import { AddPanel } from "@/features/add-gmb";
 import { PlacingBar } from "@/features/place-gmb";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
@@ -13,7 +12,7 @@ import { PlacementOverlay, StudyAreaWindow } from "@/features/placement-overlay"
 import type { LatLng, MapConfig, State } from "@/shared/api/schema";
 import { takeReturnPage } from "@/shared/api";
 import { useT, home } from "@/shared/i18n";
-import { setQuery, useQuery } from "@/shared/lib/query";
+import { go, setHome, useHome } from "@/shared/lib/location";
 import { useResource } from "@/shared/lib/use-resource";
 import { Locate, StreetView, pin, useTheMap } from "@/shared/map";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -30,13 +29,12 @@ import { LocationWindow } from "./window";
 /** `/`: the caller's GMBs on a map, unless they come back from the sign-in dialog to the page they were on. */
 export function Home() {
   const t = useT();
-  const router = useRouter();
   // Taken once: the read clears the key.
   const back = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     back.current ??= takeReturnPage();
-    if (back.current !== null && back.current !== "/") router.replace(back.current);
-  }, [router]);
+    if (back.current !== null && back.current !== "/") go(back.current, "replace");
+  }, []);
   const config = useResource("map", fetchMapConfig);
 
   return (
@@ -69,7 +67,7 @@ function GmbMap({ config }: { config: MapConfig }) {
   const peeked = usePeeked();
   const tab = useTab();
   // `?at` as the page opened: what it says after is where the map has since moved
-  const [left] = useState(useQuery("at"));
+  const [left] = useState(useHome()?.at ?? null);
   const { tags } = useGmbTags();
   const { host, map } = useTheMap(config);
   const listed = selection?.selected ?? [];
@@ -98,7 +96,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       const centre = m.getCenter();
       const zoom = m.getZoom();
       if (centre === undefined || zoom === undefined) throw new Error("the map has bounds but no centre or zoom");
-      setQuery({ at: `${centre.lat().toFixed(5)},${centre.lng().toFixed(5)},${zoom}` });
+      setHome({ at: [Number(centre.lat().toFixed(5)), Number(centre.lng().toFixed(5)), zoom] });
     };
     const idle = m.addListener("idle", update);
     update();
@@ -107,8 +105,7 @@ function GmbMap({ config }: { config: MapConfig }) {
 
   useEffect(() => {
     if (map.status !== "ok" || left === null) return;
-    const [lat, lng, zoom] = left.split(",").map(Number);
-    if (lat === undefined || lng === undefined || zoom === undefined || ![lat, lng, zoom].every(Number.isFinite)) throw new Error(`?at=${left}: not <lat>,<lng>,<zoom>`);
+    const [lat, lng, zoom] = left;
     fitted = true;
     map.map.setCenter({ lat, lng });
     map.map.setZoom(zoom);
@@ -185,7 +182,7 @@ function GmbMap({ config }: { config: MapConfig }) {
   const tabs = peekedListed && TABS[peekedListed.gmb.state];
   // a GBP whose state moved since its window opened: its state's first tab, or its card alone
   useEffect(() => {
-    if (tabs !== undefined && tab !== null && !tabs.includes(tab)) setQuery({ tab: tabs[0] ?? null });
+    if (tabs !== undefined && tab !== null && !tabs.includes(tab)) setHome({ tab: tabs[0] });
   }, [tabs, tab]);
   const windowed = peekedListed !== undefined && tab !== null && tabs?.includes(tab) === true;
   const tradeWindow = useTradeWindow();
@@ -194,7 +191,7 @@ function GmbMap({ config }: { config: MapConfig }) {
   // a trade deleted, here or in another tab: its window closes
   const gone = tradeWindow !== null && trades.status === "ok" && opened === undefined;
   useEffect(() => {
-    if (gone) setQuery({ trade: null, tab: null });
+    if (gone) openTrade(null);
   }, [gone]);
   const categoriesWindow = useCategoriesWindow();
   const trashWindow = useTrashWindow();
@@ -291,13 +288,13 @@ function GmbMap({ config }: { config: MapConfig }) {
       )}
       {peekedListed && windows && !windowed && !peekedListed.gmb.location && <Peek listed={peekedListed} onClose={() => peek(null)} className="absolute top-4 right-4" />}
       {peekedListed && windows && windowed && <LocationWindow listed={peekedListed} tab={tab} />}
-      {opened && tradeWindow && gmails.status === "ok" && windows && <TradeWindow trade={opened} tab={tradeWindow.tab} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
+      {opened && tradeWindow && gmails.status === "ok" && windows && <TradeWindow trade={opened} country={tradeWindow.country} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
       {categoriesWindow && trades.status === "ok" && gmails.status === "ok" && windows && <CategoriesWindow trades={trades.data} gmbs={gmails.data.gmbs} />}
       {trashWindow && trash.status === "ok" && windows && <TrashWindow trash={trash.data} />}
       {account && accountWindow && gmails.status === "ok" && windows && <AccountWindow gmail={account} tab={accountWindow.tab} gbps={under(gmails.data, account.id).length} />}
       {kitWindow !== null && map.status === "ok" && windows && <KitWindow map={map.map} area={kitWindow} />}
       {map.status === "ok" && windows && <StudyAreaWindow map={map.map} />}
-      {add && placed === undefined && <AddPanel key={add.raw} {...add.adding} />}
+      {add && placed === undefined && <AddPanel key={JSON.stringify(add)} {...add} />}
       {picking !== null && (
         <div className="absolute bottom-4 left-4 flex items-center gap-3 rounded-lg border border-border bg-background py-2 pr-2 pl-4 shadow-overlay">
           <p className="text-sm text-ink">{picking.label}</p>
