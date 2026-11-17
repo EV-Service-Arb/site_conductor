@@ -7,7 +7,8 @@ import { PANEL } from "@config";
 
 import { covers, openCategories, openTrade, useScope, useTrades } from "@/entities/gmb";
 import type { Country } from "@/shared/api/schema";
-import { may, useMe } from "@/entities/session";
+import { useMe } from "@/entities/session";
+import { api } from "@/shared/api";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { type T, useT, placement as placementKeys, state, hotbar } from "@/shared/i18n";
 import { type Base, setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
@@ -109,9 +110,11 @@ export function MapPanel() {
                 label={t(placementKeys.pressure, "Competitor pressure")}
                 warn={untraded ?? (view.pressure !== null && legend?.pressure?.levels === null ? t(placementKeys.noPressure, "nothing in view under pressure") : undefined)}
                 on={view.pressure !== null}
-                onToggle={() => setMapView({ pressure: view.pressure === null ? {} : null })}
+                // on at the trade's own radius: none drawn, none to start from
+                disabled={view.pressure === null && data?.trade == null}
+                onToggle={() => setMapView({ pressure: view.pressure === null ? data!.trade!.lambda_m : null })}
               />
-              {view.pressure !== null && data?.trade != null && <Radius view={view} fallback={data.trade.lambda_m} />}
+              {view.pressure !== null && <Radius lambda={view.pressure} />}
               <Row
                 icon={Store}
                 label={t(placementKeys.competitors, "Competitors")}
@@ -320,7 +323,7 @@ function DataSection({ view, data, notice, pulling, pullFailed, drawn }: { view:
         </Fold>
       )}
       {/* a sweep never bought has no trade yet: what it lacks is the notice's */}
-      {drawn !== null && (trade !== null || notice?.missing != null) && may(me, "sa:placement:study:spend") && (
+      {drawn !== null && (trade !== null || notice?.missing != null) && api.mayCall("post", "/placement/study/pull", me.permissions) && (
         <PullButton searches={trade?.searches ?? notice!.missing!} pulling={pulling} drawn={drawn} />
       )}
       {pullFailed !== null && <Note tone="error">{pullFailed}</Note>}
@@ -432,13 +435,12 @@ export function MapPreview() {
   return [heat, placement.data?.name ?? t(placementKeys.noArea, "no area picked"), view.pressure !== null && placement.data?.trade != null && t(placementKeys.pressureOn, "pressure on")].filter(Boolean).join(" · ");
 }
 
-function Radius({ view, fallback }: { view: MapView; fallback: number }) {
+function Radius({ lambda }: { lambda: number }) {
   const t = useT();
-  const lambda = view.pressure?.lambda ?? fallback;
   return (
     <div className="flex items-center gap-2 px-2 py-1 pl-8">
       <span className="w-24 shrink-0 text-ink-mid">{t(placementKeys.radius, "Radius λ {km} km", { km: (lambda / 1000).toFixed(1) })}</span>
-      <Slider min={250} max={10000} step={250} value={lambda} onValueChange={(v) => setMapView({ pressure: { lambda: v } })} />
+      <Slider min={250} max={10000} step={250} value={lambda} onValueChange={(v) => setMapView({ pressure: v })} />
     </div>
   );
 }
@@ -466,12 +468,13 @@ function Fold({ title, open: initial = false, children }: { title: string; open?
 }
 
 /** `warn`: on or off, it draws nothing here, and why. */
-function Row({ icon: Icon, label, warn, on, onToggle }: { icon: ComponentType<{ className?: string }>; label: string; warn?: string | undefined; on: boolean; onToggle: () => void }) {
+function Row({ icon: Icon, label, warn, on, disabled, onToggle }: { icon: ComponentType<{ className?: string }>; label: string; warn?: string | undefined; on: boolean; disabled?: boolean; onToggle: () => void }) {
   const Shown = on ? Eye : EyeOff;
   return (
     <button
       type="button"
       aria-pressed={on}
+      disabled={disabled}
       onClick={onToggle}
       title={warn}
       className={cn("flex h-(--control-h-sm) items-center gap-2 rounded-control px-2 text-left text-ink-mid hover:bg-hover hover:text-ink", on && "text-ink", warn !== undefined && "text-accent-warn hover:text-accent-warn")}

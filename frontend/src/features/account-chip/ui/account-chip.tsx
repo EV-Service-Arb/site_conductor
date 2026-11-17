@@ -2,12 +2,12 @@
 
 import { cn } from "@evinvest/uikit";
 import { ACCOUNT_CHIP_TAG } from "@evinvest/concierge";
-import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import type { Caller } from "@/shared/api/schema";
 import { platformMfe } from "@/shared/api";
 import { useLocale, useT } from "@/shared/i18n";
+import { go, usePath } from "@/shared/lib/location";
 import { useElementBundle } from "@/shared/mfe";
 
 import { CHIP_API_VERSION, chipAttributes } from "../model/attributes";
@@ -66,10 +66,9 @@ interface LoadedChipProps {
 function LoadedChip({ scriptUrl, me, onSignOut, className }: LoadedChipProps) {
   const t = useT();
   const locale = useLocale();
-  const pathname = usePathname();
-  const router = useRouter();
+  const pathname = usePath();
   const bundle = useElementBundle(ACCOUNT_CHIP_TAG, scriptUrl, BUNDLE);
-  const { hostRef, painted } = useChipElement(ACCOUNT_CHIP_TAG, bundle === "ready", chipAttributes(me, pathname, t), { onSignOut, onNavigate: router.push }, locale);
+  const { hostRef, painted } = useChipElement(ACCOUNT_CHIP_TAG, bundle === "ready", chipAttributes(me, pathname, t), { onSignOut, onNavigate: go }, locale);
   return (
     <div className={className}>
       <div ref={hostRef} className="col-start-1 row-start-1 flex items-center" />

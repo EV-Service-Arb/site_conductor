@@ -1,17 +1,19 @@
-import type { Gmb, Trade } from "@/shared/api/schema";
+import { type Gmb, type Trade, mustHaveValues } from "@/shared/api/schema";
+import { VIEWS } from "@/shared/api/views";
 import type { T } from "@/shared/i18n";
 
 import { categoryOf } from "./category";
 import type { ArchiveTag, SiteTag } from "./gmb";
 import type { Listed } from "./narrow";
-import { MUST_HAVES, readiness } from "./readiness";
+import { readyCount } from "./readiness";
 import { gmbs as gmbsKeys } from "./i18n";
 
 const issueKeys = gmbsKeys.issue;
 
-/** What needs the operator on a GMB, most pressing first. */
-export const ISSUES = ["overdue", "suspended", "failing", "draft", "unlocated", "no_site", "no_category", "off"] as const;
-export type Issue = (typeof ISSUES)[number];
+export type Issue = Exclude<(typeof VIEWS.carried.properties.issue.enum)[number], null>;
+
+/** What needs the operator on a GMB, most pressing first: `?issue`'s words, in `Issue`'s order (view.rs). */
+export const ISSUES = VIEWS.carried.properties.issue.enum.filter((w): w is Issue => w !== null);
 
 export const ISSUE_NAME = {
   overdue: (t) => t(issueKeys.overdue, "Overdue"),
@@ -31,28 +33,33 @@ export interface Tags {
   trades: readonly Trade[] | null;
 }
 
-/** The GMB's most pressing issue; `null` when nothing needs the operator. An off GMB is out of every service, so being off is all it has. */
-export function issueOf(gmb: Gmb, tags: Tags): Issue | null {
-  if (!gmb.enabled) return "off";
+/** Every issue of the GMB, most pressing first. An off GMB is out of every service, so being off is all it has; a draft has no location or site yet by being one. */
+export function issuesOf(gmb: Gmb, tags: Tags): Issue[] {
+  if (!gmb.enabled) return ["off"];
   const archive = tags.archive?.get(gmb.id);
   const site = tags.sites?.get(gmb.id);
-  if (site !== undefined && site.overdue > 0) return "overdue";
-  if (archive !== undefined && archive.suspended > 0) return "suspended";
-  if (archive?.failing) return "failing";
-  if (gmb.state === "draft") return "draft";
-  if (gmb.location === null) return "unlocated";
-  if (tags.sites !== null && site === undefined) return "no_site";
-  if (tags.trades !== null && categoryOf(gmb, tags.trades).status !== "set_up") return "no_category";
-  return null;
+  const draft = gmb.state === "draft";
+  const has: Record<Exclude<Issue, "off">, boolean> = {
+    overdue: site !== undefined && site.overdue > 0,
+    suspended: archive !== undefined && archive.suspended > 0,
+    failing: archive?.failing === true,
+    draft,
+    unlocated: !draft && gmb.location === null,
+    no_site: !draft && tags.sites !== null && site === undefined,
+    no_category: tags.trades !== null && categoryOf(gmb, tags.trades).status !== "set_up",
+  };
+  return ISSUES.filter((i) => i !== "off" && has[i]);
 }
 
-/** How many of `gmbs` have each issue as their most pressing one. */
+/** The GMB's most pressing issue; `null` when nothing needs the operator. */
+export function issueOf(gmb: Gmb, tags: Tags): Issue | null {
+  return issuesOf(gmb, tags)[0] ?? null;
+}
+
+/** How many of `gmbs` have each issue, a GMB counted under every one it has. */
 export function issueCounts(gmbs: readonly Gmb[], tags: Tags): Map<Issue, number> {
   const counts = new Map<Issue, number>();
-  for (const gmb of gmbs) {
-    const issue = issueOf(gmb, tags);
-    if (issue !== null) counts.set(issue, (counts.get(issue) ?? 0) + 1);
-  }
+  for (const gmb of gmbs) for (const issue of issuesOf(gmb, tags)) counts.set(issue, (counts.get(issue) ?? 0) + 1);
   return counts;
 }
 
@@ -61,6 +68,9 @@ export function issueText(issue: Issue, listed: Listed, tags: Tags, t: T): strin
   const { gmb } = listed;
   if (issue === "overdue") return t(gmbsKeys.tag.overdue, "{n} overdue", { n: tags.sites!.get(gmb.id)!.overdue });
   if (issue === "suspended") return t(gmbsKeys.tag.suspended, "{n} reviews suspended", { n: tags.archive!.get(gmb.id)!.suspended });
-  if (issue === "draft") return `${readiness(listed, tags).filter((r) => r.ready).length}/${MUST_HAVES.length}`;
+  if (issue === "draft") {
+    if (gmb.readiness === null) throw new Error(`GMB ${gmb.id}: a draft without its readiness`);
+    return `${readyCount(gmb.readiness)}/${mustHaveValues.length}`;
+  }
   return ISSUE_NAME[issue](t);
 }

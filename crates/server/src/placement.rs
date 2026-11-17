@@ -16,10 +16,10 @@ use axum::{
 	response::{IntoResponse, Response},
 };
 use ev_lib::api::{
-	GenContext, JsonSchema, OperationOutput,
+	GenContext, JsonSchema, OperationOutput, Params, Refusal,
 	openapi::{MediaType, Operation, Response as Answer, StatusCode as Status},
 };
-use sa_auth::{Principal, Service};
+use sa_auth::{Principal, Service, Study};
 use sa_core::{
 	gbp::Country,
 	placement::{self, Asks, Catalog, Definition, Gcid},
@@ -29,10 +29,10 @@ use sa_panel::gmbs::GoogleCategory;
 use serde::Deserialize;
 
 use crate::{
-	api::{ApiError, ApiResult, Params, Unstudied},
+	api::{ApiResult, Code},
 	forward::{self, Services},
-	http::{ApiRoute, ApiState, Gate, Section},
-	signin::Caller,
+	http::{ApiRoute, ApiState, Flags, Gate, SLOW, USER},
+	signin::{Caller, Freshness},
 };
 
 /// The most of placement's refusal read.
@@ -40,14 +40,18 @@ const REFUSAL: usize = 64 * 1024;
 /// The most of placement's asks read: a round of a sweep is a few hundred searches.
 const ASKS: usize = 4 * 1024 * 1024;
 
+/// A pull spends: not on a permission revoked a minute ago.
+const PULL: Gate = sa_auth::Gate::USER.with(Flags {
+	freshness: Freshness::Fresh,
+	slow: true,
+});
+
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let (read, spend) = (Gate::section(Section::Study), Gate::section(Section::Pull));
 	vec![
-		ApiRoute::new(M::GET, "/placement/catalog", read, catalog),
-		ApiRoute::new(M::GET, "/placement/study", read.slow(), study),
-		// a pull spends: not on a permission revoked a minute ago
-		ApiRoute::new(M::POST, "/placement/study/pull", spend.fresh().slow(), pull),
+		ApiRoute::new(M::GET, "/placement/catalog", USER.needs(Study::Read), catalog),
+		ApiRoute::new(M::GET, "/placement/study", SLOW.needs(Study::Read), study),
+		ApiRoute::new(M::POST, "/placement/study/pull", PULL.needs(Study::Spend), pull),
 	]
 }
 
@@ -92,7 +96,7 @@ async fn catalog(State(s): State<ApiState>, Extension(caller): Extension<Caller>
 	if res.status() != StatusCode::OK {
 		return Err(refused(res, "/trades.json").await);
 	}
-	let body = to_bytes(res.into_body(), REFUSAL).await.map_err(|e| ApiError::BadGateway(format!("reading placement's catalog: {e}")))?;
+	let body = to_bytes(res.into_body(), REFUSAL).await.map_err(|e| Refusal::new(Code::BadGateway, format!("reading placement's catalog: {e}")))?;
 	Ok(Json(serde_json::from_slice(&body).map_err(|e| eyre::eyre!("placement's catalog: {e}"))?))
 }
 
@@ -140,14 +144,14 @@ async fn bought(s: &ApiState, caller: &Caller, def: &Definition, held: &sa_panel
 		if res.status() != StatusCode::OK {
 			return Err(refused(res, "/studies/asks").await);
 		}
-		let body = to_bytes(res.into_body(), ASKS).await.map_err(|e| ApiError::BadGateway(format!("reading placement's asks: {e}")))?;
+		let body = to_bytes(res.into_body(), ASKS).await.map_err(|e| Refusal::new(Code::BadGateway, format!("reading placement's asks: {e}")))?;
 		let Asks { since, asks } = serde_json::from_slice(&body).map_err(|e| eyre::eyre!("placement's asks of {}: {e}", def.id()))?;
 		if asks.is_empty() {
 			return Ok(());
 		}
 		let need = u64::try_from(asks.len()).expect("a count of searches");
 		if asked.is_empty() && need > held.budget() {
-			return Err(ApiError::Unaffordable(held.unaffordable(need)));
+			return Err(Refusal::new(Code::Unaffordable, held.unaffordable(need)));
 		}
 		for a in &asks {
 			// what was bought is answered, so asking it again would never end
@@ -155,9 +159,9 @@ async fn bought(s: &ApiState, caller: &Caller, def: &Definition, held: &sa_panel
 				return Err(eyre::eyre!("placement asked again for {} once it was bought", a.body).into());
 			}
 			held.buy(a, since).await.map_err(|e| match e {
-				sa_places::Error::Unpaid(why) => ApiError::Unaffordable(why),
-				e @ sa_places::Error::Unbought => ApiError::Conflict(e.to_string()),
-				e @ (sa_places::Error::Api { .. } | sa_places::Error::Exhausted(_)) => ApiError::BadGateway(format!("{e}")),
+				sa_places::Error::Unpaid(why) => Refusal::new(Code::Unaffordable, why),
+				e @ sa_places::Error::Unbought => Refusal::new(Code::Conflict, e.to_string()),
+				e @ (sa_places::Error::Api { .. } | sa_places::Error::Exhausted(_)) => Refusal::new(Code::BadGateway, format!("{e}")),
 				e => eyre::eyre!(e).wrap_err("buying a study's search").into(),
 			})?;
 		}
@@ -166,32 +170,32 @@ async fn bought(s: &ApiState, caller: &Caller, def: &Definition, held: &sa_panel
 
 /// The study of `at`, as the conductor's own areas and the caller's trades say it.
 async fn define(s: &ApiState, caller: &Caller, at: StudyIn) -> ApiResult<Definition> {
-	let area = s.panel.area(&at.area).await?.ok_or(ApiError::NotFound)?;
+	let area = s.panel.area(&at.area).await?.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
 	let country: Country = area
 		.country
 		.parse()
-		.map_err(|_| ApiError::Unstudied(Unstudied::Unstudied, format!("{} is in {}, where nothing is studied", area.name, area.country)))?; // no Country: none of placement's bases
+		.map_err(|_| Refusal::new(Code::Unstudied, format!("{} is in {}, where nothing is studied", area.name, area.country)))?; // no Country: none of placement's bases
 	let category = match at.category {
 		None => None,
 		Some(key) => {
 			let (trade, of) = key
 				.split_once('.')
 				.and_then(|(t, c)| Some((t.parse::<i64>().ok()?, c.parse::<Country>().ok()?)))
-				.ok_or_else(|| ApiError::BadRequest(format!("category {key:?}: not <trade id>.<country>")))?;
+				.ok_or_else(|| Refusal::new(Code::BadRequest, format!("category {key:?}: not <trade id>.<country>")))?;
 			let trades = s.panel.trades(caller.user_id).await?;
 			let (trade, c) = trades
 				.iter()
 				.find(|t| t.id == trade)
 				.and_then(|t| t.categories.iter().find(|c| c.country == of).map(|c| (t, c)))
-				.ok_or(ApiError::NotFound)?;
+				.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
 			let named = format!("{} · {of}", trade.name);
-			let study = c.study.clone().ok_or_else(|| ApiError::Unstudied(Unstudied::NoStudy, format!("{named} names no study")))?;
-			let primary = c.google_primary.ok_or_else(|| ApiError::Unstudied(Unstudied::NoGoogleCategory, format!("{named} has no Google category")))?;
+			let study = c.study.clone().ok_or_else(|| Refusal::new(Code::NoStudy, format!("{named} names no study")))?;
+			let primary = c.google_primary.ok_or_else(|| Refusal::new(Code::NoGoogleCategory, format!("{named} has no Google category")))?;
 			if c.keywords.is_empty() {
-				return Err(ApiError::Unstudied(Unstudied::NoKeywords, format!("{named} has no keyword")));
+				return Err(Refusal::new(Code::NoKeywords, format!("{named} has no keyword")));
 			}
 			if of != country {
-				return Err(ApiError::Unstudied(Unstudied::AnotherCountry, format!("{named} is not set up for {country}, where {} is", area.name)));
+				return Err(Refusal::new(Code::AnotherCountry, format!("{named} is not set up for {country}, where {} is", area.name)));
 			}
 			let gcid = |g: GoogleCategory| Gcid {
 				id: g.id.to_owned(),
@@ -227,20 +231,20 @@ fn json(def: &Definition) -> Body {
 
 /// `method path` of placement, as `caller`.
 async fn ask(s: &ApiState, caller: &Caller, method: Method, path: &str, body: Body) -> ApiResult<Response> {
-	let services: &Services = s.placement.as_ref().ok_or_else(|| ApiError::Unavailable("placement not connected".to_owned()))?;
+	let services: &Services = s.placement.as_ref().ok_or_else(|| Refusal::new(Code::Unavailable, "placement not connected".to_owned()))?;
 	let headers = HeaderMap::from_iter([(header::CONTENT_TYPE, HeaderValue::from_static("application/json"))]);
 	let user = forward::user(caller.clone(), Service::Placement);
 	services.send(Service::Placement, method, path, headers, Some(Principal::User(user)), body).await.map_err(|e| {
 		tracing::warn!(error = %e, "placement did not answer");
-		ApiError::BadGateway("placement did not answer".to_owned())
+		Refusal::new(Code::BadGateway, "placement did not answer".to_owned())
 	})
 }
 
 /// Placement's refusal of `path`, as the caller is told it.
-async fn refused(res: Response, path: &str) -> ApiError {
+async fn refused(res: Response, path: &str) -> Refusal<Code> {
 	#[derive(Deserialize)]
 	#[serde(rename_all = "snake_case")]
-	enum Code {
+	enum Theirs {
 		Unstudied,
 		Forbidden,
 		Internal,
@@ -248,20 +252,20 @@ async fn refused(res: Response, path: &str) -> ApiError {
 		Other,
 	}
 	#[derive(Deserialize)]
-	struct Theirs {
-		code: Code,
+	struct Refused {
+		code: Theirs,
 		error: String,
 	}
 	let status = res.status();
 	let body = match to_bytes(res.into_body(), REFUSAL).await {
 		Ok(b) => b,
-		Err(e) => return ApiError::BadGateway(format!("reading placement's answer to {path}: {e}")),
+		Err(e) => return Refusal::new(Code::BadGateway, format!("reading placement's answer to {path}: {e}")),
 	};
-	match serde_json::from_slice::<Theirs>(&body) {
-		Ok(Theirs { code: Code::Unstudied, error }) => ApiError::Unstudied(Unstudied::Unstudied, error),
-		Ok(Theirs { code: Code::Forbidden, .. }) => ApiError::Forbidden,
-		Ok(Theirs { code: Code::Internal, error }) => ApiError::BadGateway(format!("placement failed: {error}")),
+	match serde_json::from_slice::<Refused>(&body) {
+		Ok(Refused { code: Theirs::Unstudied, error }) => Refusal::new(Code::Unstudied, error),
+		Ok(Refused { code: Theirs::Forbidden, .. }) => Refusal::new(Code::Forbidden, "your permissions do not allow this"),
+		Ok(Refused { code: Theirs::Internal, error }) => Refusal::new(Code::BadGateway, format!("placement failed: {error}")),
 		// anything else is what the conductor built or signed
-		Ok(Theirs { code: Code::Other, .. }) | Err(_) => ApiError::Internal(eyre::eyre!("placement answered {path} with {status}: {}", String::from_utf8_lossy(&body))),
+		Ok(Refused { code: Theirs::Other, .. }) | Err(_) => Refusal::from(eyre::eyre!("placement answered {path} with {status}: {}", String::from_utf8_lossy(&body))),
 	}
 }

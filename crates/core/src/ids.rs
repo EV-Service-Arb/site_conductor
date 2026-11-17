@@ -5,7 +5,11 @@ use std::fmt;
 use crate::Invalid;
 
 /// [`is_slug`] as a JSON Schema `pattern`.
-const SLUG_PATTERN: &str = "^[a-z0-9][a-z0-9_-]{0,63}$";
+pub const SLUG_PATTERN: &str = "^[a-z0-9][a-z0-9_-]{0,63}$";
+
+/// [`SiteOrigin::parse`] as a JSON Schema `pattern`, but for a default port written out (`:443`),
+/// which only the URL's own origin drops.
+pub const SITE_ORIGIN_PATTERN: &str = r"^(https://([a-z0-9-]+\.)*[a-z][a-z0-9-]*|http://(localhost|127\.0\.0\.1))(:[0-9]{1,5})?$";
 
 /// A brand: aquafix, vifnet, … Lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize)]
@@ -113,22 +117,37 @@ mod tests {
 	}
 
 	#[test]
+	fn the_patterns_say_what_the_parsers_take() {
+		let slug = regex::Regex::new(SLUG_PATTERN).unwrap();
+		for s in ["aquafix", "a", "0-x_y", &"a".repeat(64), "", "Aquafix", "-x", "a b", &"a".repeat(65), "é"] {
+			assert_eq!(slug.is_match(s), is_slug(s), "{s:?}");
+		}
+		let origin = regex::Regex::new(SITE_ORIGIN_PATTERN).unwrap();
+		for o in ORIGINS.iter().chain(&NOT_ORIGINS).filter(|o| **o != "https://aquafix.top:443") {
+			assert_eq!(origin.is_match(o), SiteOrigin::parse(o).is_ok(), "{o:?}");
+		}
+	}
+
+	const ORIGINS: [&str; 4] = ["https://aquafix.top", "https://vifnet.site:8443", "http://localhost:59081", "http://127.0.0.1:9"];
+	const NOT_ORIGINS: [&str; 10] = [
+		"https://aquafix.top/",
+		"https://aquafix.top/fr",
+		"https://aquafix.top?x",
+		"https://Aquafix.top",
+		"https://aquafix.top:443",
+		"https://u@aquafix.top",
+		"https://1.2.3.4",
+		"http://aquafix.top",
+		"ftp://aquafix.top",
+		"aquafix.top",
+	];
+
+	#[test]
 	fn site_origins() {
-		for good in ["https://aquafix.top", "https://vifnet.site:8443", "http://localhost:59081", "http://127.0.0.1:9"] {
+		for good in ORIGINS {
 			assert_eq!(SiteOrigin::parse(good).map(|o| o.to_string()), Ok(good.to_owned()));
 		}
-		for bad in [
-			"https://aquafix.top/",
-			"https://aquafix.top/fr",
-			"https://aquafix.top?x",
-			"https://Aquafix.top",
-			"https://aquafix.top:443",
-			"https://u@aquafix.top",
-			"https://1.2.3.4",
-			"http://aquafix.top",
-			"ftp://aquafix.top",
-			"aquafix.top",
-		] {
+		for bad in NOT_ORIGINS {
 			assert!(SiteOrigin::parse(bad).is_err(), "{bad:?}");
 		}
 	}

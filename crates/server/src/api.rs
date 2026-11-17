@@ -1,65 +1,55 @@
 //! The conductor's own `/api/v1`: `/me`, the source keys and the connected sites
 //! (`connected`), and what every module's operations take and answer. JSON in and out; every
-//! request has passed the sign-in gate (`signin::gate`), so a [`Caller`] is in its extensions.
+//! request has passed its row's gate (`signin`'s `Vouch`), so a [`Caller`] is in its extensions.
 
 use std::{borrow::Cow, collections::BTreeSet};
 
 use axum::{
 	Extension, Json,
-	extract::{FromRequest, FromRequestParts, Path, Query, Request, State, rejection::JsonRejection},
-	http::{Method, StatusCode, request::Parts},
-	response::{IntoResponse, NoContent, Response},
+	extract::State,
+	http::{Method, StatusCode},
+	response::NoContent,
 };
 use ev_lib::api::{
-	Created, GenContext, JsonSchema, OpenApi, OperationInput, OperationOutput,
-	openapi::{Operation, Response as Answer, StatusCode as Status},
+	Body, Created, ErrorCode, Ids, JsonSchema, OpenApi, Refusal, Refuses,
 	schemars::{Schema, SchemaGenerator, json_schema},
 };
-use sa_auth::SourceKind;
+use sa_auth::{SourceKind, Sources};
 use sa_core::{
 	Invalid,
 	ids::{BrandId, SiteOrigin},
 };
 use sa_panel::{Panel, Refused};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize};
 
 use crate::{
 	connected,
-	http::{ApiRoute, ApiState, Gate, Section},
+	http::{ApiRoute, ApiState, FRESH, USER},
 	signin::Caller,
 };
 
-pub(crate) type ApiResult<T> = Result<T, ApiError>;
+pub(crate) type ApiResult<T> = Result<T, Refusal<Code>>;
 
-/// Why a request failed, as the front end is told: every JSON refusal the conductor writes itself.
-#[derive(Debug)]
-pub enum ApiError {
-	BadRequest(String),
+/// Why a request was refused, as a client is told: every refusal the conductor writes itself.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, strum::VariantArray)]
+#[serde(rename_all = "snake_case")]
+pub enum Code {
+	BadRequest,
 	/// No session, or one closed.
 	Unauthenticated,
 	/// A cookie's write without the page's CSRF header, or a socket from another origin.
 	Csrf,
 	Forbidden,
 	NotFound,
-	Conflict(String),
-	TooLarge(String),
-	TooMany(String),
+	Conflict,
+	TooLarge,
+	TooMany,
 	/// Not now: the message says until when.
-	Unavailable(String),
+	Unavailable,
 	/// No browser provider is configured: no browser route answers anything else.
 	BrowsersNotConnected,
 	/// What this answer stands on did not answer.
-	BadGateway(String),
-	/// A study placement cannot build, and why.
-	Unstudied(Unstudied, String),
-	/// A pull needs more than the balance affords.
-	Unaffordable(String),
-	Internal(eyre::Report),
-}
-
-/// Why a study cannot be built.
-#[derive(Clone, Copy, Debug)]
-pub enum Unstudied {
+	BadGateway,
 	/// The category names no placement trade to study it by.
 	NoStudy,
 	/// The category has no primary Google category.
@@ -71,183 +61,91 @@ pub enum Unstudied {
 	/// Nothing placement serves studies it: no such trade file, no base for the country, or the
 	/// trade refuses it.
 	Unstudied,
-}
-
-/// Which failure, for a client to act on; the status follows from it.
-#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ErrorCode {
-	BadRequest,
-	Unauthenticated,
-	Csrf,
-	Forbidden,
-	NotFound,
-	Conflict,
-	TooLarge,
-	TooMany,
-	Unavailable,
-	BrowsersNotConnected,
-	BadGateway,
-	NoStudy,
-	NoGoogleCategory,
-	NoKeywords,
-	AnotherCountry,
-	Unstudied,
+	/// A pull needs more than the balance affords.
 	Unaffordable,
 	Internal,
 }
 
-/// What every failed operation answers: `error` is for a person.
-#[derive(JsonSchema, Serialize)]
-#[schemars(rename = "Error")]
-pub struct ErrorDto {
-	code: ErrorCode,
-	error: String,
-}
-
-pub(crate) fn routes() -> Vec<ApiRoute> {
-	use Method as M;
-	let admin = Gate::section(Section::Admin);
-	vec![
-		ApiRoute::new(M::GET, "/me", Gate::USER, me),
-		ApiRoute::new(M::GET, "/openapi.json", Gate::USER, openapi),
-		ApiRoute::new(M::GET, "/sources", admin, list_sources),
-		ApiRoute::new(M::GET, "/sources/sites", admin, connected::sites),
-		// A key must not be minted or revoked on a permission revoked a moment ago.
-		ApiRoute::new(M::POST, "/sources", admin.fresh(), add_source),
-		ApiRoute::new(M::DELETE, "/sources/{key_id}", admin.fresh(), revoke_source),
-	]
-}
-
-impl IntoResponse for ApiError {
-	fn into_response(self) -> Response {
-		use ErrorCode as C;
-		let (status, code, msg) = match self {
-			Self::BadRequest(m) => (StatusCode::BAD_REQUEST, C::BadRequest, m),
-			Self::Unauthenticated => (StatusCode::UNAUTHORIZED, C::Unauthenticated, "sign in".to_owned()),
-			Self::Csrf => (StatusCode::FORBIDDEN, C::Csrf, "the page is out of date: reload it".to_owned()),
-			Self::Forbidden => (StatusCode::FORBIDDEN, C::Forbidden, "your permissions do not allow this".to_owned()),
-			Self::NotFound => (StatusCode::NOT_FOUND, C::NotFound, "not found".to_owned()),
-			Self::Conflict(m) => (StatusCode::CONFLICT, C::Conflict, m),
-			Self::TooLarge(m) => (StatusCode::PAYLOAD_TOO_LARGE, C::TooLarge, m),
-			Self::TooMany(m) => (StatusCode::TOO_MANY_REQUESTS, C::TooMany, m),
-			Self::Unavailable(m) => (StatusCode::SERVICE_UNAVAILABLE, C::Unavailable, m),
-			Self::BrowsersNotConnected => (StatusCode::SERVICE_UNAVAILABLE, C::BrowsersNotConnected, "browsers not connected".to_owned()),
-			Self::BadGateway(m) => (StatusCode::BAD_GATEWAY, C::BadGateway, m),
-			Self::Unstudied(why, m) => (
-				StatusCode::UNPROCESSABLE_ENTITY,
-				match why {
-					Unstudied::NoStudy => C::NoStudy,
-					Unstudied::NoGoogleCategory => C::NoGoogleCategory,
-					Unstudied::NoKeywords => C::NoKeywords,
-					Unstudied::AnotherCountry => C::AnotherCountry,
-					Unstudied::Unstudied => C::Unstudied,
-				},
-				m,
-			),
-			Self::Unaffordable(m) => (StatusCode::PAYMENT_REQUIRED, C::Unaffordable, m),
-			Self::Internal(e) => {
-				crate::report(&e, "the conductor's API");
-				(StatusCode::INTERNAL_SERVER_ERROR, C::Internal, "internal error".to_owned())
-			}
-		};
-		(status, Json(ErrorDto { code, error: msg })).into_response()
-	}
-}
-
-impl OperationOutput for ApiError {
-	type Inner = ErrorDto;
-
-	fn operation_response(ctx: &mut GenContext, op: &mut Operation) -> Option<Answer> {
-		Json::<ErrorDto>::operation_response(ctx, op)
-	}
-
-	fn inferred_responses(ctx: &mut GenContext, op: &mut Operation) -> Vec<(Option<Status>, Answer)> {
-		Self::operation_response(ctx, op).map(|r| (None, r)).into_iter().collect()
-	}
-}
-
-impl From<eyre::Report> for ApiError {
-	fn from(e: eyre::Report) -> Self {
-		Self::Internal(e)
-	}
-}
-
-impl From<Refused> for ApiError {
-	fn from(r: Refused) -> Self {
-		match r {
-			Refused::Invalid(m) => Self::BadRequest(m),
-			Refused::NotFound => Self::NotFound,
-			Refused::Forbidden => Self::Forbidden,
-			Refused::Conflict(m) => Self::Conflict(m),
-			Refused::TooLarge(m) => Self::TooLarge(m),
-			Refused::Unavailable(m) => Self::Unavailable(m),
-			Refused::Closed => Self::Unavailable(r.to_string()),
+impl ErrorCode for Code {
+	fn status(self) -> StatusCode {
+		match self {
+			Self::BadRequest => StatusCode::BAD_REQUEST,
+			Self::Unauthenticated => StatusCode::UNAUTHORIZED,
+			Self::Csrf | Self::Forbidden => StatusCode::FORBIDDEN,
+			Self::NotFound => StatusCode::NOT_FOUND,
+			Self::Conflict => StatusCode::CONFLICT,
+			Self::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+			Self::TooMany => StatusCode::TOO_MANY_REQUESTS,
+			Self::Unavailable | Self::BrowsersNotConnected => StatusCode::SERVICE_UNAVAILABLE,
+			Self::BadGateway => StatusCode::BAD_GATEWAY,
+			Self::NoStudy | Self::NoGoogleCategory | Self::NoKeywords | Self::AnotherCountry | Self::Unstudied => StatusCode::UNPROCESSABLE_ENTITY,
+			Self::Unaffordable => StatusCode::PAYMENT_REQUIRED,
+			Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
 		}
 	}
 }
 
-impl From<Invalid> for ApiError {
-	fn from(e: Invalid) -> Self {
-		Self::BadRequest(e.0)
+impl Refuses<eyre::Report> for Code {
+	fn refusal(e: eyre::Report) -> Refusal<Self> {
+		crate::report(&e, "the conductor's API");
+		Refusal::new(Self::Internal, "internal error")
 	}
 }
 
-/// A JSON body, refused in the shape every failure has.
-pub(crate) struct Body<T>(pub T);
-
-impl<T: DeserializeOwned, S: Send + Sync> FromRequest<S> for Body<T> {
-	type Rejection = ApiError;
-
-	async fn from_request(req: Request, state: &S) -> Result<Self, ApiError> {
-		Json::<T>::from_request(req, state).await.map(|Json(v)| Self(v)).map_err(|e: JsonRejection| match e.status() {
-			StatusCode::PAYLOAD_TOO_LARGE => ApiError::TooLarge(e.body_text()),
-			_ => ApiError::BadRequest(e.body_text()),
-		})
+impl Refuses<Refused> for Code {
+	fn refusal(r: Refused) -> Refusal<Self> {
+		let code = match r {
+			Refused::Invalid(_) => Self::BadRequest,
+			Refused::NotFound => Self::NotFound,
+			Refused::Forbidden => Self::Forbidden,
+			Refused::Conflict(_) => Self::Conflict,
+			Refused::TooLarge(_) => Self::TooLarge,
+			Refused::Unavailable(_) | Refused::Closed => Self::Unavailable,
+		};
+		Refusal::new(code, r.to_string())
 	}
 }
 
-impl<T: JsonSchema> OperationInput for Body<T> {
-	fn operation_input(ctx: &mut GenContext, op: &mut Operation) {
-		Json::<T>::operation_input(ctx, op);
+impl Refuses<Invalid> for Code {
+	fn refusal(e: Invalid) -> Refusal<Self> {
+		Refusal::new(Self::BadRequest, e.0)
 	}
 }
 
-/// A query string, refused in the shape every failure has.
-pub(crate) struct Params<T>(pub T);
-
-impl<T: DeserializeOwned, S: Send + Sync> FromRequestParts<S> for Params<T> {
-	type Rejection = ApiError;
-
-	async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, ApiError> {
-		Query::<T>::from_request_parts(parts, state)
-			.await
-			.map(|Query(v)| Self(v))
-			.map_err(|e| ApiError::BadRequest(e.body_text()))
+impl From<sa_auth::Hop> for Code {
+	fn from(h: sa_auth::Hop) -> Self {
+		match h {
+			sa_auth::Hop::BadRequest => Self::BadRequest,
+			sa_auth::Hop::Unauthenticated => Self::Unauthenticated,
+			sa_auth::Hop::Csrf => Self::Csrf,
+			sa_auth::Hop::Unavailable => Self::Unavailable,
+			sa_auth::Hop::BadGateway => Self::BadGateway,
+			sa_auth::Hop::Internal => Self::Internal,
+		}
 	}
 }
 
-impl<T: JsonSchema> OperationInput for Params<T> {
-	fn operation_input(ctx: &mut GenContext, op: &mut Operation) {
-		Query::<T>::operation_input(ctx, op);
+impl From<sa_auth::Denied> for Code {
+	fn from(d: sa_auth::Denied) -> Self {
+		match d {
+			sa_auth::Denied::Unauthenticated => Self::Unauthenticated,
+			sa_auth::Denied::Forbidden => Self::Forbidden,
+		}
 	}
 }
 
-/// The ids in a path, by their names in it; one not the caller's, or not an id at all, is a 404.
-pub(crate) struct Ids<T>(pub T);
-
-impl<T: DeserializeOwned + Send, S: Send + Sync> FromRequestParts<S> for Ids<T> {
-	type Rejection = ApiError;
-
-	async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, ApiError> {
-		Path::<T>::from_request_parts(parts, state).await.map(|Path(v)| Self(v)).map_err(|_| ApiError::NotFound)
-	}
-}
-
-impl<T: JsonSchema> OperationInput for Ids<T> {
-	fn operation_input(ctx: &mut GenContext, op: &mut Operation) {
-		Path::<T>::operation_input(ctx, op);
-	}
+pub(crate) fn routes() -> Vec<ApiRoute> {
+	use Method as M;
+	let admin = USER.needs(Sources::Manage);
+	vec![
+		ApiRoute::new(M::GET, "/me", USER, me),
+		ApiRoute::new(M::GET, "/openapi.json", USER, openapi),
+		ApiRoute::new(M::GET, "/sources", admin, list_sources),
+		ApiRoute::new(M::GET, "/sources/sites", admin, connected::sites),
+		// A key must not be minted or revoked on a permission revoked a moment ago.
+		ApiRoute::new(M::POST, "/sources", FRESH.needs(Sources::Manage), add_source),
+		ApiRoute::new(M::DELETE, "/sources/{key_id}", FRESH.needs(Sources::Manage), revoke_source),
+	]
 }
 
 /// A path's one `{id}`.
@@ -328,12 +226,14 @@ async fn list_sources(State(panel): State<Panel>) -> ApiResult<Json<SourcesDto>>
 #[serde(deny_unknown_fields)]
 pub(crate) struct AddSource {
 	/// A lowercase slug of 1–64 of `[a-z0-9_-]`, never reused.
+	#[schemars(pattern(sa_core::ids::SLUG_PATTERN))]
 	key_id: String,
 	#[schemars(with = "KeyedSourceKind")]
 	kind: SourceKind,
 	/// At least one.
-	brands: Vec<String>,
+	brands: BTreeSet<BrandId>,
 	/// A `site` key's landing, `https://<domain>[:port]`; no other kind has one.
+	#[schemars(pattern(sa_core::ids::SITE_ORIGIN_PATTERN))]
 	origin: Option<String>,
 }
 
@@ -366,21 +266,20 @@ async fn add_source(State(panel): State<Panel>, Extension(caller): Extension<Cal
 	let kind = b.kind;
 	// A key of kind panel would only let something outside pass its writes off as typed in by hand.
 	if !kind.keyed() {
-		return Err(ApiError::BadRequest(format!("a key of kind {kind} is not issued: it is written without one")));
+		return Err(Refusal::new(Code::BadRequest, format!("a key of kind {kind} is not issued: it is written without one")));
 	}
-	let brands = b.brands.iter().map(|b| BrandId::parse(b)).collect::<Result<BTreeSet<_>, _>>()?;
 	if !sa_core::ids::is_slug(&b.key_id) {
-		return Err(ApiError::BadRequest("key_id is a lowercase slug of 1–64 of [a-z0-9_-]".into()));
+		return Err(Refusal::new(Code::BadRequest, "key_id is a lowercase slug of 1–64 of [a-z0-9_-]"));
 	}
-	if brands.is_empty() {
-		return Err(ApiError::BadRequest("a source writes for at least one brand".into()));
+	if b.brands.is_empty() {
+		return Err(Refusal::new(Code::BadRequest, "a source writes for at least one brand"));
 	}
 	let origin = b.origin.as_deref().map(SiteOrigin::parse).transpose()?;
 	if origin.is_some() != (kind == SourceKind::Site) {
-		return Err(ApiError::BadRequest("a site key has an origin, and no other kind has one".into()));
+		return Err(Refusal::new(Code::BadRequest, "a site key has an origin, and no other kind has one"));
 	}
-	let Some(added) = panel.add_source(&b.key_id, kind, brands, origin).await? else {
-		return Err(ApiError::Conflict(format!("a source {} exists already", b.key_id)));
+	let Some(added) = panel.add_source(&b.key_id, kind, b.brands, origin).await? else {
+		return Err(Refusal::new(Code::Conflict, format!("a source {} exists already", b.key_id)));
 	};
 	tracing::info!(user_id = %caller.user_id, key_id = added.key_id, kind = %kind, "source added from the panel");
 	Ok(Created(NewSourceDto {
@@ -391,13 +290,14 @@ async fn add_source(State(panel): State<Panel>, Extension(caller): Extension<Cal
 
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct KeyId {
-	key_id: String,
+	#[schemars(pattern(sa_core::ids::SLUG_PATTERN))]
+	pub(crate) key_id: String,
 }
 
 /// Revokes a source key for good: its id is never issued again.
 async fn revoke_source(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(KeyId { key_id }): Ids<KeyId>) -> ApiResult<NoContent> {
 	if !panel.revoke_source(&key_id).await? {
-		return Err(ApiError::NotFound);
+		return Err(Refusal::new(Code::NotFound, "not found"));
 	}
 	tracing::info!(user_id = %caller.user_id, key_id, "source revoked from the panel");
 	Ok(NoContent)

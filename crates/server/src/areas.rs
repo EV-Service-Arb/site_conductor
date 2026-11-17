@@ -2,7 +2,7 @@
 //! caller's GBPs by one stays `kit`'s.
 
 use axum::{Json, extract::State, http::Method};
-use ev_lib::api::JsonSchema;
+use ev_lib::api::{Body, Ids, JsonSchema, Params, Refusal};
 use jiff::Timestamp;
 use sa_core::prices::{PlacesRequest, Spends};
 use sa_panel::{
@@ -13,9 +13,9 @@ use sa_places::{LatLng, Locality, Viewport};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Ids, Params},
+	api::{ApiResult, Code},
 	gmbs::{SuggestionDto, SuggestionsDto},
-	http::{ApiRoute, ApiState, Gate},
+	http::{ApiRoute, ApiState, USER},
 	signin::Caller,
 };
 
@@ -107,20 +107,20 @@ impl From<Locality> for LocalityDto {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::GET, "/areas", user, areas),
-		ApiRoute::new(M::GET, "/areas/{slug}", user, area),
-		ApiRoute::new(M::PUT, "/areas/{slug}", user, put_area),
-		ApiRoute::new(M::GET, "/kit/cities", user, cities),
-		ApiRoute::new(M::GET, "/kit/cities/{place_id}", user, city),
-		ApiRoute::new(M::GET, "/kit/locality", user, locality),
+		ApiRoute::new(M::GET, "/areas", USER, areas),
+		ApiRoute::new(M::GET, "/areas/{slug}", USER, area),
+		ApiRoute::new(M::PUT, "/areas/{slug}", USER, put_area),
+		ApiRoute::new(M::GET, "/kit/cities", USER, cities),
+		ApiRoute::new(M::GET, "/kit/cities/{place_id}", USER, city),
+		ApiRoute::new(M::GET, "/kit/locality", USER, locality),
 	]
 }
 
 /// A path's area.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct SlugIn {
+	#[schemars(pattern(sa_core::ids::SLUG_PATTERN))]
 	pub(crate) slug: String,
 }
 
@@ -138,7 +138,7 @@ async fn areas(State(panel): State<Panel>) -> ApiResult<Json<AreasDto>> {
 
 /// The area at `/<slug>/`.
 async fn area(State(panel): State<Panel>, Ids(SlugIn { slug }): Ids<SlugIn>) -> ApiResult<Json<AreaDto>> {
-	Ok(Json(panel.area(&slug).await?.ok_or(ApiError::NotFound)?.into()))
+	Ok(Json(panel.area(&slug).await?.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?.into()))
 }
 
 /// Draws the area at `/<slug>/`, a circle; its country its city's, else its centre's (Places, paid
@@ -147,7 +147,7 @@ async fn area(State(panel): State<Panel>, Ids(SlugIn { slug }): Ids<SlugIn>) -> 
 /// 400 a link the conductor's own pages hold, or a centre in no country; 409 someone else's area.
 async fn put_area(State(s): State<ApiState>, Spends(caller, by): Spends<PlacesRequest, Caller>, Ids(SlugIn { slug }): Ids<SlugIn>, Body(b): Body<PutAreaDto>) -> ApiResult<Json<AreaDto>> {
 	if crate::web::taken(&slug, s.web.as_ref()) {
-		return Err(ApiError::BadRequest(format!("/{slug}/ is one of the conductor's own pages")));
+		return Err(Refusal::new(Code::BadRequest, format!("/{slug}/ is one of the conductor's own pages")));
 	}
 	let new = NewArea {
 		name: b.name,
@@ -155,7 +155,7 @@ async fn put_area(State(s): State<ApiState>, Spends(caller, by): Spends<PlacesRe
 		radius_m: b.radius_m,
 		city: b.city,
 	};
-	let area = s.panel.put_area(by, &slug, new, Timestamp::now()).await??;
+	let area = s.sign_in.panel.put_area(by, &slug, new, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, slug, "area drawn");
 	Ok(Json(area.into()))
 }
@@ -191,5 +191,5 @@ async fn city(State(panel): State<Panel>, Spends(_, by): Spends<PlacesRequest, C
 
 /// The city or town a point lies in (Geocoding, paid by the caller). 404 outside any.
 async fn locality(State(panel): State<Panel>, Spends(_, by): Spends<PlacesRequest, Caller>, Params(at): Params<LatLng>) -> ApiResult<Json<LocalityDto>> {
-	Ok(Json(panel.locality_at(by, at).await??.ok_or(ApiError::NotFound)?.into()))
+	Ok(Json(panel.locality_at(by, at).await??.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?.into()))
 }

@@ -2,10 +2,9 @@
 
 import { type NavSection, ShellNav, cn } from "@evinvest/uikit";
 import { Store } from "lucide-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 import { useT, nav } from "@/shared/i18n";
+import { ViewLink, usePath } from "@/shared/lib/location";
 
 import { toggleSidebar } from "../model/sidebar";
 
@@ -18,7 +17,7 @@ import { GmbTree } from "./gmb-tree";
  */
 export function Outline({ folded, onNavigate, className }: { folded: boolean; onNavigate?: () => void; className?: string }) {
   const t = useT();
-  const pathname = usePathname();
+  const pathname = usePath();
   const sections: NavSection[] = [
     ...useApps(onNavigate).flatMap((a) => (a.here ? [a.section] : "content" in a.section ? [{ ...a.section, hidden: true }] : [])),
     { id: "gbps", label: t(nav.gbps, "GBPs"), icon: Store, content: <GmbTree {...(onNavigate && { onNavigate })} /> },
@@ -27,7 +26,7 @@ export function Outline({ folded, onNavigate, className }: { folded: boolean; on
     <ShellNav
       groups={sections}
       pathname={pathname}
-      linkComponent={Link}
+      linkComponent={ViewLink}
       unfold={folded ? toggleSidebar : undefined}
       labels={{ primary: t(nav.outline, "Outline") }}
       {...(onNavigate && { onNavigate: () => onNavigate() })}

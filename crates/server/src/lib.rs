@@ -6,6 +6,7 @@
 //! A library target too, so tests can serve the real router in-process.
 
 pub mod access;
+mod admin;
 pub mod alerts;
 pub mod api;
 pub mod areas;

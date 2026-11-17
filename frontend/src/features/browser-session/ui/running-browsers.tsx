@@ -1,13 +1,13 @@
 "use client";
 
 import { StatusItem } from "@evinvest/uikit";
-import Link from "next/link";
 
 import { useGmails, browser } from "@/entities/gmb";
-import { api, ok } from "@/shared/api";
+import { api } from "@/shared/api";
 import type { Gmail } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
-import { useResource } from "@/shared/lib/use-resource";
+import { ViewLink } from "@/shared/lib/location";
+import { useResource } from "@evinvest/api/react";
 
 /** The hotbar's running work: each browser up, opening its gmail's Browser tab. Only a gmail whose browser passed its check can start one. */
 export function RunningBrowsers() {
@@ -18,11 +18,11 @@ export function RunningBrowsers() {
 
 function Running({ gmail }: { gmail: Gmail }) {
   const t = useT();
-  const connections = useResource(`connections.${gmail.id}`, () => ok(api.GET("/gmails/{id}/connections", { params: { path: { id: gmail.id } } })), "connections", { live: ["gmails"] });
+  const connections = useResource(api, "/gmails/{id}/connections", { params: { path: { id: gmail.id } }, keep: true });
   if (connections.status !== "ok" || connections.data.browser?.running == null) return null;
   return (
-    <Link href={`/?account=${gmail.id}&tab=browser`} className="rounded outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+    <ViewLink to={{ view: "home", params: { account: gmail.id, tab: "browser" } }} className="rounded outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
       <StatusItem tone="positive">{t(browser.status, "Browser · {gmail}", { gmail: gmail.gmail })}</StatusItem>
-    </Link>
+    </ViewLink>
   );
 }

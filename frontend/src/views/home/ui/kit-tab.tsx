@@ -3,10 +3,10 @@
 import { Badge, Skeleton, cn } from "@evinvest/uikit";
 
 import { KitTargetSegment, type Listed, kit, photoSrc } from "@/entities/gmb";
-import { api, ok } from "@/shared/api";
+import { api } from "@/shared/api";
 import type { KitRanked } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
-import { useResource } from "@/shared/lib/use-resource";
+import { useResource } from "@evinvest/api/react";
 import { ErrorState } from "@/shared/ui/error-state";
 import { Qr } from "@/shared/ui/qr";
 
@@ -18,7 +18,7 @@ const HINT = "font-normal tracking-normal normal-case";
 export function KitTab({ listed }: { listed: Listed }) {
   const t = useT();
   const { gmb } = listed;
-  const res = useResource(`kit.gmb.${gmb.id}`, () => ok(api.GET("/gmbs/{id}/kit", { params: { path: { id: gmb.id } } })), `kit.gmb.${gmb.id}`, { focus: true });
+  const res = useResource(api, "/gmbs/{id}/kit", { params: { path: { id: gmb.id } } });
   if (res.status === "loading") return <Skeleton className="h-64 w-full max-w-3xl" />;
   if (res.status === "error") return <ErrorState failure={res.failure} onRetry={res.reload} />;
   const k = res.data;

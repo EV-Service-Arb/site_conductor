@@ -8,7 +8,7 @@ use std::{borrow::Cow, sync::LazyLock};
 
 use axum::{Extension, Json, extract::State, http::Method};
 use ev_lib::api::{
-	JsonSchema, Upserted,
+	Body, JsonSchema, Refusal, Upserted,
 	schemars::{Schema, SchemaGenerator, json_schema},
 };
 use jiff::Timestamp;
@@ -17,8 +17,8 @@ use sa_panel::{Panel, access::AccessRequest};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-	api::{ApiError, ApiResult, Body},
-	http::{ApiRoute, Gate},
+	api::{ApiResult, Code},
+	http::{ApiRoute, USER},
 	signin::Caller,
 };
 
@@ -66,8 +66,8 @@ impl JsonSchema for Need {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	vec![
-		ApiRoute::new(Method::POST, "/access/requests", Gate::USER, request_access),
-		ApiRoute::new(Method::GET, "/access/requests/mine", Gate::USER, my_access_requests),
+		ApiRoute::new(Method::POST, "/access/requests", USER, request_access),
+		ApiRoute::new(Method::GET, "/access/requests/mine", USER, my_access_requests),
 	]
 }
 
@@ -106,10 +106,10 @@ pub(crate) struct AccessRequestsDto {
 ///
 /// 400 a need neither a permission nor an alias of the sa catalog; 409 one the caller holds already.
 async fn request_access(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(Ask { need }): Body<Ask>) -> ApiResult<Upserted<AccessRequestDto>> {
-	let held = holds(&caller.permissions, &need).ok_or_else(|| ApiError::BadRequest(format!("{need:?} is no permission or alias of the sa catalog")))?;
+	let held = holds(&caller.permissions, &need).ok_or_else(|| Refusal::new(Code::BadRequest, format!("{need:?} is no permission or alias of the sa catalog")))?;
 	panel.pending_access(caller.user_id, |n| holds(&caller.permissions, n) == Some(true)).await?;
 	if held {
-		return Err(ApiError::Conflict(format!("you hold {need} already")));
+		return Err(Refusal::new(Code::Conflict, format!("you hold {need} already")));
 	}
 	let (r, made) = panel.request_access(caller.user_id, &caller.email, &caller.preferred_name, &need, Timestamp::now()).await?;
 	let r = AccessRequestDto::from(r);

@@ -1,28 +1,24 @@
 # Running the stack locally
 
-The conductor with its Grafana, sites_panel, review_archive and both landings (aquafix, vifnet)
-on one machine, wired as in the cluster: a lead posted on a landing reaches sites_panel through
+The conductor with its Grafana, sites_panel, review_archive and the landings (aquafix, vifnet,
+debouchage) on one machine, wired as in the cluster: a lead posted on a landing reaches sites_panel through
 the conductor's ingest, a place's phone or hours edited on the sites page shows on the landing
 through sites' `/api/internal`, review_archive's overview and boards draw in the conductor's
-Grafana, and the conductor's GMBs and tokens reach review_archive. No concierge, no PostHog, no Telegram, no playbook (its forward answers 502), no Google for review_archive
+Grafana, and the conductor's GMBs and tokens reach review_archive. No concierge, no PostHog, no Telegram, no Google for review_archive
 (review_archive scans nothing): the conductor signs you in by itself (dev sign-in, below).
 
 ## Prerequisites
 
 - Nix with flakes. Everything else (Rust, Node, the sites' toolchains) comes from the flakes.
-- The others checked out beside this one, as `_sa/` holds them:
+- The siblings' checkouts named in `_.siblings-local.json` at this checkout's root (gitignored; gen reads
+  their committed documents from it too):
 
-  ```text
-  _sa/
-    site_conductor/  this repository (its worktrees work too: the others are found beside the main checkout)
-    sites/panel/     sites_panel
-    review_archive/  review_archive (skipped, with a message, when missing)
-    gmaps_optimal_placement/  placement, the home map's overlay (likewise; its first build takes minutes)
-    sites/aquafix/   Service-Arb/aquafix, up to date — the Next.js (kitstart) site
-    sites/vifnet/    Service-Arb/vifnet, likewise
+  ```json
+  { "sites": "<sites_panel>", "review_archive": "<review_archive>", "placement": "<gmaps_optimal_placement>", "playbook": "<playbook>" }
   ```
 
-  Elsewhere: `SITES_DIR=… REVIEW_ARCHIVE_DIR=… PLACEMENT_DIR=… AQUAFIX_DIR=… VIFNET_DIR=… nix run .#local-stack`. A landing checkout
+  A sibling whose checkout is missing is skipped with a message. The landings, `sites/aquafix/`,
+  `sites/vifnet/` and `sites/debouchage/`, sit beside the main checkout (`AQUAFIX_DIR=… VIFNET_DIR=… DEBOUCHAGE_DIR=…` elsewhere); a landing checkout
   without `package.json` (the old Rust sites) is skipped with a message: `git pull` it.
 - Each part's port free: the one its own dev shell sets (docs/port_range.md).
 
@@ -40,8 +36,8 @@ nix run .#local-stack -- --spend-real-quota-i-am-certain   # buy the Google answ
 ```
 
 A stack already up on the ports is reported, and the command exits: use it. The URLs to open
-are what it prints; below, `<conductor>`, `<sites_panel>`, `<aquafix>` and `<vifnet>` stand for
-those origins.
+are what it prints; below, `<conductor>`, `<sites_panel>`, `<aquafix>`, `<vifnet>` and `<debouchage>`
+stand for those origins.
 
 `--watch` builds every part from its checkout instead of with Nix: the conductor, sites_panel
 and review_archive with cargo, each restarted when its crates change; review_archive's and the
@@ -62,11 +58,10 @@ checkout's) is stopped, together with the run that started it and whatever else 
 and this checkout's take their place. A peer already answering `/health` on its port is used as it
 is; the rest are started under `--watch`, and Ctrl-C stops only those. Something else on the
 conductor's ports is let be. The peers are the services whose bundles the front end
-mounts — `devPeers` in flake.nix — each from `../<name>` beside the main checkout; one not there
-is skipped with a warning. `devUsers` in flake.nix gives a user (`id -un`) another `path` for a
-peer (relative to the main checkout, or absolute), or a `command`, run as is in the peer's
-checkout in place of the stack's own serve, which must answer on the port its dev shell sets and
-watch by itself. `SITES_DIR` and `REVIEW_ARCHIVE_DIR` still win. `--port` takes two ports of
+mounts — `devPeers` in flake.nix — each from its `_.siblings-local.json` checkout; one not there
+is skipped with a warning. `devUsers` in flake.nix gives a user (`id -un`) a `command` for a peer,
+run as is in its checkout in place of the stack's own serve, which must answer on the port its dev
+shell sets and watch by itself. `--port` takes two ports of
 `SA_PORT_RANGE` (docs/port_range.md) and a state of its own, `.local-port-<n>/`: two conductors
 never share a `panel.db`. Next runs one `next dev` per `frontend/`: `--port` beside a dev stack of
 the same checkout fails to start its front end; run it from another checkout (a worktree). The concierge and banking bundles come from the platform's origin, so
@@ -83,12 +78,14 @@ What it does (`scripts/local-stack.sh`, which the flake app runs as is):
    landing's `<site>-leads.db`, review_archive's data dir in `review_archive/`, and the logs in
    `logs/`. It persists between runs; `--reset` wipes it. A fresh `panel.db` imports an empty
    document from review_archive, which opens tokens and GMBs.
-2. Seeds, idempotently: the sources `aquafix-local` (brand `aquafix`, origin
-   `<aquafix>`) and `vifnet-local` (brand `vifnet`, origin `<vifnet>`)
+2. Starts playbook_web from its checkout (`_.siblings-local.json`'s `playbook`) and the conductor, whose `/mcp` then lists playbook's tools; without the checkout its forward answers 502. Then seeds, idempotently, over HTTP as the dev admin (`/auth/login?as=`; only with `--role admin`, a new state needs it): the sources `aquafix-local` (brand `aquafix`, origin
+   `<aquafix>`) `vifnet-local` (brand `vifnet`, origin `<vifnet>`) and `debouchage-local`
+   (brand `debouchage`, origin `<debouchage>`)
    in the conductor, each secret kept in `.local/secrets/` and reused, a key from an older run
    given its origin; the
    places `aquafix/{royat, clermont-ferrand, desgenettes, lyon-est, la-mouche, lyon-nord}` and
-   `vifnet/vifnet` in sites_panel, registered with nothing set (`sites_panel place register`).
+   `vifnet/vifnet` and `debouchage/clermont-ferrand` in sites_panel, registered with nothing set (through the conductor's `/api/sites/places`), and
+   gmaps_optimal_placement's cached answers into the queries cache (each as of its file's time).
 3. Starts `sites_panel serve` (its bundle from `PANEL_MFE_DIR`, the conductor's public key in
    `PANEL_ASSERTION_KEYS`), `review_archive serve` likewise (a headless Chromium on a signed-out
    profile: its Maps walks fail and say so), then `panel serve` in development, with dev sign-in, a signing key for this machine alone, `PANEL_SITES_URL`
@@ -134,6 +131,7 @@ pulling review_archive's dashboards into it.
 | aquafix, a point | `<aquafix>` with the point's slug before `localhost`, e.g. `http://royat.localhost:<port>/fr` |
 | aquafix, the brand page | `<aquafix>/fr` |
 | vifnet | `<vifnet>/fr` |
+| debouchage | `<debouchage>/fr` |
 
 `*.localhost` resolves to this machine in every current browser and in curl; nothing to add
 to `/etc/hosts`.
@@ -155,7 +153,7 @@ An unknown permission fails the boot, named. The account menu shows the user as 
 The binary refuses it at start (exit 78, every command) in any `APP_ENV` but `development`,
 beside any concierge variable, and unless `PANEL_PUBLIC_ORIGIN` is `http://localhost[:port]`
 or `http://127.0.0.1[:port]` — so it cannot be switched on in the image, which sets
-`APP_ENV=production`. `cargo test -p sa_server --test dev_sign_in` holds the binary to it.
+`APP_ENV=production`. `cargo test -p sa_server --test it dev_sign_in::` holds the binary to it.
 
 Without the script, the conductor alone (no forward, so no ingest and no sites), in the dev shell,
 which sets `PANEL_BIND`:
@@ -169,8 +167,7 @@ PANEL_WEB_DIR="$(nix build .#frontend --print-out-paths)" panel serve
 The front end's dev server instead of the export is `--watch`. By hand:
 `cd frontend && PANEL_DEV_BACKEND=<conductor> npm run dev` serves on the dev shell's
 `PANEL_WEB_PORT`; the sign-in's redirect goes to `PANEL_PUBLIC_ORIGIN`, so run the conductor as
-above with `PANEL_PUBLIC_ORIGIN=http://localhost:$PANEL_WEB_PORT`. `npm run dev:stub` in
-`frontend/` stands in for the backend instead.
+above with `PANEL_PUBLIC_ORIGIN=http://localhost:$PANEL_WEB_PORT`.
 
 A session in curl (what a browser does):
 
@@ -199,8 +196,8 @@ replicated, off its volume over ssh (`PROD_SSH` in the script). Everyone's data 
 sign-in is prod's `admin@evinvest.ltd`. What prod sealed under its own `PANEL_DATA_KEY` (prod's
 sessions, its sources' secrets, sites' Google tokens) does not open here: the landings sign with
 the stack's own `<brand>-local` keys. Nothing walks Maps, nothing is told to Telegram. Prod's
-GMBs come without the cache that located them: `panel gmb locate` (the stack's `PANEL_DB_PATH`
-and data key) asks for their points once.
+GMBs come without the cache that located them: `POST /admin/gmbs/locate`, as the dev admin, asks
+for their points once.
 
 ## Google
 
@@ -238,7 +235,7 @@ With the stack up:
 3. Open `<conductor>/sites/leads`: the lead is there, stage *created*, brand aquafix,
    location royat, with what you typed — it came in live.
 
-The same for vifnet at `<vifnet>/fr`. Without a browser, the form's no-JS path:
+The same for vifnet at `<vifnet>/fr`, and debouchage at `<debouchage>/fr`. Without a browser, the form's no-JS path:
 
 ```sh
 t=$(( $(date +%s) * 1000 - 5000 ))   # rendered five seconds ago, as a person would have
@@ -269,7 +266,7 @@ what it checks).
 1. `curl -s <aquafix>/.well-known/sa-site` answers aquafix's own report: the state of
    each place, of pricing and of experiments as it reads them from sites_panel (`live`, `empty`,
    `withdrawn`; `down` with why, `unset` without `SITES_PANEL_INTERNAL_URL`).
-2. Open `<conductor>/sources`: the Connected sites table shows both keys with that
+2. Open `<conductor>/sources`: the Connected sites table shows every key with that
    report, kitstart's version, the last event sites took from each key and the last time each
    brand's data was read from sites' `/api/internal`.
 
@@ -291,7 +288,7 @@ Production has no such bypass: there, wait out the 600 s.
 - **`port … is taken`**: another stack's part, or something else —
   `lsof -nP -iTCP:<port> -sTCP:LISTEN` names it.
 - **A site is skipped**: its checkout is missing or predates the Next site; `git pull` it, or
-  point `AQUAFIX_DIR` / `VIFNET_DIR` at another one.
+  point `AQUAFIX_DIR` / `VIFNET_DIR` / `DEBOUCHAGE_DIR` at another one.
 - **`source … exists but its secret is not in .local/secrets`**: the secret is shown once and
   `.local/secrets/` lost it. `--reset`.
 - **The lead does not arrive**: look at the outbox row (`webhook_outbox` in

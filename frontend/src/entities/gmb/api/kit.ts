@@ -1,15 +1,15 @@
-import { http } from "@/shared/api";
-import type { Country, paths } from "@/shared/api/schema";
+import { api, ok } from "@/shared/api";
+import openapi from "@/shared/api/openapi.json";
+import type { Country } from "@/shared/api/schema";
 
-/** A photo's largest size, as the server takes it. */
-export const PHOTO_MAX = 10 << 20;
+const PHOTOS = openapi.paths["/trades/{id}/{country}/kit/photos"].post.requestBody.content;
 
-const PHOTOS = "/trades/{id}/{country}/kit/photos" satisfies keyof paths;
-const photos = (trade: number, country: Country) => `/api/v1${PHOTOS.replace("{id}", String(trade)).replace("{country}", country)}`;
+/** A photo's largest size in bytes for its `type`, as the document's body has it; `undefined`: a type the server does not take. */
+export const photoMax = (type: string): number | undefined => Object.entries(PHOTOS).find(([t]) => t === type)?.[1].schema.maxLength;
 
-/** Re-encoded by the server: a JPEG, ≤ 2048 px, no EXIF. Not through `api`: fetch tells nothing of an upload's progress. */
-export function uploadPhoto(trade: number, country: Country, photo: Blob, onProgress: (sent: number) => void): Promise<void> {
-  return http.upload("POST", photos(trade, country), photo, photo.type || "application/octet-stream", onProgress);
+/** Re-encoded by the server: a JPEG, ≤ 2048 px, no EXIF. */
+export async function uploadPhoto(trade: number, country: Country, photo: Blob, onProgress: (sent: number) => void): Promise<void> {
+  await ok(api.upload("post", "/trades/{id}/{country}/kit/photos", { params: { path: { id: trade, country } }, body: photo, onProgress }));
 }
 
-export const photoSrc = (trade: number, country: Country, photo: number) => `${photos(trade, country)}/${photo}.jpg`;
+export const photoSrc = (trade: number, country: Country, photo: number) => api.url("/trades/{id}/{country}/kit/photos/{file}", { path: { id: trade, country, file: `${photo}.jpg` } }).href;

@@ -5,10 +5,10 @@ import { Check } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { access } from "@/entities/session";
-import { ApiError, api, ok, switchAccountPath } from "@/shared/api";
+import { Refused, api, ok, switchAccountPath } from "@/shared/api";
 import type { AccessRequest, Caller, Need } from "@/shared/api/schema";
 import { useLocale, useT, state } from "@/shared/i18n";
-import { useResource } from "@/shared/lib/use-resource";
+import { useResource } from "@evinvest/api/react";
 import { ErrorState } from "@/shared/ui/error-state";
 import { failureText } from "@/shared/ui/failure-text";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -22,11 +22,11 @@ const RECHECK_MS = 30_000;
  * `continueTo` (a path already checked by `safeContinue`), or "you're in" without one.
  */
 export function RequestAccess({ need, continueTo }: { need: Need; continueTo: string | null }) {
-  const me = useResource("me", () => ok(api.GET("/me")));
-  const mine = useResource("access.mine", async () => (await ok(api.GET("/access/requests/mine"))).requests);
+  const me = useResource(api, "/me");
+  const mine = useResource(api, "/access/requests/mine");
   const [sent, setSent] = useState<AccessRequest | null>(null);
   const held = me.status === "ok" && holds(me.data.permissions, need);
-  const pending = sent ?? (mine.status === "ok" ? (mine.data.find((r) => r.need === need) ?? null) : null);
+  const pending = sent ?? (mine.status === "ok" ? (mine.data.requests.find((r) => r.need === need) ?? null) : null);
   const waiting = pending !== null && !held;
   const reloadMe = me.reload;
 
@@ -39,8 +39,8 @@ export function RequestAccess({ need, continueTo }: { need: Need; continueTo: st
     return () => clearInterval(id);
   }, [waiting, reloadMe]);
 
-  if (me.status === "error" && me.failure.kind !== "unauthenticated") return <Frame><ErrorState failure={me.failure} onRetry={me.reload} /></Frame>;
-  if (mine.status === "error" && mine.failure.kind !== "unauthenticated") return <Frame><ErrorState failure={mine.failure} onRetry={mine.reload} /></Frame>;
+  if (me.status === "error" && me.failure.code !== "unauthenticated") return <Frame><ErrorState failure={me.failure} onRetry={me.reload} /></Frame>;
+  if (mine.status === "error" && mine.failure.code !== "unauthenticated") return <Frame><ErrorState failure={mine.failure} onRetry={mine.reload} /></Frame>;
   // A 401 has already sent the browser to sign in; a need held with somewhere to go is on its way there.
   if (me.status !== "ok" || mine.status !== "ok" || (held && continueTo !== null)) return <Frame><Skeleton className="h-96 w-full" /></Frame>;
   if (held) return <Granted />;
@@ -111,8 +111,8 @@ function Asking({
       },
       (e: unknown) => {
         setBusy(false);
-        if (e instanceof ApiError && e.failure.kind === "conflict") return onHeld(); // held already: /me says so on its next read
-        setFailure(e instanceof ApiError ? failureText(e.failure, t) : t(state.error, "Could not load this. {detail}", { detail: String(e) }));
+        if (e instanceof Refused && e.failure.code === "conflict") return onHeld(); // held already: /me says so on its next read
+        setFailure(e instanceof Refused ? failureText(e.failure, t) : t(state.error, "Could not load this. {detail}", { detail: String(e) }));
       },
     );
   };

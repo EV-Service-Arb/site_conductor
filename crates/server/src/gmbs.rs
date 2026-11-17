@@ -3,10 +3,10 @@
 //!
 //! Before the import from review_archive, the writes answer 503.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
-use ev_lib::api::{Created, JsonSchema};
+use ev_lib::api::{Body, Created, Ids, JsonSchema, Params, Refusal};
 use jiff::Timestamp;
 use sa_core::{
 	gbp::{Country, GmailRole, OnGoogle, State as GbpState},
@@ -19,10 +19,11 @@ use sa_panel::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Id, Ids, Params},
-	http::{ApiRoute, ApiState, Gate},
+	api::{ApiResult, Code, Id},
+	http::{ApiRoute, ApiState, USER},
 	signin::Caller,
 	tokens::BalanceDto,
+	view::Tab,
 };
 
 /// `GET /map`: the Maps JS key this page loads on, referrer-restricted, and its account, which the
@@ -71,6 +72,38 @@ pub struct GmbDto {
 	pub location: Option<sa_panel::gmbs::Point>,
 	/// A draft's candidate spots, in order, its location the first's; none past a draft.
 	pub spots: Vec<sa_panel::gmbs::Spot>,
+	/// Its window's tabs, in order: its state's.
+	pub tabs: Vec<Tab>,
+	/// A draft's must-haves not ready; `null` past a draft.
+	pub readiness: Option<ReadinessDto>,
+}
+
+/// What a draft needs before Google's form: the form's order, then what stands behind it.
+#[derive(Clone, Copy, Debug, Eq, JsonSchema, PartialEq, Serialize, strum::VariantArray)]
+#[serde(rename_all = "snake_case")]
+pub enum MustHave {
+	Name,
+	/// Its trade set up in its country, with Google's category.
+	Category,
+	Areas,
+	Phone,
+	/// A landing page of sites' shows it.
+	Site,
+	/// The address its film is shot at, and whether customers visit.
+	HiddenAddress,
+	Film,
+	Gmail,
+	/// Its gmail's browser set up.
+	Profile,
+}
+
+/// A draft's must-haves, in [`MustHave`]'s order, that are not ready.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Readiness")]
+pub struct ReadinessDto {
+	pub missing: Vec<MustHave>,
+	/// Not known now: sites could not be read.
+	pub unknown: Vec<MustHave>,
 }
 
 /// A trade of the caller's: Plumbing, set up in some countries.
@@ -139,6 +172,8 @@ pub struct GmailDto {
 	pub created_at: String,
 	/// Its browser set up, its last check through: the GBPs' `profile` must-have.
 	pub browser: bool,
+	/// Its window's tabs, in order.
+	pub tabs: Vec<Tab>,
 }
 
 /// `GET /gmails`.
@@ -208,40 +243,69 @@ impl From<GoogleCategory> for GoogleCategoryDto {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::GET, "/gmails", user, gmails),
-		ApiRoute::new(M::POST, "/gmails", user, add_gmail),
-		ApiRoute::new(M::PATCH, "/gmails/{id}", user, set_gmail_role),
-		ApiRoute::new(M::DELETE, "/gmails/{id}", user, remove_gmail),
-		ApiRoute::new(M::GET, "/gmbs/resolve", user, resolve_place),
-		ApiRoute::new(M::GET, "/gmbs/suggest", user, suggest_places),
-		ApiRoute::new(M::POST, "/gmbs", user, create_gmb),
-		ApiRoute::new(M::POST, "/gmails/{id}/gmbs", user, add_gmb),
-		ApiRoute::new(M::PATCH, "/gmbs/{id}", user, edit_gmb),
-		ApiRoute::new(M::PUT, "/gmbs/{id}/state", user, move_gmb),
-		ApiRoute::new(M::DELETE, "/gmbs/{id}", user, remove_gmb),
-		ApiRoute::new(M::PUT, "/gmbs/enabled", user, switch_gmbs),
-		ApiRoute::new(M::PUT, "/gmbs/trade", user, set_gmb_trades),
-		ApiRoute::new(M::PUT, "/gmbs/{id}/spots", user, set_spots),
-		ApiRoute::new(M::PUT, "/gmbs/{id}/location", user, place_gmb),
-		ApiRoute::new(M::DELETE, "/gmbs/{id}/location", user, unplace_gmb),
-		ApiRoute::new(M::PUT, "/gmbs/{id}/country", user, set_gmb_country),
-		ApiRoute::new(M::GET, "/map", user, map_key),
-		ApiRoute::new(M::POST, "/map/street_view", user, street_view),
-		ApiRoute::new(M::GET, "/trades", user, trades),
-		ApiRoute::new(M::POST, "/trades", user, add_trade),
-		ApiRoute::new(M::PATCH, "/trades/{id}", user, rename_trade),
-		ApiRoute::new(M::DELETE, "/trades/{id}", user, delete_trade),
-		ApiRoute::new(M::PUT, "/trades/{id}/{country}", user, set_up_trade),
-		ApiRoute::new(M::DELETE, "/trades/{id}/{country}", user, remove_category),
-		ApiRoute::new(M::GET, "/google-categories/{country}", user, google_categories),
+		ApiRoute::new(M::GET, "/gmails", USER, gmails),
+		ApiRoute::new(M::POST, "/gmails", USER, add_gmail),
+		ApiRoute::new(M::PATCH, "/gmails/{id}", USER, set_gmail_role),
+		ApiRoute::new(M::DELETE, "/gmails/{id}", USER, remove_gmail),
+		ApiRoute::new(M::GET, "/gmbs/resolve", USER, resolve_place),
+		ApiRoute::new(M::GET, "/gmbs/suggest", USER, suggest_places),
+		ApiRoute::new(M::POST, "/gmbs", USER, create_gmb),
+		ApiRoute::new(M::POST, "/gmails/{id}/gmbs", USER, add_gmb),
+		ApiRoute::new(M::PATCH, "/gmbs/{id}", USER, edit_gmb),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/state", USER, move_gmb),
+		ApiRoute::new(M::DELETE, "/gmbs/{id}", USER, remove_gmb),
+		ApiRoute::new(M::PUT, "/gmbs/enabled", USER, switch_gmbs),
+		ApiRoute::new(M::PUT, "/gmbs/trade", USER, set_gmb_trades),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/spots", USER, set_spots),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/location", USER, place_gmb),
+		ApiRoute::new(M::DELETE, "/gmbs/{id}/location", USER, unplace_gmb),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/country", USER, set_gmb_country),
+		ApiRoute::new(M::GET, "/map", USER, map_key),
+		ApiRoute::new(M::POST, "/map/street_view", USER, street_view),
+		ApiRoute::new(M::GET, "/trades", USER, trades),
+		ApiRoute::new(M::POST, "/trades", USER, add_trade),
+		ApiRoute::new(M::PATCH, "/trades/{id}", USER, rename_trade),
+		ApiRoute::new(M::DELETE, "/trades/{id}", USER, delete_trade),
+		ApiRoute::new(M::PUT, "/trades/{id}/{country}", USER, set_up_trade),
+		ApiRoute::new(M::DELETE, "/trades/{id}/{country}", USER, remove_category),
+		ApiRoute::new(M::GET, "/google-categories/{country}", USER, google_categories),
 	]
 }
 
-impl From<Gmb> for GmbDto {
-	fn from(b: Gmb) -> Self {
-		Self {
+/// What a GBP's readiness stands on beside the GBP itself, read once per answer.
+struct Around {
+	trades: Vec<Trade>,
+	/// The caller's gmails with their browser set up.
+	browsers: HashSet<i64>,
+	/// The GBPs a landing page shows; `None`: sites could not be read.
+	sites: Option<HashSet<i64>>,
+}
+
+impl Around {
+	async fn read(s: &ApiState, caller: &Caller, gmails: Option<&[Gmail]>) -> ApiResult<Self> {
+		let panel = &s.sign_in.panel;
+		let browsers = match gmails {
+			Some(gmails) => gmails.iter().filter(|g| g.browser).map(|g| g.id).collect(),
+			None => panel.gmails(caller.user_id).await?.0.iter().filter(|g| g.browser).map(|g| g.id).collect(),
+		};
+		let sites = match &s.pages {
+			// what sites cannot say now is unknown, not missing: `all` logs why
+			Some(pages) => pages.all().await.ok().map(|places| places.iter().map(|p| p.gmb_id).collect()),
+			None => None,
+		};
+		Ok(Self {
+			trades: panel.trades(caller.user_id).await?,
+			browsers,
+			sites,
+		})
+	}
+
+	fn dto(&self, b: Gmb) -> GmbDto {
+		let readiness = (b.state == GbpState::Draft).then(|| self.readiness(&b));
+		GmbDto {
+			tabs: tabs(b.state).to_vec(),
+			readiness,
 			id: b.id,
 			gmail_id: b.gmail_id,
 			place_id: b.place_id,
@@ -262,6 +326,43 @@ impl From<Gmb> for GmbDto {
 			spots: b.spots,
 		}
 	}
+
+	fn readiness(&self, b: &Gmb) -> ReadinessDto {
+		use strum::VariantArray;
+		let (mut missing, mut unknown) = (Vec::new(), Vec::new());
+		for &must in MustHave::VARIANTS {
+			let ready = match must {
+				MustHave::Name => Some(true),
+				MustHave::Category => Some(b.trade_id.zip(b.country).is_some_and(|(trade, country)| {
+					let trade = self.trades.iter().find(|t| t.id == trade).expect("a GBP's trade is its owner's");
+					trade.categories.iter().any(|c| c.country == country.code && c.google_primary.is_some())
+				})),
+				MustHave::Areas => Some(!b.areas.is_empty()),
+				MustHave::Phone => Some(b.phone.is_some()),
+				MustHave::Site => self.sites.as_ref().map(|shown| shown.contains(&b.id)),
+				MustHave::HiddenAddress => Some(b.hidden_address.is_some() && b.customers_visit.is_some()),
+				MustHave::Film => Some(b.film.is_some()),
+				MustHave::Gmail => Some(b.gmail_id.is_some()),
+				MustHave::Profile => Some(b.gmail_id.is_some_and(|g| self.browsers.contains(&g))),
+			};
+			match ready {
+				Some(true) => {}
+				Some(false) => missing.push(must),
+				None => unknown.push(must),
+			}
+		}
+		ReadinessDto { missing, unknown }
+	}
+}
+
+/// A GBP's window's tabs, by its state.
+fn tabs(state: GbpState) -> &'static [Tab] {
+	match state {
+		GbpState::Draft => &[Tab::Launch, Tab::Browser],
+		GbpState::Verifying => &[Tab::Browser],
+		GbpState::Verified => &[Tab::Kit],
+		GbpState::Suspended => &[],
+	}
 }
 
 impl From<Gmail> for GmailDto {
@@ -272,6 +373,7 @@ impl From<Gmail> for GmailDto {
 			role: g.role,
 			created_at: g.created_at.to_string(),
 			browser: g.browser,
+			tabs: vec![Tab::Connections, Tab::Browser],
 		}
 	}
 }
@@ -315,11 +417,12 @@ pub(crate) struct In {
 ///
 /// A draft's `gmail_id` may be null; only a verified one's `place_id` is certain; a gmail's `cap`
 /// is null while its role is unknown.
-async fn gmails(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<GmailsDto>> {
-	let (gmails, gmbs) = panel.gmails(caller.user_id).await?;
+async fn gmails(State(s): State<ApiState>, Extension(caller): Extension<Caller>) -> ApiResult<Json<GmailsDto>> {
+	let (gmails, gmbs) = s.sign_in.panel.gmails(caller.user_id).await?;
+	let around = Around::read(&s, &caller, Some(&gmails)).await?;
 	Ok(Json(GmailsDto {
 		gmails: gmails.into_iter().map(GmailDto::from).collect(),
-		gmbs: gmbs.into_iter().map(GmbDto::from).collect(),
+		gmbs: gmbs.into_iter().map(|b| around.dto(b)).collect(),
 	}))
 }
 
@@ -416,14 +519,15 @@ async fn suggest_places(State(panel): State<Panel>, Spends(_, by): Spends<Places
 /// loads and panoramas left, else the first within its allowance. 404 when none has a browser key:
 /// there is no map; 409 when none has room.
 async fn map_key(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
-	if s.panel.accounts().iter().all(|a| a.provides.browser.is_none()) {
-		return Err(ApiError::NotFound);
+	if s.sign_in.panel.accounts().iter().all(|a| a.provides.browser.is_none()) {
+		return Err(Refusal::new(Code::NotFound, "not found"));
 	}
 	let account = s
+		.sign_in
 		.panel
 		.map_account(Timestamp::now())
 		.await?
-		.ok_or_else(|| ApiError::Conflict("every Google account's free map loads and allowance this month are used".to_owned()))?;
+		.ok_or_else(|| Refusal::new(Code::Conflict, "every Google account's free map loads and allowance this month are used"))?;
 	Ok(Json(MapDto {
 		key: account.provides.browser.as_deref().expect("only an account with a browser key stands").to_owned(),
 		account: account.name.clone(),
@@ -437,11 +541,11 @@ async fn map_key(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
 /// stopped (with the account a reload would load on, when another has room).
 async fn street_view(State(s): State<ApiState>, Spends(_, by): Spends<StreetViewLoad, Caller>, Body(at): Body<PanoramaAt>) -> ApiResult<Json<BalanceDto>> {
 	let now = Timestamp::now();
-	match s.panel.open_street_view(by, &at.account, at.lat, at.lng, now).await? {
+	match s.sign_in.panel.open_street_view(by, &at.account, at.lat, at.lng, now).await? {
 		Ok(balance) => Ok(Json(BalanceDto { balance })),
-		Err(Refused::Conflict(why)) => match s.panel.map_account(now).await? {
-			Some(other) if other.name != at.account => Err(ApiError::Conflict(format!("{why}; reload the page: it then loads on {}, which has room", other.name))),
-			_ => Err(ApiError::Conflict(why)),
+		Err(Refused::Conflict(why)) => match s.sign_in.panel.map_account(now).await? {
+			Some(other) if other.name != at.account => Err(Refusal::new(Code::Conflict, format!("{why}; reload the page: it then loads on {}, which has room", other.name))),
+			_ => Err(Refusal::new(Code::Conflict, why)),
 		},
 		Err(refused) => Err(refused.into()),
 	}
@@ -469,7 +573,7 @@ pub(crate) struct NewUnplaced {
 /// Maps) by a location.
 ///
 /// 409 if a live GBP has the name.
-async fn create_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<NewUnplaced>) -> ApiResult<Created<GmbDto>> {
+async fn create_gmb(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Body(b): Body<NewUnplaced>) -> ApiResult<Created<GmbDto>> {
 	let unplaced = Unplaced {
 		name: b.name,
 		trade: b.trade,
@@ -479,9 +583,9 @@ async fn create_gmb(State(panel): State<Panel>, Extension(caller): Extension<Cal
 		at: b.location,
 		spots: b.spots,
 	};
-	let added = panel.create_gmb(caller.user_id, unplaced, Timestamp::now()).await??;
+	let added = s.sign_in.panel.create_gmb(caller.user_id, unplaced, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = added.id, state = %added.state, "GBP without a place created");
-	Ok(Created(GmbDto::from(added)))
+	Ok(Created(Around::read(&s, &caller, None).await?.dto(added)))
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -500,7 +604,7 @@ pub(crate) struct NewGmb {
 ///
 /// `name` and `country` fill what Google lacks (400 when still missing); 409 the name or the place
 /// taken.
-async fn add_gmb(State(panel): State<Panel>, Spends(caller, by): Spends<PlacesRequest, Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>, Body(b): Body<NewGmb>) -> ApiResult<Created<GmbDto>> {
+async fn add_gmb(State(s): State<ApiState>, Spends(caller, by): Spends<PlacesRequest, Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>, Body(b): Body<NewGmb>) -> ApiResult<Created<GmbDto>> {
 	let NewGmb {
 		place_id,
 		state,
@@ -509,7 +613,7 @@ async fn add_gmb(State(panel): State<Panel>, Spends(caller, by): Spends<PlacesRe
 		trade,
 	} = b;
 	if !sa_places::parse::looks_like_place_id(&place_id) {
-		return Err(ApiError::BadRequest(format!("{place_id:?} is not a place id")));
+		return Err(Refusal::new(Code::BadRequest, format!("{place_id:?} is not a place id")));
 	}
 	let existing = Existing {
 		gmail_id: gmail,
@@ -519,9 +623,9 @@ async fn add_gmb(State(panel): State<Panel>, Spends(caller, by): Spends<PlacesRe
 		country,
 		trade,
 	};
-	let added = panel.add_gmb(Some(by), existing, Timestamp::now()).await??;
+	let added = s.sign_in.panel.add_gmb(Some(by), existing, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, gmb_id = added.id, "GBP added");
-	Ok(Created(GmbDto::from(added)))
+	Ok(Created(Around::read(&s, &caller, None).await?.dto(added)))
 }
 
 /// A present `null` is `Some(None)`; an absent field `None`, by `#[serde(default)]`.
@@ -556,7 +660,7 @@ pub(crate) struct EditBody {
 /// Edits a GBP.
 ///
 /// 409 a name not a draft's, a name or a phone another live GBP's.
-async fn edit_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>, Body(b): Body<EditBody>) -> ApiResult<Json<GmbDto>> {
+async fn edit_gmb(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>, Body(b): Body<EditBody>) -> ApiResult<Json<GmbDto>> {
 	let EditBody {
 		name,
 		gmail_id,
@@ -577,9 +681,9 @@ async fn edit_gmb(State(panel): State<Panel>, Extension(caller): Extension<Calle
 		customers_visit,
 		film,
 	};
-	let edited = panel.edit_gmb(caller.user_id, gmb, edit).await??;
+	let edited = s.sign_in.panel.edit_gmb(caller.user_id, gmb, edit).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, "GBP edited");
-	Ok(Json(GmbDto::from(edited)))
+	Ok(Json(Around::read(&s, &caller, None).await?.dto(edited)))
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -593,14 +697,14 @@ pub(crate) struct Advance {
 
 /// Moves a GBP to another state. 400 a move its `next` lacks.
 async fn move_gmb(
-	State(panel): State<Panel>,
+	State(s): State<ApiState>,
 	Spends(caller, by): Spends<PlacesRequest, Caller>,
 	Ids(Id { id: gmb }): Ids<Id<i64>>,
 	Body(Advance { state: to, place }): Body<Advance>,
 ) -> ApiResult<Json<GmbDto>> {
-	let moved = panel.advance(Some(by), gmb, to, place.as_deref()).await??;
+	let moved = s.sign_in.panel.advance(Some(by), gmb, to, place.as_deref()).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, %to, "GBP's state moved");
-	Ok(Json(GmbDto::from(moved)))
+	Ok(Json(Around::read(&s, &caller, None).await?.dto(moved)))
 }
 
 /// Removes a GBP to the trash.
@@ -631,10 +735,10 @@ pub(crate) struct SetSpots {
 }
 
 /// Replaces a draft's candidate spots, its location the first's. 409 not a draft.
-async fn set_spots(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>, Body(SetSpots { spots }): Body<SetSpots>) -> ApiResult<Json<GmbDto>> {
-	let set = panel.set_spots(caller.user_id, gmb, spots).await??;
+async fn set_spots(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>, Body(SetSpots { spots }): Body<SetSpots>) -> ApiResult<Json<GmbDto>> {
+	let set = s.sign_in.panel.set_spots(caller.user_id, gmb, spots).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, spots = set.spots.len(), "draft's spots set");
-	Ok(Json(GmbDto::from(set)))
+	Ok(Json(Around::read(&s, &caller, None).await?.dto(set)))
 }
 
 /// Places a GBP's point by hand. 409 Google has its point.

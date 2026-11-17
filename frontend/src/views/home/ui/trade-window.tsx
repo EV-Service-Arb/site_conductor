@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Input,
+  FloatingPanel,
   NativeSelect,
   NativeSelectOption,
   ToggleGroup,
@@ -29,10 +30,9 @@ import { useState } from "react";
 import { chooseCategoryScope, chooseGmailScope, kit, googleName, openCategories, openTrade, setOnly, useTrades, scopeKeys, trades as tradesKeys, windowKeys, gmbs as gmbsKeys, move } from "@/entities/gmb";
 import { usePlacement } from "@/features/placement-overlay";
 import { type Category, type Country, type Gmail, type Gmb, type Trade, countryValues } from "@/shared/api/schema";
-import { ApiError, api, ok } from "@/shared/api";
+import { Refused, api, ok } from "@/shared/api";
 import { useLocale, useT, state, placement as placementKeys } from "@/shared/i18n";
-import { setQuery } from "@/shared/lib/query";
-import { useResource } from "@/shared/lib/use-resource";
+import { useResource } from "@evinvest/api/react";
 import { failureText } from "@/shared/ui/failure-text";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -40,11 +40,12 @@ import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 import { GoogleCategories } from "./google-categories";
 import { KitPoolPane } from "./kit-pool";
 import { categories } from "../model/i18n";
+import { FLOAT_AT } from "./trash-window";
 
 const MAX_KEYWORDS = 50;
 
 /** A trade's window over the map, shaped as a GBP's: its countries as tabs, side by side; the outline stays the one list of its GBPs. */
-export function TradeWindow({ trade, tab, gmbs, gmails }: { trade: Trade; tab: Country | null; gmbs: readonly Gmb[]; gmails: readonly Gmail[] }) {
+export function TradeWindow({ trade, country: tab, gmbs, gmails }: { trade: Trade; country: Country | null; gmbs: readonly Gmb[]; gmails: readonly Gmail[] }) {
   const t = useT();
   const button = useButtonSize();
   const [renaming, setRenaming] = useState(false);
@@ -84,7 +85,7 @@ export function TradeWindow({ trade, tab, gmbs, gmails }: { trade: Trade; tab: C
           {t(tradesKeys.window.scope, "Scope the outline to it")}
         </Button>
         <More trade={trade} tab={category === undefined ? null : tab} holders={held.length} onRename={() => setRenaming(true)} />
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => setQuery({ trade: null, tab: null })}>
+        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => openTrade(null)}>
           <X aria-hidden />
         </Button>
       </header>
@@ -154,20 +155,19 @@ export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; g
   const cell = "flex h-14 w-full flex-col items-start justify-center gap-0.5 rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
   return (
-    <section aria-label={t(scopeKeys.categories, "Categories")} className="absolute inset-y-0 right-0 left-0 flex flex-col overflow-y-auto border-l border-border bg-background md:left-36">
-      <header className="flex items-start gap-3 border-b border-border px-6 pt-4 pb-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-            <Tag aria-hidden className="size-4 shrink-0 text-ink-soft" />
-            {t(scopeKeys.categories, "Categories")}
-          </h2>
-          <p className="text-sm text-ink-soft tabular-nums">{t(categories.counts, "{trades} trades · {countries} countries · {held} of {of} GBPs hold one", { trades: trades.length, countries: countries.length, held: traded.length, of: gmbs.length })}</p>
-        </div>
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => openCategories(false)}>
-          <X aria-hidden />
-        </Button>
-      </header>
-      <div className="flex max-w-3xl flex-col gap-6 p-6">
+    <FloatingPanel
+      title={
+        <span className="flex items-center gap-2">
+          <Tag aria-hidden className="size-4 shrink-0 text-ink-soft" />
+          {t(scopeKeys.categories, "Categories")}
+        </span>
+      }
+      at={FLOAT_AT}
+      closeLabel={t(windowKeys.close, "Close the window")}
+      onClose={() => openCategories(false)}
+    >
+      <div className="flex w-3xl max-w-full flex-col gap-6 p-6">
+        <p className="-mt-2 text-sm text-ink-soft tabular-nums">{t(categories.counts, "{trades} trades · {countries} countries · {held} of {of} GBPs hold one", { trades: trades.length, countries: countries.length, held: traded.length, of: gmbs.length })}</p>
         <section className={SECTION}>
           <h3 className={SECTION_HEAD}>
             {t(categories.trades, "Trades")}
@@ -285,7 +285,7 @@ export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; g
           </section>
         )}
       </div>
-    </section>
+    </FloatingPanel>
   );
 }
 
@@ -406,7 +406,7 @@ function More({ trade, tab, holders, onRename }: { trade: Trade; tab: Country | 
             <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t(move.cancel, "Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className={buttonVariants({ variant: "destructive", size: button() })}
-              onClick={() => void act(() => ok(api.DELETE("/trades/{id}", { params: { path: { id: trade.id } } })), () => setQuery({ trade: null, tab: null }))()}
+              onClick={() => void act(() => ok(api.DELETE("/trades/{id}", { params: { path: { id: trade.id } } })), () => openTrade(null))()}
             >
               {t(gmbsKeys.remove, "Remove")}
             </AlertDialogAction>
@@ -449,7 +449,7 @@ const SECTION_HEAD = "flex items-baseline gap-2 text-xs font-semibold tracking-w
 function CategoryTab({ trade, category, here, gmails }: { trade: Trade; category: Category; here: readonly Gmb[]; gmails: readonly Gmail[] }) {
   const t = useT();
   const [pane, setPane] = useState<"category" | "kit">("category");
-  const pool = useResource(`kit.pool.${trade.id}.${category.country}`, () => ok(api.GET("/trades/{id}/{country}/kit", { params: { path: { id: trade.id, country: category.country } } })));
+  const pool = useResource(api, "/trades/{id}/{country}/kit", { params: { path: { id: trade.id, country: category.country } } });
   return (
     <div className="flex flex-col gap-6">
       <ToggleGroup type="single" variant="outline" size="sm" className="w-full" value={pane} onValueChange={(v) => (v === "category" || v === "kit") && setPane(v)}>
@@ -485,8 +485,8 @@ function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; categ
       trades.reload();
       return true;
     } catch (e) {
-      if (!(e instanceof ApiError)) throw e;
-      if (e.failure.kind !== "unauthenticated") setFailed({ at, text: failureText(e.failure, t) });
+      if (!(e instanceof Refused)) throw e;
+      if (e.failure.code !== "unauthenticated") setFailed({ at, text: failureText(e.failure, t) });
       return false;
     }
   };

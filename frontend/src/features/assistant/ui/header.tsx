@@ -2,7 +2,6 @@
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, IconButton, Input, Kbd, KbdGroup, Popover, PopoverContent, PopoverTrigger, cn } from "@evinvest/uikit";
 import { BookOpen, ChevronDown, ChevronsRight, Ellipsis, FileText, KeyRound, MapPin, MessageCirclePlus, Minus, PanelRight, Pin, PinOff, Share as ShareIcon, Sparkles } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 
 import { assistant } from "@/entities/assistant";
@@ -15,6 +14,7 @@ import { notifyFailure } from "@/shared/ui/notify";
 import { ChatActions, useControls } from "./chat-actions";
 import { History } from "./history";
 import { Share } from "./share";
+import { ViewLink } from "@/shared/lib/location";
 
 /**
  * The open chat's title (renamed in place by whoever can interact), its history, and the chat's controls. `chat` is
@@ -235,10 +235,10 @@ function Touched({ turns }: { turns: readonly Turn[] }) {
         <section className="flex flex-col">
           <h3 className="px-2 py-1 text-caption text-ink-soft">{t(assistant.context.locations, "Locations")}</h3>
           {locations.map((m) => (
-            <Link key={m.id} href={`/?gmb=${m.id}`} className={row}>
+            <ViewLink key={m.id} to={{ view: "home", params: { gmb: m.id } }} className={row}>
               <MapPin aria-hidden className="size-4 shrink-0 text-ink-soft" />
               <span className="truncate">{m.label}</span>
-            </Link>
+            </ViewLink>
           ))}
         </section>
       )}
@@ -252,10 +252,10 @@ function Touched({ turns }: { turns: readonly Turn[] }) {
                 <span className="truncate">{source.label}</span>
               </span>
             ) : (
-              <Link key={source.label} href={source.href} className={row}>
+              <ViewLink key={source.label} href={source.href} className={row}>
                 <FileText aria-hidden className="size-4 shrink-0 text-ink-soft" />
                 <span className="truncate">{source.label}</span>
-              </Link>
+              </ViewLink>
             ),
           )}
         </section>

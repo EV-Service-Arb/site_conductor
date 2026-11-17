@@ -2,9 +2,8 @@
 
 import { Button } from "@evinvest/uikit";
 import { Plus } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
 
-import { addHref, gmbs, openAdd } from "@/entities/gmb";
+import { gmbs, openAdd } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
 
@@ -12,8 +11,6 @@ import { useButtonSize } from "@/shared/ui/touch";
 export function AddGmbButton({ gmail, trade, labeled }: { gmail: number | null; trade: number | null; labeled?: boolean }) {
   const t = useT();
   const button = useButtonSize();
-  const router = useRouter();
-  const pathname = usePathname();
   const label = t(gmbs.gmb.add, "Add a GBP");
   return (
     <Button
@@ -23,10 +20,7 @@ export function AddGmbButton({ gmail, trade, labeled }: { gmail: number | null; 
       aria-label={label}
       title={labeled ? undefined : label}
       className={labeled ? "justify-start text-ink-soft" : undefined}
-      onClick={() => {
-        if (pathname === "/") openAdd({ gmail, trade });
-        else router.push(addHref({ gmail, trade }));
-      }}
+      onClick={() => openAdd({ ...(gmail !== null && { gmail }), ...(trade !== null && { trade }) })}
     >
       <Plus aria-hidden />
       {labeled && label}

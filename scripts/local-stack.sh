@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The conductor (its Grafana included), sites_panel, review_archive and both landings on this
+# The conductor (its Grafana included), sites_panel, review_archive and the landings on this
 # machine, wired together: a lead posted on a landing lands in sites_panel through the conductor's
 # ingest, a place edited on the sites page shows on the landing, review_archive's boards draw in
 # the conductor's Grafana. See docs/LOCAL.md.
@@ -21,8 +21,8 @@
 # likewise (REVIEW_ARCHIVE_BIN / REVIEW_ARCHIVE_MFE_DIR), and Grafana's server (PANEL_GRAFANA_SERVER).
 # Under --watch each is cargo's (npm's for the bundles) of its checkout instead, and the *_BIN /
 # *_DIR overrides of the builds are refused.
-# SITES_DIR, REVIEW_ARCHIVE_DIR, AQUAFIX_DIR and VIFNET_DIR name the checkouts, by default beside
-# this one's. Each part's port is what its own dev shell sets (docs/port_range.md).
+# _.siblings-local.json names the siblings' checkouts; AQUAFIX_DIR, VIFNET_DIR and DEBOUCHAGE_DIR the landings', by
+# default beside this one's. Each part's port is what its own dev shell sets (docs/port_range.md).
 set -euo pipefail
 
 need="run it as \`nix run .#local-stack\`, or inside \`nix develop\`: the flake sets the conductor's ports"
@@ -38,6 +38,7 @@ DEV_EMAIL="admin@evinvest.ltd"
 PROD_SSH="rpi5-ts"
 AQUAFIX_PLACES=(royat clermont-ferrand desgenettes lyon-est la-mouche lyon-nord)
 VIFNET_PLACES=(vifnet)
+DEBOUCHAGE_PLACES=(clermont-ferrand)
 
 reset=0
 sites=1
@@ -81,9 +82,9 @@ while [ $# -gt 0 ]; do
 local-stack [--reset] [--no-sites] [--watch] [--role admin|operator] [--port-offset <n>] [--from-prod] [--spend-real-quota-i-am-certain]
 dev [--port <n>] [--reset] [--role admin|operator] [--from-prod]
 
-  The conductor (dev sign-in, its Grafana at /grafana/), sites_panel, review_archive, aquafix and
-  vifnet, wired together, each on the port its dev shell sets. State in .local/ (--reset wipes
-  it). Ctrl-C stops everything. See docs/LOCAL.md.
+  The conductor (dev sign-in, its Grafana at /grafana/), sites_panel, review_archive, aquafix,
+  vifnet and debouchage, wired together, each on the port its dev shell sets. State in .local/
+  (--reset wipes it). Ctrl-C stops everything. See docs/LOCAL.md.
   --watch: every part rebuilt and restarted as its checkout is edited, and the conductor's front end
   from `next dev`, whose origin is then the one to open.
   --port-offset <n>: every port moved by n, beside the stack on the usual ones.
@@ -131,25 +132,21 @@ warn() { printf '\033[33m! %s\033[0m\n' "$*" >&2; }
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "run this from inside the conductor's checkout"
 [ -f "$root/crates/server/Cargo.toml" ] || die "$root is not the conductor's checkout"
 # The others sit beside the conductor's main checkout (_sa/{site_conductor,review_archive,
-# sites/{panel,aquafix,vifnet}}), also when this is one of its worktrees.
+# sites/{panel,aquafix,vifnet,debouchage}}), also when this is one of its worktrees.
 main_checkout="$(dirname "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)")"
 service_arb="$(dirname "$main_checkout")"
-if [ "$dev" = 1 ]; then
-	# DEV_PATH_<peer>: its user's path, flake.nix devUsers
-	dev_dir() {
-		local p="${1:-../$2}"
-		[[ "$p" = /* ]] || p="$main_checkout/$p"
-		realpath -m "$p"
-	}
-	SITES_DIR="${SITES_DIR:-$(dev_dir "${DEV_PATH_sites_panel:-}" sites_panel)}"
-	REVIEW_ARCHIVE_DIR="${REVIEW_ARCHIVE_DIR:-$(dev_dir "${DEV_PATH_review_archive:-}" review_archive)}"
-	PLACEMENT_DIR="${PLACEMENT_DIR:-$(dev_dir "${DEV_PATH_gmaps_optimal_placement:-}" gmaps_optimal_placement)}"
-fi
-SITES_DIR="${SITES_DIR:-$service_arb/sites/panel}"
-REVIEW_ARCHIVE_DIR="${REVIEW_ARCHIVE_DIR:-$service_arb/review_archive}"
-PLACEMENT_DIR="${PLACEMENT_DIR:-$service_arb/gmaps_optimal_placement}"
+# the siblings' checkouts, one gitignored file for gen and this script alike: {"sites", "review_archive",
+# "placement", "playbook": <checkout root>}
+siblings="$root/_.siblings-local.json"
+[ -f "$siblings" ] || die "$siblings names each sibling's checkout root: sites, review_archive, placement, playbook"
+sibling() { jq -er --arg k "$1" '.[$k]' "$siblings" || die "$siblings names no $1"; }
+SITES_DIR="$(sibling sites)"
+REVIEW_ARCHIVE_DIR="$(sibling review_archive)"
+PLACEMENT_DIR="$(sibling placement)"
+PLAYBOOK_DIR="$(sibling playbook)"
 AQUAFIX_DIR="${AQUAFIX_DIR:-$service_arb/sites/aquafix}"
 VIFNET_DIR="${VIFNET_DIR:-$service_arb/sites/vifnet}"
+DEBOUCHAGE_DIR="${DEBOUCHAGE_DIR:-$service_arb/sites/debouchage}"
 
 # a stack on other ports is another stack: its own databases, and its own review_archive serve.lock
 state="${LOCAL_STACK_DIR:-$root/.local}"
@@ -184,16 +181,19 @@ if [ -n "$own_port" ]; then
 else
 	PANEL_PORT=$((PANEL_PORT + offset))
 	WEB_DEV_PORT=$((WEB_DEV_PORT + offset))
-	BROWSERS_PORT=$((BROWSERS_PORT + offset))
 fi
+BROWSERS_PORT=$((BROWSERS_PORT + offset)) # a sibling's, as the others are
 SITES_PORT="$(shell_port "$SITES_DIR" PANEL_BIND)"
 REVIEW_ARCHIVE_PORT="$(shell_port "$REVIEW_ARCHIVE_DIR" REVIEW_ARCHIVE_SERVER_BIND)"
 PLACEMENT_PORT="$(shell_port "$PLACEMENT_DIR" PLACEMENT_PORT)"
+PLAYBOOK_PORT="$(shell_port "$PLAYBOOK_DIR" PORT)"
 AQUAFIX_PORT=""
 VIFNET_PORT=""
+DEBOUCHAGE_PORT=""
 if [ "$sites" = 1 ] || [ "$dev" = 0 ]; then
 	AQUAFIX_PORT="$(shell_port "$AQUAFIX_DIR" PORT)"
 	VIFNET_PORT="$(shell_port "$VIFNET_DIR" PORT)"
+	DEBOUCHAGE_PORT="$(shell_port "$DEBOUCHAGE_DIR" PORT)"
 fi
 
 busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
@@ -203,6 +203,7 @@ run_panel=1
 run_sites=1
 run_review_archive=1
 run_placement=1
+run_playbook=1
 placement_answers() { curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$PLACEMENT_PORT/health" 2>/dev/null; }
 # `take_over <port>`: a conductor or its next dev listening there stops, with the run that started it
 # (whatever else that run serves goes too, and is started here instead); anything else is let be.
@@ -252,25 +253,32 @@ if [ "$dev" = 1 ]; then
 		run_panel=0
 	fi
 	if [ -z "$SITES_PORT" ]; then
-		warn "skipping sites_panel: no checkout at $SITES_DIR (flake.nix devUsers, or SITES_DIR, names another)"
+		warn "skipping sites_panel: no checkout at $SITES_DIR (_.siblings-local.json names it)"
 		run_sites=0
 	elif answers "$SITES_PORT"; then
 		say "sites_panel already serves http://127.0.0.1:$SITES_PORT: using it"
 		run_sites=0
 	fi
 	if [ -z "$REVIEW_ARCHIVE_PORT" ]; then
-		warn "skipping review_archive: no checkout at $REVIEW_ARCHIVE_DIR (flake.nix devUsers, or REVIEW_ARCHIVE_DIR, names another)"
+		warn "skipping review_archive: no checkout at $REVIEW_ARCHIVE_DIR (_.siblings-local.json names it)"
 		run_review_archive=0
 	elif answers "$REVIEW_ARCHIVE_PORT"; then
 		say "review_archive already serves http://127.0.0.1:$REVIEW_ARCHIVE_PORT: using it"
 		run_review_archive=0
 	fi
 	if [ -z "$PLACEMENT_PORT" ]; then
-		warn "skipping gmaps_optimal_placement: no checkout at $PLACEMENT_DIR (flake.nix devUsers, or PLACEMENT_DIR, names another); the map says placement is not connected"
+		warn "skipping gmaps_optimal_placement: no checkout at $PLACEMENT_DIR (_.siblings-local.json names it); the map says placement is not connected"
 		run_placement=0
 	elif placement_answers; then
 		say "gmaps_optimal_placement already serves http://127.0.0.1:$PLACEMENT_PORT: using it"
 		run_placement=0
+	fi
+	if [ -z "$PLAYBOOK_PORT" ]; then
+		warn "skipping playbook: no checkout at $PLAYBOOK_DIR (_.siblings-local.json names it); /mcp lists no playbook tools"
+		run_playbook=0
+	elif answers "$PLAYBOOK_PORT"; then
+		say "playbook already serves http://127.0.0.1:$PLAYBOOK_PORT: using it"
+		run_playbook=0
 	fi
 	if [ "$run_panel$run_sites$run_review_archive" = 000 ]; then
 		if busy "$WEB_DEV_PORT"; then say "open http://localhost:$WEB_DEV_PORT"; else say "open http://127.0.0.1:$PANEL_PORT"; fi
@@ -280,12 +288,17 @@ elif answers "$PANEL_PORT"; then
 	echo "a stack already serves http://127.0.0.1:$PANEL_PORT (and http://localhost:$WEB_DEV_PORT under --watch): use it, or --port-offset <n> for another" >&2
 	exit 0
 fi
+[ "$dev" = 1 ] || [ -n "$PLAYBOOK_PORT" ] || {
+	warn "skipping playbook: no checkout at $PLAYBOOK_DIR (_.siblings-local.json names it); /mcp lists no playbook tools"
+	run_playbook=0
+}
 ports=()
 [ "$run_panel" = 1 ] && ports+=("$PANEL_PORT")
 [ "$run_sites" = 1 ] && ports+=("$SITES_PORT")
 [ "$run_review_archive" = 1 ] && ports+=("$REVIEW_ARCHIVE_PORT")
 [ "$run_placement" = 1 ] && ports+=("$PLACEMENT_PORT")
-[ "$sites" = 1 ] && ports+=("$AQUAFIX_PORT" "$VIFNET_PORT")
+[ "$run_playbook" = 1 ] && ports+=("$PLAYBOOK_PORT")
+[ "$sites" = 1 ] && ports+=("$AQUAFIX_PORT" "$VIFNET_PORT" "$DEBOUCHAGE_PORT")
 [ "$watch" = 1 ] && [ "$run_panel" = 1 ] && ports+=("$WEB_DEV_PORT")
 for port in "${ports[@]}"; do
 	[ -n "$port" ] || continue # a checkout absent, skipped below
@@ -336,18 +349,26 @@ in_shell() {
 	(cd "$dir" && nix develop -c "$@")
 }
 REVIEW_ARCHIVE_WEB_BUILD="nix run .#build-mfe -- '$state/watch/review_archive-mfe'"
+# The checkout's binaries linked into the state, its target dir keeping the rest: other sessions
+# build their worktrees into this target dir, and the last to link owns target/debug/<bin>.
+own_cargo="env CARGO_BUILD_BUILD_DIR='$root/target' CARGO_TARGET_DIR='$state/target' cargo"
 # once more on a failure: other sessions sweep target dirs, mid-build too
 retried() { "$@" || { warn "retrying: $*"; "$@"; }; }
-# `peer_down <peer> <checkout> <why>`: dev goes on without a peer, the conductor answering 502 for
-# it; the stack needs every part
-peer_down() {
+# `unbuilt <peer> <checkout>`: dev goes on without it, the conductor answering 502 for it; the
+# stack needs every part
+unbuilt() {
 	local locked head hint=""
 	locked="$(grep -m1 -o 'site_conductor?branch=main#[0-9a-f]*' "$2/Cargo.lock" | cut -d'#' -f2)" || true # no sa_* locked: no hint
 	head="$(git -C "$root" rev-parse HEAD)"
 	[ -z "$locked" ] || [ "$locked" = "$head" ] ||
 		hint="; its Cargo.lock has sa_* at ${locked:0:7}, this checkout is at ${head:0:7}: [patch.\"https://github.com/EV-Service-Arb/site_conductor\"] in $2/.cargo/config.toml points them at $root/crates"
-	[ "$dev" = 1 ] || die "$1 $3$hint"
-	warn "skipping $1: $3$hint (see $state/logs/); the conductor answers 502 for it"
+	[ "$dev" = 1 ] || die "$1 did not build$hint"
+	warn "skipping $1: it did not build$hint (see $state/logs/); the conductor answers 502 for it"
+}
+# `late <peer>`: one not answering in time; under dev it goes on starting, 502 until it answers
+late() {
+	[ "$dev" = 1 ] || die "$1 did not start"
+	warn "$1 is not up yet: the conductor answers 502 for it until it is"
 }
 if [ "$watch" = 1 ]; then
 	for v in PANEL_BIN PANEL_WEB_DIR SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR; do
@@ -355,29 +376,29 @@ if [ "$watch" = 1 ]; then
 	done
 	# also when another conductor serves: `panel gen-data-key` makes the state's key
 	say "building the conductor from $root"
-	retried in_shell "$root" cargo b -q -p sa_server
-	PANEL_BIN="$root/target/debug/panel"
+	retried in_shell "$root" bash -c "$own_cargo b -q -p sa_server"
+	PANEL_BIN="$state/target/debug/panel"
 	if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
-		[ -f "$SITES_DIR/flake.nix" ] || die "no sites_panel checkout at $SITES_DIR: SITES_DIR names it"
+		[ -f "$SITES_DIR/flake.nix" ] || die "no sites_panel checkout at $SITES_DIR: _.siblings-local.json names it"
 		say "building sites_panel and its bundle from $SITES_DIR"
 		if retried in_shell "$SITES_DIR" cargo b -q -p panel_server &&
 			(cd "$SITES_DIR/frontend" && { [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; } && npm run -s build); then
 			SITES_BIN="$SITES_DIR/target/debug/sites_panel"
 			SITES_MFE_DIR="$SITES_DIR/frontend/dist"
 		else
-			peer_down sites_panel "$SITES_DIR" "did not build"
+			unbuilt sites_panel "$SITES_DIR"
 			run_sites=0
 		fi
 	fi
 	if [ "$run_review_archive" = 1 ] && [ -z "${DEV_COMMAND_review_archive:-}" ]; then
-		[ -f "$REVIEW_ARCHIVE_DIR/flake.nix" ] || die "no review_archive checkout at $REVIEW_ARCHIVE_DIR: REVIEW_ARCHIVE_DIR names it"
+		[ -f "$REVIEW_ARCHIVE_DIR/flake.nix" ] || die "no review_archive checkout at $REVIEW_ARCHIVE_DIR: _.siblings-local.json names it"
 		say "building review_archive and its bundle from $REVIEW_ARCHIVE_DIR"
 		if retried in_shell "$REVIEW_ARCHIVE_DIR" cargo b -q -p review_archive_server &&
 			(cd "$REVIEW_ARCHIVE_DIR" && retried nix run .#build-mfe -- "$state/watch/review_archive-mfe"); then
 			REVIEW_ARCHIVE_BIN="$REVIEW_ARCHIVE_DIR/target/debug/review_archive"
 			REVIEW_ARCHIVE_MFE_DIR="$state/watch/review_archive-mfe"
 		else
-			peer_down review_archive "$REVIEW_ARCHIVE_DIR" "did not build"
+			unbuilt review_archive "$REVIEW_ARCHIVE_DIR"
 			run_review_archive=0
 		fi
 	fi
@@ -396,7 +417,7 @@ elif [ -z "${PANEL_WEB_DIR:-}" ]; then
 fi
 [ -x "$PANEL_BIN" ] || die "PANEL_BIN $PANEL_BIN is not an executable"
 if [ "$run_sites" = 1 ] && [ "$watch" = 0 ] && [ -z "${SITES_BIN:-}" ]; then
-	[ -f "$SITES_DIR/flake.nix" ] || die "no sites_panel checkout at $SITES_DIR: SITES_DIR names it"
+	[ -f "$SITES_DIR/flake.nix" ] || die "no sites_panel checkout at $SITES_DIR: _.siblings-local.json names it"
 	say "building sites_panel ($SITES_DIR#bin)"
 	nix build "$SITES_DIR#bin" --out-link "$state/build/sites"
 	SITES_BIN="$state/build/sites/bin/sites_panel"
@@ -425,9 +446,16 @@ if [ "$run_review_archive" = 1 ] && [ "$watch" = 0 ] && { [ -z "${REVIEW_ARCHIVE
 			REVIEW_ARCHIVE_MFE_DIR="$state/build/review_archive-mfe"
 		fi
 	else
-		echo "skipping review_archive: no checkout at $REVIEW_ARCHIVE_DIR (REVIEW_ARCHIVE_DIR names it); /api/review_archive answers 502" >&2
+		echo "skipping review_archive: no checkout at $REVIEW_ARCHIVE_DIR (_.siblings-local.json names it); /api/review_archive answers 502" >&2
 		run_review_archive=0
 	fi
+fi
+
+if [ "$run_playbook" = 1 ] && [ -z "${PLAYBOOK_BIN:-}" ]; then
+	# cargo in its checkout, which patches sa_auth to the local one: Nix would fetch the git dep
+	say "building playbook_web from $PLAYBOOK_DIR"
+	in_shell "$PLAYBOOK_DIR" cargo b -q -p playbook_web
+	PLAYBOOK_BIN="$PLAYBOOK_DIR/target/debug/playbook_web"
 fi
 
 # ── the environments ─────────────────────────────────────────────────────────────────────
@@ -442,6 +470,11 @@ fi
 sites_origin="http://127.0.0.1:$SITES_PORT"
 review_archive_origin="http://127.0.0.1:$REVIEW_ARCHIVE_PORT"
 placement_origin="${PLACEMENT_PORT:+http://127.0.0.1:$PLACEMENT_PORT}"
+# playbook_web where it runs, else nowhere: the conductor's variable is required, and the forward answers 502 for it
+playbook_origin="http://127.0.0.1:9"
+if [ -n "$PLAYBOOK_PORT" ] && { [ "$run_playbook" = 1 ] || answers "$PLAYBOOK_PORT"; }; then
+	playbook_origin="http://127.0.0.1:$PLAYBOOK_PORT"
+fi
 # The gmails' browsers only with the caller's GOLOGIN_TOKEN or MULTILOGIN_TOKEN: neither runs without a plan's.
 browsers_origin=""
 [ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ] || [ "$run_panel" = 0 ] || browsers_origin="http://127.0.0.1:$BROWSERS_PORT"
@@ -472,7 +505,7 @@ panel() {
 		MULTILOGIN_TOKEN="${browsers_origin:+${MULTILOGIN_TOKEN:-}}" \
 		PANEL_GRAFANA_SERVER="$PANEL_GRAFANA_SERVER" \
 		PANEL_GRAFANA_DIR="$state/grafana" \
-		PANEL_PLAYBOOK_URL="http://127.0.0.1:9" \
+		PANEL_PLAYBOOK_URL="$playbook_origin" \
 		TOKENS_START_CAP_MULTIPLE=1 \
 		"$PANEL_BIN" --config "$conductor_config" ${spend_flag:+"$spend_flag"} "$@"
 }
@@ -484,6 +517,21 @@ sites_panel() {
 		PANEL_ASSERTION_KEYS="$assertion_public" \
 		PANEL_MFE_DIR="$SITES_MFE_DIR" \
 		"$SITES_BIN" "$@"
+}
+
+# playbook_web in a dir of its own (it keeps mcp.db in its working directory), trusting the
+# conductor's assertions; concierge is never asked: its projection only fails to sync.
+playbook() {
+	mkdir -p "$state/playbook"
+	cd "$state/playbook"
+	env -u SENTRY_DSN \
+		APP_ENV=development \
+		PORT="$PLAYBOOK_PORT" \
+		PUBLIC_URL="$playbook_origin" \
+		PANEL_ASSERTION_KEYS="$assertion_public" \
+		CONCIERGE_GRPC_ADDR="http://127.0.0.1:9" \
+		CONCIERGE_CLIENT_SECRET="local" \
+		"$PLAYBOOK_BIN" "$@"
 }
 
 # review_archive on its data dir (REVIEW_ARCHIVE_DATA_DIR, e.g. a copy of its checkout's data/),
@@ -508,46 +556,13 @@ EOF
 # ── seed: idempotent, so every run may do it ─────────────────────────────────────────────
 
 # a conductor or sites_panel already serving has its own state, seeded by the run that started it
+fresh=0
 if [ "$run_panel" = 1 ]; then
-	say "seeding $state/panel.db"
-	fresh=0
 	[ -e "$state/panel.db" ] || fresh=1
-	panel migrate
-	# Tokens and GMBs open with the import from review_archive: here, of nothing, into a new panel.db
-	# (one copied in has its own).
-	if [ "$fresh" = 1 ]; then
-		echo '{"people": [], "gmails": [], "gmbs": [], "ledger": [], "kickbacks": []}' >"$state/review-archive-export.json"
-		panel import review-archive "$state/review-archive-export.json"
-	fi
-	# The stack's own keys, `<brand>-local`: a copy of prod has prod's `<brand>-site`, whose secrets
-	# are not here. A secret is shown once: kept in .local/secrets/<key id> for the next run. Its origin
-	# is the landing's; the same origin again is no change, another one is refused.
-	source_key() {
-		local key_id="$1" brand="$2" origin="$3" file="$state/secrets/$1"
-		if panel source list | awk -v k="$key_id" '$1 == k && $NF == "active" { found = 1 } END { exit !found }'; then
-			[ -s "$file" ] || die "source $key_id exists but its secret is not in $file — start over with --reset"
-			panel source set-origin "$key_id" "$origin" || die "source $key_id has another origin than $origin — start over with --reset"
-		else
-			panel source add "$key_id" --kind site --brand "$brand" --origin "$origin" | awk '$1 == "secret:" { print $2 }' >"$file"
-			[ -s "$file" ] || die "panel source add $key_id printed no secret"
-		fi
-	}
-	# a landing with no checkout has no port, and no source either
-	[ -z "$AQUAFIX_PORT" ] || source_key aquafix-local aquafix "http://localhost:$AQUAFIX_PORT"
-	[ -z "$VIFNET_PORT" ] || source_key vifnet-local vifnet "http://localhost:$VIFNET_PORT"
-	# What gmaps_optimal_placement's own work dir holds, into this conductor's queries cache (a newer
-	# answer cached stays).
-	placement_cached="${XDG_CACHE_HOME:-$HOME/.cache}/gmaps_optimal_placement/data/places_cache"
-	[ ! -d "$placement_cached" ] || panel import queries-cache gop "$placement_cached"
 fi
 if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
 	say "seeding $state/sites_panel.db"
 	sites_panel migrate
-	register() {
-		sites_panel place register "$1" "$2" >/dev/null 2>>"$state/logs/seed.log" || die "registering $1/$2 failed: see $state/logs/seed.log"
-	}
-	for slug in "${AQUAFIX_PLACES[@]}"; do register aquafix "$slug"; done
-	for slug in "${VIFNET_PLACES[@]}"; do register vifnet "$slug"; done
 fi
 
 # ── run ──────────────────────────────────────────────────────────────────────────────────
@@ -622,12 +637,12 @@ browsers() {
 		BROWSERS_BUSYBOX="$BROWSERS_BUSYBOX" \
 		BROWSERS_ADB_KEYBOARD="$BROWSERS_ADB_KEYBOARD" \
 		PANEL_ASSERTION_KEYS="$assertion_public" \
-		"$root/target/debug/sa_browsers" "$@"
+		"$state/target/debug/sa_browsers" "$@"
 }
-export -f panel sites_panel review_archive browsers
+export -f panel sites_panel review_archive browsers playbook
 export state conductor_config spend_flag public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_origin browsers_origin \
 	PANEL_GRAFANA_SERVER PANEL_BIN SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR REVIEW_ARCHIVE_DATA_DIR REVIEW_ARCHIVE_PORT \
-	PANEL_PORT SITES_PORT BROWSERS_PORT root
+	PANEL_PORT SITES_PORT BROWSERS_PORT root PLAYBOOK_BIN PLAYBOOK_PORT playbook_origin
 watched() {
 	local dir="$1"
 	shift
@@ -657,12 +672,12 @@ custom() {
 if [ "$run_sites" = 1 ]; then
 	if [ -n "${DEV_COMMAND_sites_panel:-}" ]; then
 		custom sites "$SITES_DIR" "$DEV_COMMAND_sites_panel"
-		wait_for sites "$sites_origin/health" 600 "$!" || peer_down sites_panel "$SITES_DIR" "did not start"
+		wait_for sites "$sites_origin/health" 600 "$!" || late sites_panel
 	else
 		say "starting sites_panel on $sites_origin"
 		serving sites "$SITES_DIR" "cargo b -q -p panel_server" "sites_panel serve --bind 127.0.0.1:$SITES_PORT" -e rs,toml,sql,lock &
 		[ "$dev" = 1 ] || essential+=("$!")
-		wait_for sites "$sites_origin/health" 30 "$!" || peer_down sites_panel "$SITES_DIR" "did not start"
+		wait_for sites "$sites_origin/health" 30 "$!" || late sites_panel
 		if [ "$watch" = 1 ]; then
 			prefixed sites-mfe watched "$SITES_DIR" --postpone -w frontend/src -w frontend/messages -- "cd frontend && npm run -s build" &
 		fi
@@ -672,19 +687,26 @@ fi
 if [ "$run_review_archive" = 1 ]; then
 	if [ -n "${DEV_COMMAND_review_archive:-}" ]; then
 		custom review_archive "$REVIEW_ARCHIVE_DIR" "$DEV_COMMAND_review_archive"
-		wait_for review_archive "$review_archive_origin/health" 600 "$!" || peer_down review_archive "$REVIEW_ARCHIVE_DIR" "did not start"
+		wait_for review_archive "$review_archive_origin/health" 600 "$!" || late review_archive
 	else
 		say "starting review_archive on $review_archive_origin"
 		mkdir -p "$REVIEW_ARCHIVE_DATA_DIR"
 		flock "$REVIEW_ARCHIVE_DATA_DIR/serve.lock" sleep infinity &
 		serving review_archive "$REVIEW_ARCHIVE_DIR" "cargo b -q -p review_archive_server" "review_archive serve --no-login-check" \
-			-w grafana -i 'crates/review_archive_web/**' -e rs,toml,sql,json,lock &
+			-i 'crates/review_archive_web/**' -e rs,toml,sql,json,lock &
 		[ "$dev" = 1 ] || essential+=("$!")
-		wait_for review_archive "$review_archive_origin/health" 60 "$!" || peer_down review_archive "$REVIEW_ARCHIVE_DIR" "did not start"
+		wait_for review_archive "$review_archive_origin/health" 60 "$!" || late review_archive
 		if [ "$watch" = 1 ]; then
 			prefixed review_archive-mfe watched "$REVIEW_ARCHIVE_DIR" --postpone -w crates/review_archive_web -w crates/review_archive_client -w crates/review_archive_core -e rs,css,html,toml -- "$REVIEW_ARCHIVE_WEB_BUILD" &
 		fi
 	fi
+fi
+
+if [ "$run_playbook" = 1 ]; then
+	# not watched, and not essential: /mcp lists no playbook tools without it
+	say "starting playbook_web on $playbook_origin"
+	prefixed playbook playbook &
+	wait_for playbook "$playbook_origin/health" 60 "$!" || warn "playbook_web did not come up; /mcp lists no playbook tools"
 fi
 
 if [ "$run_placement" = 1 ]; then
@@ -706,8 +728,8 @@ if [ -n "$browsers_origin" ]; then
 	BROWSERS_ADB="$phone_tools/adb" BROWSERS_BUSYBOX="$phone_tools/busybox" BROWSERS_ADB_KEYBOARD="$phone_tools/ADBKeyboard.apk"
 	export BROWSERS_ORBITA BROWSERS_FFMPEG BROWSERS_MLX BROWSERS_ADB BROWSERS_BUSYBOX BROWSERS_ADB_KEYBOARD
 	busy "$BROWSERS_PORT" && die "port $BROWSERS_PORT is taken: the browsers' runner's"
-	in_shell "$root" cargo b -q -p sa_browsers
-	serving browsers "$root" "cargo b -q -p sa_browsers" "browsers serve" -e rs,toml,lock &
+	in_shell "$root" bash -c "$own_cargo b -q -p sa_browsers"
+	serving browsers "$root" "$own_cargo b -q -p sa_browsers" "browsers serve" -e rs,toml,lock &
 	essential+=("$!")
 else
 	say "GOLOGIN_TOKEN and MULTILOGIN_TOKEN unset: no browsers' runner; the gmails' browsers say they are not connected"
@@ -715,9 +737,79 @@ fi
 
 if [ "$run_panel" = 1 ]; then
 	say "starting the conductor on $origin (dev sign-in: $role)"
-	serving panel "$root" "cargo b -q -p sa_server" "panel serve --bind 127.0.0.1:$PANEL_PORT" -i 'crates/gen/**' -e rs,toml,sql,lock &
+	serving panel "$root" "$own_cargo b -q -p sa_server" "panel serve --bind 127.0.0.1:$PANEL_PORT" -i 'crates/gen/**' -e rs,toml,sql,lock &
 	essential+=("$!")
-	wait_for panel "$origin/health" 30 "$!" || die "the conductor did not start"
+	wait_for panel "$origin/health" 900 "$!" || die "the conductor did not start"
+	# Dev sign-in's session, as the admin: the seeds are the conductor's own operations.
+	if [ "$role" = admin ]; then
+		say "seeding $state/panel.db over HTTP"
+		jar="$state/session.jar"
+		rm -f "$jar"
+		login="$(curl -fsS -o /dev/null -c "$jar" -w '%{redirect_url}' "$origin/auth/login?as=$DEV_EMAIL")"
+		curl -fsS -o /dev/null -b "$jar" -c "$jar" "$origin${login#"$public_origin"}"
+		csrf="$(awk '$6 == "sa_csrf" { print $7 }' "$jar")"
+		[ -n "$csrf" ] || die "dev sign-in as $DEV_EMAIL gave no session"
+		# `api <method> <path> [curl's arguments]`
+		api() {
+			local method="$1" path="$2"
+			shift 2
+			curl -fsS --fail-with-body -X "$method" -b "$jar" -H "x-sa-csrf: $csrf" -H 'content-type: application/json' "$origin/api/v1$path" "$@"
+		}
+		# Tokens and GMBs open with the import from review_archive: here, of nothing, into a new panel.db
+		# (one copied in has its own).
+		if [ "$fresh" = 1 ]; then
+			api POST /admin/imports/review-archive -d '{"people": [], "gmails": [], "gmbs": [], "ledger": [], "kickbacks": []}' >/dev/null
+		fi
+		# The stack's own keys, `<brand>-local`: a copy of prod has prod's `<brand>-site`, whose secrets
+		# are not here. A secret is shown once: kept in .local/secrets/<key id> for the next run. Its origin
+		# is the landing's; the same origin again is no change, another one is refused.
+		source_key() {
+			local key_id="$1" brand="$2" landing="$3" file="$state/secrets/$1"
+			if api GET /sources | jq -e --arg k "$key_id" '.sources[] | select(.key_id == $k and .revoked_at == null)' >/dev/null; then
+				[ -s "$file" ] || die "source $key_id exists but its secret is not in $file — start over with --reset"
+				api PUT "/sources/$key_id/origin" -d "$(jq -nc --arg o "$landing" '{origin: $o}')" >/dev/null || die "source $key_id has another origin than $landing — start over with --reset"
+			else
+				api POST /sources -d "$(jq -nc --arg k "$key_id" --arg b "$brand" --arg o "$landing" '{key_id: $k, kind: "site", brands: [$b], origin: $o}')" | jq -r .secret >"$file"
+				[ -s "$file" ] || die "the source $key_id came with no secret"
+			fi
+		}
+		# a landing with no checkout has no port, and no source either
+		[ -z "$AQUAFIX_PORT" ] || source_key aquafix-local aquafix "http://localhost:$AQUAFIX_PORT"
+		[ -z "$VIFNET_PORT" ] || source_key vifnet-local vifnet "http://localhost:$VIFNET_PORT"
+		[ -z "$DEBOUCHAGE_PORT" ] || source_key debouchage-local debouchage "http://localhost:$DEBOUCHAGE_PORT"
+		# What gmaps_optimal_placement's own work dir holds, into this conductor's queries cache, each answer
+		# as of its file's time (a newer answer cached stays).
+		placement_cached="${XDG_CACHE_HOME:-$HOME/.cache}/gmaps_optimal_placement/data/places_cache"
+		if [ -d "$placement_cached" ]; then
+			mapfile -d '' -t answers_files < <(find "$placement_cached" -maxdepth 1 -name '*.json' -print0)
+			for ((i = 0; i < ${#answers_files[@]}; i += 500)); do
+				batch=("${answers_files[@]:i:500}")
+				jq -n --arg scheme gop --rawfile times <(stat -c '%n	%Y' "${batch[@]}") '
+					($times | split("\n") | map(select(length > 0) | split("\t") | {(.[0]): (.[1] | tonumber)}) | add) as $at
+					| {scheme: $scheme, answers: (reduce inputs as $answer ({};
+						input_filename as $file | .[$file | split("/") | last | sub("\\.json$"; "")] = {answer: $answer, fetched_at: ($at[$file] | todate)}))}
+				' "${batch[@]}" | api POST /admin/imports/queries-cache --data-binary @- >/dev/null
+			done
+		fi
+		# sites' places, registered through the conductor's forward; those it knows stay as they are
+		if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
+			sites() {
+				local method="$1" path="$2"
+				shift 2
+				curl -fsS --fail-with-body -X "$method" -b "$jar" -H "x-sa-csrf: $csrf" -H 'content-type: application/json' "$origin/api/sites$path" "$@"
+			}
+			known="$(sites GET /places | jq -c '[.places[] | [.brand, .location]]')"
+			register() {
+				jq -e --arg b "$1" --arg s "$2" 'any(. == [$b, $s])' <<<"$known" >/dev/null ||
+					sites POST /places -d "$(jq -nc --arg b "$1" --arg s "$2" '{brand: $b, slug: $s}')" >/dev/null
+			}
+			for slug in "${AQUAFIX_PLACES[@]}"; do register aquafix "$slug"; done
+			for slug in "${VIFNET_PLACES[@]}"; do register vifnet "$slug"; done
+			for slug in "${DEBOUCHAGE_PLACES[@]}"; do register debouchage "$slug"; done
+		fi
+	elif [ "$fresh" = 1 ]; then
+		die "a new state is seeded as the admin: run it once without --role $role"
+	fi
 fi
 
 if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
@@ -732,7 +824,7 @@ if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
 		prefixed placement-overlay in_shell "$root" placement-overlay
 		prefixed placement-overlay watched "$root" --postpone -w crates/placement_overlay -w Cargo.lock -w .cargo/config.toml \
 			${PLACEMENT_DIR:+-w "$PLACEMENT_DIR/gmaps_optimal_placement_core"} -- placement-overlay &
-		PANEL_DEV_BACKEND="$origin" \
+		PANEL_DEV_BACKEND="$origin" PANEL_DEV_DIST=".next${own_port:+/port-$own_port}" \
 			prefixed web npx next dev --port "$WEB_DEV_PORT"
 	) &
 	web_pid=$!
@@ -769,6 +861,7 @@ start_site() {
 if [ "$sites" = 1 ]; then
 	start_site aquafix "$AQUAFIX_DIR" "$AQUAFIX_PORT" aquafix-local
 	start_site vifnet "$VIFNET_DIR" "$VIFNET_PORT" vifnet-local
+	start_site debouchage "$DEBOUCHAGE_DIR" "$DEBOUCHAGE_PORT" debouchage-local
 	for s in ${started[@]+"${started[@]}"}; do
 		IFS=: read -r name port pid <<<"$s"
 		# The first `nix run .#dev` may install node_modules: minutes, not seconds.
@@ -789,6 +882,7 @@ fi
 			for slug in "${AQUAFIX_PLACES[@]}"; do echo " aquafix  http://$slug.localhost:$AQUAFIX_PORT/fr"; done
 			;;
 		vifnet) echo " vifnet   http://localhost:$VIFNET_PORT/fr" ;;
+		debouchage) echo " debouchage http://localhost:$DEBOUCHAGE_PORT/fr" ;;
 		esac
 	done
 	echo

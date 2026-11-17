@@ -5,14 +5,14 @@ import { useSyncExternalStore } from "react";
 import type { AssistantTurn, UserTurn } from "@/entities/assistant";
 import type { Chat, Question, Turn } from "@/shared/api/schema";
 import { api, ok } from "@/shared/api";
-import { setQuery } from "@/shared/lib/query";
+import { type Carried, setCarried } from "@/shared/lib/location";
 import { DESKTOP_QUERY } from "@/shared/lib/use-media-query";
 
 /** `ask`: actions wait for a press; `act`: the first is taken at once, and can be undone. */
 export type Approval = "ask" | "act";
 
 /** Where the assistant sits beside the page; full screen is its own page, `/assistant/`. */
-export type Mode = "sidebar" | "floating";
+export type Mode = NonNullable<Carried["assistant"]>;
 export type Display = Mode | "full";
 
 /** The answer being written in this tab: its question and itself, from turn `from` of `chat`, until the server has both. */
@@ -80,14 +80,14 @@ export const newId = () => crypto.randomUUID();
 
 /** The sidebar or the floating window, else (`null`) folded. */
 export function show(mode: Mode | null): void {
-  setQuery({ assistant: mode });
+  setCarried({ assistant: mode ?? undefined });
   set((s) => (mode === null ? { ...s, folded: true } : { ...s, mode, folded: false, unread: false }));
 }
 
 /** A page without `?assistant=` shows it as this browser last left it. */
 export function restore(): void {
   const s = current();
-  setQuery((q) => (q.assistant === null && !s.folded ? { assistant: s.mode } : {}));
+  setCarried((c) => (c.assistant === undefined && !s.folded ? { assistant: s.mode } : {}));
 }
 
 export function setWidth(width: number): void {
@@ -131,8 +131,8 @@ export function stop(): void {
   stopping?.abort();
 }
 
-/** What the page tells the assistant: what is open, the views there are, the bindings bound now. */
-export type Page = Pick<Question, "url" | "views" | "bindings">;
+/** What the page tells the assistant: what is open, the bindings bound now. */
+export type Page = Pick<Question, "url" | "bindings">;
 
 /**
  * `asked` put at turn `from` of `chat` (a new chat for `null`), everything after it dropped, and answered by the

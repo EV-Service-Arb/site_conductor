@@ -5,13 +5,9 @@
 //! channel. What publishes:
 //!
 //! ```text
-//! sites' change feed    a table sites committed to (`sites.<table>`), to everyone      → its topic
+//! the store's pool      a table the conductor committed to (`conductor.<table>`)      → its topic
+//! the services' feeds   a table one committed to (`sites.<table>`, …)                  → its topic
 //!                       a rebuild there, a reconnect, the feed lagging                → resync
-//! add_source, revoke,   the signing keys, a site's origin                             → sources
-//!   set_site_origin
-//! alerts                destinations added, removed, dead, revived; rules             → alerts (its user only)
-//! assistant             a chat's turns, title, members, general access, deletion       → assistant (its owner and
-//!                       (a mark: whose it is)                                            members, the removed too)
 //! sessions closed       logout, a sign-in replacing one, a refusal  → the sockets of that session end
 //! ```
 //!
@@ -19,13 +15,11 @@
 //! simply dropped, and a subscriber that falls behind by more than the channel holds is told
 //! so ([`broadcast::error::RecvError::Lagged`]) instead of the channel growing.
 //!
-//! A command run in another process (`panel source add`) publishes on its own bus, which nobody
-//! listens to: the server's sockets do not see it.
+//! A command run in another process publishes on its own bus, which nobody listens to.
 
 use std::time::Duration;
 
 use jiff::Timestamp;
-use sa_auth::PermissionSet;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
@@ -35,38 +29,13 @@ use crate::session::SessionKey;
 /// afresh.
 pub const DEFAULT_CAPACITY: usize = 1024;
 
-/// Who may be told of a change.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Audience {
-	/// Whoever holds this permission: the one that reads what changed.
-	Holders(String),
-	/// One user: their alerts, their chats.
-	User(Uuid),
-	/// Everyone signed in: a table a service committed to.
-	Everyone,
-}
-
-/// Something committed that a screen reads.
+/// A table committed to, everyone signed in told.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Change {
+	/// `<service>.<table>`.
 	pub topic: String,
-	pub brand: Option<String>,
-	/// The single subject a screen would refetch by, when there is one.
-	pub id: Option<String>,
-	/// When it was committed (the writer's clock).
+	/// When the conductor heard of it.
 	pub at: Timestamp,
-	pub audience: Audience,
-}
-
-impl Change {
-	/// Whether `user`, holding `permissions`, may be told of it.
-	pub fn visible_to(&self, user: Uuid, permissions: &PermissionSet) -> bool {
-		match &self.audience {
-			Audience::Holders(p) => permissions.iter().any(|q| q == p),
-			Audience::User(u) => *u == user,
-			Audience::Everyone => true,
-		}
-	}
 }
 
 /// Which sessions have ended, so the sockets they opened close at once rather than at their
@@ -114,8 +83,11 @@ impl Bus {
 		let _nobody_listening = self.tx.send(signal);
 	}
 
-	pub fn changed(&self, change: Change) {
-		self.publish(Signal::Changed(change));
+	pub fn changed(&self, topic: &str) {
+		self.publish(Signal::Changed(Change {
+			topic: topic.to_owned(),
+			at: Timestamp::now(),
+		}));
 	}
 
 	/// Waits until every subscriber has let go, or `within` has passed: at shutdown, so the
@@ -139,26 +111,6 @@ impl Default for Bus {
 #[cfg(test)]
 mod tests {
 	use super::*;
-
-	#[test]
-	fn who_is_told() {
-		let (ann, bob) = (Uuid::from_u128(1), Uuid::from_u128(2));
-		let operator: PermissionSet = sa_auth::SA_OPERATOR.members.iter().copied().collect();
-		let admin: PermissionSet = sa_auth::SA_ADMIN.members.iter().copied().collect();
-		let change = |audience| Change {
-			topic: "x".into(),
-			brand: None,
-			id: None,
-			at: Timestamp::UNIX_EPOCH,
-			audience,
-		};
-		let sources = change(Audience::Holders(sa_auth::Sources::Manage.as_str().into()));
-		assert!(!sources.visible_to(ann, &operator));
-		assert!(sources.visible_to(ann, &admin));
-		let link = change(Audience::User(ann));
-		assert!(link.visible_to(ann, &operator));
-		assert!(!link.visible_to(bob, &admin), "another user's link, admin or not");
-	}
 
 	#[tokio::test]
 	async fn publishing_with_nobody_listening_is_fine() {

@@ -1,5 +1,5 @@
-//! Composition root: settings, error monitoring and logs, then the CLI over the engine's
-//! `Panel`.
+//! Composition root: settings, error monitoring and logs, then `serve`, `migrate` and
+//! `gen-data-key`; every other operation is `/api/v1`'s.
 
 // `ev_lib::settings!` expands once per field and recurses; the settings outgrew the default 128.
 #![recursion_limit = "256"]
@@ -7,18 +7,13 @@
 mod config;
 mod settings;
 
-use std::{collections::BTreeSet, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use clap::{Parser, Subcommand};
 use ev_lib::error_monitoring;
 use eyre::WrapErr;
-use jiff::Timestamp;
-use sa_auth::{Catalog, SourceKind};
-use sa_core::{
-	ids::{BrandId, SiteOrigin},
-	queries_cache::{Key, Scheme},
-};
-use sa_panel::{Panel, alerts::Hub, gmbs::Existing, seal::DataKey, store::Store, tokens::Change};
+use sa_auth::Catalog;
+use sa_panel::{Panel, alerts::Hub, seal::DataKey, store::Store};
 use sa_server::{
 	alerts::{self, Telegram},
 	concierge::{Concierge, DevIdentity},
@@ -34,11 +29,7 @@ use sa_server::{
 use crate::settings::Settings;
 
 #[derive(Parser)]
-#[command(
-	name = "panel",
-	version,
-	about = "The Service-Arb conductor: the sign-in, the source keys, the forward to the services behind it, and its hubs"
-)]
+#[command(name = "panel", version, about = "The Service-Arb conductor: the sign-in, the forward to the services behind it, and its hubs")]
 struct Cli {
 	#[command(subcommand)]
 	cmd: Cmd,
@@ -60,129 +51,8 @@ enum Cmd {
 		#[arg(long, env = "PANEL_BIND")]
 		bind: SocketAddr,
 	},
-	/// The sources that may write events, and their keys.
-	#[command(subcommand)]
-	Source(SourceCmd),
-	/// A person's gmails.
-	#[command(subcommand)]
-	Gmail(GmailCmd),
-	/// The GMBs a gmail manages.
-	#[command(subcommand)]
-	Gmb(GmbCmd),
-	/// A person's tokens, as an admin changes them.
-	#[command(subcommand)]
-	Tokens(TokensCmd),
-	/// What another service held before the conductor did.
-	#[command(subcommand)]
-	Import(ImportCmd),
 	/// Print a fresh PANEL_DATA_KEY.
 	GenDataKey,
-}
-
-#[derive(Subcommand)]
-enum SourceCmd {
-	/// Register a source; prints its secret, once.
-	Add {
-		/// Lowercase slug, e.g. aquafix-site.
-		key_id: String,
-		/// site | review_archive | gbp | posthog | sheet | telephony | bot (panel and booking are
-		/// written without a key)
-		#[arg(long)]
-		kind: String,
-		/// A brand it may write for; repeat for several.
-		#[arg(long = "brand", required = true)]
-		brands: Vec<String>,
-		/// A site's origin, where its landing answers, e.g. `https://aquafix.top`: no path. Sites only.
-		#[arg(long)]
-		origin: Option<String>,
-	},
-	List,
-	/// Give a site key issued before origins its origin; set once, never changed.
-	SetOrigin {
-		key_id: String,
-		origin: String,
-	},
-	/// Refuse its key from now on; what it wrote stays.
-	Revoke {
-		key_id: String,
-	},
-}
-
-#[derive(Subcommand)]
-enum GmailCmd {
-	/// Add a gmail to a person (by the email they sign in with).
-	Add { email: String, gmail: String },
-}
-
-#[derive(Subcommand)]
-enum GmbCmd {
-	/// Add a GBP on Google already under a gmail: a place id, or a Maps URL (a name in it needs an
-	/// account's Places key).
-	Add {
-		gmail_id: i64,
-		place: String,
-		/// verifying | verified | suspended
-		#[arg(long)]
-		state: String,
-		/// Its name, when Google gives none.
-		#[arg(long)]
-		name: Option<String>,
-		/// Its country (FR, US, CA, GB), when Google gives none.
-		#[arg(long)]
-		country: Option<String>,
-		/// The owner's trade it is of.
-		#[arg(long)]
-		trade: i64,
-	},
-	/// Locate every GMB's place that has no point or no country of Google's yet, through the
-	/// Places cache: run once after a deploy that brings points or countries, and after
-	/// `local-stack --from-prod`.
-	Locate,
-	/// Set a GMB's country (FR, US, CA, GB) while Google gives it none.
-	Country { gmb_id: i64, country: String },
-}
-
-#[derive(Subcommand)]
-enum TokensCmd {
-	/// Set a person's balance to n (0 or more).
-	Set {
-		email: String,
-		n: i64,
-		/// The admin's email, recorded.
-		#[arg(long)]
-		by: String,
-		#[arg(long)]
-		note: Option<String>,
-	},
-	/// Add n (1 or more): a sale, its reference in the note.
-	Add {
-		email: String,
-		n: i64,
-		#[arg(long)]
-		by: String,
-		#[arg(long)]
-		note: Option<String>,
-	},
-	/// Owe a person n (1 or more) until they claim it.
-	Grant {
-		email: String,
-		n: i64,
-		#[arg(long)]
-		by: String,
-		/// What it is for.
-		#[arg(long)]
-		note: String,
-	},
-}
-
-#[derive(Subcommand)]
-enum ImportCmd {
-	/// review_archive's people, gmails, GMBs and tokens, as its scripts/export_members.sql
-	/// prints them; opens tokens and GMBs. A fresh install imports an empty document.
-	ReviewArchive { file: std::path::PathBuf },
-	/// Paid answers a client kept as files, `<sha256 hex>.json` each, into the queries cache under
-	/// `scheme` (places | gop), fetched when the file was written; a newer one kept already stays.
-	QueriesCache { scheme: String, dir: std::path::PathBuf },
 }
 
 // Sentry must be initialised before the async runtime starts, hence no #[tokio::main].
@@ -192,6 +62,20 @@ fn main() -> eyre::Result<()> {
 	// What the contract's `provides` must equal (the flake's `checks.provided-paths`).
 	if std::env::args().nth(1).as_deref() == Some("--print-provided-paths") {
 		for path in sa_server::PROVIDED_PATHS {
+			println!("{path}");
+		}
+		return Ok(());
+	}
+	// What the flake's ingress and `consumes` must equal (its `checks.paths`).
+	if std::env::args().nth(1).as_deref() == Some("--print-paths") {
+		let paths = sa_server::forward::paths();
+		let listed: Vec<&str> = match std::env::args().nth(2).as_deref() {
+			Some("rate-limited") => paths.filter(|p| p.rate_limited).map(|p| p.prefix).collect(),
+			Some("unpublished") => paths.filter(|p| !p.published).map(|p| p.prefix).collect(),
+			Some("consumed") => settings::CONSUMED.to_vec(),
+			other => eyre::bail!("--print-paths rate-limited|unpublished|consumed, not {other:?}"),
+		};
+		for path in listed {
 			println!("{path}");
 		}
 		return Ok(());
@@ -235,7 +119,7 @@ fn main() -> eyre::Result<()> {
 		.block_on(run(cli, settings, dev_sign_in))
 }
 
-/// Logs go to stderr, so a CLI command's stdout stays its output.
+/// Logs go to stderr, so `gen-data-key`'s stdout stays its output.
 fn init_tracing() -> eyre::Result<()> {
 	use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
@@ -260,7 +144,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 		Ok(Arc::new(sa_places::Accounts::new(config.google)))
 	};
 	let connect = || async {
-		let store = Store::open(settings.db_path()?).await?;
+		let store = Store::open(settings.db_path()?, sa_panel::live::Bus::default()).await?;
 		let accounts = accounts()?;
 		let keys = sa_places::Keys::new(accounts.iter().filter_map(|a| Some((a.name.clone(), a.provides.places.as_deref()?.to_owned()))).collect());
 		let rank = sa_panel::meters::ByStanding {
@@ -272,7 +156,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 	};
 	match cli.cmd {
 		Cmd::Migrate => {
-			Store::open(settings.db_path()?).await?.pool().close().await;
+			Store::open(settings.db_path()?, sa_panel::live::Bus::default()).await?.pool().close().await;
 			Ok(())
 		}
 		Cmd::Serve { bind } => {
@@ -320,125 +204,8 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 			)
 			.await
 		}
-		Cmd::Source(cmd) => source(&connect().await?, cmd).await,
-		Cmd::Gmail(GmailCmd::Add { email, gmail }) => {
-			let panel = connect().await?;
-			let owner = panel.user_by_email(&email).await?;
-			let added = panel.add_gmail(owner, &gmail, Timestamp::now()).await??;
-			println!("gmail {}: {}", added.id, added.gmail);
-			Ok(())
-		}
-		Cmd::Gmb(GmbCmd::Add {
-			gmail_id,
-			place,
-			state,
-			name,
-			country,
-			trade,
-		}) => {
-			let existing = Existing {
-				gmail_id,
-				place,
-				state: state.parse()?,
-				name,
-				country: country.as_deref().map(str::parse).transpose()?,
-				trade,
-			};
-			let added = connect().await?.add_gmb(None, existing, Timestamp::now()).await??;
-			println!("GBP {}: {} {}", added.id, added.place_id.expect("on Google"), added.name);
-			Ok(())
-		}
-		Cmd::Gmb(GmbCmd::Locate) => {
-			let panel = connect().await?;
-			eyre::ensure!(
-				panel.accounts().iter().any(|a| a.provides.places.is_some()),
-				"locating asks Places: no Google account in the config file has a Places key"
-			);
-			let done = panel.locate().await?;
-			println!("{} places located", done.located);
-			if !done.no_point.is_empty() {
-				println!("{} have no point on Google: place them on the map", done.no_point.len());
-			}
-			for place_id in &done.no_country {
-				println!("{place_id}: no country on Google; `panel gmb country` it");
-			}
-			for (place_id, why) in &done.refused {
-				println!("{place_id}: {why}");
-			}
-			Ok(())
-		}
-		Cmd::Gmb(GmbCmd::Country { gmb_id, country }) => {
-			connect().await?.set_country(None, gmb_id, country.parse()?).await??;
-			Ok(())
-		}
-		Cmd::Tokens(cmd) => {
-			let (email, by, change) = match cmd {
-				TokensCmd::Set { email, n, by, note } => (email, by, Change::Set { n, note }),
-				TokensCmd::Add { email, n, by, note } => (email, by, Change::Add { n, note }),
-				TokensCmd::Grant { email, n, by, note } => (email, by, Change::Grant { n, note }),
-			};
-			let panel = connect().await?;
-			let user = panel.user_by_email(&email).await?;
-			let balance = panel.change_balance(user, change, &by, Timestamp::now()).await??;
-			println!("{email}: {balance}");
-			Ok(())
-		}
-		Cmd::Import(ImportCmd::ReviewArchive { file }) => {
-			let raw = std::fs::read(&file).wrap_err_with(|| format!("reading {}", file.display()))?;
-			let export = serde_json::from_slice(&raw).wrap_err_with(|| format!("{} is not review_archive's export", file.display()))?;
-			connect().await?.import_review_archive(export).await
-		}
-		Cmd::Import(ImportCmd::QueriesCache { scheme, dir }) => {
-			let scheme: Scheme = scheme.parse()?;
-			let store = Store::open(settings.db_path()?).await?;
-			let (mut kept, mut skipped) = (0, 0);
-			for entry in std::fs::read_dir(&dir).wrap_err_with(|| format!("reading {}", dir.display()))? {
-				let path = entry?.path();
-				let Some(key) = path.file_name().and_then(|n| n.to_str()).and_then(|n| n.strip_suffix(".json")).map(str::parse::<Key>) else {
-					skipped += 1; // a `.rejected` or `.part` beside the answers: not an answer
-					continue;
-				};
-				let key = key.wrap_err_with(|| format!("{} is not named by a request's digest", path.display()))?;
-				let text = std::fs::read_to_string(&path).wrap_err_with(|| format!("reading {}", path.display()))?;
-				serde_json::from_str::<serde_json::Value>(&text).wrap_err_with(|| format!("{} is not JSON", path.display()))?;
-				let written = std::fs::metadata(&path)?.modified()?;
-				store.keep_query(scheme, key, &text, None, None, Timestamp::try_from(written)?).await?;
-				kept += 1;
-			}
-			println!("{kept} answers cached under {scheme}; {skipped} other files left");
-			Ok(())
-		}
 		Cmd::GenDataKey => {
 			println!("{}", DataKey::generate_hex()?);
-			Ok(())
-		}
-	}
-}
-
-async fn source(panel: &Panel, cmd: SourceCmd) -> eyre::Result<()> {
-	match cmd {
-		SourceCmd::Add { key_id, kind, brands, origin } => {
-			let kind: SourceKind = kind.parse()?;
-			let brands = brands.iter().map(|b| BrandId::parse(b)).collect::<Result<BTreeSet<_>, _>>()?;
-			let origin = origin.as_deref().map(SiteOrigin::parse).transpose()?;
-			let Some(added) = panel.add_source(&key_id, kind, brands, origin).await? else {
-				eyre::bail!("a source {key_id} exists already");
-			};
-			println!("key id: {}\nsecret: {}\n(shown once; the source signs with it)", added.key_id, *added.secret);
-			Ok(())
-		}
-		SourceCmd::List => {
-			for s in panel.store().sources().await? {
-				let brands: Vec<&str> = s.grant.brands.iter().map(BrandId::as_str).collect();
-				let state = s.revoked_at.map_or_else(|| "active".to_owned(), |at| format!("revoked {at}"));
-				let origin = s.origin.as_ref().map_or("-", SiteOrigin::as_str);
-				println!("{:<24} {:<14} {:<32} {origin:<32} {state}", s.grant.key_id, s.grant.kind, brands.join(","));
-			}
-			Ok(())
-		}
-		SourceCmd::SetOrigin { key_id, origin } => panel.set_site_origin(&key_id, &SiteOrigin::parse(&origin)?).await,
-		SourceCmd::Revoke { key_id } => {
-			eyre::ensure!(panel.revoke_source(&key_id).await?, "no active source {key_id}");
 			Ok(())
 		}
 	}

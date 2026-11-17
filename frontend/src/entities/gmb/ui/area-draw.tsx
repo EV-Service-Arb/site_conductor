@@ -4,7 +4,7 @@ import { Button, Command, CommandInput, CommandItem, CommandList, Input, ToggleG
 import { Crosshair, MapPin } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
-import { ApiError, api, ok } from "@/shared/api";
+import { Refused, api, ok } from "@/shared/api";
 import type { Area, LatLng, Locality, PutArea, Suggestion } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDistance } from "@/shared/lib/format";
@@ -112,8 +112,8 @@ export function AreaDraw({ map, left, onSaved }: { map: google.maps.Map; left: n
     try {
       onSaved(await ok(api.PUT("/areas/{slug}", { params: { path: { slug } }, body })));
     } catch (e) {
-      if (!(e instanceof ApiError)) throw e;
-      if (e.failure.kind !== "unauthenticated") setRefused(failureText(e.failure, t));
+      if (!(e instanceof Refused)) throw e;
+      if (e.failure.code !== "unauthenticated") setRefused(failureText(e.failure, t));
     } finally {
       setBusy(false);
     }

@@ -8,9 +8,9 @@
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { type RefObject, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
-import { type ApiFailure, ApiError, api, ok } from "@/shared/api";
+import { type Failure, Refused, api, ok } from "@/shared/api";
 import type { MapConfig } from "@/shared/api/schema";
-import { setQuery, useQuery } from "@/shared/lib/query";
+import { setHome, useHome } from "@/shared/lib/location";
 
 const PLACES_KEY = "sa:map-places";
 const CHOSEN_EVENT = "sa:map-view-chosen";
@@ -66,7 +66,7 @@ function theMap({ key, account }: MapConfig, scheme: string): { account: string;
   return kept.saMap;
 }
 
-export type TheMap = { status: "loading" } | { status: "ok"; map: google.maps.Map; account: string } | { status: "error"; failure: ApiFailure | { kind: "invalid"; message: string } };
+export type TheMap = { status: "loading" } | { status: "ok"; map: google.maps.Map; account: string } | { status: "error"; failure: Failure };
 
 /** The page session's map, inside `host`; its polarity is the host's `--scheme`. */
 export function useTheMap(config: MapConfig): { host: RefObject<HTMLDivElement | null>; map: TheMap } {
@@ -80,7 +80,7 @@ export function useTheMap(config: MapConfig): { host: RefObject<HTMLDivElement |
     let live = true;
     map.then(
       (m) => live && setMap({ status: "ok", map: m, account }),
-      (e: unknown) => live && setMap({ status: "error", failure: e instanceof ApiError ? e.failure : { kind: "invalid", message: e instanceof Error ? e.message : String(e) } }),
+      (e: unknown) => live && setMap({ status: "error", failure: e instanceof Refused ? e.failure : { code: "maps", error: e instanceof Error ? e.message : String(e) } }),
     );
     return () => {
       live = false;
@@ -117,15 +117,13 @@ export function showPlaces(shown: boolean): void {
   chosen();
 }
 
-/** Google's imagery or its roads under everything drawn: `?base=schematic`, satellite without it. */
+/** Google's imagery or its roads under everything drawn: `?schematic`, satellite without it. */
 export function useBase(): Base {
-  const base = useQuery("base");
-  if (base !== null && base !== "schematic") throw new Error(`?base=${base}: schematic, or no ?base for satellite`);
-  return base ?? "satellite";
+  return useHome()?.schematic === true ? "schematic" : "satellite";
 }
 
 export function setBase(base: Base): void {
-  setQuery({ base: base === "satellite" ? null : "schematic" });
+  setHome({ schematic: base === "schematic" });
 }
 
 /** `element` centred on a point of `map` (or standing on it by its bottom tip) until removed, its clicks the map's no more; dragged where `onDrag` is given. */

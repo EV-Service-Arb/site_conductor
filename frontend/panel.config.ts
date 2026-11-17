@@ -15,8 +15,8 @@ type PanelConfig = {
   assistant: boolean;
   /** The hotbar's Map panel: one 20rem column, or the heat beside the overlays and data in 40rem. Either pops out into its own window. */
   mapPanel: "column" | "columns";
-  /** By tag: the key under the leader whose scope an element's own keys (`ev:keymap`) sit in, and its label. An element not here has its keys refused. */
-  elementKeys: Record<string, { key: string; label: (t: T) => string }>;
+  /** By tag: the nest whose `scope` key (under the leader) an element's own keys (`ev:keymap`) sit in, and its label. An element not here has its keys refused. */
+  elementKeys: Record<string, { nest: "sites"; label: (t: T) => string }>;
   /** The app switcher's entries under Service-Arb, in order; `icon` a monochrome mark under `public/`. */
   links: { name: string; href: string; icon: string; description: (t: T) => string; newTab: boolean }[];
 };
@@ -28,7 +28,7 @@ export const PANEL: PanelConfig = {
   theme: "dark",
   assistant: true,
   mapPanel: "columns",
-  elementKeys: { "mfe-sites-nav": { key: "v", label: (t) => t(nav.sites, "Sites") } },
+  elementKeys: { "mfe-sites-nav": { nest: "sites", label: (t) => t(nav.sites, "Sites") } },
   links: [
     { name: "Discord", href: "https://discord.gg/nGU6Fk4SAK", icon: "/links/discord.svg", description: (t) => t(links.discord, "Ask the other operators"), newTab: true },
     { name: "GitHub", href: "https://github.com/EV-Service-Arb", icon: "/links/github.svg", description: (t) => t(links.github, "The code behind this panel"), newTab: true },

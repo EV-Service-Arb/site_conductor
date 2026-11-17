@@ -18,12 +18,15 @@ type DestinationRow = (i64, Uuid, Option<i64>, String, i64, Option<i64>, Option<
 type RecipientRow = (i64, Uuid, Json<PermissionSet>, i64, Option<i64>, String);
 
 /// What concierge said of a user at `at`: their permissions and name. An answer older than the
-/// one kept is not taken (a link token's, redeemed after the gate asked again).
+/// one kept is not taken (a link token's, redeemed after the gate asked again); the same answer
+/// within 5 minutes of the last is kept as it is, so the gate's GetMe tells no change.
 pub async fn access_seen(conn: &mut SqliteConnection, user: Uuid, permissions: &PermissionSet, display: &str, at: Timestamp) -> eyre::Result<()> {
 	sqlx::query(
 		"INSERT INTO alert_access (user_id, permissions, confirmed_at, tried_at, display_name) VALUES ($1, $2, $3, $3, $4) \
 		 ON CONFLICT (user_id) DO UPDATE SET permissions = $2, confirmed_at = $3, tried_at = max(coalesce(tried_at, $3), $3), display_name = $4 \
-		 WHERE excluded.confirmed_at >= alert_access.confirmed_at",
+		 WHERE excluded.confirmed_at >= alert_access.confirmed_at \
+		 AND (excluded.permissions IS NOT alert_access.permissions OR excluded.display_name IS NOT alert_access.display_name \
+		 OR excluded.confirmed_at >= alert_access.confirmed_at + 300000000)",
 	)
 	.bind(user)
 	.bind(Json(permissions))

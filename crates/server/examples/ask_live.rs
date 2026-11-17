@@ -25,7 +25,7 @@ async fn main() {
 		ledger: vec![],
 		kickbacks: vec![],
 	};
-	p.import_review_archive(empty).await.expect("an empty import opens tokens");
+	p.import_review_archive(empty).await.unwrap().expect("an empty import opens tokens");
 	let prices: Vec<_> = sa_core::prices::Item::all().filter(|i| i.tool() == "claude").map(|i| (i, Some(1))).collect();
 	p.set_prices(&prices, &[], "admin@localhost", jiff::Timestamp::now())
 		.await
@@ -50,7 +50,7 @@ async fn main() {
 	let made = json!({ "id": chat, "title": null, "turns": [] });
 	let (status, ..) = b.send_body(&app, Method::POST, "/api/v1/assistant/chats", &json, true, Body::from(made.to_string())).await;
 	assert_eq!(status, 201);
-	let asked = json!({ "from": 0, "text": question, "mentions": [], "files": [], "url": "/", "views": { "trash": "/?trash" }, "bindings": [] });
+	let asked = json!({ "from": 0, "text": question, "mentions": [], "files": [], "url": "/", "bindings": [] });
 	let (status, _, answer) = b
 		.send_body(&app, Method::POST, &format!("/api/v1/assistant/chats/{chat}/ask"), &json, true, Body::from(asked.to_string()))
 		.await;

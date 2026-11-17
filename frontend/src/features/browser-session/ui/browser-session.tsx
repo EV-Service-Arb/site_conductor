@@ -6,10 +6,10 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { browsersUnconnected, openAccount, useGmails, browser as browserKeys } from "@/entities/gmb";
 import type { Browser, BrowserIn, BrowserOut, Gmail } from "@/shared/api/schema";
-import { ApiError, api, ok } from "@/shared/api";
+import { Refused, api, ok } from "@/shared/api";
 import { type T, useT, account } from "@/shared/i18n";
-import { backoffDelay } from "@/shared/lib/live";
-import { useResource } from "@/shared/lib/use-resource";
+import { backoffDelay } from "@evinvest/api";
+import { useResource } from "@evinvest/api/react";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorState } from "@/shared/ui/error-state";
 import { failureText } from "@/shared/ui/failure-text";
@@ -28,7 +28,7 @@ export type TypeIn = ((text: string) => void) | null;
 export function BrowserSession({ gmail, gmb, aside }: { gmail: Gmail; gmb: number | null; aside?: (type: TypeIn) => ReactNode }) {
   const t = useT();
   const button = useButtonSize();
-  const connections = useResource(`connections.${gmail.id}`, () => ok(api.GET("/gmails/{id}/connections", { params: { path: { id: gmail.id } } })), "connections", { live: ["gmails"] });
+  const connections = useResource(api, "/gmails/{id}/connections", { params: { path: { id: gmail.id } }, keep: true });
   return (
     <Settled loading={connections.status === "loading"} skeleton={<Skeleton className="h-96 w-full" />}>
       {connections.status === "error" && <ErrorState failure={connections.failure} onRetry={connections.reload} />}
@@ -100,9 +100,7 @@ function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: nu
       reload();
     };
     const timer = window.setTimeout(() => {
-      const url = new URL(`/api/v1/gmails/${id}/browser`, window.location.href);
-      url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-      const opening = new WebSocket(url);
+      const opening = new WebSocket(api.url("/gmails/{id}/browser", { path: { id } }));
       ws = opening;
       ws.onopen = () => {
         opened = true;
@@ -121,7 +119,7 @@ function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: nu
           setPhase("lost");
           window.dispatchEvent(new Event("sa:unauthenticated"));
         } else if (e.code === CLOSE.notRunning || e.code === CLOSE.stopped) gone();
-        else if (e.code === CLOSE.takenOver) setPhase("taken");
+        else if (e.code === CLOSE.replaced) setPhase("taken");
         else if (opened || e.code === CLOSE.goingAway) {
           setPhase("connecting");
           setLink({ n: link.n + 1, delay: backoffDelay(attempts.current++, Math.random) });
@@ -155,11 +153,11 @@ function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: nu
       await ok(api.POST("/gmails/{id}/browser/start", { params: { path: { id: gmail.id } }, body: { gmb } }));
     } catch (e) {
       setPhase(stopped ? "off" : "elsewhere");
-      if (!(e instanceof ApiError)) throw e;
+      if (!(e instanceof Refused)) throw e;
       if (browsersUnconnected(e)) setFailure(t(browserKeys.unconnected, "Browsers not connected"));
       // the runner full: its own words
-      else if (e.failure.kind === "unavailable" && e.failure.message !== "") setFailure(e.failure.message);
-      else if (e.failure.kind !== "unauthenticated") setFailure(failureText(e.failure, t));
+      else if (e.failure.code === "unavailable" && e.failure.error !== "") setFailure(e.failure.error);
+      else if (e.failure.code !== "unauthenticated") setFailure(failureText(e.failure, t));
       return;
     }
     reload();

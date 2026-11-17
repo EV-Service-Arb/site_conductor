@@ -2,22 +2,22 @@
 //! again instead of being reloaded.
 //!
 //! ```text
-//! GET /api/v1/live    Origin = PANEL_PUBLIC_ORIGIN, exactly                 else 403
-//!                     the session, as the /api/v1 gate                      else 401 / 503
+//! GET /api/v1/live    the session, its row's gate                            else 401 / 503
+//!                     Origin = PANEL_PUBLIC_ORIGIN, exactly                 else 403
 //!                     ≤ 5 sockets per user, ≤ 200 in all                    else 429
 //!                     → 101; the bus subscribed before the answer, so nothing committed after
 //!                       it is missed
 //! server → client     {"type":"hello","at","user_id"}                        at once
-//!                     {"type":"changed","topic","brand_id"?,"id"?,"at"}    after each commit the
-//!                                                                          user may read
+//!                     {"type":"changed","topic","at"}                       a table committed to
 //!                     {"type":"resync"}                                     fell behind; read all
 //!                     Ping every 25 s; no Pong for 60 s → dropped
 //! closes              4401 the session ended (sign-out, replaced, refused, expired)
 //!                     1001 the server is stopping
 //! ```
 //!
-//! What sites changed comes from its feed ([`follow`]): one subscriber per process, each line
-//! onto the bus with the permission that reads it.
+//! What the conductor committed comes from its store's pool; what a service did, from its feed
+//! ([`follow`]): one subscriber per process, each line onto the bus as it came. Everyone signed
+//! in is told every table: what they may read is judged when they read it.
 //!
 //! Only the server speaks: the client's frames are read for Pong and Close and otherwise
 //! ignored. CSRF has no say over a GET, so the `Origin` header is what keeps another site's
@@ -25,8 +25,7 @@
 //! browser always sends it on a WebSocket handshake, and a request without one is refused.
 //!
 //! The session is asked again every [`LiveLimits::recheck_every`] (and the permissions, through the
-//! gate's `GetMe` cache), and at once when the engine says a session ended. What a user is told
-//! is what they may read ([`sa_panel::live::Change::visible_to`]). A slow reader never makes the
+//! gate's `GetMe` cache), and at once when the engine says a session ended. A slow reader never makes the
 //! server hold more: the bus keeps a bounded backlog per subscriber and says "lagged" past it,
 //! which becomes a `resync`; a write that does not go out within
 //! [`LiveLimits::send_within`] drops the socket.
@@ -38,13 +37,17 @@ use std::{
 };
 
 use axum::{
+	Extension,
 	extract::{
 		State,
 		ws::{CloseFrame, Message, Utf8Bytes, WebSocket, WebSocketUpgrade, rejection::WebSocketUpgradeRejection},
 	},
-	http::{HeaderMap, StatusCode, header},
-	response::{IntoResponse, Response},
+	http::{HeaderMap, Method, StatusCode, header},
+	response::Response,
 };
+use ev_lib::api::Refusal;
+use sa_auth::Service;
+use sa_browsers::view::Close;
 use sa_core::feeds::Line;
 use sa_panel::{
 	live::{Change, Ended, Signal},
@@ -56,21 +59,20 @@ use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::{
-	api::ApiError,
+	api::Code,
 	cookies,
 	forward::Services,
-	signin::{self, Caller, Denied, Freshness, SignIn},
+	http::{ApiRoute, USER},
+	signin::{self, Caller, Freshness, SignIn},
 };
 
-/// The session ended: sign in again.
-pub const CLOSE_SESSION_ENDED: u16 = 4401;
-/// RFC 6455's "going away": the server is stopping.
-pub const CLOSE_GOING_AWAY: u16 = 1001;
+/// The services whose committed writes the conductor relays.
+const CHANGE_FEEDS: [Service; 2] = [Service::Sites, Service::ReviewArchive];
 
-/// How long the feed may say nothing (sites pings every 25 s) before it is taken for dead.
+/// How long a feed may say nothing (a service pings every 25 s) before it is taken for dead.
 const FEED_IDLE: Duration = Duration::from_secs(60);
 
-/// The longest line sites' feed may send.
+/// The longest line a feed may send.
 const FEED_LINE: usize = 64 * 1024;
 
 /// The waits between reconnections: doubling from the first to the last.
@@ -129,28 +131,31 @@ impl Live {
 	}
 }
 
-/// `GET /api/v1/live`. The upgrade is extracted as a `Result` so a request that is not a
-/// handshake is still answered 403/401 first, the same as one that is.
-pub async fn upgrade(State(live): State<Live>, headers: HeaderMap, ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>) -> Response {
+pub(crate) fn routes() -> Vec<ApiRoute> {
+	vec![ApiRoute::new(Method::GET, "/live", USER, live)]
+}
+
+/// A socket telling what changed: each table committed to, as it commits.
+///
+/// Opened from the panel's own pages, on the browser's session: 403 from another origin (asked
+/// before the handshake itself), 429 past a user's or the server's sockets.
+async fn live(
+	State(live): State<Live>,
+	Extension(caller): Extension<Caller>,
+	headers: HeaderMap,
+	ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
+) -> Result<Response, Refusal<Code>> {
 	if !same_origin(&headers, live.sign_in.panel_origin()) {
 		tracing::info!(origin = ?headers.get(header::ORIGIN), "live: a handshake from another origin refused");
-		return ApiError::Csrf.into_response();
+		return Err(Refusal::new(Code::Csrf, "the page is out of date: reload it"));
 	}
-	let caller = match signin::check(&live.sign_in, &headers, Freshness::Cached).await {
-		Ok(c) => c,
-		Err(denied) => return denied.into_response(&live.sign_in),
-	};
-	let ws = match ws {
-		Ok(ws) => ws,
-		Err(rejection) => return rejection.into_response(),
-	};
-	// The check passed, so the cookie is there and names a session.
+	let ws = ws.map_err(|r| Refusal::new(Code::BadRequest, r.body_text()))?;
 	let Some(key) = live.sign_in.cookies().get(&headers, cookies::SESSION).and_then(SessionKey::of_cookie) else {
-		return Denied::Unauthenticated.into_response(&live.sign_in);
+		return Err(Refusal::new(Code::Unauthenticated, "a live socket opens on the browser's session"));
 	};
 	let Some(slot) = live.slots.take(caller.user_id, &live.limits) else {
 		tracing::info!(user_id = %caller.user_id, "live: too many sockets");
-		return ApiError::TooMany("too many live connections".to_owned()).into_response();
+		return Err(Refusal::new(Code::TooMany, "too many live connections"));
 	};
 	// Only the cookie is kept, to ask for the session again.
 	let mut cookie = HeaderMap::new();
@@ -159,7 +164,7 @@ pub async fn upgrade(State(live): State<Live>, headers: HeaderMap, ws: Result<We
 	}
 	let rx = live.sign_in.panel.bus().subscribe();
 	let span = tracing::info_span!("live", user_id = %caller.user_id);
-	ws.max_message_size(4096).max_frame_size(4096).max_write_buffer_size(256 * 1024).on_upgrade(move |socket| {
+	Ok(ws.max_message_size(4096).max_frame_size(4096).max_write_buffer_size(256 * 1024).on_upgrade(move |socket| {
 		Connection {
 			socket,
 			live,
@@ -171,29 +176,49 @@ pub async fn upgrade(State(live): State<Live>, headers: HeaderMap, ws: Result<We
 		}
 		.run()
 		.instrument(span)
-	})
+	}))
 }
 
-/// Follows sites' change feed until `shutdown`, onto `bus`: reconnected with a backoff whenever
-/// it ends, fails, or goes quiet; sites sends `resync` first on every connection, so whatever
-/// was missed meanwhile is read again.
-pub async fn follow(services: Services, bus: sa_panel::live::Bus, mut shutdown: tokio::sync::watch::Receiver<bool>) {
+/// Follows every service's change feed until `shutdown`, onto `bus`.
+pub async fn follow(services: Services, bus: sa_panel::live::Bus, shutdown: tokio::sync::watch::Receiver<bool>) {
+	futures::future::join_all(CHANGE_FEEDS.map(|service| follow_one(&services, service, &bus, shutdown.clone()))).await;
+}
+
+/// One service's feed: reconnected with a backoff whenever it ends, fails, or goes quiet; the
+/// service sends `resync` first on every connection, so whatever was missed meanwhile is read
+/// again. While it has none, said once and asked again after [`crate::alerts::LOOK_AGAIN`].
+async fn follow_one(services: &Services, service: Service, bus: &sa_panel::live::Bus, mut shutdown: tokio::sync::watch::Receiver<bool>) {
 	let mut wait = FEED_BACKOFF.0;
+	let mut absent = false;
 	while !*shutdown.borrow() {
 		let heard = tokio::select! {
-			r = feed(&services, &bus) => r,
+			r = feed(services, service, bus) => r,
 			_ = shutdown.changed() => return,
 		};
-		match heard {
-			Ok(true) => wait = FEED_BACKOFF.0,
-			Ok(false) => {}
-			Err(e) => tracing::warn!(error = format!("{e:#}"), "live: sites' feed broke off"),
-		}
+		let pause = match heard {
+			Ok(Heard::Absent) => {
+				if !absent {
+					tracing::info!(%service, "live: no change feed there yet");
+					absent = true;
+				}
+				crate::alerts::LOOK_AGAIN
+			}
+			heard => {
+				absent = false;
+				match heard {
+					Ok(Heard::Lines) => wait = FEED_BACKOFF.0,
+					Err(e) => tracing::warn!(%service, error = format!("{e:#}"), "live: a change feed broke off"),
+					Ok(Heard::Nothing | Heard::Absent) => {}
+				}
+				let pause = wait;
+				wait = (wait * 2).min(FEED_BACKOFF.1);
+				pause
+			}
+		};
 		tokio::select! {
-			() = tokio::time::sleep(wait) => {}
+			() = tokio::time::sleep(pause) => {}
 			_ = shutdown.changed() => return,
 		}
-		wait = (wait * 2).min(FEED_BACKOFF.1);
 	}
 }
 
@@ -244,18 +269,8 @@ impl Drop for Slot {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 enum Out<'a> {
-	Hello {
-		at: String,
-		user_id: String,
-	},
-	Changed {
-		topic: &'a str,
-		#[serde(skip_serializing_if = "Option::is_none")]
-		brand_id: Option<&'a str>,
-		#[serde(skip_serializing_if = "Option::is_none")]
-		id: Option<&'a str>,
-		at: String,
-	},
+	Hello { at: String, user_id: String },
+	Changed { topic: &'a str, at: String },
 	Resync,
 }
 
@@ -263,8 +278,6 @@ impl<'a> Out<'a> {
 	fn changed(c: &'a Change) -> Self {
 		Self::Changed {
 			topic: &c.topic,
-			brand_id: c.brand.as_deref(),
-			id: c.id.as_deref(),
 			at: c.at.to_string(),
 		}
 	}
@@ -333,14 +346,10 @@ impl Connection {
 						self.caller = caller;
 						Step::Nothing
 					}
-					Err(Denied::Unauthenticated) => Step::Close(CLOSE_SESSION_ENDED, "session ended"),
+					Err(r) if r.code() == Code::Unauthenticated => Step::Close(Close::SignedOut, "session ended"),
 					// The API would answer 503 and keep the session: so does the socket, and it
-					// asks again at the next tick.
-					Err(Denied::Failed(ApiError::Internal(e))) => {
-						crate::report(&e, "live: the session asked again");
-						Step::Nothing
-					}
-					Err(Denied::Unavailable | Denied::Failed(_)) => Step::Nothing,
+					// asks again at the next tick (a failure of ours reported as it was refused).
+					Err(_) => Step::Nothing,
 				},
 			};
 			match step {
@@ -357,9 +366,9 @@ impl Connection {
 					}
 				}
 				Step::Close(code, reason) => {
-					tracing::debug!(code, "live: closed");
+					tracing::debug!(code = code.code(), "live: closed");
 					let frame = CloseFrame {
-						code,
+						code: code.code(),
 						reason: Utf8Bytes::from_static(reason),
 					};
 					// The last word: whether it reached the peer changes nothing here.
@@ -373,18 +382,17 @@ impl Connection {
 
 	fn on_signal(&self, signal: Result<Signal, RecvError>) -> Step {
 		match signal {
-			Ok(Signal::Changed(c)) if c.visible_to(self.caller.user_id, &self.caller.permissions) => Step::Send(Out::changed(&c).message()),
-			Ok(Signal::Changed(_)) => Step::Nothing,
+			Ok(Signal::Changed(c)) => Step::Send(Out::changed(&c).message()),
 			Ok(Signal::Resync) => Step::Send(Out::Resync.message()),
 			Ok(Signal::SessionsEnded(ended)) => {
 				let mine = match ended {
 					Ended::User(user) => user == self.caller.user_id,
 					Ended::Session(key) => key == self.key,
 				};
-				if mine { Step::Close(CLOSE_SESSION_ENDED, "session ended") } else { Step::Nothing }
+				if mine { Step::Close(Close::SignedOut, "session ended") } else { Step::Nothing }
 			}
 			Err(RecvError::Lagged(missed)) => Step::Lagged(missed),
-			Ok(Signal::GoingAway) | Err(RecvError::Closed) => Step::Close(CLOSE_GOING_AWAY, "server stopping"),
+			Ok(Signal::GoingAway) | Err(RecvError::Closed) => Step::Close(Close::GoingAway, "server stopping"),
 		}
 	}
 
@@ -400,18 +408,27 @@ enum Step {
 	Send(Message),
 	/// Behind by more than the bus holds: skip what is left of it and say so.
 	Lagged(u64),
-	Close(u16, &'static str),
+	Close(Close, &'static str),
 	/// The peer is gone or broke the protocol: nothing more to say to it.
 	Drop,
 }
 
-/// One connection to the feed, until it ends: whether a line came through it.
-async fn feed(services: &Services, bus: &sa_panel::live::Bus) -> eyre::Result<bool> {
+/// What one connection to a feed heard, once it ended.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Heard {
+	/// The service has no feed (404).
+	Absent,
+	Nothing,
+	Lines,
+}
+
+/// One connection to `service`'s feed, until it ends.
+async fn feed(services: &Services, service: Service, bus: &sa_panel::live::Bus) -> eyre::Result<Heard> {
 	use http_body_util::BodyExt;
 
 	let res = services
 		.send(
-			sa_auth::Service::Sites,
+			service,
 			axum::http::Method::GET,
 			sa_core::feeds::CHANGES,
 			HeaderMap::new(),
@@ -419,14 +436,18 @@ async fn feed(services: &Services, bus: &sa_panel::live::Bus) -> eyre::Result<bo
 			axum::body::Body::empty(),
 		)
 		.await?;
-	eyre::ensure!(res.status() == StatusCode::OK, "sites answered {}", res.status());
+	match res.status() {
+		StatusCode::OK => {}
+		StatusCode::NOT_FOUND => return Ok(Heard::Absent),
+		s => eyre::bail!("{service} answered {s}"),
+	}
 	let mut body = res.into_body();
 	let mut pending: Vec<u8> = Vec::new();
 	let mut heard = false;
 	loop {
 		let frame = match tokio::time::timeout(FEED_IDLE, body.frame()).await {
 			Ok(Some(frame)) => frame?,
-			Ok(None) => return Ok(heard),
+			Ok(None) => return Ok(if heard { Heard::Lines } else { Heard::Nothing }),
 			Err(_) => eyre::bail!("nothing for {}s", FEED_IDLE.as_secs()),
 		};
 		let Ok(data) = frame.into_data() else { continue };
@@ -439,13 +460,7 @@ async fn feed(services: &Services, bus: &sa_panel::live::Bus) -> eyre::Result<bo
 			}
 			heard = true;
 			match serde_json::from_slice::<Line>(line)? {
-				Line::Changed { topic } => bus.changed(Change {
-					topic,
-					brand: None,
-					id: None,
-					at: jiff::Timestamp::now(),
-					audience: sa_panel::live::Audience::Everyone,
-				}),
+				Line::Changed { topic } => bus.changed(&topic),
 				Line::Resync => bus.publish(Signal::Resync),
 				Line::Ping => {}
 			}
@@ -479,17 +494,11 @@ mod tests {
 	#[test]
 	fn frames_are_the_contract() {
 		let c = Change {
-			topic: "places".into(),
-			brand: Some("aquafix".into()),
-			id: Some("royat".into()),
+			topic: "sites.places".into(),
 			at: "2026-10-03T10:00:00Z".parse().unwrap(),
-			audience: sa_panel::live::Audience::User(Uuid::nil()),
 		};
 		let Message::Text(t) = Out::changed(&c).message() else { panic!("text") };
-		assert_eq!(t.as_str(), r#"{"type":"changed","topic":"places","brand_id":"aquafix","id":"royat","at":"2026-10-03T10:00:00Z"}"#);
-		let c = Change { brand: None, id: None, ..c };
-		let Message::Text(t) = Out::changed(&c).message() else { panic!("text") };
-		assert_eq!(t.as_str(), r#"{"type":"changed","topic":"places","at":"2026-10-03T10:00:00Z"}"#, "no nulls");
+		assert_eq!(t.as_str(), r#"{"type":"changed","topic":"sites.places","at":"2026-10-03T10:00:00Z"}"#);
 		let Message::Text(t) = Out::Resync.message() else { panic!("text") };
 		assert_eq!(t.as_str(), r#"{"type":"resync"}"#);
 	}

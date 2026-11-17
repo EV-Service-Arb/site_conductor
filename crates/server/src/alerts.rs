@@ -11,7 +11,7 @@ use axum::{
 	http::{HeaderName, HeaderValue, Method, Request, StatusCode, header},
 	response::NoContent,
 };
-use ev_lib::api::{Created, JsonSchema};
+use ev_lib::api::{Body, Created, Ids, JsonSchema, Refusal};
 use jiff::Timestamp;
 use sa_alerts::{Call, NotePage, Rule};
 use sa_auth::{Service, User};
@@ -26,10 +26,10 @@ use serde_json::Value;
 use tokio::sync::watch;
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Id, Ids},
+	api::{ApiResult, Code, Id},
 	concierge::Concierge,
 	forward::{Forward, SITES_TIMEOUT},
-	http::{ApiRoute, ApiState, Gate},
+	http::{ApiRoute, ApiState, FRESH, USER},
 	signin::Caller,
 	telegram::{self, BotApi, BotName},
 };
@@ -40,7 +40,7 @@ const DELIVER_EVERY: Duration = Duration::from_millis(500);
 const FAN_OUT_EVERY: Duration = Duration::from_secs(2);
 const RECHECK_EVERY: Duration = Duration::from_secs(60);
 /// A service that publishes no feed yet (404) is asked again this often.
-const LOOK_AGAIN: Duration = Duration::from_secs(60);
+pub(crate) const LOOK_AGAIN: Duration = Duration::from_secs(60);
 /// The hub with its Telegram bot, as `serve` runs it.
 #[derive(Clone)]
 pub struct Telegram {
@@ -107,16 +107,15 @@ pub async fn run(t: Telegram, shutdown: watch::Receiver<bool>) {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::GET, "/alerts", user, alerts),
+		ApiRoute::new(M::GET, "/alerts", USER, alerts),
 		// What a link token or a chat carries is concierge's answer of this moment.
-		ApiRoute::new(M::POST, "/alerts/telegram/link", user.fresh(), telegram_link),
-		ApiRoute::new(M::POST, "/alerts/telegram/chats", user.fresh(), add_chat),
-		ApiRoute::new(M::PUT, "/alerts/destinations/{id}/rules", user, set_destination_rules),
-		ApiRoute::new(M::PUT, "/alerts/destinations/{id}/gmail", user, set_destination_gmail),
-		ApiRoute::new(M::POST, "/alerts/destinations/{id}/test", user, test_destination),
-		ApiRoute::new(M::DELETE, "/alerts/destinations/{id}", user, remove_destination),
+		ApiRoute::new(M::POST, "/alerts/telegram/link", FRESH, telegram_link),
+		ApiRoute::new(M::POST, "/alerts/telegram/chats", FRESH, add_chat),
+		ApiRoute::new(M::PUT, "/alerts/destinations/{id}/rules", USER, set_destination_rules),
+		ApiRoute::new(M::PUT, "/alerts/destinations/{id}/gmail", USER, set_destination_gmail),
+		ApiRoute::new(M::POST, "/alerts/destinations/{id}/test", USER, test_destination),
+		ApiRoute::new(M::DELETE, "/alerts/destinations/{id}", USER, remove_destination),
 	]
 }
 
@@ -152,7 +151,7 @@ fn display(caller: &Caller) -> &str {
 }
 
 fn bot(t: Option<Telegram>) -> ApiResult<Telegram> {
-	t.ok_or_else(|| ApiError::Unavailable("Telegram is not configured".into()))
+	t.ok_or_else(|| Refusal::new(Code::Unavailable, "Telegram is not configured"))
 }
 
 /// A link to the bot whose `/start` makes the chat the caller's private destination.
@@ -169,7 +168,7 @@ pub(crate) struct LinkDto {
 async fn telegram_link(State(panel): State<Panel>, State(t): State<Option<Telegram>>, Extension(caller): Extension<Caller>) -> ApiResult<Created<LinkDto>> {
 	let t = bot(t)?;
 	let Some(name) = t.name.get() else {
-		return Err(ApiError::Unavailable("the bot is starting, try again in a minute".into()));
+		return Err(Refusal::new(Code::Unavailable, "the bot is starting, try again in a minute"));
 	};
 	let token = panel.telegram_link_token(caller.user_id, &caller.permissions, display(&caller), Timestamp::now()).await?;
 	tracing::info!(user_id = %caller.user_id, "telegram: link token issued");

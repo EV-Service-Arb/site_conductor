@@ -2,15 +2,16 @@
 
 import { ChatPanel, ConfirmDialog, Kbd, Spinner, toast, useKeymap as usePageKeymap } from "@evinvest/uikit";
 import { CornerDownRight, Eye, Lock, Sparkles, Upload } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { type AssistantTurn, useChat, assistant } from "@/entities/assistant";
 import { type Listed, narrowed, useGmails, useGmbTags, usePeeked } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
 import type { Action, Turn } from "@/shared/api/schema";
-import { ApiError, api, ok } from "@/shared/api";
-import { ROUTES } from "@/shared/config/routes";
+import { Refused, api, ok } from "@/shared/api";
+import { VIEWS } from "@/shared/api/views";
+import { href } from "@evinvest/views";
+import { go, useAt, useCarried } from "@/shared/lib/location";
 import { type T, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 
@@ -34,14 +35,32 @@ let back: string | null = null;
  * One chat: header, conversation and composer, on any of the three surfaces. `id` is `null` for a chat not started;
  * `onOpen` makes another the surface's.
  */
-export function ChatView({ id, display, onOpen, onHide }: { id: string | null; display: Display; onOpen: (id: string | null) => void; onHide: (() => void) | null }) {
+export function ChatView(props: Surface & { id: string | null }) {
+  return props.id === null ? <ChatBody {...props} id={null} read={NO_CHAT} /> : <ReadChat {...props} id={props.id} />;
+}
+
+interface Surface {
+  display: Display;
+  onOpen: (id: string | null) => void;
+  onHide: (() => void) | null;
+}
+
+type ChatRead = ReturnType<typeof useChat>;
+
+/** No chat asked for: nothing to read, so nothing to read again. */
+const NO_CHAT: ChatRead = { status: "ok", data: null, fresh: true, reload: () => {} };
+
+function ReadChat(props: Surface & { id: string }) {
+  return <ChatBody {...props} read={useChat(props.id)} />;
+}
+
+function ChatBody({ id, display, onOpen, onHide, read }: Surface & { id: string | null; read: ChatRead }) {
   const t = useT();
   const me = useMe();
-  const router = useRouter();
-  const pathname = usePathname();
+  const at = useAt();
+  const carried = useCarried();
   const s = useAssistant();
   const keymap = usePageKeymap();
-  const read = useChat(id);
   const chat = read.status === "ok" ? read.data : null;
   const turns = shown(chat, id, s.running);
   const gmails = useGmails();
@@ -75,7 +94,7 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
   }, [written, chat?.version, reload]);
 
   const failed = (e: unknown) => {
-    if (e instanceof ApiError && e.failure.kind === "conflict") toast.error(t(assistant.conflict, "Someone wrote in this chat meanwhile: it is read again, and your message kept"));
+    if (e instanceof Refused && e.failure.code === "conflict") toast.error(t(assistant.conflict, "Someone wrote in this chat meanwhile: it is read again, and your message kept"));
     else notifyFailure(e, t);
     reload();
   };
@@ -86,7 +105,7 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
   };
   const send = (draft: Draft, from = turns.length) => {
     const named = [...(subject && !draft.subjectOff ? asMentions([subject]) : []), ...draft.mentions].filter((m, i, xs) => xs.findIndex((x) => x.id === m.id) === i);
-    const page: Page = { url: `${window.location.pathname}${window.location.search}`, views: ROUTES, bindings: [...keymap.bound.values()] };
+    const page: Page = { url: `${window.location.pathname}${window.location.search}`, bindings: [...keymap.bound.values()] };
     const asked = ask(chat, from, { text: draft.text, mentions: named, files: draft.files }, page);
     if (asked.id !== id) onOpen(asked.id);
     asked.answered.then(
@@ -122,16 +141,17 @@ export function ChatView({ id, display, onOpen, onHide }: { id: string | null; d
     onDisplay: (chatId, to) => {
       if (to === display && chatId === id) return;
       if (to === "full") {
+        // the display chosen on the way back is the one shown
         if (display !== "full") {
-          const here = new URL(window.location.href);
-          here.searchParams.delete("assistant"); // the display chosen on the way back is the one shown
-          back = `${pathname}${here.search}`;
+          const kept = { ...carried };
+          delete kept.assistant;
+          back = href(VIEWS, at, kept);
         }
-        router.push(`${ROUTES.assistant}?chat=${chatId}`);
+        go({ view: "assistant", params: { chat: chatId } });
       } else {
         openChat(chatId, to);
         if (display === "full") {
-          router.push(back ?? "/");
+          go(back ?? { view: "home", params: {} });
           back = null;
         }
       }
@@ -277,10 +297,9 @@ function Blocked({ icon: Icon, text }: { icon: typeof Lock; text: string }) {
 
 /** The location the page is on: a GMB's archive page, or the card open on the map. */
 function useSubject(all: readonly Listed[]): Listed | null {
-  const pathname = usePathname();
+  const at = useAt();
   const peeked = usePeeked();
-  const route = /^\/review_archive\/gmbs\/(\d+)/.exec(pathname);
-  const id = route ? Number(route[1]) : pathname === "/" ? peeked : null;
+  const id = at.view === "review_archive.mine.gmb" ? at.params.gmb : at.view === "home" ? peeked : null;
   return all.find((l) => l.gmb.id === id) ?? null;
 }
 

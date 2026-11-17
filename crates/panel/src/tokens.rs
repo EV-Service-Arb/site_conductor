@@ -91,11 +91,11 @@ impl Panel {
 	}
 
 	/// The one user last seen with `email`.
-	pub async fn user_by_email(&self, email: &str) -> eyre::Result<Uuid> {
+	pub async fn user_by_email(&self, email: &str) -> eyre::Result<Result<Uuid, Refused>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection to find a user")?;
 		match users::by_email(&mut conn, email).await?.as_slice() {
-			[one] => Ok(*one),
-			[] => eyre::bail!("no user {email}: they sign in to the conductor first"),
+			[one] => Ok(Ok(*one)),
+			[] => Ok(Err(Refused::Invalid(format!("no user {email}: they sign in to the conductor first")))),
 			many => eyre::bail!("{} users are {email}: {many:?}", many.len()),
 		}
 	}

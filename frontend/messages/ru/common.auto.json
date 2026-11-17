@@ -223,14 +223,6 @@
     "en": "set {at}",
     "t": "задан {at}"
   },
-  "account.tab.browser": {
-    "en": "Browser",
-    "t": "Браузер"
-  },
-  "account.tab.connections": {
-    "en": "Connections",
-    "t": "Подключения"
-  },
   "account.test": {
     "en": "Test",
     "t": "Проверить"
@@ -3458,6 +3450,10 @@
   "window.tab.browser": {
     "en": "Browser",
     "t": "Браузер"
+  },
+  "window.tab.connections": {
+    "en": "Connections",
+    "t": "Подключения"
   },
   "window.tab.launch": {
     "en": "Launch",

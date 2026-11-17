@@ -1,14 +1,14 @@
-export { fetchMapConfig, fetchSitesPlaces, linkPlace, placeGmb, setTrades, switchGmbs } from "./api/gmbs";
+export { placeGmb, setTrades, switchGmbs } from "./api/gmbs";
+export { linkPlace } from "./api/sites";
 export { browsersUnconnected, uploadFilm } from "./api/connections";
-export { fetchArchive } from "./api/tags";
 export { type Placed, categoryName, categoryOf } from "./model/category";
 export { GmailsProvider, useGmails, useGmbTags, useTrades, useTrash, useUndoable } from "./model/gmails-context";
 export { GMAIL_ROLE_NAME, STATE_NAME, STATE_TONE, googleName } from "./model/gmb";
-export type { ArchiveTag, SiteTag, SitesPlace } from "./model/gmb";
+export type { ArchiveTag, SiteTag } from "./model/gmb";
 export { ISSUES, ISSUE_NAME, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
 export { type Listed, byView, narrowed, under } from "./model/narrow";
-export { MUST_HAVES, type MustHave, readiness } from "./model/readiness";
-export { ACCOUNT_TABS, type AccountTab, type Adding, type OnMap, TABS, type Tab, addHref, open, openAccount, openAdd, openCategories, openKit, openTrade, openTrash, openOrFocus, peek, setOnMap, useAccountWindow, useAddWindow, useCategoriesWindow, useKitWindow, useOnMap, usePeeked, useTab, useTradeWindow, useTrashWindow } from "./model/on-map";
+export { readyCount } from "./model/readiness";
+export { type Adding, type OnMap, open, openAccount, openAdd, openCategories, openKit, openTrade, openTrash, openOrFocus, peek, setOnMap, useAccountWindow, useAddWindow, useCategoriesWindow, useKitWindow, useOnMap, usePeeked, useTab, useTradeWindow, useTrashWindow } from "./model/on-map";
 export { type Pattern, type Scope, chooseCategoryScope, chooseGmailScope, covers, inCategories, inScope, useScope } from "./model/scope";
 export { PublishSelection, type Selection, select, setFilter, setOnly, useSelection } from "./model/selection";
 export { TradeSelect } from "./ui/trade-select";
@@ -18,6 +18,6 @@ export { gmbs, trades, browser, windowKeys, scopeKeys, trash, undo, move, kit, a
 export { AreaDraw, useOutline } from "./ui/area-draw";
 export { localityAt } from "./api/areas";
 export { isSlug, slugOf } from "./model/areas";
-export { PHOTO_MAX, photoSrc, uploadPhoto } from "./api/kit";
+export { photoMax, photoSrc, uploadPhoto } from "./api/kit";
 export { TARGET_NAME } from "./model/kit";
 export { KitTargetSegment } from "./ui/kit-target";

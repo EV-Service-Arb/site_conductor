@@ -27,9 +27,10 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::{
+	api::Code,
 	concierge::Issued,
 	cookies::{self, CSRF_HEADER},
-	signin::{self, Denied, Freshness, SignIn, page, private},
+	signin::{self, Freshness, SignIn, page, private},
 };
 
 /// Where the MCP endpoint is: the resource, and the issuer under it.
@@ -154,8 +155,8 @@ async fn authorize(State(s): State<SignIn>, uri: Uri, headers: HeaderMap, q: Res
 	let here = uri.path_and_query().expect("a request line has a path").as_str();
 	let caller = match signin::check(&s, &headers, Freshness::Cached).await {
 		Ok(c) => c,
-		Err(Denied::Unauthenticated) => return private(Redirect::to(&format!("/auth/login?return_to={}", signin::encode(here))).into_response()),
-		Err(denied) => return denied.into_response(&s),
+		Err(r) if r.code() == Code::Unauthenticated => return private(Redirect::to(&format!("/auth/login?return_to={}", signin::encode(here))).into_response()),
+		Err(r) => return signin::refused(&s, r),
 	};
 	let Some(csrf) = s.cookies().get(&headers, cookies::CSRF) else {
 		return bad_link();
@@ -210,7 +211,7 @@ async fn consent(State(s): State<SignIn>, mut headers: HeaderMap, Form(f): Form<
 	}
 	let caller = match signin::check(&s, &headers, Freshness::Cached).await {
 		Ok(c) => c,
-		Err(denied) => return denied.into_response(&s),
+		Err(r) => return signin::refused(&s, r),
 	};
 	let grant = Grant {
 		user_id: caller.user_id,

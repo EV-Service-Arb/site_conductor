@@ -10,9 +10,9 @@ use axum::{
 	extract::State,
 	http::{HeaderMap, Method, StatusCode},
 };
-use ev_lib::api::JsonSchema;
+use ev_lib::api::{JsonSchema, Params, Refusal};
 use jiff::Timestamp;
-use sa_auth::{Principal, Service};
+use sa_auth::{Principal, Service, Tokens};
 use sa_core::{
 	prices::{Item, MapLoad, Scope, Spends},
 	usage::{Bill, UsagePage},
@@ -22,10 +22,10 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
 use crate::{
-	api::{self, ApiError, ApiResult, Params},
+	api::{ApiResult, Code},
 	browser::Connected,
 	forward::Services,
-	http::{ApiRoute, Gate, Section},
+	http::{ApiRoute, USER},
 	signin::Caller,
 	tokens::BalanceDto,
 };
@@ -122,8 +122,8 @@ pub async fn run(panel: Panel, services: Option<Services>, browsers: Option<Conn
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
 	vec![
-		ApiRoute::new(M::POST, "/map/load", Gate::USER, buy_map),
-		ApiRoute::new(M::GET, "/admin/usage", Gate::section(Section::Tokens), spend),
+		ApiRoute::new(M::POST, "/map/load", USER, buy_map),
+		ApiRoute::new(M::GET, "/admin/usage", USER.needs(Tokens::Grant), spend),
 	]
 }
 
@@ -138,7 +138,7 @@ pub(crate) struct MapOn {
 /// it: recorded and charged (`map.map`, the admin's price) in one write.
 ///
 /// 400 an account without one; 409 not priced, or past the balance.
-async fn buy_map(State(panel): State<Panel>, Spends(_, by): Spends<MapLoad, Caller>, api::Body(on): api::Body<MapOn>) -> ApiResult<Json<BalanceDto>> {
+async fn buy_map(State(panel): State<Panel>, Spends(_, by): Spends<MapLoad, Caller>, ev_lib::api::Body(on): ev_lib::api::Body<MapOn>) -> ApiResult<Json<BalanceDto>> {
 	let balance = panel.buy_map(by, &on.account, Timestamp::now()).await??;
 	Ok(Json(BalanceDto { balance }))
 }
@@ -156,10 +156,10 @@ pub(crate) struct Window {
 /// What our tools spent on vendors per UTC day, item, bill and source, in units and each use at its
 /// unit's cost when it was done: what Grafana's sa-tokens dashboard reads.
 pub(crate) async fn spend(State(panel): State<Panel>, Params(q): Params<Window>) -> ApiResult<Json<UsageDto>> {
-	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| ApiError::BadRequest(format!("{ms}: {e}")));
+	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| Refusal::new(Code::BadRequest, format!("{ms}: {e}")));
 	let (from, to) = (at(q.from)?, at(q.to)?);
 	if from >= to || to.duration_since(from) > SPAN {
-		return Err(ApiError::BadRequest(format!("from is before to, at most {} days", SPAN.as_hours() / 24)));
+		return Err(Refusal::new(Code::BadRequest, format!("from is before to, at most {} days", SPAN.as_hours() / 24)));
 	}
 	let days = panel.used(from, to).await?;
 	Ok(Json(UsageDto {

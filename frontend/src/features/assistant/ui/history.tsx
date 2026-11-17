@@ -57,7 +57,7 @@ function Chats({ current, onOpen }: { current: string | null; onOpen: (id: strin
   const [renaming, setRenaming] = useState<string | null>(null);
   const search = useRef<HTMLInputElement>(null);
   const needle = filter.trim().toLowerCase();
-  const all = list.status === "ok" ? list.data : [];
+  const all = list.status === "ok" ? list.data.chats : [];
   const found = all.filter((c) => (c.archived_at !== null) === archived && (needle === "" || (c.title ?? t(assistant.newChat, "New chat")).toLowerCase().includes(needle)));
   const groups = archived ? [{ id: "archived", label: (t: T) => t(assistant.history.archived, "Archived chats"), chats: found }] : groupsOf(found);
   const flat = groups.flatMap((g) => g.chats);

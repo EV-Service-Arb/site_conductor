@@ -9,7 +9,7 @@ import { api, ok } from "@/shared/api";
 import type { KitNearby } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDistance } from "@/shared/lib/format";
-import { useResource } from "@/shared/lib/use-resource";
+import { useResource } from "@evinvest/api/react";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { Qr } from "@/shared/ui/qr";
@@ -21,12 +21,6 @@ const subscribeHash = (onChange: () => void) => {
   return () => window.removeEventListener("hashchange", onChange);
 };
 
-/** `/<slug>/` is the page the server answers for an area's slug; `/kit/` itself names none. */
-const slugOfPath = () => {
-  const [first, ...rest] = window.location.pathname.split("/").filter(Boolean);
-  return first === undefined || first === "kit" || rest.length > 0 ? null : first;
-};
-
 /** The GBP shown full screen, `#<id>`: the phone's back returns to the list. */
 const shownOfHash = () => {
   const raw = window.location.hash.slice(1);
@@ -35,15 +29,6 @@ const shownOfHash = () => {
   if (!Number.isSafeInteger(id)) throw new Error(`#${raw}: not a GBP id`);
   return id;
 };
-
-/** An area's kit on the operator's phone (13b): its GBPs nearest first; one tapped fills the screen with its QR (13c). */
-export function KitView() {
-  // `undefined` while prerendered: the export has no path to read
-  const slug = useSyncExternalStore(subscribeHash, slugOfPath, () => undefined);
-  if (slug === undefined) return <Skeleton className="min-h-svh rounded-none" />;
-  if (slug === null) return <NoArea />;
-  return <AreaKit slug={slug} />;
-}
 
 function NoArea() {
   const t = useT();
@@ -57,14 +42,15 @@ function NoArea() {
   );
 }
 
-function AreaKit({ slug }: { slug: string }) {
-  const res = useResource(`kit.area.${slug}`, () => ok(api.GET("/kit/areas/{slug}/gmbs", { params: { path: { slug } } })), `kit.area.${slug}`, { focus: true });
+/** An area's kit on the operator's phone (13b): its GBPs nearest first; one tapped fills the screen with its QR (13c). */
+export function KitView({ slug }: { slug: string }) {
+  const res = useResource(api, "/kit/areas/{slug}/gmbs", { params: { path: { slug } } });
   const shown = useSyncExternalStore(subscribeHash, shownOfHash, () => null);
   const [find, setFind] = useState("");
   const pushed = useRef(false);
   if (res.status === "loading") return <Skeleton className="min-h-svh rounded-none" />;
   if (res.status === "error")
-    return res.failure.kind === "not_found" ? (
+    return res.failure.code === "not_found" ? (
       <NoArea />
     ) : (
       <div className="p-4">
@@ -149,7 +135,7 @@ function List({ area, gmbs, total, find, onFind, onShow }: { area: { name: strin
 function Shown({ gmbs, at, area, onBack, onReturn }: { gmbs: readonly KitNearby[]; at: number; area: string; onBack: () => void; onReturn: () => void }) {
   const t = useT();
   const gmb = gmbs[at]!;
-  const res = useResource(`kit.gmb.${gmb.id}`, () => ok(api.GET("/gmbs/{id}/kit", { params: { path: { id: gmb.id } } })));
+  const res = useResource(api, "/gmbs/{id}/kit", { params: { path: { id: gmb.id } } });
   const url = res.status === "ok" ? res.data.url : null;
   const start = useRef<number | null>(null);
   const step = (by: number) => {

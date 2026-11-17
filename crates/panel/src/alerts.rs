@@ -254,17 +254,6 @@ pub(crate) fn derived_event_id(parts: &[&str]) -> Uuid {
 	uuid::Builder::from_custom_bytes(bytes).into_uuid()
 }
 
-/// A user's destinations or rules changed. Stamped here: the calls that change them take no clock.
-pub(crate) fn alerts_changed(user: Uuid) -> crate::live::Change {
-	crate::live::Change {
-		topic: "alerts".into(),
-		brand: None,
-		id: None,
-		at: Timestamp::now(),
-		audience: crate::live::Audience::User(user),
-	}
-}
-
 impl Panel {
 	pub async fn alerts(&self, user: Uuid, permissions: &PermissionSet) -> eyre::Result<Alerts> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for alerts")?;

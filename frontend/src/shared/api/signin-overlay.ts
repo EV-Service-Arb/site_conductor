@@ -1,4 +1,4 @@
-// State of the sign-in overlay, outside React: a 401 is seen by `http` and the live socket, which
+// State of the sign-in overlay, outside React: a 401 is seen by the client and the live socket, which
 // are not components. The overlay is `signinOverlay` in panel.config.ts; off, or
 // with no host component mounted to show it, `requestSignInOverlay` says no and the caller
 // redirects as it always did.
@@ -83,4 +83,27 @@ export function takeReturnPage(): string | null {
   } catch {
     return null;
   }
+}
+
+/** The backend's sign-in; a full navigation, since it answers with a redirect to concierge. */
+export const SIGN_IN_PATH = "/auth/login";
+
+/** The sign-in through Google's account chooser, past the evinvest.ltd session the browser may have. */
+export function switchAccountPath(returnTo: string): string {
+  return `${SIGN_IN_PATH}?prompt=select_account&return_to=${encodeURIComponent(returnTo)}`;
+}
+
+/** The full-page way to sign in: off to the backend's sign-in, and back here. */
+export function redirectToSignIn(): void {
+  if (typeof window === "undefined") return;
+  const here = window.location.pathname + window.location.search;
+  // /auth/login is the Rust backend's route, not a page of this app: only a full navigation reaches it.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.assign(`${SIGN_IN_PATH}?return_to=${encodeURIComponent(here)}`);
+}
+
+/** The session is gone (an HTTP 401, the live socket's 4401): the overlay when it is on, else the redirect. */
+export function goToSignIn(): void {
+  if (requestSignInOverlay()) return;
+  redirectToSignIn();
 }

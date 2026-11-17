@@ -14,27 +14,26 @@ use axum::{
 	body::{Body, to_bytes},
 	http::{HeaderMap, HeaderValue, Method, StatusCode, header},
 };
-use ev_lib::api::{
-	OpenApi,
-	openapi::{Info, Paths, ReferenceOr, Server},
+use ev_lib::{
+	api::{
+		OpenApi,
+		openapi::{Info, Paths, ReferenceOr, Server},
+	},
+	views::{Table, Views},
 };
 use eyre::WrapErr;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use sa_auth::{PermissionSet, Principal, Service};
 use serde_json::{Map, Value};
+use strum::VariantArray;
 use tokio::sync::watch;
 
 use crate::{
 	forward::{self, Services},
 	tools,
+	view::View,
 };
 
-/// The services that serve their document, and where (docs/ARCHITECTURE.md, The catalog).
-const DOCUMENTS: [(Service, &str); 3] = [
-	(Service::Sites, "/api/v1/openapi.json"),
-	(Service::ReviewArchive, "/openapi.json"),
-	(Service::Playbook, "/openapi.json"),
-];
 const PULL_EVERY: Duration = Duration::from_secs(60);
 const PULL_TIMEOUT: Duration = Duration::from_secs(10);
 const DOCUMENT_ANSWER: usize = 16 * 1024 * 1024;
@@ -45,10 +44,12 @@ const SEGMENT: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'_').remove(b'
 pub struct Catalog {
 	/// The conductor's own, under `/api/v1`.
 	own: Arc<OpenApi>,
-	/// Each service's, as last pulled, its prefix applied.
-	services: Arc<RwLock<BTreeMap<String, OpenApi>>>,
+	/// Each service's, as last pulled, its prefix applied, and its views (`x-views`).
+	services: Arc<RwLock<BTreeMap<String, (OpenApi, Option<Table>)>>>,
 	/// `own` and `services` merged, absolute paths: rebuilt on a pull that changed something.
 	merged: Arc<RwLock<Arc<OpenApi>>>,
+	/// The conductor's views, each service's nested under its page: rebuilt as `merged` is.
+	views: Arc<RwLock<Arc<Table>>>,
 }
 
 impl Catalog {
@@ -59,7 +60,13 @@ impl Catalog {
 			own,
 			services: Arc::default(),
 			merged,
+			views: Arc::new(RwLock::new(Arc::new(View::table().clone()))),
 		}
+	}
+
+	/// Every view a person can be shown: the conductor's, the services' under their pages.
+	pub(crate) fn views(&self) -> Arc<Table> {
+		self.views.read().expect("never held across a panic").clone()
 	}
 
 	/// The conductor's own operations, relative to `/api/v1`: what the front end's client is
@@ -100,7 +107,7 @@ impl Catalog {
 	pub(crate) fn instructions(&self) -> String {
 		let services = self.services.read().expect("never held across a panic");
 		std::iter::once(&*self.own)
-			.chain(services.values())
+			.chain(services.values().map(|(doc, _)| doc))
 			.filter_map(|doc| doc.info.description.as_deref())
 			.collect::<Vec<_>>()
 			.join("\n\n")
@@ -136,14 +143,29 @@ impl Catalog {
 	}
 
 	async fn pull(&self, services: &Services, etags: &Mutex<BTreeMap<String, HeaderValue>>) {
-		for (service, path) in DOCUMENTS {
+		let documents = Service::VARIANTS.iter().copied().filter(|s| services.serves(*s)).filter_map(|s| Some((s, s.document()?)));
+		for (service, path) in documents {
 			let name = service.to_string();
 			match self.pull_one(services, service, path, etags).await {
 				Ok(None) => {}
-				Ok(Some(doc)) => {
+				Ok(Some(pulled)) => {
 					let mut held = self.services.write().expect("never held across a panic");
-					held.insert(name, doc);
-					*self.merged.write().expect("never held across a panic") = Arc::new(merge(&self.own, &held));
+					let mut next = held.clone();
+					next.insert(name.clone(), pulled);
+					let mut views = View::table().clone();
+					let nested = next
+						.iter()
+						.filter_map(|(n, (_, v))| v.as_ref().map(|v| (n, v)))
+						.try_for_each(|(n, v)| views.nest(n, v.clone()).map_err(|e| eyre::eyre!("{n}'s views: {e}")));
+					match nested {
+						Ok(()) => {
+							*held = next;
+							let docs: BTreeMap<String, OpenApi> = held.iter().map(|(n, (d, _))| (n.clone(), d.clone())).collect();
+							*self.merged.write().expect("never held across a panic") = Arc::new(merge(&self.own, &docs));
+							*self.views.write().expect("never held across a panic") = Arc::new(views);
+						}
+						Err(e) => crate::report(&e.wrap_err(format!("{name}'s operations kept as they were")), "pulling the services' documents"),
+					}
 				}
 				Err(e) => crate::report(&e.wrap_err(format!("{name}'s operations kept as they were")), "pulling the services' documents"),
 			}
@@ -151,7 +173,7 @@ impl Catalog {
 	}
 
 	/// The service's document, prefixed and named; `None` when it has not changed.
-	async fn pull_one(&self, services: &Services, service: Service, path: &str, etags: &Mutex<BTreeMap<String, HeaderValue>>) -> eyre::Result<Option<OpenApi>> {
+	async fn pull_one(&self, services: &Services, service: Service, path: &str, etags: &Mutex<BTreeMap<String, HeaderValue>>) -> eyre::Result<Option<(OpenApi, Option<Table>)>> {
 		let name = service.to_string();
 		let mut headers = HeaderMap::new();
 		if let Some(etag) = etags.lock().expect("held for a lookup only").get(&name) {
@@ -168,8 +190,12 @@ impl Catalog {
 		}
 		let etag = res.headers().get(header::ETAG).cloned();
 		let body = to_bytes(res.into_body(), DOCUMENT_ANSWER).await.map_err(|e| eyre::eyre!("reading {name}'s document: {e}"))?;
-		let doc: Value = serde_json::from_slice(&body).wrap_err_with(|| format!("{name}'s document"))?;
-		let doc = prefixed(&name, service, doc)?;
+		let mut doc: Value = serde_json::from_slice(&body).wrap_err_with(|| format!("{name}'s document"))?;
+		let views = match doc.get_mut("x-views").map(Value::take) {
+			Some(v) => Some(serde_json::from_value(v).wrap_err_with(|| format!("{name}'s x-views"))?),
+			None => None,
+		};
+		let doc = (prefixed(&name, service, doc)?, views);
 		if let Some(etag) = etag {
 			etags.lock().expect("held for a lookup only").insert(name, etag);
 		}

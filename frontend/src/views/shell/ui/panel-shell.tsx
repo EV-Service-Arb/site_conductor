@@ -1,13 +1,11 @@
 "use client";
 
 import { Toaster } from "@evinvest/uikit";
-import { usePathname, useSearchParams } from "next/navigation";
-import { type ReactNode, Suspense, useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { MeProvider } from "@/entities/session";
-import { api, ok } from "@/shared/api";
-import { syncQuery } from "@/shared/lib/query";
-import { useResource } from "@/shared/lib/use-resource";
+import { api } from "@/shared/api";
+import { useResource } from "@evinvest/api/react";
 import { ErrorState } from "@/shared/ui/error-state";
 
 import { NoAccessScreen, ShellSkeleton, UnavailableScreen } from "./access-screens";
@@ -26,36 +24,19 @@ export function PanelShell({ bare = false, children }: { bare?: boolean; childre
     <>
       <PanelBody bare={bare}>{children}</PanelBody>
       <SignInOverlay />
-      {!bare && (
-        <Suspense>
-          <RoutedElements />
-        </Suspense>
-      )}
     </>
   );
 }
 
-/** The host's router moves the location by `pushState`, which elements routing by it never hear: each move is
- * announced as back and forward are (Next ignores a `popstate` without its state). */
-function RoutedElements() {
-  const pathname = usePathname();
-  const search = useSearchParams().toString();
-  useEffect(() => {
-    syncQuery();
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  }, [pathname, search]);
-  return null;
-}
-
 /** `bare`: the gate alone, without the frame: a page of its own (the kit's `/<area>/`). */
 function PanelBody({ bare, children }: { bare: boolean; children: ReactNode }) {
-  const me = useResource("me", () => ok(api.GET("/me")));
+  const me = useResource(api, "/me");
   const [accessLost, setAccessLost] = useState(false);
 
   if (accessLost) return <NoAccessScreen />;
   if (me.status === "loading") return <ShellSkeleton />;
   if (me.status === "error") {
-    switch (me.failure.kind) {
+    switch (me.failure.code) {
       case "unauthenticated":
         return <ShellSkeleton />;
       case "unavailable":

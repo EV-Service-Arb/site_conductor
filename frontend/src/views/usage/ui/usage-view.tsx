@@ -4,12 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle, PageFrame, Skeleton } from "@
 
 import { useMe } from "@/entities/session";
 import type { Permission } from "@/shared/api/schema";
-import { fetchArchive } from "@/entities/gmb";
 import { UsageFigures } from "@/entities/tokens";
-import { api, ok } from "@/shared/api";
-import { ROUTES } from "@/shared/config/routes";
+import { api, reviewArchive } from "@/shared/api";
 import { type T, useT, usage as usageKeys, account, nav } from "@/shared/i18n";
-import { useResource } from "@/shared/lib/use-resource";
+import { ViewLink } from "@/shared/lib/location";
+import { useResource } from "@evinvest/api/react";
 
 /** Who grants it, by a permission's second segment: the service, or the conductor's own admin. */
 const SECTION: Record<string, (t: T) => string> = {
@@ -33,9 +32,9 @@ export function UsageView() {
       <Access />
       <UsageCard />
       <Section title={t(account.integrations, "Integrations")}>
-        <a className="text-sm text-ink hover:underline" href={ROUTES.alerts}>
+        <ViewLink className="text-sm text-ink hover:underline" to={{ view: "alerts", params: {} }}>
           {t(account.alerts, "Alerts")}
-        </a>
+        </ViewLink>
         <p className="text-sm text-ink-soft">{t(account.alerts.hint, "Where your alerts go: your Telegram, channels and groups.")}</p>
       </Section>
     </PageFrame>
@@ -87,15 +86,15 @@ function Access() {
 
 function UsageCard() {
   const t = useT();
-  const usage = useResource("account.usage", async () => (await ok(api.GET("/tokens/usage"))).days);
-  const archive = useResource("account.archive", fetchArchive);
+  const usage = useResource(api, "/tokens/usage");
+  const archive = useResource(reviewArchive, "/me/gmbs");
   return (
     <Section title={t(account.usage, "Usage")}>
       {usage.status === "loading" && <Skeleton className="h-24 w-full" />}
       {usage.status === "error" && <p className="text-sm text-ink-soft">{t(account.usage.unavailable, "Usage can't be shown right now.")}</p>}
-      {usage.status === "ok" && <UsageFigures days={usage.data} />}
+      {usage.status === "ok" && <UsageFigures days={usage.data.days} />}
       <Row label={t(account.usage.places, "Places tracked now")}>
-        <span className="tabular-nums">{archive.status === "ok" && archive.data !== null ? archive.data.places_tracked : "—"}</span>
+        <span className="tabular-nums">{archive.status === "ok" ? archive.data.places_tracked : "—"}</span>
       </Row>
     </Section>
   );

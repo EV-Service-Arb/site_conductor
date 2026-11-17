@@ -635,6 +635,319 @@ export const VIEWS = {
       "nest": "sites",
       "scope": "v"
     },
+    "sites.experiments": {
+      "path": "/sites/experiments",
+      "description": "The landings' experiments and their overrides, of every brand or one.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {
+          "brand": {
+            "description": "A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.",
+            "examples": [
+              "aquafix"
+            ],
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "needs": "sa:sites:analysis:read"
+    },
+    "sites.invoices": {
+      "path": "/sites/invoices",
+      "description": "The invoices asked of banking, and a new one.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "needs": "sa:sites:work:read"
+    },
+    "sites.leads": {
+      "path": "/sites/leads",
+      "description": "The leads, filtered, and one of them open.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {
+          "booking": {
+            "description": "Where a lead's booking stands.",
+            "enum": [
+              "none",
+              "booked",
+              "canceled",
+              "done",
+              "no_show",
+              "requested",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "brand": {
+            "description": "A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.",
+            "examples": [
+              "aquafix"
+            ],
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "channel": {
+            "description": "How a lead came in.",
+            "enum": [
+              "form",
+              "phone_inbound",
+              "callback",
+              "whatsapp",
+              "telegram",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_from": {
+            "description": "Created on or after this UTC day.",
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_to": {
+            "description": "Created on or before this UTC day.",
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "flow": {
+            "description": "Absent: every lead; a lead that said no flow is under none of the three.",
+            "enum": [
+              "quote",
+              "estimate",
+              "fixed",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lead": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "description": "A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.",
+                "examples": [
+                  "aquafix"
+                ],
+                "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "description": "A lead, unique within its brand.",
+                "examples": [
+                  "L-1"
+                ],
+                "type": "string"
+              }
+            ],
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "message_ref": {
+            "description": "A messenger ref as the customer quotes it or an operator pastes it (`Réf. aq 7k3f`:\nlabel, case, spaces; O→0, I/L→1 in the code): the leads carrying it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "overdue": {
+            "default": false,
+            "description": "Only the leads overdue for their first contact.",
+            "type": "boolean"
+          },
+          "stage": {
+            "description": "The personal stages, in funnel order. `Lost` is off to the side: any stage can end\nthere, and any later progress takes the lead out of it again.",
+            "enum": [
+              "created",
+              "contacted",
+              "quoted",
+              "won",
+              "completed",
+              "paid",
+              "lost",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "suspect": {
+            "description": "Absent: every lead.",
+            "enum": [
+              "only",
+              "exclude",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "needs": "sa:sites:work:read"
+    },
+    "sites.overview": {
+      "path": "/sites/overview",
+      "description": "The funnel over a period, of every brand or one.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {
+          "brand": {
+            "description": "A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.",
+            "examples": [
+              "aquafix"
+            ],
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "period": {
+            "description": "The days the overview's funnel spans, ending today; absent, the funnel's own window.",
+            "enum": [
+              "7",
+              "30",
+              "90",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "needs": "sa:sites:analysis:read"
+    },
+    "sites.places": {
+      "path": "/sites/places",
+      "description": "The places, their settings and history; one of them open.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {
+          "brand": {
+            "description": "A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.",
+            "examples": [
+              "aquafix"
+            ],
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "location": {
+            "description": "A location: a GBP listing plus its landing subdomain.",
+            "examples": [
+              "royat"
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "needs": "sa:sites:work:read"
+    },
+    "sites.pricing": {
+      "path": "/sites/pricing",
+      "description": "The brands' price lists; one brand's open.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {
+          "brand": {
+            "description": "A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.",
+            "examples": [
+              "aquafix"
+            ],
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "needs": "sa:sites:work:read"
+    },
+    "sites.start": {
+      "path": "/sites",
+      "description": "Where the base leads: the leads for who works them, else the funnel.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      }
+    },
     "sources": {
       "path": "/sources",
       "description": "Source keys and the sites they connect.",

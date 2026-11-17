@@ -12,8 +12,7 @@
 //! ```
 //!
 //! [`Services`] is the one client and signing key every call to a service goes through: the
-//! forward's, ingest's, Grafana's ([`crate::grafana`]), the hubs' own reads of sites, and
-//! placement's studies ([`crate::placement`]), which nothing forwards.
+//! forward's, ingest's, Grafana's ([`crate::grafana`]), and the hubs' own reads of sites.
 
 use std::{sync::Arc, time::Duration};
 
@@ -25,59 +24,112 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::any,
 };
+use ev_lib::api::Refusal;
 use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use sa_auth::{Assertion, Principal, Service, Signer, User};
 
 use crate::{
-	api::ApiError,
+	api::Code,
 	catalog::Catalog,
 	cookies,
 	signin::{self, Caller, Freshness, SignIn},
 };
 
-/// Longest prefixes first: the first match wins.
+/// The services' paths on the conductor's origin, longest prefixes first: the first match wins.
+/// With [`OWN`], every prefix of the origin (docs/ARCHITECTURE.md, Forward).
 const ROUTES: [Route; 6] = [
 	Route {
 		prefix: "/api/sites",
 		upstream: "/api/v1",
 		service: Service::Sites,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/api/hooks/booking",
 		upstream: "/api/hooks/booking",
 		service: Service::Sites,
+		rate_limited: true,
+		published: true,
 		gate: Gate::Open,
 	},
 	Route {
 		prefix: "/mfe/sites",
 		upstream: "/mfe",
 		service: Service::Sites,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Open,
 	},
 	Route {
 		prefix: "/api/review_archive",
 		upstream: "",
 		service: Service::ReviewArchive,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/mfe/review_archive",
 		upstream: "/mfe",
 		service: Service::ReviewArchive,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Open,
 	},
 	Route {
 		prefix: "/api/playbook",
 		upstream: "",
 		service: Service::Playbook,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Session,
 	},
 ];
 
-/// The services that serve their Grafana dashboards at `GET /dashboards` (docs/ARCHITECTURE.md,
-/// Grafana).
-pub(crate) const DASHBOARDS: [Service; 1] = [Service::ReviewArchive];
+/// The conductor's own prefixes: never a page's, nor a kit area's.
+const OWN: [Path; 14] = [
+	Path::new("/api", false, true),
+	Path::new("/api/v1", false, true),
+	// open to everyone: the edge's limit is its only guard
+	Path::new("/api/queries_cache", true, true),
+	// in-cluster only: the landings' and bots' ingest, the landings' review kit
+	Path::new("/api/ingest", false, false),
+	Path::new("/api/kit", false, false),
+	Path::new("/auth", true, true),
+	Path::new("/mcp", false, true),
+	// open (RFC 7591), or a sign-in's every step
+	Path::new("/mcp/register", true, true),
+	Path::new("/mcp/authorize", true, true),
+	Path::new("/mcp/token", true, true),
+	Path::new("/grafana", false, true),
+	Path::new("/mfe", false, true),
+	Path::new("/health", false, true),
+	// once the cabinet's account chip: a tab on an earlier build may still ask for its script
+	Path::new("/cabinet", false, true),
+];
+
+/// A prefix of the conductor's origin, and what the edge does with it.
+#[derive(Clone, Copy, Debug)]
+pub struct Path {
+	pub prefix: &'static str,
+	/// Per client IP at the edge.
+	pub rate_limited: bool,
+	/// The public ingress may route it; else in-cluster only.
+	pub published: bool,
+}
+
+impl Path {
+	const fn new(prefix: &'static str, rate_limited: bool, published: bool) -> Self {
+		Self { prefix, rate_limited, published }
+	}
+}
+
+/// Every prefix of the origin: the services' and the conductor's own.
+pub fn paths() -> impl Iterator<Item = Path> {
+	ROUTES.iter().map(|r| Path::new(r.prefix, r.rate_limited, r.published)).chain(OWN)
+}
 
 /// Hop-by-hop headers (RFC 9110 §7.6.1) and what only the panel may say: never passed on.
 pub(crate) const DROPPED_UP: [&str; 11] = [
@@ -100,11 +152,6 @@ pub(crate) const SITES_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The most of a service's answer the conductor reads: a page of notes or a photo, with room.
 const ANSWER: usize = 16 * 1024 * 1024;
-
-/// Every path the forward owns: never the front end's.
-pub fn prefixes() -> impl Iterator<Item = &'static str> {
-	ROUTES.iter().map(|r| r.prefix)
-}
 
 /// Whether `path` is `prefix` or below it, by whole segments.
 pub fn under(path: &str, prefix: &str) -> bool {
@@ -137,6 +184,11 @@ impl Services {
 		}
 	}
 
+	/// Whether `service` is configured: placement may not be.
+	pub(crate) fn serves(&self, service: Service) -> bool {
+		service != Service::Placement || self.upstreams.placement.is_some()
+	}
+
 	/// `method path[?query]` to `service`, `principal` vouched for by an assertion bound to the
 	/// path; what only the conductor may say, and hop-by-hop headers, are not passed either way.
 	/// The answer streams.
@@ -154,7 +206,7 @@ impl Services {
 			Service::ReviewArchive => &self.upstreams.review_archive,
 			Service::Playbook => &self.upstreams.playbook,
 			Service::Sites => &self.upstreams.sites,
-			Service::Placement => self.upstreams.placement.as_ref().expect("placement's studies ask only once it `serves`"),
+			Service::Placement => self.upstreams.placement.as_ref().expect("sent to only where `serves` says so"),
 			Service::Browsers => panic!("the runner is not forwarded: `browser` calls it"),
 		};
 		let uri: Uri = format!("{}{path_and_query}", base.to_string().trim_end_matches('/'))
@@ -180,11 +232,6 @@ impl Services {
 		let (mut parts, body) = res.into_parts();
 		strip(&mut parts.headers, &DROPPED_DOWN);
 		Ok(Response::from_parts(parts, Body::new(body)))
-	}
-
-	/// Whether `service` is configured: placement is optional.
-	pub(crate) fn serves(&self, service: Service) -> bool {
-		service != Service::Placement || self.upstreams.placement.is_some()
 	}
 
 	/// `GET path?query` of sites as the conductor, its JSON answer.
@@ -254,16 +301,17 @@ impl Forward {
 				let route = ROUTES.iter().find(|r| r.prefix == prefix).expect("apis() are ROUTES");
 				self.pass(route, req, Some(Principal::User(user(service)))).await
 			}
-			None => ApiError::NotFound.into_response(),
+			None => Refusal::new(Code::NotFound, "not found").into_response(),
 		}
 	}
 
 	async fn pass(&self, route: &Route, req: Request, principal: Option<Principal>) -> Response {
+		assert!(self.services.serves(route.service), "every forwarded service is configured");
 		let rest = &req.uri().path()[route.prefix.len()..];
 		// decoded as a service might, so no route reaches above its upstream prefix
 		let decoded = rest.to_ascii_lowercase().replace("%2e", ".").replace("%2f", "/").replace("%5c", "/").replace('\\', "/");
 		if decoded.split('/').any(|s| s == "." || s == "..") {
-			return ApiError::BadRequest("not a forwardable path".to_owned()).into_response();
+			return Refusal::new(Code::BadRequest, "not a forwardable path").into_response();
 		}
 		let upstream_path = format!("{}{rest}", route.upstream);
 		let upstream_path = if upstream_path.is_empty() { "/".to_owned() } else { upstream_path };
@@ -276,7 +324,7 @@ impl Forward {
 			Ok(res) => res,
 			Err(e) => {
 				tracing::warn!(error = %e, service = ?route.service, "a forward failed");
-				ApiError::BadGateway("the service did not answer".to_owned()).into_response()
+				Refusal::new(Code::BadGateway, "the service did not answer").into_response()
 			}
 		}
 	}
@@ -295,6 +343,8 @@ struct Route {
 	/// What replaces `prefix` upstream.
 	upstream: &'static str,
 	service: Service,
+	rate_limited: bool,
+	published: bool,
 	gate: Gate,
 }
 
@@ -323,20 +373,12 @@ async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 			let write = !matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
 			// a write must not outlive a revoked grant by even the cached GetMe's minute
 			let freshness = if write { Freshness::Fresh } else { Freshness::Cached };
-			// an MCP client's bearer: no cookie for a cross-site request to ride on, and ours, so it never goes up
-			let caller = if req.headers().contains_key(header::AUTHORIZATION) {
-				let caller = signin::bearer(&f.sign_in, req.headers(), freshness).await;
-				req.headers_mut().remove(header::AUTHORIZATION);
-				caller
-			} else {
-				if write && !f.sign_in.cookies().csrf_ok(req.headers()) {
-					return ApiError::Csrf.into_response();
-				}
-				signin::check(&f.sign_in, req.headers(), freshness).await
-			};
+			let caller = signin::caller_of(&f.sign_in, req.method(), req.headers(), freshness).await;
+			// an MCP client's bearer is ours: it never goes up
+			req.headers_mut().remove(header::AUTHORIZATION);
 			match caller {
 				Ok(caller) => Some(Principal::User(user(caller, route.service))),
-				Err(denied) => return denied.into_response(&f.sign_in),
+				Err(r) => return signin::refused(&f.sign_in, r),
 			}
 		}
 	};
@@ -385,8 +427,8 @@ mod tests {
 		assert_eq!(route("/api/sites/leads"), Some(("/api/sites", Gate::Session)));
 		assert_eq!(route("/mfe/sites/mfe-sites.js"), Some(("/mfe/sites", Gate::Open)));
 		assert_eq!(route("/sites/leads"), None, "the page is the front end's");
-		assert_eq!(route("/api/placement/trades.json"), None, "placement is the conductor's to ask, never forwarded");
 		assert_eq!(route("/mfe/review_archive/mfe-review-archive-dashboard.js"), Some(("/mfe/review_archive", Gate::Open)));
 		assert_eq!(route("/mfe/banking/wallet.js"), None, "banking's bundle is not forwarded");
+		assert_eq!(route("/api/placement/payload/cleaning/Lyon"), None, "placement is not forwarded");
 	}
 }

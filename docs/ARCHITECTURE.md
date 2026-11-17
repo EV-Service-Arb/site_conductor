@@ -82,14 +82,15 @@ crates/ui/               Dioxus components the services' front ends share
 crates/placement_overlay/  the home map's drawing of a placement payload (wasm, imported by the front end;
                          placement's core linked by git): a renderer, the host fetches and pulls
 crates/contracts/        concierge's gRPC contract (tonic, from contracts/proto)
-crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
+crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`; thin over `Panel`
   src/signin.rs          /auth/login, /auth/callback, /auth/logout; the /api/v1 gate
   src/oauth.rs           /mcp/{register,authorize,token} and their metadata: OAuth 2.1 for MCP clients
   src/mcp.rs             POST /mcp: `search` and `call` to an MCP client
   src/concierge.rs       concierge over gRPC: ExchangeCode, RefreshClientToken, GetMe,
                          PublishCatalog; its development stand-in (PANEL_DEV_SIGN_IN)
   src/cookies.rs         __Host- cookies, the double-submit CSRF check
-  src/http.rs            the router; the /api/v1 route table and the section each sits under
+  src/http.rs            the router; the /api/v1 route table and each row's gate
+  src/admin.rs           the admin operations: a site key's origin, a gmail for a person, locate, the imports
   src/api.rs             GET /me, /sources
   src/connected.rs       GET /sources/sites: each site key's landing report beside sites' view
   src/access.rs          /api/v1/access/requests
@@ -156,16 +157,17 @@ GET /auth/callback   state = the cookie's (constant time), and not redeemed befo
                      when within 30 s of expiry, see below); GetMe (cached ≤ 60 s per session,
                      asked afresh for POST/DELETE /sources, the Telegram link and a chat added,
                      one retry when concierge does not answer) → the caller's permissions, else 401 (cookies
-                     cleared) / 503; then the route's section, else 403
+                     cleared) / 503; then the row's permission, else 403
 POST /auth/logout    CSRF; every session of the user is closed
 ```
 
 - **Permissions, no admission.** Any active concierge account signs in. `GetMe` answers the
   concrete `sa` permissions the user holds (no alias, no wildcard; anything outside `sa` is a
-  failed answer). Every `/api/v1` route sits under one section — Admin
-  (`sa:admin:sources:manage`), Tokens (`sa:admin:tokens:grant`), Study (`sa:placement:study:read`),
-  Pull (`sa:placement:study:spend`) — or none (`/me`,
-  `/access/requests*`, `/alerts*`, `/assistant*`, the caller's own gmails, GMBs, trades, tokens and review kit, the kit's areas). Each fresh
+  failed answer). Every `/api/v1` row names at most one permission, its `x-permission` and
+  exactly what its gate checks (`sa_auth::Gate`, the conductor's `Vouch` the session):
+  `sa:admin:sources:manage` for the source keys, `sa:admin:tokens:grant` for everyone's tokens,
+  `sa:placement:study:read` / `:spend` for placement's studies and pulls,
+  none for the rest (the caller's own gmails, GMBs, trades, tokens, alerts, chats and review kit). Each fresh
   `GetMe` upserts the user (`users`: id, email, name), whom tokens and gmails belong to.
 - **The catalog.** `serve` publishes `Catalog::collect("sa", PANEL_BUILD_EPOCH)` — the whole `sa`
   namespace, every service's permissions — with `PublishCatalog` before it serves (the image
@@ -198,8 +200,11 @@ POST /auth/logout    CSRF; every session of the user is closed
 ## Forward
 
 The services live under the conductor's origin; `forward.rs` streams each prefix to its
-service, both ways (hyper-util, no buffering), one table for all of it — the front end's
-reserved paths (`web.rs`) are derived from it.
+service, both ways (hyper-util, no buffering), one table for all of it (`ROUTES`).
+With the conductor's own prefixes (`OWN`) it is every prefix of the origin and what the edge does
+with each: the front end's reserved paths (`web.rs`, a JSON 404 below any of them) and the flake's
+ingress lists (`checks.paths`, by `--print-paths`) are derived from it, and a test holds the
+second block below to it.
 
 ```text
 /api/sites/*                     → sites /api/v1/*              session + User; CSRF on writes (a bearer: none)
@@ -208,6 +213,29 @@ reserved paths (`web.rs`) are derived from it.
 /api/review_archive/*            → review_archive /*            session + User; CSRF on writes
 /mfe/review_archive/*            → review_archive /mfe/*        open: the dashboard's bundle
 /api/playbook/*                  → playbook /*                  session + User; CSRF on writes
+```
+
+```text
+/api/sites                public
+/api/hooks/booking        public, rate-limited
+/mfe/sites                public
+/api/review_archive       public
+/mfe/review_archive       public
+/api/playbook             public
+/api                      public                  the conductor's own, and nothing else's
+/api/v1                   public
+/api/queries_cache        public, rate-limited    open to everyone
+/api/ingest               in-cluster
+/api/kit                  in-cluster
+/auth                     public, rate-limited
+/mcp                      public
+/mcp/register             public, rate-limited    open (RFC 7591)
+/mcp/authorize            public, rate-limited
+/mcp/token                public, rate-limited
+/grafana                  public
+/mfe                      public                  the services' bundles, forwarded or not
+/health                   public
+/cabinet                  public                  once the cabinet's account chip
 ```
 
 - **The assertion** (`sa_auth`, header `x-sa-assertion`) is signed for one request: Ed25519
@@ -235,14 +263,14 @@ reserved paths (`web.rs`) are derived from it.
 - **The pages.** `/sites` mounts `<mfe-sites-panel api="/api/sites" base="/sites" csrf-cookie>`
   from `/mfe/sites/`; `/review_archive` mounts
   `<mfe-review-archive-dashboard grafana="/grafana/" ui>` from `/mfe/review_archive/`, `ui` its
-  default (`reviewArchiveUi` in `frontend/panel.config.ts`). Any `/sites/<view>` or
-  `/review_archive/<view>` without a dot in its last segment is that page, for the element to
-  route, and a file below a view (`/sites/<view>/index.txt`, `…/__next.*.txt`) is the page's
-  own, so Next's client-side navigation to a view stays soft. The bundles run on this origin:
+  default (`reviewArchiveUi` in `frontend/panel.config.ts`). Every view (`View`, the services'
+  nested under their pages) is the front end's one page, which shows the view the location
+  parses as; below a nest the path is the element's to route. The bundles run on this origin:
   their builds are trusted as the conductor's own code is.
-- **The elements route by the location.** Next moves it with `pushState`, which fires nothing:
-  after each of its moves the shell dispatches a stateless `popstate`, as back and forward do
-  (Next's own handler ignores it). An element is created once per tag, attributes and language
+- **The elements route by the location.** The front end's location store moves it with
+  `pushState`, which fires nothing: after each move, its own or an element's (it wraps
+  `pushState`/`replaceState`), it dispatches a stateless `popstate`, as back and forward do
+  (Next's own handler ignores it), and puts back the carried keys a move dropped. An element is created once per tag, attributes and language
   and re-inserted after: a Dioxus one (ev_lib's `mfe`) cannot be torn down, so it keeps running
   while its page is not shown, and holds its last route while the location is not under its base.
 - **One keymap and one undo history per page, the shell's.** An element listens for no key: it
@@ -343,18 +371,19 @@ browser ── /grafana/api/ds/query ─▶ conductor: a viewer token into each 
 Grafana (Infinity) ── GET 127.0.0.1:<any>/api/<service>/… + token ──▶ the forward, as that viewer
 Grafana (Infinity) ── GET 127.0.0.1:<any>/api/v1/… + token ──▶ the conductor's own GETs, as that viewer
 conductor ── GET /dashboards (Conductor), every 60 s, conditional ──▶ each service of
-             forward::DASHBOARDS ──▶ <dir>/dashboards/<service>/<uid>.json ──▶ Grafana
+             Service::dashboards ──▶ <dir>/dashboards/<service>/<uid>.json ──▶ Grafana
 ```
 
 - **Datasources are derived:** one Infinity datasource per service's API (`/api/<service>`), its
-  uid the service's name, and `conductor` for the conductor's own GETs (`/api/v1`, each route's
-  section checked against the viewer); its url that API on the loopback listener and nothing
+  uid the service's name, and `conductor` for the conductor's own GETs (`/api/v1`, each row's
+  gate taking the viewer's token on a request the loopback listener marked); its url that API on
+  the loopback listener and nothing
   beyond it allowed; written, with the dashboards' provider and the conductor's own dashboards,
   before Grafana starts.
 - **Dashboards are the services':** coupled to a service's API, they ship with its release, built
   over its document (`sa_core::dashboards`): a query names an operation, and a field its JSONata
   reads that the answer lacks fails the build. A
-  service that has them is in `forward::DASHBOARDS`, and its `GET /dashboards` answers a JSON
+  service that has them says so (`sa_auth::Service::dashboards`), and its `GET /dashboards` answers a JSON
   array of them, each with its `uid`, and an ETag. A pull that fails — no answer, a 404, a uid
   another service serves or Grafana refuses — is reported, and what was served before stays.
 - Grafana's dashboards query by POST, so every method under `/grafana/` takes the cached `GetMe`
@@ -385,11 +414,11 @@ What a key may write — its kind's types, its brands, a bot's lookup — is sit
 event. An unknown key and a bad signature answer the same 401, so key ids cannot be probed for;
 only a timestamp outside the window is told apart.
 
-**Keys** (`/api/v1/sources`, `panel source add|list|set-origin|revoke`): one kind and a set of
+**Keys** (`/api/v1/sources`): one kind and a set of
 brands each, the secret shown once. Kinds `panel` and `booking` are written by sites itself: no
 key is issued for them. A `site` key carries its landing's origin (`https://<domain>[:port]`,
 nothing after it; plain http on `localhost` / `127.0.0.1` for a landing on this machine): given
-when the key is issued, or once with `set-origin` for a key issued before origins.
+when the key is issued, or once with `PUT /sources/{key_id}/origin` for a key issued before origins.
 
 ## Queries cache
 
@@ -418,8 +447,8 @@ PUT    /api/queries_cache/{scheme}/{key}         {answer, request, bought: {item
   `fresh_since` is a reader's age limit, or its re-ask.
 - **Open to everyone**, reads and writes: bounded as ingest, a body ≤ 8 MiB, and rate-limited per
   client at the edge.
-- `panel import queries-cache <scheme> <dir>` takes the files a client kept, `<key>.json` each, as of
-  when each was written.
+- `POST /admin/imports/queries-cache` takes the answers a client kept as files, each as of its own
+  `fetched_at` (its file's time, for `local-stack`).
 
 ## The conductor's API, `/api/v1`
 
@@ -429,13 +458,14 @@ person.
 
 **One table, everything derived** (ev_lib `api`): `http::api_routes` is what the router is built
 from; each operation's request and answer are its handler's signature, its description the
-handler's `///`, its id the handler's name, its permission its section, and what it spends its
+handler's `///`, its id the handler's name, its permission its gate's, and what it spends its
 `sa_core::prices::Spends<Tool, _>` (`x-spends`: the tool's items), which hands the handler the
 `Spender` that whatever buys takes. `GET /openapi.json` is that document, narrowed to the operations the caller's
 permissions open; the front end's client and types are generated from it (`nix run .#gen`), and
-an agent's tools read it. Below, the overview (a test holds it to the table); what each answers
-is in the document. Slow: 8 at once, 10 min each, not the bounds above. The browser viewer's
-socket (`GET /gmails/{id}/browser`) is outside the gate, as `/live` is.
+an agent's tools read it. Below, the overview (a test holds it to the table), its permissions
+`sa:admin:…`; what each answers is in the document. Slow: 8 at once, 10 min each, not the bounds
+above; a socket's handshake: as `/live`'s. Every refusal is the row's `x-errors`; every answer
+`no-store`, and a 401 clears the cookies.
 
 **The catalog** (`catalog.rs`): sites (`/api/v1/openapi.json`), review_archive and playbook
 (`/openapi.json`) derive theirs the same way; the conductor pulls each as it pulls `/dashboards` (Conductor, every
@@ -451,10 +481,12 @@ POST   /me/claude/connect
 PUT    /me/claude
 DELETE /me/claude
 GET    /openapi.json
-GET    /sources                             Admin
-POST   /sources                             Admin, fresh
-GET    /sources/sites                       Admin
-DELETE /sources/{key_id}                    Admin, fresh
+GET    /live                                socket
+GET    /sources                             sources:manage
+POST   /sources                             sources:manage, fresh
+GET    /sources/sites                       sources:manage
+DELETE /sources/{key_id}                    sources:manage, fresh
+PUT    /sources/{key_id}/origin             sources:manage, fresh
 POST   /access/requests
 GET    /access/requests/mine
 GET    /alerts
@@ -467,6 +499,7 @@ POST   /gmails
 PATCH  /gmails/{id}
 DELETE /gmails/{id}
 GET    /gmails/{id}/connections
+GET    /gmails/{id}/browser                 socket: the viewer
 PUT    /gmails/{id}/{imap,maps_key,browser}
 POST   /gmails/{id}/{imap,maps_key,browser}/test
 DELETE /gmails/{id}/{imap,maps_key,browser}
@@ -523,14 +556,18 @@ GET    /tokens/ledger
 GET    /tokens/usage
 POST   /tokens/claim
 PUT    /tokens/settings
-GET    /admin/tokens                        Tokens
-POST   /admin/tokens/{user_id}              Tokens, fresh
-GET    /admin/tokens/prices                 Tokens
-PUT    /admin/tokens/prices                 Tokens, fresh
-GET    /admin/tokens/flows                  Tokens
-GET    /admin/usage                         Tokens
-GET    /admin/meters                        Tokens
-GET    /admin/meters/readings               Tokens
+GET    /admin/tokens                        tokens:grant
+POST   /admin/tokens/{user_id}              tokens:grant, fresh
+GET    /admin/tokens/prices                 tokens:grant
+PUT    /admin/tokens/prices                 tokens:grant, fresh
+GET    /admin/tokens/flows                  tokens:grant
+GET    /admin/usage                         tokens:grant
+GET    /admin/meters                        tokens:grant
+GET    /admin/meters/readings               tokens:grant
+POST   /admin/gmails                        tokens:grant, fresh
+POST   /admin/imports/review-archive        tokens:grant, fresh
+POST   /admin/imports/queries-cache         sources:manage, fresh, slow
+POST   /admin/gmbs/locate                   sources:manage, fresh, slow
 GET    /assistant/chats
 POST   /assistant/chats
 GET    /assistant/chats/{id}
@@ -617,32 +654,35 @@ A screen reads through the API and is told, over one WebSocket, when what it rea
 changed. Nothing is sent but the hint.
 
 ```text
-GET /api/v1/live    Origin = PANEL_PUBLIC_ORIGIN exactly                     else 403
-                    the session, as the /api/v1 gate (cached GetMe)          else 401 / 503
+GET /api/v1/live    the session, its row's gate (cached GetMe)               else 401 / 503
+                    Origin = PANEL_PUBLIC_ORIGIN exactly                     else 403
                     ≤ 5 sockets per user, ≤ 200 in all                       else 429
-                    → 101; any signed-in user: what they are told is judged per message
+                    → 101; any signed-in user
 server → client     {"type":"hello","at","user_id"}                          at once
-                    {"type":"changed","topic","brand_id"?,"id"?,"at"}        a change they may read
+                    {"type":"changed","topic","at"}                          a table committed to
                     {"type":"resync"}                                        read everything again
                     WS Ping every 25 s; no Pong within 60 s → dropped
 closes              4401 the session ended   1001 the server is stopping
 ```
 
-- **What sites changed** comes from its feed, `GET /api/conductor/changes` (NDJSON, a Conductor
-  assertion): one follower per process puts each `changed` line (`sa_core::feeds::Line`: a table it
-  committed to, `sites.<table>`) on the bus, told to everyone signed in, and each `resync` to everyone. sites sends `resync`
-  first on every connection and a `ping` every 25 s; a feed that ends, fails, or says nothing
-  for 60 s is followed again after 1 s, doubling to 30 s, so what was missed meanwhile is read
-  again.
-- **The conductor's own writes:** every write through `/api/v1` that succeeds is told as
-  `changed`, its topic the path's first segment (`gmails` for `/gmails/{id}/browser/start`), its
-  id the path's first parameter; to the holders of the route's section, else to the caller, whose
-  own resource it is (`http::tell`). A shared chat's other people are told by the engine. What the
-  bot changes on its own (a chat linked by `/start`, `/stop`, one found dead) is told as `alerts`.
-- **The shell relays.** The front end holds the one socket and re-dispatches on `window`, as
-  `CustomEvent`s: `sa:live` (each server message as is, and a `{type:"resync"}` after the shell
-  reconnects), `sa:live-status` (`{status}`; answered to an element's
-  `sa:live-status-request`). The sites elements dispatch `sa:title-count` (`{count}`, the nav
+- **A topic is a table** (`<service>.<table>`), and everyone signed in is told every one: what
+  they may read is judged when they read it. A screen follows the topics its GET's `x-sa-reads`
+  named.
+- **The conductor's own writes** are told by its store's pool (`ev_lib::sqlite`): every committed
+  write, a request's, the bot's or a background task's, as `conductor.<table>` once its connection
+  goes back; a rolled-back one never, nor one that changed no row (an upsert that writes the same
+  values changes it).
+- **What a service changed** comes from its feed, `GET /api/conductor/changes` (NDJSON, a
+  Conductor assertion; sites and review_archive): one follower per service puts each `changed`
+  line (`sa_core::feeds::Line`) on the bus as it came, and each `resync`. A service sends
+  `resync` first on every connection and a `ping` every 25 s; a feed that ends, fails, or says
+  nothing for 60 s is followed again after 1 s, doubling to 30 s, so what was missed meanwhile is
+  read again. One that answers 404 has none yet: said once, asked again every 60 s.
+- **The shell relays.** The front end holds the one socket (`@evinvest/api`'s `useLiveSocket`)
+  and re-dispatches on `window`, as `CustomEvent`s: `ev:live` (each server message as is, and a
+  `{type:"resync"}` after the shell reconnects), `ev:live-status` (`{status}`; answered to an
+  element's `ev:live-status-request`). Each read follows the tables its last answer named
+  (`x-sa-reads`); one that named none re-reads when the window regains focus. The sites elements dispatch `sa:title-count` (`{count}`, the nav
   only) and `sa:unauthenticated` (the shell opens its sign-in, returning to the current page).
 - **The bus is in-process** (`tokio::sync::broadcast`, one pod), 1024 messages per subscriber; a
   socket further behind skips the backlog and is sent `resync`. A frame that does not go out
@@ -665,7 +705,7 @@ Places requests charge at the buy.
 other gmails' keys, free; then the Google accounts' Places keys (below) at the admin's price per
 request kind (Places' SKU), held under one lock per person from the balance read to the charge, so a
 request below the price, or unpriced, is refused before Google is asked. A cached answer costs
-nothing. The operator's commands (`gmb add`, `locate`) try the gmail's keys, then the house pays.
+nothing. The operator's `locate` tries the gmail's keys, then the house pays.
 review_archive's lookups are the house's for now.
 
 **A study's pull is sold per search** (`placement.search`) the conductor buys for it, on the
@@ -825,8 +865,8 @@ push (a change, a page, 60 s)
   second spender.
 - **A 404 on `/api/conductor/*`** is an archive not cut over yet: told once at info, asked again
   every 60 s.
-- **The import opens it.** `panel import review-archive <file>` (review_archive's
-  `scripts/export_members.sql`) writes its people, gmails, GMBs (ids kept; with no country, so
+- **The import opens it.** `POST /admin/imports/review-archive` (review_archive's
+  `scripts/export_members.sql`'s output as the body) writes its people, gmails, GMBs (ids kept; with no country, so
   only an empty list passes), ledger and pending kick-backs in one transaction, refused unless
   the tables are empty, and creates the cursor. Until then tokens and GMBs are closed and `serve` neither follows nor pushes: a balance read
   writes a renewal, which would make the import refuse. A fresh install imports an empty
@@ -836,13 +876,13 @@ push (a change, a page, 60 s)
 - **A GBP's point** is on its row: Google's, else one the operator places on the map (a
   service-area place has none on Google, a GBP without a place none at all). Google's replaces a placed one, a
   placed one never replaces Google's. Google's is written with the GBP from the answer that named
-  it; a GBP added without a key, or imported, has none until `panel gmb locate` asks for the
-  missing ones and lists those Google gives no point: a command, so the spend is explicit; run
-  after a deploy that brings points, and after `local-stack --from-prod`.
+  it; a GBP added without a key, or imported, has none until `POST /admin/gmbs/locate` asks for the
+  missing ones and lists those Google gives no point: an operation, so the spend is explicit and
+  an agent proposes it; run after a deploy that brings points, and after `local-stack --from-prod`.
 - **The review kit** is below.
 - **A GBP's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
   language table) follows the point's rule: Google's (its address), else set by hand
-  (`PUT /gmbs/{id}/country`, `panel gmb country`); `locate` asks for the missing ones too and
+  (`PUT /gmbs/{id}/country`); `locate` asks for the missing ones too and
   lists those Google gives none.
 
 ## Review kit
@@ -1061,10 +1101,14 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   `/health`, `APP_ENV=production`, the variables required, secret and optional,
   `PANEL_DB_PATH`, the volume (`/data`) and the SQLite file on it to replicate, what the ingress
   must not publish or must rate-limit, and the egress. `checks.contract-env` fails the flake
-  when its required variables and the binary's `--print-required-vars` disagree.
+  when its required variables and the binary's `--print-required-vars` disagree; `checks.paths`
+  when its `ingress.rateLimitPathPrefixes`, `ingress.excludePathPrefixes` or `consumes` and the
+  binary's `--print-paths rate-limited|unpublished|consumed` (the path table, the forward's
+  variables) do.
 - **What it provides and consumes, by contract name.** `provides.ingest` is
   `/api/ingest/v1/events`, `provides.kit` `/api/kit/v1`, `provides.queries_cache` `/api/queries_cache`; `consumes` names the peers behind `PANEL_SITES_URL` (`sites_panel`),
-  `PANEL_REVIEW_ARCHIVE_URL` (`review_archive`) and `PANEL_PLAYBOOK_URL` (`playbook_web`), whose
+  `PANEL_REVIEW_ARCHIVE_URL` (`review_archive`), `PANEL_PLAYBOOK_URL` (`playbook_web`) and
+  `PANEL_PLACEMENT_URL` (`gmaps_optimal_placement`), whose
   URLs and egress devops derives. `checks.provided-paths` fails the flake when `provides` and the
   binary's `--print-provided-paths` (the constants its router mounts) disagree.
 - **The landings, outbound on :443.** The Connected sites page asks each site key's origin; the

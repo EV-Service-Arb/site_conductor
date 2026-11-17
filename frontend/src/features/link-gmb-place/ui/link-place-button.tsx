@@ -4,9 +4,11 @@ import { Button, CommandDialog, CommandEmpty, CommandInput, CommandItem, Command
 import { Link2 } from "lucide-react";
 import { useState } from "react";
 
-import { type SiteTag, fetchSitesPlaces, linkPlace, gmbs } from "@/entities/gmb";
+import { useResource } from "@evinvest/api/react";
+
+import { type SiteTag, linkPlace, gmbs } from "@/entities/gmb";
+import { sites } from "@/shared/api";
 import { useT, nav } from "@/shared/i18n";
-import { useResource } from "@/shared/lib/use-resource";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
 
@@ -65,7 +67,7 @@ function Picker({
   onUnlink?: () => void;
 }) {
   const t = useT();
-  const places = useResource("gmbs.link.places", fetchSitesPlaces);
+  const places = useResource(sites, "/places");
   const holder = new Map([...linked].map(([id, tag]) => [`${tag.brand}/${tag.location}`, id]));
   return (
     <CommandDialog open onOpenChange={(o) => !o && onClose()}>
@@ -75,7 +77,7 @@ function Picker({
         {onUnlink && <CommandItem value={t(gmbs.link.unlink, "No site place")} onSelect={onUnlink}>{t(gmbs.link.unlink, "No site place")}</CommandItem>}
         {places.status === "error" && <p className="px-3 py-2 text-sm text-ink-soft">{t(gmbs.tags.failed, "{service} can't be read right now.", { service: t(nav.sites, "Sites") })}</p>}
         {places.status === "ok" &&
-          places.data.map((p) => {
+          places.data.places.map((p) => {
             const key = `${p.brand}/${p.location}`;
             const other = holder.get(key);
             const taken = other !== undefined && other !== gmbId;

@@ -3,7 +3,6 @@
 import { Button, HoverCard, HoverCardContent, HoverCardTrigger, IconButton, Spinner, Textarea, cn } from "@evinvest/uikit";
 import { Check, ChevronRight, Copy, CornerDownRight, FileText, MapPin, Pencil, RotateCcw, ThumbsDown, ThumbsUp } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import type { Action, Cost } from "@/shared/api/schema";
@@ -14,6 +13,7 @@ import { ConnectClaudeDialog } from "@/features/connect-claude";
 
 import { LocationToken, RichText } from "./rich-text";
 import { assistant } from "@/entities/assistant";
+import { ViewLink } from "@/shared/lib/location";
 
 const plain = (text: string) => text.replace(/@\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/ ?\[\d+\]/g, "");
 
@@ -312,9 +312,9 @@ function ActionCard({ action, primary, onAct }: { action: Action; primary: boole
     </>
   );
   return "href" in action.target ? (
-    <Link href={action.target.href} className={look}>
+    <ViewLink href={action.target.href} className={look}>
       {body}
-    </Link>
+    </ViewLink>
   ) : (
     <button type="button" className={look} disabled={onAct === null} onClick={() => onAct?.(action)}>
       {body}

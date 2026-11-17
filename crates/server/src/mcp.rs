@@ -10,14 +10,14 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::post,
 };
-use ev_lib::api::schemars::schema_for;
 use serde_json::{Value, json};
 
 use crate::{
+	api::Code,
 	catalog::Catalog,
 	oauth,
-	signin::{self, Caller, Denied, Freshness, SignIn},
-	tools::{self, Own, Tools},
+	signin::{self, Caller, Freshness, SignIn},
+	tools::{self, Def, Tools},
 };
 
 /// Newest first; the first is answered to a client asking for one not here.
@@ -38,11 +38,11 @@ pub(crate) fn routes(mcp: Mcp) -> Router {
 async fn endpoint(State(m): State<Mcp>, headers: HeaderMap, body: Result<Json<Value>, axum::extract::rejection::JsonRejection>) -> Response {
 	let caller = match signin::bearer(&m.sign_in, &headers, Freshness::Cached).await {
 		Ok(c) => c,
-		Err(Denied::Unauthenticated) => {
+		Err(r) if r.code() == Code::Unauthenticated => {
 			let challenge = HeaderValue::from_str(&oauth::challenge(&m.sign_in)).expect("the origin is visible ASCII");
 			return (StatusCode::UNAUTHORIZED, [(header::WWW_AUTHENTICATE, challenge)]).into_response();
 		}
-		Err(denied) => return denied.into_response(&m.sign_in),
+		Err(r) => return signin::refused(&m.sign_in, r),
 	};
 	let Ok(Json(msg)) = body else {
 		return Json(failure(Value::Null, -32700, "not JSON")).into_response();
@@ -58,7 +58,7 @@ async fn endpoint(State(m): State<Mcp>, headers: HeaderMap, body: Result<Json<Va
 	let answer = match method {
 		"initialize" => Ok(initialize(&params, m.catalog.instructions())),
 		"ping" => Ok(json!({})),
-		"tools/list" => Ok(json!({ "tools": list(&m.tools.own(|p| may(&caller, p))) })),
+		"tools/list" => Ok(json!({ "tools": list(m.tools.definitions(|p| may(&caller, p), false)) })),
 		"tools/call" => call(&m, &caller, &headers, params).await,
 		_ => Err((-32601, format!("no method {method}"))),
 	};
@@ -88,37 +88,23 @@ fn confirmed_property() -> Value {
 	})
 }
 
-fn list(own: &[Own]) -> Value {
-	let mut call = serde_json::to_value(schema_for!(tools::Call)).expect("a schema serializes");
-	call["properties"]["confirmed"] = confirmed_property();
-	let mut tools = vec![
-		json!({
-			"name": "search",
-			"title": "Find operations",
-			"description": "Finds the panel's operations matching what you need: their ids, parameters, body schemas and hints (read_only, idempotent, destructive, spends). An empty query lists every operation you may call.",
-			"inputSchema": schema_for!(tools::Search),
-			"annotations": { "readOnlyHint": true, "openWorldHint": false },
-		}),
-		json!({
-			"name": "call",
-			"title": "Run an operation",
-			"description": "Runs one operation by its id from `search`, as the signed-in user; answers its status and body. One whose hints say destructive or spends is not run without `confirmed: true`: it answers what it would do, for you to ask the user.",
-			"inputSchema": call,
-			"annotations": { "readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": true },
-		}),
-	];
-	for t in own {
-		let mut input = t.input.clone();
-		if t.hints.proposed() {
-			input["properties"]["confirmed"] = confirmed_property();
-		}
-		tools.push(json!({
-			"name": t.name,
-			"description": t.description,
-			"inputSchema": input,
-			"annotations": { "readOnlyHint": t.hints.read_only, "destructiveHint": t.hints.destructive, "idempotentHint": t.hints.idempotent, "openWorldHint": true },
-		}));
-	}
+fn list(defs: Vec<Def>) -> Value {
+	let tools = defs
+		.into_iter()
+		.map(|t| {
+			let mut input = t.input;
+			if t.hints.proposed() || t.name == "call" {
+				input["properties"]["confirmed"] = confirmed_property();
+			}
+			let h = &t.hints;
+			json!({
+				"name": t.name,
+				"description": t.description,
+				"inputSchema": input,
+				"annotations": { "readOnlyHint": h.read_only, "destructiveHint": h.destructive, "idempotentHint": h.idempotent, "openWorldHint": !h.read_only },
+			})
+		})
+		.collect();
 	Value::Array(tools)
 }
 

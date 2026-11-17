@@ -1,11 +1,10 @@
 "use client";
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, cn } from "@evinvest/uikit";
-import Link from "next/link";
 import { Fragment } from "react";
 
 import type { Caller } from "@/shared/api/schema";
-import { ROUTES } from "@/shared/config/routes";
+import { ViewLink } from "@/shared/lib/location";
 import { useT, nav } from "@/shared/i18n";
 
 import { fallbackIdentity, panelGroups } from "../model/attributes";
@@ -35,7 +34,7 @@ export function ChipFallback({ me, onSignOut, className }: { me: Caller; onSignO
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href={ROUTES.account}>{t(nav.account, "Profile")}</Link>
+          <ViewLink to={{ view: "account", params: {} }}>{t(nav.account, "Profile")}</ViewLink>
         </DropdownMenuItem>
         {panelGroups(me, t).map((group) => (
           <Fragment key={group.id}>
@@ -43,7 +42,7 @@ export function ChipFallback({ me, onSignOut, className }: { me: Caller; onSignO
             <DropdownMenuGroup>
               {group.items.map((item) => (
                 <DropdownMenuItem key={item.id} asChild>
-                  {item.external ? <a href={item.href}>{item.label}</a> : <Link href={item.href}>{item.label}</Link>}
+                  {item.external ? <a href={item.href}>{item.label}</a> : <ViewLink href={item.href}>{item.label}</ViewLink>}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuGroup>

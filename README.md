@@ -4,8 +4,8 @@
 ![Build time](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/site_conductor-build.json)
 ![Test time](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/site_conductor-test.json)
 <br>
-[<img alt="ci errors" src="https://img.shields.io/github/actions/workflow/status/EV-Service-Arb/site_conductor/errors.yml?branch=main&style=for-the-badge&style=flat-square&label=errors&labelColor=420d09" height="20">](https://github.com/EV-Service-Arb/site_conductor/actions?query=branch%3Amain) <!--NB: Won't find it if repo is private-->
-[<img alt="ci warnings" src="https://img.shields.io/github/actions/workflow/status/EV-Service-Arb/site_conductor/warnings.yml?branch=main&style=for-the-badge&style=flat-square&label=warnings&labelColor=d16002" height="20">](https://github.com/EV-Service-Arb/site_conductor/actions?query=branch%3Amain) <!--NB: Won't find it if repo is private-->
+[![errors](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/site_conductor-errors.json)](https://github.com/EV-Service-Arb/site_conductor/actions/workflows/errors.yml?query=branch%3Amain)
+[![warnings](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/site_conductor-warnings.json)](https://github.com/EV-Service-Arb/site_conductor/actions/workflows/warnings.yml?query=branch%3Amain)
 
 The Service-Arb conductor (`sa.evinvest.ltd`): the host the Service-Arb services live behind.
 It knows who a person is — people sign in through concierge (the conductor is its relying
@@ -46,16 +46,12 @@ nix build
 export PANEL_DATA_KEY="$(panel gen-data-key)"
 export PANEL_DB_PATH=./panel.db
 
-# Every command migrates on open; this one does nothing else.
+# `serve` migrates on open as well; this one does nothing else.
 panel migrate
 
-# A source: its key signs what it sends for the brands named. The secret is printed once.
-# A site's key carries its landing's origin (the Sources page asks it /.well-known/sa-site).
-panel source add aquafix-site --kind site --brand aquafix --origin https://aquafix.top
-panel source add aquafix-tg --kind bot --brand aquafix      # a messenger bot
-panel source set-origin vifnet-site https://vifnet.site     # a site key issued before origins, once
-panel source list
-panel source revoke aquafix-site
+# Everything else the conductor does is its `/api/v1` (`GET /openapi.json`): a source's key
+# (`POST /sources`), its landing's origin, the imports. The first `serve` of a new database waits
+# for `POST /admin/imports/review-archive` with review_archive's export, empty for a fresh install.
 
 # HTTP on 127.0.0.1:59120, with signing in — all four, or PANEL_DEV_SIGN_IN in development:
 #   PANEL_PUBLIC_ORIGIN=https://sa.evinvest.ltd   CONCIERGE_PUBLIC_ORIGIN=https://evinvest.ltd
@@ -88,7 +84,8 @@ looks a lead up by the ref the customer brought the same way:
 
 ```sh
 nix run .#local-stack    # the conductor on :59120 (signed in as a dev admin), sites_panel on :59121,
-                         # and the aquafix and vifnet landings from the checkouts beside it, wired
+                         # and the aquafix, vifnet and debouchage landings from the checkouts beside
+                         # it, wired
                          # together; Ctrl-C stops all
 ```
 

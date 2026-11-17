@@ -1,4 +1,7 @@
+import { mayOpen } from "@evinvest/views";
+
 import openapi from "@/shared/api/openapi.json";
+import { VIEWS } from "@/shared/api/views";
 import { type Caller, type Need, type Permission, permissionValues } from "@/shared/api/schema";
 
 const members: Record<Exclude<Need, Permission>, readonly string[]> = openapi.components.schemas.Need["x-members"];
@@ -21,16 +24,7 @@ export function may(caller: Caller, permission: Permission): boolean {
   return caller.permissions.includes(permission);
 }
 
-/** The sites nav lists the Work and Analysis sections: anything else it would show empty. */
+/** Whether one of sites' views that names a permission opens for the caller: its start names none, and shows nothing alone. */
 export function seesSites(caller: Caller): boolean {
-  return may(caller, "sa:sites:work:read") || may(caller, "sa:sites:analysis:read");
-}
-
-/** The caller's own screens, beside the account chip, left to right. `walletPage`: the build flag. */
-export function ownScreens(caller: Caller, walletPage: boolean): ("usage" | "tokens" | "wallet")[] {
-  return [
-    "usage" as const,
-    "tokens" as const,
-    ...(walletPage && may(caller, "sa:sites:work:read") ? (["wallet"] as const) : []),
-  ];
+  return (Object.keys(VIEWS.views) as (keyof typeof VIEWS.views)[]).some((view) => view.startsWith("sites.") && "needs" in VIEWS.views[view] && mayOpen(VIEWS, view, caller.permissions));
 }

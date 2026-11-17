@@ -1,11 +1,10 @@
 "use client";
 
 import { Popover, PopoverContent, PopoverTrigger, Switch, cn } from "@evinvest/uikit";
-import { Check, ChevronDown, ChevronRight, ListFilter, Plug, Settings } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { ArrowUpRight, Check, ChevronDown, ChevronRight, ListFilter, Plug, Settings } from "lucide-react";
 import { type MouseEvent, useEffect, useState } from "react";
 
-import { chooseCategoryScope, chooseGmailScope, covers, GMAIL_ROLE_NAME, inCategories, openAccount, openCategories, type Pattern, type Selection, under, useScope, useTrades, scopeKeys, gmbs as gmbsKeys } from "@/entities/gmb";
+import { chooseCategoryScope, chooseGmailScope, covers, GMAIL_ROLE_NAME, inCategories, openAccount, openCategories, openTrade, type Pattern, type Selection, under, useScope, useTrades, scopeKeys, gmbs as gmbsKeys } from "@/entities/gmb";
 import { AddGmailButton } from "@/features/add-gmail";
 import { AddGmbButton } from "@/features/add-gmb";
 import { api, ok } from "@/shared/api";
@@ -33,6 +32,10 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
   const scope = useScope();
   const [open, setOpen] = useState(false);
   const [opened, setOpened] = useState<ReadonlySet<number>>(new Set());
+  const openSettings = (trade: number, country: Country | undefined) => {
+    setOpen(false);
+    openTrade(trade, country);
+  };
   const { scoped, chosen, edited, isSelected, move } = selection;
   const { gmails } = data;
   const known = trades.status === "ok" ? trades.data : null;
@@ -83,7 +86,6 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
       </div>
       <PopoverContent align="start" className="max-h-[80svh] w-96 overflow-y-auto p-1.5">
         <div className={HEADING}>
-          {t(scopeKeys.categories, "Categories")}
           <ManageCategories onOpened={() => setOpen(false)} />
           <span className="flex-1" />
           {known !== null && (
@@ -92,7 +94,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
             </span>
           )}
         </div>
-        {known !== null && <Matrix all={data.gmbs} gmbs={data.gmbs.filter(byGmail)} trades={known} picked={scope.categories} />}
+        {known !== null && <Matrix all={data.gmbs} gmbs={data.gmbs.filter(byGmail)} trades={known} picked={scope.categories} onSettings={openSettings} />}
         <p className="px-2 pt-1 text-xs text-ink-soft">{t(scopeKeys.matrix.how, "Click scopes · Shift-click adds")}</p>
         {data.gmbs.some((b) => b.trade_id === null) && <p className="px-2 text-xs text-ink-soft">{t(scopeKeys.matrix.untraded, "{n} GBPs have no trade → the outline's No category chip", { n: data.gmbs.filter((b) => b.trade_id === null).length })}</p>}
         <div className={cn(HEADING, "mt-1 border-t border-border pt-2")}>
@@ -196,7 +198,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
  * Trades by the countries that have GBPs or categories: a cell counts the GBPs of that category under the gmails picked. Blank:
  * not set up and holding none; `0`: set up and holding none; dashed, in the warning tone: GBPs there, the trade not set up.
  */
-function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[]; trades: readonly Trade[]; picked: readonly Pattern[] | null }) {
+function Matrix({ all, gmbs, trades, picked, onSettings }: { all: readonly Gmb[]; gmbs: Gmb[]; trades: readonly Trade[]; picked: readonly Pattern[] | null; onSettings: (trade: number, country: Country | undefined) => void }) {
   const t = useT();
   const countries = countryValues.filter((c) => all.some((b) => b.country?.code === c) || trades.some((tr) => tr.categories.some((k) => k.country === c)));
   if (trades.length === 0) return <p className="px-2 py-1.5 text-xs text-ink-soft">{t(scopeKeys.categories.none, "No trades yet: ⚙ names one.")}</p>;
@@ -209,6 +211,11 @@ function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[
   const state = (p: Pattern) => (picked?.some((q) => same(q, p)) ? PICKED : null);
   const count = (trade: number | "*", country: Country | "*") => gmbs.filter((b) => inCategories(b, [{ trade, country }])).length;
   const box = "h-7 rounded-md text-xs tabular-nums outline-none hover:bg-hover/60 focus-visible:ring-2 focus-visible:ring-ring";
+  const settings = (label: string, open: () => void, className: string) => (
+    <button type="button" aria-label={label} title={label} onClick={open} className={cn("items-center justify-center rounded text-ink-soft outline-none hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-ring", className)}>
+      <ArrowUpRight aria-hidden className="size-3" />
+    </button>
+  );
   return (
     <table className="w-full border-separate border-spacing-0.5 text-sm">
       <thead>
@@ -243,7 +250,7 @@ function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[
           return (
             <tr key={tr.id}>
               <th className="font-normal">
-                <span className="flex items-center">
+                <span className="group flex items-center">
                   <button
                     type="button"
                     aria-pressed={state(row) !== null}
@@ -254,6 +261,7 @@ function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[
                     <span className="min-w-0 flex-1 truncate text-left">{tr.name}</span>
                     <span className="text-xs text-ink-soft">{count(tr.id, "*")}</span>
                   </button>
+                  {settings(t(scopeKeys.matrix.open, "Open {category}", { category: tr.name }), () => onSettings(tr.id, countries.find((c) => tr.categories.some((k) => k.country === c))), cn("size-5 shrink-0", ON_HOVER))}
                 </span>
               </th>
               {countries.map((c) => {
@@ -263,7 +271,7 @@ function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[
                 const covering = state(p) === null && picked !== null && picked.some((q) => covers(q, tr.id, c));
                 if (!setUp && n === 0) return <td key={c} />;
                 return (
-                  <td key={c}>
+                  <td key={c} className="group/cell relative">
                     <button
                       type="button"
                       aria-pressed={state(p) !== null}
@@ -279,6 +287,7 @@ function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[
                     >
                       {n}
                     </button>
+                    {settings(t(scopeKeys.matrix.open, "Open {category}", { category: `${tr.name} · ${c}` }), () => onSettings(tr.id, c), "absolute top-0 right-0 hidden size-4 bg-popover group-hover/cell:flex group-focus-within/cell:flex")}
                   </td>
                 );
               })}
@@ -290,23 +299,20 @@ function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[
   );
 }
 
-/** The categories' own window, where they are managed; the picker only selects. */
+/** The categories' own window, where they are managed, opened by the heading; the picker only selects. */
 function ManageCategories({ onOpened }: { onOpened: () => void }) {
   const t = useT();
-  const router = useRouter();
-  const pathname = usePathname();
   return (
     <button
       type="button"
       onClick={() => {
         onOpened();
-        if (pathname === "/") openCategories(true);
-        else router.push("/?categories");
+        openCategories(true);
       }}
-      aria-label={t(scopeKeys.categories.manage, "Manage categories")}
       title={t(scopeKeys.categories.manage, "Manage categories")}
-      className="rounded p-0.5 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex items-center gap-1 rounded p-0.5 tracking-wide uppercase outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
     >
+      {t(scopeKeys.categories, "Categories")}
       <Settings aria-hidden className="size-3.5" />
     </button>
   );
@@ -315,16 +321,13 @@ function ManageCategories({ onOpened }: { onOpened: () => void }) {
 /** A gmail's own window, its connections, over the map as a trade's is. */
 function OpenAccount({ gmail, onOpened }: { gmail: Gmail; onOpened: () => void }) {
   const t = useT();
-  const router = useRouter();
-  const pathname = usePathname();
   const label = t(account.open, "Connections of {gmail}", { gmail: gmail.gmail });
   return (
     <button
       type="button"
       onClick={() => {
         onOpened();
-        if (pathname === "/") openAccount({ gmail: gmail.id, tab: "connections" });
-        else router.push(`/?account=${gmail.id}&tab=connections`);
+        openAccount({ gmail: gmail.id, tab: "connections" });
       }}
       aria-label={label}
       title={label}
