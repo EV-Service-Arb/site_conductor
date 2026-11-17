@@ -1,15 +1,6 @@
 import openapi from "@/shared/api/openapi.json";
 import type { ConnectedSites as Answer, BrandReads, Probe } from "@/shared/api/schema";
 
-/** A site key's origin as `sa_core::ids::SiteOrigin` takes it; the backend has the last word. */
-export function isOrigin(s: string): boolean {
-  try {
-    const u = new URL(s);
-    return u.origin === s && (u.protocol === "https:" || ["localhost", "127.0.0.1"].includes(u.hostname));
-  } catch {
-    return false;
-  }
-}
 
 /** What sites' `/api/internal` serves a brand, as the document's `BrandReads` names them. */
 const ENDPOINTS = Object.keys(openapi.components.schemas.BrandReads.properties) as (keyof BrandReads)[];

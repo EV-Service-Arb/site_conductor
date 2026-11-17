@@ -3,15 +3,19 @@
 import { Button, Field, FieldDescription, FieldLabel, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn } from "@evinvest/uikit";
 import { useId, useState } from "react";
 
-import { isOrigin, sourceKindLabel, sources } from "@/entities/source";
+import { sourceKindLabel, sources } from "@/entities/source";
 import { api, ok } from "@/shared/api";
+import openapi from "@/shared/api/openapi.json";
 import { type KeyedSourceKind, type NewSourceKey, keyedSourceKindValues } from "@/shared/api/schema";
-import { isSlug } from "@/shared/config/brands";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 import { brandsFrom } from "../model/brands";
+
+const fields = openapi.components.schemas.AddSource.properties;
+const KEY_ID = new RegExp(fields.key_id.pattern);
+const ORIGIN = new RegExp(fields.origin.pattern);
 
 /** A new signing key: its id, the one kind it writes as, the brands it may write for, and a site's origin. */
 export function AddSourceForm({ onAdded }: { onAdded: (added: NewSourceKey) => void }) {
@@ -26,7 +30,7 @@ export function AddSourceForm({ onAdded }: { onAdded: (added: NewSourceKey) => v
   const size = useControlSize();
   const brands = brandsFrom(brandsText);
   const site = kind === "site";
-  const ready = isSlug(keyId) && brands !== null && (!site || isOrigin(origin));
+  const ready = KEY_ID.test(keyId) && brands !== null && (!site || ORIGIN.test(origin));
 
   const submit = async () => {
     if (!brands) return;

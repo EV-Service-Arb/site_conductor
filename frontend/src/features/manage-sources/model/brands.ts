@@ -1,7 +1,5 @@
-import { isSlug } from "@/shared/config/brands";
-
-/** "aquafix, vifnet" → ["aquafix", "vifnet"]; null if any is not a brand slug or none is given. */
+/** "aquafix, vifnet" → ["aquafix", "vifnet"]; null if none is given. Each is the server's to refuse: no document gives a brand's form. */
 export function brandsFrom(raw: string): string[] | null {
   const brands = [...new Set(raw.split(/[\s,]+/).filter(Boolean))];
-  return brands.length > 0 && brands.every(isSlug) ? brands : null;
+  return brands.length > 0 ? brands : null;
 }

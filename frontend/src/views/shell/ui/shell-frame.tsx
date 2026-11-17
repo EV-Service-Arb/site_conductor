@@ -7,7 +7,6 @@ import { useEffect } from "react";
 import { PANEL } from "@config";
 
 import { GmailsProvider, PublishSelection, undo } from "@/entities/gmb";
-import { seesSites, useMe } from "@/entities/session";
 import { Assistant } from "@/features/assistant";
 import { api, goToSignIn } from "@/shared/api";
 import { useT, keys, nav } from "@/shared/i18n";
@@ -33,7 +32,6 @@ const UNAUTHENTICATED_EVENT = "sa:unauthenticated";
 /** Every signed-in screen between the top bar and the hotbar, beside the outline; the tab's live socket and the elements' window events. */
 export function ShellFrame({ onForbidden, children }: { onForbidden: () => void; children: ReactNode }) {
   const t = useT();
-  const me = useMe();
   const at = useAt();
   const folded = useSidebarFolded();
   const width = useSidebarWidth();
@@ -48,7 +46,7 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
   return (
     <KeymapProvider leader={LEADER} elements={elements} labels={{ title: t(keys.help, "Keybinds") }}>
       <UndoProvider labels={{ undo: t(undo.undo, "Undo"), redo: t(undo.redo, "Redo") }}>
-        <GmailsProvider seesSites={seesSites(me)}>
+        <GmailsProvider>
           <PublishSelection />
           <NavKeys />
           <div className="flex h-svh flex-col">

@@ -4,12 +4,12 @@ import { Button, Input, NativeSelect, NativeSelectOption, ToggleGroup, ToggleGro
 import { Check, Copy, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { CategoryChip, categoryName, categoryOf, GMAIL_ROLE_NAME, gmbs, googleName, type Listed, MUST_HAVES, type MustHave, openAccount, openTrade, type Placed, readiness, TradeSelect, under, useGmails, useGmbTags } from "@/entities/gmb";
-import { may, useMe } from "@/entities/session";
+import { CategoryChip, categoryName, categoryOf, GMAIL_ROLE_NAME, gmbs, googleName, type Listed, openAccount, openTrade, type Placed, TradeSelect, under, useGmails, useGmbTags } from "@/entities/gmb";
+import { useMe } from "@/entities/session";
 import { LinkPlaceButton } from "@/features/link-gmb-place";
 import { SpotsEditor } from "@/features/add-gmb";
-import { type Country, type Gmb, type GmbEdit, type GoogleCategory, countryValues } from "@/shared/api/schema";
-import { Refused, api, ok } from "@/shared/api";
+import { type Country, type Gmb, type GmbEdit, type GoogleCategory, type MustHave, countryValues, mustHaveValues } from "@/shared/api/schema";
+import { Refused, api, ok, sites as sitesApi } from "@/shared/api";
 import { type T, useLocale, useT, account, nav } from "@/shared/i18n";
 import { failureText } from "@/shared/ui/failure-text";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -37,12 +37,15 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
   const me = useMe();
   const gmails = useGmails();
   const { sites, tags } = useGmbTags();
-  const rows = readiness({ gmb, gmail }, tags);
   const placed = tags.trades === null ? null : categoryOf(gmb, tags.trades);
-  const ready = rows.filter((r) => r.ready).length;
-  const missing = rows.filter((r) => !r.ready);
   const button = useButtonSize();
   const [failed, setFailed] = useState<{ must: MustHave; text: string } | null>(null);
+  if (gmb.readiness === null) throw new Error(`GMB ${gmb.id}: the launch tab of a GBP past its draft`);
+  const { missing: absent, unknown } = gmb.readiness;
+  // the form's order; one sites could not tell of is not ready either
+  const rows = mustHaveValues.map((must) => ({ must, ready: !absent.includes(must) && !unknown.includes(must) }));
+  const ready = rows.filter((r) => r.ready).length;
+  const missing = rows.filter((r) => !r.ready);
 
   const save = (must: MustHave) => async (edit: GmbEdit) => {
     try {
@@ -58,7 +61,7 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
     <TextEditor value={value} {...(type && { type })} onSave={(v) => save(must)(edit(v))} />
   );
 
-  const linked = may(me, "sa:sites:work:places:edit") ? tags.sites : null;
+  const linked = sitesApi.mayCall("put", "/places/{brand}/{slug}/gmb", me.permissions) ? tags.sites : null;
   const gmailList = gmails.status === "ok" ? gmails.data.gmails : [];
   const room = (id: number) => {
     const g = gmailList.find((g) => g.id === id);
@@ -153,7 +156,7 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
               <span key={r.must} className={cn("h-1.5 w-4 rounded-full", r.ready ? "bg-positive" : "bg-ink-soft/40")} />
             ))}
           </span>
-          <p className="font-medium text-ink">{t(launch.ready, "{n} of {of} ready to open Google's form", { n: ready, of: MUST_HAVES.length })}</p>
+          <p className="font-medium text-ink">{t(launch.ready, "{n} of {of} ready to open Google's form", { n: ready, of: mustHaveValues.length })}</p>
         </div>
         <p className="text-sm text-ink-soft">
           {missing.length === 0 ? t(launch.ready.all, "Everything Google's form asks is ready: open it from the profile.") : t(launch.missing, "Missing: {what}", { what: missing.map((r) => MUST_NAME[r.must](t)).join(" · ") })}

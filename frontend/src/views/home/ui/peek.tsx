@@ -3,7 +3,7 @@
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, buttonVariants, cn } from "@evinvest/uikit";
 import { X } from "lucide-react";
 
-import { CategoryChip, type Listed, TABS, issueOf, issueText, open, useGmbTags, gmbs } from "@/entities/gmb";
+import { CategoryChip, type Listed, issueOf, issueText, open, useGmbTags, gmbs } from "@/entities/gmb";
 import { ViewLink } from "@/shared/lib/location";
 import { useT, home } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -47,7 +47,7 @@ export function Peek({ listed, onClose, className }: { listed: Listed; onClose: 
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {TABS[gmb.state].length > 0 && (
+          {gmb.tabs.length > 0 && (
             <Button size={button("sm")} onClick={() => open(gmb)}>
               {t(home.peek.open, "Open")}
             </Button>

@@ -16,7 +16,10 @@ import { useT } from "@/shared/i18n";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorState } from "@/shared/ui/error-state";
 import { mayOpen } from "@evinvest/views";
+import type { PATHS } from "@/shared/api/paths";
 import { VIEWS } from "@/shared/api/views";
+
+const GRAFANA: (typeof PATHS)[number] = "/grafana";
 
 /** Prices, everyone's spending and balances, for whoever grants tokens. */
 export function AdminTokensView() {
@@ -45,7 +48,7 @@ export function AdminTokensView() {
         <h2 className="text-sm font-semibold text-ink">{t(tokens.admin.spending, "Spending")}</h2>
         <iframe
           title={t(tokens.admin.spending, "Spending")}
-          src={`/grafana/d/sa-tokens/?kiosk&hideLogo&_dash.hideLinks&theme=dark`}
+          src={`${GRAFANA}/d/sa-tokens/?kiosk&hideLogo&_dash.hideLinks&theme=dark`}
           className="h-screen w-full rounded-lg border border-border"
         />
       </section>

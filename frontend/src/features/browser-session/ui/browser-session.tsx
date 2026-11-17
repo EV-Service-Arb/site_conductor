@@ -119,7 +119,7 @@ function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: nu
           setPhase("lost");
           window.dispatchEvent(new Event("sa:unauthenticated"));
         } else if (e.code === CLOSE.notRunning || e.code === CLOSE.stopped) gone();
-        else if (e.code === CLOSE.takenOver) setPhase("taken");
+        else if (e.code === CLOSE.replaced) setPhase("taken");
         else if (opened || e.code === CLOSE.goingAway) {
           setPhase("connecting");
           setLink({ n: link.n + 1, delay: backoffDelay(attempts.current++, Math.random) });

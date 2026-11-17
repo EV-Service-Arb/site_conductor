@@ -1,11 +1,11 @@
-import type { Gmb, Trade } from "@/shared/api/schema";
+import { type Gmb, type Trade, mustHaveValues } from "@/shared/api/schema";
 import { VIEWS } from "@/shared/api/views";
 import type { T } from "@/shared/i18n";
 
 import { categoryOf } from "./category";
 import type { ArchiveTag, SiteTag } from "./gmb";
 import type { Listed } from "./narrow";
-import { MUST_HAVES, readiness } from "./readiness";
+import { readyCount } from "./readiness";
 import { gmbs as gmbsKeys } from "./i18n";
 
 const issueKeys = gmbsKeys.issue;
@@ -63,6 +63,9 @@ export function issueText(issue: Issue, listed: Listed, tags: Tags, t: T): strin
   const { gmb } = listed;
   if (issue === "overdue") return t(gmbsKeys.tag.overdue, "{n} overdue", { n: tags.sites!.get(gmb.id)!.overdue });
   if (issue === "suspended") return t(gmbsKeys.tag.suspended, "{n} reviews suspended", { n: tags.archive!.get(gmb.id)!.suspended });
-  if (issue === "draft") return `${readiness(listed, tags).filter((r) => r.ready).length}/${MUST_HAVES.length}`;
+  if (issue === "draft") {
+    if (gmb.readiness === null) throw new Error(`GMB ${gmb.id}: a draft without its readiness`);
+    return `${readyCount(gmb.readiness)}/${mustHaveValues.length}`;
+  }
   return ISSUE_NAME[issue](t);
 }

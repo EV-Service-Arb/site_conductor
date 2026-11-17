@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
+import { PATHS } from "./src/shared/api/paths";
+
 /**
  * The panel is a static export of one page, which the Rust binary serves for every path that is a
  * view (`VIEWS`), next to `/api` and `/auth` on one origin (see README.md, "How it is served").
@@ -22,12 +24,8 @@ export default function config(phase: string): NextConfig {
       // a study's Pull buys its whole sweep in one request, minutes long; Next's proxy cuts at 30 s
       experimental: { proxyTimeout: 15 * 60_000 },
       async rewrites() {
-        // the backend's prefixes; every other path is the page, which parses it
-        const afterFiles = [
-          ...["/api", "/auth", "/mcp", "/.well-known", "/mfe", "/grafana"].map((p) => ({ source: `${p}/:path*`, destination: `${backend}${p}/:path*` })),
-          { source: "/mcp", destination: `${backend}/mcp` },
-          { source: "/grafana/", destination: `${backend}/grafana/` }, // `:path*` empty drops the slash: /grafana, unrouted
-        ];
+        // the backend's paths; every other path is the page, which parses it. `:path*` empty drops the slash: `/grafana/` has its own.
+        const afterFiles = PATHS.flatMap((p) => [p, `${p}/`, `${p}/:path*`].map((source) => ({ source, destination: `${backend}${source}` })));
         return { beforeFiles: [], afterFiles, fallback: [{ source: "/:path*", destination: "/" }] };
       },
     };

@@ -3,27 +3,24 @@
 import { Button, NativeSelect, NativeSelectOption, Settled, Skeleton, cn } from "@evinvest/uikit";
 import { Mail, X } from "lucide-react";
 
-import { ACCOUNT_TABS, type AccountTab, GMAIL_ROLE_NAME, openAccount, useGmails, windowKeys, gmbs } from "@/entities/gmb";
+import { GMAIL_ROLE_NAME, openAccount, useGmails, windowKeys, gmbs } from "@/entities/gmb";
 import { BrowserSession } from "@/features/browser-session";
 import { ImapCard } from "@/features/connect-imap";
 import { BrowserCard } from "@/features/set-browser";
 import { MapsKeyCard } from "@/features/set-maps-key";
 import { api, ok } from "@/shared/api";
-import { type Gmail, type GmailRole, gmailRoleValues } from "@/shared/api/schema";
-import { type T, useT, account } from "@/shared/i18n";
+import { type Gmail, type GmailRole, type Tab, gmailRoleValues } from "@/shared/api/schema";
+import { useT, account } from "@/shared/i18n";
 import { useResource } from "@evinvest/api/react";
 import { ErrorState } from "@/shared/ui/error-state";
+import { TAB_NAME } from "./window";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
 
 /** A managing gmail's own window over the map, shaped as a trade's: what it is connected to, and its browser. */
-const TAB_NAME = {
-  connections: (t) => t(account.tab.connections, "Connections"),
-  browser: (t) => t(account.tab.browser, "Browser"),
-} satisfies Record<AccountTab, (t: T) => string>;
-
-export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: AccountTab; gbps: number }) {
+export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Tab; gbps: number }) {
   const t = useT();
+  if (!gmail.tabs.includes(tab)) throw new Error(`?tab=${tab}: not a tab of gmail ${gmail.id}'s window`);
   const button = useButtonSize();
 
   return (
@@ -44,7 +41,7 @@ export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Account
         </Button>
       </header>
       <nav role="tablist" aria-label={gmail.gmail} className="flex items-center gap-1 border-b border-border px-6 pt-3">
-        {ACCOUNT_TABS.map((k) => (
+        {gmail.tabs.map((k) => (
           <button
             key={k}
             type="button"

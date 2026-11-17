@@ -6,6 +6,8 @@ import type { paths } from "./schema";
 import placementDocument from "./services/placement.json";
 import type { paths as PlacementPaths } from "./services/placement";
 import reviewArchiveDocument from "./services/review_archive.json";
+import sitesDocument from "./services/sites.json";
+import type { paths as SitesPaths } from "./services/sites";
 import type { paths as ReviewArchivePaths } from "./services/review_archive";
 import { goToSignIn } from "./signin-overlay";
 
@@ -22,6 +24,7 @@ export const api = createApi<paths>({ document: openapi, baseUrl: "/api/v1", hea
 // A forwarded service's 401 is not the panel's session ending: the panel's own reads see to that.
 const theirs = () => {};
 export const reviewArchive = createApi<ReviewArchivePaths>({ document: reviewArchiveDocument, baseUrl: "/api/review_archive", headers: csrf, onUnauthenticated: theirs });
+export const sites = createApi<SitesPaths>({ document: sitesDocument, baseUrl: "/api/sites", headers: csrf, onUnauthenticated: theirs });
 export const placement = createApi<PlacementPaths>({ document: placementDocument, baseUrl: "/api/placement", headers: csrf, onUnauthenticated: theirs });
 
 /** A refusal or no answer, as every service words one: `code` from the operation's `x-errors`, or `network`. */

@@ -5,7 +5,7 @@ import { Button, Skeleton, cn } from "@evinvest/uikit";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { type Listed, TABS, type Tags, issueOf, narrowed, openAccount, openOrFocus, openTrade, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useAddWindow, move, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useKitWindow, useTradeWindow, useTrades } from "@/entities/gmb";
+import { type Listed, type Tags, issueOf, narrowed, openAccount, openOrFocus, openTrade, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useAddWindow, move, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useKitWindow, useTradeWindow, useTrades } from "@/entities/gmb";
 import { AddPanel } from "@/features/add-gmb";
 import { PlacingBar } from "@/features/place-gmb";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
@@ -180,7 +180,7 @@ function GmbMap({ config }: { config: MapConfig }) {
   }, [moved]);
 
   const peekedListed = gmails.status === "ok" ? narrowed(gmails.data, null, "").find((l) => l.gmb.id === peeked) : undefined;
-  const tabs = peekedListed && TABS[peekedListed.gmb.state];
+  const tabs = peekedListed?.gmb.tabs;
   // a GBP whose state moved since its window opened: its state's first tab, or its card alone
   useEffect(() => {
     if (tabs !== undefined && tab !== null && !tabs.includes(tab)) setHome({ tab: tabs[0] });
