@@ -46,16 +46,12 @@ nix build
 export PANEL_DATA_KEY="$(panel gen-data-key)"
 export PANEL_DB_PATH=./panel.db
 
-# Every command migrates on open; this one does nothing else.
+# `serve` migrates on open as well; this one does nothing else.
 panel migrate
 
-# A source: its key signs what it sends for the brands named. The secret is printed once.
-# A site's key carries its landing's origin (the Sources page asks it /.well-known/sa-site).
-panel source add aquafix-site --kind site --brand aquafix --origin https://aquafix.top
-panel source add aquafix-tg --kind bot --brand aquafix      # a messenger bot
-panel source set-origin vifnet-site https://vifnet.site     # a site key issued before origins, once
-panel source list
-panel source revoke aquafix-site
+# Everything else the conductor does is its `/api/v1` (`GET /openapi.json`): a source's key
+# (`POST /sources`), its landing's origin, the imports. The first `serve` of a new database waits
+# for `POST /admin/imports/review-archive` with review_archive's export, empty for a fresh install.
 
 # HTTP on 127.0.0.1:59120, with signing in — all four, or PANEL_DEV_SIGN_IN in development:
 #   PANEL_PUBLIC_ORIGIN=https://sa.evinvest.ltd   CONCIERGE_PUBLIC_ORIGIN=https://evinvest.ltd

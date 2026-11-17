@@ -80,7 +80,7 @@ crates/places/           Google Places: a place from what a person pastes (an id
                          keys are on; review_archive takes it too
 crates/ui/               Dioxus components the services' front ends share
 crates/contracts/        concierge's gRPC contract (tonic, from contracts/proto)
-crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
+crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`; thin over `Panel`
   src/signin.rs          /auth/login, /auth/callback, /auth/logout; the /api/v1 gate
   src/oauth.rs           /mcp/{register,authorize,token} and their metadata: OAuth 2.1 for MCP clients
   src/mcp.rs             POST /mcp: `search` and `call` to an MCP client
@@ -88,6 +88,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
                          PublishCatalog; its development stand-in (PANEL_DEV_SIGN_IN)
   src/cookies.rs         __Host- cookies, the double-submit CSRF check
   src/http.rs            the router; the /api/v1 route table and each row's gate
+  src/admin.rs           the admin operations: a site key's origin, a gmail for a person, locate, the imports
   src/api.rs             GET /me, /sources
   src/connected.rs       GET /sources/sites: each site key's landing report beside sites' view
   src/access.rs          /api/v1/access/requests
@@ -373,11 +374,11 @@ What a key may write — its kind's types, its brands, a bot's lookup — is sit
 event. An unknown key and a bad signature answer the same 401, so key ids cannot be probed for;
 only a timestamp outside the window is told apart.
 
-**Keys** (`/api/v1/sources`, `panel source add|list|set-origin|revoke`): one kind and a set of
+**Keys** (`/api/v1/sources`): one kind and a set of
 brands each, the secret shown once. Kinds `panel` and `booking` are written by sites itself: no
 key is issued for them. A `site` key carries its landing's origin (`https://<domain>[:port]`,
 nothing after it; plain http on `localhost` / `127.0.0.1` for a landing on this machine): given
-when the key is issued, or once with `set-origin` for a key issued before origins.
+when the key is issued, or once with `PUT /sources/{key_id}/origin` for a key issued before origins.
 
 ## Queries cache
 
@@ -405,8 +406,8 @@ PUT    /api/queries_cache/{scheme}/{key}         {answer, request, bought: {item
   `fresh_since` is a reader's age limit, or its re-ask.
 - **Open to everyone**, reads and writes: bounded as ingest, a body ≤ 8 MiB, and rate-limited per
   client at the edge.
-- `panel import queries-cache <scheme> <dir>` takes the files a client kept, `<key>.json` each, as of
-  when each was written.
+- `POST /admin/imports/queries-cache` takes the answers a client kept as files, each as of its own
+  `fetched_at` (its file's time, for `local-stack`).
 
 ## The conductor's API, `/api/v1`
 
@@ -444,6 +445,7 @@ GET    /sources                             sources:manage
 POST   /sources                             sources:manage, fresh
 GET    /sources/sites                       sources:manage
 DELETE /sources/{key_id}                    sources:manage, fresh
+PUT    /sources/{key_id}/origin             sources:manage, fresh
 POST   /access/requests
 GET    /access/requests/mine
 GET    /alerts
@@ -517,6 +519,10 @@ GET    /admin/tokens/flows                  tokens:grant
 GET    /admin/usage                         tokens:grant
 GET    /admin/meters                        tokens:grant
 GET    /admin/meters/readings               tokens:grant
+POST   /admin/gmails                        tokens:grant, fresh
+POST   /admin/imports/review-archive        tokens:grant, fresh
+POST   /admin/imports/queries-cache         sources:manage, fresh, slow
+POST   /admin/gmbs/locate                   sources:manage, fresh, slow
 GET    /assistant/chats
 POST   /assistant/chats
 GET    /assistant/chats/{id}
@@ -653,7 +659,7 @@ Places requests charge at the buy.
 other gmails' keys, free; then the Google accounts' Places keys (below) at the admin's price per
 request kind (Places' SKU), held under one lock per person from the balance read to the charge, so a
 request below the price, or unpriced, is refused before Google is asked. A cached answer costs
-nothing. The operator's commands (`gmb add`, `locate`) try the gmail's keys, then the house pays.
+nothing. The operator's `locate` tries the gmail's keys, then the house pays.
 review_archive's lookups are the house's for now.
 
 **A study's pull is sold per search** (`placement.search`), charged by the forward, under the same
@@ -809,8 +815,8 @@ push (a change, a page, 60 s)
   second spender.
 - **A 404 on `/api/conductor/*`** is an archive not cut over yet: told once at info, asked again
   every 60 s.
-- **The import opens it.** `panel import review-archive <file>` (review_archive's
-  `scripts/export_members.sql`) writes its people, gmails, GMBs (ids kept; with no country, so
+- **The import opens it.** `POST /admin/imports/review-archive` (review_archive's
+  `scripts/export_members.sql`'s output as the body) writes its people, gmails, GMBs (ids kept; with no country, so
   only an empty list passes), ledger and pending kick-backs in one transaction, refused unless
   the tables are empty, and creates the cursor. Until then tokens and GMBs are closed and `serve` neither follows nor pushes: a balance read
   writes a renewal, which would make the import refuse. A fresh install imports an empty
@@ -820,13 +826,13 @@ push (a change, a page, 60 s)
 - **A GBP's point** is on its row: Google's, else one the operator places on the map (a
   service-area place has none on Google, a GBP without a place none at all). Google's replaces a placed one, a
   placed one never replaces Google's. Google's is written with the GBP from the answer that named
-  it; a GBP added without a key, or imported, has none until `panel gmb locate` asks for the
-  missing ones and lists those Google gives no point: a command, so the spend is explicit; run
-  after a deploy that brings points, and after `local-stack --from-prod`.
+  it; a GBP added without a key, or imported, has none until `POST /admin/gmbs/locate` asks for the
+  missing ones and lists those Google gives no point: an operation, so the spend is explicit and
+  an agent proposes it; run after a deploy that brings points, and after `local-stack --from-prod`.
 - **The review kit** is below.
 - **A GBP's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
   language table) follows the point's rule: Google's (its address), else set by hand
-  (`PUT /gmbs/{id}/country`, `panel gmb country`); `locate` asks for the missing ones too and
+  (`PUT /gmbs/{id}/country`); `locate` asks for the missing ones too and
   lists those Google gives none.
 
 ## Review kit
