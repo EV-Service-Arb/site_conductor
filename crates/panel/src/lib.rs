@@ -179,9 +179,11 @@ impl Panel {
 	}
 
 	/// Gives a site key issued before origins its origin, once; the same origin again is no change.
-	pub async fn set_site_origin(&self, key_id: &str, origin: &SiteOrigin) -> eyre::Result<()> {
-		eyre::ensure!(self.store.set_site_origin(key_id, origin).await?, "no active site key {key_id} without another origin");
-		Ok(())
+	pub async fn set_site_origin(&self, key_id: &str, origin: &SiteOrigin) -> eyre::Result<Result<(), Refused>> {
+		Ok(match self.store.set_site_origin(key_id, origin).await? {
+			true => Ok(()),
+			false => Err(Refused::Conflict(format!("no active site key {key_id} without another origin"))),
+		})
 	}
 
 	/// Revokes a source's key; `false` when there was no such key, or it was revoked already.

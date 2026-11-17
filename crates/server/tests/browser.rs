@@ -187,7 +187,7 @@ impl World {
 			ledger: vec![],
 			kickbacks: vec![],
 		};
-		panel.import_review_archive(empty).await.unwrap();
+		panel.import_review_archive(empty).await.unwrap().unwrap();
 		let who = DevIdentity {
 			user_id: DevIdentity::named("dev@localhost"),
 			permissions: operator(),

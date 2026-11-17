@@ -61,7 +61,7 @@ async fn an_area_has_the_country_its_place_or_its_centre_lies_in() {
 			kickbacks: vec![],
 		})
 		.await
-		.unwrap();
+		.unwrap().unwrap();
 	panel
 		.set_prices(
 			&[PlacesRequest::Details, PlacesRequest::Geocode].map(|r| (Item::Places(r), Some(0))),

@@ -154,7 +154,7 @@ async fn a_client_signs_in_and_acts_as_its_user() {
 			kickbacks: vec![],
 		})
 		.await
-		.unwrap();
+		.unwrap().unwrap();
 
 	let (bearer, mut user, session) = signed_in_client(&app).await;
 

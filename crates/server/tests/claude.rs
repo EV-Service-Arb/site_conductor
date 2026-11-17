@@ -89,7 +89,7 @@ impl World {
 			ledger: vec![],
 			kickbacks: vec![],
 		};
-		panel.import_review_archive(empty).await.unwrap();
+		panel.import_review_archive(empty).await.unwrap().unwrap();
 		let stub = Stub::default();
 		let api = Router::new().route("/v1/oauth/token", post(token)).route("/v1/messages", post(messages)).with_state(stub.clone());
 		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

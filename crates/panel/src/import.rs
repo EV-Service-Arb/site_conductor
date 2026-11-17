@@ -11,7 +11,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-	Panel,
+	Panel, Refused,
 	store::{
 		gmbs as gmbs_db,
 		tokens::{self as db, Charged, Entry, Owed, REVIEW_ARCHIVE},
@@ -19,8 +19,9 @@ use crate::{
 	},
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ReviewArchiveExport")]
 pub struct Export {
 	pub people: Vec<Person>,
 	pub gmails: Vec<ExportGmail>,
@@ -29,8 +30,9 @@ pub struct Export {
 	pub kickbacks: Vec<ExportKickback>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "ExportPerson")]
 pub struct Person {
 	pub sub: Option<Uuid>,
 	pub email: String,
@@ -38,7 +40,7 @@ pub struct Person {
 	pub first_seen: Timestamp,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExportGmail {
 	pub id: i64,
@@ -48,7 +50,7 @@ pub struct ExportGmail {
 	pub created_at: Timestamp,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExportGmb {
 	pub id: i64,
@@ -59,7 +61,7 @@ pub struct ExportGmb {
 	pub created_at: Timestamp,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExportEntry {
 	pub sub: Option<Uuid>,
@@ -73,7 +75,7 @@ pub struct ExportEntry {
 	pub note: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExportKickback {
 	pub sub: Option<Uuid>,
@@ -105,7 +107,7 @@ impl Panel {
 	/// Writes `export` and opens tokens and GMBs. Refused before anything is written when a
 	/// person has no sub (every such email listed), or when tokens are open already or anything
 	/// was written to them.
-	pub async fn import_review_archive(&self, export: Export) -> eyre::Result<()> {
+	pub async fn import_review_archive(&self, export: Export) -> eyre::Result<Result<(), Refused>> {
 		let subless: BTreeSet<&str> = export
 			.people
 			.iter()
@@ -115,11 +117,12 @@ impl Panel {
 			.chain(export.ledger.iter().filter(|e| e.sub.is_none()).map(|e| e.email.as_str()))
 			.chain(export.kickbacks.iter().filter(|k| k.sub.is_none()).map(|k| k.email.as_str()))
 			.collect();
-		eyre::ensure!(
-			subless.is_empty(),
-			"people without a sub (they sign in to the conductor first): {}",
-			subless.into_iter().collect::<Vec<_>>().join(", ")
-		);
+		if !subless.is_empty() {
+			return Ok(Err(Refused::Invalid(format!(
+				"people without a sub (they sign in to the conductor first): {}",
+				subless.into_iter().collect::<Vec<_>>().join(", ")
+			))));
+		}
 		let sub = |s: Option<Uuid>| s.expect("checked above");
 		let people: BTreeSet<Uuid> = export.people.iter().map(|p| sub(p.sub)).collect();
 		let named = export
@@ -129,12 +132,18 @@ impl Panel {
 			.chain(export.ledger.iter().map(|e| e.sub))
 			.chain(export.kickbacks.iter().map(|k| k.sub));
 		for s in named {
-			eyre::ensure!(people.contains(&sub(s)), "{} is named but not among the people", sub(s));
+			if !people.contains(&sub(s)) {
+				return Ok(Err(Refused::Invalid(format!("{} is named but not among the people", sub(s)))));
+			}
 		}
 
 		let mut tx = self.store.begin_write().await?;
-		eyre::ensure!(db::cursor(&mut tx).await?.is_none(), "tokens and GMBs are open already: imported before");
-		eyre::ensure!(db::untouched(&mut tx).await?, "gmails, GMBs, the ledger or kick-backs hold rows already");
+		if db::cursor(&mut tx).await?.is_some() {
+			return Ok(Err(Refused::Conflict("tokens and GMBs are open already: imported before".into())));
+		}
+		if !db::untouched(&mut tx).await? {
+			return Ok(Err(Refused::Conflict("gmails, GMBs, the ledger or kick-backs hold rows already".into())));
+		}
 		for p in &export.people {
 			let user = User {
 				user_id: sub(p.sub),
@@ -200,6 +209,6 @@ impl Panel {
 			"imported from review_archive; tokens and GMBs open"
 		);
 		self.snapshot_due.notify_one();
-		Ok(())
+		Ok(Ok(()))
 	}
 }

@@ -494,7 +494,7 @@ async fn setup() -> Setup {
 			kickbacks: vec![],
 		})
 		.await
-		.unwrap();
+		.unwrap().unwrap();
 	Setup {
 		db: db.pool().await,
 		_db: db,

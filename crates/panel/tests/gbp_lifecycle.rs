@@ -33,7 +33,7 @@ async fn opened(db: &TestDb) -> Panel {
 		kickbacks: vec![],
 	})
 	.await
-	.unwrap();
+	.unwrap().unwrap();
 	p
 }
 
