@@ -390,7 +390,7 @@ async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 					puller = Some(caller.user_id);
 					Some(Principal::User(user(caller, route.service)))
 				}
-				Err(denied) => return denied.into_response(&f.sign_in),
+				Err(r) => return signin::refused(&f.sign_in, r),
 			}
 		}
 	};

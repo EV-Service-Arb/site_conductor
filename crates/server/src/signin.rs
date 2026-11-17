@@ -41,7 +41,7 @@ use axum::{
 	http::{HeaderMap, HeaderValue, Method, StatusCode, header, request::Parts},
 	response::{Html, IntoResponse, Response},
 };
-use ev_lib::api::{JsonSchema, OperationInput, Refusal, Refuses};
+use ev_lib::api::{JsonSchema, OperationInput, Refusal};
 use jiff::Timestamp;
 use sa_auth::{PermissionSet, Principal, Vouch};
 use sa_panel::{
@@ -468,13 +468,13 @@ impl Vouch<Flags> for ApiState {
 
 /// Who calls: an MCP client's bearer, else the session's cookie, with CSRF on anything that is
 /// not a read.
-pub(crate) async fn caller_of(s: &SignIn, method: &Method, headers: &HeaderMap, freshness: Freshness) -> Result<Caller, Denied> {
+pub(crate) async fn caller_of(s: &SignIn, method: &Method, headers: &HeaderMap, freshness: Freshness) -> Result<Caller, Refusal<Code>> {
 	if headers.contains_key(header::AUTHORIZATION) {
 		// No cookie is read: nothing a cross-site request rides on.
 		return bearer(s, headers, freshness).await;
 	}
 	if !matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS) && !s.cookies.csrf_ok(headers) {
-		return Err(Denied::Csrf);
+		return Err(Refusal::new(Code::Csrf, "the page is out of date: reload it"));
 	}
 	check(s, headers, freshness).await
 }
@@ -491,72 +491,38 @@ async fn get_me(s: &SignIn, access: &str) -> Result<Me, ConciergeError> {
 	}
 }
 
-/// Why a caller was not let in, before it is an answer: `/api/v1` answers it, a live socket
-/// closes on it.
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum Denied {
-	/// No session, or one closed: sign in again (401, the cookies cleared).
-	#[error("sign in")]
-	Unauthenticated,
-	/// A cookie's write without the page's CSRF header.
-	#[error("the page is out of date: reload it")]
-	Csrf,
-	/// Concierge cannot be asked now; nothing is closed (503).
-	#[error("sign-in is unavailable, try again")]
-	Unavailable,
-	/// Concierge answered what the sign-in cannot stand on.
-	#[error("sign-in failed")]
-	BadGateway,
-	#[error(transparent)]
-	Internal(eyre::Report),
-}
-
-impl Refuses<Denied> for Code {
-	fn refusal(d: Denied) -> Refusal<Self> {
-		match d {
-			Denied::Unauthenticated => Refusal::new(Self::Unauthenticated, d.to_string()),
-			Denied::Csrf => Refusal::new(Self::Csrf, d.to_string()),
-			Denied::Unavailable => Refusal::new(Self::Unavailable, d.to_string()),
-			Denied::BadGateway => Refusal::new(Self::BadGateway, d.to_string()),
-			Denied::Internal(e) => e.into(),
-		}
-	}
-}
-
-impl Denied {
-	/// The answer of a route outside the table: the cookies cleared with a 401.
-	pub(crate) fn into_response(self, s: &SignIn) -> Response {
-		let signed_out_too = matches!(self, Self::Unauthenticated);
-		let res = Refusal::<Code>::from(self).into_response();
-		if signed_out_too { signed_out(s, res) } else { res }
-	}
+/// A non-table route's answer to `refused`: with a 401, the cookies cleared.
+pub(crate) fn refused(s: &SignIn, refused: Refusal<Code>) -> Response {
+	let signed_out_too = refused.code() == Code::Unauthenticated;
+	let res = refused.into_response();
+	if signed_out_too { signed_out(s, res) } else { res }
 }
 
 /// The session behind the request's cookie and what concierge says its user may do: what
 /// [`gate`] lets through, and what a live socket asks again while it is open.
-pub(crate) async fn check(s: &SignIn, headers: &HeaderMap, freshness: Freshness) -> Result<Caller, Denied> {
-	let cookie = s.cookies.get(headers, cookies::SESSION).ok_or(Denied::Unauthenticated)?;
+pub(crate) async fn check(s: &SignIn, headers: &HeaderMap, freshness: Freshness) -> Result<Caller, Refusal<Code>> {
+	let cookie = s.cookies.get(headers, cookies::SESSION).ok_or_else(|| Refusal::new(Code::Unauthenticated, "sign in"))?;
 	caller(s, cookie, false, freshness).await
 }
 
 /// [`check`] for the session granted an MCP client, named by `Authorization: Bearer`.
-pub(crate) async fn bearer(s: &SignIn, headers: &HeaderMap, freshness: Freshness) -> Result<Caller, Denied> {
+pub(crate) async fn bearer(s: &SignIn, headers: &HeaderMap, freshness: Freshness) -> Result<Caller, Refusal<Code>> {
 	let token = headers
 		.get(header::AUTHORIZATION)
 		.and_then(|v| v.to_str().ok())
 		.and_then(|v| v.strip_prefix("Bearer "))
-		.ok_or(Denied::Unauthenticated)?;
+		.ok_or_else(|| Refusal::new(Code::Unauthenticated, "sign in"))?;
 	caller(s, token, true, freshness).await
 }
 
-async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Result<Caller, Denied> {
+async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Result<Caller, Refusal<Code>> {
 	let session = match s.panel.session(id, Timestamp::now(), &s.concierge).await {
 		// A browser's id is no bearer, nor a client's a cookie.
-		Ok(session) if session.client_id.is_some() != bearer => return Err(Denied::Unauthenticated),
+		Ok(session) if session.client_id.is_some() != bearer => return Err(Refusal::new(Code::Unauthenticated, "sign in")),
 		Ok(session) => session,
-		Err(SessionError::Missing | SessionError::Rejected) => return Err(Denied::Unauthenticated),
-		Err(SessionError::Unavailable) => return Err(Denied::Unavailable),
-		Err(SessionError::Internal(e)) => return Err(Denied::Internal(e.wrap_err("reading a session"))),
+		Err(SessionError::Missing | SessionError::Rejected) => return Err(Refusal::new(Code::Unauthenticated, "sign in")),
+		Err(SessionError::Unavailable) => return Err(Refusal::new(Code::Unavailable, "sign-in is unavailable, try again")),
+		Err(SessionError::Internal(e)) => return Err(e.wrap_err("reading a session").into()),
 	};
 	// The user is here: the bot may ask concierge with this session for another week.
 	if let Err(e) = s.panel.touch_session(&session.key, Timestamp::now()).await {
@@ -579,21 +545,21 @@ async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Res
 				if let Err(e) = s.panel.close_session(&session.key).await {
 					crate::report(&e, "closing a refused session");
 				}
-				return Err(Denied::Unauthenticated);
+				return Err(Refusal::new(Code::Unauthenticated, "sign in"));
 			}
 			Err(ConciergeError::Unavailable(why)) => {
 				tracing::warn!(why, "concierge unavailable for GetMe");
-				return Err(Denied::Unavailable);
+				return Err(Refusal::new(Code::Unavailable, "sign-in is unavailable, try again"));
 			}
 			Err(e @ ConciergeError::Failed(_)) => {
 				crate::report(&eyre::eyre!(e), "GetMe");
-				return Err(Denied::BadGateway);
+				return Err(Refusal::new(Code::BadGateway, "sign-in failed"));
 			}
 		},
 	};
 	if me.user_id != session.user_id {
 		crate::report(&eyre::eyre!("GetMe answered another user than the session's"), "GetMe");
-		return Err(Denied::BadGateway);
+		return Err(Refusal::new(Code::BadGateway, "sign-in failed"));
 	}
 	if fresh {
 		// Alerts go only on permissions concierge confirmed lately; every answer the gate gets is
@@ -609,7 +575,7 @@ async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Res
 			name: me.preferred_name.clone(),
 		};
 		if let Err(e) = s.panel.user_seen(&user, Timestamp::now()).await {
-			return Err(Denied::Internal(e.wrap_err("recording a user seen")));
+			return Err(e.wrap_err("recording a user seen").into());
 		}
 	}
 	Ok(Caller {

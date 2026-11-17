@@ -61,8 +61,8 @@ use crate::{
 	api::Code,
 	cookies,
 	forward::Services,
-	http::{ApiRoute, SOCKET},
-	signin::{self, Caller, Denied, Freshness, SignIn},
+	http::{ApiRoute, USER},
+	signin::{self, Caller, Freshness, SignIn},
 };
 
 /// The session ended: sign in again.
@@ -136,7 +136,7 @@ impl Live {
 }
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
-	vec![ApiRoute::new(Method::GET, "/live", SOCKET, live)]
+	vec![ApiRoute::new(Method::GET, "/live", USER, live)]
 }
 
 /// A socket telling what changed: each table committed to, as it commits.
@@ -350,15 +350,10 @@ impl Connection {
 						self.caller = caller;
 						Step::Nothing
 					}
-					Err(Denied::Unauthenticated) => Step::Close(CLOSE_SESSION_ENDED, "session ended"),
+					Err(r) if r.code() == Code::Unauthenticated => Step::Close(CLOSE_SESSION_ENDED, "session ended"),
 					// The API would answer 503 and keep the session: so does the socket, and it
-					// asks again at the next tick.
-					Err(Denied::Internal(e)) => {
-						crate::report(&e, "live: the session asked again");
-						Step::Nothing
-					}
-					Err(Denied::Unavailable | Denied::BadGateway) => Step::Nothing,
-					Err(Denied::Csrf) => unreachable!("a session check asks for no CSRF"),
+					// asks again at the next tick (a failure of ours reported as it was refused).
+					Err(_) => Step::Nothing,
 				},
 			};
 			match step {

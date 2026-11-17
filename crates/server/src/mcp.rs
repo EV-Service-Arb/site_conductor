@@ -16,7 +16,8 @@ use serde_json::{Value, json};
 use crate::{
 	catalog::Catalog,
 	oauth,
-	signin::{self, Caller, Denied, Freshness, SignIn},
+	api::Code,
+	signin::{self, Caller, Freshness, SignIn},
 	tools::{self, Own, Tools},
 };
 
@@ -38,11 +39,11 @@ pub(crate) fn routes(mcp: Mcp) -> Router {
 async fn endpoint(State(m): State<Mcp>, headers: HeaderMap, body: Result<Json<Value>, axum::extract::rejection::JsonRejection>) -> Response {
 	let caller = match signin::bearer(&m.sign_in, &headers, Freshness::Cached).await {
 		Ok(c) => c,
-		Err(Denied::Unauthenticated) => {
+		Err(r) if r.code() == Code::Unauthenticated => {
 			let challenge = HeaderValue::from_str(&oauth::challenge(&m.sign_in)).expect("the origin is visible ASCII");
 			return (StatusCode::UNAUTHORIZED, [(header::WWW_AUTHENTICATE, challenge)]).into_response();
 		}
-		Err(denied) => return denied.into_response(&m.sign_in),
+		Err(r) => return signin::refused(&m.sign_in, r),
 	};
 	let Ok(Json(msg)) = body else {
 		return Json(failure(Value::Null, -32700, "not JSON")).into_response();

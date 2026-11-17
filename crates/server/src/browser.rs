@@ -69,9 +69,9 @@ use crate::{
 	api::{ApiResult, Code, Id},
 	connections::{self, CheckedDto, ConnectionsDto},
 	cookies,
-	http::{ApiRoute, ApiState, SLOW, SOCKET, USER},
+	http::{ApiRoute, ApiState, SLOW, USER},
 	live,
-	signin::{self, Caller, Denied, Freshness, SignIn},
+	signin::{self, Caller, Freshness, SignIn},
 };
 
 /// The viewer was replaced by another of the gmail's.
@@ -281,7 +281,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::POST, "/gmails/{id}/browser/stop", USER, stop_browser),
 		ApiRoute::new(M::PUT, "/gmails/{id}/browser/film", SLOW, set_film).layer(|h| h.layer(DefaultBodyLimit::max(FILM_MAX))),
 		ApiRoute::new(M::DELETE, "/gmails/{id}/browser/film", USER, remove_film),
-		ApiRoute::new(M::GET, "/gmails/{id}/browser", SOCKET, viewer),
+		ApiRoute::new(M::GET, "/gmails/{id}/browser", USER, viewer),
 	]
 }
 
@@ -579,8 +579,8 @@ impl Watch {
 					Ok(_) | Err(RecvError::Lagged(_)) => {}
 				},
 				_ = self.recheck.tick() => match signin::check(&self.sign_in, &self.cookie, Freshness::Cached).await {
-					Err(Denied::Unauthenticated) => return (live::CLOSE_SESSION_ENDED, "session ended"),
-					Err(Denied::Internal(e)) => crate::report(&e, "a viewer's session asked again"),
+					Err(r) if r.code() == Code::Unauthenticated => return (live::CLOSE_SESSION_ENDED, "session ended"),
+					// a failure of ours was reported as it was refused
 					Ok(_) | Err(_) => {}
 				},
 			}

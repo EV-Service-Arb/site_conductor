@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
 	api::{ApiResult, Code, KeyId},
 	gmbs::GmailDto,
-	http::{ApiRoute, Budget, FRESH, Flags, Gate},
+	http::{ApiRoute, FRESH, Flags, Gate},
 	signin::{Caller, Freshness},
 };
 
@@ -32,7 +32,7 @@ const MAX_IMPORT: usize = 256 * 1024 * 1024;
 
 const SLOW_FRESH: Gate = sa_auth::Gate::USER.with(Flags {
 	freshness: Freshness::Fresh,
-	budget: Budget::Slow,
+	slow: true,
 });
 
 pub(crate) fn routes() -> Vec<ApiRoute> {

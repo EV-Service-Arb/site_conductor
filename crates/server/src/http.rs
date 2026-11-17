@@ -50,36 +50,22 @@ pub(crate) type Gate = sa_auth::Gate<Flags>;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct Flags {
 	pub(crate) freshness: Freshness,
-	pub(crate) budget: Budget,
-}
-
-/// Which bound a row's requests share.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Budget {
-	Api,
 	/// Waits on a browser or takes a film's bytes: 8 at once, 10 min each.
-	Slow,
-	/// A socket's handshake: the socket lives on after the 101, and a burst of reconnecting tabs
-	/// must not shed the API's requests.
-	Socket,
+	pub(crate) slow: bool,
 }
 
 pub(crate) const USER: Gate = sa_auth::Gate::USER.with(Flags {
 	freshness: Freshness::Cached,
-	budget: Budget::Api,
+	slow: false,
 });
 /// Asks concierge afresh: for what must not outlive a revoked permission by a minute.
 pub(crate) const FRESH: Gate = sa_auth::Gate::USER.with(Flags {
 	freshness: Freshness::Fresh,
-	budget: Budget::Api,
+	slow: false,
 });
 pub(crate) const SLOW: Gate = sa_auth::Gate::USER.with(Flags {
 	freshness: Freshness::Cached,
-	budget: Budget::Slow,
-});
-pub(crate) const SOCKET: Gate = sa_auth::Gate::USER.with(Flags {
-	freshness: Freshness::Cached,
-	budget: Budget::Socket,
+	slow: true,
 });
 
 /// The conductor's own `/api/v1` document, derived from its table.
@@ -160,24 +146,26 @@ pub fn app(
 		browsers,
 		model,
 	};
-	let mount = |budget: Budget| {
+	// a socket's handshake has its own bound: the socket lives on after the 101, and a burst of
+	// reconnecting tabs must not shed the API's requests
+	let mount = |socket: bool, slow: bool| {
 		api_routes()
 			.into_iter()
-			.filter(|r| r.guard.flags.budget == budget)
+			.filter(|r| r.socket() == socket && r.guard.flags.slow == slow)
 			.fold(Router::new(), |routes, r| routes.merge(Router::new().route(r.path, r.handler())))
 			.with_state(state.clone())
 	};
 	if let Some(grafana) = grafana {
 		let own = api_routes()
 			.into_iter()
-			.filter(|r| r.method == Method::GET && r.guard.flags.budget != Budget::Socket)
+			.filter(|r| r.method == Method::GET && !r.socket())
 			.fold(Router::new(), |routes, r| routes.merge(Router::new().route(r.path, r.handler())));
 		grafana.own(bounded(own.with_state(state.clone()), limits.api_concurrent, limits.api_timeout));
 	}
 	let session = sign_in.clone();
-	let v1 = bounded(mount(Budget::Api), limits.api_concurrent, limits.api_timeout)
-		.merge(bounded(mount(Budget::Slow), 8, Duration::from_secs(600)))
-		.merge(bounded(mount(Budget::Socket), limits.live.upgrade_concurrent, limits.live.upgrade_timeout))
+	let v1 = bounded(mount(false, false), limits.api_concurrent, limits.api_timeout)
+		.merge(bounded(mount(false, true), 8, Duration::from_secs(600)))
+		.merge(bounded(mount(true, false), limits.live.upgrade_concurrent, limits.live.upgrade_timeout))
 		.layer(middleware::map_response(move |mut res: Response| {
 			let session = session.clone();
 			async move {

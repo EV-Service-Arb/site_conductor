@@ -63,9 +63,13 @@ async fn an_operator_runs_none_of_them() {
 #[tokio::test]
 async fn a_site_key_from_before_origins_gets_its_origin_once() {
 	let (panel, app, mut b, _db) = conductor(admin()).await;
-	let sql = |key: &str, kind: &str| format!("INSERT INTO sources (key_id, kind, brand_ids, secret_sealed, data_key_fp) VALUES ('{key}', '{kind}', '[\"aquafix\"]', x'00', zeroblob(32))");
 	for (key, kind) in [("aquafix-site", "site"), ("aquafix-bot", "bot")] {
-		sqlx::query(&sql(key, kind)).execute(panel.store().pool()).await.unwrap();
+		sqlx::query("INSERT INTO sources (key_id, kind, brand_ids, secret_sealed, data_key_fp) VALUES ($1, $2, '[\"aquafix\"]', x'00', zeroblob(32))")
+			.bind(key)
+			.bind(kind)
+			.execute(panel.store().pool())
+			.await
+			.unwrap();
 	}
 	let set = |key: &'static str, origin: &'static str| (Method::PUT, format!("/api/v1/sources/{key}/origin"), Some(json!({ "origin": origin })));
 	let mut put = async |(key, origin)| {

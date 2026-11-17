@@ -43,7 +43,7 @@ use tokio::sync::watch;
 use crate::{
 	api::Code,
 	forward::{self, DASHBOARDS, Forward},
-	signin::{self, Caller, Denied, Freshness},
+	signin::{self, Caller, Freshness},
 };
 
 /// Carries a viewer's token on Grafana's fetches.
@@ -335,13 +335,13 @@ fn uids(dir: &Path) -> eyre::Result<HashSet<String>> {
 }
 
 /// Who the viewer is, by the session, as for a read.
-async fn viewer(g: &Grafana, headers: &HeaderMap) -> Result<Caller, Denied> {
+async fn viewer(g: &Grafana, headers: &HeaderMap) -> Result<Caller, Refusal<Code>> {
 	signin::check(g.forward.sign_in(), headers, Freshness::Cached).await
 }
 
 async fn pass(State(g): State<Grafana>, req: Request) -> Response {
 	if let Err(denied) = viewer(&g, req.headers()).await {
-		return denied.into_response(g.forward.sign_in());
+		return signin::refused(g.forward.sign_in(), denied);
 	}
 	let (parts, body) = req.into_parts();
 	g.send(parts.method, &parts.uri, parts.headers, body).await
@@ -352,7 +352,7 @@ async fn pass(State(g): State<Grafana>, req: Request) -> Response {
 async fn query(State(g): State<Grafana>, req: Request) -> Response {
 	let caller = match viewer(&g, req.headers()).await {
 		Ok(c) => c,
-		Err(denied) => return denied.into_response(g.forward.sign_in()),
+		Err(r) => return signin::refused(g.forward.sign_in(), r),
 	};
 	let (parts, body) = req.into_parts();
 	let mut query: Value = match to_bytes(body, 1 << 20)
