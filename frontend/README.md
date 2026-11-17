@@ -19,18 +19,15 @@ src/entities/        session · source · tokens · gmb · alerts · assistant �
 src/shared/          api/ (`api`: /api/v1 from openapi.json, its answers checked against it; `http`: the services' forwards;
                      CSRF, the gate's answers), i18n/, lib/ (live/: the socket), mfe/, ui/
 messages/            @evinvest/i18n's catalogues (`npm run i18n` regenerates them); a root key lives in the slice it names
-scripts/dev-stub.ts  a stand-in backend for local work
 tests/               vitest, in Node: the rules the screens obey live in plain modules; e2e/: the Figma frames
 ```
 
 ## Running it
 
 ```sh
-npm ci
-npm run dev:stub     # on STUB_PORT — /api/v1 (me, sources, access) and /auth; STUB_ROLE=admin, STUB_ME=401|503,
-                     # STUB_LIVE=off for no socket, STUB_LIVE_EVERY=5 for busier live activity
-PANEL_DEV_BACKEND=http://127.0.0.1:$STUB_PORT npm run dev
-                     # on PANEL_WEB_PORT — proxies /api, /auth and /mfe to PANEL_DEV_BACKEND
+nix run .#dev        # the conductor and its peers, and this front end's next dev on PANEL_WEB_PORT
+PANEL_DEV_BACKEND=<conductor> npm run dev
+                     # by hand: proxies the backend's prefixes to PANEL_DEV_BACKEND, every other path to the page
 ```
 
 The ports are the dev shell's (`nix develop`). Against the real backend, point `PANEL_DEV_BACKEND`
@@ -46,8 +43,9 @@ for what acts on the platform session. The panel's own chip entries are the call
 stand-in, while the bundle loads or when it cannot, opens the same entries.
 
 Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
-`nix run .#figma` puts the conductor's own screens into Figma, both breakpoints, over the stub as an
-admin (`tests/e2e`; the loop is the `figma-render` skill).
+`nix run .#figma` puts the conductor's own screens into Figma, both breakpoints, over a stack of its
+own (`dev --port`) as an admin (`tests/e2e`; the loop is the `figma-render` skill); `nix run .#e2e`
+runs the other specs over the same.
 
 ## How it is served
 

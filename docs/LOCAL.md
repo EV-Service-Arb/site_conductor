@@ -169,8 +169,7 @@ PANEL_WEB_DIR="$(nix build .#frontend --print-out-paths)" panel serve
 The front end's dev server instead of the export is `--watch`. By hand:
 `cd frontend && PANEL_DEV_BACKEND=<conductor> npm run dev` serves on the dev shell's
 `PANEL_WEB_PORT`; the sign-in's redirect goes to `PANEL_PUBLIC_ORIGIN`, so run the conductor as
-above with `PANEL_PUBLIC_ORIGIN=http://localhost:$PANEL_WEB_PORT`. `npm run dev:stub` in
-`frontend/` stands in for the backend instead.
+above with `PANEL_PUBLIC_ORIGIN=http://localhost:$PANEL_WEB_PORT`.
 
 A session in curl (what a browser does):
 

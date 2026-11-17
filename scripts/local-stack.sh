@@ -708,7 +708,8 @@ if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
 		# shell, whose js-local lays our packages' checkouts over the install (frontend/_.js-local.json)
 		prefixed web in_shell "$root" bash -c \
 			'cd frontend && if [ node_modules/.package-lock.json -nt package-lock.json ]; then js-local; else npm ci; fi'
-		PANEL_DEV_BACKEND="$origin" \
+		# Next refuses a second `next dev` on one dist dir: a stack on ports of its own runs beside the usual one
+		PANEL_DEV_BACKEND="$origin" PANEL_DEV_DIST=".next${own_port:+/port-$own_port}" \
 			prefixed web npx next dev --port "$WEB_DEV_PORT"
 	) &
 	web_pid=$!

@@ -36,9 +36,8 @@
           SA_PORT_RANGE = "${toString SA_PORT_RANGE.from}-${toString SA_PORT_RANGE.to}";
           PANEL_BIND = "127.0.0.1:${local 0}";
           PANEL_WEB_PORT = local 1; # the front end's `npm run dev`
-          STUB_PORT = local 2; # its `npm run dev:stub`
-          FIGMA_STUB_PORT = local 3; # `nix run .#figma`'s stub and `next dev`, never a running stack's
-          FIGMA_WEB_PORT = local 4;
+          FIGMA_STACK_PORT = local 3; # `nix run .#e2e`/`.#figma`'s own stack (`dev --port`), never a running one's
+          FIGMA_WEB_PORT = local 4; # its next dev: FIGMA_STACK_PORT + 1
           BROWSERS_BIND = "127.0.0.1:${local 5}"; # sa_browsers' runner
         };
 
@@ -344,7 +343,7 @@
         # The front end's own screens into Figma (frontend/tests/e2e), by `@evinvest/figma-render`'s bin;
         # the loop is the `figma-render` skill.
         figmaFile = "G9JfrDvGd0BKUdOKYg61Nn"; # "panel — renders"
-        overStub = lib.concatStrings
+        overStack = lib.concatStrings
           (lib.mapAttrsToList (k: v: "export ${k}=${lib.escapeShellArg v}\n") (localEnv // {
             PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
             PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
@@ -355,16 +354,16 @@
         '';
         figma = pkgs.writeShellApplication {
           name = "figma";
-          runtimeInputs = with pkgs; [ coreutils git nodejs_22 playwright-test ];
-          text = overStub + ''
+          runtimeInputs = with pkgs; [ coreutils git nodejs_22 playwright-test ] ++ [ dev ];
+          text = overStack + ''
             exec node_modules/.bin/evinvest-figma-render "$@" -c tests/e2e${lib.optionalString (figmaFile != null) " --file ${figmaFile}"}
           '';
         };
-        # The front end's behaviour over the same stub: every spec in frontend/tests/e2e but the renders.
+        # The front end's behaviour over the same stack: every spec in frontend/tests/e2e but the renders.
         e2e = pkgs.writeShellApplication {
           name = "e2e";
-          runtimeInputs = with pkgs; [ coreutils git nodejs_22 playwright-test ];
-          text = overStub + ''
+          runtimeInputs = with pkgs; [ coreutils git nodejs_22 playwright-test ] ++ [ dev ];
+          text = overStack + ''
             exec playwright test -c tests/e2e --grep-invert @figma "$@"
           '';
         };
@@ -417,8 +416,8 @@
           publish = v_flakes.utils.publish pkgs;
           gen = { type = "app"; program = lib.getExe gen; meta.description = "the OpenAPI document and the front end's client types from it (pre-commit runs it too)"; };
           dev = { type = "app"; program = lib.getExe dev; meta.description = "the conductor and its peers under watch: a conductor already serving is replaced, a peer used (docs/LOCAL.md)"; };
-          e2e = { type = "app"; program = lib.getExe e2e; meta.description = "the front end's behaviour over the stub (frontend/tests/e2e, the renders aside); args go to `playwright test`"; };
-          figma = { type = "app"; program = lib.getExe figma; meta.description = "the front end's screens into Figma over the stub, gridded on a new page of figmaFile; `-- frames` lists them"; };
+          e2e = { type = "app"; program = lib.getExe e2e; meta.description = "the front end's behaviour over a stack of its own (frontend/tests/e2e, the renders aside); args go to `playwright test`"; };
+          figma = { type = "app"; program = lib.getExe figma; meta.description = "the front end's screens into Figma over a stack of its own, gridded on a new page of figmaFile; `-- frames` lists them"; };
           local-stack = { type = "app"; program = lib.getExe localStack; meta.description = "the conductor, its Grafana, sites_panel, review_archive and both landings, wired together on this machine (docs/LOCAL.md)"; };
         };
 
