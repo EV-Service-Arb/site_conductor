@@ -14,7 +14,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "gen:api": "openapi-typescript src/shared/api/openapi.json -o src/shared/api/schema.ts --enum-values --root-types --root-types-no-schema-prefix --default-non-nullable=false",
+    "gen:api": "openapi-typescript src/shared/api/openapi.json -o src/shared/api/schema.ts --enum-values --root-types --root-types-no-schema-prefix --default-non-nullable=false && for d in src/shared/api/services/*.json; do [ -e \"$d\" ] || continue; openapi-typescript \"$d\" -o \"${d%.json}.ts\" --enum-values --root-types --root-types-no-schema-prefix --default-non-nullable=false; done",
     "postinstall": "[ -z \"$IN_NIX_SHELL\" ] || js-local",
     "i18n": "evinvest-i18n-extract --exclude out,public,messages,tests,tmp,scripts",
     "i18n:release": "evinvest-i18n-check --release --exclude out,public,messages,tests,tmp,scripts",
