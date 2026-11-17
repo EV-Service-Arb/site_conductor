@@ -329,11 +329,7 @@ async fn a_write_tells_every_socket_the_tables_a_read_named() {
 	let key = json!({"key_id": "vifnet-site", "kind": "site", "brands": ["vifnet"], "origin": "https://vifnet.site"});
 	assert_eq!(admin_b.send_body(&admin_app, Method::POST, "/api/v1/sources", Some(key)).await.0, StatusCode::CREATED);
 	let [admin_heard, op_heard] = heard(&panel, [&mut admin_ws, &mut op]).await;
-	assert_eq!(
-		admin_heard,
-		topics(&["alert_access", "sessions", "sources", "users"]),
-		"the read's table, the gate's session check and its GetMe asked afresh"
-	);
+	assert_eq!(admin_heard, topics(&["sources"]), "the table the read named; GetMe asked afresh changed nothing");
 	assert_eq!(op_heard, admin_heard, "the operator, who may not read the keys, is told the same");
 }
 

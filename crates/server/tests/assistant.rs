@@ -166,7 +166,7 @@ async fn a_deleted_chat_takes_its_members_and_marks_and_tells_their_tables() {
 	assert_eq!(owner.call(Method::DELETE, &url, None).await.0, StatusCode::NO_CONTENT);
 	assert_eq!(
 		told(&p, &mut bus).await,
-		topics(&["assistant_chats", "assistant_marks", "assistant_members", "sessions"]),
+		topics(&["assistant_chats", "assistant_marks", "assistant_members"]),
 		"the member's screens read their chats again"
 	);
 

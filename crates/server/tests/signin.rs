@@ -999,9 +999,8 @@ async fn no_permission_opens_no_section() {
 	}
 }
 
-/// Every write through `/api/v1` that commits is told on the bus by the tables it wrote, a refused
-/// one by none; beside them, every request's session check (told when prepared, whether its row
-/// moved or not).
+/// Every write through `/api/v1` that commits is told on the bus by the tables whose rows it
+/// changed; a refused write, or a read, by none. The first `GetMe` records the user.
 #[tokio::test]
 async fn every_committed_write_is_told_by_its_tables() {
 	let db = TestDb::create().await;
@@ -1038,30 +1037,26 @@ async fn every_committed_write_is_told_by_its_tables() {
 	assert_eq!(made.status, StatusCode::CREATED, "{}", made.body);
 	assert_eq!(
 		told(&panel, &mut rx).await,
-		topics(&["alert_access", "assistant_chats", "sessions", "users"]),
+		topics(&["alert_access", "assistant_chats", "users"]),
 		"GetMe's first answer is recorded too"
 	);
 	let renamed = b
 		.send(&app, Method::PUT, &format!("/api/v1/assistant/chats/{chat}/title"), Some(json!({"title": "x"})), true)
 		.await;
 	assert_eq!(renamed.status, StatusCode::OK, "{}", renamed.body);
-	assert_eq!(told(&panel, &mut rx).await, topics(&["assistant_chats", "sessions"]));
+	assert_eq!(told(&panel, &mut rx).await, topics(&["assistant_chats"]));
 	let refused = b
 		.send(&app, Method::POST, "/api/v1/assistant/chats", Some(json!({"id": chat, "title": null, "turns": []})), true)
 		.await;
 	assert_eq!(refused.status, StatusCode::CONFLICT);
-	assert_eq!(told(&panel, &mut rx).await, topics(&["sessions"]), "a refused write");
+	assert_eq!(told(&panel, &mut rx).await, topics(&[]), "a refused write");
 	let key = b
 		.send(&app, Method::POST, "/api/v1/sources", Some(json!({"key_id": "told", "kind": "sheet", "brands": ["fr"]})), true)
 		.await;
 	assert_eq!(key.status, StatusCode::CREATED, "{}", key.body);
-	assert_eq!(
-		told(&panel, &mut rx).await,
-		topics(&["alert_access", "sessions", "sources", "users"]),
-		"a key is minted on GetMe asked afresh"
-	);
+	assert_eq!(told(&panel, &mut rx).await, topics(&["sources"]), "GetMe asked afresh, its answer unchanged, writes nothing");
 	assert_eq!(b.get(&app, "/api/v1/sources").await.status, StatusCode::OK);
-	assert_eq!(told(&panel, &mut rx).await, topics(&["sessions"]), "a read");
+	assert_eq!(told(&panel, &mut rx).await, topics(&[]), "a read");
 }
 
 /// `/auth/login?return_to=` lands the browser back on a path of this origin, and refuses

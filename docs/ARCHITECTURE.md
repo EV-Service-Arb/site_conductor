@@ -625,8 +625,8 @@ closes              4401 the session ended   1001 the server is stopping
   named.
 - **The conductor's own writes** are told by its store's pool (`ev_lib::sqlite`): every committed
   write, a request's, the bot's or a background task's, as `conductor.<table>` once its connection
-  goes back; a rolled-back one never. A write is known when its statement is prepared, so one that
-  changed no row is told too (every request's session check tells `conductor.sessions`).
+  goes back; a rolled-back one never, nor one that changed no row (an upsert that writes the same
+  values changes it).
 - **What a service changed** comes from its feed, `GET /api/conductor/changes` (NDJSON, a
   Conductor assertion; sites and review_archive): one follower per service puts each `changed`
   line (`sa_core::feeds::Line`) on the bus as it came, and each `resync`. A service sends
