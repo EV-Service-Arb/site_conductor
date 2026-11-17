@@ -1,10 +1,11 @@
 "use client";
 
 import { Badge, Button, cn } from "@evinvest/uikit";
-import { ChevronDown, ChevronUp, Globe, Hash, Mail, MapPin, Phone, QrCode, Send, Smartphone, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Globe, Hash, Mail, MapPin, Phone, Plug, QrCode, Send, Smartphone, X } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { CategoryChip, type Listed, MUST_HAVES, TABS, type Tab, open, openAccount, readiness, useGmbTags, useSelection, windowKeys, STATE_NAME, STATE_TONE } from "@/entities/gmb";
+import { CategoryChip, type Listed, open, openAccount, readyCount, useGmbTags, useSelection, windowKeys, STATE_NAME, STATE_TONE } from "@/entities/gmb";
+import { type Tab, mustHaveValues } from "@/shared/api/schema";
 import { type T, useT, account } from "@/shared/i18n";
 import { setHome } from "@/shared/lib/location";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -13,13 +14,15 @@ import { BrowserTab } from "./browser-tab";
 import { KitTab } from "./kit-tab";
 import { Launch } from "./launch";
 
-const TAB_NAME = {
+/** A window's tab, the GBP's or the gmail's. */
+export const TAB_NAME = {
   launch: (t) => t(windowKeys.tab.launch, "Launch"),
   browser: (t) => t(windowKeys.tab.browser, "Browser"),
   kit: (t) => t(windowKeys.tab.kit, "Review kit"),
+  connections: (t) => t(windowKeys.tab.connections, "Connections"),
 } satisfies Record<Tab, (t: T) => string>;
 
-const ICON: Record<Tab, ReactNode> = { launch: <Send aria-hidden className="size-4" />, browser: <Smartphone aria-hidden className="size-4" />, kit: <QrCode aria-hidden className="size-4" /> };
+const ICON: Record<Tab, ReactNode> = { launch: <Send aria-hidden className="size-4" />, browser: <Smartphone aria-hidden className="size-4" />, kit: <QrCode aria-hidden className="size-4" />, connections: <Plug aria-hidden className="size-4" /> };
 
 /** A GBP's window over the map, beside the outline: its header, and the tabs its state has. */
 export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
@@ -30,13 +33,13 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
   const { gmb, gmail } = listed;
   const site = tags.sites?.get(gmb.id);
   // the outline's order, of the GBPs a window opens on
-  const order = selection === null ? [] : [...selection.selected, ...selection.rows.filter((l) => !selection.isSelected(l.gmb.id))].filter((l) => TABS[l.gmb.state].length > 0);
+  const order = selection === null ? [] : [...selection.selected, ...selection.rows.filter((l) => !selection.isSelected(l.gmb.id))].filter((l) => l.gmb.tabs.length > 0);
   const at = order.findIndex((l) => l.gmb.id === gmb.id);
   const step = (by: number) => {
     const next = order[(at + by + order.length) % order.length];
     if (next !== undefined) open(next.gmb);
   };
-  const ready = gmb.state === "draft" ? readiness(listed, tags).filter((r) => r.ready).length : null;
+  const ready = gmb.readiness === null ? null : readyCount(gmb.readiness);
   const point = gmb.address ?? (gmb.location && t(windowKeys.planned, "planned · {at}", { at: `${gmb.location.lat.toFixed(3)}, ${gmb.location.lng.toFixed(3)}` }));
   const facts = [
     point && { icon: <MapPin aria-hidden />, text: point },
@@ -55,8 +58,8 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
           <CategoryChip gmb={gmb} />
           {ready !== null && (
             <span className="text-sm text-ink-soft">
-              <span className={cn("font-mono tabular-nums", ready === MUST_HAVES.length ? "text-positive" : "text-accent-warn")}>
-                {ready}/{MUST_HAVES.length}
+              <span className={cn("font-mono tabular-nums", ready === mustHaveValues.length ? "text-positive" : "text-accent-warn")}>
+                {ready}/{mustHaveValues.length}
               </span>{" "}
               {t(windowKeys.readyToSubmit, "ready to submit")}
             </span>
@@ -94,7 +97,7 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
         </p>
       </header>
       <nav role="tablist" aria-label={t(windowKeys.tabs, "Sections")} className="flex gap-1 border-b border-border px-6 pt-3">
-        {TABS[gmb.state].map((k) => (
+        {gmb.tabs.map((k) => (
           <button
             key={k}
             type="button"

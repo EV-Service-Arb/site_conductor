@@ -1,10 +1,9 @@
-//! What costs: every action a vendor bills us for, or we bill a person for. Each tool is an enum of
-//! its actions, declared once in the `priced!` below with where it happens, whether it is sold and
-//! its unit: its variants' `message` is their name, their doc what an admin reads under it. The
+//! What costs: every action a vendor bills us for, and a person pays for. Each tool is an enum of
+//! its actions, declared once in the `priced!` below with where it happens and its unit: its variants' `message` is their name, their doc what an admin reads under it. The
 //! admin's prices page, the conductor's tables, the snapshot and the usage all walk [`Item::all`],
 //! so a variant added here is priced, costed and counted there with nothing else written.
 //!
-//! A price is the admin's; a sold item without one is not sold. A cost is the admin's too. Both are
+//! A price is the admin's; an item without one is refused. A cost is the admin's too. Both are
 //! for [`Item::per`] units: a model's tokens are priced by the million.
 
 use std::{collections::BTreeMap, fmt, marker::PhantomData, str::FromStr};
@@ -15,7 +14,7 @@ use uuid::Uuid;
 
 use crate::meters::Meter;
 
-/// What each item costs, in tokens; an item absent is not sold.
+/// What each item costs, in tokens; an item absent is refused.
 pub type Prices = BTreeMap<Item, i64>;
 
 #[cfg(feature = "api")]
@@ -26,7 +25,7 @@ pub trait Tool {
 	fn items() -> Vec<Item>;
 }
 
-/// Where it happens: who counts it, and charges for it if it is sold.
+/// Where it happens: who counts it and charges for it.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, VariantArray, strum::IntoStaticStr, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -35,21 +34,10 @@ pub enum Scope {
 	Conductor,
 	/// After the fact, through its charge feed.
 	ReviewArchive,
-	/// sa_browsers' runner: nobody is charged.
+	/// sa_browsers' runner: charged as its usage feed is taken, to whom each use names.
 	Browsers,
-	/// gmaps_optimal_placement's studies: a pull's searches charged at the conductor's forward.
+	/// gmaps_optimal_placement's studies: what a pull bought, charged at the conductor's forward.
 	Placement,
-}
-
-/// Whether a person pays tokens for it.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, VariantArray, strum::IntoStaticStr, schemars::JsonSchema)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum Sale {
-	/// At the admin's price; unpriced, refused.
-	Sold,
-	/// Counted and costed; nobody is charged.
-	Metered,
 }
 
 /// A Places request on the shared keys, by how Google bills it: both masks ask a display name,
@@ -188,7 +176,7 @@ pub enum WalkStep {
 }
 
 macro_rules! priced {
-	($($tool:ident($ty:ident) = $key:literal, $scope:ident, $sale:ident, $per:literal $unit:literal, $title:literal;)+) => {
+	($($tool:ident($ty:ident) = $key:literal, $scope:ident, $per:literal $unit:literal, $title:literal;)+) => {
 		/// One costly action: `<tool>.<variant>` on the wire.
 		#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 		pub enum Item {
@@ -204,12 +192,6 @@ macro_rules! priced {
 			pub fn scope(self) -> Scope {
 				match self {
 					$(Self::$tool(_) => Scope::$scope,)+
-				}
-			}
-
-			pub fn sale(self) -> Sale {
-				match self {
-					$(Self::$tool(_) => Sale::$sale,)+
 				}
 			}
 
@@ -271,16 +253,16 @@ macro_rules! priced {
 }
 
 priced! {
-	Places(PlacesRequest) = "places", Conductor, Sold, 1 "request", "Google Places on the shared keys";
-	StreetView(StreetViewLoad) = "street_view", Conductor, Sold, 1 "panorama", "Google Street View on the map";
-	Map(MapLoad) = "map", Conductor, Metered, 1 "load", "Google Maps in the browser";
-	Walk(WalkStep) = "walk", ReviewArchive, Sold, 1 "step", "A walk down a place's reviews";
-	Phone(PhoneTime) = "phone", Browsers, Metered, 1 "minute", "Multilogin's cloud phones";
-	Placement(PlacementRequest) = "placement", Placement, Sold, 1 "search", "A study's pull";
-	Ads(AdsRequest) = "ads", Placement, Metered, 1 "request", "Google Ads API";
-	DataForSeo(DataForSeoTask) = "dataforseo", Placement, Metered, 1 "task", "DataForSEO";
-	Browser(BrowserStart) = "browser", Browsers, Metered, 1 "start", "Antidetect browsers";
-	Claude(ModelTokens) = "claude", Conductor, Sold, 1_000_000 "token", "Claude, the assistant's model";
+	Places(PlacesRequest) = "places", Conductor, 1 "request", "Google Places on the shared keys";
+	StreetView(StreetViewLoad) = "street_view", Conductor, 1 "panorama", "Google Street View on the map";
+	Map(MapLoad) = "map", Conductor, 1 "load", "Google Maps in the browser";
+	Walk(WalkStep) = "walk", ReviewArchive, 1 "step", "A walk down a place's reviews";
+	Phone(PhoneTime) = "phone", Browsers, 1 "minute", "Multilogin's cloud phones";
+	Placement(PlacementRequest) = "placement", Placement, 1 "search", "A study's pull";
+	Ads(AdsRequest) = "ads", Placement, 1 "request", "Google Ads API";
+	DataForSeo(DataForSeoTask) = "dataforseo", Placement, 1 "task", "DataForSEO";
+	Browser(BrowserStart) = "browser", Browsers, 1 "start", "Antidetect browsers";
+	Claude(ModelTokens) = "claude", Conductor, 1_000_000 "token", "Claude, the assistant's model";
 }
 
 impl<A: Tool, B: Tool> Tool for (A, B) {
@@ -289,8 +271,7 @@ impl<A: Tool, B: Tool> Tool for (A, B) {
 	}
 }
 
-/// Who buys of `T`'s items are made for (`W`, as their service names a person), charged for those
-/// sold. What spends takes one, so a handler gets it from its `Spends` and its operation says what
+/// Who buys of `T`'s items are made for (`W`, as their service names a person), charged for them. What spends takes one, so a handler gets it from its `Spends` and its operation says what
 /// it spends.
 pub struct Spender<T, W = Uuid> {
 	who: W,

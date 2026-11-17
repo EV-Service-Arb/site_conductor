@@ -20,6 +20,7 @@ pub mod view;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use uuid::Uuid;
 
 /// The Chrome major of the Orbita the runner runs (the flake's `orbita`); every device's UA says it.
 pub const CHROME: &str = "151";
@@ -108,6 +109,8 @@ pub struct Launch {
 	/// What this run is for (a GBP's point, or the gmail alone): a launch for another while it
 	/// runs is refused, never folded into it.
 	pub run: String,
+	/// Whom its uses are charged to.
+	pub user: Uuid,
 	pub browser: Browser,
 }
 
@@ -150,6 +153,8 @@ pub enum Browser {
 		zone: String,
 		/// ISO 3166-1 alpha-2: the phone's exit, read from inside it, is here or the run stops.
 		country: String,
+		/// What the person's balance affords: the run stops there, if not before.
+		minutes: u64,
 	},
 }
 

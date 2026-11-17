@@ -2,8 +2,8 @@ import type { Tone } from "@evinvest/uikit";
 
 import type { GmailRole, GoogleCategory, State } from "@/shared/api/schema";
 import type { GmbReviews } from "@/shared/api/services/review_archive";
+import type { GmbPlace } from "@/shared/api/services/sites";
 import type { T } from "@/shared/i18n";
-import { type Infer, type Parser, arrayOf, bool, num, object, str } from "@/shared/lib/parse";
 
 import { gmbs } from "./i18n";
 
@@ -31,24 +31,5 @@ export function googleName(g: GoogleCategory, lang: string): string {
 /** review_archive's tag on a GMB. */
 export type ArchiveTag = GmbReviews;
 
-/** A JSON object keyed by GMB id, each value checked. */
-function byGmb<T>(p: Parser<T>): Parser<Map<number, T>> {
-  return (v, path) => {
-    if (typeof v !== "object" || v === null || Array.isArray(v)) throw new Error(`${path}: expected an object of GMB ids`);
-    return new Map(
-      Object.entries(v).map(([id, value]) => {
-        const n = Number(id);
-        if (!Number.isSafeInteger(n)) throw new Error(`${path}: ${id} is not a GMB id`);
-        return [n, p(value, `${path}.${id}`)];
-      }),
-    );
-  };
-}
-
-const siteTagParser = object({ brand: str, location: str, leads_7d: num, overdue: num });
-export type SiteTag = Infer<typeof siteTagParser>;
-export const sitesParser = byGmb(siteTagParser);
-
-const sitesPlaceParser = object({ brand: str, location: str, withdrawn: bool });
-export type SitesPlace = Infer<typeof sitesPlaceParser>;
-export const sitesPlacesParser = object({ places: arrayOf(sitesPlaceParser) });
+/** sites' tag on a GMB: its place and how its leads stand. */
+export type SiteTag = GmbPlace;

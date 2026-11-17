@@ -17,7 +17,7 @@ use crate::{
 const UP_WITHIN: Duration = Duration::from_secs(180);
 const ALIVE_EVERY: Duration = Duration::from_secs(15);
 
-pub(crate) async fn life(runner: &Runner, gmail: i64, token: &str, folder: &str, profile: &str, ends: &mut Ends<'_>) -> eyre::Result<()> {
+pub(crate) async fn life(runner: &Runner, gmail: i64, user: uuid::Uuid, token: &str, folder: &str, profile: &str, ends: &mut Ends<'_>) -> eyre::Result<()> {
 	let started = tokio::time::timeout(UP_WITHIN, async {
 		//LOOP: until the launcher has Mimic and starts it; UP_WITHIN bounds it
 		loop {
@@ -51,7 +51,7 @@ pub(crate) async fn life(runner: &Runner, gmail: i64, token: &str, folder: &str,
 			.ok_or_else(|| eyre::eyre!("Mimic's /json/version names no socket: {version}"))?
 			.to_owned();
 		up(runner, gmail, Up::Devtools(devtools));
-		runner.0.usage.record(Item::Browser(BrowserStart::Mimic), 1, jiff::Timestamp::now())?;
+		runner.0.usage.record(Item::Browser(BrowserStart::Mimic), 1, jiff::Timestamp::now(), user)?;
 		let gone = async {
 			//LOOP: until its devtools stop answering
 			loop {

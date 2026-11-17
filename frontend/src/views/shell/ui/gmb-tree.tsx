@@ -4,14 +4,14 @@ import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMe
 import { ChevronDown, CircleMinus, CirclePlus, Link2, Pencil, QrCode, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
-import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, MUST_HAVES, openOrFocus, openKit, openTrash, readiness, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, TABS, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, kit as kitKeys, trades as tradesKeys } from "@/entities/gmb";
-import { may, useMe } from "@/entities/session";
+import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, openOrFocus, openKit, openTrash, readyCount, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, kit as kitKeys, trades as tradesKeys } from "@/entities/gmb";
+import { useMe } from "@/entities/session";
 import { AddGmbButton } from "@/features/add-gmb";
 import { EditGbp } from "@/features/edit-gbp";
 import { LinkPlace } from "@/features/link-gmb-place";
 import { PlaceButton } from "@/features/place-gmb";
-import { api, ok } from "@/shared/api";
-import { type Gmb, type State, countryValues } from "@/shared/api/schema";
+import { api, ok, sites as sitesApi } from "@/shared/api";
+import { type Gmb, type State, countryValues, mustHaveValues } from "@/shared/api/schema";
 import { ViewLink, useAt } from "@/shared/lib/location";
 import { useT } from "@/shared/i18n";
 import { ErrorState } from "@/shared/ui/error-state";
@@ -46,7 +46,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   const peeked = usePeeked();
   const at = useAt();
   const { sites, tags } = useGmbTags();
-  const linked = may(me, "sa:sites:work:places:edit") ? tags.sites : null;
+  const linked = sitesApi.mayCall("put", "/places/{brand}/{slug}/gmb", me.permissions) ? tags.sites : null;
   const selection = useSelection();
   const undoable = useUndoable();
 
@@ -374,11 +374,11 @@ function GmbRow({
   const hovered = useOnMap((s) => s.hovered === gmb.id);
   const [dialog, setDialog] = useState<"edit" | "link" | "remove" | null>(null);
   const name = gmb.name;
-  const first = TABS[gmb.state][0];
+  const first = gmb.tabs[0];
   const move = (selected ? t(gmbsKeys.deselect, "Leave out") : t(gmbsKeys.select, "Select"));
   const issue = issueOf(gmb, tags);
   const archive = tags.archive?.get(gmb.id);
-  const ready = gmb.state === "draft" ? readiness({ gmb, gmail }, tags).filter((r) => r.ready).length : null;
+  const ready = gmb.readiness === null ? null : readyCount(gmb.readiness);
   const shown = issue === "draft" ? null : issue;
   const where = [gmb.address, showGmail ? gmail?.gmail : null].filter(Boolean).join(" · ");
   const label = (
@@ -386,7 +386,7 @@ function GmbRow({
       <span className="flex items-baseline gap-2">
         <span className={cn("min-w-0 flex-1 truncate", gmb.enabled ? "text-ink" : "text-ink-soft")}>{name}</span>
         {ready !== null && (
-          <span className={cn("shrink-0 text-xs tabular-nums", ready === MUST_HAVES.length ? "text-positive" : "text-accent-warn")} title={t(gmbsKeys.readiness.title, "Must-haves ready before Google's form")}>
+          <span className={cn("shrink-0 text-xs tabular-nums", ready === mustHaveValues.length ? "text-positive" : "text-accent-warn")} title={t(gmbsKeys.readiness.title, "Must-haves ready before Google's form")}>
             {issueText("draft", { gmb, gmail }, tags, t)}
           </span>
         )}

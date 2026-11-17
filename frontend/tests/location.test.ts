@@ -29,8 +29,8 @@ describe("the location store", () => {
   it("puts back the carried keys an element's own move dropped", async () => {
     await check("/sites?gmbs=3", (store) => {
         store.linkTo({ view: "home", params: {} }); // the page has rendered where it is
-        window.history.pushState(null, "", "/sites/leads?stage=new");
-      }, "/sites/leads?gmbs=3&stage=new");
+        window.history.pushState(null, "", "/sites/leads?stage=quoted");
+      }, "/sites/leads?gmbs=3&stage=quoted");
   });
 
   it("takes a carried key out when told to, and does not put it back", async () => {

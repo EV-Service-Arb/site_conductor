@@ -143,6 +143,8 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/trash", USER, trash),
 		ApiRoute::new(M::POST, "/trash/gmails/{id}/restore", USER, restore_gmail),
 		ApiRoute::new(M::POST, "/trash/gmbs/{id}/restore", USER, restore_gmb),
+		ApiRoute::new(M::DELETE, "/trash/gmails/{id}", USER, erase_gmail),
+		ApiRoute::new(M::DELETE, "/trash/gmbs/{id}", USER, erase_gmb),
 		ApiRoute::new(M::PUT, "/trash/settings", USER, set_trash_settings),
 	]
 }
@@ -172,12 +174,26 @@ async fn restore_gmb(State(panel): State<Panel>, Extension(caller): Extension<Ca
 	Ok(NoContent)
 }
 
+/// Deletes a trashed gmail for good, with every GBP of it in the trash.
+async fn erase_gmail(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>) -> ApiResult<NoContent> {
+	panel.erase_gmail(caller.user_id, gmail, Timestamp::now()).await??;
+	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail erased");
+	Ok(NoContent)
+}
+
+/// Deletes a trashed GBP for good.
+async fn erase_gmb(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>) -> ApiResult<NoContent> {
+	panel.erase_gmb(caller.user_id, gmb, Timestamp::now()).await??;
+	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, "GBP erased");
+	Ok(NoContent)
+}
+
 /// Sets how long the caller's trash keeps what they removed. `never_purge` needs
-/// `sa:admin:trash:keep` (403).
+/// `sa:admin:trash:keep` (403); turned off, the kept days count from now.
 async fn set_trash_settings(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(set): Body<SetSettingsDto>) -> ApiResult<NoContent> {
 	if set.never_purge.is_some() && !caller.permissions.may(TrashPermission::Keep) {
 		return Err(Refusal::new(Code::Forbidden, "your permissions do not allow this"));
 	}
-	panel.set_trash_settings(caller.user_id, set.keep_days, set.never_purge).await??;
+	panel.set_trash_settings(caller.user_id, set.keep_days, set.never_purge, Timestamp::now()).await??;
 	Ok(NoContent)
 }

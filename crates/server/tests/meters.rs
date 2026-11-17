@@ -11,7 +11,7 @@ use axum::{
 	http::{Method, StatusCode},
 };
 use jiff::{SignedDuration, Timestamp};
-use sa_core::prices::{Item, PlacesRequest, StreetViewLoad};
+use sa_core::prices::{Item, MapLoad, PlacesRequest, StreetViewLoad};
 use sa_panel::{
 	Panel,
 	import::Export,
@@ -250,8 +250,13 @@ async fn nothing_is_bought_on_a_stopping_meter_without_a_reading() {
 	w.price(Some(0)).await;
 	let (status, refused) = w.open().await;
 	assert_eq!(status, StatusCode::CONFLICT, "{refused}");
-	let (status, _) = w.call(Method::POST, "/api/v1/map/loaded", Some(json!({ "account": "a" }))).await;
-	assert_eq!(status, StatusCode::NO_CONTENT, "a map load is only watched");
+	w.panel
+		.set_prices(&[(Item::from(MapLoad::Map), Some(0))], &[], "admin@localhost", Timestamp::now())
+		.await
+		.unwrap()
+		.unwrap();
+	let (status, _) = w.call(Method::POST, "/api/v1/map/load", Some(json!({ "account": "a" }))).await;
+	assert_eq!(status, StatusCode::OK, "a map load is only watched");
 
 	let m = w.street_view_meter().await;
 	assert_eq!(m["reading"], Value::Null);
@@ -284,7 +289,7 @@ async fn a_page_loads_on_the_account_with_free_panoramas_and_a_reload_moves_on()
 
 	let (status, refused) = w.open_on("nowhere").await;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{refused}");
-	let (status, refused) = w.call(Method::POST, "/api/v1/map/loaded", Some(json!({ "account": "nowhere" }))).await;
+	let (status, refused) = w.call(Method::POST, "/api/v1/map/load", Some(json!({ "account": "nowhere" }))).await;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{refused}");
 }
 

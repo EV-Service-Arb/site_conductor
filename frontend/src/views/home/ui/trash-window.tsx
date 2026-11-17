@@ -1,10 +1,10 @@
 "use client";
 
-import { Badge, Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch, type Tone } from "@evinvest/uikit";
+import { Badge, Button, ConfirmDialog, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch, type Tone } from "@evinvest/uikit";
 import { RotateCcw, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import { openTrash, STATE_NAME, STATE_TONE, useGmails, trash as trashKeys, windowKeys } from "@/entities/gmb";
+import { move, openTrash, STATE_NAME, STATE_TONE, useGmails, trash as trashKeys, windowKeys } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { api, ok } from "@/shared/api";
 import type { Trash } from "@/shared/api/schema";
@@ -43,7 +43,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
       reload();
     }
   };
-  const row = (key: string, primary: string, secondary: string | null, badge: { name: string; tone: Tone } | null, removed: string, purge: string | null, blocked: string | null, restore: () => Promise<void>) => (
+  const row = (key: string, primary: string, secondary: string | null, badge: { name: string; tone: Tone } | null, removed: string, purge: string | null, blocked: string | null, restore: () => Promise<void>, erase: () => Promise<void>) => (
     <li key={key} className="flex items-start gap-3 rounded-md px-2 py-2 hover:bg-hover/50">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <p className="flex items-center gap-2 text-sm">
@@ -58,6 +58,19 @@ export function TrashWindow({ trash }: { trash: Trash }) {
         <RotateCcw aria-hidden />
         {t(trashKeys.restore, "Restore")}
       </Button>
+      <ConfirmDialog
+        trigger={
+          <Button variant="ghost" size={button("sm")} icon disabled={busy} aria-label={t(trashKeys.erase, "Delete for good")} title={t(trashKeys.erase, "Delete for good")}>
+            <Trash2 aria-hidden />
+          </Button>
+        }
+        tone="error"
+        title={t(trashKeys.erase.title, "Delete {name} for good?", { name: primary })}
+        description={t(trashKeys.erase.body, "It cannot be restored after this.")}
+        confirmLabel={t(trashKeys.erase, "Delete for good")}
+        labels={{ cancel: t(move.cancel, "Cancel") }}
+        onConfirm={() => act(erase)}
+      />
     </li>
   );
 
@@ -87,7 +100,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
                   {t(trashKeys.gmails, "Gmails")} <span className="font-normal tabular-nums">{trash.gmails.length}</span>
                 </h3>
                 <ul className="flex flex-col">
-                  {trash.gmails.map((g) => row(`g${g.id}`, g.gmail, t(trashKeys.with, "{n} GBPs with it", { n: g.gmbs }), null, g.removed_at, g.purge_at, g.blocked, () => ok(api.POST("/trash/gmails/{id}/restore", { params: { path: { id: g.id } } }))))}
+                  {trash.gmails.map((g) => row(`g${g.id}`, g.gmail, t(trashKeys.with, "{n} GBPs with it", { n: g.gmbs }), null, g.removed_at, g.purge_at, g.blocked, () => ok(api.POST("/trash/gmails/{id}/restore", { params: { path: { id: g.id } } })), () => ok(api.DELETE("/trash/gmails/{id}", { params: { path: { id: g.id } } }))))}
                 </ul>
               </section>
             )}
@@ -97,7 +110,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
                   {t(trashKeys.gmbs, "GBPs removed on their own")} <span className="font-normal tabular-nums">{trash.gmbs.length}</span>
                 </h3>
                 <ul className="flex flex-col">
-                  {trash.gmbs.map((b) => row(`b${b.id}`, b.name, b.gmail, { name: STATE_NAME[b.state](t), tone: STATE_TONE[b.state] }, b.removed_at, b.purge_at, b.blocked, () => ok(api.POST("/trash/gmbs/{id}/restore", { params: { path: { id: b.id } } }))))}
+                  {trash.gmbs.map((b) => row(`b${b.id}`, b.name, b.gmail, { name: STATE_NAME[b.state](t), tone: STATE_TONE[b.state] }, b.removed_at, b.purge_at, b.blocked, () => ok(api.POST("/trash/gmbs/{id}/restore", { params: { path: { id: b.id } } })), () => ok(api.DELETE("/trash/gmbs/{id}", { params: { path: { id: b.id } } }))))}
                 </ul>
               </section>
             )}
@@ -141,7 +154,7 @@ function Settings({ trash, onSet }: { trash: Trash; onSet: () => void }) {
         {t(trashKeys.keep.after, "then delete for good")}
       </div>
       {may(me, "sa:admin:trash:keep") && (
-        <label className="flex items-center gap-2 text-sm text-ink">
+        <label className="flex items-center gap-2 text-sm text-ink" title={t(trashKeys.never.hint, "Turned off, the kept days count from then: nothing here is deleted for good at that moment.")}>
           <Switch checked={never_purge} onCheckedChange={(on) => void save(keep_days, on)} />
           {t(trashKeys.never, "Never delete for good")}
         </label>

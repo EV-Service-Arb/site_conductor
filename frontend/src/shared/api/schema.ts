@@ -199,11 +199,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every item of the price catalog (`sa_core::prices`): Places requests, Street View, review_archive's walk steps; each priced in tokens or not sold. */
+        /** Every item of the price catalog (`sa_core::prices`), each priced in tokens or refused. */
         get: operations["token_prices"];
         /**
-         * Prices the items given, 0 or more tokens or `null` off sale, and costs them, 0 µ$ a unit or more or `null` unknown; the others stay.
-         * @description 400 an item not in the catalog, or a metered one priced.
+         * Prices the items given, 0 or more tokens or `null` refused, and costs them, 0 µ$ a unit or more or `null` unknown; the others stay.
+         * @description 400 an item not in the catalog.
          */
         put: operations["set_token_prices"];
         post?: never;
@@ -1281,7 +1281,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/map/loaded": {
+    "/map/load": {
         parameters: {
             query?: never;
             header?: never;
@@ -1290,8 +1290,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Records that the caller's browser built a Google map on an account's browser key: a billed load of ours. 400 an account without one. */
-        post: operations["map_loaded"];
+        /**
+         * Buys the Google map the caller's browser builds on an account's browser key, before it builds it: recorded and charged (`map.map`, the admin's price) in one write.
+         * @description 400 an account without one; 409 not priced, or past the balance.
+         */
+        post: operations["buy_map"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1727,6 +1730,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/trash/gmails/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Deletes a trashed gmail for good, with every GBP of it in the trash. */
+        delete: operations["erase_gmail"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/trash/gmails/{id}/restore": {
         parameters: {
             query?: never;
@@ -1742,6 +1762,23 @@ export interface paths {
          */
         post: operations["restore_gmail"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trash/gmbs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Deletes a trashed GBP for good. */
+        delete: operations["erase_gmb"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1775,7 +1812,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Sets how long the caller's trash keeps what they removed. `never_purge` needs `sa:admin:trash:keep` (403). */
+        /** Sets how long the caller's trash keeps what they removed. `never_purge` needs `sa:admin:trash:keep` (403); turned off, the kept days count from now. */
         put: operations["set_trash_settings"];
         post?: never;
         delete?: never;
@@ -2614,10 +2651,6 @@ export interface components {
          * @enum {string}
          */
         LedgerKind: "add" | "set" | "charge" | "accrual" | "kickback";
-        /** @description The account a page's map loaded on. */
-        Loaded: {
-            account: string;
-        };
         Locality: {
             /** @description ISO 3166-1 alpha-2. */
             country: string;
@@ -2646,6 +2679,10 @@ export interface components {
         MapConfig: {
             account: string;
             key: string;
+        };
+        /** @description The account a page's map loads on. */
+        MapOn: {
+            account: string;
         };
         MapsKey: {
             checked: components["schemas"]["Checked"];
@@ -2921,7 +2958,7 @@ export interface components {
             /** Format: uint32 */
             width: number;
         };
-        /** @description A catalog item, its price (`null`: not sold, or metered) and what `per` units cost us (`null`: unknown). */
+        /** @description A catalog item, its price (`null`: refused) and what `per` units cost us (`null`: unknown). */
         Price: {
             cost: components["schemas"]["UnitCost"] | null;
             description: string;
@@ -2932,7 +2969,6 @@ export interface components {
              */
             per: number;
             price: components["schemas"]["TokenPrice"] | null;
-            sale: components["schemas"]["Sale"];
             scope: components["schemas"]["Scope"];
             title: string;
             tool: string;
@@ -3084,20 +3120,12 @@ export interface components {
             stream: string | null;
         };
         /**
-         * @description Whether a person pays tokens for it.
-         *
-         *     - `sold`: At the admin's price; unpriced, refused.
-         *     - `metered`: Counted and costed; nobody is charged.
-         * @enum {string}
-         */
-        Sale: "sold" | "metered";
-        /**
-         * @description Where it happens: who counts it, and charges for it if it is sold.
+         * @description Where it happens: who counts it and charges for it.
          *
          *     - `conductor`: At the buy, before Google is asked.
          *     - `review_archive`: After the fact, through its charge feed.
-         *     - `browsers`: sa_browsers' runner: nobody is charged.
-         *     - `placement`: gmaps_optimal_placement's studies: a pull's searches charged at the conductor's forward.
+         *     - `browsers`: sa_browsers' runner: charged as its usage feed is taken, to whom each use names.
+         *     - `placement`: gmaps_optimal_placement's studies: what a pull bought, charged at the conductor's forward.
          * @enum {string}
          */
         Scope: "conductor" | "review_archive" | "browsers" | "placement";
@@ -3126,7 +3154,7 @@ export interface components {
             key: string;
         };
         /**
-         * @description The items given, each priced at 0 tokens or more or `null` off sale, each costed at 0 µ$ a unit
+         * @description The items given, each priced at 0 tokens or more or `null` refused, each costed at 0 µ$ a unit
          *     or more or `null` unknown; the others stay.
          */
         SetPrices: {
@@ -3474,6 +3502,8 @@ export interface components {
             /** Format: int64 */
             balance: number;
             email: string;
+            /** @description RFC 3339. */
+            first_seen: string;
             name: string;
             /** Format: uuid */
             user_id: string;
@@ -3507,7 +3537,7 @@ export interface components {
              */
             daily: number;
             kickbacks: components["schemas"]["Kickback"][];
-            /** @description Each sold, priced item: its tokens. */
+            /** @description Each priced item: its tokens. */
             prices: {
                 /** Format: int64 */
                 "ads.historical_metrics"?: number;
@@ -3933,10 +3963,10 @@ export type LatLng = components['schemas']['LatLng'];
 export type Ledger = components['schemas']['Ledger'];
 export type LedgerEntry = components['schemas']['LedgerEntry'];
 export type LedgerKind = components['schemas']['LedgerKind'];
-export type Loaded = components['schemas']['Loaded'];
 export type Locality = components['schemas']['Locality'];
 export type Located = components['schemas']['Located'];
 export type MapConfig = components['schemas']['MapConfig'];
+export type MapOn = components['schemas']['MapOn'];
 export type MapsKey = components['schemas']['MapsKey'];
 export type Mention = components['schemas']['Mention'];
 export type MentionKind = components['schemas']['MentionKind'];
@@ -3986,7 +4016,6 @@ export type Role = components['schemas']['Role'];
 export type Rule = components['schemas']['Rule'];
 export type RulesBody = components['schemas']['RulesBody'];
 export type Running = components['schemas']['Running'];
-export type Sale = components['schemas']['Sale'];
 export type Scope = components['schemas']['Scope'];
 export type SetBrowser = components['schemas']['SetBrowser'];
 export type SetCountry = components['schemas']['SetCountry'];
@@ -5498,7 +5527,7 @@ export interface operations {
             cookie?: never;
         };
         /**
-         * @description The items given, each priced at 0 tokens or more or `null` off sale, each costed at 0 µ$ a unit
+         * @description The items given, each priced at 0 tokens or more or `null` refused, each costed at 0 µ$ a unit
          *     or more or `null` unknown; the others stay.
          */
         requestBody: {
@@ -14923,26 +14952,28 @@ export interface operations {
             };
         };
     };
-    map_loaded: {
+    buy_map: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** @description The account a page's map loaded on. */
+        /** @description The account a page's map loads on. */
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Loaded"];
+                "application/json": components["schemas"]["MapOn"];
             };
         };
         responses: {
-            /** @description no content */
-            204: {
+            /** @description The answer to a balance change. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["Balance"];
+                };
             };
             /** @description `bad_request` */
             400: {
@@ -18970,7 +19001,263 @@ export interface operations {
             };
         };
     };
+    erase_gmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     restore_gmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    erase_gmb: {
         parameters: {
             query?: never;
             header?: never;
@@ -19389,7 +19676,6 @@ export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
 export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "payment_received", "source_silent", "booked", "access_requested", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed"];
-export const saleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Sale"]> = ["sold", "metered"];
 export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scope"]> = ["conductor", "review_archive", "browsers", "placement"];
 export const sourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "panel", "booking", "bot"];
 export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["State"]> = ["draft", "verifying", "verified", "suspended"];

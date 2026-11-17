@@ -15,7 +15,7 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::get,
 };
-use sa_core::prices::{Item, PlacesRequest};
+use sa_core::prices::{Item, MapLoad, PlacesRequest};
 use sa_panel::{
 	Panel,
 	import::Export,
@@ -188,6 +188,18 @@ impl World {
 	}
 
 	/// The keys the billed requests went out with since asked last.
+	async fn price_map(&self, tokens: Option<i64>) {
+		self.panel
+			.set_prices(&[(Item::Map(MapLoad::Map), tokens)], &[], "admin@localhost", jiff::Timestamp::now())
+			.await
+			.unwrap()
+			.unwrap();
+	}
+
+	async fn load_map(&mut self) -> (StatusCode, Value) {
+		self.call(Method::POST, "/api/v1/map/load", Some(json!({ "account": "house" }))).await
+	}
+
 	fn billed(&self) -> Vec<String> {
 		std::mem::take(&mut *self.stub.billed.lock().unwrap())
 	}
@@ -251,6 +263,26 @@ async fn below_the_price_or_unpriced_nothing_is_bought() {
 	let (status, gbp) = w.add_gbp(gmail, PROCOPE).await;
 	assert_eq!(status, StatusCode::CREATED, "the whole balance is enough: {gbp}");
 	assert_eq!(w.balance().await, 0);
+}
+
+#[tokio::test]
+async fn a_map_is_bought_before_it_is_built() {
+	let mut w = World::new().await;
+	let (status, refused) = w.load_map().await;
+	assert_eq!(status, StatusCode::CONFLICT, "not priced: {refused}");
+
+	let balance = w.balance().await;
+	w.price_map(Some(balance + 1)).await;
+	let (status, refused) = w.load_map().await;
+	assert_eq!(status, StatusCode::CONFLICT, "{refused}");
+	assert_eq!(w.balance().await, balance);
+
+	w.price_map(Some(3)).await;
+	let (status, bought) = w.load_map().await;
+	assert_eq!((status, &bought["balance"]), (StatusCode::OK, &json!(balance - 3)), "{bought}");
+	let (_, ledger) = w.call(Method::GET, "/api/v1/tokens/ledger?limit=1", None).await;
+	let charge = &ledger["entries"][0];
+	assert_eq!((charge["delta"].as_i64(), charge["service"].as_str()), (Some(-3), Some("map")), "{ledger}");
 }
 
 #[tokio::test]
@@ -320,19 +352,14 @@ async fn every_priced_item_is_the_admins_to_price_and_the_archive_is_told() {
 		"only those given change"
 	);
 	let map = set["prices"].as_array().unwrap().iter().find(|p| p["item"] == "map.map").unwrap();
-	assert_eq!(
-		(&map["sale"], &map["price"], &map["cost"]["usd_micros"]),
-		(&json!("metered"), &Value::Null, &json!(7000)),
-		"a cost, no price: {map}"
-	);
+	assert_eq!((&map["price"], &map["cost"]["usd_micros"]), (&Value::Null, &json!(7000)), "a cost, no price: {map}");
 	let told = w.panel.snapshot(jiff::Timestamp::now()).await.unwrap().unwrap().prices;
 	assert_eq!(told.get(&"walk.open".parse().unwrap()), Some(&7));
-	assert_eq!(told.get(&"walk.step".parse().unwrap()), None, "off sale: not walked");
+	assert_eq!(told.get(&"walk.step".parse().unwrap()), None, "unpriced: not walked");
 
 	for refused in [
 		json!({ "prices": { "walk.fly": 1 }, "costs": {} }),
 		json!({ "prices": { "walk.open": -1 }, "costs": {} }),
-		json!({ "prices": { "map.map": 1 }, "costs": {} }),
 		json!({ "prices": {}, "costs": { "map.map": -1 } }),
 	] {
 		let (status, body) = w.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(refused.clone())).await;
@@ -359,8 +386,9 @@ async fn every_paid_answer_and_map_is_counted_once_on_whose_bill() {
 	assert_eq!(status, StatusCode::CREATED, "{gbp}");
 	let (status, kept) = w.call(Method::GET, &format!("/api/v1/gmbs/resolve?place={FLORE}&gmail={gmail}"), None).await;
 	assert_eq!(status, StatusCode::OK, "{kept}");
+	w.price_map(Some(0)).await;
 	for _ in 0..2 {
-		assert_eq!(w.call(Method::POST, "/api/v1/map/loaded", Some(json!({ "account": "house" }))).await.0, StatusCode::NO_CONTENT);
+		assert_eq!(w.load_map().await.0, StatusCode::OK);
 	}
 
 	let now = jiff::Timestamp::now().as_millisecond();
@@ -389,7 +417,8 @@ async fn every_paid_answer_and_map_is_counted_once_on_whose_bill() {
 #[tokio::test]
 async fn a_use_is_costed_at_the_cost_it_had_when_done() {
 	let mut w = World::holding(admin()).await;
-	let load = async |w: &mut World| assert_eq!(w.call(Method::POST, "/api/v1/map/loaded", Some(json!({ "account": "house" }))).await.0, StatusCode::NO_CONTENT);
+	w.price_map(Some(0)).await;
+	let load = async |w: &mut World| assert_eq!(w.load_map().await.0, StatusCode::OK);
 	let cost = async |w: &mut World, usd_micros: Value| {
 		let (status, set) = w
 			.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(json!({ "prices": {}, "costs": { "map.map": usd_micros } })))

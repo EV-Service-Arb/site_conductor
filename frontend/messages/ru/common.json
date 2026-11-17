@@ -280,8 +280,8 @@
     "t": "Удалить фото"
   },
   "kit.photos.tooLarge": {
-    "en": "{name}: a photo is 10 MiB at most",
-    "t": "{name}: фото не больше 10 МиБ"
+    "en": "{name}: a photo is {mib} MiB at most",
+    "t": "{name}: фото не больше {mib} МиБ"
   },
   "kit.photos.upload": {
     "en": "Upload",

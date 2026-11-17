@@ -223,14 +223,6 @@
     "en": "set {at}",
     "t": "задан {at}"
   },
-  "account.tab.browser": {
-    "en": "Browser",
-    "t": "Браузер"
-  },
-  "account.tab.connections": {
-    "en": "Connections",
-    "t": "Подключения"
-  },
   "account.test": {
     "en": "Test",
     "t": "Проверить"
@@ -2491,10 +2483,6 @@
     "en": "unknown",
     "t": "неизвестно"
   },
-  "prices.metered": {
-    "en": "nobody charged",
-    "t": "без оплаты"
-  },
   "prices.per": {
     "en": "a {unit}",
     "t": "за {unit}"
@@ -2556,8 +2544,8 @@
     "t": "Не продаётся: {n}"
   },
   "prices.why": {
-    "en": "Tokens: what each thing costs a person; empty is not sold, so a Places request is refused and a walk step not walked. Cached answers and a person's own Maps keys cost nothing. $: what one unit costs us, for the spending below.",
-    "t": "Токены: сколько стоит каждая вещь человеку; пусто — не продаётся: запрос к Places отклоняется, шаг обхода не выполняется. Кэшированные ответы и собственные ключи Maps ничего не стоят. $: сколько нам стоит одна единица — для расходов ниже."
+    "en": "Tokens: what each thing costs a person, 0 for free; empty is not sold, so it is refused: a Places request, a map, a browser's start, a walk step. Cached answers and a person's own Maps keys cost nothing. $: what one unit costs us, for the spending below.",
+    "t": "Токены: сколько каждое действие стоит пользователю; 0 — бесплатно. Пустое значение означает, что услуга не продаётся, поэтому запрос отклоняется: запрос Places, карта, запуск браузера, шаг прогулки. Кэшированные ответы и собственные ключи Maps пользователя ничего не стоят. $: сколько нам стоит одна единица для указанных ниже расходов."
   },
   "reviewArchive.loading": {
     "en": "Loading the review archive…",
@@ -2815,6 +2803,10 @@
     "en": "All balances",
     "t": "Все балансы"
   },
+  "tokens.admin.age": {
+    "en": "Age",
+    "t": "Возраст"
+  },
   "tokens.admin.balance": {
     "en": "Tokens",
     "t": "Токены"
@@ -2826,6 +2818,14 @@
   "tokens.admin.empty": {
     "en": "Nobody has signed in yet.",
     "t": "Ещё никто не входил."
+  },
+  "tokens.admin.noMatch": {
+    "en": "Nobody matches.",
+    "t": "Никто не найден."
+  },
+  "tokens.admin.search": {
+    "en": "Name or email",
+    "t": "Имя или электронная почта"
   },
   "tokens.admin.spending": {
     "en": "Spending",
@@ -3231,6 +3231,18 @@
     "en": "Nothing removed.",
     "t": "Ничего не удалено."
   },
+  "trash.erase": {
+    "en": "Delete for good",
+    "t": "Удалить навсегда"
+  },
+  "trash.erase.body": {
+    "en": "It cannot be restored after this.",
+    "t": "После этого восстановить будет невозможно."
+  },
+  "trash.erase.title": {
+    "en": "Delete {name} for good?",
+    "t": "Удалить {name} навсегда?"
+  },
   "trash.for.days": {
     "en": ", restorable for {days} days",
     "t": " и восстановим {days} дн."
@@ -3270,6 +3282,10 @@
   "trash.never": {
     "en": "Never delete for good",
     "t": "Никогда не удалять навсегда"
+  },
+  "trash.never.hint": {
+    "en": "Turned off, the kept days count from then: nothing here is deleted for good at that moment.",
+    "t": "Если отключено, отсчёт дней хранения начинается с этого момента: ничего здесь не удаляется навсегда сразу."
   },
   "trash.never.on": {
     "en": "Nothing here is deleted for good.",
@@ -3434,6 +3450,10 @@
   "window.tab.browser": {
     "en": "Browser",
     "t": "Браузер"
+  },
+  "window.tab.connections": {
+    "en": "Connections",
+    "t": "Подключения"
   },
   "window.tab.launch": {
     "en": "Launch",

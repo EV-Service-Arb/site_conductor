@@ -16,6 +16,7 @@ use jiff::Timestamp;
 use sa_core::prices::{Item, PhoneTime};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use uuid::Uuid;
 
 use crate::{
 	Runner, adb,
@@ -50,11 +51,13 @@ impl MobileMinutes {
 }
 
 pub(crate) struct Run {
+	pub(crate) user: Uuid,
 	pub(crate) token: String,
 	pub(crate) phone: String,
 	pub(crate) geo: Option<(f64, f64)>,
 	pub(crate) zone: String,
 	pub(crate) country: String,
+	pub(crate) minutes: u64,
 }
 
 /// A phone this runner may have started: on disk from before `phone/start` until it reads stopped.
@@ -65,6 +68,8 @@ struct Record {
 	token: String,
 	/// Just before `phone/start`: its minutes are counted from here.
 	since: Timestamp,
+	/// Whom its minutes are charged to.
+	user: Uuid,
 }
 
 // r[impl browsers.phone-stops]
@@ -73,6 +78,7 @@ pub(crate) async fn life(runner: &Runner, gmail: i64, run: Run, ends: &mut Ends<
 		phone: run.phone.clone(),
 		token: run.token.clone(),
 		since: Timestamp::now(),
+		user: run.user,
 	};
 	remember(runner, &record)?;
 	let start = runner.0.multilogin.start(&run.token, &run.phone, &runner.0.minutes).await;
@@ -97,7 +103,7 @@ fn counted(runner: &Runner, r: &Record) -> eyre::Result<()> {
 	let at = Timestamp::now();
 	// a clock stepped back since its start still leaves the minute it started
 	let secs = at.duration_since(r.since).as_secs().max(1);
-	runner.0.usage.record(Item::Phone(PhoneTime::Running), (secs as u64).div_ceil(60) as i64, at)
+	runner.0.usage.record(Item::Phone(PhoneTime::Running), (secs as u64).div_ceil(60) as i64, at, r.user)
 }
 
 async fn started(runner: &Runner, gmail: i64, run: &Run, start: &Value, ends: &mut Ends<'_>) -> eyre::Result<()> {
@@ -145,9 +151,10 @@ async fn started(runner: &Runner, gmail: i64, run: &Run, start: &Value, ends: &m
 	.await?;
 	placed(runner, &phone, run).await?;
 	up(runner, gmail, Up::Phone { adb: Arc::new(phone), stream });
+	let cap = CAP.min(Duration::from_secs(run.minutes.saturating_mul(60)));
 	tokio::select! {
 		() = ends.any(gmail, IDLE) => {}
-		() = tokio::time::sleep_until(at + CAP) => tracing::warn!(gmail, phone = run.phone, "phone ran {}s: stopped", CAP.as_secs()),
+		() = tokio::time::sleep_until(at + cap) => tracing::warn!(gmail, phone = run.phone, "phone ran {}s, as much as it may: stopped", cap.as_secs()),
 	}
 	Ok(())
 }

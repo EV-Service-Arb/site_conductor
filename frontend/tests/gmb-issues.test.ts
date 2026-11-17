@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import type { ArchiveTag, SiteTag } from "@/entities/gmb/model/gmb";
 import { type Issue, type Tags, issueCounts, issueOf, issueText } from "@/entities/gmb/model/issues";
-import { readiness } from "@/entities/gmb/model/readiness";
 import type { Gmail, Gmb, GoogleCategory, Trade } from "@/shared/api/schema";
 import { translator } from "@evinvest/i18n";
 
@@ -26,6 +25,8 @@ const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
   enabled,
   location: located ? { lat: 45.76, lng: 4.83, placed: false } : null,
   spots: [],
+  readiness: null,
+  tabs: ["kit"],
 });
 const archive = (suspended: number, failing: boolean): ArchiveTag => ({ tracked: true, rating: 4.5, reviews: 10, suspended, reinstating: 0, failing, live_30d: Array(30).fill(null) });
 const site = (overdue: number): SiteTag => ({ brand: "aquafix", location: "lyon-9", leads_7d: 3, overdue });
@@ -85,8 +86,18 @@ describe("a GBP's category", () => {
   });
 });
 
-/** A draft with `fill` set: none of its must-haves but its name otherwise. */
-const draft = (id: number, fill: Partial<Gmb> = {}): Gmb => ({ ...gmb(id, { located: false }), place_id: null, gmail_id: null, state: "draft", next: ["verifying"], country: null, ...fill });
+/** A draft with `fill` set: none of its must-haves but its name otherwise, as the server judges them. */
+const draft = (id: number, fill: Partial<Gmb> = {}): Gmb => ({
+  ...gmb(id, { located: false }),
+  place_id: null,
+  gmail_id: null,
+  state: "draft",
+  next: ["verifying"],
+  country: null,
+  readiness: { missing: ["areas", "phone", "film", "gmail", "category", "site", "hidden_address", "profile"], unknown: [] },
+  tabs: ["launch", "browser"],
+  ...fill,
+});
 const full: Partial<Gmb> = {
   trade_id: PLUMBING,
   country: { code: "FR", by_hand: true },
@@ -100,48 +111,15 @@ const full: Partial<Gmb> = {
 /** The draft as listed: under a gmail whose browser is `browser`, when it has one. */
 const listed = (g: Gmb, browser = true): { gmb: Gmb; gmail: Gmail | null } => ({
   gmb: g,
-  gmail: g.gmail_id == null ? null : { id: g.gmail_id, gmail: "ops@example.test", role: "manager", created_at: "2026-11-06T00:00:00Z", browser },
+  gmail: g.gmail_id == null ? null : { id: g.gmail_id, gmail: "ops@example.test", role: "manager", created_at: "2026-11-06T00:00:00Z", browser, tabs: ["connections", "browser"] },
 });
 
-describe("a draft's readiness", () => {
-  const ready = (g: Gmb, tags: Tags, browser = true) =>
-    readiness(listed(g, browser), tags)
-      .filter((r) => r.ready)
-      .map((r) => r.must);
-
-  it("is its name alone until the rest is set, in Google's order", () => {
-    expect(ready(draft(1), { archive: null, sites: new Map(), trades: plumbing() })).toEqual(["name"]);
-    expect(ready(draft(1, full), { archive: null, sites: new Map(), trades: plumbing() })).toEqual(["name", "category", "areas", "phone", "hidden_address", "film", "gmail", "profile"]);
-  });
-
-  it("has its site only where sites links a place to it, and none while sites is unread", () => {
-    expect(ready(draft(1, full), { archive: null, sites: new Map([[1, site(0)]]), trades: plumbing() })).toHaveLength(9);
-    expect(ready(draft(1, full), { archive: null, sites: null, trades: plumbing() })).not.toContain("site");
-  });
-
-  it("has its browser only once its gmail's is set up and its last check went through", () => {
-    expect(ready(draft(1, full), { archive: null, sites: null, trades: plumbing() }, false)).not.toContain("profile");
-    expect(ready(draft(1, { ...full, gmail_id: null }), { archive: null, sites: null, trades: plumbing() })).not.toContain("profile");
-  });
-
-  it("has its address only once whether customers visit is decided", () => {
-    expect(ready(draft(1, { ...full, customers_visit: null }), { archive: null, sites: null, trades: plumbing() })).not.toContain("hidden_address");
-  });
-
-  it("has its category only once its trade is set up in its country with Google's primary category", () => {
-    for (const [why, fill, trades] of [
-      ["no country", { ...full, country: null }, plumbing()],
-      ["not set up there", { ...full, country: { code: "US", by_hand: true } }, plumbing()],
-      ["no primary", full, plumbing(null)],
-      ["the trades unread", full, null],
-    ] as const) {
-      expect(ready(draft(1, fill), { archive: null, sites: null, trades }), why).not.toContain("category");
-    }
-  });
-
-  it("is a draft's issue, after overdue leads and before a missing point, told as its count", () => {
+describe("a draft", () => {
+  it("is a draft's issue, after overdue leads and before a missing point, told as its count of must-haves ready", () => {
     const tags: Tags = { archive: null, sites: new Map([[2, site(1)]]), trades: plumbing() };
-    check([draft(1, full), draft(2), gmb(3, { located: false })], tags, { 1: "draft", 2: "overdue", 3: "unlocated" });
-    expect(issueText("draft", listed(draft(1, full)), tags, translator({}, "en"))).toBe("8/9");
+    const all = { ...full, readiness: { missing: ["site" as const], unknown: [] } };
+    check([draft(1, all), draft(2), gmb(3, { located: false })], tags, { 1: "draft", 2: "overdue", 3: "unlocated" });
+    expect(issueText("draft", listed(draft(1, all)), tags, translator({}, "en"))).toBe("8/9");
+    expect(issueText("draft", listed(draft(1, { ...all, readiness: { missing: [], unknown: ["site"] } })), tags, translator({}, "en"))).toBe("8/9");
   });
 });

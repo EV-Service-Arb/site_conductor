@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import type { Country, Gmb, LatLng, State } from "@/shared/api/schema";
+import type { Country, Gmb, LatLng, Tab } from "@/shared/api/schema";
 import { type Home, setHome, useHome } from "@/shared/lib/location";
 
 /** What the map and the outline beside it share about the GMBs. */
@@ -52,24 +52,16 @@ export function peek(gmb: number | null): void {
   setHome({ gmb: gmb ?? undefined });
 }
 
-/** A GBP window's tab; a gmail's window has its own (`AccountTab`), both in `?tab`. */
-export type Tab = Exclude<NonNullable<Home["tab"]>, "connections">;
-
-/** The location window's tabs by state, in order; a GBP whose state has none opens as its card only. */
-export const TABS: Record<State, readonly Tab[]> = { draft: ["launch", "browser"], verifying: ["browser"], verified: ["kit"], suspended: [] };
-
 /** The tab the GBP's window is open on; `null`: no window, the card only, or a gmail's window holds `?tab`. */
 export function useTab(): Tab | null {
   const home = useHome();
-  if (home === null || home.account !== undefined || home.tab === undefined) return null;
-  if (home.tab === "connections") throw new Error("?tab=connections: a gmail's tab, with no ?account");
-  return home.tab;
+  if (home === null || home.account !== undefined) return null;
+  return home.tab ?? null;
 }
 
-/** The GBP's window, on the open tab while its state has it, else on its state's first; its card alone where it has none. */
-export function open(gmb: Pick<Gmb, "id" | "state">): void {
-  const tabs = TABS[gmb.state];
-  setHome((now) => ({ ...NO_WINDOW, gmb: gmb.id, tab: now.account === undefined && tabs.find((t) => t === now.tab) !== undefined ? now.tab : tabs[0] }));
+/** The GBP's window, on the open tab while it has it, else on its first; its card alone where it has none (`Gmb.tabs`). */
+export function open(gmb: Pick<Gmb, "id" | "tabs">): void {
+  setHome((now) => ({ ...NO_WINDOW, gmb: gmb.id, tab: now.account === undefined && gmb.tabs.find((t) => t === now.tab) !== undefined ? now.tab : gmb.tabs[0] }));
 }
 
 /** A GBP clicked on the map or in the outline beside it: the first click opens it, the next goes to it on the map, out of its window. */
@@ -99,19 +91,15 @@ export function openCategories(on: boolean): void {
   setHome({ ...NO_WINDOW, categories: on });
 }
 
-export const ACCOUNT_TABS = ["connections", "browser"] as const satisfies readonly NonNullable<Home["tab"]>[];
-export type AccountTab = (typeof ACCOUNT_TABS)[number];
-
-/** The gmail whose own window is open (`?account`, apart from the outline's `?gmail` scope), on its tab. */
-export function useAccountWindow(): { gmail: number; tab: AccountTab } | null {
+/** The gmail whose own window is open (`?account`, apart from the outline's `?gmail` scope), on its tab (one of `Gmail.tabs`). */
+export function useAccountWindow(): { gmail: number; tab: Tab } | null {
   const home = useHome();
   if (home?.account === undefined) return null;
-  const tab = ACCOUNT_TABS.find((t) => t === home.tab);
-  if (tab === undefined) throw new Error(`?tab=${home.tab}: not a tab of gmail ${home.account}'s window`);
-  return { gmail: home.account, tab };
+  if (home.tab === undefined) throw new Error(`?account=${home.account}: its window has no ?tab`);
+  return { gmail: home.account, tab: home.tab };
 }
 
-export function openAccount(at: { gmail: number; tab: AccountTab } | null): void {
+export function openAccount(at: { gmail: number; tab: Tab } | null): void {
   setHome({ ...NO_WINDOW, account: at?.gmail, tab: at?.tab });
 }
 

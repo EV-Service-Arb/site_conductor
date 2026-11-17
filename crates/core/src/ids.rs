@@ -50,7 +50,7 @@ impl schemars::JsonSchema for BrandId {
 	}
 
 	fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
-		schemars::json_schema!({ "type": "string", "pattern": SLUG_PATTERN, "description": "A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric." })
+		schemars::json_schema!({ "type": "string", "pattern": SLUG_PATTERN, "examples": ["aquafix"], "description": "A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric." })
 	}
 }
 

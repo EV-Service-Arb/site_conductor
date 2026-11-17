@@ -4,7 +4,7 @@ import { Button, ConfirmDialog, Skeleton, Textarea, cn, toast } from "@evinvest/
 import { Check, ImagePlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { PHOTO_MAX, kit, move, photoSrc, uploadPhoto } from "@/entities/gmb";
+import { photoMax, kit, move, photoSrc, uploadPhoto } from "@/entities/gmb";
 import { type Failure, Refused, api, ok } from "@/shared/api";
 import type { Country, KitDraft, KitPhoto, KitPool } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
@@ -226,8 +226,9 @@ function Upload({ at }: { at: At }) {
   const [sent, setSent] = useState<number | null>(null);
   const upload = async (files: File[]) => {
     for (const [i, file] of files.entries()) {
-      if (file.size > PHOTO_MAX) {
-        toast.error(t(kit.photos.tooLarge, "{name}: a photo is 10 MiB at most", { name: file.name }));
+      const max = photoMax(file.type);
+      if (max !== undefined && file.size > max) {
+        toast.error(t(kit.photos.tooLarge, "{name}: a photo is {mib} MiB at most", { name: file.name, mib: max / 2 ** 20 }));
         continue;
       }
       try {

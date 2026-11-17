@@ -4,7 +4,7 @@ import { Button, Skeleton, buttonVariants, toast } from "@evinvest/uikit";
 import { href } from "@evinvest/views";
 import { Copy, ExternalLink, Plus, QrCode, X } from "lucide-react";
 
-import { AreaDraw, TARGET_NAME, kit, open, openKit, outlineOf, useOutline, windowKeys } from "@/entities/gmb";
+import { AreaDraw, TARGET_NAME, kit, open, openKit, outlineOf, useGmails, useOutline, windowKeys } from "@/entities/gmb";
 import { api } from "@/shared/api";
 import type { KitNearby } from "@/shared/api/schema";
 import { VIEWS } from "@/shared/api/views";
@@ -151,7 +151,10 @@ function NewArea() {
 
 function Group({ title, gmbs, locale }: { title: string; gmbs: readonly KitNearby[]; locale: string }) {
   const t = useT();
+  const gmails = useGmails();
   if (gmbs.length === 0) return null;
+  // its window's tabs are the caller's GMB's, as the gmails read has it
+  const own = (id: number) => (gmails.status === "ok" ? gmails.data.gmbs.find((b) => b.id === id) : undefined);
   return (
     <section className="flex flex-col gap-1">
       <h3 className={SECTION_HEAD}>
@@ -160,7 +163,7 @@ function Group({ title, gmbs, locale }: { title: string; gmbs: readonly KitNearb
       <ul className="flex flex-col">
         {gmbs.map((g) => (
           <li key={g.id}>
-            <button type="button" onClick={() => open(g)} className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring">
+            <button type="button" disabled={own(g.id) === undefined} onClick={() => open(own(g.id)!)} className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring">
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm text-ink">{g.name}</span>
                 <span className="truncate text-xs text-ink-soft">{[g.address, g.target === null ? t(kit.off, "kit off") : TARGET_NAME[g.target](t)].filter(Boolean).join(" · ")}</span>

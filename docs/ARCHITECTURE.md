@@ -108,7 +108,7 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
                          socket, the relay between it and a browser's devtools, a phone's passed through
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
   src/trash.rs           /api/v1/trash; the hourly purge
-  src/usage.rs           /api/v1/map/loaded, /api/v1/admin/usage; the services' usage feeds followed
+  src/usage.rs           /api/v1/map/load, /api/v1/admin/usage; the services' usage feeds followed
   src/meters.rs          /api/v1/admin/meters{,/readings}; each account's meters read at start and daily
   src/config.rs          the config file (`--config`): the Google accounts
   src/assistant.rs       /api/v1/assistant; the turns' shape
@@ -333,7 +333,7 @@ conductor ── POST /profiles/{gmail}/launch {Launch}, Conductor ──▶ sa_
   stands. A phone is placed from inside (mock location on every provider, the zone read back) and its
   exit read from inside must be in the GBP's country. A start for another while one runs is refused.
   Ten minutes without a viewer stop a browser; a phone, three, and thirty after its start whoever
-  watches.
+  watches, or sooner the minutes its launch says the person's balance affords.
 - **The runner owns a phone's life**, so a dead conductor leaves none billing: it is recorded on the
   runner's disk before `phone/start`, stopped on every way its run ends (a failed step, a step past
   the time it should take, stop, removal, idle, the cap, SIGTERM), the stop retried until `statuses` reads it stopped, and a recorded one
@@ -342,7 +342,8 @@ conductor ── POST /profiles/{gmail}/launch {Launch}, Conductor ──▶ sa_
 - **What it spent, the runner tells** (`GET /usage`, `sa_core::usage`): a phone's run at its stop,
   its minutes from just before `phone/start` (on disk with its record), a started one whole; it is
   counted if its start was answered or it was read running at the stop, so one stopped already
-  when a restarted runner reads it is not counted twice. A browser's start, once up.
+  when a restarted runner reads it is not counted twice. A browser's start, once up. Each names
+  whom its launch was for, who is charged as the conductor takes it.
 - **The relay** never sends `Runtime.enable` (what pages detect devtools by): `Target.*`, `Page.*`
   (the screencast, navigation, dialogs) and `Input.*`, a finger's touches for the pointer. A phone is
   not devtools: the runner speaks the viewer's frames itself (screencap, `input`, ADBKeyBoard's
@@ -517,7 +518,7 @@ DELETE /gmbs/{id}/location
 PUT    /gmbs/{id}/country
 GET    /map
 POST   /map/street_view
-POST   /map/loaded
+POST   /map/load
 GET    /trades
 POST   /trades
 PATCH  /trades/{id}
@@ -545,6 +546,7 @@ GET    /kit/locality
 GET    /google-categories/{country}
 GET    /trash
 POST   /trash/{gmails,gmbs}/{id}/restore
+DELETE /trash/{gmails,gmbs}/{id}
 PUT    /trash/settings
 GET    /tokens
 GET    /tokens/ledger
@@ -732,28 +734,30 @@ request below the price, or unpriced, is refused before Google is asked. A cache
 nothing. The operator's `locate` tries the gmail's keys, then the house pays.
 review_archive's lookups are the house's for now.
 
-**A study's pull is sold per search** (`placement.search`), charged by the forward, under the same
-lock:
+**A study's pull is sold per search** (`placement.search`), and per Ads request and DataForSEO
+task it buys, charged by the forward, under the same lock; refused while any of them is unpriced:
 
 ```text
 a pull: placement's operation (its pulled document) whose x-spends names a sold item of scope Placement
   ─ price set, budget = balance ÷ price ─▶ placement, its {sha}, ?budget=<n>
   ├─ the sweep needs more than n: 402 unaffordable, nothing bought ─▶ the person told so, with their balance
-  └─ x-billed: <k> on any answer, k ≤ n ─▶ the ledger: −k × placement.search; a pull that failed owes it
-                                          all back, as a failed walk does: the failure is the house's
+  └─ x-billed: {item: count} on any answer, places.search ≤ n ─▶ the ledger: the searches × price, the
+                    Ads and DataForSEO ones × theirs up to what the balance has left; a pull that failed
+                    owes it all back, as a failed walk does: the failure is the house's
 ```
 
 Until the catalog holds placement's document, nothing signed in passes to placement (503): a pull
 would reach it with the caller's own budget.
 
-A person's front end reads the sold prices with their balance, and an action costing more than
+A person's front end reads the prices with their balance, and an action costing more than
 their `confirm_above` (100 unsaid) asks them first.
 
 **Prices are the admin's.** Every costly action is an item of `sa_core::prices`: each tool declares
 its items there once (an enum, a variant's message its name and its doc what it is) with where it
-happens, its unit and how many its price and cost are for (a model's tokens: a million), and whether it is sold (a person pays tokens for it) or metered (counted only).
-The admin's page, `token_prices`, `unit_costs` and the snapshot are walked from it. A sold item
-without a price is not sold: a Places request is refused, a walk step not walked. A unit's cost to
+happens, its unit and how many its price and cost are for (a model's tokens: a million). Every use
+of every item is charged to whom it was made for, at the admin's price; a free one is priced 0.
+The admin's page, `token_prices`, `unit_costs` and the snapshot are walked from it. An item
+without a price is not sold: a Places request, a map, a browser's start is refused, a walk step not walked. A unit's cost to
 us is the admin's too, dated (`unit_costs`, append-only): a use costs what its unit did when it was
 done, the first cost ever set for a use before it, none after one set back to unknown.
 
@@ -762,9 +766,9 @@ bill, who told), counted where it happens:
 
 ```text
 a Google answer bought, any service ─ PUT /api/queries_cache, `bought` ─ in the write keeping it
-a map built in a browser ─ POST /map/loaded        a panorama ─ POST /map/street_view
-review_archive's walk steps ─ GET /api/conductor/usage ┐ followed every 10 s, a page and its
-the runner's phone minutes, browser starts ─ GET /usage ┘ cursor in one write (`sa_core::usage`)
+a map, before it is built ─ POST /map/load        a panorama ─ POST /map/street_view   (each charged in its write)
+review_archive's walk steps ─ GET /api/conductor/usage ┐ followed every 10 s, a page, its charges
+the runner's phone minutes, browser starts ─ GET /usage ┘ and its cursor in one write (`sa_core::usage`)
 the assistant's model tokens, by kind ─ each round of POST /assistant/chats/{id}/ask, its model the key,
                                         on whose Claude it ran
 ```
@@ -865,8 +869,10 @@ priced in money, so an account overshoots by its hours behind.
   gmail removed removes its GBPs.
 - **The trash.** A removed gmail or GBP is its owner's to restore (a gmail with the GBPs removed
   at its `removed_at`) until purged: `keep_days` after its removal (30 unsaid; 1, 7, 30 or 90), never with
-  `never_purge` (an admin's say; unsaid, on under dev sign-in). Purged is gone for good: its
-  gmail's IMAP and Maps key deleted, its row kept.
+  `never_purge` (an admin's say; unsaid, on under dev sign-in); `never_purge` turned off counts
+  the kept days from then, so nothing goes the moment it may. The owner may purge one at once: a
+  gmail with every GBP of it in the trash. Purged is gone for good: its gmail's IMAP and Maps key
+  deleted, its row kept.
 
 ```text
 follow (10 s)   GET review_archive /api/conductor/charges?after=<cursor>&limit=500 (Conductor)
@@ -1065,11 +1071,13 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   admin's price; no cost is written where it is spent.
 - **A use is counted once, where it happens**: a Google answer bought in the write that keeps it, a
   service's through its feed, taken only from where its cursor stands.
-- **No buy on credit.** A Places request on the shared keys, a Street View panorama or a study's
-  pull for a person is charged at its price, and refused before it is sent when their balance is
-  below it; a pull buys no search past what the balance affords. Their own keys and the queries
-  cache cost nothing. A round of the assistant on the panel's Claude starts only on a balance
-  above 0; its cost, known once it is done, is charged up to what they hold.
+- **No buy on credit.** A Places request on the shared keys, a Street View panorama, a map, a
+  browser's start or a study's pull for a person is charged at its price, and refused before it is
+  sent when their balance is below it; a pull buys no search past what the balance affords. Their
+  own keys and the queries cache cost nothing. A round of the assistant on the panel's Claude starts
+  only on a balance above 0, a cloud phone on one minute's; their cost, and a pull's Ads requests and
+  DataForSEO tasks, known once done, are charged up to what they hold, and a phone runs no longer
+  than its launch's balance affords.
 - **No Street View past the free ones.** No panorama opens on a browser key but one
   `POST /map/street_view` bought, and none is bought past its meter's free ones on that key's
   account.

@@ -1,5 +1,11 @@
-/** As `sa_core::ids::is_slug`, which the server holds an area's link to. */
-export const isSlug = (s: string) => /^[a-z0-9][a-z0-9_-]{0,63}$/.test(s);
+import openapi from "@/shared/api/openapi.json";
+
+const slug = openapi.paths["/areas/{slug}"].put.parameters.find((p) => p.name === "slug");
+if (slug === undefined) throw new Error("the document's PUT /areas/{slug} has no slug");
+const SLUG = new RegExp(slug.schema.pattern);
+
+/** An area's link as the document's `{slug}` takes it. */
+export const isSlug = (s: string) => SLUG.test(s);
 
 /** An area's link from its name: `Saint-Étienne` → `saint-etienne`. */
 export const slugOf = (name: string) =>

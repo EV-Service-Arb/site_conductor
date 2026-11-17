@@ -1,5 +1,6 @@
-//! A study's pull is sold per Places search (docs/ARCHITECTURE.md, Tokens and GBPs): placement is
-//! told what the person affords, and what it bought is charged to them.
+//! A study's pull is sold per Places search, Ads request and DataForSEO task (docs/ARCHITECTURE.md,
+//! Tokens and GBPs): placement is told how many searches the person affords, and what it bought is
+//! charged to them.
 
 use axum::{
 	Json, Router,
@@ -9,7 +10,7 @@ use axum::{
 	response::IntoResponse,
 	routing::post,
 };
-use sa_core::prices::{Item, PlacementRequest};
+use sa_core::prices::{AdsRequest, DataForSeoTask, Item, PlacementRequest, Tool};
 use sa_panel::{
 	import::Export,
 	testing::{TestDb, admin, panel},
@@ -33,27 +34,30 @@ struct Budget {
 	budget: u64,
 }
 
-/// gmaps_optimal_placement's pull: refused before buying past the budget, else all of it bought;
-/// study `fails` fails after 5.
+/// gmaps_optimal_placement's pull: refused before buying past the budget, else all of it bought
+/// with two Ads requests; study `fails` fails after 5 searches.
 async fn pull(Path(sha): Path<String>, Query(Budget { budget }): Query<Budget>) -> axum::response::Response {
 	match budget < NEED {
-		_ if sha == "fails" => (StatusCode::INTERNAL_SERVER_ERROR, [("x-billed", "5")], "the day's quota ran out").into_response(),
+		_ if sha == "fails" => (StatusCode::INTERNAL_SERVER_ERROR, [("x-billed", r#"{"places.search":5}"#)], "the day's quota ran out").into_response(),
 		true => (
 			StatusCode::PAYMENT_REQUIRED,
-			[("x-billed", "0")],
+			[("x-billed", "{}")],
 			Json(json!({ "code": "unaffordable", "error": format!("this pull needs at least {NEED} Places searches, and may buy {budget}") })),
 		)
 			.into_response(),
-		false => ([("x-billed", NEED.to_string())], Json(json!({}))).into_response(),
+		false => ([("x-billed", json!({ "places.search": NEED, "ads.keyword_ideas": 2 }).to_string())], Json(json!({}))).into_response(),
 	}
 }
 
+/// Each Ads request and DataForSEO task.
+const AFTER: i64 = 3;
+
 async fn setup(price: Option<i64>, balance: i64) -> (TestDb, Router, Log, Browser) {
-	setup_on(price, balance, true).await
+	setup_with(price, Some(AFTER), balance, true).await
 }
 
 /// `documented`: the catalog has pulled placement's document.
-async fn setup_on(price: Option<i64>, balance: i64, documented: bool) -> (TestDb, Router, Log, Browser) {
+async fn setup_with(price: Option<i64>, after: Option<i64>, balance: i64, documented: bool) -> (TestDb, Router, Log, Browser) {
 	let db = TestDb::create().await;
 	let p = panel(&db).await;
 	p.import_review_archive(Export {
@@ -67,10 +71,10 @@ async fn setup_on(price: Option<i64>, balance: i64, documented: bool) -> (TestDb
 	.unwrap()
 	.unwrap();
 	let now = jiff::Timestamp::now();
-	p.set_prices(&[(Item::Placement(PlacementRequest::Search), price)], &[], "admin@localhost", now)
-		.await
-		.unwrap()
-		.unwrap();
+	let prices: Vec<_> = std::iter::once((Item::Placement(PlacementRequest::Search), price))
+		.chain(<(AdsRequest, DataForSeoTask)>::items().into_iter().map(|i| (i, after)))
+		.collect();
+	p.set_prices(&prices, &[], "admin@localhost", now).await.unwrap().unwrap();
 	let email = "dev-admin@localhost";
 	let placement = Router::new()
 		.route("/openapi.json", axum::routing::get(|| async { ([("content-type", "application/json")], DOCUMENT) }))
@@ -104,19 +108,19 @@ async fn a_pull_is_told_what_the_balance_affords_and_charged_what_it_bought() {
 
 	let (status, headers) = b.send(&app, Method::POST, &format!("{PULL}?budget=99999"), &[], true).await;
 	assert_eq!(status, StatusCode::OK);
-	assert_eq!(headers["x-billed"], "38");
+	assert_eq!(headers["x-billed"], r#"{"ads.keyword_ideas":2,"places.search":38}"#);
 	assert_eq!(
 		seen.lock().unwrap().pop().unwrap().path_and_query,
 		"/studies/abc/pull?budget=125",
 		"the caller's own budget is not heard"
 	);
 
-	assert_eq!(get(&mut b, &app, "/api/v1/tokens").await["balance"], 1000 - 38 * 8);
+	assert_eq!(get(&mut b, &app, "/api/v1/tokens").await["balance"], 1000 - 38 * 8 - 2 * AFTER);
 	let ledger = get(&mut b, &app, "/api/v1/tokens/ledger?limit=1").await;
 	let charge = &ledger["entries"][0];
 	assert_eq!(
 		(&charge["delta"], &charge["kind"], &charge["service"], &charge["key"]),
-		(&json!(-304), &json!("charge"), &json!("placement"), &json!("abc")),
+		(&json!(-310), &json!("charge"), &json!("placement"), &json!("abc")),
 		"{charge}"
 	);
 }
@@ -140,7 +144,7 @@ async fn a_failed_pull_is_charged_what_it_bought_and_owes_it_all_back() {
 	let (_db, app, _, mut b) = setup(Some(8), 1000).await;
 
 	let (status, headers) = b.send(&app, Method::POST, "/api/placement/studies/fails/pull", &[], true).await;
-	assert_eq!((status, &headers["x-billed"]), (StatusCode::INTERNAL_SERVER_ERROR, &"5".parse().unwrap()));
+	assert_eq!((status, &headers["x-billed"]), (StatusCode::INTERNAL_SERVER_ERROR, &r#"{"places.search":5}"#.parse().unwrap()));
 	let tokens = get(&mut b, &app, "/api/v1/tokens").await;
 	assert_eq!(tokens["balance"], 1000 - 5 * 8);
 	let owed = &tokens["kickbacks"][0];
@@ -149,7 +153,7 @@ async fn a_failed_pull_is_charged_what_it_bought_and_owes_it_all_back() {
 
 #[tokio::test]
 async fn no_pull_passes_before_placement_says_which_operations_buy() {
-	let (_db, app, seen, mut b) = setup_on(Some(8), 1000, false).await;
+	let (_db, app, seen, mut b) = setup_with(Some(8), Some(AFTER), 1000, false).await;
 
 	let (status, _) = b.send(&app, Method::POST, &format!("{PULL}?budget=99999"), &[], true).await;
 	assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
@@ -158,12 +162,22 @@ async fn no_pull_passes_before_placement_says_which_operations_buy() {
 }
 
 #[tokio::test]
-async fn an_unpriced_pull_is_refused_before_placement_is_asked() {
-	let (_db, app, seen, mut b) = setup(None, 1000).await;
+async fn what_the_searches_leave_pays_for_the_rest_and_no_more() {
+	let (_db, app, _, mut b) = setup(Some(8), 38 * 8 + 1).await;
 
-	assert_eq!(b.send(&app, Method::POST, PULL, &[], true).await.0, StatusCode::CONFLICT);
-	assert!(seen.lock().unwrap().is_empty());
-	assert_eq!(get(&mut b, &app, "/api/v1/tokens").await["balance"], 1000);
+	assert_eq!(b.send(&app, Method::POST, PULL, &[], true).await.0, StatusCode::OK);
+	assert_eq!(get(&mut b, &app, "/api/v1/tokens").await["balance"], 0, "the Ads requests past it are let go");
+}
+
+#[tokio::test]
+async fn an_unpriced_pull_is_refused_before_placement_is_asked() {
+	for (price, after) in [(None, Some(AFTER)), (Some(8), None)] {
+		let (_db, app, seen, mut b) = setup_with(price, after, 1000, true).await;
+
+		assert_eq!(b.send(&app, Method::POST, PULL, &[], true).await.0, StatusCode::CONFLICT, "{price:?}, {after:?}");
+		assert!(seen.lock().unwrap().is_empty());
+		assert_eq!(get(&mut b, &app, "/api/v1/tokens").await["balance"], 1000);
+	}
 }
 
 #[tokio::test]
@@ -172,7 +186,7 @@ async fn a_person_reads_the_prices_and_sets_above_what_they_are_asked() {
 
 	let tokens = get(&mut b, &app, "/api/v1/tokens").await;
 	assert_eq!((&tokens["prices"]["placement.search"], &tokens["confirm_above"]), (&json!(8), &json!(100)), "{tokens}");
-	assert!(tokens["prices"].get("map.map").is_none(), "a metered item is not sold");
+	assert!(tokens["prices"].get("map.map").is_none(), "an unpriced item is not read");
 
 	let mut put = async |n: i64| {
 		let body = Body::from(json!({ "confirm_above": n }).to_string());
