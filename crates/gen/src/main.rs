@@ -10,7 +10,7 @@ use ev_lib::{
 	api::{openapi::SchemaObject, schemars::generate::SchemaSettings},
 	views::Views,
 };
-use sa_browsers::view::{In as ViewerIn, Out as ViewerOut};
+use sa_browsers::view::{Close as ViewerClose, In as ViewerIn, Out as ViewerOut};
 use sa_server::view::View;
 
 /// Where each sibling commits its document in its checkout; `None`: none committed yet, the copy kept.
@@ -29,6 +29,7 @@ fn main() {
 	let mut frames = SchemaSettings::draft07().with(|s| s.definitions_path = "#/components/schemas/".into()).into_generator();
 	frames.subschema_for::<ViewerIn>();
 	frames.subschema_for::<ViewerOut>();
+	frames.subschema_for::<ViewerClose>();
 	let schemas = &mut doc.components.as_mut().expect("the document has components").schemas;
 	for (name, schema) in frames.take_definitions(true) {
 		let json_schema = schema.try_into().expect("schemars defines schemas as objects");

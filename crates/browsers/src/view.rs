@@ -2,10 +2,68 @@
 //! conductor speaks it for a devtools browser (its relay), the runner for a cloud phone (the
 //! conductor passing it through).
 
+use std::borrow::Cow;
+
+use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 
+/// The most a frame from the viewer holds, in bytes.
+pub const FRAME_MAX: usize = 4096;
+
+/// The most characters one [`In::Text`] carries.
+pub const TEXT_MAX: usize = 600;
+
+// JSON writes a character in 6 bytes at most (`\u001f`); the rest of the frame is its tag
+const _: () = assert!(TEXT_MAX * 6 + 64 <= FRAME_MAX, "a text frame of TEXT_MAX characters fits a frame");
+
+/// Why the conductor closes a viewer's or a live socket: its close frame's code.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::IntoStaticStr, strum::VariantArray)]
+#[repr(u16)]
+pub enum Close {
+	/// The session ended: sign in again.
+	SignedOut = 4401,
+	/// Nothing runs for the gmail: start it first.
+	NotRunning = 4404,
+	/// Another viewer of the gmail took over.
+	Replaced = 4409,
+	/// The browser stopped, or its devtools went.
+	Stopped = 4410,
+	/// RFC 6455's normal closure: the viewer left, or did not keep up.
+	Normal = 1000,
+	/// RFC 6455's "going away": the server is stopping.
+	GoingAway = 1001,
+	/// RFC 6455's "unsupported data": a binary frame.
+	TextOnly = 1003,
+	/// RFC 6455's "invalid frame payload data": not a frame of the viewer's.
+	NotAFrame = 1007,
+}
+
+impl Close {
+	pub fn code(self) -> u16 {
+		self as u16
+	}
+}
+
+impl JsonSchema for Close {
+	fn schema_name() -> Cow<'static, str> {
+		"BrowserClose".into()
+	}
+
+	fn json_schema(_: &mut SchemaGenerator) -> Schema {
+		use strum::VariantArray;
+		let codes: Vec<u16> = Self::VARIANTS.iter().map(|c| c.code()).collect();
+		let names: Vec<&str> = Self::VARIANTS.iter().map(|&c| c.into()).collect();
+		json_schema!({
+			"type": "integer",
+			"description": "Why the conductor closed the socket: its close frame's code.",
+			"enum": codes,
+			"x-enum-varnames": names,
+		})
+	}
+}
+
 /// A frame to the viewer.
-#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[schemars(rename = "BrowserOut")]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Out {
@@ -34,15 +92,15 @@ pub enum Out {
 	},
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 pub struct Tab {
 	pub id: String,
 	pub title: String,
 	pub url: String,
 }
 
-/// A frame from the viewer; at most 4 KiB. Points are in the last frame's space.
-#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
+/// A frame from the viewer; at most [`FRAME_MAX`] bytes. Points are in the last frame's space.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[schemars(rename = "BrowserIn")]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum In {
@@ -67,6 +125,7 @@ pub enum In {
 	},
 	/// Text, as a phone's keyboard commits it, into the focused field.
 	Text {
+		#[schemars(length(max = TEXT_MAX))]
 		text: String,
 	},
 	Navigate {
@@ -90,7 +149,7 @@ pub enum In {
 	},
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, schemars::JsonSchema)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TouchPhase {
 	Start,

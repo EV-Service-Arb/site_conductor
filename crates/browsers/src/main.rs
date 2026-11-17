@@ -372,7 +372,7 @@ async fn view(State(runner): State<Runner>, Path(gmail): Path<i64>, upgrade: Res
 		Ok(u) => u,
 		Err(rejection) => return rejection.into_response(),
 	};
-	upgrade.max_message_size(4096).on_upgrade(move |socket| async move {
+	upgrade.max_message_size(sa_browsers::view::FRAME_MAX).on_upgrade(move |socket| async move {
 		let _client = client;
 		adb::view(socket, &phone).await;
 	})

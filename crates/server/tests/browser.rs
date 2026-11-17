@@ -533,7 +533,7 @@ async fn the_viewer_sees_the_page_and_touches_it_as_a_phone_one_viewer_at_a_time
 	while last.get("closed").is_none() {
 		last = next(&mut first).await;
 	}
-	assert_eq!(last["closed"], sa_server::browser::CLOSE_REPLACED, "one viewer per gmail");
+	assert_eq!(last["closed"], sa_browsers::view::Close::Replaced.code(), "one viewer per gmail");
 }
 
 #[tokio::test]
