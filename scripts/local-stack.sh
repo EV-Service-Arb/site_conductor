@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The conductor (its Grafana included), sites_panel, review_archive and both landings on this
+# The conductor (its Grafana included), sites_panel, review_archive and the landings on this
 # machine, wired together: a lead posted on a landing lands in sites_panel through the conductor's
 # ingest, a place edited on the sites page shows on the landing, review_archive's boards draw in
 # the conductor's Grafana. See docs/LOCAL.md.
@@ -21,8 +21,8 @@
 # likewise (REVIEW_ARCHIVE_BIN / REVIEW_ARCHIVE_MFE_DIR), and Grafana's server (PANEL_GRAFANA_SERVER).
 # Under --watch each is cargo's (npm's for the bundles) of its checkout instead, and the *_BIN /
 # *_DIR overrides of the builds are refused.
-# SITES_DIR, REVIEW_ARCHIVE_DIR, AQUAFIX_DIR and VIFNET_DIR name the checkouts, by default beside
-# this one's. Each part's port is what its own dev shell sets (docs/port_range.md).
+# SITES_DIR, REVIEW_ARCHIVE_DIR, AQUAFIX_DIR, VIFNET_DIR and DEBOUCHAGE_DIR name the checkouts, by
+# default beside this one's. Each part's port is what its own dev shell sets (docs/port_range.md).
 set -euo pipefail
 
 need="run it as \`nix run .#local-stack\`, or inside \`nix develop\`: the flake sets the conductor's ports"
@@ -38,6 +38,7 @@ DEV_EMAIL="admin@evinvest.ltd"
 PROD_SSH="rpi5-ts"
 AQUAFIX_PLACES=(royat clermont-ferrand desgenettes lyon-est la-mouche lyon-nord)
 VIFNET_PLACES=(vifnet)
+DEBOUCHAGE_PLACES=(clermont-ferrand)
 
 reset=0
 sites=1
@@ -81,9 +82,9 @@ while [ $# -gt 0 ]; do
 local-stack [--reset] [--no-sites] [--watch] [--role admin|operator] [--port-offset <n>] [--from-prod] [--spend-real-quota-i-am-certain]
 dev [--port <n>] [--reset] [--role admin|operator] [--from-prod]
 
-  The conductor (dev sign-in, its Grafana at /grafana/), sites_panel, review_archive, aquafix and
-  vifnet, wired together, each on the port its dev shell sets. State in .local/ (--reset wipes
-  it). Ctrl-C stops everything. See docs/LOCAL.md.
+  The conductor (dev sign-in, its Grafana at /grafana/), sites_panel, review_archive, aquafix,
+  vifnet and debouchage, wired together, each on the port its dev shell sets. State in .local/
+  (--reset wipes it). Ctrl-C stops everything. See docs/LOCAL.md.
   --watch: every part rebuilt and restarted as its checkout is edited, and the conductor's front end
   from `next dev`, whose origin is then the one to open.
   --port-offset <n>: every port moved by n, beside the stack on the usual ones.
@@ -131,7 +132,7 @@ warn() { printf '\033[33m! %s\033[0m\n' "$*" >&2; }
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "run this from inside the conductor's checkout"
 [ -f "$root/crates/server/Cargo.toml" ] || die "$root is not the conductor's checkout"
 # The others sit beside the conductor's main checkout (_sa/{site_conductor,review_archive,
-# sites/{panel,aquafix,vifnet}}), also when this is one of its worktrees.
+# sites/{panel,aquafix,vifnet,debouchage}}), also when this is one of its worktrees.
 main_checkout="$(dirname "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)")"
 service_arb="$(dirname "$main_checkout")"
 if [ "$dev" = 1 ]; then
@@ -150,6 +151,7 @@ REVIEW_ARCHIVE_DIR="${REVIEW_ARCHIVE_DIR:-$service_arb/review_archive}"
 PLACEMENT_DIR="${PLACEMENT_DIR:-$service_arb/gmaps_optimal_placement}"
 AQUAFIX_DIR="${AQUAFIX_DIR:-$service_arb/sites/aquafix}"
 VIFNET_DIR="${VIFNET_DIR:-$service_arb/sites/vifnet}"
+DEBOUCHAGE_DIR="${DEBOUCHAGE_DIR:-$service_arb/sites/debouchage}"
 
 # a stack on other ports is another stack: its own databases, and its own review_archive serve.lock
 state="${LOCAL_STACK_DIR:-$root/.local}"
@@ -191,9 +193,11 @@ REVIEW_ARCHIVE_PORT="$(shell_port "$REVIEW_ARCHIVE_DIR" REVIEW_ARCHIVE_SERVER_BI
 PLACEMENT_PORT="$(shell_port "$PLACEMENT_DIR" PLACEMENT_PORT)"
 AQUAFIX_PORT=""
 VIFNET_PORT=""
+DEBOUCHAGE_PORT=""
 if [ "$sites" = 1 ] || [ "$dev" = 0 ]; then
 	AQUAFIX_PORT="$(shell_port "$AQUAFIX_DIR" PORT)"
 	VIFNET_PORT="$(shell_port "$VIFNET_DIR" PORT)"
+	DEBOUCHAGE_PORT="$(shell_port "$DEBOUCHAGE_DIR" PORT)"
 fi
 
 busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
@@ -286,7 +290,7 @@ ports=()
 [ "$run_sites" = 1 ] && ports+=("$SITES_PORT")
 [ "$run_review_archive" = 1 ] && ports+=("$REVIEW_ARCHIVE_PORT")
 [ "$run_placement" = 1 ] && ports+=("$PLACEMENT_PORT")
-[ "$sites" = 1 ] && ports+=("$AQUAFIX_PORT" "$VIFNET_PORT")
+[ "$sites" = 1 ] && ports+=("$AQUAFIX_PORT" "$VIFNET_PORT" "$DEBOUCHAGE_PORT")
 [ "$watch" = 1 ] && [ "$run_panel" = 1 ] && ports+=("$WEB_DEV_PORT")
 for port in "${ports[@]}"; do
 	[ -n "$port" ] || continue # a checkout absent, skipped below
@@ -544,6 +548,7 @@ if [ "$run_panel" = 1 ]; then
 	# a landing with no checkout has no port, and no source either
 	[ -z "$AQUAFIX_PORT" ] || source_key aquafix-local aquafix "http://localhost:$AQUAFIX_PORT"
 	[ -z "$VIFNET_PORT" ] || source_key vifnet-local vifnet "http://localhost:$VIFNET_PORT"
+	[ -z "$DEBOUCHAGE_PORT" ] || source_key debouchage-local debouchage "http://localhost:$DEBOUCHAGE_PORT"
 	# What gmaps_optimal_placement's own work dir holds, into this conductor's queries cache (a newer
 	# answer cached stays).
 	placement_cached="${XDG_CACHE_HOME:-$HOME/.cache}/gmaps_optimal_placement/data/places_cache"
@@ -557,6 +562,7 @@ if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
 	}
 	for slug in "${AQUAFIX_PLACES[@]}"; do register aquafix "$slug"; done
 	for slug in "${VIFNET_PLACES[@]}"; do register vifnet "$slug"; done
+	for slug in "${DEBOUCHAGE_PLACES[@]}"; do register debouchage "$slug"; done
 fi
 
 # ── run ──────────────────────────────────────────────────────────────────────────────────
@@ -774,6 +780,7 @@ start_site() {
 if [ "$sites" = 1 ]; then
 	start_site aquafix "$AQUAFIX_DIR" "$AQUAFIX_PORT" aquafix-local
 	start_site vifnet "$VIFNET_DIR" "$VIFNET_PORT" vifnet-local
+	start_site debouchage "$DEBOUCHAGE_DIR" "$DEBOUCHAGE_PORT" debouchage-local
 	for s in ${started[@]+"${started[@]}"}; do
 		IFS=: read -r name port pid <<<"$s"
 		# The first `nix run .#dev` may install node_modules: minutes, not seconds.
@@ -794,6 +801,7 @@ fi
 			for slug in "${AQUAFIX_PLACES[@]}"; do echo " aquafix  http://$slug.localhost:$AQUAFIX_PORT/fr"; done
 			;;
 		vifnet) echo " vifnet   http://localhost:$VIFNET_PORT/fr" ;;
+		debouchage) echo " debouchage http://localhost:$DEBOUCHAGE_PORT/fr" ;;
 		esac
 	done
 	echo

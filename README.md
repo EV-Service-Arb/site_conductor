@@ -88,7 +88,8 @@ looks a lead up by the ref the customer brought the same way:
 
 ```sh
 nix run .#local-stack    # the conductor on :59120 (signed in as a dev admin), sites_panel on :59121,
-                         # and the aquafix and vifnet landings from the checkouts beside it, wired
+                         # and the aquafix, vifnet and debouchage landings from the checkouts beside
+                         # it, wired
                          # together; Ctrl-C stops all
 ```
 
