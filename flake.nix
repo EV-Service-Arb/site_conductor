@@ -231,7 +231,7 @@
           # the image is the release: every key translated, as committed
           preBuild = ''
             export HOME="$TMPDIR"
-            mkdir -p src/shared/placement_overlay && cp ${placementOverlay}/* src/shared/placement_overlay/
+            cp -r --no-preserve=mode ${placementOverlay} src/shared/placement_overlay
             npm run i18n:release
           '';
           installPhase = ''
