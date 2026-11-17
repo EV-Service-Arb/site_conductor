@@ -21,6 +21,8 @@ export type ApiFailure =
   | { kind: "bad_request"; message: string }
   /** A 422 naming the fields it refused, each with the backend's reason. */
   | { kind: "invalid_fields"; fields: Record<string, string> }
+  /** A 422 the conductor says the why of. */
+  | { kind: "refused"; code: ErrorCode; message: string }
   /** A 422 naming one place in the body it refused (`needs.standard.inputs[2]`). */
   | { kind: "invalid_path"; path: string; message: string }
   | { kind: "failed"; status: number; message: string }
@@ -96,6 +98,7 @@ export async function failureOf(res: Response): Promise<ApiFailure> {
       return { kind: "bad_request", message };
     case 422:
       if (fields) return { kind: "invalid_fields", fields };
+      if (code !== null) return { kind: "refused", code, message };
       return path === null ? { kind: "failed", status: 422, message } : { kind: "invalid_path", path, message };
     case 503:
       return { kind: "unavailable", code, message };

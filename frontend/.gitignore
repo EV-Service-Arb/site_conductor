@@ -1,3 +1,5 @@
 # `next build` writes the static export here; the image copies it, git does not keep it.
 /out/
 next-env.d.ts
+# crates/placement_overlay, built by wasm-bindgen (docs/ARCHITECTURE.md, Placement)
+/src/shared/placement_overlay/

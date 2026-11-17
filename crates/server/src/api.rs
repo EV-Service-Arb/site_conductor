@@ -50,7 +50,27 @@ pub enum ApiError {
 	BrowsersNotConnected,
 	/// What this answer stands on did not answer.
 	BadGateway(String),
+	/// A study placement cannot build, and why.
+	Unstudied(Unstudied, String),
+	/// A pull needs more than the balance affords.
+	Unaffordable(String),
 	Internal(eyre::Report),
+}
+
+/// Why a study cannot be built.
+#[derive(Clone, Copy, Debug)]
+pub enum Unstudied {
+	/// The category names no placement trade to study it by.
+	NoStudy,
+	/// The category has no primary Google category.
+	NoGoogleCategory,
+	/// The category has no keyword.
+	NoKeywords,
+	/// The category is set up for another country than the area's.
+	AnotherCountry,
+	/// Nothing placement serves studies it: no such trade file, no base for the country, or the
+	/// trade refuses it.
+	Unstudied,
 }
 
 /// Which failure, for a client to act on; the status follows from it.
@@ -68,6 +88,12 @@ pub enum ErrorCode {
 	Unavailable,
 	BrowsersNotConnected,
 	BadGateway,
+	NoStudy,
+	NoGoogleCategory,
+	NoKeywords,
+	AnotherCountry,
+	Unstudied,
+	Unaffordable,
 	Internal,
 }
 
@@ -108,6 +134,18 @@ impl IntoResponse for ApiError {
 			Self::Unavailable(m) => (StatusCode::SERVICE_UNAVAILABLE, C::Unavailable, m),
 			Self::BrowsersNotConnected => (StatusCode::SERVICE_UNAVAILABLE, C::BrowsersNotConnected, "browsers not connected".to_owned()),
 			Self::BadGateway(m) => (StatusCode::BAD_GATEWAY, C::BadGateway, m),
+			Self::Unstudied(why, m) => (
+				StatusCode::UNPROCESSABLE_ENTITY,
+				match why {
+					Unstudied::NoStudy => C::NoStudy,
+					Unstudied::NoGoogleCategory => C::NoGoogleCategory,
+					Unstudied::NoKeywords => C::NoKeywords,
+					Unstudied::AnotherCountry => C::AnotherCountry,
+					Unstudied::Unstudied => C::Unstudied,
+				},
+				m,
+			),
+			Self::Unaffordable(m) => (StatusCode::PAYMENT_REQUIRED, C::Unaffordable, m),
 			Self::Internal(e) => {
 				crate::report(&e, "the conductor's API");
 				(StatusCode::INTERNAL_SERVER_ERROR, C::Internal, "internal error".to_owned())

@@ -29,6 +29,7 @@ pub mod live;
 mod mcp;
 pub mod meters;
 mod oauth;
+mod placement;
 mod queries_cache;
 pub mod signin;
 pub mod telegram;

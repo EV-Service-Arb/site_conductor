@@ -2,73 +2,17 @@
 
 import { useSyncExternalStore } from "react";
 
-import { ApiError, api, http, ok, readCsrf } from "@/shared/api";
-import { type Infer, arrayOf, bool, nullable, num, object, oneOf, parse, recordOf, str } from "@/shared/lib/parse";
+import { ApiError, api, ok } from "@/shared/api";
+import { bool, num, object, parse, recordOf } from "@/shared/lib/parse";
 import { covers, useScope, useTrades } from "@/entities/gmb";
-import type { Area, Category, Trade } from "@/shared/api/schema";
+import type { Area, Category, ErrorCode, Trade } from "@/shared/api/schema";
+import type { Event, Legend, Notice, Overlay, Summary, Tune } from "@/shared/placement_overlay/placement_overlay";
 import { setQuery, useQuery } from "@/shared/lib/query";
 import { useResource } from "@/shared/lib/use-resource";
 
-// gmaps_optimal_placement behind the forward (docs/ARCHITECTURE.md, Forward): its overlay module
-// builds a category's study over an area and draws it on the map it is handed.
-const API = "/api/placement";
-const MODULE = "/mfe/placement/overlay.js";
-
-const servedParser = object({ trades: arrayOf(str), countries: arrayOf(str) });
-
-const layerParser = object({ id: str, name: str, note: str, trade: bool });
-const dataParser = nullable(
-  object({
-    name: str,
-    cells: num,
-    imputed: num,
-    layers: arrayOf(layerParser),
-    trade: nullable(
-      object({
-        lambda_m: num,
-        tiers: arrayOf(object({ name: str, weight: num, fetched_s: arrayOf(num) })),
-        categories: arrayOf(object({ kind: str, label: str, color: str, counts: arrayOf(num) })),
-        queries: arrayOf(object({ text: str, hits: num })),
-        terms: arrayOf(object({ text: str, weight: num })),
-        unweighted: arrayOf(str),
-        searches: num,
-      }),
-    ),
-  }),
-);
-const legendParser = object({
-  heat: nullable(object({ id: str, name: str, note: str, scale: oneOf(["percentile", "linear"] as const), stops: arrayOf(str), cells: num, ticks: nullable(arrayOf(str)), focus: nullable(str) })),
-  pressure: nullable(object({ stops: arrayOf(str), note: str, levels: nullable(arrayOf(object({ q: num, value: str }))) })),
-  competitors: nullable(object({ in_view: num })),
-});
-const noticeParser = object({ text: nullable(str), missing: nullable(num) });
-
-export type Layer = Infer<typeof layerParser>;
-export type Data = NonNullable<Infer<typeof dataParser>>;
-export type Legend = Infer<typeof legendParser>;
-export type Notice = Infer<typeof noticeParser> & { text: string };
-
-/** What gop builds and caches: the conductor's category applied to the conductor's area; no category, the area's grid alone. */
-type Definition = {
-  area: { slug: string; country: string; margin_m: number } & ({ kind: "city"; viewport: { south: number; west: number; north: number; east: number } } | { kind: "circle"; center: { lat: number; lng: number }; radius_m: number });
-  category: { trade: number; country: string; study: string; keywords: string[]; google_primary: { id: string; name: string }; google_additional: { id: string; name: string }[] } | null;
-};
-
-export type Tuning = { lambda_m: number | null; tiers: Record<string, { weight: number; show: boolean }> | null };
-
-interface Handle extends EventTarget {
-  show(def: Definition | null): Promise<void>;
-  heat(layer: string | null): void;
-  tune(t: Tuning): void;
-  pressure(on: boolean): void;
-  competitors(on: boolean): void;
-  opacity(x: number): void;
-  hideImputed(on: boolean): void;
-  pull(): Promise<void>;
-}
-interface OverlayModule {
-  overlay(map: google.maps.Map, opts: { api: string; csrf: () => string }): Promise<Handle>;
-}
+export type { Legend, Tune };
+export type Data = Summary;
+export type Layer = Summary["layers"][number];
 
 export type Placement =
   | { status: "loading" }
@@ -82,9 +26,11 @@ export type Placement =
       countries: readonly string[];
       data: Data | null;
       legend: Legend | null;
-      notice: Notice | null;
+      notice: (Notice & { text: string }) | null;
       pulling: boolean;
       pullFailed: string | null;
+      /** Why the study drawn is not: the conductor's refusal, or a failure. */
+      refused: { refused: Refusal; message: string } | { failed: string } | null;
     };
 
 let state: Placement = { status: "loading" };
@@ -107,13 +53,13 @@ export function usePlacement(): Placement {
 }
 
 /** Once per page session, as the map is: the map outlives its page, and so does what is drawn on it. */
-let attached: Promise<Handle | null> | null = null;
+let attached: Promise<Overlay | null> | null = null;
 
-export function attach(map: google.maps.Map): Promise<Handle | null> {
+export function attach(map: google.maps.Map): Promise<Overlay | null> {
   attached ??= (async () => {
-    let served: Infer<typeof servedParser>;
+    let catalog;
     try {
-      served = await http.get(`${API}/trades.json`, servedParser);
+      catalog = await ok(api.GET("/placement/catalog"));
     } catch (e) {
       if (e instanceof ApiError && e.failure.kind === "unavailable") {
         set({ status: "unconnected" });
@@ -121,22 +67,19 @@ export function attach(map: google.maps.Map): Promise<Handle | null> {
       }
       throw e;
     }
-    const { overlay } = (await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ MODULE)) as OverlayModule;
-    const handle = await overlay(map, {
-      api: API,
-      csrf: () => {
-        const token = readCsrf(document.cookie);
-        if (token === null) throw new Error("no CSRF cookie beside a signed-in session");
-        return token;
-      },
+    const module = await import("@/shared/placement_overlay/placement_overlay");
+    await module.default();
+    set({ status: "ok", trades: catalog.trades, countries: catalog.countries, data: null, legend: null, notice: null, pulling: false, pullFailed: null, refused: null });
+    return new module.Overlay(map, (e: Event) => {
+      switch (e.kind) {
+        case "data":
+          return update({ data: e.detail });
+        case "legend":
+          return update({ legend: e.detail });
+        case "notice":
+          return update({ notice: e.detail.text === null ? null : { ...e.detail, text: e.detail.text } });
+      }
     });
-    set({ status: "ok", trades: served.trades, countries: served.countries, data: null, legend: null, notice: null, pulling: false, pullFailed: null });
-    const on = <T>(name: string, parser: (v: unknown, path: string) => T, then: (v: T) => void) =>
-      handle.addEventListener(name, (e) => then(parse(parser, (e as CustomEvent<unknown>).detail)));
-    on("data", dataParser, (data) => update({ data }));
-    on("legend", legendParser, (legend) => update({ legend }));
-    on("notice", noticeParser, (n) => update({ notice: n.text === null ? null : { ...n, text: n.text } }));
-    return handle;
   })().catch((e: unknown) => {
     set({ status: "error", message: e instanceof Error ? e.message : String(e) });
     return null;
@@ -144,15 +87,24 @@ export function attach(map: google.maps.Map): Promise<Handle | null> {
   return attached;
 }
 
-export async function pull(): Promise<void> {
-  const handle = await attached;
-  if (handle === null) throw new Error("placement: a pull with no overlay attached");
+/** What a study is asked by: the area, and the category over it or none. */
+export type Query = { area: string; category?: CategoryKey };
+
+/** The payload of `q`, as placement wrote it: the overlay parses it. */
+export async function payloadOf(q: Query): Promise<string> {
+  return ok(api.GET("/placement/study", { params: { query: q }, parseAs: "text" }));
+}
+
+export async function pull(q: Query): Promise<void> {
+  const overlay = await attached;
+  if (overlay === null) throw new Error("placement: a pull with no overlay attached");
   update({ pulling: true, pullFailed: null });
   try {
-    await handle.pull();
+    const payload = await ok(api.POST("/placement/study/pull", { params: { query: q }, parseAs: "text" }));
+    overlay.show(payload, true);
     update({ pulling: false });
   } catch (e) {
-    update({ pulling: false, pullFailed: e instanceof Error ? e.message : String(e) });
+    update({ pulling: false, pullFailed: e instanceof ApiError && "message" in e.failure ? e.failure.message : e instanceof Error ? e.message : String(e) });
   }
 }
 
@@ -230,7 +182,9 @@ export function setMapView(change: Partial<MapView>): void {
   });
 }
 
-export type Refusal = "no study" | "no google category" | "no keywords" | "another country";
+/** Why the conductor would not build a study: its own words for it. */
+export type Refusal = Extract<ErrorCode, "no_study" | "no_google_category" | "no_keywords" | "another_country" | "unstudied">;
+const REFUSALS: readonly string[] = ["no_study", "no_google_category", "no_keywords", "another_country", "unstudied"] satisfies Refusal[];
 
 export type Studied =
   | { status: "loading" }
@@ -240,8 +194,8 @@ export type Studied =
       areas: readonly Area[];
       area: Area | null;
       picked: { trade: Trade; category: Category } | null;
-      /** What is shown over `area`; `null` while no area is picked. */
-      drawn: { definition: Definition } | { refused: Refusal } | null;
+      /** What is asked over `area`; `null` while no area is picked. */
+      drawn: Query | null;
     };
 
 /** The URL's study and area, resolved against the categories and the areas. */
@@ -262,35 +216,26 @@ export function useStudied(view: MapView): Studied {
   }
   const area = view.area === null || view.area === "" ? null : (areas.data.find((a) => a.slug === view.area) ?? null);
   if (view.area !== null && view.area !== "" && area === null && areas.fresh) throw new Error(`?area=${view.area}: no such area`);
-  const drawn = area === null ? null : picked === null ? { definition: gridOnly(area) } : define(picked.trade, picked.category, area);
+  const drawn = area === null ? null : { area: area.slug, ...(view.study !== null && { category: view.study }) };
   return { status: "ok", areas: areas.data, area, picked, drawn };
 }
 
-/** Why a category cannot be studied, or its definition over `area`. */
-function define(trade: Trade, category: Category, area: Area): { refused: Refusal } | { definition: Definition } {
-  if (category.study === null) return { refused: "no study" };
-  if (category.google_primary === null) return { refused: "no google category" };
-  if (category.keywords.length === 0) return { refused: "no keywords" };
-  if (area.country !== category.country) return { refused: "another country" };
-  const named = (g: { id: string; names: Record<string, string> }) => {
-    const name = g.names[category.lang];
-    if (name === undefined) throw new Error(`${g.id} has no name in ${category.lang}, ${category.country}'s language`);
-    return { id: g.id, name };
-  };
-  return {
-    definition: {
-      area: framed(area),
-      category: { trade: trade.id, country: category.country, study: category.study, keywords: [...category.keywords], google_primary: named(category.google_primary), google_additional: category.google_additional.map(named) },
-    },
-  };
+/** The payload of what `studied` draws, or why the conductor would not build it. */
+export type Payload = { status: "loading" } | { status: "error"; message: string } | { status: "refused"; refused: Refusal; message: string } | { status: "ok"; payload: string | null; fresh: boolean };
+
+export function usePayload(drawn: Query | null): Payload {
+  const key = drawn === null ? "none" : `${drawn.area}.${drawn.category ?? ""}`;
+  const read = useResource(`placement.${key}`, () => (drawn === null ? Promise.resolve(null) : payloadOf(drawn)), "placement");
+  if (read.status === "loading") return read;
+  if (read.status === "ok") return { status: "ok", payload: read.data, fresh: read.fresh };
+  const f = read.failure;
+  if (f.kind === "refused" && REFUSALS.includes(f.code)) return { status: "refused", refused: f.code as Refusal, message: f.message };
+  return { status: "error", message: "message" in f ? f.message : f.kind };
 }
 
-/** The area's grid alone: no category, nothing billed. */
-function gridOnly(area: Area): Definition {
-  return { area: framed(area), category: null };
-}
-
-function framed(a: Area): Definition["area"] {
-  const base = { slug: a.slug, country: a.country, margin_m: a.margin_m };
-  return a.shape.kind === "city" ? { ...base, kind: "city", viewport: a.shape.viewport } : { ...base, kind: "circle", center: a.center, radius_m: a.shape.radius_m };
+/** What the overlay was handed, told to the panel. */
+export function landed(p: Payload): void {
+  if (state.status !== "ok") return; // the overlay is not attached yet: nothing is drawn to say why of
+  const refused = p.status === "refused" ? { refused: p.refused, message: p.message } : p.status === "error" ? { failed: p.message } : null;
+  if (JSON.stringify(refused) !== JSON.stringify(state.refused)) update({ refused });
 }

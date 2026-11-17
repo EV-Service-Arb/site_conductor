@@ -10,7 +10,10 @@ import type { paths } from "./schema";
 const ajv = new Ajv2020({ strict: false, validateFormats: false, validateSchema: false });
 ajv.addSchema(openapi, "api");
 
-function answerSchema(path: string, method: string, status: number): ValidateFunction {
+/** `null`: an answer the document declares opaque, a JSON body with no schema (placement's payload). */
+function answerSchema(path: string, method: string, status: number): ValidateFunction | null {
+  const media = (openapi.paths as Record<string, Record<string, { responses: Record<string, { content?: Record<string, { schema?: unknown }> }> }>>)[path]?.[method.toLowerCase()]?.responses[String(status)]?.content?.["application/json"];
+  if (media !== undefined && media.schema === undefined) return null;
   const pointer = ["paths", path, method.toLowerCase(), "responses", String(status), "content", "application/json", "schema"]
     .map((p) => encodeURIComponent(p.replaceAll("~", "~0").replaceAll("/", "~1")))
     .join("/");
@@ -37,8 +40,9 @@ export function createApi(deps: HttpDeps, baseUrl: string): Api {
         throw new ApiError(failure);
       }
       if (response.status === 204) return;
-      const body: unknown = await response.clone().json();
       const validate = answerSchema(schemaPath, request.method, response.status);
+      if (validate === null) return;
+      const body: unknown = await response.clone().json();
       if (!validate(body)) throw new Error(`${request.method} ${schemaPath}: ${ajv.errorsText(validate.errors)}`);
     },
     onError: () => new ApiError({ kind: "network" }),

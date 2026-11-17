@@ -9,12 +9,11 @@
 //! /api/review_archive/*            → review_archive /*          session + assertion; CSRF on writes
 //! /mfe/review_archive/*            → review_archive /mfe/*      open: the dashboard's bundle
 //! /api/playbook/*                  → playbook /*                session + assertion; CSRF on writes
-//! /api/placement/*                 → placement /*               session + assertion; CSRF on writes
-//! /mfe/placement/*                 → placement /mfe/*           open: the map overlay's module
 //! ```
 //!
 //! [`Services`] is the one client and signing key every call to a service goes through: the
-//! forward's, ingest's, Grafana's ([`crate::grafana`]), and the hubs' own reads of sites.
+//! forward's, ingest's, Grafana's ([`crate::grafana`]), the hubs' own reads of sites, and
+//! placement's studies ([`crate::placement`]), which nothing forwards.
 
 use std::{sync::Arc, time::Duration};
 
@@ -28,7 +27,6 @@ use axum::{
 };
 use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use sa_auth::{Assertion, Principal, Service, Signer, User};
-use sa_core::placement::{BILLED, Billed};
 
 use crate::{
 	api::ApiError,
@@ -38,7 +36,7 @@ use crate::{
 };
 
 /// Longest prefixes first: the first match wins.
-const ROUTES: [Route; 8] = [
+const ROUTES: [Route; 6] = [
 	Route {
 		prefix: "/api/sites",
 		upstream: "/api/v1",
@@ -74,18 +72,6 @@ const ROUTES: [Route; 8] = [
 		upstream: "",
 		service: Service::Playbook,
 		gate: Gate::Session,
-	},
-	Route {
-		prefix: "/api/placement",
-		upstream: "",
-		service: Service::Placement,
-		gate: Gate::Session,
-	},
-	Route {
-		prefix: "/mfe/placement",
-		upstream: "/mfe",
-		service: Service::Placement,
-		gate: Gate::Open,
 	},
 ];
 
@@ -168,7 +154,7 @@ impl Services {
 			Service::ReviewArchive => &self.upstreams.review_archive,
 			Service::Playbook => &self.upstreams.playbook,
 			Service::Sites => &self.upstreams.sites,
-			Service::Placement => self.upstreams.placement.as_ref().expect("`pass` answers placement's routes itself without it"),
+			Service::Placement => self.upstreams.placement.as_ref().expect("placement's studies ask only once it `serves`"),
 			Service::Browsers => panic!("the runner is not forwarded: `browser` calls it"),
 		};
 		let uri: Uri = format!("{}{path_and_query}", base.to_string().trim_end_matches('/'))
@@ -194,6 +180,11 @@ impl Services {
 		let (mut parts, body) = res.into_parts();
 		strip(&mut parts.headers, &DROPPED_DOWN);
 		Ok(Response::from_parts(parts, Body::new(body)))
+	}
+
+	/// Whether `service` is configured: placement is optional.
+	pub(crate) fn serves(&self, service: Service) -> bool {
+		service != Service::Placement || self.upstreams.placement.is_some()
 	}
 
 	/// `GET path?query` of sites as the conductor, its JSON answer.
@@ -267,56 +258,7 @@ impl Forward {
 		}
 	}
 
-	/// A study's pull, on what `user` affords, charged what placement says it bought; owed back when it failed.
-	async fn pull(&self, route: &Route, mut req: Request, principal: Option<Principal>, user: uuid::Uuid, sha: &str) -> Response {
-		let held = match self.panel().pull(user).await {
-			Ok(Ok(held)) => held,
-			Ok(Err(refused)) => return ApiError::from(refused).into_response(),
-			Err(e) => return ApiError::from(e).into_response(),
-		};
-		*req.uri_mut() = format!("{}?budget={}", req.uri().path(), held.budget())
-			.parse()
-			.expect("a path that arrived in a URI, and a number");
-		let res = self.pass(route, req, principal).await;
-		let billed: Billed = match res.headers().get(BILLED) {
-			Some(v) => match serde_json::from_slice(v.as_bytes()) {
-				Ok(b) => b,
-				Err(e) => return ApiError::Internal(eyre::eyre!("placement's {BILLED} of {sha} is {v:?}: {e}")).into_response(),
-			},
-			// placement says it on every pull it ran: a refusal without it never reached one
-			None if !res.status().is_success() => Billed::new(),
-			None => return ApiError::Internal(eyre::eyre!("placement answered the pull of {sha} without {BILLED}")).into_response(),
-		};
-		let failed = !res.status().is_success();
-		if res.status() != StatusCode::PAYMENT_REQUIRED {
-			return match held.paid(&billed, sha, failed).await {
-				Ok(()) => res,
-				Err(e) => ApiError::from(e).into_response(),
-			};
-		}
-		#[derive(serde::Deserialize)]
-		struct Unaffordable {
-			need: u64,
-		}
-		let body = match to_bytes(res.into_body(), ANSWER).await {
-			Ok(body) => body,
-			Err(e) => return ApiError::BadGateway(format!("reading placement's refusal: {e}")).into_response(),
-		};
-		let need = match serde_json::from_slice::<Unaffordable>(&body) {
-			Ok(u) => u.need,
-			Err(e) => return ApiError::Internal(eyre::eyre!("placement's 402 for {sha}, {:?}: {e}", String::from_utf8_lossy(&body))).into_response(),
-		};
-		let why = held.unaffordable(need);
-		if let Err(e) = held.paid(&billed, sha, failed).await {
-			return ApiError::from(e).into_response();
-		}
-		(StatusCode::PAYMENT_REQUIRED, why).into_response()
-	}
-
 	async fn pass(&self, route: &Route, req: Request, principal: Option<Principal>) -> Response {
-		if route.service == Service::Placement && self.services.upstreams.placement.is_none() {
-			return ApiError::Unavailable("placement not connected".to_owned()).into_response();
-		}
 		let rest = &req.uri().path()[route.prefix.len()..];
 		// decoded as a service might, so no route reaches above its upstream prefix
 		let decoded = rest.to_ascii_lowercase().replace("%2e", ".").replace("%2f", "/").replace("%5c", "/").replace('\\', "/");
@@ -375,7 +317,6 @@ pub(crate) fn prefix(service: Service, upstream: &str) -> Option<&'static str> {
 
 async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 	let route = ROUTES.iter().find(|r| under(req.uri().path(), r.prefix)).expect("mounted under one of ROUTES");
-	let mut puller = None;
 	let principal = match route.gate {
 		Gate::Open => None,
 		Gate::Session => {
@@ -394,29 +335,12 @@ async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 				signin::check(&f.sign_in, req.headers(), freshness).await
 			};
 			match caller {
-				Ok(caller) => {
-					puller = Some(caller.user_id);
-					Some(Principal::User(user(caller, route.service)))
-				}
+				Ok(caller) => Some(Principal::User(user(caller, route.service))),
 				Err(denied) => return denied.into_response(&f.sign_in),
 			}
 		}
 	};
-	if *req.method() == Method::POST
-		&& let Some(user) = puller
-		&& let Some(sha) = pulled(req.uri().path())
-	{
-		let sha = sha.to_owned();
-		return f.pull(route, req, principal, user, &sha).await;
-	}
 	f.pass(route, req, principal).await
-}
-
-/// The study of `POST /api/placement/studies/{sha}/pull`.
-fn pulled(path: &str) -> Option<&str> {
-	path.strip_prefix("/api/placement/studies/")?
-		.strip_suffix("/pull")
-		.filter(|sha| !sha.is_empty() && !sha.contains('/'))
 }
 
 /// `caller`, as `service` is told of them: its slice of their permissions only.
@@ -461,10 +385,8 @@ mod tests {
 		assert_eq!(route("/api/sites/leads"), Some(("/api/sites", Gate::Session)));
 		assert_eq!(route("/mfe/sites/mfe-sites.js"), Some(("/mfe/sites", Gate::Open)));
 		assert_eq!(route("/sites/leads"), None, "the page is the front end's");
-		assert_eq!(route("/api/placement/payload/cleaning/Lyon"), Some(("/api/placement", Gate::Session)));
-		assert_eq!(route("/mfe/placement/overlay.js"), Some(("/mfe/placement", Gate::Open)));
+		assert_eq!(route("/api/placement/trades.json"), None, "placement is the conductor's to ask, never forwarded");
 		assert_eq!(route("/mfe/review_archive/mfe-review-archive-dashboard.js"), Some(("/mfe/review_archive", Gate::Open)));
 		assert_eq!(route("/mfe/banking/wallet.js"), None, "banking's bundle is not forwarded");
-		assert_eq!(route("/placement"), None, "no page of its own");
 	}
 }

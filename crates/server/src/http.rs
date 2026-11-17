@@ -18,7 +18,7 @@ use axum::{
 };
 use ev_lib::api::{Guard, OpenApi, Route};
 use jiff::Timestamp;
-use sa_auth::{PermissionSet, Sources, Tokens};
+use sa_auth::{PermissionSet, Sources, Study, Tokens};
 use sa_panel::{
 	Panel,
 	live::{Audience, Change},
@@ -38,7 +38,7 @@ use crate::{
 	grafana::Grafana,
 	ingest, kit,
 	live::{self, Live, LiveLimits},
-	mcp, meters, oauth, queries_cache,
+	mcp, meters, oauth, placement, queries_cache,
 	signin::{self, Caller, Freshness, Gatekeeper, SignIn},
 	tokens,
 	tools::Tools,
@@ -55,6 +55,10 @@ pub enum Section {
 	Admin,
 	/// Everyone's tokens.
 	Tokens,
+	/// Placement's studies, as paid for.
+	Study,
+	/// Placement's pulls: Places searches bought on the caller's tokens.
+	Pull,
 }
 
 impl Section {
@@ -62,6 +66,8 @@ impl Section {
 		match self {
 			Self::Admin => permissions.may(Sources::Manage),
 			Self::Tokens => permissions.may(Tokens::Grant),
+			Self::Study => permissions.may(Study::Read),
+			Self::Pull => permissions.may(Study::Spend),
 		}
 	}
 
@@ -69,6 +75,8 @@ impl Section {
 		match self {
 			Self::Admin => Sources::Manage.as_str(),
 			Self::Tokens => Tokens::Grant.as_str(),
+			Self::Study => Study::Read.as_str(),
+			Self::Pull => Study::Spend.as_str(),
 		}
 	}
 }
@@ -205,6 +213,7 @@ pub fn app(
 		tools: tools.clone(),
 		panel: sign_in.panel.clone(),
 		sites: forward.as_ref().map(|f| f.services().clone()),
+		placement: forward.as_ref().map(|f| f.services().clone()).filter(|s| s.serves(sa_auth::Service::Placement)),
 		pages: pages.clone(),
 		web: web.cloned(),
 		probe: connected::probe_client(),
@@ -270,6 +279,7 @@ pub(crate) fn api_routes() -> Vec<ApiRoute> {
 		claude::routes(),
 		kit::routes(),
 		areas::routes(),
+		placement::routes(),
 		meters::routes(),
 	]
 	.into_iter()
@@ -324,6 +334,8 @@ pub(crate) struct ApiState {
 	pub(crate) panel: Panel,
 	/// With the forward configured.
 	pub(crate) sites: Option<Services>,
+	/// With PANEL_PLACEMENT_URL too.
+	pub(crate) placement: Option<Services>,
 	/// What the Connected sites page asks the landings with.
 	pub(crate) probe: reqwest::Client,
 	/// With `TELEGRAM_BOT_TOKEN`.

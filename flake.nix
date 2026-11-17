@@ -115,11 +115,16 @@
           filter = path: _type: baseNameOf path != ".cargo";
         };
 
+        # placement's core is a git dependency (crates/placement_overlay)
+        cargoLock = {
+          lockFile = ./Cargo.lock;
+          allowBuiltinFetchGit = true;
+        };
+
         bin = rustPlatform.buildRustPackage {
-          inherit pname;
+          inherit pname cargoLock;
           version = manifest.version;
           src = pureSrc;
-          cargoLock.lockFile = ./Cargo.lock;
           cargoBuildFlags = [ "-p" "sa_server" ];
           nativeBuildInputs = with pkgs; [ pkg-config ];
           # ev_lib's `sentry` turns on reqwest's native-tls, which is OpenSSL on Linux
@@ -130,6 +135,42 @@
           doCheck = false;
           auditable = false; # cargo-auditable doesn't support edition 2024
           meta.description = "the panel binary";
+        };
+
+        # The CLI must be the lock's `wasm-bindgen`: a skew is a hard error at bindgen time.
+        wasmBindgen = (lib.findFirst (p: p.name == "wasm-bindgen") (throw "Cargo.lock holds no wasm-bindgen") (lib.importTOML ./Cargo.lock).package).version;
+        wasm-bindgen-cli =
+          let cli = pkgs."wasm-bindgen-cli_${lib.replaceStrings [ "." ] [ "_" ] wasmBindgen}" or (throw "nixpkgs has no wasm-bindgen-cli ${wasmBindgen}, the lock's wasm-bindgen"); in
+          assert lib.assertMsg (cli.version == wasmBindgen) "wasm-bindgen-cli ${cli.version} is not the lock's wasm-bindgen ${wasmBindgen}";
+          cli;
+        # crates/placement_overlay as the front end imports it: wasm-bindgen's module, its .d.ts, the wasm
+        placementOverlay = rustPlatform.buildRustPackage {
+          pname = "placement_overlay";
+          version = manifest.version;
+          inherit cargoLock;
+          src = pureSrc;
+          nativeBuildInputs = [ wasm-bindgen-cli pkgs.binaryen ];
+          buildPhase = ''
+            runHook preBuild
+            cargo build --release -p placement_overlay --target wasm32-unknown-unknown
+            wasm-bindgen --target web --out-dir "$out" --out-name placement_overlay target/wasm32-unknown-unknown/release/placement_overlay.wasm
+            wasm-opt -Oz "$out/placement_overlay_bg.wasm" -o "$out/placement_overlay_bg.wasm"
+            runHook postBuild
+          '';
+          installPhase = "true";
+          doCheck = false;
+          auditable = false; # cargo-auditable doesn't support edition 2024
+          meta.description = "the home map's placement overlay";
+        };
+        # The same into the checkout, unoptimised: next dev imports it (local-stack --dev).
+        placementOverlayDev = pkgs.writeShellApplication {
+          name = "placement-overlay";
+          runtimeInputs = [ rust wasm-bindgen-cli pkgs.git ];
+          text = ''
+            cd "$(git rev-parse --show-toplevel)"
+            cargo build -q -p placement_overlay --target wasm32-unknown-unknown
+            wasm-bindgen --target web --out-dir frontend/src/shared/placement_overlay --out-name placement_overlay target/wasm32-unknown-unknown/debug/placement_overlay.wasm
+          '';
         };
 
         # The front end's static export (`next build` → out/), served by `panel serve` from
@@ -155,6 +196,7 @@
           # the image is the release: every key translated, as committed
           preBuild = ''
             export HOME="$TMPDIR"
+            mkdir -p src/shared/placement_overlay && cp ${placementOverlay}/* src/shared/placement_overlay/
             npm run i18n:release
           '';
           installPhase = ''
@@ -425,7 +467,7 @@
 
         packages = {
           default = bin;
-          inherit bin frontend;
+          inherit bin frontend placementOverlay;
         } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (containerStd.packages // { grafana-server = grafanaServer; inherit orbita; mlx = multilogin.mlx; phone-tools = multilogin.phoneTools; });
 
         containers = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux containers;
@@ -452,6 +494,7 @@
               sqlite # inspecting the database
               rust
               testTimeline
+              placementOverlayDev
               (v_flakes.js-local { inherit pkgs; }) # frontend/_.js-local.json: our npm packages from their checkouts
             ] ++ pre-commit-check.enabledPackages ++ combined.enabledPackages;
 

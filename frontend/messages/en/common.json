@@ -697,6 +697,7 @@
   "placement.refused.google": "The category has no Google category: it names the competitors",
   "placement.refused.keywords": "The category has no keywords: they weigh the competitors",
   "placement.refused.study": "The category links no study",
+  "placement.refused.unstudied": "Placement does not study this category here",
   "placement.studies.category": "Categories with a study",
   "placement.studies.scope": "In scope",
   "placement.study": "Study",
