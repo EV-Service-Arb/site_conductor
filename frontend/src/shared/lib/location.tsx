@@ -146,9 +146,9 @@ export function setHome(change: Change<Home> | ((now: Home) => Change<Home>)): v
   write(linkTo({ view: "home", params: changed(now, typeof change === "function" ? change(now) : change) }), at.view === "home" ? "replace" : "push");
 }
 
-export function setCarried(change: Change<Carried>): void {
+export function setCarried(change: Change<Carried> | ((now: Carried) => Change<Carried>)): void {
   const { at, carried } = viewed();
-  write(href(VIEWS, at, changed(carried, change)), "replace");
+  write(href(VIEWS, at, changed(carried, typeof change === "function" ? change(carried) : change)), "replace");
 }
 
 /** The location's path, for what matches links by it (the kit's nav menus). */

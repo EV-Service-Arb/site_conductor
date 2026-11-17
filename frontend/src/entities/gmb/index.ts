@@ -15,7 +15,7 @@ export { TradeSelect } from "./ui/trade-select";
 export { CategoryChip } from "./ui/category-chip";
 export { LiveReviews } from "./ui/live-reviews";
 export { gmbs, trades, browser, windowKeys, scopeKeys, trash, undo, move, kit, areaKeys } from "./model/i18n";
-export { AreaDraw, type Outline, outlineOf, useOutline } from "./ui/area-draw";
+export { AreaDraw, useOutline } from "./ui/area-draw";
 export { localityAt } from "./api/areas";
 export { isSlug, slugOf } from "./model/areas";
 export { photoMax, photoSrc, uploadPhoto } from "./api/kit";

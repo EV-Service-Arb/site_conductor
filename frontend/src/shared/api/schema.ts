@@ -399,7 +399,7 @@ export interface paths {
         /** The area at `/<slug>/`. */
         get: operations["area"];
         /**
-         * Draws the area at `/<slug>/`: a city (its outline and country asked of Places, paid by the caller) or a circle (its centre's country reverse-geocoded), with a margin around it that is "next to it"; over what it was if the caller drew it.
+         * Draws the area at `/<slug>/`, a circle; its country its city's, else its centre's (Places, paid by the caller); over what it was if the caller drew it.
          * @description 400 a link the conductor's own pages hold, or a centre in no country; 409 someone else's area.
          */
         put: operations["put_area"];
@@ -1890,24 +1890,14 @@ export interface components {
         AnswerState: "working" | "writing" | "done" | "stopped";
         Area: {
             center: components["schemas"]["LatLng"];
+            /** @description The locality's place it was drawn from: an outline to see it by, not its edge. */
+            city: string | null;
             /** @description ISO 3166-1 alpha-2. */
             country: string;
-            /** Format: int64 */
-            margin_m: number;
             name: string;
-            shape: components["schemas"]["AreaShape"];
-            slug: string;
-        };
-        AreaShape: {
-            /** @constant */
-            kind: "city";
-            place_id: string;
-            viewport: components["schemas"]["Viewport"];
-        } | {
-            /** @constant */
-            kind: "circle";
             /** Format: int64 */
             radius_m: number;
+            slug: string;
         };
         Areas: {
             areas: components["schemas"]["Area"][];
@@ -2531,8 +2521,6 @@ export interface components {
             distance_m: number;
             /** Format: int64 */
             id: number;
-            /** @description `false`: within the margin outside it. */
-            inside: boolean;
             last_shown: string | null;
             location: components["schemas"]["LatLng"];
             name: string;
@@ -2981,20 +2969,9 @@ export interface components {
          */
         Provider: "multilogin" | "multilogin_browser" | "gologin";
         PutArea: {
-            /** @constant */
-            kind: "city";
-            /** Format: int64 */
-            margin_m: number;
-            place_id: string;
-        } | {
-            /** @constant */
-            kind: "circle";
-            /** Format: double */
-            lat: number;
-            /** Format: double */
-            lng: number;
-            /** Format: int64 */
-            margin_m: number;
+            center: components["schemas"]["LatLng"];
+            /** @description A locality's place id, from `/kit/cities`. */
+            city?: string | null;
             name: string;
             /** Format: int64 */
             radius_m: number;
@@ -3858,7 +3835,6 @@ export type Advance = components['schemas']['Advance'];
 export type Alerts = components['schemas']['Alerts'];
 export type AnswerState = components['schemas']['AnswerState'];
 export type Area = components['schemas']['Area'];
-export type AreaShape = components['schemas']['AreaShape'];
 export type Areas = components['schemas']['Areas'];
 export type Ask = components['schemas']['Ask'];
 export type Attachment = components['schemas']['Attachment'];

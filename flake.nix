@@ -84,14 +84,16 @@
             "./crates/server" = [ "git_version" "log_directives" "api_docs" ];
           };
         };
+        js = v_flakes.js { inherit pkgs; packages = [ "frontend" ]; };
         github = v_flakes.github {
-          inherit pkgs pname rs;
+          inherit pkgs pname rs js;
           enable = true;
           lastSupportedVersion = "nightly-2026-09-24";
           containerRelease = { registry = "ghcr.io/ev-service-arb"; };
           figma = { };
           jobs.default = true;
           jobs.errors.install.packages = [ "ffmpeg" ]; # crates/browsers/tests/runner.rs cuts its films with it
+          jobs.errors.augment = [ e2e { name = "checks"; builds = checks; } ];
           lfs = false;
         };
         readme = v_flakes.readme-fw {
@@ -102,7 +104,7 @@
           rootDir = ./.;
           badges = [ "msrv" "loc" "ci" ];
         };
-        combined = v_flakes.utils.combine { inherit rust; modules = [ rs github readme ]; };
+        combined = v_flakes.utils.combine { inherit rust; modules = [ rs js github readme ]; };
 
         build_rust = v_flakes.rs.build_nightly system;
         rustPlatform = pkgs.makeRustPlatform { rustc = build_rust; cargo = build_rust; inherit stdenv; };
@@ -358,29 +360,27 @@
         # The front end's own screens into Figma (frontend/tests/e2e), by `@evinvest/figma-render`'s bin;
         # the loop is the `figma-render` skill.
         figmaFile = "G9JfrDvGd0BKUdOKYg61Nn"; # "panel — renders"
-        overStack = lib.concatStrings
-          (lib.mapAttrsToList (k: v: "export ${k}=${lib.escapeShellArg v}\n") (localEnv // {
-            PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
-            PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
-          })) + ''
-          cd "$(git rev-parse --show-toplevel)/frontend"
-          [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci >&2 # stdout is `frames`' JSON
-          ln -sfn ${pkgs.playwright-test}/lib/node_modules tests/e2e/node_modules
-        '';
-        figma = pkgs.writeShellApplication {
+        figma = (js.playwright {
           name = "figma";
-          runtimeInputs = with pkgs; [ coreutils git nodejs_22 playwright-test ] ++ [ dev ];
-          text = overStack + ''
-            exec node_modules/.bin/evinvest-figma-render "$@" -c tests/e2e${lib.optionalString (figmaFile != null) " --file ${figmaFile}"}
-          '';
-        };
+          package = "frontend";
+          config = "tests/e2e";
+          env = localEnv;
+          runtimeInputs = [ dev ];
+          run = ''exec node_modules/.bin/evinvest-figma-render "$@" -c tests/e2e --file ${figmaFile}'';
+        }).program;
         # The front end's behaviour over the same stack: every spec in frontend/tests/e2e but the renders.
-        e2e = pkgs.writeShellApplication {
+        e2e = js.playwright {
           name = "e2e";
-          runtimeInputs = with pkgs; [ coreutils git nodejs_22 playwright-test ] ++ [ dev ];
-          text = overStack + ''
-            exec playwright test -c tests/e2e --grep-invert @figma "$@"
-          '';
+          package = "frontend";
+          config = "tests/e2e";
+          env = localEnv;
+          runtimeInputs = [ dev ];
+          run = ''exec playwright test -c tests/e2e --grep-invert @figma "$@"'';
+        };
+        checks = {
+          contract-env = contractEnv;
+          provided-paths = providedPaths;
+          inherit paths;
         };
         # In the devShell, not an app: built in another environment, every crate's fingerprint is stale.
         testTimeline = pkgs.writeShellApplication {
@@ -429,7 +429,7 @@
           publish = v_flakes.utils.publish pkgs;
           gen = { type = "app"; program = lib.getExe gen; meta.description = "the OpenAPI document and the front end's client types from it (pre-commit runs it too)"; };
           dev = { type = "app"; program = lib.getExe dev; meta.description = "the conductor and its peers under watch: a conductor already serving is replaced, a peer used (docs/LOCAL.md)"; };
-          e2e = { type = "app"; program = lib.getExe e2e; meta.description = "the front end's behaviour over a stack of its own (frontend/tests/e2e, the renders aside); args go to `playwright test`"; };
+          e2e = { type = "app"; program = lib.getExe e2e.program; meta.description = "the front end's behaviour over a stack of its own (frontend/tests/e2e, the renders aside); args go to `playwright test`"; };
           figma = { type = "app"; program = lib.getExe figma; meta.description = "the front end's screens into Figma over a stack of its own, gridded on a new page of figmaFile; `-- frames` lists them"; };
           local-stack = { type = "app"; program = lib.getExe localStack; meta.description = "the conductor, its Grafana, sites_panel, review_archive and both landings, wired together on this machine (docs/LOCAL.md)"; };
         };
@@ -441,9 +441,7 @@
 
         containers = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux containers;
 
-        checks.contract-env = contractEnv;
-        checks.provided-paths = providedPaths;
-        checks.paths = paths;
+        inherit checks;
 
         devShells.default =
           with pkgs;
@@ -464,7 +462,6 @@
               sqlite # inspecting the database
               rust
               testTimeline
-              (v_flakes.js-local { inherit pkgs; }) # frontend/_.js-local.json: our npm packages from their checkouts
             ] ++ pre-commit-check.enabledPackages ++ combined.enabledPackages;
 
             env = localEnv // {

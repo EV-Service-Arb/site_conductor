@@ -31,6 +31,7 @@ test("a key the open scope does not bind reaches the field, and Esc closes the s
 
 test("outside a field the leader is z, with Alt or without", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("button", { name: "Assistant: show or hide", pressed: true }).click(); // a new browser opens it, its composer focused
   for (const leader of ["z", "Alt+z"]) {
     // Pressed again until the keymap listens: it attaches once the page hydrates. The leader pressed inside its own scope stays in it.
     await expect(async () => {

@@ -151,7 +151,7 @@ An unknown permission fails the boot, named. The account menu shows the user as 
 The binary refuses it at start (exit 78, every command) in any `APP_ENV` but `development`,
 beside any concierge variable, and unless `PANEL_PUBLIC_ORIGIN` is `http://localhost[:port]`
 or `http://127.0.0.1[:port]` — so it cannot be switched on in the image, which sets
-`APP_ENV=production`. `cargo test -p sa_server --test dev_sign_in` holds the binary to it.
+`APP_ENV=production`. `cargo test -p sa_server --test it dev_sign_in::` holds the binary to it.
 
 Without the script, the conductor alone (no forward, so no ingest and no sites), in the dev shell,
 which sets `PANEL_BIND`:

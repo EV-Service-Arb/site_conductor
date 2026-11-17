@@ -894,8 +894,8 @@ photos saved  → a use (photo, g), once
   download works.
 - **Photos** are re-encoded on the way in (JPEG, ≤ 2048 px, upright, no EXIF): what a reviewer
   saves carries nothing of where it was taken.
-- **Areas** are geography, everyone's, and carry their country (ISO 3166-1 alpha-2, Places'): a city (Google's locality: inside its viewport is in) or a
-  circle, and a margin around it that is "next to it". `/<slug>/` is the kit's page when the slug is
+- **Areas** are geography, everyone's, and carry their country (ISO 3166-1 alpha-2, Places'): a circle
+  around a centre, and the locality it was drawn from, if any, an outline to see it by. `/<slug>/` is the kit's page when the slug is
   an area's; a slug never takes a path of the conductor's own (the front end's directories, the
   reserved and forwarded prefixes).
 
