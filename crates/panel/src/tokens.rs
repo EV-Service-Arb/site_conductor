@@ -145,7 +145,7 @@ impl Panel {
 		let today = now.to_zoned(TimeZone::UTC).date();
 		let first = today.checked_sub(jiff::Span::new().days(USAGE_DAYS - 1)).wrap_err("30 days before today")?;
 		let since = first.to_zoned(TimeZone::UTC).wrap_err("a day's start")?.timestamp();
-		let epoch_day = |d: Date| d.to_zoned(TimeZone::UTC).map(|z| z.timestamp().as_second() / 86_400);
+		let epoch_day = |d: Date| d.to_zoned(TimeZone::UTC).map(|z| z.timestamp().as_second().div_euclid(86_400));
 		let charged = db::charges_by_day(&mut conn, user, since).await?;
 		first
 			.series(jiff::Span::new().days(1))

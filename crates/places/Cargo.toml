@@ -8,9 +8,12 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 
+[package.metadata.cargo-machete]
+ignored = ["schemars"] # `ConfigJsonSchema`'s expansion names it; no source does
+
 [features]
 # `Account` read from a v_utils config file, its keys `{ env = "…" }`.
-settings = ["dep:v_utils", "v_utils/cli"]
+settings = ["dep:v_utils", "v_utils/cli", "dep:schemars"]
 
 [dependencies]
 base64.workspace = true
@@ -18,7 +21,7 @@ eyre.workspace = true
 jiff.workspace = true
 reqwest.workspace = true
 sa_core.workspace = true
-schemars.workspace = true
+schemars = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

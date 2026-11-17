@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 #[derive(Debug, PartialEq, Views)]
 #[views(carried = Outline)]
+#[expect(clippy::large_enum_variant, reason = "a parsed route, one per request; Views derives over named fields, which a Box would hide")]
 pub enum View {
 	/// The map of the caller's GBPs, and every window over it.
 	#[view("/", key = 'h')]

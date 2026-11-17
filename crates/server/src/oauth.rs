@@ -147,7 +147,7 @@ async fn authorize(State(s): State<SignIn>, uri: Uri, headers: HeaderMap, q: Res
 	}
 	let client = match registered(&s, &q.client_id, &q.redirect_uri, &q.code_challenge).await {
 		Ok(c) => c,
-		Err(res) => return res,
+		Err(res) => return *res,
 	};
 	if let Some(Decision::Deny) = q.decision {
 		return back(&q.redirect_uri, &[("error", "access_denied")], q.state.as_deref());
@@ -207,7 +207,7 @@ async fn consent(State(s): State<SignIn>, mut headers: HeaderMap, Form(f): Form<
 		return bad_link();
 	}
 	if let Err(res) = registered(&s, &f.client_id, &f.redirect_uri, &f.code_challenge).await {
-		return res;
+		return *res;
 	}
 	let caller = match signin::check(&s, &headers, Freshness::Cached).await {
 		Ok(c) => c,
@@ -271,20 +271,20 @@ async fn token(State(s): State<SignIn>, Form(f): Form<TokenForm>) -> Response {
 
 /// The client, when `redirect_uri` is one of its own (a loopback one on any port, RFC 8252 §7.3)
 /// and the challenge an S256 one.
-async fn registered(s: &SignIn, client_id: &str, redirect_uri: &str, challenge: &str) -> Result<Client, Response> {
+async fn registered(s: &SignIn, client_id: &str, redirect_uri: &str, challenge: &str) -> Result<Client, Box<Response>> {
 	if challenge.len() != 43 || !challenge.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') || !redirect_allowed(redirect_uri) {
-		return Err(bad_link());
+		return Err(Box::new(bad_link()));
 	}
 	let client = match s.panel.client(client_id).await {
 		Ok(Some(c)) => c,
-		Ok(None) => return Err(bad_link()),
+		Ok(None) => return Err(Box::new(bad_link())),
 		Err(e) => {
 			crate::report(&e, "reading an MCP client");
-			return Err(private(page(
+			return Err(Box::new(private(page(
 				StatusCode::INTERNAL_SERVER_ERROR,
 				"Connecting failed",
 				"Something went wrong on our side. Try again.",
-			)));
+			))));
 		}
 	};
 	let loopback = |u: &str| {
@@ -297,7 +297,7 @@ async fn registered(s: &SignIn, client_id: &str, redirect_uri: &str, challenge: 
 		.any(|u| u == redirect_uri || loopback(u).is_some_and(|u| Some(u) == loopback(redirect_uri)))
 	{
 		true => Ok(client),
-		false => Err(bad_link()),
+		false => Err(Box::new(bad_link())),
 	}
 }
 

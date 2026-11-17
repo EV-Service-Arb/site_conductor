@@ -3,7 +3,6 @@
 
 use axum::{
 	Router,
-	body::Body,
 	http::{Method, StatusCode},
 };
 use sa_auth::PermissionSet;
@@ -61,19 +60,7 @@ impl Person {
 	}
 
 	async fn call(&mut self, method: Method, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
-		let json = [("content-type", "application/json")];
-		let (status, _, bytes) = self
-			.browser
-			.send_body(
-				&self.app,
-				method,
-				uri,
-				if body.is_some() { &json } else { &[] },
-				true,
-				body.map_or(Body::empty(), |b| Body::from(b.to_string())),
-			)
-			.await;
-		(status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+		self.browser.call(&self.app, method, uri, body).await
 	}
 }
 

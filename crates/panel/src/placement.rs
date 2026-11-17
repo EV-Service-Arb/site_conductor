@@ -44,7 +44,7 @@ impl Pull {
 	pub fn budget(&self) -> u64 {
 		match self.price {
 			0 => u64::MAX,
-			price => u64::try_from(self.balance / price).unwrap_or(0), // a balance below zero affords none
+			price => u64::try_from(self.balance.div_euclid(price)).unwrap_or(0), // a balance below zero affords none
 		}
 	}
 

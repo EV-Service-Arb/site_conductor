@@ -20,7 +20,7 @@
 //!                                           runner's own, passed through
 //! ```
 //! Unset PANEL_BROWSERS_URL: 503 `browsers_not_connected`; a provider without its token, 503
-//! "<provider> not connected".
+//! "`<provider>` not connected".
 
 use std::{
 	collections::HashMap,

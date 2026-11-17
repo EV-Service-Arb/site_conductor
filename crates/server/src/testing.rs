@@ -149,6 +149,22 @@ impl Browser {
 		(status, headers, body)
 	}
 
+	/// `body` sent as JSON, the answer read as JSON (`Null` for an empty or non-JSON one).
+	pub async fn call(&mut self, app: &Router, method: Method, uri: &str, body: Option<serde_json::Value>) -> (StatusCode, serde_json::Value) {
+		let json = [("content-type", "application/json")];
+		let (status, _, bytes) = self
+			.send_body(
+				app,
+				method,
+				uri,
+				if body.is_some() { &json } else { &[] },
+				true,
+				body.map_or(Body::empty(), |b| Body::from(b.to_string())),
+			)
+			.await;
+		(status, serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null)) // 204s and HTML errors carry no JSON; callers assert on the status first
+	}
+
 	pub async fn send(&mut self, app: &Router, method: Method, uri: &str, extra: &[(&str, &str)], csrf: bool) -> (StatusCode, HeaderMap) {
 		let (status, headers, _) = self.send_body(app, method, uri, extra, csrf, Body::empty()).await;
 		(status, headers)

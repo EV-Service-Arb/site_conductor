@@ -100,6 +100,8 @@
           jobs.default = true;
           jobs.errors.install.packages = [ "ffmpeg" "deno" ]; # crates/browsers/tests/runner.rs cuts its films with ffmpeg; crates/sandbox's tests run Deno
           jobs.errors.augment = [ e2e { name = "checks"; builds = checks; } ];
+          jobs.warnings.exclude = [ "code-duplication" ];
+          jobs.warnings.augment = [{ name = "code-duplication"; args.excludePatterns = [ "frontend/src/shared/api/schema.ts" "frontend/src/shared/api/services/**" "frontend/src/shared/api/views.ts" "crates/sandbox/js/catalog.ts" ]; }]; # generated
           lfs = false;
         };
         readme = v_flakes.readme-fw {

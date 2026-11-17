@@ -37,24 +37,15 @@ pub struct CodeRow {
 	pub expires_at: Timestamp,
 }
 
-pub async fn insert_code(
-	conn: &mut SqliteConnection,
-	code_hash: &[u8],
-	session: &[u8],
-	redirect_uri: &str,
-	challenge: &str,
-	bearer_sealed: &[u8],
-	data_key_fp: &[u8],
-	expires_at: Timestamp,
-) -> eyre::Result<()> {
+pub async fn insert_code(conn: &mut SqliteConnection, code_hash: &[u8], code: &CodeRow) -> eyre::Result<()> {
 	sqlx::query("INSERT INTO oauth_codes (code_hash, session, redirect_uri, challenge, bearer_sealed, data_key_fp, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7)")
 		.bind(code_hash)
-		.bind(session)
-		.bind(redirect_uri)
-		.bind(challenge)
-		.bind(bearer_sealed)
-		.bind(data_key_fp)
-		.bind(to_db(expires_at))
+		.bind(&code.session)
+		.bind(&code.redirect_uri)
+		.bind(&code.challenge)
+		.bind(&code.bearer_sealed)
+		.bind(&code.data_key_fp)
+		.bind(to_db(code.expires_at))
 		.execute(&mut *conn)
 		.await
 		.wrap_err("issuing an MCP code")?;
@@ -63,12 +54,12 @@ pub async fn insert_code(
 
 /// Deletes the code and answers it: a code is presented once, whatever comes of it.
 pub async fn take_code(conn: &mut SqliteConnection, code_hash: &[u8]) -> eyre::Result<Option<CodeRow>> {
-	let row: Option<(Vec<u8>, String, String, Vec<u8>, Vec<u8>, i64)> =
-		sqlx::query_as("DELETE FROM oauth_codes WHERE code_hash = $1 RETURNING session, redirect_uri, challenge, bearer_sealed, data_key_fp, expires_at")
-			.bind(code_hash)
-			.fetch_optional(&mut *conn)
-			.await
-			.wrap_err("redeeming an MCP code")?;
+	type Row = (Vec<u8>, String, String, Vec<u8>, Vec<u8>, i64);
+	let row: Option<Row> = sqlx::query_as("DELETE FROM oauth_codes WHERE code_hash = $1 RETURNING session, redirect_uri, challenge, bearer_sealed, data_key_fp, expires_at")
+		.bind(code_hash)
+		.fetch_optional(&mut *conn)
+		.await
+		.wrap_err("redeeming an MCP code")?;
 	row.map(|(session, redirect_uri, challenge, bearer_sealed, data_key_fp, expires_at)| {
 		Ok(CodeRow {
 			session,

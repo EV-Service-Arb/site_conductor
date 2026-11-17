@@ -66,6 +66,9 @@ const PAGES_FOR: Duration = Duration::from_secs(60);
 /// The landing's path a GBP's page is at, under its site key's origin.
 const PAGE: &str = "/avis/";
 
+/// The places as last read, and when.
+type Kept = (Instant, Arc<Vec<Place>>);
+
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitDraft")]
 pub(crate) struct DraftDto {
@@ -225,7 +228,7 @@ pub(crate) struct OfferedPhotoDto {
 #[derive(Clone)]
 pub(crate) struct Pages {
 	services: Services,
-	kept: Arc<Mutex<Option<(Instant, Arc<Vec<Place>>)>>>,
+	kept: Arc<Mutex<Option<Kept>>>,
 }
 impl Pages {
 	pub(crate) fn new(services: Services) -> Self {
@@ -635,27 +638,33 @@ pub(crate) fn landing_routes(panel: Panel, pages: Pages, limits: &Limits) -> Rou
 }
 
 /// The landing's key, its MAC over `body` (a GET's: `GET <path?query>`).
-async fn landing_key(l: &Landing, headers: &HeaderMap, body: &[u8]) -> Result<Grant, Response> {
-	let (key_id, timestamp, signature) = ingest::signed(headers).ok_or_else(ingest::unsigned)?;
+async fn landing_key(l: &Landing, headers: &HeaderMap, body: &[u8]) -> Result<Grant, Box<Response>> {
+	let (key_id, timestamp, signature) = ingest::signed(headers).ok_or_else(|| Box::new(ingest::unsigned()))?;
 	let batch = SignedBatch { key_id, timestamp, signature, body };
-	l.panel.authenticate(batch, Timestamp::now()).await.map_err(ingest::refused)
+	l.panel.authenticate(batch, Timestamp::now()).await.map_err(|e| Box::new(ingest::refused(e)))
 }
 
 /// The GBP `view` showed, its brand one of `key`'s.
-async fn view_of(l: &Landing, key: &Grant, view: Uuid) -> Result<(), Response> {
-	let mut conn = l.panel.store().pool().acquire().await.map_err(|e| Refusal::<Code>::from(eyre::Report::from(e)).into_response())?;
+async fn view_of(l: &Landing, key: &Grant, view: Uuid) -> Result<(), Box<Response>> {
+	let mut conn = l
+		.panel
+		.store()
+		.pool()
+		.acquire()
+		.await
+		.map_err(|e| Box::new(Refusal::<Code>::from(eyre::Report::from(e)).into_response()))?;
 	let gmb = sa_panel::store::kit::view_gmb(&mut conn, view)
 		.await
-		.map_err(|e| Refusal::<Code>::from(e).into_response())?
-		.ok_or_else(|| Refusal::new(Code::NotFound, "not found").into_response())?;
+		.map_err(|e| Box::new(Refusal::<Code>::from(e).into_response()))?
+		.ok_or_else(|| Box::new(Refusal::new(Code::NotFound, "not found").into_response()))?;
 	let place = l
 		.pages
 		.of_gmb(gmb)
 		.await
-		.map_err(IntoResponse::into_response)?
-		.ok_or_else(|| Refusal::new(Code::NotFound, "not found").into_response())?;
+		.map_err(|e| Box::new(e.into_response()))?
+		.ok_or_else(|| Box::new(Refusal::new(Code::NotFound, "not found").into_response()))?;
 	if !key.brands.iter().any(|b| b.as_str() == place.brand) {
-		return Err(Refusal::new(Code::NotFound, "not found").into_response());
+		return Err(Box::new(Refusal::new(Code::NotFound, "not found").into_response()));
 	}
 	Ok(())
 }
@@ -672,7 +681,7 @@ async fn offer(State(l): State<Landing>, OriginalUri(uri): OriginalUri, headers:
 	let signed = format!("GET {}", uri.path_and_query().map_or_else(|| uri.path(), |pq| pq.as_str()));
 	let key = match landing_key(&l, &headers, signed.as_bytes()).await {
 		Ok(k) => k,
-		Err(res) => return res,
+		Err(res) => return *res,
 	};
 	let Ok(Query(q)) = q else {
 		return Refusal::new(Code::BadRequest, "brand, slug and qr=1 if it came from the QR").into_response();
@@ -706,13 +715,13 @@ async fn offered_photo(State(l): State<Landing>, OriginalUri(uri): OriginalUri, 
 	let signed = format!("GET {}", uri.path_and_query().map_or_else(|| uri.path(), |pq| pq.as_str()));
 	let key = match landing_key(&l, &headers, signed.as_bytes()).await {
 		Ok(k) => k,
-		Err(res) => return res,
+		Err(res) => return *res,
 	};
 	let (Ok(Query(q)), Ok(photo)) = (q, jpg(&file)) else {
 		return Refusal::new(Code::NotFound, "not found").into_response();
 	};
 	if let Err(res) = view_of(&l, &key, q.view).await {
-		return res;
+		return *res;
 	}
 	match l.panel.offered_photo(q.view, photo).await {
 		Ok(Ok(bytes)) => Jpeg(bytes).into_response(),
@@ -728,7 +737,7 @@ async fn event(State(l): State<Landing>, headers: HeaderMap, body: axum::body::B
 	};
 	let key = match landing_key(&l, &headers, &body).await {
 		Ok(k) => k,
-		Err(res) => return res,
+		Err(res) => return *res,
 	};
 	let e: EventDto = match serde_json::from_slice(&body) {
 		Ok(e) => e,
@@ -740,7 +749,7 @@ async fn event(State(l): State<Landing>, headers: HeaderMap, body: axum::body::B
 		_ => return Refusal::new(Code::BadRequest, "one of copied or saved").into_response(),
 	};
 	if let Err(res) = view_of(&l, &key, e.view).await {
-		return res;
+		return *res;
 	}
 	match l.panel.kit_event(e.view, event, Timestamp::now()).await {
 		Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),

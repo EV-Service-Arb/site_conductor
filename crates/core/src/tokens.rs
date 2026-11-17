@@ -37,7 +37,7 @@ impl Renewal {
 /// What renewal adds to `balance` at `now`, renewed last at `last`, and the time it is renewed
 /// up to: whole days only, so asking twice in a day adds once.
 pub fn accrue(balance: i64, last: Timestamp, now: Timestamp, daily: i64, cap: i64) -> (i64, Timestamp) {
-	let days = now.duration_since(last).as_secs() / 86_400;
+	let days = now.duration_since(last).as_secs().div_euclid(86_400);
 	if days <= 0 {
 		return (0, last);
 	}
@@ -58,7 +58,7 @@ pub fn split<W: Clone>(cost: i64, payers: &[(W, i64)]) -> Vec<(W, i64)> {
 		.into_iter()
 		.zip(0..)
 		.map(|((who, balance), i)| {
-			let share = (left + (n - i) - 1) / (n - i);
+			let share = (left + (n - i) - 1).div_euclid(n - i); // rounded up: `left` is never negative
 			let paid = share.min(*balance);
 			left -= paid;
 			(who.clone(), paid)

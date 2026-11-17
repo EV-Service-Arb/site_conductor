@@ -423,7 +423,7 @@ impl Panel {
 				country: browser.exit.country,
 				minutes: match price {
 					0 => u64::MAX,
-					price => u64::try_from(balance / price).expect("a balance at its price or above"),
+					price => u64::try_from(balance.div_euclid(price)).expect("a balance at its price or above"),
 				},
 			},
 			(p, device, profile) => eyre::bail!("gmail {id}'s {p} browser is stored as {device} with profile {profile:?}"),

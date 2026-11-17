@@ -128,7 +128,7 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 		"every answer's tokens, an empty kind not counted"
 	);
 
-	let sent = sent.lock().unwrap();
+	let sent = sent.lock().unwrap().clone(); // the asks below await
 	let results = |n: usize| sent[n]["messages"].as_array().unwrap().last().unwrap()["content"].as_array().unwrap().clone();
 	let found: Value = serde_json::from_str(results(1)[0]["content"].as_str().unwrap()).unwrap();
 	assert!(found["operations"].as_array().unwrap().iter().any(|o| o["id"] == "delete_trade"), "{found}");

@@ -37,8 +37,8 @@ use hyper_util::{
 	rt::{TokioExecutor, TokioIo},
 };
 use sa_auth::{Principal, Service};
-use strum::VariantArray;
 use serde_json::{Value, json};
+use strum::VariantArray;
 use tokio::sync::watch;
 
 use crate::{
@@ -230,7 +230,7 @@ impl Grafana {
 	async fn pull(&self, etags: &Mutex<HashMap<String, HeaderValue>>) {
 		for service in Service::VARIANTS.iter().copied().filter(|s| s.dashboards()) {
 			if let Err(e) = self.pull_one(service, etags).await {
-				crate::report(&e.wrap_err(format!("{}'s dashboards kept as they were", service.to_string())), "pulling the dashboards");
+				crate::report(&e.wrap_err(format!("{service}'s dashboards kept as they were")), "pulling the dashboards");
 			}
 		}
 	}

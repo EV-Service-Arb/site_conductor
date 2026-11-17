@@ -294,7 +294,7 @@ pub(crate) async fn meter_readings(State(panel): State<Panel>, Params(q): Params
 	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| Refusal::new(Code::BadRequest, format!("{ms}: {e}")));
 	let (from, to) = (at(q.from)?, at(q.to)?);
 	if from >= to || to.duration_since(from) > SPAN {
-		return Err(Refusal::new(Code::BadRequest, format!("from is before to, at most {} days", SPAN.as_hours() / 24)));
+		return Err(Refusal::new(Code::BadRequest, format!("from is before to, at most {} days", SPAN.as_hours().div_euclid(24))));
 	}
 	Ok(Json(ReadingsDto {
 		readings: panel.meter_readings(from, to).await?.into_iter().map(ReadingDto::from).collect(),

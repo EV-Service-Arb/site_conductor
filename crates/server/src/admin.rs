@@ -82,7 +82,7 @@ async fn add_gmail_for(State(panel): State<Panel>, Extension(caller): Extension<
 	Ok(Created(GmailDto::from(added)))
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(JsonSchema, Serialize)]
 #[schemars(rename = "Located")]
 pub(crate) struct LocatedDto {
 	/// Places given a point or a country.
@@ -95,7 +95,7 @@ pub(crate) struct LocatedDto {
 	refused: Vec<RefusedPlace>,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(JsonSchema, Serialize)]
 pub(crate) struct RefusedPlace {
 	place_id: String,
 	why: String,
@@ -149,7 +149,7 @@ pub(crate) struct KeptAnswer {
 	fetched_at: Timestamp,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(JsonSchema, Serialize)]
 pub(crate) struct Imported {
 	answers: usize,
 }

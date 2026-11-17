@@ -63,7 +63,7 @@ impl JsonSchema for Close {
 }
 
 /// A frame to the viewer.
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[schemars(rename = "BrowserOut")]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Out {
@@ -92,7 +92,7 @@ pub enum Out {
 	},
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[schemars(rename = "BrowserTab")]
 pub struct Tab {
 	pub id: String,
@@ -101,7 +101,7 @@ pub struct Tab {
 }
 
 /// A frame from the viewer; at most [`FRAME_MAX`] bytes. Points are in the last frame's space.
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[schemars(rename = "BrowserIn")]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum In {
@@ -150,7 +150,7 @@ pub enum In {
 	},
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TouchPhase {
 	Start,
