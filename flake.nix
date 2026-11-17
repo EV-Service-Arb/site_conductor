@@ -49,7 +49,12 @@
           runtimeInputs = [ rust pkgs.git pkgs.nodejs ];
           text = ''
             cd "$(git rev-parse --show-toplevel)"
-            cargo run -q -p sa_gen "$@"
+            # resolved on a copy: under a [patch.crates-io] path override cargo would rewrite the committed
+            # lock into the path form the Nix build cannot vendor, from inside the pre-commit hook
+            lock="$(mktemp -d)"
+            trap 'rm -r "$lock"' EXIT
+            cp Cargo.lock "$lock/"
+            cargo --config "resolver.lockfile-path=\"$lock/Cargo.lock\"" run -q -p sa_gen "$@"
             cd frontend && npm run -s gen:api
           '';
         };

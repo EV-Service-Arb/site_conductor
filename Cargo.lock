@@ -1639,6 +1639,8 @@ dependencies = [
 [[package]]
 name = "ev_lib"
 version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8703f93d48bb9388c809cce5c9027ed59abac1d2a42c189bd2d221442aabd76"
 dependencies = [
  "aide",
  "axum",
@@ -1674,6 +1676,8 @@ dependencies = [
 [[package]]
 name = "ev_lib_macros"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd680513be34eae4399823a484cc91353b8cce7f1dd389146465db046a155dee"
 dependencies = [
  "proc-macro2",
  "quote",
