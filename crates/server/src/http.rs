@@ -34,7 +34,7 @@ use crate::{
 	grafana::Grafana,
 	ingest, kit,
 	live::{self, Live, LiveLimits},
-	mcp, meters, oauth, queries_cache,
+	mcp, meters, oauth, placement, queries_cache,
 	signin::{self, Freshness, SignIn},
 	tokens,
 	tools::Tools,
@@ -142,6 +142,7 @@ pub fn app(
 		sign_in: sign_in.clone(),
 		live: Live::new(sign_in.clone(), limits.live),
 		sites: forward.as_ref().map(|f| f.services().clone()),
+		placement: forward.as_ref().map(|f| f.services().clone()).filter(|s| s.serves(sa_auth::Service::Placement)),
 		pages: pages.clone(),
 		web: web.cloned(),
 		probe: connected::probe_client(),
@@ -222,6 +223,7 @@ pub(crate) fn api_routes() -> Vec<ApiRoute> {
 		claude::routes(),
 		kit::routes(),
 		areas::routes(),
+		placement::routes(),
 		meters::routes(),
 		live::routes(),
 	]
@@ -242,6 +244,8 @@ pub(crate) struct ApiState {
 	pub(crate) live: Live,
 	/// With the forward configured.
 	pub(crate) sites: Option<Services>,
+	/// With PANEL_PLACEMENT_URL too.
+	pub(crate) placement: Option<Services>,
 	/// What the Connected sites page asks the landings with.
 	pub(crate) probe: reqwest::Client,
 	/// With `TELEGRAM_BOT_TOKEN`.

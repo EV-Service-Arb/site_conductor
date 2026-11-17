@@ -207,8 +207,7 @@ run_sites=1
 run_review_archive=1
 run_placement=1
 run_playbook=1
-# placement serves no /health: its overlay module is what the conductor needs of it
-placement_answers() { curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$PLACEMENT_PORT/mfe/overlay.js" 2>/dev/null; }
+placement_answers() { curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$PLACEMENT_PORT/health" 2>/dev/null; }
 # `take_over <port>`: a conductor or its next dev listening there stops, with the run that started it
 # (whatever else that run serves goes too, and is started here instead); anything else is let be.
 take_over() {
@@ -735,11 +734,11 @@ fi
 
 if [ "$run_placement" = 1 ]; then
 	# not watched, and not essential: the map goes on without it; its first build takes minutes
-	say "starting gmaps_optimal_placement on $placement_origin (the home map's overlay)"
+	say "starting gmaps_optimal_placement on $placement_origin (the home map's studies)"
 	# its settings' `queries_cache`, through their environment: `serve` takes no settings flag
 	(cd "$PLACEMENT_DIR" && PANEL_ASSERTION_KEYS="$assertion_public" GMAPS_OPTIMAL_PLACEMENT_QUERIES_CACHE="$origin/api/queries_cache" \
 		prefixed placement bash -c \
-		"${DEV_COMMAND_gmaps_optimal_placement:-nix run .#conductor -- $spend_flag --port $PLACEMENT_PORT -t examples/trades -l examples/locations}") &
+		"${DEV_COMMAND_gmaps_optimal_placement:-nix run .#conductor -- $spend_flag --port $PLACEMENT_PORT -t examples/trades --countries examples/countries}") &
 	placement_pid=$!
 fi
 
@@ -854,7 +853,10 @@ if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
 		# shell, whose js-local lays our packages' checkouts over the install (frontend/_.js-local.json)
 		prefixed web in_shell "$root" bash -c \
 			'cd frontend && if [ node_modules/.package-lock.json -nt package-lock.json ]; then js-local; else npm ci; fi'
-		# Next refuses a second `next dev` on one dist dir: a stack on ports of its own runs beside the usual one
+		# the map's overlay (crates/placement_overlay), and again whenever it or the placement core it links changes
+		prefixed placement-overlay in_shell "$root" placement-overlay
+		prefixed placement-overlay watched "$root" --postpone -w crates/placement_overlay -w Cargo.lock -w .cargo/config.toml \
+			${PLACEMENT_DIR:+-w "$PLACEMENT_DIR/gmaps_optimal_placement_core"} -- placement-overlay &
 		PANEL_DEV_BACKEND="$origin" PANEL_DEV_DIST=".next${own_port:+/port-$own_port}" \
 			prefixed web npx next dev --port "$WEB_DEV_PORT"
 	) &
@@ -863,7 +865,7 @@ if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
 fi
 
 if [ "$run_placement" = 1 ]; then
-	wait_for placement "$placement_origin/mfe/overlay.js" 900 "$placement_pid" || warn "gmaps_optimal_placement did not come up; the map says placement is not connected"
+	wait_for placement "$placement_origin/health" 900 "$placement_pid" || warn "gmaps_optimal_placement did not come up; the map says placement is not connected"
 fi
 
 started=()

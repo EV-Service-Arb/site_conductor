@@ -4,16 +4,16 @@ import { useEffect, useState } from "react";
 
 import { useT, placement as placementKeys } from "@/shared/i18n";
 
-import { type Legend, attach, useMapView, usePlacement, useStudied } from "../model/placement";
+import type { Overlay } from "@/shared/placement_overlay/placement_overlay";
 
-type Handle = NonNullable<Awaited<ReturnType<typeof attach>>>;
+import { type Legend, type Query, attach, landed, useMapView, usePayload, usePlacement, useStudied } from "../model/placement";
 
 /** gmaps_optimal_placement's drawing on `map`, as the panel's URL state says: the picked category's study over the picked area; and its legend. */
 export function PlacementOverlay({ map }: { map: google.maps.Map }) {
   const placement = usePlacement();
   const view = useMapView();
   const studied = useStudied(view);
-  const [live, setLive] = useState<Handle | null>(null);
+  const [live, setLive] = useState<Overlay | null>(null);
   useEffect(() => {
     let mounted = true;
     void attach(map).then((a) => mounted && setLive(a));
@@ -22,13 +22,12 @@ export function PlacementOverlay({ map }: { map: google.maps.Map }) {
     };
   }, [map]);
 
-  const definition = studied.status === "ok" && studied.drawn !== null && "definition" in studied.drawn ? studied.drawn.definition : null;
-  const shown = JSON.stringify(definition);
+  const drawn = studied.status === "ok" ? studied.drawn : null;
   useEffect(() => {
-    void live?.show(definition);
-    // `shown` is `definition`, by value
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, shown]);
+    if (drawn !== null) return;
+    live?.show(null, false);
+    landed(null);
+  }, [live, drawn, placement.status]);
   // the overlay refuses a layer the shown study lacks; `?heat` waits for the study that offers it
   const data = placement.status === "ok" ? placement.data : null;
   const heat = data?.layers.some((l) => l.id === view.heat) ? view.heat : null;
@@ -38,7 +37,7 @@ export function PlacementOverlay({ map }: { map: google.maps.Map }) {
   const traded = data?.trade != null;
   const tuning = JSON.stringify({ lambda_m: view.pressure, tiers: view.tiers });
   useEffect(() => {
-    if (traded) live?.tune(JSON.parse(tuning) as Parameters<Handle["tune"]>[0]);
+    if (traded) live?.tune(JSON.parse(tuning) as Parameters<Overlay["tune"]>[0]);
   }, [live, traded, tuning, data]);
   const pressure = view.pressure !== null && traded;
   useEffect(() => {
@@ -55,7 +54,23 @@ export function PlacementOverlay({ map }: { map: google.maps.Map }) {
     live?.hideImputed(view.hideImputed);
   }, [live, view.hideImputed]);
 
-  return placement.status === "ok" && placement.legend !== null && definition !== null ? <LegendStrip legend={placement.legend} /> : null;
+  return (
+    <>
+      {drawn !== null && live !== null && <Study live={live} drawn={drawn} attached={placement.status} />}
+      {placement.status === "ok" && placement.legend !== null && drawn !== null && placement.refused === null && <LegendStrip legend={placement.legend} />}
+    </>
+  );
+}
+
+/** The payload of `drawn`, read and handed to the overlay; why it is not, told to the panel. */
+function Study({ live, drawn, attached }: { live: Overlay; drawn: Query; attached: string }) {
+  const payload = usePayload(drawn);
+  const shown = payload.status === "ok" ? (payload.fresh ? payload.payload : undefined) : payload.status === "loading" ? undefined : null;
+  useEffect(() => {
+    if (shown !== undefined) live.show(shown, false);
+  }, [live, shown]);
+  useEffect(() => landed(payload), [payload, attached]);
+  return null;
 }
 
 function LegendStrip({ legend }: { legend: Legend }) {

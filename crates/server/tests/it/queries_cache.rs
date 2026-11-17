@@ -112,7 +112,7 @@ async fn a_write_is_kept_only_under_its_querys_digest() {
 		request: "GET x".into(),
 		bought: None,
 	};
-	let mismatched = cache.put(Key([0; 32]), put.clone()).await.unwrap_err();
+	let mismatched = cache.put(Scheme::Places, Key([0; 32]), put.clone()).await.unwrap_err();
 	assert!(mismatched.to_string().contains("400"), "{mismatched:#}");
 	let billed = |bill, account: Option<&str>| Put {
 		bought: Some(Billed {
@@ -123,12 +123,12 @@ async fn a_write_is_kept_only_under_its_querys_digest() {
 		..put.clone()
 	};
 	for (bill, account) in [(Bill::Ours, Some("elsewhere")), (Bill::Ours, None), (Bill::Theirs, Some("house"))] {
-		let refused = cache.put(k, billed(bill, account)).await.unwrap_err();
+		let refused = cache.put(Scheme::Places, k, billed(bill, account)).await.unwrap_err();
 		assert!(refused.to_string().contains("400"), "{bill:?} on {account:?}: {refused:#}");
 	}
-	assert_eq!(cache.get(k).await.unwrap(), None, "nothing refused is kept");
-	cache.put(k, put).await.unwrap();
-	assert_eq!(cache.get(k).await.unwrap().unwrap().answer, json!({}));
+	assert_eq!(cache.get(Scheme::Places, k).await.unwrap(), None, "nothing refused is kept");
+	cache.put(Scheme::Places, k, put).await.unwrap();
+	assert_eq!(cache.get(Scheme::Places, k).await.unwrap().unwrap().answer, json!({}));
 }
 
 #[tokio::test]
@@ -145,8 +145,8 @@ async fn a_buy_off_the_google_meters_names_no_account() {
 			account: account.map(str::to_owned),
 		}),
 	};
-	let refused = cache.put(k, bought(Some("house"))).await.unwrap_err();
+	let refused = cache.put(Scheme::Gop, k, bought(Some("house"))).await.unwrap_err();
 	assert!(refused.to_string().contains("400"), "{refused:#}");
-	cache.put(k, bought(None)).await.unwrap();
-	assert_eq!(cache.get(k).await.unwrap().unwrap().answer, json!({}));
+	cache.put(Scheme::Gop, k, bought(None)).await.unwrap();
+	assert_eq!(cache.get(Scheme::Gop, k).await.unwrap().unwrap().answer, json!({}));
 }

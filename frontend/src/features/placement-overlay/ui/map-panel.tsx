@@ -8,12 +8,12 @@ import { PANEL } from "@config";
 import { covers, openCategories, openTrade, useScope, useTrades } from "@/entities/gmb";
 import type { Country } from "@/shared/api/schema";
 import { useMe } from "@/entities/session";
-import { placement as placementApi } from "@/shared/api";
+import { api } from "@/shared/api";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { type T, useT, placement as placementKeys, state, hotbar } from "@/shared/i18n";
 import { type Base, setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
 
-import { type CategoryKey, type Data, type Layer, type Legend, type MapView, type Refusal, type Studied, categoryKey, pull, setMapView, useMapView, usePlacement, useStudied } from "../model/placement";
+import { type CategoryKey, type Data, type Layer, type Legend, type MapView, type Query, type Refusal, type Studied, categoryKey, pull, setMapView, useMapView, usePlacement, useStudied } from "../model/placement";
 
 const LAYOUT = {
   column: "flex w-80 flex-col",
@@ -50,10 +50,11 @@ const STUDIES_NAME = {
 } satisfies Record<"scope" | "category", (t: T) => string>;
 
 const REFUSAL = {
-  "no study": (t) => t(placementKeys.refused.study, "The category links no study"),
-  "no google category": (t) => t(placementKeys.refused.google, "The category has no Google category: it names the competitors"),
-  "no keywords": (t) => t(placementKeys.refused.keywords, "The category has no keywords: they weigh the competitors"),
-  "another country": (t) => t(placementKeys.refused.country, "The area is in another country than the category"),
+  no_study: (t) => t(placementKeys.refused.study, "The category links no study"),
+  no_google_category: (t) => t(placementKeys.refused.google, "The category has no Google category: it names the competitors"),
+  no_keywords: (t) => t(placementKeys.refused.keywords, "The category has no keywords: they weigh the competitors"),
+  another_country: (t) => t(placementKeys.refused.country, "The area is in another country than the category"),
+  unstudied: (t) => t(placementKeys.refused.unstudied, "Placement does not study this category here"),
 } satisfies Record<Refusal, (t: T) => string>;
 
 /** The hotbar's Map panel: the study (a category over an area), its heat, the overlays, what the data is, and the base. */
@@ -68,13 +69,13 @@ export function MapPanel() {
   const ok = placement.status === "ok" ? placement : null;
   const data = ok?.data ?? null;
   const legend = ok?.legend ?? null;
-  const drawn = studied.status === "ok" ? studied.drawn : null;
+  const refused = ok?.refused ?? null;
   // why the trade overlays draw nothing, whatever their eye says
   const untraded =
     studied.status === "ok" && studied.area === null
       ? t(placementKeys.noArea, "no area picked")
-      : drawn !== null && "refused" in drawn
-        ? REFUSAL[drawn.refused](t)
+      : refused !== null && "refused" in refused
+        ? REFUSAL[refused.refused](t)
         : view.study === null
           ? t(placementKeys.pickTrade, "pick a trade")
           : data !== null && data.trade === null
@@ -94,7 +95,7 @@ export function MapPanel() {
               <Section title={t(placementKeys.study, "Study")}>
                 <StudyPicker view={view} studied={studied} trades={ok.trades} />
                 <AreaPicker view={view} studied={studied} />
-                {drawn !== null && "refused" in drawn && <Note tone="warn">{REFUSAL[drawn.refused](t)}</Note>}
+                {refused !== null && ("refused" in refused ? <Note tone="warn">{REFUSAL[refused.refused](t)}</Note> : <Note tone="error">{refused.failed}</Note>)}
                 {studied.area === null && view.area !== "" && <Note tone="warn">{t(placementKeys.pickArea, "Pick an area, or draw one: a study is bought and kept per area")}</Note>}
               </Section>
               {data !== null && <Heat view={view} data={data} legend={legend} />}
@@ -125,7 +126,7 @@ export function MapPanel() {
               <Row icon={MapPin} label={t(hotbar.places, "Google's places")} on={places} onToggle={() => showPlaces(!places)} />
             </Section>
           )}
-          {ok && data !== null && <DataSection view={view} data={data} notice={ok.notice} pulling={ok.pulling} pullFailed={ok.pullFailed} />}
+          {ok && data !== null && <DataSection view={view} data={data} notice={ok.notice} pulling={ok.pulling} pullFailed={ok.pullFailed} drawn={studied.status === "ok" ? studied.drawn : null} />}
           {ok && data === null && ok.notice !== null && <Note tone="warn">{ok.notice.text}</Note>}
           <Section title={t(placementKeys.base, "Base")}>
             <ToggleGroup type="single" size="sm" value={base} onValueChange={(v) => typeof v === "string" && v !== "" && setBase(v as Base)} className="px-2">
@@ -291,14 +292,14 @@ function Tiers({ view, trade }: { view: MapView; trade: TradeData }) {
   );
 }
 
-function PullButton({ searches, pulling }: { searches: number; pulling: boolean }) {
+function PullButton({ searches, pulling, drawn }: { searches: number; pulling: boolean; drawn: Query }) {
   const t = useT();
   const held = useTokens();
   const spend = useSpendConfirm();
   const price = held.status === "ok" ? held.data.prices["placement.search"] : undefined;
   return (
     <div className="px-2 py-1">
-      <Button size="sm" variant="secondary" className="w-full" disabled={pulling || held.status !== "ok"} onClick={() => void spend.ask(price === undefined ? undefined : searches * price, pull)} title={t(placementKeys.pull.what, "re-asks Google the Places searches this map was built from")}>
+      <Button size="sm" variant="secondary" className="w-full" disabled={pulling || held.status !== "ok"} onClick={() => void spend.ask(price === undefined ? undefined : searches * price, () => pull(drawn))} title={t(placementKeys.pull.what, "re-asks Google the Places searches this map was built from")}>
         {price === undefined ? t(placementKeys.pull, "Pull latest · {n} searches", { n: searches }) : t(placementKeys.pull.priced, "Pull latest · {n} searches · ≈ {tokens} tokens", { n: searches, tokens: searches * price })}
       </Button>
       {spend.dialog}
@@ -306,7 +307,7 @@ function PullButton({ searches, pulling }: { searches: number; pulling: boolean 
   );
 }
 
-function DataSection({ view, data, notice, pulling, pullFailed }: { view: MapView; data: Data; notice: { text: string; missing: number | null } | null; pulling: boolean; pullFailed: string | null }) {
+function DataSection({ view, data, notice, pulling, pullFailed, drawn }: { view: MapView; data: Data; notice: { text: string; missing: number | null } | null; pulling: boolean; pullFailed: string | null; drawn: Query | null }) {
   const t = useT();
   const me = useMe();
   const [now] = useState(() => Date.now() / 1000);
@@ -322,8 +323,8 @@ function DataSection({ view, data, notice, pulling, pullFailed }: { view: MapVie
         </Fold>
       )}
       {/* a sweep never bought has no trade yet: what it lacks is the notice's */}
-      {(trade !== null || notice?.missing != null) && placementApi.mayCall("post", "/studies/{sha}/pull", me.permissions) && (
-        <PullButton searches={trade?.searches ?? notice!.missing!} pulling={pulling} />
+      {drawn !== null && (trade !== null || notice?.missing != null) && api.mayCall("post", "/placement/study/pull", me.permissions) && (
+        <PullButton searches={trade?.searches ?? notice!.missing!} pulling={pulling} drawn={drawn} />
       )}
       {pullFailed !== null && <Note tone="error">{pullFailed}</Note>}
       {trade !== null && trade.categories.length > 0 && (

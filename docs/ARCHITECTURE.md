@@ -4,8 +4,8 @@ The conductor is Service-Arb's host on `sa.evinvest.ltd`: who a person is (sessi
 concierge), what they hold across the services (the gmails and GMBs they manage, their tokens),
 who a machine is (the source keys), the shell the browser loads, and the forward to the services
 behind the origin — sites_panel (the sites business: leads, places, pricing, experiments,
-bookings, invoices), review_archive, playbook and placement (gmaps_optimal_placement: where
-demand sits and how contested it is, drawn over the home map) — and each managing gmail's antidetect
+bookings, invoices), review_archive and playbook — placement (gmaps_optimal_placement: where
+demand sits and how contested it is, drawn over the home map), which the conductor alone asks — and each managing gmail's antidetect
 browser or cloud phone, run by sa_browsers and driven through the conductor. Each service trusts only the assertion the
 conductor signs for a request; none of them sees a session, and none calls the conductor but its
 queries cache: it reads them. Live updates and alerts are its hubs, fed by what the services tell it; tokens are
@@ -82,6 +82,8 @@ crates/places/           Google Places: a place from what a person pastes (an id
                          rotation its purse pays for; the Google accounts (`Account`) the rotation's
                          keys are on; review_archive takes it too
 crates/ui/               Dioxus components the services' front ends share
+crates/placement_overlay/  the home map's drawing of a placement payload (wasm, imported by the front end;
+                         placement's core linked by git): a renderer, the host fetches and pulls
 crates/contracts/        concierge's gRPC contract (tonic, from contracts/proto)
 crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`; thin over `Panel`
   src/signin.rs          /auth/login, /auth/callback, /auth/logout; the /api/v1 gate
@@ -123,6 +125,8 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
                          `search`/`call`/`execute`, `open` (a view) and `run` (a binding); what destroys or
                          spends is proposed, the user confirms it
   src/areas.rs           /api/v1/areas, and the cities and localities they are drawn from
+  src/placement.rs       /api/v1/placement: a study's Definition built from the areas and trades, placement
+                         asked as the caller; a pull held, what placement says it lacks bought, charged
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
                          work in `serve`
   src/telegram.rs        the Bot API, its long poll
@@ -166,6 +170,7 @@ POST /auth/logout    CSRF; every session of the user is closed
   failed answer). Every `/api/v1` row names at most one permission, its `x-permission` and
   exactly what its gate checks (`sa_auth::Gate`, the conductor's `Vouch` the session):
   `sa:admin:sources:manage` for the source keys, `sa:admin:tokens:grant` for everyone's tokens,
+  `sa:placement:study:read` / `:spend` for placement's studies and pulls,
   none for the rest (the caller's own gmails, GMBs, trades, tokens, alerts, chats and review kit). Each fresh
   `GetMe` upserts the user (`users`: id, email, name), whom tokens and gmails belong to.
 - **The catalog.** `serve` publishes `Catalog::collect("sa", PANEL_BUILD_EPOCH)` — the whole `sa`
@@ -285,9 +290,27 @@ second block below to it.
 - Without `PANEL_ASSERTION_KEY`, `PANEL_REVIEW_ARCHIVE_URL`, `PANEL_PLAYBOOK_URL` and
   `PANEL_SITES_URL` (all four, or none), nothing is forwarded, nothing ingested, the hubs hear
   nothing of sites, and review_archive is neither followed nor told.
-- **Placement** (`PANEL_PLACEMENT_URL`, optional, needs the four) is gmaps_optimal_placement's
-  `serve --behind-conductor`, reached by the conductor's own operations only: nothing of it is
-  forwarded.
+- **Placement** (`PANEL_PLACEMENT_URL`, optional, needs the four) is not forwarded: see Placement.
+
+## Placement
+
+gmaps_optimal_placement's `serve`, behind `PANEL_PLACEMENT_URL`, has one client: the conductor
+(`placement.rs`), as the caller. The browser never speaks placement's protocol; what crosses repos
+is placement's core (a Cargo dependency of `crates/placement_overlay`) and `sa_core::placement`.
+
+```text
+GET  /placement/study?area&category ─ the area, the caller's category (or none) → Definition ─▶ placement POST /studies
+     ◀── the payload, unread ── the front end hands it to the overlay (wasm, built with the front end)
+POST /placement/study/pull?…        ─ the same Definition ─▶ placement POST /studies/asks ─▶ [Ask], since
+     each Ask bought into the queries cache (`gop`), asked again until none ─▶ POST /studies/pull ◀── the payload
+```
+
+The conductor decides what cannot be studied, by why (`no_study`, `no_google_category`,
+`no_keywords`, `another_country`; placement's `unstudied`); the front end only renders it. A study
+never spends; a pull (`sa:placement:study:spend`) buys the Places searches it lacks at the puller's
+tokens (Tokens and GBPs). Placement buys nothing: the conductor is the one center of data
+ingestion, and what placement derives, for a map or for training, it derives from what the
+conductor holds. Unset, those routes answer 503 and the map says placement is not connected.
 
 ## Browsers
 
@@ -423,7 +446,8 @@ PUT    /api/queries_cache/{scheme}/{key}         {answer, request, bought: {item
 ```
 
 - **A key is its query's SHA-256**, under its client's scheme: `places` (sa_places: method,
-  URL, field mask, body) and `gop` (placement: URL, body). The cache derives none.
+  URL, field mask, body) and `gop` (placement: URL, body; its Places searches the conductor buys
+  for a pull, `sa_places::Google::asked`). The cache derives none.
 - **Buying is claim, buy, PUT.** A claim holds the key 30 s; whoever else asks waits on it and is
   served what was bought. A failed buy gives the claim up; a holder that dies lets it lapse.
 - **A PUT says what it bought** (`bought`: the catalog item and whose key, null for an answer kept
@@ -525,6 +549,9 @@ GET    /kit/areas/{slug}/gmbs
 GET    /areas
 GET    /areas/{slug}
 PUT    /areas/{slug}
+GET    /placement/catalog                   study:read
+GET    /placement/study                     study:read, slow
+POST   /placement/study/pull                study:spend, fresh, slow
 GET    /kit/cities
 GET    /kit/cities/{place_id}
 GET    /kit/locality
@@ -719,8 +746,16 @@ request below the price, or unpriced, is refused before Google is asked. A cache
 nothing. The operator's `locate` tries the gmail's keys, then the house pays.
 review_archive's lookups are the house's for now.
 
-**A study's pull is sold per search** (`placement.search`), and per Ads request and DataForSEO
-task it buys; refused while any of them is unpriced.
+**A study's pull is sold per search** (`placement.search`) the conductor buys for it, on the
+house's rotation, under the same lock; refused while it is unpriced:
+
+```text
+POST /api/v1/placement/study/pull ─ price set, budget = balance ÷ price ─▶ placement …/asks: [Ask]
+  ├─ the first round needs more than n: 402, nothing bought ─▶ the person told the tokens it needs
+  ├─ each Ask bought (the pull its purse: none past n, else 402), asked again until none is lacking
+  └─ ─▶ placement …/pull ─▶ the ledger: the searches bought × price; a pull that failed
+                    owes it all back, as a failed walk does: the failure is the house's
+```
 
 A person's front end reads the prices with their balance, and an action costing more than
 their `confirm_above` (100 unsaid) asks them first.
@@ -1048,9 +1083,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   browser's start or a study's pull for a person is charged at its price, and refused before it is
   sent when their balance is below it; a pull buys no search past what the balance affords. Their
   own keys and the queries cache cost nothing. A round of the assistant on the panel's Claude starts
-  only on a balance above 0, a cloud phone on one minute's; their cost, and a pull's Ads requests and
-  DataForSEO tasks, known once done, are charged up to what they hold, and a phone runs no longer
-  than its launch's balance affords.
+  only on a balance above 0, a cloud phone on one minute's; their cost, known once done, is charged
+  up to what they hold, and a phone runs no longer than its launch's balance affords.
 - **No Street View past the free ones.** No panorama opens on a browser key but one
   `POST /map/street_view` bought, and none is bought past its meter's free ones on that key's
   account.

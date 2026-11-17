@@ -1,0 +1,22 @@
+[package]
+name = "placement_overlay"
+description = "Placement's heat, pressure field and competitor dots over the home map's google.maps.Map"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+gmaps_optimal_placement_core = { git = "https://github.com/EV-Service-Arb/gmaps_optimal_placement", branch = "main", features = ["ts"] }
+js-sys = "0.3"
+serde.workspace = true
+serde_json.workspace = true
+tsify = "0.5"
+wasm-bindgen = "0.2"
+
+[lints]
+workspace = true

@@ -60,7 +60,7 @@ ev_lib::settings! {
 		/// and the hubs' feeds.
 		#[required_in("production")]
 		panel_sites_url: Option<String>,
-		/// gmaps_optimal_placement (`serve --behind-conductor`), from inside the cluster: the home
+		/// gmaps_optimal_placement (`serve`), from inside the cluster: the home
 		/// map's overlay. Optional; needs the forward's four.
 		panel_placement_url: Option<String>,
 		/// The conductor's bot (`@evinvest_sa_bot`; not `telegram_token_main`). Unset: no Telegram

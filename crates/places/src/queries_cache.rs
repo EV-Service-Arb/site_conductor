@@ -12,13 +12,13 @@ use crate::Error;
 
 pub type Pending<'a, T> = Pin<Box<dyn Future<Output = Result<T, Error>> + Send + 'a>>;
 
-/// The cache as `sa_places` asks it, under [`Scheme::Places`].
+/// The cache as `sa_places` asks it.
 pub trait QueriesCache: Send + Sync + std::fmt::Debug {
-	fn get(&self, key: Key) -> Pending<'_, Option<Stored>>;
-	fn claim(&self, key: Key, fresh_since: Option<Timestamp>) -> Pending<'_, Claim>;
-	fn put(&self, key: Key, put: Put) -> Pending<'_, ()>;
+	fn get(&self, scheme: Scheme, key: Key) -> Pending<'_, Option<Stored>>;
+	fn claim(&self, scheme: Scheme, key: Key, fresh_since: Option<Timestamp>) -> Pending<'_, Claim>;
+	fn put(&self, scheme: Scheme, key: Key, put: Put) -> Pending<'_, ()>;
 	/// The claim given up: the buy failed, and nothing is kept.
-	fn release(&self, key: Key) -> Pending<'_, ()>;
+	fn release(&self, scheme: Scheme, key: Key) -> Pending<'_, ()>;
 }
 
 /// The conductor's queries cache over HTTP.
@@ -65,6 +65,8 @@ pub(crate) struct Request<'a> {
 	pub url: &'a str,
 	pub mask: &'a str,
 	pub body: &'a str,
+	/// Whose key it is: [`Scheme::Gop`] for a search placement asked (`sa_core::placement::Ask`).
+	pub scheme: Scheme,
 	/// How Google bills it; not part of the key, the mask decides it.
 	pub sku: sa_core::prices::PlacesRequest,
 	/// What it asks about, as a person reads it: a place id, a search's text.
@@ -74,7 +76,11 @@ pub(crate) struct Request<'a> {
 impl Request<'_> {
 	/// What the key is the digest of, kept with the answer.
 	pub fn preimage(&self) -> String {
-		format!("{}\n{}\n{}\n{}", self.method, self.url, self.mask, self.body)
+		match self.scheme {
+			Scheme::Places => format!("{}\n{}\n{}\n{}", self.method, self.url, self.mask, self.body),
+			// keyed by Google's URL, whichever this one is: a stub's stands in for it
+			Scheme::Gop => sa_core::queries_cache::gop(sa_core::placement::SEARCH_TEXT, self.body),
+		}
 	}
 
 	pub fn key(&self) -> Key {
@@ -83,9 +89,9 @@ impl Request<'_> {
 }
 
 impl QueriesCache for Remote {
-	fn get(&self, key: Key) -> Pending<'_, Option<Stored>> {
+	fn get(&self, scheme: Scheme, key: Key) -> Pending<'_, Option<Stored>> {
 		Box::pin(async move {
-			let path = under(Scheme::Places, key);
+			let path = under(scheme, key);
 			match self.send(reqwest::Method::GET, &path, Vec::new()).await? {
 				(reqwest::StatusCode::OK, text) => Ok(Some(serde_json::from_str(&text)?)),
 				(reqwest::StatusCode::NOT_FOUND, _) => Ok(None),
@@ -94,9 +100,9 @@ impl QueriesCache for Remote {
 		})
 	}
 
-	fn claim(&self, key: Key, fresh_since: Option<Timestamp>) -> Pending<'_, Claim> {
+	fn claim(&self, scheme: Scheme, key: Key, fresh_since: Option<Timestamp>) -> Pending<'_, Claim> {
 		Box::pin(async move {
-			let path = format!("{}/claim", under(Scheme::Places, key));
+			let path = format!("{}/claim", under(scheme, key));
 			let body = serde_json::to_vec(&ClaimBody { fresh_since })?;
 			match self.send(reqwest::Method::POST, &path, body).await? {
 				(reqwest::StatusCode::OK, text) => Ok(serde_json::from_str(&text)?),
@@ -105,9 +111,9 @@ impl QueriesCache for Remote {
 		})
 	}
 
-	fn put(&self, key: Key, put: Put) -> Pending<'_, ()> {
+	fn put(&self, scheme: Scheme, key: Key, put: Put) -> Pending<'_, ()> {
 		Box::pin(async move {
-			let path = under(Scheme::Places, key);
+			let path = under(scheme, key);
 			match self.send(reqwest::Method::PUT, &path, serde_json::to_vec(&put)?).await? {
 				(reqwest::StatusCode::NO_CONTENT, _) => Ok(()),
 				(status, text) => Err(self.refused(&path, status, &text)),
@@ -115,9 +121,9 @@ impl QueriesCache for Remote {
 		})
 	}
 
-	fn release(&self, key: Key) -> Pending<'_, ()> {
+	fn release(&self, scheme: Scheme, key: Key) -> Pending<'_, ()> {
 		Box::pin(async move {
-			let path = format!("{}/claim", under(Scheme::Places, key));
+			let path = format!("{}/claim", under(scheme, key));
 			match self.send(reqwest::Method::DELETE, &path, Vec::new()).await? {
 				(reqwest::StatusCode::NO_CONTENT, _) => Ok(()),
 				(status, text) => Err(self.refused(&path, status, &text)),
