@@ -310,7 +310,7 @@
             # a source that gets a 5xx retries from its outbox; nothing is lost while down
             criticality = "normal";
             entrypoint = [ "${bin}/bin/${pname}" "--config" configPath "--spend-real-quota-i-am-certain" "serve" "--bind" "0.0.0.0:${toString port}" ];
-            # /bin/panel, for `kubectl exec … panel source add` and the like
+            # /bin/panel, for `kubectl exec … panel migrate` and the like
             contents = [ bin ];
             # the production guards (`#[required_in("production")]`) are armed wherever it runs
             env = {
@@ -380,7 +380,7 @@
         # app does not depend on them, so naming a cargo build skips the Nix one.
         localStack = pkgs.writeShellApplication {
           name = "local-stack";
-          runtimeInputs = with pkgs; [ coreutils curl gawk git gnused iproute2 procps util-linux nodejs_22 watchexec litestream sops yq-go openssh gnutar ];
+          runtimeInputs = with pkgs; [ coreutils curl gawk jq git gnused iproute2 procps util-linux nodejs_22 watchexec litestream sops yq-go openssh gnutar ];
           text = lib.concatStrings (lib.mapAttrsToList (k: v: "export ${k}=${v}\n") localEnv) + builtins.readFile ./scripts/local-stack.sh;
         };
 
