@@ -410,6 +410,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/areas/{slug}/studies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Defines placement's study of the area at `/<slug>/` under one of the caller's categories, or of the area alone; buys nothing.
+         * @description 404 no such area or category of the caller's; 422 a category not set up to be studied
+         *     (`no_study`, `no_google_category`, `no_keywords`), set up for `another_country`, or one
+         *     placement does not study (`unstudied`); 503 placement not connected.
+         */
+        post: operations["define_study"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assistant/archived": {
         parameters: {
             query?: never;
@@ -2383,6 +2405,652 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sites/bookings/google_calendar/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Google's redirect after the owner's consent: the brand's refresh token kept, sealed, and a page that sends the owner back to the one the consent was asked from. 409 `consent_expired` for a consent asked more than 10 minutes ago, or never. */
+        get: operations["sites.google_callback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/bookings/google_calendar/{brand}/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Asks the brand's calendar owner to let the panel read it: Google's consent page, which sends them back through the callback to `return_to`. */
+        post: operations["sites.google_consent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/bookings/unmatched": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The providers' bookings no lead was found for, the next slot first; at most 200. */
+        get: operations["sites.unmatched_bookings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/bookings/{id}/attach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Joins a provider's booking to a lead of its brand by hand (`booking.attached`).
+         * @description 404 for a booking not known, or no such lead of its brand; 409 when it was joined by hand
+         *     already.
+         */
+        post: operations["sites.attach_booking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/experiments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A brand's experiments, or every brand's: declared, overridden, and in effect. */
+        get: operations["sites.list_experiments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/experiments/{brand}/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Overrides how a landing runs one of its experiments: switched on or off, its weights, its holdout (`experiment.configured`).
+         * @description 400 for a change the declaration cannot take (weights against its variants); 404 for an
+         *     experiment unknown or retired, or a key that cannot be one. A change that changes nothing
+         *     journals nothing.
+         */
+        put: operations["sites.configure_experiment"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/funnel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The funnel of the leads created within a window of UTC days: each stage reached, the lost and manual shares, the payments.
+         * @description Payments are of those same leads, whenever paid. An empty window has no location rows.
+         *     Visits and intents are PostHog's: `posthog_url` opens the funnel there.
+         */
+        get: operations["sites.funnel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/gmbs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The places linked to a GMB, by the GMB's id, with their leads of the last 7 days and those overdue for a first contact. */
+        get: operations["sites.gmbs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The last 500 invoices, newest first, as the panel last stored them: banking is not asked. */
+        get: operations["sites.list_invoices"];
+        put?: never;
+        /**
+         * Issues an invoice through banking's ScopeLedger, payable on its pay page.
+         * @description Stored `creating` with its terms, then asked of banking: a refusal drops it, a lost answer
+         *     keeps it for the retry, which is answered 200 with the same invoice.
+         *
+         *     The Idempotency-Key is required: a lost answer retried without one would bill twice. 400 for
+         *     what was typed or banking found wrong with it; 409 for a key used for other terms, or
+         *     banking's reason (`invoice_not_open`, `scope_frozen`, …); 503 `invoices_unavailable` without
+         *     a ledger configured, banking's `not_granted`, or `ledger_unavailable`.
+         */
+        post: operations["sites.create_invoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/invoices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One invoice, as banking has it now; a final one (paid, cancelled, expired) as stored. */
+        get: operations["sites.get_invoice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/leads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The leads, newest created first, a page at a time.
+         * @description Each filter narrows; `created_*` are UTC days, both included.
+         */
+        get: operations["sites.list_leads"];
+        put?: never;
+        /** Creates a lead by hand (`lead.created`, kind `panel`). */
+        post: operations["sites.create_lead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/leads/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many leads are at each stage, and how many are overdue for their first contact. */
+        get: operations["sites.lead_counts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/leads/{brand}/{lead}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A lead's card: the lead and every event about it. */
+        get: operations["sites.get_lead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/leads/{brand}/{lead}/booking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sets or clears a lead's booked slot by hand (`booking.set`, `booking.cleared`).
+         * @description 400 for an instant that is not one; 409 when the booking is not where the action starts from.
+         */
+        post: operations["sites.book_lead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/leads/{brand}/{lead}/booking/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * How a lead's booking ended (`booking.status_changed`).
+         * @description 409 unless the lead is booked.
+         */
+        post: operations["sites.close_booking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/leads/{brand}/{lead}/calls/attempt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Starts a call to the customer (`call.attempted`); its outcome is logged against the attempt. */
+        post: operations["sites.attempt_call"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/leads/{brand}/{lead}/calls/{attempt}/outcome": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** How an attempted call went (`call.logged`). */
+        post: operations["sites.call_outcome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/leads/{brand}/{lead}/messaged": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The customer wrote on a messenger, as the operator saw it (`lead.messaged`). */
+        post: operations["sites.mark_messaged"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/leads/{brand}/{lead}/no_answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A call nobody answered (`call.attempted` + `call.logged{no_answer}`).
+         * @description A note's button: its Idempotency-Key is required, so a press repeated records nothing twice.
+         */
+        post: operations["sites.no_answer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/leads/{brand}/{lead}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records a payment for a lead's job, entered by hand (`payment.received`). */
+        post: operations["sites.record_payment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/leads/{brand}/{lead}/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Moves a lead to a stage (`lead.contacted`, `lead.quoted`, `job.won`, `lead.lost`, `job.completed`).
+         * @description Stages move forward; `lost` from anywhere, and later progress reopens a lost lead. 409 when
+         *     the move is not from where the lead stands.
+         */
+        post: operations["sites.move_lead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller, as the conductor vouched for them: their user id and `sa:sites:*` permissions. */
+        get: operations["sites.me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/places": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every place the panel knows: every location a lead names, and every place registered. */
+        get: operations["sites.list_places"];
+        put?: never;
+        /**
+         * Registers a place by hand, before it has a lead.
+         * @description 409 `place_exists` for a place the panel knows.
+         */
+        post: operations["sites.register_place"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/places/{brand}/{slug}/gmb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Links a place to the conductor's GMB it is the landing of, or unlinks it.
+         * @description 404 for a place not known; 409 `gmb_taken` when another place has that GMB.
+         */
+        put: operations["sites.link_gmb"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/places/{brand}/{slug}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Puts a withdrawn place back on the sites. */
+        post: operations["sites.restore_place"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/places/{brand}/{slug}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A place's live settings, as the sites are served them. */
+        get: operations["sites.place_settings"];
+        /**
+         * Replaces a place's live settings, whole; the sites take them on their next read.
+         * @description 409 `stale` when `expected_updated_at` is not what the place stands at; 422
+         *     `invalid_settings` naming every refused field by its path (`hours[0].opens`, `serviceArea[2]`).
+         */
+        put: operations["sites.set_place_settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/places/{brand}/{slug}/settings/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A place's changes, the latest first: its settings before and after each. */
+        get: operations["sites.place_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/places/{brand}/{slug}/settings/revert/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Puts back the settings a change found (its `before`), journaled as a revert.
+         * @description The body is optional: none, `null` or `{}` reverts over whatever is there. 404 for a change
+         *     not of this place; 409 `stale` as for a PUT.
+         */
+        post: operations["sites.revert_place_settings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/places/{brand}/{slug}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Takes a place off the sites: they answer it as gone. Its settings are kept. */
+        post: operations["sites.withdraw_place"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The pricing of every brand the panel knows (a lead's, a place's, a landing's experiments') or has pricing or locales for. */
+        get: operations["sites.list_pricing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/pricing/{brand}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A brand's pricing; one never set has its model, `updated_at` and `updated_by` null. */
+        get: operations["sites.get_pricing"];
+        /**
+         * Saves a brand's price list; its sites take it on their next read.
+         * @description 409 `stale` when `expected_updated_at` is not what it stands at; 422 `invalid_pricing` naming
+         *     the model's first problem by its path.
+         */
+        put: operations["sites.set_pricing"];
+        post?: never;
+        /**
+         * Takes a brand's price list off its sites: they keep their baked one.
+         * @description 409 as for a PUT.
+         */
+        delete: operations["sites.remove_pricing"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/pricing/{brand}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A brand's last 50 pricing changes, the latest first; a removal's model, `valid_from` and `needs` null. */
+        get: operations["sites.pricing_changes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/pricing/{brand}/locales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sets the locales a brand's sites speak. The saved model is not checked again: one missing a new locale's labels is kept for the editor and not served until saved with them. */
+        put: operations["sites.set_locales"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sites/pricing/{brand}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What a model, saved or not, prices a need at with these answers; `cents` null is no price.
+         * @description 422 as for a PUT: the draft is held to the brand's locales, as a site would hold it.
+         */
+        post: operations["sites.preview_price"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2626,6 +3294,12 @@ export interface components {
             /** @description Placement's trade that studies it. */
             study: string | null;
         };
+        /** @description A trade of the caller's, as set up for a country. */
+        CategoryIn: {
+            country: components["schemas"]["Country"];
+            /** Format: int64 */
+            trade: number;
+        };
         /** @description A chat, whole. */
         Chat: {
             /** @description RFC 3339; the caller's own. */
@@ -2774,7 +3448,7 @@ export interface components {
          * @description Which refusal, for a client to act on: its status follows from it.
          * @enum {string}
          */
-        ErrorCode: "bad_gateway" | "bad_request" | "browsers_not_connected" | "conflict" | "csrf" | "forbidden" | "internal" | "not_found" | "too_large" | "too_many" | "unauthenticated" | "unavailable";
+        ErrorCode: "another_country" | "bad_gateway" | "bad_request" | "browsers_not_connected" | "conflict" | "csrf" | "forbidden" | "internal" | "no_google_category" | "no_keywords" | "no_study" | "not_found" | "too_large" | "too_many" | "unaffordable" | "unauthenticated" | "unavailable" | "unstudied";
         /** @description Where a gmail's proxy comes out, at its last check. */
         Exit: {
             city: string;
@@ -2895,6 +3569,8 @@ export interface components {
             id: number;
             /** @description Optional, the caller's say: nothing here judges it. */
             role: components["schemas"]["GmailRole"] | null;
+            /** @description Its window's tabs, in order. */
+            tabs: components["schemas"]["Tab"][];
         };
         GmailBody: {
             /**
@@ -2954,9 +3630,13 @@ export interface components {
             phone: string | null;
             /** @description Google's place id; `null` while a draft, and maybe while verifying or suspended: off Maps. */
             place_id: string | null;
+            /** @description A draft's must-haves not ready; `null` past a draft. */
+            readiness: components["schemas"]["Readiness"] | null;
             /** @description A draft's candidate spots, in order, its location the first's; none past a draft. */
             spots: components["schemas"]["Spot"][];
             state: components["schemas"]["State"];
+            /** @description Its window's tabs, in order: its state's. */
+            tabs: components["schemas"]["Tab"][];
             /**
              * Format: int64
              * @description Its category is this trade in its country.
@@ -3374,6 +4054,16 @@ export interface components {
             /** Format: int64 */
             output: number;
         };
+        /**
+         * @description What a draft needs before Google's form: the form's order, then what stands behind it.
+         *
+         *     - `category`: Its trade set up in its country, with Google's category.
+         *     - `site`: A landing page of sites' shows it.
+         *     - `hidden_address`: The address its film is shot at, and whether customers visit.
+         *     - `profile`: Its gmail's browser set up.
+         * @enum {string}
+         */
+        MustHave: "name" | "areas" | "phone" | "film" | "gmail" | "category" | "site" | "hidden_address" | "profile";
         /** @enum {string} */
         Need: "sa:admin:sources:manage" | "sa:admin:tokens:grant" | "sa:admin:trash:keep" | "sa:placement:study:read" | "sa:placement:study:spend" | "sa:playbook:mcp:use" | "sa:review_archive:archive:operate" | "sa:review_archive:members:act_as" | "sa:sites:analysis:experiments:edit" | "sa:sites:analysis:read" | "sa:sites:work:invoices:create" | "sa:sites:work:leads:edit" | "sa:sites:work:pii:see" | "sa:sites:work:places:edit" | "sa:sites:work:pricing:edit" | "sa:sites:work:read" | "sa:admin" | "sa:everyone" | "sa:operator";
         NewChat: {
@@ -3603,6 +4293,12 @@ export interface components {
             detail: string;
             /** @constant */
             state: "failed";
+        };
+        /** @description A draft's must-haves, in [`MustHave`]'s order, that are not ready. */
+        Readiness: {
+            missing: components["schemas"]["MustHave"][];
+            /** @description Not known now: sites could not be read. */
+            unknown: components["schemas"]["MustHave"][];
         };
         RefusedPlace: {
             place_id: string;
@@ -3992,6 +4688,14 @@ export interface components {
          * @enum {string}
          */
         Stop: "at_free" | "never";
+        Study: {
+            /** @description The definition's id at placement: what its overlay shows. */
+            sha: string;
+        };
+        StudyOf: {
+            /** @description One of the caller's; none: the area's grid alone, nothing billed. */
+            category?: components["schemas"]["CategoryIn"] | null;
+        };
         /** @description A place what is being typed may be heading for. */
         Suggestion: {
             /** @description Its name, or the address's first line. */
@@ -4008,6 +4712,14 @@ export interface components {
             enabled: boolean;
             gmbs: number[];
         };
+        /**
+         * @description - `launch`: A draft's launch onto Google.
+         *     - `browser`: The gmail's browser.
+         *     - `kit`: A verified GBP's review kit.
+         *     - `connections`: A gmail's inbox and Maps key.
+         * @enum {string}
+         */
+        Tab: "launch" | "browser" | "kit" | "connections";
         /** @description What an action does: a view, an operation, or a binding of the page's keymap — nothing else. */
         Target: {
             href: string;
@@ -4365,7 +5077,7 @@ export interface components {
          * @description Which refusal, for a client to act on: its status follows from it.
          * @enum {string}
          */
-        "placement.ErrorCode": "bad_request" | "forbidden" | "internal" | "not_found" | "too_large" | "unaffordable" | "unauthenticated" | "unstudied";
+        "placement.ErrorCode": "bad_request" | "forbidden" | "internal" | "not_found" | "too_large" | "unaffordable" | "unauthenticated" | "unstudied" | "csrf" | "unavailable" | "bad_gateway" | "conflict";
         /** @description One of Google's Business Profile categories, named in the country's language. */
         "placement.Gcid": {
             id: string;
@@ -4537,7 +5249,7 @@ export interface components {
          * @description Which refusal, for a client to act on: its status follows from it.
          * @enum {string}
          */
-        "playbook.ErrorCode": "bad_request" | "forbidden" | "over_budget" | "unanswerable" | "unauthenticated";
+        "playbook.ErrorCode": "bad_request" | "forbidden" | "over_budget" | "unanswerable" | "unauthenticated" | "csrf" | "unavailable" | "bad_gateway" | "internal";
         /** @description One tracked place's reviews in three columns. */
         "review_archive.Board": {
             /** @description Gone with an open appeal, most recently requested first. */
@@ -4653,7 +5365,7 @@ export interface components {
          * @description Which refusal, for a client to act on: its status follows from it.
          * @enum {string}
          */
-        "review_archive.ErrorCode": "bad_request" | "busy" | "conflict" | "forbidden" | "internal" | "invalid" | "not_found" | "timed_out" | "too_large" | "unauthenticated" | "unclaimable";
+        "review_archive.ErrorCode": "bad_request" | "busy" | "conflict" | "forbidden" | "internal" | "invalid" | "not_found" | "timed_out" | "too_large" | "unauthenticated" | "unclaimable" | "csrf" | "unavailable" | "bad_gateway";
         /**
          * @description What a webhook can subscribe to. Stored and sent (`X-Event`) under its dotted name.
          *
@@ -5344,6 +6056,1058 @@ export interface components {
             /** @description Where deliveries go. */
             url: string;
         };
+        /** @description Adds `addCents` to the base. */
+        "sites.AddOption": {
+            /** Format: int64 */
+            addCents: number;
+            id: string;
+            labels: {
+                [key: string]: string;
+            };
+        };
+        /** @description A storefront's address; its region and country are the site's. */
+        "sites.Address": {
+            locality: string;
+            /** @description A French postal code: five digits. */
+            postalCode: string;
+            street: string;
+        };
+        /** @description What the provider gave of who booked. */
+        "sites.Attendee": {
+            email?: string | null;
+            name?: string | null;
+            phone?: string | null;
+        };
+        "sites.BookingAttach": {
+            lead: components["schemas"]["sites.LeadId"];
+        };
+        /**
+         * @description How a booked slot ended, as an operator says (`booking.status_changed`).
+         * @enum {string}
+         */
+        "sites.BookingClosed": "done" | "no_show" | "canceled";
+        /**
+         * @description A place's `booking` setting: the providers it has a page on, and the one it offers by
+         *     default — `manual` or one of them. `manual` is always there, so never configured.
+         */
+        "sites.BookingConfig": {
+            default: components["schemas"]["sites.Provider"];
+            providers: {
+                cal_com?: components["schemas"]["sites.BookingPage"];
+                google_calendar?: components["schemas"]["sites.BookingPage"];
+                link?: components["schemas"]["sites.BookingPage"];
+            };
+        };
+        "sites.BookingEnd": {
+            status: components["schemas"]["sites.BookingClosed"];
+        };
+        /**
+         * @description How a provider's booking was joined to its lead.
+         *
+         *     - `ref`: By the ref the booking page carried (the lead's id).
+         *     - `contact`: By the attendee's phone or email, one lead of the brand within the window.
+         *     - `manual`: By an operator: a slot typed in, or a provider's booking attached by hand.
+         * @enum {string}
+         */
+        "sites.BookingMatch": "ref" | "contact" | "manual";
+        /** @description A provider's booking page. */
+        "sites.BookingPage": {
+            url: string;
+        };
+        /** @description An operator's slot for a lead. */
+        "sites.BookingSlot": {
+            /** @constant */
+            action: "set";
+            end_at?: string | null;
+            start_at: string;
+        } | {
+            /** @constant */
+            action: "clear";
+        };
+        /**
+         * @description Where a lead's booking stands.
+         *
+         *     - `requested`: The site asked for a slot (`booking.requested`); nobody has one yet.
+         * @enum {string}
+         */
+        "sites.BookingStatus": "none" | "booked" | "canceled" | "done" | "no_show" | "requested";
+        /**
+         * @description A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.
+         * @example aquafix
+         */
+        "sites.BrandId": string;
+        "sites.CallAttempt": {
+            /** Format: uuid */
+            attempt_id: string;
+        };
+        /**
+         * @description How a call ended, as the operator tells it. Only what a person can know without
+         *     telephony: no durations, no missed calls (spec §10.1).
+         *
+         *     - `later`: The customer asked to be called back.
+         * @enum {string}
+         */
+        "sites.CallOutcome": "answered" | "no_answer" | "wrong_number" | "later";
+        "sites.CallOutcomeBody": {
+            outcome: components["schemas"]["sites.CallOutcome"];
+        };
+        /** @enum {string} */
+        "sites.ChangeKind": "set" | "remove";
+        /**
+         * @description How the customer was reached.
+         * @enum {string}
+         */
+        "sites.ContactChannel": "phone" | "whatsapp" | "email" | "telegram" | "other";
+        /**
+         * @description The currencies a quote or a payment may be in. Checked here, not in the registry: a rebuild
+         *     must not re-judge what was journaled under an older list.
+         * @enum {string}
+         */
+        "sites.Currency": "EUR" | "USD" | "GBP" | "AUD";
+        /**
+         * @description A day of the week, as the hours name it.
+         * @enum {string}
+         */
+        "sites.DayOfWeek": "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
+        /**
+         * @description When in the day the visitor would like their slot.
+         * @enum {string}
+         */
+        "sites.DayPart": "morning" | "afternoon" | "evening";
+        /** @description `discountBp` taken off the subtotal, in basis points: 1 000 is 10 % off. */
+        "sites.DiscountOption": {
+            /** Format: int64 */
+            discountBp: number;
+            id: string;
+            labels: {
+                [key: string]: string;
+            };
+        };
+        /** @description Why the request was refused. */
+        "sites.Error": {
+            code: components["schemas"]["sites.ErrorCode"];
+            /** @description For a person. */
+            error: string;
+        };
+        /**
+         * @description Which refusal, for a client to act on: its status follows from it.
+         * @enum {string}
+         */
+        "sites.ErrorCode": "already_attached" | "bad_request" | "booking_done" | "consent_expired" | "forbidden" | "gmb_taken" | "google_refused" | "google_unavailable" | "idempotency_conflict" | "idempotency_key_taken" | "internal" | "invalid_pricing" | "invalid_settings" | "invoice_not_open" | "invoice_processing" | "invoices_unavailable" | "ledger_refused" | "ledger_unavailable" | "no_booking" | "no_won_job" | "not_booked" | "not_found" | "not_granted" | "place_exists" | "scope_frozen" | "stale" | "too_large" | "unauthenticated" | "csrf" | "unavailable" | "bad_gateway";
+        /** @description One experiment of a brand: declared by its landing, overridden by an admin. */
+        "sites.Experiment": {
+            brand: components["schemas"]["sites.BrandId"];
+            declared: components["schemas"]["sites.ExperimentDeclared"];
+            /** @description What the landing runs: the declaration with the override laid over it. */
+            effective: components["schemas"]["sites.ExperimentSplit"];
+            key: components["schemas"]["sites.ExperimentKey"];
+            /** @description Null when nothing is set, or everything was put back. */
+            override: components["schemas"]["sites.ExperimentOverride"] | null;
+            /** @description Its funnel in PostHog; null without a project configured. */
+            posthog_url: string | null;
+            /** @description Its landing no longer declares it. */
+            retired: boolean;
+            /** @description The first is the control. */
+            variants: components["schemas"]["sites.Variant"][];
+            /** Format: date-time */
+            weights_changed_at: string | null;
+        };
+        /** @description A change: each field absent (left), null (put back to the declaration) or a value (set). */
+        "sites.ExperimentChange": {
+            /** @default null */
+            enabled?: boolean | null;
+            /**
+             * Format: double
+             * @description In [0, 1).
+             * @default null
+             */
+            holdout?: number | null;
+            /**
+             * @description One per variant, each ≥ 0, their sum > 0.
+             * @default null
+             */
+            weights?: number[] | null;
+        };
+        /** @description As the landing's latest declaration said it. */
+        "sites.ExperimentDeclared": {
+            /** Format: date-time */
+            declared_at: string;
+            enabled: boolean;
+            /**
+             * Format: double
+             * @description The share of visitors kept out of it, in [0, 1).
+             */
+            holdout: number | null;
+            /** @description The hypothesis, in a line. */
+            summary: string | null;
+            /** @description One per variant. */
+            weights: number[];
+        };
+        /** @example hero_layout */
+        "sites.ExperimentKey": string;
+        /** @description What an admin set over the declaration; a field null is the declaration's. */
+        "sites.ExperimentOverride": {
+            /** Format: date-time */
+            changed_at: string;
+            /** @description The admin's email, else their id. */
+            changed_by: string;
+            enabled: boolean | null;
+            /** Format: double */
+            holdout: number | null;
+            weights: number[] | null;
+        };
+        /** @description The weights, the switch and the holdout of an experiment. */
+        "sites.ExperimentSplit": {
+            enabled: boolean;
+            /**
+             * Format: double
+             * @description The share of visitors kept out of it, in [0, 1).
+             */
+            holdout: number | null;
+            /** @description One per variant. */
+            weights: number[];
+        };
+        "sites.Experiments": {
+            experiments: components["schemas"]["sites.Experiment"][];
+        };
+        "sites.Funnel": {
+            brand: components["schemas"]["sites.BrandId"] | null;
+            /** Format: date */
+            from: string;
+            /**
+             * Format: uint64
+             * @description Under this many, a share has no percent.
+             */
+            min_sample: number;
+            /** @description The same funnel from the visit on in PostHog; null without a project configured. */
+            posthog_url: string | null;
+            /** Format: date */
+            to: string;
+        } & (components["schemas"]["sites.FunnelSlice"] | {
+            by: components["schemas"]["sites.FunnelBy"];
+            locations: components["schemas"]["sites.LocationFunnel"][];
+        });
+        /**
+         * @description How the funnel is cut.
+         *
+         *     - `location`: One slice per brand's location; `location` null for the leads naming none.
+         * @enum {string}
+         */
+        "sites.FunnelBy": "location";
+        /** @description A slice's funnel: its steps, the lost and manual shares, and its payments. */
+        "sites.FunnelSlice": {
+            lost: components["schemas"]["sites.Share"];
+            manual: components["schemas"]["sites.Share"];
+            payments: components["schemas"]["sites.Paid"][];
+            stages: components["schemas"]["sites.FunnelStep"][];
+        };
+        "sites.FunnelStep": {
+            of_leads: components["schemas"]["sites.Share"];
+            of_previous: components["schemas"]["sites.Share"] | null;
+            /** Format: uint64 */
+            reached: number;
+            /** @enum {string} */
+            stage: "created" | "contacted" | "quoted" | "won" | "completed" | "paid";
+        };
+        /** @description Degrees, on the globe. */
+        "sites.Geo": {
+            /** Format: double */
+            lat: number;
+            /** Format: double */
+            lng: number;
+        };
+        "sites.GmbLink": {
+            /**
+             * Format: int64
+             * @description Required: `null` unlinks.
+             */
+            gmb_id: number;
+        };
+        /** @description A GMB's place and how its leads stand. */
+        "sites.GmbPlace": {
+            brand: string;
+            /**
+             * Format: uint32
+             * @description Leads created in the last 7 days.
+             */
+            leads_7d: number;
+            location: string;
+            /**
+             * Format: uint32
+             * @description Leads overdue for their first contact.
+             */
+            overdue: number;
+        };
+        /** @description GMB ids split by commas (`3,7`): only what belongs to the places linked to one of them; empty selects none. */
+        "sites.Gmbs": string;
+        "sites.GoogleConsentAsked": {
+            /** @description The calendar to read; the owner's own (`primary`) when absent. */
+            calendar_id?: string | null;
+            /**
+             * Format: uri
+             * @description The page to come back to once Google answered: one of the conductor's.
+             */
+            return_to: string;
+        };
+        "sites.GoogleConsentUrl": {
+            /** @description Google's consent page, for the brand's calendar owner to open. */
+            url: string;
+        };
+        /** @example bedrooms */
+        "sites.InputId": string;
+        /** @description An invoice the panel asked banking for. */
+        "sites.Invoice": {
+            /** @description Canonical decimal USDT. */
+            amount: string;
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: uuid
+             * @description The concierge user who issued it.
+             */
+            created_by: string;
+            /** @description USDT. */
+            currency: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: uuid */
+            id: string;
+            /** @description Banking's; null while `creating`. */
+            invoice_id: string | null;
+            memo: string;
+            /** Format: date-time */
+            paid_at: string | null;
+            /** @description The payer's `auth_subject` at banking. */
+            paid_by: string | null;
+            /** @description Banking's page where the payer pays; null while `creating`. */
+            pay_url: string | null;
+            state: components["schemas"]["sites.InvoiceState"];
+        };
+        /**
+         * @description Where an invoice stands, as the panel stores it.
+         *
+         *     - `creating`: The panel has the row, banking has not answered yet (or the answer was lost): a retry
+         *     with the same idempotency key sends the stored terms again.
+         *     - `open`: Payable on banking's pay page.
+         *     - `processing`: The payer paid and the ledger has not posted it yet. Not a payment: it ends `paid`, or
+         *     falls back to `open` if the ledger refuses it. Never fulfil on it.
+         *     - `paid`: The ledger took the payment (`INVOICE_STATE_PAID`, `KIND_INVOICE_PAID`). Final.
+         * @enum {string}
+         */
+        "sites.InvoiceState": "cancelled" | "expired" | "creating" | "open" | "processing" | "paid";
+        "sites.Invoices": {
+            invoices: components["schemas"]["sites.Invoice"][];
+        };
+        /** @description The event a write journaled. */
+        "sites.Journaled": {
+            /** Format: uuid */
+            event_id: string;
+        };
+        /** @description A lead: the projection's row, its wait for a first contact, and what the customer left. */
+        "sites.Lead": {
+            /** @description Its booking; `status: none` when it has none. */
+            booking: components["schemas"]["sites.LeadBooking"];
+            brand: string;
+            /** @description Null for a lead seen before its creation. */
+            channel: components["schemas"]["sites.LeadChannel"] | null;
+            /** Format: date-time */
+            completed_at: string | null;
+            /** Format: date-time */
+            contacted_at: string | null;
+            /**
+             * Format: date-time
+             * @description When each stage was first reached.
+             */
+            created_at: string | null;
+            /** @description An estimate's inputs, input id → value id. */
+            estimate_inputs: {
+                [key: string]: components["schemas"]["sites.InputId"];
+            } | null;
+            /** @description The landing's flow; null when it said none. */
+            flow: components["schemas"]["sites.LeadFlow"] | null;
+            job_id: string | null;
+            /** Format: date-time */
+            last_event_at: string;
+            lead_id: string;
+            location: string | null;
+            /** Format: date-time */
+            lost_at: string | null;
+            lost_reason: components["schemas"]["sites.LostReason"] | null;
+            /** @description Typed in by hand (an event of kind `panel`). */
+            manual: boolean;
+            /** @description The ref the customer carries into a messenger (`AQ-7K3F`), when the landing made one. */
+            message_ref: string | null;
+            /**
+             * Format: date-time
+             * @description When the customer first wrote on a messenger, and on which; null while they have not.
+             */
+            messaged_at: string | null;
+            messaged_channel: components["schemas"]["sites.Messenger"] | null;
+            /** Format: date-time */
+            paid_at: string | null;
+            /**
+             * @description What the customer left (name, phone, need, …), for a caller holding
+             *     `sa:sites:work:pii:see`; absent otherwise or when there is none.
+             */
+            pii?: unknown;
+            /**
+             * Format: date
+             * @description When the pricing model behind `quoted_cents` took effect.
+             */
+            pricing_valid_from: string | null;
+            /** Format: date-time */
+            quoted_at: string | null;
+            /**
+             * Format: int64
+             * @description The price an estimate or a fixed price showed, integer cents EUR TTC.
+             */
+            quoted_cents: number | null;
+            /** @description Set while it waits for its first contact. */
+            sla: components["schemas"]["sites.Sla"] | null;
+            stage: components["schemas"]["sites.Stage"];
+            /** @description Why the landing's antispam doubted it; null otherwise. */
+            suspect: components["schemas"]["sites.LeadSuspect"] | null;
+            /** Format: date-time */
+            won_at: string | null;
+        };
+        /** @description A lead's booking, folded from its facts. */
+        "sites.LeadBooking": {
+            /** Format: date-time */
+            end_at: string | null;
+            /** @description The provider's booking, when the slot is one. */
+            external_ref: string | null;
+            /** @description How the slot joined the lead. */
+            match: components["schemas"]["sites.BookingMatch"] | null;
+            /**
+             * Format: date
+             * @description The visitor's wish.
+             */
+            preferred_date: string | null;
+            preferred_part: components["schemas"]["sites.DayPart"] | null;
+            provider: components["schemas"]["sites.Provider"] | null;
+            /** Format: date-time */
+            start_at: string | null;
+            status: components["schemas"]["sites.BookingStatus"];
+        };
+        "sites.LeadCard": {
+            events: components["schemas"]["sites.LeadEvent"][];
+            lead: components["schemas"]["sites.Lead"];
+        };
+        /**
+         * @description How a lead came in.
+         *
+         *     - `form`: The landing's form.
+         *     - `phone_inbound`: A call that bypassed the form, entered by the operator (spec §10a).
+         *     - `callback`: The landing's "call me back" request: the customer left a number to be called on.
+         *     - `whatsapp`: The customer chose to write on WhatsApp (MESSENGER-CHANNELS-SPEC §1): the landing's
+         *     prefilled message, or a conversation a bot or an operator saw start there.
+         *     - `telegram`: The customer chose the brand's Telegram bot (`t.me/<bot>?start=<ref>`).
+         * @enum {string}
+         */
+        "sites.LeadChannel": "form" | "phone_inbound" | "callback" | "whatsapp" | "telegram";
+        "sites.LeadCounts": {
+            /** Format: uint64 */
+            overdue: number;
+            /** @description Every stage, 0 included. */
+            stages: {
+                /** Format: uint64 */
+                completed: number;
+                /** Format: uint64 */
+                contacted: number;
+                /** Format: uint64 */
+                created: number;
+                /** Format: uint64 */
+                lost: number;
+                /** Format: uint64 */
+                paid: number;
+                /** Format: uint64 */
+                quoted: number;
+                /** Format: uint64 */
+                won: number;
+            };
+            /** Format: uint64 */
+            total: number;
+        };
+        "sites.LeadCreation": {
+            brand: components["schemas"]["sites.BrandId"];
+            /**
+             * @description A customer who called (`phone_inbound`, when absent), or wrote on a messenger without the
+             *     landing.
+             */
+            channel?: components["schemas"]["sites.ManualChannel"] | null;
+            location: components["schemas"]["sites.LocationId"];
+            need: string;
+            phone?: string | null;
+        };
+        /** @description One event of a lead, as its card shows it. */
+        "sites.LeadEvent": {
+            /** Format: uuid */
+            id: string;
+            job_id: string | null;
+            /** @description Typed in by hand (kind `panel`). */
+            manual: boolean;
+            /** Format: date-time */
+            occurred_at: string;
+            /** @description What the customer left, for a caller who sees it. */
+            pii?: unknown;
+            /** @description The event's properties, as its type has them. */
+            properties: unknown;
+            /** Format: date-time */
+            received_at: string;
+            source_id: string;
+            source_kind: string;
+            /** @description How the registry judged it. */
+            status: components["schemas"]["sites.Status"];
+            status_reason: string | null;
+            type: string;
+            /** Format: int32 */
+            type_version: number;
+        };
+        /**
+         * @description Which of a landing's flows a lead came through (FORM-VARIANTS-SPEC): a quote asked for, a
+         *     price estimated from what the visitor picked, or a fixed price for a well-defined job.
+         * @enum {string}
+         */
+        "sites.LeadFlow": "quote" | "estimate" | "fixed";
+        /**
+         * @description A lead, unique within its brand.
+         * @example L-1
+         */
+        "sites.LeadId": string;
+        "sites.LeadPage": {
+            leads: components["schemas"]["sites.Lead"][];
+            /** @description Asks for the next page; null on the last. */
+            next_cursor: string | null;
+        };
+        /**
+         * @description Why a landing's antispam doubted a lead it still sent: it may be a person, so it is kept
+         *     and shown, marked. A lead the honeypot caught never arrives, so it has no mark here.
+         *
+         *     - `rate_limited`: The visitor's address sent more than the landing allows in its window.
+         *     - `too_fast`: The form came back sooner after it was shown than a person types.
+         * @enum {string}
+         */
+        "sites.LeadSuspect": "rate_limited" | "too_fast";
+        /** @example fr */
+        "sites.LocaleTag": string;
+        /** @description A slice's funnel: its steps, the lost and manual shares, and its payments. */
+        "sites.LocationFunnel": {
+            brand: string;
+            location: string | null;
+            lost: components["schemas"]["sites.Share"];
+            manual: components["schemas"]["sites.Share"];
+            payments: components["schemas"]["sites.Paid"][];
+            stages: components["schemas"]["sites.FunnelStep"][];
+        };
+        /**
+         * @description A location: a GBP listing plus its landing subdomain.
+         * @example royat
+         */
+        "sites.LocationId": string;
+        /**
+         * @description Why an operator says a lead was lost: the panel's words, kept few so the reports compare.
+         *     The registry takes any slug (`lead.lost` events journaled before the list).
+         * @enum {string}
+         */
+        "sites.LostReason": "too_expensive" | "no_answer" | "went_elsewhere" | "out_of_area" | "not_needed" | "spam" | "other";
+        /**
+         * @description The channels an operator takes a lead in by hand: a call, or a conversation a customer
+         *     started on a messenger without the landing. A form and a callback are the landing's.
+         * @enum {string}
+         */
+        "sites.ManualChannel": "phone_inbound" | "whatsapp" | "telegram";
+        /** @description `GET /me`. */
+        "sites.Me": {
+            /** @description The caller's `sa:sites:*` permissions. */
+            permissions: components["schemas"]["sites.Permission"][];
+            /**
+             * Format: uuid
+             * @description The concierge user id: what a user's own marks are kept under.
+             */
+            sub: string;
+        };
+        "sites.Messaged": {
+            channel: components["schemas"]["sites.Messenger"];
+        };
+        /**
+         * @description A messenger the customer writes the brand on.
+         * @enum {string}
+         */
+        "sites.Messenger": "whatsapp" | "telegram";
+        /**
+         * @description A part of a model a change names, in the model's order.
+         *
+         *     - `general`: `roundToCents` and `minimumCents`.
+         * @enum {string}
+         */
+        "sites.ModelPart": "validFrom" | "inputs" | "needs" | "general";
+        /** @description The subtotal times `multiplyBp`, in basis points: 11 000 is ×1.1. */
+        "sites.MultiplyOption": {
+            id: string;
+            labels: {
+                [key: string]: string;
+            };
+            /** Format: int64 */
+            multiplyBp: number;
+        };
+        /** @description How one need is priced. */
+        "sites.NeedPricing": {
+            /** Format: int64 */
+            baseCents: number;
+            inputs: string[];
+            /** @constant */
+            kind: "estimate";
+        } | {
+            /** Format: int64 */
+            cents: number;
+            /** @constant */
+            kind: "fixed";
+        };
+        "sites.NewInvoice": {
+            /**
+             * @description Decimal USDT as a string, a JSON number would round it: whole USDT up to 999 999 999, at
+             *     most 6 decimals.
+             */
+            amount: string;
+            /** Format: uint32 */
+            expires_in_days: number;
+            /**
+             * @description Banking refuses links.
+             * @default
+             */
+            memo?: string;
+        };
+        "sites.NewLead": {
+            brand: components["schemas"]["sites.BrandId"];
+            /** Format: uuid */
+            event_id: string;
+            /** @description `p-<uuidv7>`. */
+            lead_id: components["schemas"]["sites.LeadId"];
+        };
+        /** @description A row of opening hours, in the place's local time (Europe/Paris for every place in v1). */
+        "sites.OpeningHours": {
+            /** @description After `opens`: a night across midnight is two rows. */
+            closes: string;
+            /** @description One at least, each once, in week order. */
+            days: components["schemas"]["sites.DayOfWeek"][];
+            /** @description `HH:MM`. */
+            opens: string;
+        };
+        /** @description What a slice's leads were paid in one currency, in its minor units; never converted. */
+        "sites.Paid": {
+            /** Format: int64 */
+            billed: number;
+            /** Format: int64 */
+            commission: number;
+            /** Format: uint64 */
+            count: number;
+            currency: string;
+        };
+        "sites.Payment": {
+            /**
+             * Format: int64
+             * @description Minor units, |amount| ≤ 10^10.
+             */
+            billed: number;
+            /**
+             * Format: int64
+             * @description Minor units, |amount| ≤ 10^10.
+             */
+            commission: number;
+            currency: components["schemas"]["sites.Currency"];
+        };
+        /** @enum {string} */
+        "sites.Permission": "sa:sites:analysis:experiments:edit" | "sa:sites:analysis:read" | "sa:sites:work:invoices:create" | "sa:sites:work:leads:edit" | "sa:sites:work:pii:see" | "sa:sites:work:places:edit" | "sa:sites:work:pricing:edit" | "sa:sites:work:read";
+        /** @description A place: its live settings, who set them last, and where it stands. */
+        "sites.Place": {
+            brand: components["schemas"]["sites.BrandId"];
+            /** @description Whether the caller may change it. */
+            can_edit: boolean;
+            /**
+             * Format: int64
+             * @description The conductor's GMB this place is the landing of.
+             */
+            gmb_id: number | null;
+            /** @description Only the fields set; `{}` when none (the site serves its baked config). */
+            settings: components["schemas"]["sites.PlaceLive"];
+            slug: components["schemas"]["sites.LocationId"];
+            /**
+             * Format: date-time
+             * @description Null while the settings were never set: what a first edit must expect.
+             */
+            updated_at: string | null;
+            updated_by: string | null;
+            /** @description Off the sites: they answer it as gone. */
+            withdrawn: boolean;
+        };
+        /** @description One change of a place: its settings before and after. */
+        "sites.PlaceChange": {
+            after: components["schemas"]["sites.PlaceLive"];
+            /** Format: date-time */
+            at: string;
+            before: components["schemas"]["sites.PlaceLive"];
+            /** @description The user's email, else their id; `cli` from the pod. */
+            by: string;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["sites.PlaceChangeKind"];
+            /**
+             * Format: uuid
+             * @description The change a revert went back before.
+             */
+            reverts: string | null;
+        };
+        /**
+         * @description What a change did to a place.
+         *
+         *     - `register`: Registered by hand (it may not have had a lead yet).
+         *     - `set`: Its settings replaced.
+         *     - `revert`: The settings an earlier change found, put back.
+         *     - `withdraw`: Taken off the sites: they answer it as gone.
+         *     - `restore`: Back on the sites.
+         * @enum {string}
+         */
+        "sites.PlaceChangeKind": "register" | "set" | "revert" | "withdraw" | "restore";
+        "sites.PlaceHistory": {
+            changes: components["schemas"]["sites.PlaceChange"][];
+        };
+        /**
+         * @description A place's live settings: only the fields that are set. Empty: the site serves its baked
+         *     config.
+         */
+        "sites.PlaceLive": {
+            address?: components["schemas"]["sites.Address"];
+            booking?: components["schemas"]["sites.BookingConfig"];
+            geo?: components["schemas"]["sites.Geo"];
+            hours?: components["schemas"]["sites.OpeningHours"][];
+            /** @description A text per locale; a site keeps it only when every locale it speaks is there. */
+            landmark?: {
+                [key: string]: string;
+            };
+            /** @description The landing's messenger buttons switched off where `false`; a messenger left out is on. */
+            messengers?: {
+                telegram?: boolean;
+                whatsapp?: boolean;
+            };
+            phone?: string;
+            rating?: components["schemas"]["sites.Rating"];
+            /** @description Where the place asks for a Google review. */
+            reviewUrl?: string;
+            /** @description Commune names. */
+            serviceArea?: string[];
+            storefrontPhoto?: string;
+            /** @description The place's Telegram bot: its username, without the `@`. */
+            telegram?: string;
+            whatsapp?: string;
+        };
+        "sites.PlaceSummary": {
+            brand: string;
+            /**
+             * Format: date-time
+             * @description Its latest change: registered, set, reverted, withdrawn or restored; null for a place only leads name.
+             */
+            changed_at: string | null;
+            /** @description Live settings with a field set at least. */
+            has_settings: boolean;
+            /** Format: date-time */
+            last_lead_at: string | null;
+            location: string;
+            withdrawn: boolean;
+        };
+        "sites.Places": {
+            places: components["schemas"]["sites.PlaceSummary"][];
+        };
+        "sites.PricePreview": {
+            /**
+             * Format: int64
+             * @description Integer cents EUR TTC; null when the need is a quote.
+             */
+            cents: number | null;
+        };
+        "sites.PricePreviewRequest": {
+            /**
+             * @description Input id → option id.
+             * @default {}
+             */
+            inputs?: {
+                [key: string]: string;
+            };
+            model: components["schemas"]["sites.PricingModel"];
+            need: string;
+        };
+        /** @description A brand's pricing as saved. */
+        "sites.Pricing": {
+            brand_id: components["schemas"]["sites.BrandId"];
+            /** @description The languages every label must be in; fr and en unless set. */
+            locales: string[];
+            /** @description Null when never set or removed: the sites keep their baked one. */
+            model: components["schemas"]["sites.PricingModel"] | null;
+            /**
+             * Format: date-time
+             * @description Null while never set: what a first save must expect. A removal has a time too.
+             */
+            updated_at: string | null;
+            updated_by: string | null;
+        };
+        /** @description One change of a brand's pricing. */
+        "sites.PricingChange": {
+            /** Format: date-time */
+            at: string;
+            by: string;
+            /**
+             * @description What it changed of the model before it, in the model's order; null for a first save or
+             *     when either side is a removal.
+             */
+            changed: components["schemas"]["sites.ModelPart"][] | null;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["sites.ChangeKind"];
+            /** @description The model the change left; null for a removal. */
+            model: components["schemas"]["sites.PricingModel"] | null;
+            /**
+             * Format: uint
+             * @description How many needs the saved model prices; null for a removal.
+             */
+            needs: number | null;
+            /** @description The saved model's `validFrom`; null for a removal. */
+            valid_from: string | null;
+        };
+        "sites.PricingChanges": {
+            changes: components["schemas"]["sites.PricingChange"][];
+        };
+        /** @constant */
+        "sites.PricingCurrency": "EUR";
+        /** @constant */
+        "sites.PricingFormat": 1;
+        /**
+         * @description An enum the visitor answers: bedrooms, a surface band, a zone, a frequency. Its kind says
+         *     what its options do, and when: every `add` first, then every `multiply`, then every
+         *     `discount`.
+         */
+        "sites.PricingInput": {
+            id: string;
+            /** @constant */
+            kind: "add";
+            labels: {
+                [key: string]: string;
+            };
+            options: components["schemas"]["sites.AddOption"][];
+        } | {
+            id: string;
+            /** @constant */
+            kind: "multiply";
+            labels: {
+                [key: string]: string;
+            };
+            options: components["schemas"]["sites.MultiplyOption"][];
+        } | {
+            id: string;
+            /** @constant */
+            kind: "discount";
+            labels: {
+                [key: string]: string;
+            };
+            options: components["schemas"]["sites.DiscountOption"][];
+        };
+        /**
+         * @description A checked model, in its wire shape: every value within the limits, which keeps a price
+         *     within an `i64` and a double alike. Only [`PricingModel::parse`] makes one.
+         */
+        "sites.PricingModel": {
+            currency: components["schemas"]["sites.PricingCurrency"];
+            format: components["schemas"]["sites.PricingFormat"];
+            inputs: components["schemas"]["sites.PricingInput"][];
+            /**
+             * Format: int64
+             * @description An estimate never comes out below this, after the rounding.
+             */
+            minimumCents: number;
+            /** @description By the brand's need slug; a need not here is a quote. */
+            needs: {
+                [key: string]: components["schemas"]["sites.NeedPricing"];
+            };
+            /**
+             * Format: int64
+             * @description The estimate's total is rounded half up to a multiple of this (1 = to the cent).
+             */
+            roundToCents: number;
+            /**
+             * @description `YYYY-MM-DD`, a day the calendar has: when the prices hold from. Stored with every lead
+             *     priced by it.
+             */
+            validFrom: string;
+        };
+        "sites.Pricings": {
+            items: components["schemas"]["sites.Pricing"][];
+        };
+        /**
+         * @description Where a slot is booked.
+         *
+         *     - `manual`: No external page: the site promises a call, and an operator records the slot.
+         *     - `link`: An external booking page on any https host; no adapter reads it back.
+         *     - `google_calendar`: A Google Calendar appointment schedule; its bookings are pulled from the calendar.
+         *     - `cal_com`: Cal.com, ours (`cal.evinvest.ltd`) or the hosted cloud.
+         * @enum {string}
+         */
+        "sites.Provider": "manual" | "link" | "google_calendar" | "cal_com";
+        /** @description A provider's booking as the front end reads it. */
+        "sites.ProviderBooking": {
+            /** Format: date-time */
+            booked_at: string | null;
+            brand: components["schemas"]["sites.BrandId"];
+            /** @description The attendee, for a caller who sees PII. */
+            contact?: components["schemas"]["sites.Attendee"] | null;
+            /** Format: date-time */
+            end_at: string | null;
+            external_ref: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_event_at: string;
+            /** @description The lead it joined; null while unmatched. */
+            lead_id: components["schemas"]["sites.LeadId"] | null;
+            /** @description How it joined the lead. */
+            match: components["schemas"]["sites.BookingMatch"] | null;
+            provider: components["schemas"]["sites.Provider"];
+            /** Format: date-time */
+            start_at: string;
+            status: components["schemas"]["sites.ProviderBookingStatus"];
+        };
+        /**
+         * @description Where a provider's booking stands.
+         * @enum {string}
+         */
+        "sites.ProviderBookingStatus": "booked" | "canceled";
+        "sites.ProviderBookings": {
+            bookings: components["schemas"]["sites.ProviderBooking"][];
+        };
+        /**
+         * @description Google's rating for the place, with when it was read: the API's terms cap how long a copy
+         *     may be shown.
+         */
+        "sites.Rating": {
+            /** Format: int64 */
+            count: number;
+            /** @description An RFC 3339 instant, as sent. */
+            fetchedAt: string;
+            /**
+             * Format: double
+             * @description 1 to 5.
+             */
+            value: number;
+        };
+        "sites.RegisterPlace": {
+            brand: components["schemas"]["sites.BrandId"];
+            slug: components["schemas"]["sites.LocationId"];
+        };
+        "sites.RemovePricing": {
+            /**
+             * Format: date-time
+             * @description Required: taking a brand's prices off its sites over a version the editor did not see is
+             *     not something to do by default. Null for pricing never set.
+             */
+            expected_updated_at: string;
+        };
+        "sites.RevertPlaceSettings": {
+            /**
+             * Format: date-time
+             * @description Checked as a PUT checks it: null for settings never set. Absent: over whatever is there.
+             * @default null
+             */
+            expected_updated_at?: string | null;
+        };
+        "sites.SetLocales": {
+            /** @description 1 to 8, each once: every label of the brand's model must be in each. */
+            locales: components["schemas"]["sites.LocaleTag"][];
+        };
+        "sites.SetPlaceSettings": {
+            /**
+             * Format: date-time
+             * @description The `updated_at` the editor read; null (or absent) for settings never set.
+             * @default null
+             */
+            expected_updated_at?: string | null;
+            /** @description The whole of the settings, not a patch: a field left out is cleared. */
+            settings: components["schemas"]["sites.PlaceLive"];
+        };
+        "sites.SetPricing": {
+            /**
+             * Format: date-time
+             * @description The `updated_at` the editor read; null (or absent) for pricing never set.
+             * @default null
+             */
+            expected_updated_at?: string | null;
+            model: components["schemas"]["sites.PricingModel"];
+        };
+        /**
+         * @description A share as the front end may show it: `percent` only when `of` is large enough, and
+         *     `small_sample` saying so otherwise, so "12 of 17" is all that can be drawn.
+         */
+        "sites.Share": {
+            /** Format: uint64 */
+            n: number;
+            /** Format: uint64 */
+            of: number;
+            /** Format: uint64 */
+            percent: number | null;
+            small_sample: boolean;
+        };
+        /** @description A lead's wait for its first contact: overdue after 30 minutes. */
+        "sites.Sla": {
+            overdue: boolean;
+            /** Format: int64 */
+            waiting_seconds: number;
+            /** Format: date-time */
+            waiting_since: string;
+        };
+        /**
+         * @description The personal stages, in funnel order. `Lost` is off to the side: any stage can end
+         *     there, and any later progress takes the lead out of it again.
+         * @enum {string}
+         */
+        "sites.Stage": "created" | "contacted" | "quoted" | "won" | "completed" | "paid" | "lost";
+        /** @description Where a lead moves, and what the move says. */
+        "sites.StageMove": {
+            channel?: components["schemas"]["sites.ContactChannel"] | null;
+            /** @constant */
+            stage: "contacted";
+        } | {
+            /**
+             * Format: int64
+             * @description Minor units, |amount| ≤ 10^10.
+             */
+            amount?: number | null;
+            currency?: components["schemas"]["sites.Currency"] | null;
+            /** @constant */
+            stage: "quoted";
+        } | {
+            job_id?: string | null;
+            /** @constant */
+            stage: "won";
+        } | {
+            note?: string | null;
+            reason: components["schemas"]["sites.LostReason"];
+            /** @constant */
+            stage: "lost";
+        } | {
+            /** @constant */
+            stage: "completed";
+        };
+        /**
+         * @description Where an event stands with the registry.
+         * @enum {string}
+         */
+        "sites.Status": "registered" | "unregistered" | "invalid";
+        /**
+         * @description Which of the suspect leads to list.
+         *
+         *     - `only`: Only those the landing's antispam doubted.
+         *     - `exclude`: None of them.
+         * @enum {string}
+         */
+        "sites.SuspectFilter": "only" | "exclude";
+        /** @example control */
+        "sites.Variant": string;
     };
     responses: never;
     parameters: never;
@@ -5379,6 +7143,7 @@ export type CallInput = components['schemas']['CallInput'];
 export type Caller = components['schemas']['Caller'];
 export type Candidates = components['schemas']['Candidates'];
 export type Category = components['schemas']['Category'];
+export type CategoryIn = components['schemas']['CategoryIn'];
 export type Chat = components['schemas']['Chat'];
 export type ChatSummary = components['schemas']['ChatSummary'];
 export type Chats = components['schemas']['Chats'];
@@ -5452,6 +7217,7 @@ export type MeterTotal = components['schemas']['MeterTotal'];
 export type MeterUse = components['schemas']['MeterUse'];
 export type Meters = components['schemas']['Meters'];
 export type ModelUsed = components['schemas']['ModelUsed'];
+export type MustHave = components['schemas']['MustHave'];
 export type Need = components['schemas']['Need'];
 export type NewChat = components['schemas']['NewChat'];
 export type NewGmail = components['schemas']['NewGmail'];
@@ -5481,6 +7247,7 @@ export type QueriesCacheImport = components['schemas']['QueriesCacheImport'];
 export type Question = components['schemas']['Question'];
 export type ReadInternalReads = components['schemas']['ReadInternalReads'];
 export type ReadMapOfTimestamp = components['schemas']['ReadMap_of_Timestamp'];
+export type Readiness = components['schemas']['Readiness'];
 export type RefusedPlace = components['schemas']['RefusedPlace'];
 export type ReportSources = components['schemas']['ReportSources'];
 export type ReviewArchiveExport = components['schemas']['ReviewArchiveExport'];
@@ -5519,9 +7286,12 @@ export type StartBrowser = components['schemas']['StartBrowser'];
 export type State = components['schemas']['State'];
 export type Step = components['schemas']['Step'];
 export type Stop = components['schemas']['Stop'];
+export type Study = components['schemas']['Study'];
+export type StudyOf = components['schemas']['StudyOf'];
 export type Suggestion = components['schemas']['Suggestion'];
 export type Suggestions = components['schemas']['Suggestions'];
 export type Switch = components['schemas']['Switch'];
+export type Tab = components['schemas']['Tab'];
 export type Target = components['schemas']['Target'];
 export type TelegramLink = components['schemas']['TelegramLink'];
 export type Title = components['schemas']['Title'];
@@ -5608,6 +7378,114 @@ export type ReviewArchiveTargetPatch = components['schemas']['review_archive.Tar
 export type ReviewArchiveTrackPatch = components['schemas']['review_archive.TrackPatch'];
 export type ReviewArchiveVersionDto = components['schemas']['review_archive.VersionDto'];
 export type ReviewArchiveWebhookDto = components['schemas']['review_archive.WebhookDto'];
+export type SitesAddOption = components['schemas']['sites.AddOption'];
+export type SitesAddress = components['schemas']['sites.Address'];
+export type SitesAttendee = components['schemas']['sites.Attendee'];
+export type SitesBookingAttach = components['schemas']['sites.BookingAttach'];
+export type SitesBookingClosed = components['schemas']['sites.BookingClosed'];
+export type SitesBookingConfig = components['schemas']['sites.BookingConfig'];
+export type SitesBookingEnd = components['schemas']['sites.BookingEnd'];
+export type SitesBookingMatch = components['schemas']['sites.BookingMatch'];
+export type SitesBookingPage = components['schemas']['sites.BookingPage'];
+export type SitesBookingSlot = components['schemas']['sites.BookingSlot'];
+export type SitesBookingStatus = components['schemas']['sites.BookingStatus'];
+export type SitesBrandId = components['schemas']['sites.BrandId'];
+export type SitesCallAttempt = components['schemas']['sites.CallAttempt'];
+export type SitesCallOutcome = components['schemas']['sites.CallOutcome'];
+export type SitesCallOutcomeBody = components['schemas']['sites.CallOutcomeBody'];
+export type SitesChangeKind = components['schemas']['sites.ChangeKind'];
+export type SitesContactChannel = components['schemas']['sites.ContactChannel'];
+export type SitesCurrency = components['schemas']['sites.Currency'];
+export type SitesDayOfWeek = components['schemas']['sites.DayOfWeek'];
+export type SitesDayPart = components['schemas']['sites.DayPart'];
+export type SitesDiscountOption = components['schemas']['sites.DiscountOption'];
+export type SitesError = components['schemas']['sites.Error'];
+export type SitesErrorCode = components['schemas']['sites.ErrorCode'];
+export type SitesExperiment = components['schemas']['sites.Experiment'];
+export type SitesExperimentChange = components['schemas']['sites.ExperimentChange'];
+export type SitesExperimentDeclared = components['schemas']['sites.ExperimentDeclared'];
+export type SitesExperimentKey = components['schemas']['sites.ExperimentKey'];
+export type SitesExperimentOverride = components['schemas']['sites.ExperimentOverride'];
+export type SitesExperimentSplit = components['schemas']['sites.ExperimentSplit'];
+export type SitesExperiments = components['schemas']['sites.Experiments'];
+export type SitesFunnel = components['schemas']['sites.Funnel'];
+export type SitesFunnelBy = components['schemas']['sites.FunnelBy'];
+export type SitesFunnelSlice = components['schemas']['sites.FunnelSlice'];
+export type SitesFunnelStep = components['schemas']['sites.FunnelStep'];
+export type SitesGeo = components['schemas']['sites.Geo'];
+export type SitesGmbLink = components['schemas']['sites.GmbLink'];
+export type SitesGmbPlace = components['schemas']['sites.GmbPlace'];
+export type SitesGmbs = components['schemas']['sites.Gmbs'];
+export type SitesGoogleConsentAsked = components['schemas']['sites.GoogleConsentAsked'];
+export type SitesGoogleConsentUrl = components['schemas']['sites.GoogleConsentUrl'];
+export type SitesInputId = components['schemas']['sites.InputId'];
+export type SitesInvoice = components['schemas']['sites.Invoice'];
+export type SitesInvoiceState = components['schemas']['sites.InvoiceState'];
+export type SitesInvoices = components['schemas']['sites.Invoices'];
+export type SitesJournaled = components['schemas']['sites.Journaled'];
+export type SitesLead = components['schemas']['sites.Lead'];
+export type SitesLeadBooking = components['schemas']['sites.LeadBooking'];
+export type SitesLeadCard = components['schemas']['sites.LeadCard'];
+export type SitesLeadChannel = components['schemas']['sites.LeadChannel'];
+export type SitesLeadCounts = components['schemas']['sites.LeadCounts'];
+export type SitesLeadCreation = components['schemas']['sites.LeadCreation'];
+export type SitesLeadEvent = components['schemas']['sites.LeadEvent'];
+export type SitesLeadFlow = components['schemas']['sites.LeadFlow'];
+export type SitesLeadId = components['schemas']['sites.LeadId'];
+export type SitesLeadPage = components['schemas']['sites.LeadPage'];
+export type SitesLeadSuspect = components['schemas']['sites.LeadSuspect'];
+export type SitesLocaleTag = components['schemas']['sites.LocaleTag'];
+export type SitesLocationFunnel = components['schemas']['sites.LocationFunnel'];
+export type SitesLocationId = components['schemas']['sites.LocationId'];
+export type SitesLostReason = components['schemas']['sites.LostReason'];
+export type SitesManualChannel = components['schemas']['sites.ManualChannel'];
+export type SitesMe = components['schemas']['sites.Me'];
+export type SitesMessaged = components['schemas']['sites.Messaged'];
+export type SitesMessenger = components['schemas']['sites.Messenger'];
+export type SitesModelPart = components['schemas']['sites.ModelPart'];
+export type SitesMultiplyOption = components['schemas']['sites.MultiplyOption'];
+export type SitesNeedPricing = components['schemas']['sites.NeedPricing'];
+export type SitesNewInvoice = components['schemas']['sites.NewInvoice'];
+export type SitesNewLead = components['schemas']['sites.NewLead'];
+export type SitesOpeningHours = components['schemas']['sites.OpeningHours'];
+export type SitesPaid = components['schemas']['sites.Paid'];
+export type SitesPayment = components['schemas']['sites.Payment'];
+export type SitesPermission = components['schemas']['sites.Permission'];
+export type SitesPlace = components['schemas']['sites.Place'];
+export type SitesPlaceChange = components['schemas']['sites.PlaceChange'];
+export type SitesPlaceChangeKind = components['schemas']['sites.PlaceChangeKind'];
+export type SitesPlaceHistory = components['schemas']['sites.PlaceHistory'];
+export type SitesPlaceLive = components['schemas']['sites.PlaceLive'];
+export type SitesPlaceSummary = components['schemas']['sites.PlaceSummary'];
+export type SitesPlaces = components['schemas']['sites.Places'];
+export type SitesPricePreview = components['schemas']['sites.PricePreview'];
+export type SitesPricePreviewRequest = components['schemas']['sites.PricePreviewRequest'];
+export type SitesPricing = components['schemas']['sites.Pricing'];
+export type SitesPricingChange = components['schemas']['sites.PricingChange'];
+export type SitesPricingChanges = components['schemas']['sites.PricingChanges'];
+export type SitesPricingCurrency = components['schemas']['sites.PricingCurrency'];
+export type SitesPricingFormat = components['schemas']['sites.PricingFormat'];
+export type SitesPricingInput = components['schemas']['sites.PricingInput'];
+export type SitesPricingModel = components['schemas']['sites.PricingModel'];
+export type SitesPricings = components['schemas']['sites.Pricings'];
+export type SitesProvider = components['schemas']['sites.Provider'];
+export type SitesProviderBooking = components['schemas']['sites.ProviderBooking'];
+export type SitesProviderBookingStatus = components['schemas']['sites.ProviderBookingStatus'];
+export type SitesProviderBookings = components['schemas']['sites.ProviderBookings'];
+export type SitesRating = components['schemas']['sites.Rating'];
+export type SitesRegisterPlace = components['schemas']['sites.RegisterPlace'];
+export type SitesRemovePricing = components['schemas']['sites.RemovePricing'];
+export type SitesRevertPlaceSettings = components['schemas']['sites.RevertPlaceSettings'];
+export type SitesSetLocales = components['schemas']['sites.SetLocales'];
+export type SitesSetPlaceSettings = components['schemas']['sites.SetPlaceSettings'];
+export type SitesSetPricing = components['schemas']['sites.SetPricing'];
+export type SitesShare = components['schemas']['sites.Share'];
+export type SitesSla = components['schemas']['sites.Sla'];
+export type SitesStage = components['schemas']['sites.Stage'];
+export type SitesStageMove = components['schemas']['sites.StageMove'];
+export type SitesStatus = components['schemas']['sites.Status'];
+export type SitesSuspectFilter = components['schemas']['sites.SuspectFilter'];
+export type SitesVariant = components['schemas']['sites.Variant'];
 export type $defs = Record<string, never>;
 export interface operations {
     request_access: {
@@ -5659,6 +7537,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -5688,6 +7575,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5768,6 +7664,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -5797,6 +7702,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5882,6 +7796,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -5911,6 +7834,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5991,6 +7923,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -6020,6 +7961,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6104,6 +8054,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -6133,6 +8092,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6216,6 +8184,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -6245,6 +8222,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6326,6 +8312,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -6355,6 +8350,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6441,6 +8445,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -6470,6 +8483,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6551,6 +8573,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -6580,6 +8611,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6666,6 +8706,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -6695,6 +8744,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6776,6 +8834,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -6805,6 +8872,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6894,6 +8970,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -6923,6 +9008,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7014,6 +9108,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -7043,6 +9146,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7129,6 +9241,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -7158,6 +9279,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7239,6 +9369,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -7268,6 +9407,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7349,6 +9497,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -7378,6 +9535,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7465,6 +9631,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -7494,6 +9669,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7581,6 +9765,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -7610,6 +9803,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7691,6 +9893,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -7720,6 +9931,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7805,6 +10025,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -7834,6 +10063,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7915,6 +10153,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -7944,6 +10191,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8024,6 +10280,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8053,6 +10318,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8135,6 +10409,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8164,6 +10447,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8250,6 +10542,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8279,6 +10580,148 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    define_study: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudyOf"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Study"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8358,6 +10801,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8387,6 +10839,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8468,6 +10929,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8497,6 +10967,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8582,6 +11061,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8611,6 +11099,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8694,6 +11191,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8723,6 +11229,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8804,6 +11319,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8833,6 +11357,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8916,6 +11449,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8945,6 +11487,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9032,6 +11583,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9061,6 +11621,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9146,6 +11715,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9175,6 +11753,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9262,6 +11849,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9291,6 +11887,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9378,6 +11983,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9407,6 +12021,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9494,6 +12117,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9523,6 +12155,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9605,6 +12246,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9634,6 +12284,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9719,6 +12378,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9748,6 +12416,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9835,6 +12512,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9864,6 +12550,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9951,6 +12646,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9980,6 +12684,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10064,6 +12777,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10093,6 +12815,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10174,6 +12905,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10203,6 +12943,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10288,6 +13037,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10317,6 +13075,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10398,6 +13165,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10427,6 +13203,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10514,6 +13299,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10543,6 +13337,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10628,6 +13431,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10657,6 +13469,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10743,6 +13564,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10772,6 +13602,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10853,6 +13692,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10882,6 +13730,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10967,6 +13824,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10996,6 +13862,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11077,6 +13952,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11106,6 +13990,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11191,6 +14084,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11220,6 +14122,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11301,6 +14212,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11330,6 +14250,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11412,6 +14341,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11441,6 +14379,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11523,6 +14470,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11552,6 +14508,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11639,6 +14604,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11668,6 +14642,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11754,6 +14737,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11783,6 +14775,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11864,6 +14865,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11893,6 +14903,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11975,6 +14994,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12004,6 +15032,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12090,6 +15127,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12119,6 +15165,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12200,6 +15255,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12229,6 +15293,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12311,6 +15384,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12340,6 +15422,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12425,6 +15516,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12454,6 +15554,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12537,6 +15646,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12566,6 +15684,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12652,6 +15779,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12681,6 +15817,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12767,6 +15912,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12796,6 +15950,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12879,6 +16042,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12908,6 +16080,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12989,6 +16170,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13018,6 +16208,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13106,6 +16305,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13135,6 +16343,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13220,6 +16437,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13249,6 +16475,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13332,6 +16567,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13361,6 +16605,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13448,6 +16701,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13477,6 +16739,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13558,6 +16829,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13587,6 +16867,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13672,6 +16961,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13701,6 +16999,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13782,6 +17089,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13811,6 +17127,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13898,6 +17223,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13927,6 +17261,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14014,6 +17357,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14043,6 +17395,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14126,6 +17487,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14155,6 +17525,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14237,6 +17616,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14266,6 +17654,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14350,6 +17747,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14379,6 +17785,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14461,6 +17876,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14490,6 +17914,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14573,6 +18006,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14602,6 +18044,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14685,6 +18136,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14714,6 +18174,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14798,6 +18267,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14827,6 +18305,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14911,6 +18398,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14940,6 +18436,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15026,6 +18531,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15055,6 +18569,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15200,6 +18723,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15229,6 +18761,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15314,6 +18855,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15343,6 +18893,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15422,6 +18981,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15451,6 +19019,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15532,6 +19109,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15561,6 +19147,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15706,6 +19301,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15735,6 +19339,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15820,6 +19433,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15849,6 +19471,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15929,6 +19560,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15958,6 +19598,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16039,6 +19688,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16068,6 +19726,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16153,6 +19820,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16182,6 +19858,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16263,6 +19948,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16292,6 +19986,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16373,6 +20076,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16402,6 +20114,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16488,6 +20209,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16517,6 +20247,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16601,6 +20340,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16630,6 +20378,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16711,6 +20468,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16740,6 +20506,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16821,6 +20596,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16850,6 +20634,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16935,6 +20728,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16964,6 +20766,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17045,6 +20856,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17074,6 +20894,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17161,6 +20990,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17190,6 +21028,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17278,6 +21125,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17307,6 +21163,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17389,6 +21254,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17418,6 +21292,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17502,6 +21385,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17531,6 +21423,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17619,6 +21520,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17648,6 +21558,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17731,6 +21650,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17760,6 +21688,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17849,6 +21786,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17878,6 +21824,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17935,9 +21890,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "image/jpeg": unknown;
-                "image/png": unknown;
-                "image/webp": unknown;
+                "image/jpeg": string;
+                "image/png": string;
+                "image/webp": string;
             };
         };
         responses: {
@@ -17961,6 +21916,15 @@ export interface operations {
             };
             /** @description `unauthenticated` */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17997,6 +21961,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18083,6 +22056,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -18112,6 +22094,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18195,6 +22186,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -18224,6 +22224,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18305,6 +22314,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -18334,6 +22352,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18415,6 +22442,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -18444,6 +22480,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18525,6 +22570,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -18554,6 +22608,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18638,6 +22701,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -18667,6 +22739,15 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18795,6 +22876,24 @@ export interface operations {
                     "application/json": components["schemas"]["placement.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["placement.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["placement.Error"];
+                };
+            };
         };
     };
     "placement.define": {
@@ -18892,6 +22991,24 @@ export interface operations {
                     "application/json": components["schemas"]["placement.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["placement.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["placement.Error"];
+                };
+            };
         };
     };
     "placement.pull": {
@@ -18962,6 +23079,15 @@ export interface operations {
                     "application/json": components["schemas"]["placement.Error"];
                 };
             };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["placement.Error"];
+                };
+            };
             /** @description `unstudied` */
             422: {
                 headers: {
@@ -18973,6 +23099,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["placement.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["placement.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19000,6 +23144,15 @@ export interface operations {
                     "application/json": components["schemas"]["placement.Served"];
                 };
             };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["placement.Error"];
+                };
+            };
             /** @description `unauthenticated` */
             401: {
                 headers: {
@@ -19011,6 +23164,33 @@ export interface operations {
             };
             /** @description `forbidden` */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["placement.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["placement.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["placement.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19079,6 +23259,33 @@ export interface operations {
             };
             /** @description `over_budget` */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["playbook.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["playbook.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["playbook.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19158,6 +23365,33 @@ export interface operations {
                     "application/json": components["schemas"]["playbook.Error"];
                 };
             };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["playbook.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["playbook.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["playbook.Error"];
+                };
+            };
         };
     };
     "playbook.search": {
@@ -19223,6 +23457,33 @@ export interface operations {
             };
             /** @description `over_budget` */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["playbook.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["playbook.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["playbook.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19351,6 +23612,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.capture_webp": {
@@ -19439,6 +23718,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19540,6 +23837,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.list_layouts": {
@@ -19626,6 +23941,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19741,6 +24074,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.me": {
@@ -19826,6 +24177,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19921,6 +24290,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20028,6 +24415,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.withdraw_reinstatement": {
@@ -20119,6 +24524,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20238,6 +24661,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.track_board": {
@@ -20338,6 +24779,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.relink_track": {
@@ -20431,6 +24890,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20540,6 +25017,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.scan_track": {
@@ -20640,6 +25135,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.my_overview": {
@@ -20727,6 +25240,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20829,6 +25360,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.reset_my_settings": {
@@ -20917,6 +25466,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21033,6 +25600,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.list_members": {
@@ -21117,6 +25702,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21211,6 +25814,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21317,6 +25938,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.list_targets": {
@@ -21401,6 +26040,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21514,6 +26171,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.get_target": {
@@ -21608,6 +26283,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.disable_target": {
@@ -21695,6 +26388,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21810,6 +26521,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.export_zip": {
@@ -21900,6 +26629,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22005,6 +26752,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.list_runs": {
@@ -22094,6 +26859,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22195,6 +26978,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.list_webhooks": {
@@ -22279,6 +27080,24 @@ export interface operations {
             };
             /** @description `internal` */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22392,6 +27211,24 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
         };
     };
     "review_archive.delete_webhook": {
@@ -22484,6 +27321,4491 @@ export interface operations {
                     "application/json": components["schemas"]["review_archive.Error"];
                 };
             };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+        };
+    };
+    "sites.google_callback": {
+        parameters: {
+            query: {
+                code?: string | null;
+                /** @description Google's word when the owner said no. */
+                error?: string | null;
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description HTML content */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.google_consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.GoogleConsentAsked"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.GoogleConsentUrl"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.unmatched_bookings": {
+        parameters: {
+            query?: {
+                brand?: components["schemas"]["sites.BrandId"] | null;
+                /** @description 100 when absent. */
+                limit?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.ProviderBookings"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.attach_booking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.BookingAttach"];
+            };
+        };
+        responses: {
+            /** @description The event a write journaled. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.list_experiments": {
+        parameters: {
+            query?: {
+                /** @description Absent: every brand's. */
+                brand?: components["schemas"]["sites.BrandId"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Experiments"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.configure_experiment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                key: components["schemas"]["sites.ExperimentKey"];
+            };
+            cookie?: never;
+        };
+        /** @description A change: each field absent (left), null (put back to the declaration) or a value (set). */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.ExperimentChange"];
+            };
+        };
+        responses: {
+            /** @description One experiment of a brand: declared by its landing, overridden by an admin. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Experiment"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.funnel": {
+        parameters: {
+            query?: {
+                brand?: components["schemas"]["sites.BrandId"] | null;
+                /** @description Absent: the whole funnel. */
+                by?: components["schemas"]["sites.FunnelBy"] | null;
+                /** @description A UTC day; 29 days before `to` when absent. */
+                from?: string | null;
+                gmb?: components["schemas"]["sites.Gmbs"] | null;
+                /** @description A UTC day, included; today when absent. At most 366 days from `from`. */
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Funnel"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.gmbs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["sites.GmbPlace"];
+                    };
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.list_invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Invoices"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.create_invoice": {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 1–128 visible ASCII characters. The action's event id derives from (user, action, subject, key): a retry finds the first attempt and is answered 200 with its body, journaling nothing. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.NewInvoice"];
+            };
+        };
+        responses: {
+            /** @description An invoice the panel asked banking for. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Invoice"];
+                };
+            };
+            /** @description An invoice the panel asked banking for. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Invoice"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.get_invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An invoice the panel asked banking for. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Invoice"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.list_leads": {
+        parameters: {
+            query?: {
+                booking?: components["schemas"]["sites.BookingStatus"] | null;
+                brand?: components["schemas"]["sites.BrandId"] | null;
+                channel?: components["schemas"]["sites.LeadChannel"] | null;
+                /** @description Created on or after this UTC day. */
+                created_from?: string | null;
+                /** @description Created on or before this UTC day. */
+                created_to?: string | null;
+                /** @description Absent: every lead; a lead that said no flow is under none of the three. */
+                flow?: components["schemas"]["sites.LeadFlow"] | null;
+                /**
+                 * @description A messenger ref as the customer quotes it or an operator pastes it (`Réf. aq 7k3f`:
+                 *     label, case, spaces; O→0, I/L→1 in the code): the leads carrying it.
+                 */
+                message_ref?: string | null;
+                /** @description Only the leads overdue for their first contact. */
+                overdue?: boolean;
+                stage?: components["schemas"]["sites.Stage"] | null;
+                /** @description Absent: every lead. */
+                suspect?: components["schemas"]["sites.SuspectFilter"] | null;
+                /** @description `next_cursor` of the page before. */
+                cursor?: string | null;
+                gmb?: components["schemas"]["sites.Gmbs"] | null;
+                /** @description At most 200; 50 when absent. */
+                limit?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.LeadPage"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.create_lead": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description 1–128 visible ASCII characters. The action's event id derives from (user, action, subject, key): a retry finds the first attempt and is answered 200 with its body, journaling nothing. */
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.LeadCreation"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.NewLead"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.NewLead"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.lead_counts": {
+        parameters: {
+            query?: {
+                brand?: components["schemas"]["sites.BrandId"] | null;
+                gmb?: components["schemas"]["sites.Gmbs"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.LeadCounts"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.get_lead": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                lead: components["schemas"]["sites.LeadId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.LeadCard"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.book_lead": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description 1–128 visible ASCII characters. The action's event id derives from (user, action, subject, key): a retry finds the first attempt and is answered 200 with its body, journaling nothing. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                lead: components["schemas"]["sites.LeadId"];
+            };
+            cookie?: never;
+        };
+        /** @description An operator's slot for a lead. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.BookingSlot"];
+            };
+        };
+        responses: {
+            /** @description The event a write journaled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description The event a write journaled. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.close_booking": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description 1–128 visible ASCII characters. The action's event id derives from (user, action, subject, key): a retry finds the first attempt and is answered 200 with its body, journaling nothing. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                lead: components["schemas"]["sites.LeadId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.BookingEnd"];
+            };
+        };
+        responses: {
+            /** @description The event a write journaled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description The event a write journaled. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.attempt_call": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                lead: components["schemas"]["sites.LeadId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.CallAttempt"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.call_outcome": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attempt: string;
+                brand: components["schemas"]["sites.BrandId"];
+                lead: components["schemas"]["sites.LeadId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.CallOutcomeBody"];
+            };
+        };
+        responses: {
+            /** @description The event a write journaled. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.mark_messaged": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description 1–128 visible ASCII characters. The action's event id derives from (user, action, subject, key): a retry finds the first attempt and is answered 200 with its body, journaling nothing. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                lead: components["schemas"]["sites.LeadId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.Messaged"];
+            };
+        };
+        responses: {
+            /** @description The event a write journaled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description The event a write journaled. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.no_answer": {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 1–128 visible ASCII characters. The action's event id derives from (user, action, subject, key): a retry finds the first attempt and is answered 200 with its body, journaling nothing. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                lead: components["schemas"]["sites.LeadId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The event a write journaled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description The event a write journaled. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.record_payment": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description 1–128 visible ASCII characters. The action's event id derives from (user, action, subject, key): a retry finds the first attempt and is answered 200 with its body, journaling nothing. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                lead: components["schemas"]["sites.LeadId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.Payment"];
+            };
+        };
+        responses: {
+            /** @description The event a write journaled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description The event a write journaled. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.move_lead": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description 1–128 visible ASCII characters. The action's event id derives from (user, action, subject, key): a retry finds the first attempt and is answered 200 with its body, journaling nothing. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                lead: components["schemas"]["sites.LeadId"];
+            };
+            cookie?: never;
+        };
+        /** @description Where a lead moves, and what the move says. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.StageMove"];
+            };
+        };
+        responses: {
+            /** @description The event a write journaled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description The event a write journaled. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Journaled"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /me`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Me"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `csrf` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.list_places": {
+        parameters: {
+            query?: {
+                gmb?: components["schemas"]["sites.Gmbs"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Places"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.register_place": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.RegisterPlace"];
+            };
+        };
+        responses: {
+            /** @description A place: its live settings, who set them last, and where it stands. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Place"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.link_gmb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                slug: components["schemas"]["sites.LocationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.GmbLink"];
+            };
+        };
+        responses: {
+            /** @description A place: its live settings, who set them last, and where it stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Place"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.restore_place": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                slug: components["schemas"]["sites.LocationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A place: its live settings, who set them last, and where it stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Place"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.place_settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                slug: components["schemas"]["sites.LocationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A place: its live settings, who set them last, and where it stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Place"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.set_place_settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                slug: components["schemas"]["sites.LocationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.SetPlaceSettings"];
+            };
+        };
+        responses: {
+            /** @description A place: its live settings, who set them last, and where it stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Place"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.place_history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                slug: components["schemas"]["sites.LocationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.PlaceHistory"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.revert_place_settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                /** @description The change to go back before. */
+                id: string;
+                slug: components["schemas"]["sites.LocationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.RevertPlaceSettings"];
+            };
+        };
+        responses: {
+            /** @description A place: its live settings, who set them last, and where it stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Place"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.withdraw_place": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+                slug: components["schemas"]["sites.LocationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A place: its live settings, who set them last, and where it stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Place"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.list_pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Pricings"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.get_pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A brand's pricing as saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Pricing"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.set_pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.SetPricing"];
+            };
+        };
+        responses: {
+            /** @description A brand's pricing as saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Pricing"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.remove_pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.RemovePricing"];
+            };
+        };
+        responses: {
+            /** @description A brand's pricing as saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Pricing"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.pricing_changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.PricingChanges"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.set_locales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.SetLocales"];
+            };
+        };
+        responses: {
+            /** @description A brand's pricing as saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Pricing"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+        };
+    };
+    "sites.preview_price": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brand: components["schemas"]["sites.BrandId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["sites.PricePreviewRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.PricePreview"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `already_attached`, `booking_done`, `consent_expired`, `gmb_taken`, `google_refused`, `idempotency_conflict`, `idempotency_key_taken`, `invoice_not_open`, `invoice_processing`, `ledger_refused`, `no_booking`, `no_won_job`, `not_booked`, `place_exists`, `scope_frozen`, `stale` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `invalid_pricing`, `invalid_settings` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
+            /** @description `google_unavailable`, `invoices_unavailable`, `ledger_unavailable`, `not_granted` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["sites.Error"];
+                };
+            };
         };
     };
 }
@@ -22501,7 +31823,7 @@ export const billValues: ReadonlyArray<FlattenedDeepRequired<components>["schema
 export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Country"]> = ["FR", "US", "CA", "GB"];
 export const destinationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DestinationKind"]> = ["channel", "private", "group"];
 export const deviceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Device"]> = ["pixel_7", "galaxy_s23", "redmi_note_14"];
-export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["bad_gateway", "bad_request", "browsers_not_connected", "conflict", "csrf", "forbidden", "internal", "not_found", "too_large", "too_many", "unauthenticated", "unavailable"];
+export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["another_country", "bad_gateway", "bad_request", "browsers_not_connected", "conflict", "csrf", "forbidden", "internal", "no_google_category", "no_keywords", "no_study", "not_found", "too_large", "too_many", "unaffordable", "unauthenticated", "unavailable", "unstudied"];
 export const feedbackValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Feedback"]> = ["up", "down"];
 export const flowKindDtoValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FlowKindDto"]> = ["renewal", "purchase", "set", "spend", "grant_claimed", "refund", "granted"];
 export const generalAccessValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GeneralAccess"]> = ["none", "view"];
@@ -22510,6 +31832,7 @@ export const keyedSourceKindValues: ReadonlyArray<FlattenedDeepRequired<componen
 export const kitTargetValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitTarget"]> = ["google", "drafts", "one_tap"];
 export const ledgerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["LedgerKind"]> = ["add", "set", "charge", "accrual", "kickback"];
 export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MentionKind"]> = ["location"];
+export const mustHaveValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MustHave"]> = ["name", "areas", "phone", "film", "gmail", "category", "site", "hidden_address", "profile"];
 export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
 export const onGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OnGoogle"]> = ["verifying", "verified", "suspended"];
 export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Permission"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
@@ -22522,15 +31845,43 @@ export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schem
 export const sourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "panel", "booking", "bot"];
 export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["State"]> = ["draft", "verifying", "verified", "suspended"];
 export const stopValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Stop"]> = ["at_free", "never"];
+export const tabValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tab"]> = ["launch", "browser", "kit", "connections"];
 export const vendorValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Vendor"]> = ["google"];
 export const placementCountryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["placement.Country"]> = ["FR", "US", "CA", "GB"];
-export const placementErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["placement.ErrorCode"]> = ["bad_request", "forbidden", "internal", "not_found", "too_large", "unaffordable", "unauthenticated", "unstudied"];
+export const placementErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["placement.ErrorCode"]> = ["bad_request", "forbidden", "internal", "not_found", "too_large", "unaffordable", "unauthenticated", "unstudied", "csrf", "unavailable", "bad_gateway", "conflict"];
 export const placementScaleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["placement.Scale"]> = ["linear", "percentile"];
-export const playbookErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["playbook.ErrorCode"]> = ["bad_request", "forbidden", "over_budget", "unanswerable", "unauthenticated"];
-export const review_archiveErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["review_archive.ErrorCode"]> = ["bad_request", "busy", "conflict", "forbidden", "internal", "invalid", "not_found", "timed_out", "too_large", "unauthenticated", "unclaimable"];
+export const playbookErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["playbook.ErrorCode"]> = ["bad_request", "forbidden", "over_budget", "unanswerable", "unauthenticated", "csrf", "unavailable", "bad_gateway", "internal"];
+export const review_archiveErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["review_archive.ErrorCode"]> = ["bad_request", "busy", "conflict", "forbidden", "internal", "invalid", "not_found", "timed_out", "too_large", "unauthenticated", "unclaimable", "csrf", "unavailable", "bad_gateway"];
 export const review_archiveEventValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["review_archive.Event"]> = ["review.new", "review.changed", "review.gone", "review.reappeared", "run.failed"];
 export const review_archiveJobKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["review_archive.JobKind"]> = ["scan", "capture"];
 export const review_archiveJobStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["review_archive.JobStatus"]> = ["queued", "running", "done", "failed"];
 export const review_archiveOnGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["review_archive.OnGoogle"]> = ["verifying", "verified", "suspended"];
 export const review_archiveRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["review_archive.RunStatus"]> = ["ok", "partial", "failed"];
 export const review_archiveTargetKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["review_archive.TargetKind"]> = ["maps", "gbp"];
+export const sitesBookingClosedValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.BookingClosed"]> = ["done", "no_show", "canceled"];
+export const sitesBookingMatchValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.BookingMatch"]> = ["ref", "contact", "manual"];
+export const sitesBookingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.BookingStatus"]> = ["none", "booked", "canceled", "done", "no_show", "requested"];
+export const sitesCallOutcomeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.CallOutcome"]> = ["answered", "no_answer", "wrong_number", "later"];
+export const sitesChangeKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.ChangeKind"]> = ["set", "remove"];
+export const sitesContactChannelValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.ContactChannel"]> = ["phone", "whatsapp", "email", "telegram", "other"];
+export const sitesCurrencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.Currency"]> = ["EUR", "USD", "GBP", "AUD"];
+export const sitesDayOfWeekValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.DayOfWeek"]> = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+export const sitesDayPartValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.DayPart"]> = ["morning", "afternoon", "evening"];
+export const sitesErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.ErrorCode"]> = ["already_attached", "bad_request", "booking_done", "consent_expired", "forbidden", "gmb_taken", "google_refused", "google_unavailable", "idempotency_conflict", "idempotency_key_taken", "internal", "invalid_pricing", "invalid_settings", "invoice_not_open", "invoice_processing", "invoices_unavailable", "ledger_refused", "ledger_unavailable", "no_booking", "no_won_job", "not_booked", "not_found", "not_granted", "place_exists", "scope_frozen", "stale", "too_large", "unauthenticated", "csrf", "unavailable", "bad_gateway"];
+export const sitesFunnelByValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.FunnelBy"]> = ["location"];
+export const sitesFunnelStepStageValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.FunnelStep"]["stage"]> = ["created", "contacted", "quoted", "won", "completed", "paid"];
+export const sitesInvoiceStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.InvoiceState"]> = ["cancelled", "expired", "creating", "open", "processing", "paid"];
+export const sitesLeadChannelValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.LeadChannel"]> = ["form", "phone_inbound", "callback", "whatsapp", "telegram"];
+export const sitesLeadFlowValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.LeadFlow"]> = ["quote", "estimate", "fixed"];
+export const sitesLeadSuspectValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.LeadSuspect"]> = ["rate_limited", "too_fast"];
+export const sitesLostReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.LostReason"]> = ["too_expensive", "no_answer", "went_elsewhere", "out_of_area", "not_needed", "spam", "other"];
+export const sitesManualChannelValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.ManualChannel"]> = ["phone_inbound", "whatsapp", "telegram"];
+export const sitesMessengerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.Messenger"]> = ["whatsapp", "telegram"];
+export const sitesModelPartValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.ModelPart"]> = ["validFrom", "inputs", "needs", "general"];
+export const sitesPermissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.Permission"]> = ["sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
+export const sitesPlaceChangeKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.PlaceChangeKind"]> = ["register", "set", "revert", "withdraw", "restore"];
+export const sitesProviderValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.Provider"]> = ["manual", "link", "google_calendar", "cal_com"];
+export const sitesProviderBookingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.ProviderBookingStatus"]> = ["booked", "canceled"];
+export const sitesStageValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.Stage"]> = ["created", "contacted", "quoted", "won", "completed", "paid", "lost"];
+export const sitesStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.Status"]> = ["registered", "unregistered", "invalid"];
+export const sitesSuspectFilterValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["sites.SuspectFilter"]> = ["only", "exclude"];

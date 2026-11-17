@@ -9,7 +9,7 @@ import { api, ok } from "@/shared/api";
 import type { KitNearby } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDistance } from "@/shared/lib/format";
-import { useResource } from "@/shared/lib/use-resource";
+import { useResource } from "@evinvest/api/react";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { Qr } from "@/shared/ui/qr";
@@ -44,13 +44,13 @@ function NoArea() {
 
 /** An area's kit on the operator's phone (13b): its GBPs nearest first; one tapped fills the screen with its QR (13c). */
 export function KitView({ slug }: { slug: string }) {
-  const res = useResource(`kit.area.${slug}`, () => ok(api.GET("/kit/areas/{slug}/gmbs", { params: { path: { slug } } })), `kit.area.${slug}`, { focus: true });
+  const res = useResource(api, "/kit/areas/{slug}/gmbs", { params: { path: { slug } } });
   const shown = useSyncExternalStore(subscribeHash, shownOfHash, () => null);
   const [find, setFind] = useState("");
   const pushed = useRef(false);
   if (res.status === "loading") return <Skeleton className="min-h-svh rounded-none" />;
   if (res.status === "error")
-    return res.failure.kind === "not_found" ? (
+    return res.failure.code === "not_found" ? (
       <NoArea />
     ) : (
       <div className="p-4">
@@ -135,7 +135,7 @@ function List({ area, gmbs, total, find, onFind, onShow }: { area: { name: strin
 function Shown({ gmbs, at, area, onBack, onReturn }: { gmbs: readonly KitNearby[]; at: number; area: string; onBack: () => void; onReturn: () => void }) {
   const t = useT();
   const gmb = gmbs[at]!;
-  const res = useResource(`kit.gmb.${gmb.id}`, () => ok(api.GET("/gmbs/{id}/kit", { params: { path: { id: gmb.id } } })));
+  const res = useResource(api, "/gmbs/{id}/kit", { params: { path: { id: gmb.id } } });
   const url = res.status === "ok" ? res.data.url : null;
   const start = useRef<number | null>(null);
   const step = (by: number) => {

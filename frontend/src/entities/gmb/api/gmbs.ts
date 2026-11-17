@@ -1,21 +1,10 @@
 import type { UndoEntry } from "@evinvest/uikit";
 
-import { ApiError, api, http, ignoreBody, ok } from "@/shared/api";
-import type { Gmb, LatLng, MapConfig, Point } from "@/shared/api/schema";
+import { api, ok } from "@/shared/api";
+import type { Gmb, LatLng, Point } from "@/shared/api/schema";
 import type { T } from "@/shared/i18n";
 
-import { type SitesPlace, sitesPlacesParser } from "../model/gmb";
 import { undo } from "../model/i18n";
-
-/** `null`: the conductor has no browser key, so there is no map. */
-export async function fetchMapConfig(): Promise<MapConfig | null> {
-  try {
-    return await ok(api.GET("/map"));
-  } catch (e) {
-    if (e instanceof ApiError && e.failure.kind === "not_found") return null;
-    throw e;
-  }
-}
 
 /** What a write sets on each GBP, and how it writes a value; `of` reads an absent field as the `null` it means. */
 interface Field<V> {
@@ -87,13 +76,4 @@ export function switchGmbs(gmbs: Gmb[], enabled: boolean, t: T): Promise<UndoEnt
 /** All of `gmbs` or none: one not the caller's refuses the lot. `null` takes their trade away. */
 export function setTrades(gmbs: Gmb[], trade: number | null, t: T): Promise<UndoEntry> {
   return set(TRADE, gmbs, trade, t(undo.trade, "Trade set on {n}", { n: gmbs.length }), t);
-}
-
-export async function fetchSitesPlaces(): Promise<SitesPlace[]> {
-  return (await http.get("/api/sites/places", sitesPlacesParser)).places;
-}
-
-/** sites' place answer is not read: the page re-reads its tags. */
-export async function linkPlace(brand: string, location: string, gmbId: number | null): Promise<void> {
-  await http.send("PUT", `/api/sites/places/${encodeURIComponent(brand)}/${encodeURIComponent(location)}/gmb`, { gmb_id: gmbId }, ignoreBody);
 }

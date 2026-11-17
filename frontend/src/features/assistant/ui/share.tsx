@@ -81,7 +81,7 @@ function Invite({ chat, access, onInvited }: { chat: string; access: Access; onI
   }, [search]);
   const people = usePeople(query);
   const taken = new Set([access.owner.id, ...access.members.map((m) => m.id), ...picked.map((p) => p.id)]);
-  const found = people.status === "ok" ? people.data.filter((p) => !taken.has(p.id)) : [];
+  const found = people.status === "ok" ? people.data.people.filter((p) => !taken.has(p.id)) : [];
   const share = () => {
     setSending(true);
     void ok(api.POST("/assistant/chats/{id}/members", { params: { path: { id: chat } }, body: { users: picked.map((p) => p.id) } }))

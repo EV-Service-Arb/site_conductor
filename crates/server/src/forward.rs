@@ -16,7 +16,7 @@
 //! [`Services`] is the one client and signing key every call to a service goes through: the
 //! forward's, ingest's, Grafana's ([`crate::grafana`]), and the hubs' own reads of sites.
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use axum::{
 	Router,
@@ -26,9 +26,13 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::any,
 };
-use ev_lib::api::Refusal;
+use ev_lib::api::{
+	OpenApi, Refusal,
+	openapi::{Operation, Parameter, ReferenceOr},
+};
 use hyper_util::client::legacy::{Client, connect::HttpConnector};
-use sa_auth::{Assertion, Principal, Service, Signer, User};
+use sa_auth::{Assertion, Hop, Principal, Service, Signer, User};
+use sa_core::prices::{Item, Sale, Scope};
 
 use crate::{
 	api::Code,
@@ -37,65 +41,123 @@ use crate::{
 	signin::{self, Caller, Freshness, SignIn},
 };
 
-/// What the forward answers itself on a service's API, before the service or in its place: each
-/// forwarded operation's refusals beside the service's own.
-pub const REFUSALS: [Code; 6] = [Code::BadRequest, Code::Unauthenticated, Code::Csrf, Code::Unavailable, Code::BadGateway, Code::Internal];
+/// What the forward answers itself on a pull, beside [`sa_auth::Hop`]'s: unpriced, or past the balance.
+const PULL_REFUSALS: [Code; 2] = [Code::Conflict, Code::Unaffordable];
+/// The query parameter a pull is told what the balance affords by, as placement's document names it.
+const BUDGET: &str = "budget";
 
-/// Longest prefixes first: the first match wins.
+/// The services' paths on the conductor's origin, longest prefixes first: the first match wins.
+/// With [`OWN`], every prefix of the origin (docs/ARCHITECTURE.md, Forward).
 const ROUTES: [Route; 8] = [
 	Route {
 		prefix: "/api/sites",
 		upstream: "/api/v1",
 		service: Service::Sites,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/api/hooks/booking",
 		upstream: "/api/hooks/booking",
 		service: Service::Sites,
+		rate_limited: true,
+		published: true,
 		gate: Gate::Open,
 	},
 	Route {
 		prefix: "/mfe/sites",
 		upstream: "/mfe",
 		service: Service::Sites,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Open,
 	},
 	Route {
 		prefix: "/api/review_archive",
 		upstream: "",
 		service: Service::ReviewArchive,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/mfe/review_archive",
 		upstream: "/mfe",
 		service: Service::ReviewArchive,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Open,
 	},
 	Route {
 		prefix: "/api/playbook",
 		upstream: "",
 		service: Service::Playbook,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/api/placement",
 		upstream: "",
 		service: Service::Placement,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Session,
 	},
 	Route {
 		prefix: "/mfe/placement",
 		upstream: "/mfe",
 		service: Service::Placement,
+		rate_limited: false,
+		published: true,
 		gate: Gate::Open,
 	},
 ];
 
-/// The services that serve their Grafana dashboards at `GET /dashboards` (docs/ARCHITECTURE.md,
-/// Grafana).
-pub(crate) const DASHBOARDS: [Service; 1] = [Service::ReviewArchive];
+/// The conductor's own prefixes: never a page's, nor a kit area's.
+const OWN: [Path; 15] = [
+	Path::new("/api", false, true),
+	Path::new("/api/v1", false, true),
+	// open to everyone: the edge's limit is its only guard
+	Path::new("/api/queries_cache", true, true),
+	// in-cluster only: the landings' and bots' ingest, the landings' review kit, the sandbox's runs
+	Path::new("/api/ingest", false, false),
+	Path::new("/api/kit", false, false),
+	Path::new(crate::execute::PREFIX, false, false),
+	Path::new("/auth", true, true),
+	Path::new("/mcp", false, true),
+	// open (RFC 7591), or a sign-in's every step
+	Path::new("/mcp/register", true, true),
+	Path::new("/mcp/authorize", true, true),
+	Path::new("/mcp/token", true, true),
+	Path::new("/grafana", false, true),
+	Path::new("/mfe", false, true),
+	Path::new("/health", false, true),
+	// once the cabinet's account chip: a tab on an earlier build may still ask for its script
+	Path::new("/cabinet", false, true),
+];
+
+/// A prefix of the conductor's origin, and what the edge does with it.
+#[derive(Clone, Copy, Debug)]
+pub struct Path {
+	pub prefix: &'static str,
+	/// Per client IP at the edge.
+	pub rate_limited: bool,
+	/// The public ingress may route it; else in-cluster only.
+	pub published: bool,
+}
+
+impl Path {
+	const fn new(prefix: &'static str, rate_limited: bool, published: bool) -> Self {
+		Self { prefix, rate_limited, published }
+	}
+}
+
+/// Every prefix of the origin: the services' and the conductor's own.
+pub fn paths() -> impl Iterator<Item = Path> {
+	ROUTES.iter().map(|r| Path::new(r.prefix, r.rate_limited, r.published)).chain(OWN)
+}
 
 /// Hop-by-hop headers (RFC 9110 §7.6.1) and what only the panel may say: never passed on.
 pub(crate) const DROPPED_UP: [&str; 11] = [
@@ -119,9 +181,10 @@ pub(crate) const SITES_TIMEOUT: Duration = Duration::from_secs(10);
 /// The most of a service's answer the conductor reads: a page of notes or a photo, with room.
 const ANSWER: usize = 16 * 1024 * 1024;
 
-/// Every path the forward owns: never the front end's.
-pub fn prefixes() -> impl Iterator<Item = &'static str> {
-	ROUTES.iter().map(|r| r.prefix)
+/// What the forward answers itself on `service`'s operation `op`, before the service or in its place.
+pub fn refusals(service: Service, op: &Operation) -> Vec<Code> {
+	let pull: &[Code] = if service == Service::Placement && pulls(op) { &PULL_REFUSALS } else { &[] };
+	<Hop as strum::VariantArray>::VARIANTS.iter().map(|&h| Code::from(h)).chain(pull.iter().copied()).collect()
 }
 
 /// Whether `path` is `prefix` or below it, by whole segments.
@@ -153,6 +216,11 @@ impl Services {
 			upstreams: Arc::new(upstreams),
 			client: Client::builder(hyper_util::rt::TokioExecutor::new()).build(connector),
 		}
+	}
+
+	/// Whether `service` is configured: placement may not be.
+	pub(crate) fn serves(&self, service: Service) -> bool {
+		service != Service::Placement || self.upstreams.placement.is_some()
 	}
 
 	/// `method path[?query]` to `service`, `principal` vouched for by an assertion bound to the
@@ -279,7 +347,7 @@ impl Forward {
 			Ok(Err(refused)) => return Refusal::<Code>::from(refused).into_response(),
 			Err(e) => return Refusal::<Code>::from(e).into_response(),
 		};
-		*req.uri_mut() = format!("{}?budget={}", req.uri().path(), held.budget())
+		*req.uri_mut() = format!("{}?{BUDGET}={}", req.uri().path(), held.budget())
 			.parse()
 			.expect("a path that arrived in a URI, and a number");
 		let res = self.pass(route, req, principal).await;
@@ -301,25 +369,25 @@ impl Forward {
 		}
 		#[derive(serde::Deserialize)]
 		struct Unaffordable {
-			need: u64,
+			error: String,
 		}
 		let body = match to_bytes(res.into_body(), ANSWER).await {
 			Ok(body) => body,
 			Err(e) => return Refusal::new(Code::BadGateway, format!("reading placement's refusal: {e}")).into_response(),
 		};
-		let need = match serde_json::from_slice::<Unaffordable>(&body) {
-			Ok(u) => u.need,
+		let theirs = match serde_json::from_slice::<Unaffordable>(&body) {
+			Ok(u) => u.error,
 			Err(e) => return Refusal::<Code>::from(eyre::eyre!("placement's 402 for {sha}, {:?}: {e}", String::from_utf8_lossy(&body))).into_response(),
 		};
-		let why = held.unaffordable(need);
+		let why = held.unaffordable(&theirs);
 		if let Err(e) = held.paid(billed, sha, failed).await {
 			return Refusal::<Code>::from(e).into_response();
 		}
-		(StatusCode::PAYMENT_REQUIRED, why).into_response()
+		Refusal::new(Code::Unaffordable, why).into_response()
 	}
 
 	async fn pass(&self, route: &Route, req: Request, principal: Option<Principal>) -> Response {
-		if route.service == Service::Placement && self.services.upstreams.placement.is_none() {
+		if !self.services.serves(route.service) {
 			return Refusal::new(Code::Unavailable, "placement not connected").into_response();
 		}
 		let rest = &req.uri().path()[route.prefix.len()..];
@@ -358,6 +426,8 @@ struct Route {
 	/// What replaces `prefix` upstream.
 	upstream: &'static str,
 	service: Service,
+	rate_limited: bool,
+	published: bool,
 	gate: Gate,
 }
 
@@ -399,21 +469,71 @@ async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 			}
 		}
 	};
-	if *req.method() == Method::POST
-		&& let Some(user) = puller
-		&& let Some(sha) = pulled(req.uri().path())
+	if let Some(user) = puller
+		&& route.service == Service::Placement
 	{
-		let sha = sha.to_owned();
-		return f.pull(route, req, principal, user, &sha).await;
+		match pulled(&f.catalog.document(), route.prefix, req.method(), req.uri().path()) {
+			Ok(Some(sha)) => return f.pull(route, req, principal, user, &sha).await,
+			Ok(None) => {}
+			Err(refused) => return refused.into_response(),
+		}
 	}
 	f.pass(route, req, principal).await
 }
 
-/// The study of `POST /api/placement/studies/{sha}/pull`.
-fn pulled(path: &str) -> Option<&str> {
-	path.strip_prefix("/api/placement/studies/")?
-		.strip_suffix("/pull")
-		.filter(|sha| !sha.is_empty() && !sha.contains('/'))
+/// The study `method path` pulls: the `{sha}` of the catalog's operation under `prefix` that
+/// [`pulls`]. Refused while none there is known, as a pull would pass on the caller's own budget.
+fn pulled(doc: &OpenApi, prefix: &str, method: &Method, path: &str) -> Result<Option<String>, Refusal<Code>> {
+	let mut ops = doc.operations().filter(|(template, ..)| under(template, prefix)).peekable();
+	if ops.peek().is_none() {
+		return Err(Refusal::new(Code::Unavailable, "placement is not connected, or its operations are not known yet"));
+	}
+	let Some((op, bound)) = ops
+		.filter(|(_, m, op)| m.eq_ignore_ascii_case(method.as_str()) && pulls(op))
+		.find_map(|(template, _, op)| bound(template, path).map(|b| (op, b)))
+	else {
+		return Ok(None);
+	};
+	let budgeted = op
+		.parameters
+		.iter()
+		.any(|p| matches!(p, ReferenceOr::Item(Parameter::Query { parameter_data, .. }) if parameter_data.name == BUDGET));
+	match bound.get("sha") {
+		Some(sha) if budgeted => Ok(Some((*sha).to_owned())),
+		_ => {
+			let id = op.operation_id.as_deref().expect("every operation has an id");
+			Err(eyre::eyre!("{id} buys placement's searches, and its document names no {{sha}} or no ?{BUDGET}").into())
+		}
+	}
+}
+
+/// Whether `op` buys a sold item of placement's: a pull, charged at the forward.
+fn pulls(op: &Operation) -> bool {
+	op.extensions.get("x-spends").is_some_and(|v| {
+		serde_json::from_value::<Vec<Item>>(v.clone())
+			.expect("x-spends names priced items")
+			.into_iter()
+			.any(|i| i.scope() == Scope::Placement && i.sale() == Sale::Sold)
+	})
+}
+
+/// `path`'s value of each of `template`'s `{name}`s, if it is that template's.
+fn bound<'t, 'p>(template: &'t str, path: &'p str) -> Option<BTreeMap<&'t str, &'p str>> {
+	let (template, path): (Vec<_>, Vec<_>) = (template.split('/').collect(), path.split('/').collect());
+	if template.len() != path.len() {
+		return None;
+	}
+	let mut bound = BTreeMap::new();
+	for (t, p) in template.into_iter().zip(path) {
+		match t.strip_prefix('{').and_then(|n| n.strip_suffix('}')) {
+			Some(name) if !p.is_empty() => {
+				bound.insert(name, p);
+			}
+			None if t == p => {}
+			_ => return None,
+		}
+	}
+	Some(bound)
 }
 
 /// `caller`, as `service` is told of them: its slice of their permissions only.

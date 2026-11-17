@@ -9,11 +9,11 @@ import { PANEL } from "@config";
 import { GmailsProvider, PublishSelection, undo } from "@/entities/gmb";
 import { seesSites, useMe } from "@/entities/session";
 import { Assistant } from "@/features/assistant";
-import { goToSignIn } from "@/shared/api";
+import { api, goToSignIn } from "@/shared/api";
 import { useT, keys, nav } from "@/shared/i18n";
 import { VIEWS } from "@/shared/api/views";
 import { useAt } from "@/shared/lib/location";
-import { useLiveSocket } from "@/shared/lib/live";
+import { useLiveSocket } from "@evinvest/api/react";
 import { ResizeEdge } from "@/shared/ui/resize-edge";
 
 import { WIDTH, setSidebarWidth, useSidebarFolded, useSidebarWidth } from "../model/sidebar";
@@ -37,7 +37,7 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
   const at = useAt();
   const folded = useSidebarFolded();
   const width = useSidebarWidth();
-  const live = useLiveSocket({ onUnauthenticated: goToSignIn, onForbidden });
+  useLiveSocket(api.url("/live"), { onUnauthenticated: goToSignIn, onForbidden });
   const leads = t(title.leads, "Leads");
   useEffect(() => followTitleCount(window, document, leads), [leads]);
   useEffect(() => {
@@ -62,7 +62,7 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
               <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
               {PANEL.assistant && at.view !== "assistant" && <Assistant />}
             </div>
-            <PanelHotbar live={live} />
+            <PanelHotbar />
           </div>
         </GmailsProvider>
       </UndoProvider>

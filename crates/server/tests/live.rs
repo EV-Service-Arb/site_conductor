@@ -17,6 +17,7 @@ use axum::{
 };
 use jiff::Timestamp;
 use sa_auth::PermissionSet;
+use sa_browsers::view::Close;
 use sa_panel::{
 	Panel,
 	live::{Bus, Signal},
@@ -28,7 +29,7 @@ use sa_server::{
 	concierge::DEV_CODE,
 	forward::{Services, Upstreams},
 	http::Limits,
-	live::{self, CLOSE_SESSION_ENDED, LiveLimits},
+	live::{self, LiveLimits},
 	testing::{SEED, app_with, upstream},
 };
 use serde_json::{Value, json};
@@ -329,11 +330,7 @@ async fn a_write_tells_every_socket_the_tables_a_read_named() {
 	let key = json!({"key_id": "vifnet-site", "kind": "site", "brands": ["vifnet"], "origin": "https://vifnet.site"});
 	assert_eq!(admin_b.send_body(&admin_app, Method::POST, "/api/v1/sources", Some(key)).await.0, StatusCode::CREATED);
 	let [admin_heard, op_heard] = heard(&panel, [&mut admin_ws, &mut op]).await;
-	assert_eq!(
-		admin_heard,
-		topics(&["alert_access", "sessions", "sources", "users"]),
-		"the read's table, the gate's session check and its GetMe asked afresh"
-	);
+	assert_eq!(admin_heard, topics(&["sources"]), "the table the read named; GetMe asked afresh changed nothing");
 	assert_eq!(op_heard, admin_heard, "the operator, who may not read the keys, is told the same");
 }
 
@@ -407,7 +404,7 @@ async fn signing_out_closes_a_socket_the_feed_was_telling() {
 	lines.send(Some(json!({"type": "changed", "topic": "sites.leads"}).to_string())).unwrap();
 	assert_eq!(ws.text().await["topic"], "sites.leads");
 	assert_eq!(b.send(&app, Method::POST, "/auth/logout").await.0, StatusCode::NO_CONTENT);
-	assert_eq!(ws.past_changes().await, Frame::Close(CLOSE_SESSION_ENDED));
+	assert_eq!(ws.past_changes().await, Frame::Close(Close::SignedOut.code()));
 }
 
 #[tokio::test]
@@ -419,7 +416,7 @@ async fn a_new_sign_in_closes_the_socket_of_the_session_it_replaces() {
 	let mut ws = open(addr, &b).await;
 	heard(&panel, [&mut ws]).await;
 	b.sign_in(&app).await;
-	assert_eq!(ws.past_changes().await, Frame::Close(CLOSE_SESSION_ENDED));
+	assert_eq!(ws.past_changes().await, Frame::Close(Close::SignedOut.code()));
 }
 
 /// A session ended with nobody telling the bus (expired, or deleted from the database) is
@@ -439,7 +436,7 @@ async fn a_session_gone_is_found_at_the_recheck() {
 	let mut ws = open(addr, &signed_in(&app).await).await;
 	heard(&panel, [&mut ws]).await;
 	sqlx::query("DELETE FROM sessions").execute(&db.pool().await).await.unwrap();
-	assert_eq!(ws.past_changes().await, Frame::Close(CLOSE_SESSION_ENDED));
+	assert_eq!(ws.past_changes().await, Frame::Close(Close::SignedOut.code()));
 }
 
 /// The test's runtime has one thread: the ten changes are published before the socket's task

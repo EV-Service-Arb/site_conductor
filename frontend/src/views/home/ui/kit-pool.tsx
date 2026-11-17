@@ -5,10 +5,10 @@ import { Check, ImagePlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { PHOTO_MAX, kit, move, photoSrc, uploadPhoto } from "@/entities/gmb";
-import { ApiError, api, ok } from "@/shared/api";
+import { type Failure, Refused, api, ok } from "@/shared/api";
 import type { Country, KitDraft, KitPhoto, KitPool } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
-import type { Resource } from "@/shared/lib/use-resource";
+import type { Resource } from "@evinvest/api/react";
 import { ErrorState } from "@/shared/ui/error-state";
 import { failureText } from "@/shared/ui/failure-text";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -21,7 +21,7 @@ const HINT = "font-normal tracking-normal normal-case";
 const leastUsed = <X extends { uses: number }>(xs: readonly X[]) => [...xs].sort((a, b) => a.uses - b.uses);
 
 /** A category's review kit (13h): the drafts a reviewer copies, and the photos they save, each to a GBP once. */
-export function KitPoolPane({ trade, country, pool }: { trade: number; country: Country; pool: Resource<KitPool> & { reload: () => void } }) {
+export function KitPoolPane({ trade, country, pool }: { trade: number; country: Country; pool: Resource<KitPool, Failure> & { reload: () => void } }) {
   const t = useT();
   if (pool.status === "loading") return <Skeleton className="h-64 w-full" />;
   if (pool.status === "error") return <ErrorState failure={pool.failure} onRetry={pool.reload} />;
@@ -159,8 +159,8 @@ function DraftEditor({ at, initial, save, onDone }: { at: At; initial: { text: s
       at.reload();
       onDone();
     } catch (e) {
-      if (!(e instanceof ApiError)) throw e;
-      if (e.failure.kind !== "unauthenticated") setRefused(failureText(e.failure, t));
+      if (!(e instanceof Refused)) throw e;
+      if (e.failure.code !== "unauthenticated") setRefused(failureText(e.failure, t));
     } finally {
       setBusy(false);
     }

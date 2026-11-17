@@ -11,7 +11,7 @@ import { MapsKeyCard } from "@/features/set-maps-key";
 import { api, ok } from "@/shared/api";
 import { type Gmail, type GmailRole, gmailRoleValues } from "@/shared/api/schema";
 import { type T, useT, account } from "@/shared/i18n";
-import { useResource } from "@/shared/lib/use-resource";
+import { useResource } from "@evinvest/api/react";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -66,7 +66,7 @@ export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Account
 }
 
 function Connections({ gmail }: { gmail: Gmail }) {
-  const connections = useResource(`connections.${gmail.id}`, () => ok(api.GET("/gmails/{id}/connections", { params: { path: { id: gmail.id } } })), "connections", { live: ["gmails"] });
+  const connections = useResource(api, "/gmails/{id}/connections", { params: { path: { id: gmail.id } }, keep: true });
   return (
     <Settled loading={connections.status === "loading"} skeleton={<Skeleton className="h-64 w-full" />}>
       {connections.status === "error" && <ErrorState failure={connections.failure} onRetry={connections.reload} />}

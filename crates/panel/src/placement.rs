@@ -35,14 +35,9 @@ impl Pull {
 		}
 	}
 
-	/// What a person is told when the sweep needs more than [`Self::budget`].
-	pub fn unaffordable(&self, need: u64) -> String {
-		format!(
-			"this pull needs at least {} tokens ({need} searches at {}), and you hold {}",
-			need.saturating_mul(self.price.unsigned_abs()),
-			self.price,
-			self.balance
-		)
+	/// What a person is told when the sweep needs more than [`Self::budget`], beside placement's `theirs`.
+	pub fn unaffordable(&self, theirs: &str) -> String {
+		format!("{theirs}: you hold {} tokens, at {} a search", self.balance, self.price)
 	}
 
 	/// `bought` searches of study `sha`, no more than [`Self::budget`], charged; a pull that `failed`

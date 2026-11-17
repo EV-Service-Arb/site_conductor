@@ -494,7 +494,8 @@ async fn setup() -> Setup {
 			kickbacks: vec![],
 		})
 		.await
-		.unwrap().unwrap();
+		.unwrap()
+		.unwrap();
 	Setup {
 		db: db.pool().await,
 		_db: db,
@@ -1241,14 +1242,14 @@ async fn a_destination_changing_is_told_by_its_tables() {
 	s.n.handle(Update::Stop { chat: private(1) }, t0()).await.unwrap();
 	assert_eq!(
 		told(&s.panel, &mut rx).await,
-		topics(&["alert_destinations", "alert_rules", "telegram_destinations", "telegram_outbox"]),
-		"/stop"
+		topics(&["alert_destinations", "telegram_destinations"]),
+		"/stop: the destination and its cascade"
 	);
 	s.n.handle(Update::Stop { chat: private(1) }, t0()).await.unwrap();
 	assert_eq!(
 		told(&s.panel, &mut rx).await,
-		topics(&["alert_destinations", "alert_rules", "telegram_destinations", "telegram_outbox", "telegram_replies"]),
-		"nothing was linked: the delete, its cascade and the reply are told as prepared"
+		topics(&["telegram_replies"]),
+		"nothing was linked: only the unsolicited reply is written"
 	);
 
 	s.link(user, aliases::operator(), 1, t0()).await;

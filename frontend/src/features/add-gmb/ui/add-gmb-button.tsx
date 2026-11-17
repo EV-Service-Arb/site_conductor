@@ -20,7 +20,7 @@ export function AddGmbButton({ gmail, trade, labeled }: { gmail: number | null; 
       aria-label={label}
       title={labeled ? undefined : label}
       className={labeled ? "justify-start text-ink-soft" : undefined}
-      onClick={() => openAdd({ gmail, trade })}
+      onClick={() => openAdd({ ...(gmail !== null && { gmail }), ...(trade !== null && { trade }) })}
     >
       <Plus aria-hidden />
       {labeled && label}

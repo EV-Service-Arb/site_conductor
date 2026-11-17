@@ -90,7 +90,7 @@ async fn the_review_archive_import_opens_tokens_once_and_a_gmail_is_added_for_a_
 	let import = "/api/v1/admin/imports/review-archive";
 	let subless = json!({ "people": [{ "sub": null, "email": "x@y.z", "name": "X", "first_seen": "2026-01-01T00:00:00Z" }], "gmails": [], "gmbs": [], "ledger": [], "kickbacks": [] });
 	let (status, refused) = call(&mut b, &app, Method::POST, import, Some(subless)).await;
-	assert_eq!((status, refused["message"].as_str().unwrap().contains("x@y.z")), (StatusCode::BAD_REQUEST, true), "{refused}");
+	assert_eq!((status, refused["error"].as_str().unwrap().contains("x@y.z")), (StatusCode::BAD_REQUEST, true), "{refused}");
 	assert_eq!(call(&mut b, &app, Method::POST, import, Some(empty_export())).await.0, StatusCode::NO_CONTENT);
 	assert_eq!(call(&mut b, &app, Method::POST, import, Some(empty_export())).await.0, StatusCode::CONFLICT, "imported before");
 

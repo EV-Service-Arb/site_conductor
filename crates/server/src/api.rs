@@ -44,6 +44,19 @@ pub enum Code {
 	Conflict,
 	TooLarge,
 	TooMany,
+	/// A pull needs more than the balance affords.
+	Unaffordable,
+	/// The category names no placement trade to study it by.
+	NoStudy,
+	/// The category has no primary Google category.
+	NoGoogleCategory,
+	/// The category has no keyword.
+	NoKeywords,
+	/// The category is set up for another country than the area's.
+	AnotherCountry,
+	/// Nothing placement serves studies it: no such trade file, no base for the country, or the
+	/// trade refuses it.
+	Unstudied,
 	/// Not now: the message says until when.
 	Unavailable,
 	/// No browser provider is configured: no browser route answers anything else.
@@ -63,6 +76,8 @@ impl ErrorCode for Code {
 			Self::Conflict => StatusCode::CONFLICT,
 			Self::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
 			Self::TooMany => StatusCode::TOO_MANY_REQUESTS,
+			Self::Unaffordable => StatusCode::PAYMENT_REQUIRED,
+			Self::NoStudy | Self::NoGoogleCategory | Self::NoKeywords | Self::AnotherCountry | Self::Unstudied => StatusCode::UNPROCESSABLE_ENTITY,
 			Self::Unavailable | Self::BrowsersNotConnected => StatusCode::SERVICE_UNAVAILABLE,
 			Self::BadGateway => StatusCode::BAD_GATEWAY,
 			Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
@@ -94,6 +109,19 @@ impl Refuses<Refused> for Code {
 impl Refuses<Invalid> for Code {
 	fn refusal(e: Invalid) -> Refusal<Self> {
 		Refusal::new(Self::BadRequest, e.0)
+	}
+}
+
+impl From<sa_auth::Hop> for Code {
+	fn from(h: sa_auth::Hop) -> Self {
+		match h {
+			sa_auth::Hop::BadRequest => Self::BadRequest,
+			sa_auth::Hop::Unauthenticated => Self::Unauthenticated,
+			sa_auth::Hop::Csrf => Self::Csrf,
+			sa_auth::Hop::Unavailable => Self::Unavailable,
+			sa_auth::Hop::BadGateway => Self::BadGateway,
+			sa_auth::Hop::Internal => Self::Internal,
+		}
 	}
 }
 
@@ -198,12 +226,14 @@ async fn list_sources(State(panel): State<Panel>) -> ApiResult<Json<SourcesDto>>
 #[serde(deny_unknown_fields)]
 pub(crate) struct AddSource {
 	/// A lowercase slug of 1–64 of `[a-z0-9_-]`, never reused.
+	#[schemars(pattern(sa_core::ids::SLUG_PATTERN))]
 	key_id: String,
 	#[schemars(with = "KeyedSourceKind")]
 	kind: SourceKind,
 	/// At least one.
 	brands: Vec<String>,
 	/// A `site` key's landing, `https://<domain>[:port]`; no other kind has one.
+	#[schemars(pattern(sa_core::ids::SITE_ORIGIN_PATTERN))]
 	origin: Option<String>,
 }
 
@@ -261,6 +291,7 @@ async fn add_source(State(panel): State<Panel>, Extension(caller): Extension<Cal
 
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct KeyId {
+	#[schemars(pattern(sa_core::ids::SLUG_PATTERN))]
 	pub(crate) key_id: String,
 }
 

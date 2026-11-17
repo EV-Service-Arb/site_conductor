@@ -299,10 +299,11 @@
             # in-cluster only, by service DNS: the landings' and bots' ingest, the landings' review kit, the sandbox's runs
             # (docs/ARCHITECTURE.md, Deploy requirements)
             excludePathPrefixes = [ "/api/ingest" "/api/kit" "/api/run" ];
-            # per client IP at the edge; the conductor bounds concurrency, not who calls. /api/hooks:
+            # per client IP at the edge; the conductor bounds concurrency, not who calls. /api/hooks/booking:
             # the booking providers' webhooks, forwarded to sites (public, signature-checked there).
-            # /api/queries_cache: open to everyone, so this is its only guard. /mcp/register: open too
-            rateLimitPathPrefixes = [ "/auth" "/api/hooks" "/api/queries_cache" "/mcp/register" "/mcp/authorize" "/mcp/token" ];
+            # /api/queries_cache: open to everyone, so this is its only guard. /mcp/register: open too.
+            # `checks.paths` holds both lists to the binary's path table (forward::ROUTES and OWN).
+            rateLimitPathPrefixes = [ "/auth" "/api/hooks/booking" "/api/queries_cache" "/mcp/register" "/mcp/authorize" "/mcp/token" ];
           };
           egress = {
             # concierge's gRPC, at the address it names
@@ -331,6 +332,7 @@
           PANEL_SITES_URL = "sites_panel";
           PANEL_REVIEW_ARCHIVE_URL = "review_archive";
           PANEL_PLAYBOOK_URL = "playbook_web";
+          PANEL_PLACEMENT_URL = "gmaps_optimal_placement";
           PANEL_SANDBOX_URL = "${pname}-sandbox";
         };
 
@@ -398,6 +400,18 @@
           touch "$out"
         '';
 
+        paths = pkgs.runCommand "${pname}-paths" { } ''
+          check() {
+            ${bin}/bin/${pname} --print-paths "$1" | sort > got
+            printf '%s\n' $2 | sort > want
+            diff -u want got || { echo "flake.nix $3 disagrees with the binary's --print-paths $1" >&2; exit 1; }
+          }
+          check rate-limited ${lib.escapeShellArg (lib.concatStringsSep " " deploy.ingress.rateLimitPathPrefixes)} ingress.rateLimitPathPrefixes
+          check unpublished ${lib.escapeShellArg (lib.concatStringsSep " " deploy.ingress.excludePathPrefixes)} ingress.excludePathPrefixes
+          check consumed ${lib.escapeShellArg (lib.concatStringsSep " " (lib.attrNames consumes))} consumes
+          touch "$out"
+        '';
+
         # The front end's own screens into Figma (frontend/tests/e2e), by `@evinvest/figma-render`'s bin;
         # the loop is the `figma-render` skill.
         figmaFile = "G9JfrDvGd0BKUdOKYg61Nn"; # "panel — renders"
@@ -442,18 +456,16 @@
           text = lib.concatStrings (lib.mapAttrsToList (k: v: "export ${k}=${v}\n") localEnv) + builtins.readFile ./scripts/local-stack.sh;
         };
 
-        # `nix run .#dev`'s peers, from ../<name> unless their user's entry names a `path` or `command` (docs/LOCAL.md)
+        # `nix run .#dev`'s peers, from the checkouts _.siblings-local.json names; a user's entry may name a `command` (docs/LOCAL.md)
         devPeers = [ "sites_panel" "review_archive" "gmaps_optimal_placement" ];
-        devUsers = {
-          v.sites_panel.path = "../sites/panel";
-        };
+        devUsers = { };
         devPrelude = lib.concatStrings (lib.mapAttrsToList
           (user: peers:
             "if [ \"$(id -un)\" = ${lib.escapeShellArg user} ]; then\n"
             + lib.concatStrings (lib.mapAttrsToList
               (peer: o:
                 assert lib.assertMsg (builtins.elem peer devPeers) "devUsers.${user}.${peer}: not one of devPeers";
-                assert lib.assertMsg (lib.subtractLists [ "path" "command" ] (lib.attrNames o) == [ ]) "devUsers.${user}.${peer}: only path and command";
+                assert lib.assertMsg (lib.subtractLists [ "command" ] (lib.attrNames o) == [ ]) "devUsers.${user}.${peer}: only command";
                 lib.concatStrings (lib.mapAttrsToList (k: v: "export DEV_${lib.toUpper k}_${peer}=${lib.escapeShellArg v}\n") o))
               peers)
             + "fi\n")
@@ -488,6 +500,7 @@
 
         checks.contract-env = contractEnv;
         checks.provided-paths = providedPaths;
+        checks.paths = paths;
 
         devShells.default =
           with pkgs;

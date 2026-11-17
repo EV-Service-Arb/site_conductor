@@ -47,6 +47,7 @@ use axum::{
 };
 use ev_lib::api::Refusal;
 use sa_auth::Service;
+use sa_browsers::view::Close;
 use sa_core::feeds::Line;
 use sa_panel::{
 	live::{Change, Ended, Signal},
@@ -64,11 +65,6 @@ use crate::{
 	http::{ApiRoute, USER},
 	signin::{self, Caller, Freshness, SignIn},
 };
-
-/// The session ended: sign in again.
-pub const CLOSE_SESSION_ENDED: u16 = 4401;
-/// RFC 6455's "going away": the server is stopping.
-pub const CLOSE_GOING_AWAY: u16 = 1001;
 
 /// The services whose committed writes the conductor relays.
 const CHANGE_FEEDS: [Service; 2] = [Service::Sites, Service::ReviewArchive];
@@ -350,7 +346,7 @@ impl Connection {
 						self.caller = caller;
 						Step::Nothing
 					}
-					Err(r) if r.code() == Code::Unauthenticated => Step::Close(CLOSE_SESSION_ENDED, "session ended"),
+					Err(r) if r.code() == Code::Unauthenticated => Step::Close(Close::SignedOut, "session ended"),
 					// The API would answer 503 and keep the session: so does the socket, and it
 					// asks again at the next tick (a failure of ours reported as it was refused).
 					Err(_) => Step::Nothing,
@@ -370,9 +366,9 @@ impl Connection {
 					}
 				}
 				Step::Close(code, reason) => {
-					tracing::debug!(code, "live: closed");
+					tracing::debug!(code = code.code(), "live: closed");
 					let frame = CloseFrame {
-						code,
+						code: code.code(),
 						reason: Utf8Bytes::from_static(reason),
 					};
 					// The last word: whether it reached the peer changes nothing here.
@@ -393,10 +389,10 @@ impl Connection {
 					Ended::User(user) => user == self.caller.user_id,
 					Ended::Session(key) => key == self.key,
 				};
-				if mine { Step::Close(CLOSE_SESSION_ENDED, "session ended") } else { Step::Nothing }
+				if mine { Step::Close(Close::SignedOut, "session ended") } else { Step::Nothing }
 			}
 			Err(RecvError::Lagged(missed)) => Step::Lagged(missed),
-			Ok(Signal::GoingAway) | Err(RecvError::Closed) => Step::Close(CLOSE_GOING_AWAY, "server stopping"),
+			Ok(Signal::GoingAway) | Err(RecvError::Closed) => Step::Close(Close::GoingAway, "server stopping"),
 		}
 	}
 
@@ -412,7 +408,7 @@ enum Step {
 	Send(Message),
 	/// Behind by more than the bus holds: skip what is left of it and say so.
 	Lagged(u64),
-	Close(u16, &'static str),
+	Close(Close, &'static str),
 	/// The peer is gone or broke the protocol: nothing more to say to it.
 	Drop,
 }

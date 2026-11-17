@@ -1,19 +1,19 @@
 "use client";
 
-import { Button, Skeleton, cn } from "@evinvest/uikit";
+import { useResource } from "@evinvest/api/react";
+import { Button, ResourceError, Skeleton, cn } from "@evinvest/uikit";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { type Listed, TABS, type Tags, fetchMapConfig, issueOf, narrowed, openAccount, openOrFocus, openTrade, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useAddWindow, move, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useKitWindow, useTradeWindow, useTrades } from "@/entities/gmb";
+import { type Listed, TABS, type Tags, issueOf, narrowed, openAccount, openOrFocus, openTrade, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useAddWindow, move, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useKitWindow, useTradeWindow, useTrades } from "@/entities/gmb";
 import { AddPanel } from "@/features/add-gmb";
 import { PlacingBar } from "@/features/place-gmb";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { PlacementOverlay, StudyAreaWindow } from "@/features/placement-overlay";
 import type { LatLng, MapConfig, State } from "@/shared/api/schema";
-import { takeReturnPage } from "@/shared/api";
+import { api, takeReturnPage } from "@/shared/api";
 import { useT, home } from "@/shared/i18n";
 import { go, setHome, useHome } from "@/shared/lib/location";
-import { useResource } from "@/shared/lib/use-resource";
 import { Locate, StreetView, pin, useTheMap } from "@/shared/map";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -35,18 +35,19 @@ export function Home() {
     back.current ??= takeReturnPage();
     if (back.current !== null && back.current !== "/") go(back.current, "replace");
   }, []);
-  const config = useResource("map", fetchMapConfig);
+  const config = useResource(api, "/map");
 
   return (
     <div className="relative min-h-0 flex-1">
       {config.status === "loading" && <Skeleton className="absolute inset-0 rounded-none" />}
-      {config.status === "error" && (
+      {config.status === "error" && config.failure.code !== "not_found" && (
         <div className="p-6">
           <ErrorState failure={config.failure} onRetry={config.reload} />
         </div>
       )}
-      {config.status === "ok" && config.data === null && <EmptyState className="m-6" title={t(home.noMap, "No map here")} description={t(home.noMap.why, "No Google account in the conductor's config has a browser key. Your GMBs are in the list beside.")} />}
-      {config.status === "ok" && config.data !== null && <GmbMap config={config.data} />}
+      {/* not found: the conductor has no browser key, so there is no map */}
+      {config.status === "error" && config.failure.code === "not_found" && <EmptyState className="m-6" title={t(home.noMap, "No map here")} description={t(home.noMap.why, "No Google account in the conductor's config has a browser key. Your GMBs are in the list beside.")} />}
+      {config.status === "ok" && <GmbMap config={config.data} />}
     </div>
   );
 }
@@ -278,7 +279,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       {map.status === "ok" && <Locate map={map.map} />}
       {map.status === "error" && (
         <div className="absolute inset-x-6 top-6">
-          <ErrorState failure={{ kind: "invalid", message: map.message }} />
+          <ResourceError variant="alert" message={map.message} />
         </div>
       )}
       {peekedListed && windows && !windowed && map.status === "ok" && peekedListed.gmb.location && (

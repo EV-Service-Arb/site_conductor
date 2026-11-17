@@ -66,6 +66,20 @@ fn main() -> eyre::Result<()> {
 		}
 		return Ok(());
 	}
+	// What the flake's ingress and `consumes` must equal (its `checks.paths`).
+	if std::env::args().nth(1).as_deref() == Some("--print-paths") {
+		let paths = sa_server::forward::paths();
+		let listed: Vec<&str> = match std::env::args().nth(2).as_deref() {
+			Some("rate-limited") => paths.filter(|p| p.rate_limited).map(|p| p.prefix).collect(),
+			Some("unpublished") => paths.filter(|p| !p.published).map(|p| p.prefix).collect(),
+			Some("consumed") => settings::CONSUMED.to_vec(),
+			other => eyre::bail!("--print-paths rate-limited|unpublished|consumed, not {other:?}"),
+		};
+		for path in listed {
+			println!("{path}");
+		}
+		return Ok(());
+	}
 	// The deploy contract, straight out of the image: the gitops preflight diffs it with the
 	// cluster Secret's keys, so a missing variable is caught before the rollout.
 	if let Some(profile) = settings::print_required_vars_for() {

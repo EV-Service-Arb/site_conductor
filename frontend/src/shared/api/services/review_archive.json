@@ -278,7 +278,10 @@
           "timed_out",
           "too_large",
           "unauthenticated",
-          "unclaimable"
+          "unclaimable",
+          "csrf",
+          "unavailable",
+          "bad_gateway"
         ],
         "type": "string"
       },
@@ -1968,6 +1971,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Captures a place without registering it.",
@@ -1975,9 +1998,11 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
@@ -1985,6 +2010,7 @@
           "timed_out": 408,
           "too_large": 413,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -2093,6 +2119,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "A capture's WebP, provenance in its Exif.",
@@ -2100,14 +2146,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       }
@@ -2217,6 +2267,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "A job: `queued`, `running`, `done` or `failed`; on `done`, the reviews its run listed with their capture URLs (for a capture of `review_ids`, those of them it found).",
@@ -2224,14 +2294,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -2344,6 +2418,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Every band's published layout of a dock: what a browser without one of its own starts from.",
@@ -2351,14 +2445,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       }
@@ -2492,6 +2590,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Publishes a dock's layout at a band for every browser without one of its own.",
@@ -2499,9 +2617,11 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
@@ -2509,6 +2629,7 @@
           "timed_out": 408,
           "too_large": 413,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -2607,6 +2728,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Who is signed in.",
@@ -2614,14 +2755,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       }
@@ -2730,6 +2875,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "The archive's tag on each of the member's GMBs, for the conductor's page.",
@@ -2737,14 +2902,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       }
@@ -2870,6 +3039,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Withdraws the open request; it stays on record as withdrawn.",
@@ -2877,14 +3066,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       },
@@ -3016,6 +3209,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Records that the removed review's reinstatement was asked of Google, now.",
@@ -3023,14 +3236,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       }
@@ -3177,6 +3394,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Switches the GMB's track of a place on or off, or marks it a favorite; the place's target stays as it is.",
@@ -3184,9 +3421,11 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
@@ -3194,6 +3433,7 @@
           "timed_out": 408,
           "too_large": 413,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       }
@@ -3326,6 +3566,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "A tracked place's reviews in four columns: snapshotted, suspended, removed, reinstating.",
@@ -3333,14 +3593,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       }
@@ -3473,6 +3737,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Asks Google about a tracked place again: its id, name and address become what Google gives now.",
@@ -3480,14 +3764,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       }
@@ -3638,6 +3926,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "A tracked place's runs, newest first.",
@@ -3645,15 +3953,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       }
@@ -3787,6 +4098,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Queues a scan of a tracked place, on top of its schedule; the member who asks pays for it in tokens.",
@@ -3794,14 +4125,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-spends": [
@@ -3920,6 +4255,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "The member's gmails, each with its GMBs and their places as tracked, by screenshots over the last 7 days.",
@@ -3927,14 +4282,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       }
@@ -4043,6 +4402,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Every setting back to its default.",
@@ -4050,14 +4429,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       },
@@ -4164,6 +4547,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "What the member chose, each beside its default.",
@@ -4171,14 +4574,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       },
@@ -4306,6 +4713,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Chooses what the patch names; the rest stays.",
@@ -4313,9 +4740,11 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
@@ -4323,6 +4752,7 @@
           "timed_out": 408,
           "too_large": 413,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         }
       }
@@ -4423,6 +4853,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Everyone who signed in here, and the addresses from before people had ids, with what they hold.",
@@ -4430,14 +4880,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:members:act_as"
@@ -4548,6 +5002,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "A review with every version and capture.",
@@ -4555,14 +5029,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -4708,6 +5186,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Per target and UTC day: new, changed, gone, mean rating, histogram.",
@@ -4715,15 +5213,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -4825,6 +5326,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Every watched place.",
@@ -4832,14 +5353,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -4957,6 +5482,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Watches a place: a place id, or a Maps URL, resolved through Places.",
@@ -4964,9 +5509,11 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
@@ -4974,6 +5521,7 @@
           "timed_out": 408,
           "too_large": 413,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -5084,6 +5632,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Disables the target. Nothing archived is deleted.",
@@ -5091,14 +5659,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -5207,6 +5779,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "A target with its last run, what is archived, and the next scheduled scan.",
@@ -5214,14 +5806,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -5351,6 +5947,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Changes what the patch names; the rest stays.",
@@ -5358,9 +5974,11 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
@@ -5368,6 +5986,7 @@
           "timed_out": 408,
           "too_large": 413,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -5487,6 +6106,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "The target's archive: `manifest.json` and the first capture of each review.",
@@ -5494,15 +6133,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -5642,6 +6284,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "The target's reviews as archived.",
@@ -5649,15 +6311,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -5786,6 +6451,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "The target's runs, newest first.",
@@ -5793,15 +6478,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -5913,6 +6601,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Scans the target now, ahead of the scheduled scans.",
@@ -5920,14 +6628,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -6029,6 +6741,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Every hook, never its secret.",
@@ -6036,14 +6768,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -6162,6 +6898,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Subscribes to events.",
@@ -6169,9 +6925,11 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
@@ -6179,6 +6937,7 @@
           "timed_out": 408,
           "too_large": 413,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"
@@ -6282,6 +7041,26 @@
               }
             },
             "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Removes the hook and whatever it was still owed.",
@@ -6289,14 +7068,18 @@
           "http"
         ],
         "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
           "busy": 429,
           "conflict": 409,
+          "csrf": 403,
           "forbidden": 403,
           "internal": 500,
           "invalid": 400,
           "not_found": 404,
           "timed_out": 408,
           "unauthenticated": 401,
+          "unavailable": 503,
           "unclaimable": 403
         },
         "x-permission": "sa:review_archive:archive:operate"

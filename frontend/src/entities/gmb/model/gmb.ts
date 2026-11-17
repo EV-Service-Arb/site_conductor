@@ -1,8 +1,9 @@
 import type { Tone } from "@evinvest/uikit";
 
 import type { GmailRole, GoogleCategory, State } from "@/shared/api/schema";
+import type { GmbReviews } from "@/shared/api/services/review_archive";
 import type { T } from "@/shared/i18n";
-import { type Infer, type Parser, arrayOf, bool, nullable, num, object, str } from "@/shared/lib/parse";
+import { type Infer, type Parser, arrayOf, bool, num, object, str } from "@/shared/lib/parse";
 
 import { gmbs } from "./i18n";
 
@@ -27,6 +28,9 @@ export function googleName(g: GoogleCategory, lang: string): string {
   return name;
 }
 
+/** review_archive's tag on a GMB. */
+export type ArchiveTag = GmbReviews;
+
 /** A JSON object keyed by GMB id, each value checked. */
 function byGmb<T>(p: Parser<T>): Parser<Map<number, T>> {
   return (v, path) => {
@@ -40,17 +44,6 @@ function byGmb<T>(p: Parser<T>): Parser<Map<number, T>> {
     );
   };
 }
-
-const daysParser = arrayOf(nullable(object({ live: num, lost: num })));
-const live30dParser: Parser<Infer<typeof daysParser>> = (v, path) => {
-  const days = daysParser(v, path);
-  if (days.length !== 30) throw new Error(`${path}: expected 30 days, got ${days.length}`);
-  return days;
-};
-const archiveTagParser = object({ tracked: bool, rating: nullable(num), reviews: nullable(num), suspended: num, reinstating: num, failing: bool, live_30d: live30dParser });
-export type ArchiveTag = Infer<typeof archiveTagParser>;
-export const archiveParser = object({ gmbs: byGmb(archiveTagParser), places_tracked: num });
-export type Archive = Infer<typeof archiveParser>;
 
 const siteTagParser = object({ brand: str, location: str, leads_7d: num, overdue: num });
 export type SiteTag = Infer<typeof siteTagParser>;

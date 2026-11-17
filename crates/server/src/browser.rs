@@ -50,7 +50,7 @@ use jiff::Timestamp;
 use sa_auth::{Assertion, Principal, Service, Signer};
 use sa_browsers::{
 	Launch, Profiles,
-	view::{In as ViewerIn, Out as ViewerOut, Tab as TabDto, TouchPhase, web_url},
+	view::{Close, FRAME_MAX, In as ViewerIn, Out as ViewerOut, Tab as TabDto, TouchPhase, web_url},
 };
 use sa_core::prices::{BrowserStart, PhoneTime, Spends};
 use sa_panel::{
@@ -73,13 +73,6 @@ use crate::{
 	live,
 	signin::{self, Caller, Freshness, SignIn},
 };
-
-/// The viewer was replaced by another of the gmail's.
-pub const CLOSE_REPLACED: u16 = 4409;
-/// Nothing runs for the gmail: start it first.
-pub const CLOSE_NOT_RUNNING: u16 = 4404;
-/// The browser stopped, or its devtools went.
-pub const CLOSE_STOPPED: u16 = 4410;
 
 /// A launch waits on the runner, which bounds it: a phone's start, its adb and its placement
 /// the longest.
@@ -499,7 +492,7 @@ async fn viewer(
 	}
 	let bus = s.sign_in.panel.bus().subscribe();
 	let span = tracing::info_span!("browser", user_id = %caller.user_id, gmail_id = gmail);
-	Ok(ws.max_message_size(4096).max_frame_size(4096).max_write_buffer_size(4 << 20).on_upgrade(move |socket| {
+	Ok(ws.max_message_size(FRAME_MAX).max_frame_size(FRAME_MAX).max_write_buffer_size(4 << 20).on_upgrade(move |socket| {
 		async move {
 			let (viewing, replaced) = c.viewers.take(gmail);
 			let watch = Watch {
@@ -526,22 +519,27 @@ async fn viewer(
 					}
 					.run()
 					.await,
-				Ok(None) => close(socket, CLOSE_NOT_RUNNING, "not running: start it").await,
+				Ok(None) => close(socket, Close::NotRunning, "not running: start it").await,
 				Err(e) => {
 					crate::report(&e, "browser");
-					close(socket, CLOSE_STOPPED, "its devtools did not answer").await
+					close(socket, Close::Stopped, "its devtools did not answer").await
 				}
 			};
 			drop(viewing);
-			tracing::debug!(code, reason, "browser: viewer closed");
+			tracing::debug!(code = code.code(), reason, "browser: viewer closed");
 		}
 		.instrument(span)
 	}))
 }
 
-async fn close(mut socket: WebSocket, code: u16, reason: &'static str) -> (u16, &'static str) {
+async fn close(mut socket: WebSocket, code: Close, reason: &'static str) -> (Close, &'static str) {
 	// the last word: whether it reached the viewer changes nothing here
-	let _last = socket.send(Message::Close(Some(CloseFrame { code, reason: reason.into() }))).await;
+	let _last = socket
+		.send(Message::Close(Some(CloseFrame {
+			code: code.code(),
+			reason: reason.into(),
+		})))
+		.await;
 	(code, reason)
 }
 
@@ -567,19 +565,19 @@ struct Watch {
 
 impl Watch {
 	/// Why the viewer is to close, once it is.
-	async fn ended(&mut self) -> (u16, &'static str) {
+	async fn ended(&mut self) -> (Close, &'static str) {
 		//LOOP: until one of them says close
 		loop {
 			tokio::select! {
-				_ = &mut self.replaced => return (CLOSE_REPLACED, "another viewer took over"),
+				_ = &mut self.replaced => return (Close::Replaced, "another viewer took over"),
 				signal = self.bus.recv() => match signal {
-					Ok(Signal::SessionsEnded(Ended::User(u))) if u == self.caller.user_id => return (live::CLOSE_SESSION_ENDED, "session ended"),
-					Ok(Signal::SessionsEnded(Ended::Session(k))) if k == self.key => return (live::CLOSE_SESSION_ENDED, "session ended"),
-					Ok(Signal::GoingAway) | Err(RecvError::Closed) => return (live::CLOSE_GOING_AWAY, "server stopping"),
+					Ok(Signal::SessionsEnded(Ended::User(u))) if u == self.caller.user_id => return (Close::SignedOut, "session ended"),
+					Ok(Signal::SessionsEnded(Ended::Session(k))) if k == self.key => return (Close::SignedOut, "session ended"),
+					Ok(Signal::GoingAway) | Err(RecvError::Closed) => return (Close::GoingAway, "server stopping"),
 					Ok(_) | Err(RecvError::Lagged(_)) => {}
 				},
 				_ = self.recheck.tick() => match signin::check(&self.sign_in, &self.cookie, Freshness::Cached).await {
-					Err(r) if r.code() == Code::Unauthenticated => return (live::CLOSE_SESSION_ENDED, "session ended"),
+					Err(r) if r.code() == Code::Unauthenticated => return (Close::SignedOut, "session ended"),
 					// a failure of ours was reported as it was refused
 					Ok(_) | Err(_) => {}
 				},
@@ -589,29 +587,29 @@ impl Watch {
 }
 
 /// A cloud phone's viewer, the runner's: each of the viewer's frames checked, then passed on.
-async fn pass(mut socket: WebSocket, mut runner: Devtools, mut watch: Watch) -> (u16, &'static str) {
+async fn pass(mut socket: WebSocket, mut runner: Devtools, mut watch: Watch) -> (Close, &'static str) {
 	//LOOP: until either socket ends or the viewer is to go
 	let (code, reason) = loop {
 		tokio::select! {
 			m = socket.recv() => match m {
 				Some(Ok(Message::Text(t))) => {
 					if serde_json::from_str::<ViewerIn>(&t).is_err() {
-						break (1007, "not a frame of the viewer's");
+						break (Close::NotAFrame, "not a frame of the viewer's");
 					}
 					if runner.send(tungstenite::Message::text(t.as_str())).await.is_err() {
-						break (CLOSE_STOPPED, "the phone stopped");
+						break (Close::Stopped, "the phone stopped");
 					}
 				}
 				Some(Ok(Message::Ping(_) | Message::Pong(_))) => {}
-				Some(Ok(Message::Binary(_))) => break (1003, "text frames only"),
-				Some(Ok(Message::Close(_)) | Err(_)) | None => break (1000, "viewer left"),
+				Some(Ok(Message::Binary(_))) => break (Close::TextOnly, "text frames only"),
+				Some(Ok(Message::Close(_)) | Err(_)) | None => break (Close::Normal, "viewer left"),
 			},
 			m = runner.next() => match m {
 				Some(Ok(tungstenite::Message::Text(t))) => match tokio::time::timeout(SEND_WITHIN, socket.send(Message::Text(t.as_str().into()))).await {
 					Ok(Ok(())) => {}
-					_ => break (1000, "the viewer did not keep up"),
+					_ => break (Close::Normal, "the viewer did not keep up"),
 				},
-				Some(Ok(tungstenite::Message::Close(_)) | Err(_)) | None => break (CLOSE_STOPPED, "the phone stopped"),
+				Some(Ok(tungstenite::Message::Close(_)) | Err(_)) | None => break (Close::Stopped, "the phone stopped"),
 				Some(Ok(_)) => {}
 			},
 			end = watch.ended() => break end,
@@ -637,26 +635,26 @@ struct View {
 }
 
 impl View {
-	async fn run(mut self) -> (u16, &'static str) {
+	async fn run(mut self) -> (Close, &'static str) {
 		if self
 			.cdp(None, "Target.setDiscoverTargets", json!({ "discover": true }), Asked::Done("discovering the tabs"))
 			.await
 			.is_err()
 		{
-			return close(self.socket, CLOSE_STOPPED, "its devtools went").await;
+			return close(self.socket, Close::Stopped, "its devtools went").await;
 		}
 		//LOOP: until either socket ends or the viewer is to go
 		loop {
-			let step: Result<(), (u16, &'static str)> = tokio::select! {
+			let step: Result<(), (Close, &'static str)> = tokio::select! {
 				m = self.socket.recv() => match m {
 					Some(Ok(Message::Text(t))) => self.heard(&t).await,
 					Some(Ok(Message::Ping(_) | Message::Pong(_))) => Ok(()),
-					Some(Ok(Message::Binary(_))) => Err((1003, "text frames only")),
-					Some(Ok(Message::Close(_)) | Err(_)) | None => return (1000, "viewer left"),
+					Some(Ok(Message::Binary(_))) => Err((Close::TextOnly, "text frames only")),
+					Some(Ok(Message::Close(_)) | Err(_)) | None => return (Close::Normal, "viewer left"),
 				},
 				m = self.devtools.next() => match m {
 					Some(Ok(tungstenite::Message::Text(t))) => self.told(&t).await,
-					Some(Ok(tungstenite::Message::Close(_)) | Err(_)) | None => Err((CLOSE_STOPPED, "the browser stopped")),
+					Some(Ok(tungstenite::Message::Close(_)) | Err(_)) | None => Err((Close::Stopped, "the browser stopped")),
 					Some(Ok(_)) => Ok(()),
 				},
 				end = self.watch.ended() => Err(end),
@@ -669,7 +667,7 @@ impl View {
 	}
 
 	/// Sends a command, its answer handled when it comes; `Err` the devtools gone.
-	async fn cdp(&mut self, session: Option<&str>, method: &str, params: Value, asked: Asked) -> Result<(), (u16, &'static str)> {
+	async fn cdp(&mut self, session: Option<&str>, method: &str, params: Value, asked: Asked) -> Result<(), (Close, &'static str)> {
 		self.next += 1;
 		let mut m = json!({ "id": self.next, "method": method, "params": params });
 		if let Some(s) = session {
@@ -679,31 +677,31 @@ impl View {
 		self.devtools
 			.send(tungstenite::Message::text(m.to_string()))
 			.await
-			.map_err(|_| (CLOSE_STOPPED, "its devtools went"))
+			.map_err(|_| (Close::Stopped, "its devtools went"))
 	}
 
 	/// On the shown tab, if any.
-	async fn on_active(&mut self, method: &str, params: Value, what: &'static str) -> Result<(), (u16, &'static str)> {
+	async fn on_active(&mut self, method: &str, params: Value, what: &'static str) -> Result<(), (Close, &'static str)> {
 		let Some((_, session)) = self.active.clone() else {
 			return Ok(());
 		};
 		self.cdp(Some(&session), method, params, Asked::Done(what)).await
 	}
 
-	async fn say(&mut self, out: &ViewerOut) -> Result<(), (u16, &'static str)> {
+	async fn say(&mut self, out: &ViewerOut) -> Result<(), (Close, &'static str)> {
 		let text = serde_json::to_string(out).expect("a derived Serialize of strings and numbers");
 		match tokio::time::timeout(SEND_WITHIN, self.socket.send(Message::Text(text.into()))).await {
 			Ok(Ok(())) => Ok(()),
-			_ => Err((1000, "the viewer did not keep up")),
+			_ => Err((Close::Normal, "the viewer did not keep up")),
 		}
 	}
 
-	async fn heard(&mut self, text: &str) -> Result<(), (u16, &'static str)> {
+	async fn heard(&mut self, text: &str) -> Result<(), (Close, &'static str)> {
 		let input: ViewerIn = match serde_json::from_str(text) {
 			Ok(i) => i,
 			Err(e) => {
 				tracing::debug!(error = %e, "browser: a viewer frame refused");
-				return Err((1007, "not a frame of the viewer's"));
+				return Err((Close::NotAFrame, "not a frame of the viewer's"));
 			}
 		};
 		match input {
@@ -765,7 +763,7 @@ impl View {
 	}
 
 	/// Shows tab `target`: the one shown before let go, this one attached and cast.
-	async fn show(&mut self, target: &str) -> Result<(), (u16, &'static str)> {
+	async fn show(&mut self, target: &str) -> Result<(), (Close, &'static str)> {
 		if !self.tabs.iter().any(|t| t.id == target) || self.active.as_ref().is_some_and(|(t, _)| t == target) {
 			return Ok(());
 		}
@@ -780,7 +778,7 @@ impl View {
 		self.tabs_changed().await
 	}
 
-	async fn tabs_changed(&mut self) -> Result<(), (u16, &'static str)> {
+	async fn tabs_changed(&mut self) -> Result<(), (Close, &'static str)> {
 		let out = ViewerOut::Tabs {
 			tabs: self.tabs.clone(),
 			active: self.active.as_ref().map(|(t, _)| t.clone()),
@@ -788,8 +786,8 @@ impl View {
 		self.say(&out).await
 	}
 
-	async fn told(&mut self, text: &str) -> Result<(), (u16, &'static str)> {
-		let v: Value = serde_json::from_str(text).map_err(|_| (CLOSE_STOPPED, "its devtools spoke something else"))?;
+	async fn told(&mut self, text: &str) -> Result<(), (Close, &'static str)> {
+		let v: Value = serde_json::from_str(text).map_err(|_| (Close::Stopped, "its devtools spoke something else"))?;
 		if let Some(id) = v["id"].as_u64() {
 			let Some(asked) = self.pending.remove(&id) else {
 				tracing::warn!(id, "browser: devtools answered what was never asked");
@@ -813,7 +811,7 @@ impl View {
 			return match asked {
 				Asked::Done(_) => Ok(()),
 				Asked::Attach(target) => {
-					let session = r["sessionId"].as_str().ok_or((CLOSE_STOPPED, "an attach without a session"))?.to_owned();
+					let session = r["sessionId"].as_str().ok_or((Close::Stopped, "an attach without a session"))?.to_owned();
 					self.active = Some((target, session.clone()));
 					self.cdp(Some(&session), "Page.enable", json!({}), Asked::Done("watching the page")).await?;
 					let cast = json!({ "format": "jpeg", "quality": 60, "maxWidth": 1080, "maxHeight": 2400, "everyNthFrame": 1 });

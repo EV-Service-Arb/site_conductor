@@ -29,9 +29,9 @@ import { useState } from "react";
 import { chooseCategoryScope, chooseGmailScope, kit, googleName, openCategories, openTrade, setOnly, useTrades, scopeKeys, trades as tradesKeys, windowKeys, gmbs as gmbsKeys, move } from "@/entities/gmb";
 import { usePlacement } from "@/features/placement-overlay";
 import { type Category, type Country, type Gmail, type Gmb, type Trade, countryValues } from "@/shared/api/schema";
-import { ApiError, api, ok } from "@/shared/api";
+import { Refused, api, ok } from "@/shared/api";
 import { useLocale, useT, state, placement as placementKeys } from "@/shared/i18n";
-import { useResource } from "@/shared/lib/use-resource";
+import { useResource } from "@evinvest/api/react";
 import { failureText } from "@/shared/ui/failure-text";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -448,7 +448,7 @@ const SECTION_HEAD = "flex items-baseline gap-2 text-xs font-semibold tracking-w
 function CategoryTab({ trade, category, here, gmails }: { trade: Trade; category: Category; here: readonly Gmb[]; gmails: readonly Gmail[] }) {
   const t = useT();
   const [pane, setPane] = useState<"category" | "kit">("category");
-  const pool = useResource(`kit.pool.${trade.id}.${category.country}`, () => ok(api.GET("/trades/{id}/{country}/kit", { params: { path: { id: trade.id, country: category.country } } })));
+  const pool = useResource(api, "/trades/{id}/{country}/kit", { params: { path: { id: trade.id, country: category.country } } });
   return (
     <div className="flex flex-col gap-6">
       <ToggleGroup type="single" variant="outline" size="sm" className="w-full" value={pane} onValueChange={(v) => (v === "category" || v === "kit") && setPane(v)}>
@@ -484,8 +484,8 @@ function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; categ
       trades.reload();
       return true;
     } catch (e) {
-      if (!(e instanceof ApiError)) throw e;
-      if (e.failure.kind !== "unauthenticated") setFailed({ at, text: failureText(e.failure, t) });
+      if (!(e instanceof Refused)) throw e;
+      if (e.failure.code !== "unauthenticated") setFailed({ at, text: failureText(e.failure, t) });
       return false;
     }
   };

@@ -199,8 +199,11 @@ POST /auth/logout    CSRF; every session of the user is closed
 ## Forward
 
 The services live under the conductor's origin; `forward.rs` streams each prefix to its
-service, both ways (hyper-util, no buffering), one table for all of it — the front end's
-reserved paths (`web.rs`) are derived from it.
+service, both ways (hyper-util, no buffering), one table for all of it (`ROUTES`).
+With the conductor's own prefixes (`OWN`) it is every prefix of the origin and what the edge does
+with each: the front end's reserved paths (`web.rs`, a JSON 404 below any of them) and the flake's
+ingress lists (`checks.paths`, by `--print-paths`) are derived from it, and a test holds the
+second block below to it.
 
 ```text
 /api/sites/*                     → sites /api/v1/*              session + User; CSRF on writes (a bearer: none)
@@ -211,6 +214,32 @@ reserved paths (`web.rs`) are derived from it.
 /api/playbook/*                  → playbook /*                  session + User; CSRF on writes
 /api/placement/*                 → placement /*                 session + User; CSRF on writes
 /mfe/placement/*                 → placement /mfe/*             open: the map overlay's module
+```
+
+```text
+/api/sites                public
+/api/hooks/booking        public, rate-limited
+/mfe/sites                public
+/api/review_archive       public
+/mfe/review_archive       public
+/api/playbook             public
+/api/placement            public
+/mfe/placement            public
+/api                      public                  the conductor's own, and nothing else's
+/api/v1                   public
+/api/queries_cache        public, rate-limited    open to everyone
+/api/ingest               in-cluster
+/api/kit                  in-cluster
+/api/run                  in-cluster              a sandbox's runs (Code mode)
+/auth                     public, rate-limited
+/mcp                      public
+/mcp/register             public, rate-limited    open (RFC 7591)
+/mcp/authorize            public, rate-limited
+/mcp/token                public, rate-limited
+/grafana                  public
+/mfe                      public                  the services' bundles, forwarded or not
+/health                   public
+/cabinet                  public                  once the cabinet's account chip
 ```
 
 - **The assertion** (`sa_auth`, header `x-sa-assertion`) is signed for one request: Ed25519
@@ -263,9 +292,15 @@ reserved paths (`web.rs`) are derived from it.
 - **Placement** (`PANEL_PLACEMENT_URL`, optional, needs the four) is gmaps_optimal_placement's
   `serve --behind-conductor`. The home map imports its `/mfe/placement/overlay.js` once per page
   session and hands it the map: the heat, the pressure field and the competitors are its drawing,
-  the model's wasm shipped with the payload it reads. A GET there never spends; a POST (Pull
-  latest, `sa:placement:study:spend`) buys the Places searches it lacks, at the puller's tokens
-  (Tokens and GBPs). Unset, `/api/placement` answers 503 and the map says placement is not
+  the model's wasm shipped with the payload it reads. Only a pull spends (Pull latest,
+  `sa:placement:study:spend`): the forward knows one by placement's document in the catalog, not
+  by its path, and buys the Places searches it lacks at the puller's tokens (Tokens and GBPs).
+  A study's definition (`sa_core::placement::Definition`) is the conductor's: `POST
+  /api/v1/areas/{slug}/studies` builds it from the area and one of the caller's categories (or
+  none: the grid alone), PUTs it at placement as the caller under its id, and hands the browser
+  only that id, which the overlay shows. A category without a study, a Google category or a
+  keyword, or set up for another country, is refused by that word; placement's `unstudied` comes
+  back as it is. Unset, `/api/placement` answers 503 and the map says placement is not
   connected.
 
 ## Browsers
@@ -335,7 +370,7 @@ browser ── /grafana/api/ds/query ─▶ conductor: a viewer token into each 
 Grafana (Infinity) ── GET 127.0.0.1:<any>/api/<service>/… + token ──▶ the forward, as that viewer
 Grafana (Infinity) ── GET 127.0.0.1:<any>/api/v1/… + token ──▶ the conductor's own GETs, as that viewer
 conductor ── GET /dashboards (Conductor), every 60 s, conditional ──▶ each service of
-             forward::DASHBOARDS ──▶ <dir>/dashboards/<service>/<uid>.json ──▶ Grafana
+             Service::dashboards ──▶ <dir>/dashboards/<service>/<uid>.json ──▶ Grafana
 ```
 
 - **Datasources are derived:** one Infinity datasource per service's API (`/api/<service>`), its
@@ -347,7 +382,7 @@ conductor ── GET /dashboards (Conductor), every 60 s, conditional ──▶ 
 - **Dashboards are the services':** coupled to a service's API, they ship with its release, built
   over its document (`sa_core::dashboards`): a query names an operation, and a field its JSONata
   reads that the answer lacks fails the build. A
-  service that has them is in `forward::DASHBOARDS`, and its `GET /dashboards` answers a JSON
+  service that has them says so (`sa_auth::Service::dashboards`), and its `GET /dashboards` answers a JSON
   array of them, each with its `uid`, and an ETag. A pull that fails — no answer, a 404, a uid
   another service serves or Grafana refuses — is reported, and what was served before stays.
 - Grafana's dashboards query by POST, so every method under `/grafana/` takes the cached `GetMe`
@@ -503,6 +538,7 @@ GET    /kit/areas/{slug}/gmbs
 GET    /areas
 GET    /areas/{slug}
 PUT    /areas/{slug}
+POST   /areas/{slug}/studies                placement:study:read
 GET    /kit/cities
 GET    /kit/cities/{place_id}
 GET    /kit/locality
@@ -658,18 +694,19 @@ closes              4401 the session ended   1001 the server is stopping
   named.
 - **The conductor's own writes** are told by its store's pool (`ev_lib::sqlite`): every committed
   write, a request's, the bot's or a background task's, as `conductor.<table>` once its connection
-  goes back; a rolled-back one never. A write is known when its statement is prepared, so one that
-  changed no row is told too (every request's session check tells `conductor.sessions`).
+  goes back; a rolled-back one never, nor one that changed no row (an upsert that writes the same
+  values changes it).
 - **What a service changed** comes from its feed, `GET /api/conductor/changes` (NDJSON, a
   Conductor assertion; sites and review_archive): one follower per service puts each `changed`
   line (`sa_core::feeds::Line`) on the bus as it came, and each `resync`. A service sends
   `resync` first on every connection and a `ping` every 25 s; a feed that ends, fails, or says
   nothing for 60 s is followed again after 1 s, doubling to 30 s, so what was missed meanwhile is
   read again. One that answers 404 has none yet: said once, asked again every 60 s.
-- **The shell relays.** The front end holds the one socket and re-dispatches on `window`, as
-  `CustomEvent`s: `sa:live` (each server message as is, and a `{type:"resync"}` after the shell
-  reconnects), `sa:live-status` (`{status}`; answered to an element's
-  `sa:live-status-request`). The sites elements dispatch `sa:title-count` (`{count}`, the nav
+- **The shell relays.** The front end holds the one socket (`@evinvest/api`'s `useLiveSocket`)
+  and re-dispatches on `window`, as `CustomEvent`s: `ev:live` (each server message as is, and a
+  `{type:"resync"}` after the shell reconnects), `ev:live-status` (`{status}`; answered to an
+  element's `ev:live-status-request`). Each read follows the tables its last answer named
+  (`x-sa-reads`); one that named none re-reads when the window regains focus. The sites elements dispatch `sa:title-count` (`{count}`, the nav
   only) and `sa:unauthenticated` (the shell opens its sign-in, returning to the current page).
 - **The bus is in-process** (`tokio::sync::broadcast`, one pod), 1024 messages per subscriber; a
   socket further behind skips the backlog and is sent `resync`. A frame that does not go out
@@ -699,11 +736,15 @@ review_archive's lookups are the house's for now.
 lock:
 
 ```text
-POST /api/placement/studies/{sha}/pull ─ price set, budget = balance ÷ price ─▶ placement …/pull?budget=<n>
-  ├─ the sweep needs more than n: 402 {need}, nothing bought ─▶ the person told the tokens it needs
-  └─ x-billed: <k> on any answer, k ≤ n ─▶ the ledger: −k × price; a pull that failed owes it all back,
-                                          as a failed walk does: the failure is the house's
+a pull: placement's operation (its pulled document) whose x-spends names a sold item of scope Placement
+  ─ price set, budget = balance ÷ price ─▶ placement, its {sha}, ?budget=<n>
+  ├─ the sweep needs more than n: 402 unaffordable, nothing bought ─▶ the person told so, with their balance
+  └─ x-billed: <k> on any answer, k ≤ n ─▶ the ledger: −k × placement.search; a pull that failed owes it
+                                          all back, as a failed walk does: the failure is the house's
 ```
+
+Until the catalog holds placement's document, nothing signed in passes to placement (503): a pull
+would reach it with the caller's own budget.
 
 A person's front end reads the sold prices with their balance, and an action costing more than
 their `confirm_above` (100 unsaid) asks them first.
@@ -1087,17 +1128,21 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   `/health`, `APP_ENV=production`, the variables required, secret and optional,
   `PANEL_DB_PATH`, the volume (`/data`) and the SQLite file on it to replicate, what the ingress
   must not publish or must rate-limit, and the egress. `checks.contract-env` fails the flake
-  when its required variables and the binary's `--print-required-vars` disagree.
+  when its required variables and the binary's `--print-required-vars` disagree; `checks.paths`
+  when its `ingress.rateLimitPathPrefixes`, `ingress.excludePathPrefixes` or `consumes` and the
+  binary's `--print-paths rate-limited|unpublished|consumed` (the path table, the forward's
+  variables) do.
 - **What it provides and consumes, by contract name.** `provides.ingest` is
   `/api/ingest/v1/events`, `provides.kit` `/api/kit/v1`, `provides.queries_cache` `/api/queries_cache`; `consumes` names the peers behind `PANEL_SITES_URL` (`sites_panel`),
-  `PANEL_REVIEW_ARCHIVE_URL` (`review_archive`) and `PANEL_PLAYBOOK_URL` (`playbook_web`), whose
+  `PANEL_REVIEW_ARCHIVE_URL` (`review_archive`), `PANEL_PLAYBOOK_URL` (`playbook_web`) and
+  `PANEL_PLACEMENT_URL` (`gmaps_optimal_placement`), whose
   URLs and egress devops derives. `checks.provided-paths` fails the flake when `provides` and the
   binary's `--print-provided-paths` (the constants its router mounts) disagree.
 - **The landings, outbound on :443.** The Connected sites page asks each site key's origin; the
   origins are data, so the egress is public :443, not a host list.
-- **Ingest and the kit stay inside the cluster.** Their sources reach them by service DNS; the
-  IngressRoute that publishes `sa.evinvest.ltd` must not route `/api/ingest` nor `/api/kit`, and
-  the NetworkPolicy lets in only the pods that send.
+- **Ingest, the kit and the runs stay inside the cluster.** Their senders reach them by service DNS;
+  the IngressRoute that publishes `sa.evinvest.ltd` must not route `/api/ingest`, `/api/kit` nor
+  `/api/run`, and the NetworkPolicy lets in only the pods that send.
 - **sites_panel within reach, and only through here.** The conductor calls `PANEL_SITES_URL` for
   everything it forwards and for its hubs; sites has no public route of its own (the landings
   reach its `/api/internal` in-cluster).

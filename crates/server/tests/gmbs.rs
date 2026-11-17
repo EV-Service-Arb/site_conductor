@@ -11,6 +11,7 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::get,
 };
+use sa_auth::PermissionSet;
 use sa_core::{
 	gbp::{Country, OnGoogle},
 	prices::{Item, PlacesRequest, Spender},
@@ -20,7 +21,7 @@ use sa_panel::{
 	gmbs::{Existing, Gmb, Unplaced},
 	import::Export,
 	seal::DataKey,
-	testing::{TestDb, account, admin, panel_on},
+	testing::{TestDb, account, admin, operator, panel_on},
 };
 use sa_places::{Google, Keys};
 use sa_server::{
@@ -106,10 +107,10 @@ async fn opened(p: &Panel) {
 	p.import_review_archive(empty).await.unwrap().unwrap();
 }
 
-fn app(panel: Panel) -> Router {
+fn app(panel: Panel, permissions: PermissionSet) -> Router {
 	let who = DevIdentity {
 		user_id: DevIdentity::named("dev@localhost"),
-		permissions: admin(),
+		permissions,
 		email: "dev@localhost".to_owned(),
 	};
 	let config = SignInConfig {
@@ -140,7 +141,7 @@ async fn a_gmb_is_located_when_added_and_its_place_asked_once() {
 	let db = TestDb::create().await;
 	let p = panel(&db, Some(&base)).await;
 	opened(&p).await;
-	let app = app(p);
+	let app = app(p, admin());
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 
@@ -179,7 +180,7 @@ async fn locate_fills_only_the_missing_points_and_pays_for_each_once() {
 	}
 
 	let keyed = panel(&db, Some(&base)).await;
-	let app = app(keyed.clone());
+	let app = app(keyed.clone(), admin());
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	assert_eq!(locate(&mut b, &app).await, located(2, &[], &[]));
@@ -242,7 +243,7 @@ async fn a_service_area_gmb_has_no_point_until_placed_on_the_map() {
 	add(&keyless, owner, gmail.id, FLORE).await;
 
 	let keyed = panel(&db, Some(&base)).await;
-	let app = app(keyed.clone());
+	let app = app(keyed.clone(), admin());
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (status, assist) = call(
@@ -283,7 +284,7 @@ async fn a_point_is_placed_and_taken_back_only_on_the_callers_gmb_without_google
 	let other = seen(&p, "other@localhost").await;
 	let theirs = p.add_gmail(other, "other@gmail.com", jiff::Timestamp::now()).await.unwrap().unwrap();
 	let theirs = add(&p, other, theirs.id, FLORE).await;
-	let app = app(p);
+	let app = app(p, admin());
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
@@ -327,7 +328,7 @@ async fn the_map_is_told_only_when_configured() {
 		let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
 		let store = db.store().await;
 		let keyless = Google::try_new(Keys::new(vec![]), Arc::new(sa_places::InOrder), Arc::new(store.clone())).unwrap();
-		let app = app(panel_on(store, key, keyless, sa_places::Accounts::new(accounts)));
+		let app = app(panel_on(store, key, keyless, sa_places::Accounts::new(accounts)), admin());
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		assert_eq!(call(&mut b, &app, Method::GET, "/api/v1/map", None).await, want);
@@ -340,7 +341,7 @@ async fn a_draft_goes_onto_google_and_is_verified() {
 	let db = TestDb::create().await;
 	let p = panel(&db, Some(&base)).await;
 	opened(&p).await;
-	let app = app(p);
+	let app = app(p, admin());
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
@@ -410,7 +411,7 @@ async fn a_gbp_off_maps_is_added_without_its_place_and_given_it_once_verified() 
 	let db = TestDb::create().await;
 	let p = panel(&db, Some(&base)).await;
 	opened(&p).await;
-	let app = app(p);
+	let app = app(p, admin());
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
@@ -478,7 +479,7 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 	let db = TestDb::create().await;
 	let p = panel(&db, None).await;
 	opened(&p).await;
-	let app = app(p);
+	let app = app(p, admin());
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, heating) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Heating" }))).await;
@@ -498,6 +499,12 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 		Some(json!({ "name": "Lyon 8", "trade": heating["id"], "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] })),
 	)
 	.await;
+	assert_eq!(first["tabs"], json!(["launch", "browser"]), "a draft's window");
+	assert_eq!(
+		first["readiness"],
+		json!({ "missing": ["category", "areas", "phone", "hidden_address", "film", "gmail", "profile"], "unknown": ["site"] }),
+		"its trade has no country yet, and with no sites to ask a landing page is unknown"
+	);
 	let first = format!("/api/v1/gmbs/{}", first["id"]);
 	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
 
@@ -513,6 +520,7 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 		};
 		assert_eq!(&edited[field], want, "{field}");
 	}
+	assert_eq!(edited["readiness"], json!({ "missing": ["category", "gmail", "profile"], "unknown": ["site"] }), "{edited}");
 	let (_, cleared) = call(&mut b, &app, Method::PATCH, &first, Some(json!({ "areas": null, "customers_visit": null }))).await;
 	assert_eq!((&cleared["areas"], &cleared["customers_visit"], &cleared["trade_id"]), (&json!([]), &Value::Null, &trade["id"]));
 	let (status, _) = call(
@@ -534,7 +542,7 @@ async fn a_gmails_role_is_optional() {
 	let db = TestDb::create().await;
 	let p = panel(&db, None).await;
 	opened(&p).await;
-	let app = app(p);
+	let app = app(p, admin());
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
@@ -574,7 +582,7 @@ async fn beside_another(db: &TestDb) -> (Router, Browser, i64, i64) {
 		}],
 	};
 	let gbp = p.create_gmb(other, unplaced, jiff::Timestamp::now()).await.unwrap().unwrap();
-	let app = app(p);
+	let app = app(p, admin());
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	(app, b, trade.id, gbp.id)
@@ -754,7 +762,7 @@ async fn a_removed_gmail_is_restored_from_the_trash_and_only_an_admin_keeps_it_f
 	let db = TestDb::create().await;
 	let p = panel(&db, None).await;
 	opened(&p).await;
-	let app = app(p);
+	let app = app(p, operator());
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;

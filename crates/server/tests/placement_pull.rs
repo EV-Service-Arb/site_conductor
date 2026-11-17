@@ -17,13 +17,16 @@ use sa_panel::{
 };
 use sa_server::{
 	concierge::DevIdentity,
-	testing::{Browser, Log, app_with, upstream},
+	http,
+	testing::{Browser, Log, conductor, services, upstream},
 };
 use serde_json::{Value, json};
 
 /// Searches the stub's sweep needs.
 const NEED: u64 = 38;
 const PULL: &str = "/api/placement/studies/abc/pull";
+/// Placement's document as the conductor's gen vendored it: its pull's template, `x-spends` and budget.
+const DOCUMENT: &str = include_str!("../../../frontend/src/shared/api/services/placement.json");
 
 #[derive(serde::Deserialize)]
 struct Budget {
@@ -35,12 +38,22 @@ struct Budget {
 async fn pull(Path(sha): Path<String>, Query(Budget { budget }): Query<Budget>) -> axum::response::Response {
 	match budget < NEED {
 		_ if sha == "fails" => (StatusCode::INTERNAL_SERVER_ERROR, [("x-billed", "5")], "the day's quota ran out").into_response(),
-		true => (StatusCode::PAYMENT_REQUIRED, [("x-billed", "0")], Json(json!({ "need": NEED, "budget": budget }))).into_response(),
+		true => (
+			StatusCode::PAYMENT_REQUIRED,
+			[("x-billed", "0")],
+			Json(json!({ "code": "unaffordable", "error": format!("this pull needs at least {NEED} Places searches, and may buy {budget}") })),
+		)
+			.into_response(),
 		false => ([("x-billed", NEED.to_string())], Json(json!({}))).into_response(),
 	}
 }
 
 async fn setup(price: Option<i64>, balance: i64) -> (TestDb, Router, Log, Browser) {
+	setup_on(price, balance, true).await
+}
+
+/// `documented`: the catalog has pulled placement's document.
+async fn setup_on(price: Option<i64>, balance: i64, documented: bool) -> (TestDb, Router, Log, Browser) {
 	let db = TestDb::create().await;
 	let p = panel(&db).await;
 	p.import_review_archive(Export {
@@ -51,15 +64,24 @@ async fn setup(price: Option<i64>, balance: i64) -> (TestDb, Router, Log, Browse
 		kickbacks: vec![],
 	})
 	.await
-	.unwrap().unwrap();
+	.unwrap()
+	.unwrap();
 	let now = jiff::Timestamp::now();
 	p.set_prices(&[(Item::Placement(PlacementRequest::Search), price)], &[], "admin@localhost", now)
 		.await
 		.unwrap()
 		.unwrap();
 	let email = "dev-admin@localhost";
-	let (base, seen) = upstream(Router::new().route("/studies/{sha}/pull", post(pull))).await;
-	let app = app_with(p.clone(), admin(), email, &base, Default::default());
+	let placement = Router::new()
+		.route("/openapi.json", axum::routing::get(|| async { ([("content-type", "application/json")], DOCUMENT) }))
+		.route("/studies/{sha}/pull", post(pull));
+	let (base, seen) = upstream(placement).await;
+	let (sign_in, forward) = conductor(p.clone(), admin(), email, &base);
+	if documented {
+		forward.catalog().follow(services(&base), tokio::sync::watch::channel(true).1).await;
+	}
+	seen.lock().unwrap().clear();
+	let app = http::app(sign_in, Some(forward), None, Default::default(), None, None, None, None, None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	get(&mut b, &app, "/api/v1/tokens").await; // the gate records who they are
@@ -105,7 +127,10 @@ async fn a_balance_below_the_sweep_buys_nothing_and_is_told_the_need() {
 
 	let (status, _, body) = b.send_body(&app, Method::POST, PULL, &[], true, Body::empty()).await;
 	assert_eq!(status, StatusCode::PAYMENT_REQUIRED);
-	assert_eq!(String::from_utf8_lossy(&body), "this pull needs at least 304 tokens (38 searches at 8), and you hold 100");
+	assert_eq!(
+		serde_json::from_slice::<Value>(&body).unwrap(),
+		json!({ "code": "unaffordable", "error": "this pull needs at least 38 Places searches, and may buy 12: you hold 100 tokens, at 8 a search" })
+	);
 	assert_eq!(seen.lock().unwrap().pop().unwrap().path_and_query, "/studies/abc/pull?budget=12");
 	assert_eq!(get(&mut b, &app, "/api/v1/tokens").await["balance"], 100);
 }
@@ -120,6 +145,16 @@ async fn a_failed_pull_is_charged_what_it_bought_and_owes_it_all_back() {
 	assert_eq!(tokens["balance"], 1000 - 5 * 8);
 	let owed = &tokens["kickbacks"][0];
 	assert_eq!((&owed["amount"], &owed["service"], &owed["key"]), (&json!(40), &json!("placement"), &json!("fails")), "{tokens}");
+}
+
+#[tokio::test]
+async fn no_pull_passes_before_placement_says_which_operations_buy() {
+	let (_db, app, seen, mut b) = setup_on(Some(8), 1000, false).await;
+
+	let (status, _) = b.send(&app, Method::POST, &format!("{PULL}?budget=99999"), &[], true).await;
+	assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+	assert!(seen.lock().unwrap().is_empty(), "the caller's own budget never reaches placement");
+	assert_eq!(get(&mut b, &app, "/api/v1/tokens").await["balance"], 1000);
 }
 
 #[tokio::test]
