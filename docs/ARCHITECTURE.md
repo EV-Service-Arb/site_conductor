@@ -71,6 +71,9 @@ crates/browsers/         sa_browsers: the devices a browser poses as, a launch's
                          frames (lib); the runner (`sa_browsers serve`): Orbita headless, Mimic through
                          the Multilogin app's launcher, a browser's devtools passed to the conductor
                          alone, a film made the camera; a cloud phone's life and its viewer over adb
+crates/sandbox/          sa_sandbox: a run of the agents' code and what it answers, its limits (lib); the
+                         runner (`sa_sandbox serve`): each run one Deno process, type-checked first, no
+                         permission but the net to the conductor's `/api/run`; `js/`, what a run imports
 crates/places/           Google Places: a place from what a person pastes (an id, a Maps URL, a
                          search), its point; suggestions as one types (Autocomplete, no session
                          token); a locality's viewport, the one around a point (Geocoding), a
@@ -1000,6 +1003,10 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **A gmail's browser is driven only through the conductor**, its devtools no one else's, a phone's
   viewer only through it; the runner holds none of the conductor's secrets: a launch brings a token
   for that run alone (GoLogin's 3 minutes, Multilogin's 3 hours) and the proxy.
+- **Model-written code runs only in sa_sandbox**, its own pod: Deno with no permission but the net to
+  the conductor's `/api/run`, which is never public. It holds no secret but its run's token, which
+  opens only the catalog's operations, as their caller, while the run lasts, and none that destroys
+  or spends.
 - **A cloud phone bills while it runs**: nothing a test runs starts one, and one that started stops
   on every way its run ends (docs/spec/browsers.md).
 - **No two gmails share a proxy**: an exit two accounts share is a link Google can draw.

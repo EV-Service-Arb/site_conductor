@@ -169,6 +169,7 @@ impl Services {
 			Service::Sites => &self.upstreams.sites,
 			Service::Placement => self.upstreams.placement.as_ref().expect("`pass` answers placement's routes itself without it"),
 			Service::Browsers => panic!("the runner is not forwarded: `browser` calls it"),
+			Service::Sandbox => panic!("the runner is not forwarded: `execute` calls it"),
 		};
 		let uri: Uri = format!("{}{path_and_query}", base.to_string().trim_end_matches('/'))
 			.parse()

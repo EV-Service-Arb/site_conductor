@@ -162,6 +162,8 @@ pub enum Service {
 	Placement,
 	/// sa_browsers' runner: told by the conductor alone, nobody's permissions.
 	Browsers,
+	/// sa_sandbox's runner: told by the conductor alone, nobody's permissions.
+	Sandbox,
 }
 
 impl Service {
@@ -178,6 +180,7 @@ impl Service {
 			Self::Sites => "sa:sites:",
 			Self::Placement => "sa:placement:",
 			Self::Browsers => "sa:browsers:",
+			Self::Sandbox => "sa:sandbox:",
 		}
 	}
 }

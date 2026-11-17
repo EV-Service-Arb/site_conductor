@@ -4432,6 +4432,7 @@ name = "sa_gen"
 version = "0.1.0"
 dependencies = [
  "ev_lib 0.33.0",
+ "sa_auth",
  "sa_browsers",
  "sa_server",
  "serde_json",
@@ -4500,6 +4501,26 @@ dependencies = [
  "url",
  "v_utils",
  "zeroize",
+]
+
+[[package]]
+name = "sa_sandbox"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clap",
+ "color-eyre",
+ "eyre",
+ "jiff",
+ "reqwest",
+ "sa_auth",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

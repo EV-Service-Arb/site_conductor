@@ -1,0 +1,11 @@
+{
+  "name": "sa-sandbox",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@evinvest/api": "^0.1.0"
+  },
+  "scripts": {
+    "postinstall": "[ -z \"$IN_NIX_SHELL\" ] || js-local"
+  }
+}
