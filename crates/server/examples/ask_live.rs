@@ -42,7 +42,7 @@ async fn main() {
 		concierge_origin: ORIGIN.to_owned(),
 	};
 	let model = Model::new("https://api.anthropic.com".into(), "https://platform.claude.com".into(), Some(token.into()));
-	let app = http::app(SignIn::new(p, Concierge::dev(who), config), None, None, Default::default(), None, None, None, Some(model));
+	let app = http::app(SignIn::new(p, Concierge::dev(who), config), None, None, Default::default(), None, None, None, Some(model), None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let json = [("content-type", "application/json")];

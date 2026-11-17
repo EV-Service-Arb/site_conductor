@@ -31,6 +31,8 @@ PANEL_PORT="${PANEL_PORT##*:}"
 WEB_DEV_PORT="${PANEL_WEB_PORT:?$need}"
 BROWSERS_PORT="${BROWSERS_BIND:?$need}"
 BROWSERS_PORT="${BROWSERS_PORT##*:}"
+SANDBOX_PORT="${SANDBOX_BIND:?$need}"
+SANDBOX_PORT="${SANDBOX_PORT##*:}"
 offset=0
 # whom dev sign-in is, whatever --role: with --from-prod, prod's own account
 DEV_EMAIL="admin@evinvest.ltd"
@@ -186,6 +188,7 @@ else
 	PANEL_PORT=$((PANEL_PORT + offset))
 	WEB_DEV_PORT=$((WEB_DEV_PORT + offset))
 	BROWSERS_PORT=$((BROWSERS_PORT + offset))
+	SANDBOX_PORT=$((SANDBOX_PORT + offset))
 fi
 SITES_PORT="$(shell_port "$SITES_DIR" PANEL_BIND)"
 REVIEW_ARCHIVE_PORT="$(shell_port "$REVIEW_ARCHIVE_DIR" REVIEW_ARCHIVE_SERVER_BIND)"
@@ -451,6 +454,15 @@ fi
 # The gmails' browsers only with the caller's GOLOGIN_TOKEN or MULTILOGIN_TOKEN: neither runs without a plan's.
 browsers_origin=""
 [ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ] || [ "$run_panel" = 0 ] || browsers_origin="http://127.0.0.1:$BROWSERS_PORT"
+# The agents' `execute` once crates/sandbox/js has its packages: @evinvest/api comes through its _.js-local.json until published.
+sandbox_origin=""
+if [ "$run_panel" = 1 ]; then
+	sandbox_js="$root/crates/sandbox/js"
+	[ "$sandbox_js/node_modules/.package-lock.json" -nt "$sandbox_js/package.json" ] || in_shell "$root" bash -c "cd crates/sandbox/js && npm install --no-audit --no-fund >&2"
+	if [ -d "$sandbox_js/node_modules/@evinvest/api" ]; then
+		sandbox_origin="http://127.0.0.1:$SANDBOX_PORT"
+	fi
+fi
 # The Google accounts, their keys named in it from the environment (docs/ARCHITECTURE.md, Google accounts).
 conductor_config="${SA_CONDUCTOR_CONFIG:-$HOME/.config/sa_conductor.nix}"
 [ -f "$conductor_config" ] || { echo "no conductor config at $conductor_config (SA_CONDUCTOR_CONFIG): its \`google\` accounts, \`[]\` for none" >&2; exit 1; }
@@ -474,6 +486,7 @@ panel() {
 		PANEL_REVIEW_ARCHIVE_URL="$review_archive_origin" \
 		PANEL_PLACEMENT_URL="$placement_origin" \
 		PANEL_BROWSERS_URL="$browsers_origin" \
+		PANEL_SANDBOX_URL="$sandbox_origin" \
 		GOLOGIN_TOKEN="${browsers_origin:+${GOLOGIN_TOKEN:-}}" \
 		MULTILOGIN_TOKEN="${browsers_origin:+${MULTILOGIN_TOKEN:-}}" \
 		PANEL_GRAFANA_SERVER="$PANEL_GRAFANA_SERVER" \
@@ -617,10 +630,20 @@ browsers() {
 		PANEL_ASSERTION_KEYS="$assertion_public" \
 		"$root/target/debug/sa_browsers" "$@"
 }
-export -f panel sites_panel review_archive browsers playbook
-export state conductor_config spend_flag public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_origin browsers_origin \
+# sa_sandbox's runner: each run Deno, net to this conductor's /api/run alone
+sandbox() {
+	SANDBOX_BIND="127.0.0.1:$SANDBOX_PORT" \
+		SANDBOX_MAX=2 \
+		SANDBOX_DENO="$(command -v deno)" \
+		SANDBOX_JS="$root/crates/sandbox/js" \
+		SANDBOX_CONDUCTOR_URL="http://127.0.0.1:$PANEL_PORT/api/run" \
+		PANEL_ASSERTION_KEYS="$assertion_public" \
+		"$root/target/debug/sa_sandbox" "$@"
+}
+export -f panel sites_panel review_archive browsers sandbox playbook
+export state conductor_config spend_flag public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_origin browsers_origin sandbox_origin \
 	PANEL_GRAFANA_SERVER PANEL_BIN SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR REVIEW_ARCHIVE_DATA_DIR REVIEW_ARCHIVE_PORT \
-	PANEL_PORT SITES_PORT BROWSERS_PORT root PLAYBOOK_BIN PLAYBOOK_PORT playbook_origin
+	PANEL_PORT SITES_PORT BROWSERS_PORT SANDBOX_PORT root PLAYBOOK_BIN PLAYBOOK_PORT playbook_origin
 watched() {
 	local dir="$1"
 	shift
@@ -711,6 +734,16 @@ if [ -n "$browsers_origin" ]; then
 	essential+=("$!")
 else
 	say "GOLOGIN_TOKEN and MULTILOGIN_TOKEN unset: no browsers' runner; the gmails' browsers say they are not connected"
+fi
+
+if [ -n "$sandbox_origin" ]; then
+	say "starting the sandbox's runner on $sandbox_origin"
+	busy "$SANDBOX_PORT" && die "port $SANDBOX_PORT is taken: the sandbox's runner's"
+	in_shell "$root" cargo b -q -p sa_sandbox
+	serving sandbox "$root" "cargo b -q -p sa_sandbox" "sandbox serve" -e rs,toml,lock &
+	essential+=("$!")
+elif [ "$run_panel" = 1 ]; then
+	say "crates/sandbox/js has no @evinvest/api (its _.js-local.json names the checkout until it is published): no sandbox, the agents have no execute"
 fi
 
 if [ "$run_panel" = 1 ]; then

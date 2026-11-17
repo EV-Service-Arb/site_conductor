@@ -28,6 +28,7 @@ ev_lib = { workspace = true, features = ["settings", "error_monitoring", "api", 
 eyre.workspace = true
 futures.workspace = true
 getrandom.workspace = true
+hex.workspace = true
 http-body-util.workspace = true
 hyper-util.workspace = true
 jiff = { workspace = true, features = ["serde"] }
@@ -41,6 +42,7 @@ sa_contracts.workspace = true
 sa_core = { workspace = true, features = ["api"] }
 sa_panel.workspace = true
 sa_places = { workspace = true, features = ["settings"] }
+sa_sandbox.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -66,7 +68,6 @@ ev_lib = { workspace = true, features = ["api_docs"] }
 [dev-dependencies]
 axum = { workspace = true, features = ["multipart"] }
 base64.workspace = true
-hex.workspace = true
 hmac.workspace = true
 image.workspace = true
 sa_panel = { workspace = true, features = ["testing"] }

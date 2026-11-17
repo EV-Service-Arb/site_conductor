@@ -17,12 +17,12 @@ use axum::{
 use ev_lib::{
 	api::{
 		OpenApi,
-		openapi::{Info, Paths, ReferenceOr, Server},
+		openapi::{Info, Operation, Paths, ReferenceOr, Server},
 	},
 	views::{Table, Views},
 };
 use eyre::WrapErr;
-use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use sa_auth::{PermissionSet, Principal, Service};
 use serde_json::{Map, Value};
 use tokio::sync::watch;
@@ -105,6 +105,37 @@ impl Catalog {
 			}
 		}
 		Ok((Method::from_bytes(method.to_uppercase().as_bytes()).expect("the document's methods are standard"), uri))
+	}
+
+	/// The operation `method` `path` is served by, with its path's parameters by name: of the
+	/// templates that match, the one whose first differing segment is literal, as the routers pick.
+	pub(crate) fn operation(&self, method: &Method, path: &str) -> Option<(Operation, Map<String, Value>)> {
+		let doc = self.document();
+		let asked: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+		let method = method.as_str().to_lowercase();
+		doc.operations()
+			.filter(|(_, m, _)| *m == method)
+			.filter_map(|(template, _, op)| {
+				let segments: Vec<&str> = template.split('/').filter(|s| !s.is_empty()).collect();
+				if segments.len() != asked.len() {
+					return None;
+				}
+				let mut params = Map::new();
+				let mut literal = Vec::with_capacity(segments.len());
+				for (segment, value) in segments.iter().zip(&asked) {
+					match segment.strip_prefix('{').and_then(|s| s.strip_suffix('}')) {
+						Some(name) => {
+							params.insert(name.to_owned(), Value::String(percent_decode_str(value).decode_utf8().ok()?.into_owned())); // a value not UTF-8 matches no operation
+							literal.push(false);
+						}
+						None if segment == value => literal.push(true),
+						None => return None,
+					}
+				}
+				Some((literal, op.clone(), params))
+			})
+			.max_by(|a, b| a.0.cmp(&b.0))
+			.map(|(_, op, params)| (op, params))
 	}
 
 	/// What an agent is told of the panel before anything: the conductor's document's description,
@@ -205,6 +236,15 @@ impl Catalog {
 		}
 		Ok(Some(doc))
 	}
+}
+
+/// The catalog as it stands once each of `vendored` is pulled: what the sandbox's client is generated from.
+pub fn merged(vendored: impl IntoIterator<Item = (Service, Value)>) -> eyre::Result<OpenApi> {
+	let docs = vendored
+		.into_iter()
+		.map(|(service, doc)| Ok((service.to_string(), prefixed(service.as_str(), service, doc)?)))
+		.collect::<eyre::Result<_>>()?;
+	Ok(merge(&crate::http::document(), &docs))
 }
 
 /// A service's document under its forward prefix, its ids and schemas named `<service>.<name>`.

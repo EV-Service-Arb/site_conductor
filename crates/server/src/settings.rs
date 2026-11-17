@@ -96,6 +96,9 @@ ev_lib::settings! {
 		/// sa_browsers' runner, from inside the cluster, e.g. `http://browsers:59130`. Needs
 		/// PANEL_ASSERTION_KEY: it trusts the conductor's assertion alone.
 		panel_browsers_url: Option<String>,
+		/// sa_sandbox's runner, from inside the cluster, e.g. `http://panel-sandbox:59121`: the agents'
+		/// `execute`, none without it. Needs PANEL_ASSERTION_KEY: it trusts the conductor's assertion alone.
+		panel_sandbox_url: Option<String>,
 		/// Grafana's server (the image's `grafanaServer` wrapper): `serve` runs it, at `/grafana/`.
 		/// With PANEL_GRAFANA_DIR, or neither; needs the forward and a public origin.
 		panel_grafana_server: Option<String>,
@@ -248,6 +251,23 @@ impl Settings {
 		let url = bare_http_origin("PANEL_BROWSERS_URL", &url)?.to_string();
 		let browsers = sa_panel::browsers::Browsers::try_new(gologin.map(zeroize::Zeroizing::new), multilogin.map(zeroize::Zeroizing::new))?;
 		Ok(Some(sa_server::browser::Connected::try_new(browsers, &url, signer)?))
+	}
+
+	/// Where `execute` runs: `None` without PANEL_SANDBOX_URL.
+	pub fn sandbox(&self) -> eyre::Result<Option<sa_server::execute::Sandbox>> {
+		let Some(url) = self.panel_sandbox_url.as_deref().map(str::trim).filter(|v| !v.is_empty()) else {
+			return Ok(None);
+		};
+		let signer = self
+			.panel_assertion_key
+			.as_deref()
+			.map(str::trim)
+			.filter(|v| !v.is_empty())
+			.ok_or_else(|| eyre::eyre!("PANEL_SANDBOX_URL needs PANEL_ASSERTION_KEY: the runner trusts the conductor's assertion alone"))?
+			.parse()
+			.map_err(|e| eyre::eyre!("PANEL_ASSERTION_KEY: {e}"))?;
+		let url = bare_http_origin("PANEL_SANDBOX_URL", url)?.to_string();
+		Ok(Some(sa_server::execute::Sandbox::try_new(&url, signer)?))
 	}
 
 	/// `None` when neither variable is set; one without the other is a mistake, named.
@@ -453,6 +473,7 @@ mod tests {
 				"GOLOGIN_TOKEN",
 				"MULTILOGIN_TOKEN",
 				"PANEL_BROWSERS_URL",
+				"PANEL_SANDBOX_URL",
 				"PANEL_GRAFANA_SERVER",
 				"PANEL_GRAFANA_DIR",
 				"PANEL_WEB_DIR",

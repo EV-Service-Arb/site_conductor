@@ -1,5 +1,5 @@
 //! The in-page assistant's loop: Claude asked with the caller's question, given the operations as
-//! `search` and `call` (`crate::tools`, through the `/api/v1` gate on the caller's own session) and
+//! `search`, `call` and `execute` (`crate::tools`, through the `/api/v1` gate on the caller's own session) and
 //! the page as `open` (a view) and `run` (a binding of its keymap). What spends or destroys is
 //! proposed, never done: the user confirms it from the answer's actions. The turns are written
 //! through the chats' versioned store as the loop goes, each write told to the caller's screens.
@@ -24,6 +24,7 @@ use crate::{
 	api::{ApiResult, Code, Id},
 	assistant::{Action, ActionState, AnswerState, Attachment, ChatDto, Cost, Mention, Step, Target, Turn, Used},
 	claude::{MODEL, SUBSCRIPTION},
+	execute::Executed,
 	http::ApiState,
 	signin::Caller,
 	tools::{self, Search},
@@ -37,8 +38,8 @@ code) for trade businesses: the managing gmails, each GBP's state (draft, verify
 leads, its reviews, tokens that pay for Google requests. You act for the person asking, with exactly their permissions.\n\
 \n\
 Tools: `search` finds the panel's operations by what they do (use it before `call`; an empty query lists them all); \
-`call` runs one by its id. An operation that destroys or spends is not run: it becomes a proposal the person confirms, \
-so say what it will do. `open` offers a view as a link; `run` offers a binding of the page's keymap. The <page> block \
+`call` runs one by its id; `execute`, where it is given, runs code over them for what takes several. An operation that \
+destroys or spends is not run: it becomes a proposal the person confirms, so say what it will do. `open` offers a view as a link; `run` offers a binding of the page's keymap. The <page> block \
 says what is open and the bindings bound now.\n\
 \n\
 Answer briefly, in the person's language. Formatting: **bold**, `- ` items, `@[label](location:<gbp id>)` to name a GBP.";
@@ -390,6 +391,25 @@ async fn use_tool(state: &ApiState, headers: &HeaderMap, permissions: &sa_auth::
 			};
 			call(state, headers, c, answer, action).await
 		}
+		Some("execute") => match serde_json::from_value::<tools::Execute>(input.clone()) {
+			Ok(e) => match state.tools.execute(headers, e.code).await {
+				Ok(Executed { ran, proposed }) => {
+					let mut result = json!({ "ran": ran });
+					let step = match proposed {
+						Some(c) => {
+							let label = c.operation.replace('_', " ");
+							answer.actions.push(action(&label, Target::Call(c)));
+							result["proposed"] = json!("the run stopped at this call; the person confirms it from the answer: say what it will do");
+							format!("Ran code; proposed {label}")
+						}
+						None => "Ran code".to_owned(),
+					};
+					(result, step)
+				}
+				Err(e) => (json!({ "error": e }), "Ran code".to_owned()),
+			},
+			Err(e) => (json!({ "error": e.to_string() }), "Ran code".to_owned()),
+		},
 		Some("open") => match serde_json::from_value::<tools::Open>(input.clone()) {
 			Ok(o) => match state.tools.open(&o, |p| p.is_none_or(|p| permissions.iter().any(|h| h == p))) {
 				Ok(href) => {

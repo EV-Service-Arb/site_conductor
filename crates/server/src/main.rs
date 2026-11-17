@@ -185,6 +185,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				settings.web()?,
 				settings.browsers()?,
 				settings.model(),
+				settings.sandbox()?,
 				readers,
 				bind,
 			)
@@ -214,6 +215,7 @@ async fn serve(
 	files: Option<Files>,
 	browsers: Option<sa_server::browser::Connected>,
 	model: sa_server::claude::Model,
+	sandbox: Option<sa_server::execute::Sandbox>,
 	readers: Vec<sa_panel::meters::google::Google>,
 	bind: SocketAddr,
 ) -> eyre::Result<()> {
@@ -310,6 +312,9 @@ async fn serve(
 	if browsers.is_none() {
 		tracing::warn!("PANEL_BROWSERS_URL unset: no browsers, their routes answer 503");
 	}
+	if sandbox.is_none() {
+		tracing::warn!("PANEL_SANDBOX_URL unset: no sandbox, the agents have no execute");
+	}
 	if model.owner().is_none() {
 		tracing::warn!("CLAUDE_CODE_OAUTH_TOKEN unset: the assistant answers only on a person's own Claude");
 	}
@@ -325,6 +330,7 @@ async fn serve(
 		browsers,
 		files.as_ref(),
 		Some(model),
+		sandbox,
 	);
 	let app = match files {
 		Some(files) => web::serve(app, files, panel_for_pages),

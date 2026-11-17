@@ -86,7 +86,7 @@ crates/contracts/        concierge's gRPC contract (tonic, from contracts/proto)
 crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`; thin over `Panel`
   src/signin.rs          /auth/login, /auth/callback, /auth/logout; the /api/v1 gate
   src/oauth.rs           /mcp/{register,authorize,token} and their metadata: OAuth 2.1 for MCP clients
-  src/mcp.rs             POST /mcp: `search` and `call` to an MCP client
+  src/mcp.rs             POST /mcp: `search`, `call` and `execute` to an MCP client
   src/concierge.rs       concierge over gRPC: ExchangeCode, RefreshClientToken, GetMe,
                          PublishCatalog; its development stand-in (PANEL_DEV_SIGN_IN)
   src/cookies.rs         __Host- cookies, the double-submit CSRF check
@@ -115,11 +115,12 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
   src/kit.rs             the review kit: its /api/v1 routes, the landings' /api/kit/v1
   src/catalog.rs         every operation behind the origin: the conductor's own and the services'
                          documents, pulled and merged under their forward prefixes
-  src/tools.rs           an agent's `search` and `call` over the catalog: a call runs through the app
-                         with the caller's credentials, as their own request would
+  src/tools.rs           an agent's `search`, `call` and `execute` over the catalog: a call runs through
+                         the app with the caller's credentials, as their own request would
+  src/execute.rs         `execute`: a run in sa_sandbox, its token; /api/run, the run's way back
   src/claude.rs          the Claude API; /api/v1/me/claude: a person's own Claude, connected
   src/ask.rs             the in-page assistant's loop (`POST /assistant/chats/{id}/ask`): Claude with
-                         `search`/`call`, `open` (a view) and `run` (a binding); what destroys or
+                         `search`/`call`/`execute`, `open` (a view) and `run` (a binding); what destroys or
                          spends is proposed, the user confirms it
   src/areas.rs           /api/v1/areas, and the cities and localities they are drawn from
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
@@ -580,7 +581,8 @@ lacking `need`: it asks, then reads `/me` every 30 s and goes on to `continue` (
 ## Agents over MCP
 
 `<origin>/mcp` serves MCP (Streamable HTTP, JSON answers, no MCP session) as the signed-in user,
-the only MCP of the services: `search` and `call` over the catalog (`tools.rs`), and each operation
+the only MCP of the services: `search` and `call` over the catalog (`tools.rs`), `execute` (Code
+mode, below), and each operation
 a service marks its own tool (`x-tool`, `sa_core::agent::Tool`) as `<service>_<operation_id>`
 (`playbook_search`), its parameters and body the tool's input, a text answer handed on as it
 came. Its instructions are the documents' descriptions, the conductor's then each service's. A
@@ -605,6 +607,34 @@ POST /mcp             Bearer, else 401 with WWW-Authenticate's resource_metadata
   long as the session does: no refresh token. A browser's id is no bearer, nor a client's a cookie.
 - **Bounded:** the OAuth routes as `/auth/*`; `/mcp` 32 at once, 10 min each (a call waits on its
   operation).
+
+## Code mode
+
+`execute { code }`, on both transports where `PANEL_SANDBOX_URL` is set: TypeScript over the
+catalog's client, for work that takes several calls. It runs in sa_sandbox's pod, never here.
+
+```text
+agent ─execute─▶ conductor: a run's token → the caller's cookie+CSRF or bearer, while execute waits
+   POST /runs {code, token} (Conductor assertion, aud sandbox) ─▶ sa_sandbox
+      deno run --check: main.ts = the code + `import { api }` (crates/sandbox/js/prelude.ts)
+      api = createApi<paths>(catalog.json)  ── Bearer token ──▶ conductor /api/run/<path>
+   /api/run: a live run, under CALLS ─ one operation of the catalog (static segments before
+             parameters) ─ destroys or spends? the run's proposal, refused (x-sa-run-refused) : the
+             request through the app as the caller, its Set-Cookie dropped
+   ◀── Ran {ended, stdout, stderr, truncated} + the proposal, from the conductor's own record
+```
+
+- **The client is the catalog's**: gen writes `crates/sandbox/js/catalog.json` with the catalog's own
+  merge over the vendored documents, and its types (`catalog.ts`) beside it; the runner type-checks
+  every run against them first, and a type error runs nothing.
+- **A run is one Deno process** with no permission but the net to the conductor's `host:port`
+  (the runner's `SANDBOX_CONDUCTOR_URL`, never a request's) and the two run variables; its
+  environment emptied, killed at `LIMIT` (60 s), each stream kept to `OUTPUT` (64 KiB), `CALLS`
+  (100) operations at most, `SANDBOX_MAX` runs at once (past it, 503). The limits are
+  `sa_sandbox`'s, read by both ends.
+- **The first call that destroys or spends ends the run**: the prelude exits on the gate's
+  refusal, and that call is proposed as a `call` of it would be (an action in the answer; on MCP,
+  `proposed` until `call` comes with `confirmed: true`). The token dies with `execute`.
 
 ## Live updates, `/api/v1/live`
 
@@ -1107,6 +1137,11 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   address. The conductor too dials those proxies (a set-up's check, to `ip-api.com:80` through them),
   `api.gologin.com:443` and `api.multilogin.com:443`. Multilogin's account auto-stop (Account
   settings) at 40 min is the backstop by hand.
+- **The sandbox.** sa_sandbox is its own pod (`panel-sandbox`; the conductor's `PANEL_SANDBOX_URL`,
+  in-cluster only), stateless: `SANDBOX_MAX` runs at once, each one's type check about 300 MB, the
+  conductor's public keys (`PANEL_ASSERTION_KEYS`), Deno and `crates/sandbox/js` with its packages
+  in the image. Its egress is DNS and the conductor's `/api/run` alone, which the public
+  IngressRoute must not route.
 - **Telegram, outbound only.** With `TELEGRAM_BOT_TOKEN` the pods need egress to
   `api.telegram.org:443`; no webhook is set on the bot (`getUpdates` refuses to run while one is).
 - **`/api/v1/live` through the public IngressRoute, as a WebSocket.** Nothing in front may buffer
