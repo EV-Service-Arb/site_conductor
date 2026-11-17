@@ -363,7 +363,7 @@ if [ "$watch" = 1 ]; then
 		SITES_MFE_DIR="$SITES_DIR/frontend/dist"
 	fi
 	if [ "$run_review_archive" = 1 ] && [ -z "${DEV_COMMAND_review_archive:-}" ]; then
-		[ -f "$REVIEW_ARCHIVE_DIR/flake.nix" ] || die "no review_archive checkout at $REVIEW_ARCHIVE_DIR: REVIEW_ARCHIVE_DIR names it"
+		[ -f "$REVIEW_ARCHIVE_DIR/flake.nix" ] || die "no review_archive checkout at $REVIEW_ARCHIVE_DIR: _.siblings-local.json names it"
 		say "building review_archive and its bundle from $REVIEW_ARCHIVE_DIR"
 		in_shell "$REVIEW_ARCHIVE_DIR" cargo b -q -p review_archive_server
 		(cd "$REVIEW_ARCHIVE_DIR" && nix run .#build-mfe -- "$state/watch/review_archive-mfe")
@@ -414,15 +414,16 @@ if [ "$run_review_archive" = 1 ] && [ "$watch" = 0 ] && { [ -z "${REVIEW_ARCHIVE
 			REVIEW_ARCHIVE_MFE_DIR="$state/build/review_archive-mfe"
 		fi
 	else
-		echo "skipping review_archive: no checkout at $REVIEW_ARCHIVE_DIR (REVIEW_ARCHIVE_DIR names it); /api/review_archive answers 502" >&2
+		echo "skipping review_archive: no checkout at $REVIEW_ARCHIVE_DIR (_.siblings-local.json names it); /api/review_archive answers 502" >&2
 		run_review_archive=0
 	fi
 fi
 
 if [ "$run_playbook" = 1 ] && [ -z "${PLAYBOOK_BIN:-}" ]; then
-	say "building playbook_web ($PLAYBOOK_DIR#playbook_web)"
-	nix build "$PLAYBOOK_DIR#playbook_web" --out-link "$state/build/playbook"
-	PLAYBOOK_BIN="$state/build/playbook/bin/playbook_web"
+	# cargo in its checkout, which patches sa_auth to the local one: Nix would fetch the git dep
+	say "building playbook_web from $PLAYBOOK_DIR"
+	in_shell "$PLAYBOOK_DIR" cargo b -q -p playbook_web
+	PLAYBOOK_BIN="$PLAYBOOK_DIR/target/debug/playbook_web"
 fi
 
 # ── the environments ─────────────────────────────────────────────────────────────────────

@@ -1885,7 +1885,7 @@ export interface components {
         };
         AddSource: {
             /** @description At least one. */
-            brands: string[];
+            brands: components["schemas"]["BrandId"][];
             /** @description A lowercase slug of 1–64 of `[a-z0-9_-]`, never reused. */
             key_id: string;
             kind: components["schemas"]["KeyedSourceKind"];
@@ -1988,6 +1988,11 @@ export interface components {
             /** @description Its keys, as the keycaps read. */
             sequence: string;
         };
+        /**
+         * @description A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.
+         * @example aquafix
+         */
+        BrandId: string;
         BrandReads: {
             /** Format: date-time */
             experiments: string | null;
@@ -3898,6 +3903,7 @@ export type Balance = components['schemas']['Balance'];
 export type BalanceChange = components['schemas']['BalanceChange'];
 export type Bill = components['schemas']['Bill'];
 export type Bound = components['schemas']['Bound'];
+export type BrandId = components['schemas']['BrandId'];
 export type BrandReads = components['schemas']['BrandReads'];
 export type Browser = components['schemas']['Browser'];
 export type CallInput = components['schemas']['CallInput'];
