@@ -431,7 +431,7 @@
           dev = { type = "app"; program = lib.getExe dev; meta.description = "the conductor and its peers under watch: a conductor already serving is replaced, a peer used (docs/LOCAL.md)"; };
           e2e = { type = "app"; program = lib.getExe e2e.program; meta.description = "the front end's behaviour over a stack of its own (frontend/tests/e2e, the renders aside); args go to `playwright test`"; };
           figma = { type = "app"; program = lib.getExe figma; meta.description = "the front end's screens into Figma over a stack of its own, gridded on a new page of figmaFile; `-- frames` lists them"; };
-          local-stack = { type = "app"; program = lib.getExe localStack; meta.description = "the conductor, its Grafana, sites_panel, review_archive and both landings, wired together on this machine (docs/LOCAL.md)"; };
+          local-stack = { type = "app"; program = lib.getExe localStack; meta.description = "the conductor, its Grafana, sites_panel, review_archive and the landings, wired together on this machine (docs/LOCAL.md)"; };
         };
 
         packages = {

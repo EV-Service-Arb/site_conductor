@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn } from "@evinvest/uikit";
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn, useBinding } from "@evinvest/uikit";
 import { ChevronDown, CircleMinus, CirclePlus, Link2, Pencil, QrCode, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
@@ -213,8 +213,10 @@ function TrashButton() {
   const trash = useTrash();
   const button = useButtonSize();
   const n = trash.status === "ok" ? trash.data.gmails.length + trash.data.gmbs.length : null;
+  const open = () => openTrash(true);
+  useBinding({ on: { key: "T" }, id: "trash", run: { label: t(trashKeys.open, "Trash"), run: open } });
   return (
-    <Button variant="ghost" size={button("sm")} className="text-ink-soft" onClick={() => openTrash(true)}>
+    <Button variant="ghost" size={button("sm")} className="text-ink-soft" onClick={open}>
       <Trash2 aria-hidden />
       {t(trashKeys.open, "Trash")}
       {n !== null && n > 0 && <span className="tabular-nums">{n}</span>}

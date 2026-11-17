@@ -18,6 +18,9 @@ use crate::{
 /// The header on every answer to a pull: its [`Billed`], as JSON.
 pub const BILLED: &str = "x-billed";
 
+/// The header on a pull refused `unaffordable` (402): at least how many Places searches it needs.
+pub const NEED: &str = "x-need";
+
 /// What a pull bought, each item's count: its Places searches as `places.search`.
 pub type Billed = BTreeMap<Item, u64>;
 
@@ -141,6 +144,15 @@ pub struct Category {
 	pub keywords: Vec<String>,
 	pub google_primary: Gcid,
 	pub google_additional: Vec<Gcid>,
+}
+
+/// What placement studies: the trade files a category's `study` names one of, and the countries it
+/// has a base for.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Catalog {
+	pub trades: Vec<String>,
+	pub countries: Vec<Country>,
 }
 
 /// One of Google's Business Profile categories, named in the country's language.

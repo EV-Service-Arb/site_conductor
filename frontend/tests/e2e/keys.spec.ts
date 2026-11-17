@@ -42,3 +42,17 @@ test("outside a field the leader is z, with Alt or without", async ({ page }) =>
     await expect(page.getByText("Keybinds")).toBeHidden();
   }
 });
+
+test("z T floats the trash over the page, and Escape within it closes it", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Assistant: show or hide", pressed: true }).click(); // a new browser opens it, its composer focused
+  const trash = page.getByRole("dialog", { name: "Trash" });
+  await expect(async () => {
+    await page.keyboard.press("z");
+    await page.keyboard.press("Shift+T");
+    await expect(trash).toBeVisible({ timeout: 500 });
+  }).toPass();
+  await page.keyboard.press("Escape");
+  await expect(trash).toBeHidden();
+  await expect(page).not.toHaveURL(/trash/);
+});

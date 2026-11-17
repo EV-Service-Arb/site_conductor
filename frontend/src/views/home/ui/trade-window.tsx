@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Input,
+  FloatingPanel,
   NativeSelect,
   NativeSelectOption,
   ToggleGroup,
@@ -39,6 +40,7 @@ import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 import { GoogleCategories } from "./google-categories";
 import { KitPoolPane } from "./kit-pool";
 import { categories } from "../model/i18n";
+import { FLOAT_AT } from "./trash-window";
 
 const MAX_KEYWORDS = 50;
 
@@ -153,20 +155,19 @@ export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; g
   const cell = "flex h-14 w-full flex-col items-start justify-center gap-0.5 rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
   return (
-    <section aria-label={t(scopeKeys.categories, "Categories")} className="absolute inset-y-0 right-0 left-0 flex flex-col overflow-y-auto border-l border-border bg-background md:left-36">
-      <header className="flex items-start gap-3 border-b border-border px-6 pt-4 pb-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-            <Tag aria-hidden className="size-4 shrink-0 text-ink-soft" />
-            {t(scopeKeys.categories, "Categories")}
-          </h2>
-          <p className="text-sm text-ink-soft tabular-nums">{t(categories.counts, "{trades} trades · {countries} countries · {held} of {of} GBPs hold one", { trades: trades.length, countries: countries.length, held: traded.length, of: gmbs.length })}</p>
-        </div>
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => openCategories(false)}>
-          <X aria-hidden />
-        </Button>
-      </header>
-      <div className="flex max-w-3xl flex-col gap-6 p-6">
+    <FloatingPanel
+      title={
+        <span className="flex items-center gap-2">
+          <Tag aria-hidden className="size-4 shrink-0 text-ink-soft" />
+          {t(scopeKeys.categories, "Categories")}
+        </span>
+      }
+      at={FLOAT_AT}
+      closeLabel={t(windowKeys.close, "Close the window")}
+      onClose={() => openCategories(false)}
+    >
+      <div className="flex w-3xl max-w-full flex-col gap-6 p-6">
+        <p className="-mt-2 text-sm text-ink-soft tabular-nums">{t(categories.counts, "{trades} trades · {countries} countries · {held} of {of} GBPs hold one", { trades: trades.length, countries: countries.length, held: traded.length, of: gmbs.length })}</p>
         <section className={SECTION}>
           <h3 className={SECTION_HEAD}>
             {t(categories.trades, "Trades")}
@@ -284,7 +285,7 @@ export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; g
           </section>
         )}
       </div>
-    </section>
+    </FloatingPanel>
   );
 }
 
