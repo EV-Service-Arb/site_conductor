@@ -23,6 +23,10 @@ use sha2::{Digest as _, Sha256};
 mod gate;
 #[cfg(feature = "axum")]
 pub use gate::{Conductor, Denied, Gate, Verifier, Vouch};
+#[cfg(feature = "axum")]
+mod hop;
+#[cfg(feature = "axum")]
+pub use hop::Hop;
 
 /// The request header the assertion rides in, panel → service.
 pub const HEADER: &str = "x-sa-assertion";
