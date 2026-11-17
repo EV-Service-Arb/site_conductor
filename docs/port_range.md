@@ -10,7 +10,7 @@ The tens, in order from the start of the range:
 
 1. site_conductor
 2. review_archive
-3. sites: sites/panel first, then the landings (aquafix, vifnet)
+3. sites: sites/panel first, then the landings (aquafix, vifnet, debouchage)
 4. playbook
 5. verif_tools
 6. gmaps_optimal_placement
