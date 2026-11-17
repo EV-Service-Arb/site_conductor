@@ -93,6 +93,7 @@ pub enum Out {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[schemars(rename = "BrowserTab")]
 pub struct Tab {
 	pub id: String,
 	pub title: String,

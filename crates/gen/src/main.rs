@@ -32,6 +32,7 @@ fn main() {
 	frames.subschema_for::<ViewerClose>();
 	let schemas = &mut doc.components.as_mut().expect("the document has components").schemas;
 	for (name, schema) in frames.take_definitions(true) {
+		assert!(!schemas.contains_key(&name), "{name}: a frame's schema is named as one of the document's");
 		let json_schema = schema.try_into().expect("schemars defines schemas as objects");
 		schemas.insert(
 			name,
