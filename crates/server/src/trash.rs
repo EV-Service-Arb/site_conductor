@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
 	api::{ApiResult, Code, Id},
-	http::{ApiRoute, Gate},
+	http::{ApiRoute, USER},
 	signin::Caller,
 };
 
@@ -139,12 +139,11 @@ pub async fn run(panel: Panel, keep_by_default: bool, shutdown: tokio::sync::wat
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::GET, "/trash", user, trash),
-		ApiRoute::new(M::POST, "/trash/gmails/{id}/restore", user, restore_gmail),
-		ApiRoute::new(M::POST, "/trash/gmbs/{id}/restore", user, restore_gmb),
-		ApiRoute::new(M::PUT, "/trash/settings", user, set_trash_settings),
+		ApiRoute::new(M::GET, "/trash", USER, trash),
+		ApiRoute::new(M::POST, "/trash/gmails/{id}/restore", USER, restore_gmail),
+		ApiRoute::new(M::POST, "/trash/gmbs/{id}/restore", USER, restore_gmb),
+		ApiRoute::new(M::PUT, "/trash/settings", USER, set_trash_settings),
 	]
 }
 

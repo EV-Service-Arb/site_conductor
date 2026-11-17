@@ -51,7 +51,7 @@ use crate::{
 	areas::{AreaDto, SlugIn},
 	forward::Services,
 	gmbs::TradeIn,
-	http::{ApiRoute, ApiState, Gate, Limits},
+	http::{ApiRoute, ApiState, Limits, SLOW, USER},
 	ingest,
 	signin::Caller,
 };
@@ -347,19 +347,18 @@ fn ranked(drafts: Vec<Ranked>, target: Option<Target>) -> Vec<RankedDto> {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit", user, kit_pool),
-		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/drafts", user, add_kit_draft),
-		ApiRoute::new(M::PATCH, "/trades/{id}/{country}/kit/drafts/{draft}", user, edit_kit_draft),
-		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/drafts/{draft}", user, remove_kit_draft),
-		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/photos", user.slow(), add_kit_photo).layer(|h| h.layer(DefaultBodyLimit::max(PHOTO_MAX))),
-		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit/photos/{file}", user, kit_photo),
-		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/photos/{file}", user, remove_kit_photo),
-		ApiRoute::new(M::GET, "/gmbs/{id}/kit", user, gmb_kit),
-		ApiRoute::new(M::PUT, "/gmbs/{id}/kit", user, set_gmb_kit),
-		ApiRoute::new(M::POST, "/gmbs/{id}/kit/shown", user, kit_shown),
-		ApiRoute::new(M::GET, "/kit/areas/{slug}/gmbs", user, kit_area_gmbs),
+		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit", USER, kit_pool),
+		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/drafts", USER, add_kit_draft),
+		ApiRoute::new(M::PATCH, "/trades/{id}/{country}/kit/drafts/{draft}", USER, edit_kit_draft),
+		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/drafts/{draft}", USER, remove_kit_draft),
+		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/photos", SLOW, add_kit_photo).layer(|h| h.layer(DefaultBodyLimit::max(PHOTO_MAX))),
+		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit/photos/{file}", USER, kit_photo),
+		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/photos/{file}", USER, remove_kit_photo),
+		ApiRoute::new(M::GET, "/gmbs/{id}/kit", USER, gmb_kit),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/kit", USER, set_gmb_kit),
+		ApiRoute::new(M::POST, "/gmbs/{id}/kit/shown", USER, kit_shown),
+		ApiRoute::new(M::GET, "/kit/areas/{slug}/gmbs", USER, kit_area_gmbs),
 	]
 }
 
@@ -513,6 +512,7 @@ async fn page_of(s: &ApiState, gmb: i64) -> ApiResult<Option<String>> {
 		return Ok(None);
 	};
 	let mut origins: Vec<String> = s
+		.sign_in
 		.panel
 		.store()
 		.sources()
@@ -534,7 +534,7 @@ async fn page_of(s: &ApiState, gmb: i64) -> ApiResult<Option<String>> {
 }
 
 async fn kit_dto(s: &ApiState, caller: &Caller, gmb: i64) -> ApiResult<GmbKitDto> {
-	let Kit { target, review_uri, drafts, funnel } = s.panel.kit(caller.user_id, gmb, Timestamp::now()).await??;
+	let Kit { target, review_uri, drafts, funnel } = s.sign_in.panel.kit(caller.user_id, gmb, Timestamp::now()).await??;
 	let page = page_of(s, gmb).await?;
 	let url = match (&page, target) {
 		(_, None) => None,
@@ -575,7 +575,7 @@ async fn set_gmb_kit(
 	if matches!(target, Some(Target::Drafts | Target::OneTap)) && page_of(&s, gmb).await?.is_none() {
 		return Err(Refusal::new(Code::Conflict, "no landing page of its: only Google's form"));
 	}
-	s.panel.set_kit_target(by, gmb, target, Timestamp::now()).await??;
+	s.sign_in.panel.set_kit_target(by, gmb, target, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, ?target, "kit target set");
 	Ok(Json(kit_dto(&s, &caller, gmb).await?))
 }

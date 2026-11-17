@@ -24,7 +24,7 @@ testing = ["sa_panel/testing", "tower/util"]
 axum = { workspace = true, features = ["ws"] }
 clap.workspace = true
 color-eyre.workspace = true
-ev_lib = { workspace = true, features = ["settings", "error_monitoring", "api"] }
+ev_lib = { workspace = true, features = ["settings", "error_monitoring", "api", "api_ws"] }
 eyre.workspace = true
 futures.workspace = true
 getrandom.workspace = true

@@ -29,7 +29,7 @@ use crate::{
 	api::{ApiResult, Code, Id},
 	concierge::Concierge,
 	forward::{Forward, SITES_TIMEOUT},
-	http::{ApiRoute, ApiState, Gate},
+	http::{ApiRoute, ApiState, FRESH, USER},
 	signin::Caller,
 	telegram::{self, BotApi, BotName},
 };
@@ -107,16 +107,15 @@ pub async fn run(t: Telegram, shutdown: watch::Receiver<bool>) {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::GET, "/alerts", user, alerts),
+		ApiRoute::new(M::GET, "/alerts", USER, alerts),
 		// What a link token or a chat carries is concierge's answer of this moment.
-		ApiRoute::new(M::POST, "/alerts/telegram/link", user.fresh(), telegram_link),
-		ApiRoute::new(M::POST, "/alerts/telegram/chats", user.fresh(), add_chat),
-		ApiRoute::new(M::PUT, "/alerts/destinations/{id}/rules", user, set_destination_rules),
-		ApiRoute::new(M::PUT, "/alerts/destinations/{id}/gmail", user, set_destination_gmail),
-		ApiRoute::new(M::POST, "/alerts/destinations/{id}/test", user, test_destination),
-		ApiRoute::new(M::DELETE, "/alerts/destinations/{id}", user, remove_destination),
+		ApiRoute::new(M::POST, "/alerts/telegram/link", FRESH, telegram_link),
+		ApiRoute::new(M::POST, "/alerts/telegram/chats", FRESH, add_chat),
+		ApiRoute::new(M::PUT, "/alerts/destinations/{id}/rules", USER, set_destination_rules),
+		ApiRoute::new(M::PUT, "/alerts/destinations/{id}/gmail", USER, set_destination_gmail),
+		ApiRoute::new(M::POST, "/alerts/destinations/{id}/test", USER, test_destination),
+		ApiRoute::new(M::DELETE, "/alerts/destinations/{id}", USER, remove_destination),
 	]
 }
 

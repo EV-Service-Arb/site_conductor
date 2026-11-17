@@ -10,19 +10,17 @@
 //!                      state not redeemed before, else 400 and the code is never presented;
 //!                      ExchangeCode(code, verifier); the browser's previous session closed
 //!                      → server-side session, cookies → 303 return_to, else /
-//! /api/v1/*            an MCP client's bearer ([`crate::oauth`]), else CSRF on anything but
-//!                      GET and the cookie; the session (access token rotated when it is
-//!                      about to expire); GetMe (≤ 60 s cache; fresh for minting or revoking
-//!                      source keys) → the caller's permissions, else 401/503
+//! /api/v1/*            each row's gate (`Vouch for ApiState`): an MCP client's bearer
+//!                      ([`crate::oauth`]), else CSRF on anything but GET and the cookie; the
+//!                      session (access token rotated when it is about to expire); GetMe
+//!                      (≤ 60 s cache; fresh where the row says) → the caller's permissions,
+//!                      else 401/503; then the row's permission, else 403
 //! POST /auth/logout    CSRF; every session of the user is closed
 //! ```
 //!
 //! Signing out of evinvest.ltd revokes the concierge token family: the panel's session ends
 //! at its next rotation, within the access token's lifetime. A permission revoked at concierge
 //! is seen within [`ME_TTL`].
-//!
-//! Every signed-in user passes the gate; what they may open is the routers' to say
-//! ([`crate::http`]).
 //!
 //! The browser never holds a concierge token: only a random session id, whose hash names a
 //! row holding the tokens sealed.
@@ -39,14 +37,13 @@ use std::{
 };
 
 use axum::{
-	extract::{FromRequestParts, Query, Request, State},
+	extract::{FromRequestParts, Query, State},
 	http::{HeaderMap, HeaderValue, Method, StatusCode, header, request::Parts},
-	middleware::Next,
 	response::{Html, IntoResponse, Response},
 };
 use ev_lib::api::{JsonSchema, OperationInput, Refusal, Refuses};
 use jiff::Timestamp;
-use sa_auth::PermissionSet;
+use sa_auth::{PermissionSet, Principal, Vouch};
 use sa_panel::{
 	Panel,
 	oauth::Grant,
@@ -60,7 +57,8 @@ use crate::{
 	api::Code,
 	concierge::{CLIENT_ID, Concierge, ConciergeError, DEV_CODE, DevIdentity, Me},
 	cookies::{self, Cookies},
-	http::Gate,
+	grafana::Loopback,
+	http::{ApiState, Flags, Gate},
 };
 
 /// How long `GetMe` is trusted for a session: a grant revoked at concierge shuts the panel
@@ -428,7 +426,7 @@ fn dev_email(email: &str) -> bool {
 	email.len() <= MAX_DEV_AS && email.contains('@') && email.bytes().all(|b| b.is_ascii_graphic())
 }
 
-fn signed_out(s: &SignIn, mut res: Response) -> Response {
+pub(crate) fn signed_out(s: &SignIn, mut res: Response) -> Response {
 	let h = res.headers_mut();
 	h.append(header::SET_COOKIE, s.cookies.clear(cookies::SESSION));
 	h.append(header::SET_COOKIE, s.cookies.clear(cookies::CSRF));
@@ -437,45 +435,48 @@ fn signed_out(s: &SignIn, mut res: Response) -> Response {
 
 /// Whether a route trusts the cached `GetMe`, or asks concierge afresh: for what must not
 /// outlive a revoked permission by even [`ME_TTL`].
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Freshness {
 	Cached,
 	Fresh,
 }
 
-/// What [`gate`] asks of a route's caller.
-#[derive(Clone, Debug)]
-pub(crate) struct Gatekeeper {
-	pub sign_in: SignIn,
-	pub gate: Gate,
+/// The gate of an `/api/v1` row: on Grafana's loopback, the viewer a token stands for; else a
+/// grant's bearer, or the session's cookie with CSRF for anything that is not a read. The caller
+/// goes into the request's extensions as a [`Caller`]; the row's permission is the gate's.
+impl Vouch<Flags> for ApiState {
+	type Refusal = Code;
+
+	const REFUSALS: &'static [Code] = &[Code::Csrf, Code::Unavailable, Code::BadGateway, Code::Internal];
+
+	async fn vouch(&self, gate: &Gate, parts: &mut Parts) -> Result<Principal, Refusal<Code>> {
+		let caller = match parts.extensions.get::<Loopback>() {
+			Some(loopback) => loopback.viewer(parts).ok_or_else(|| Refusal::new(Code::Unauthenticated, "a viewer's token, on a GET"))?,
+			None => caller_of(&self.sign_in, &parts.method, &parts.headers, gate.flags.freshness).await?,
+		};
+		let user = sa_auth::User {
+			sub: caller.user_id.to_string(),
+			email: caller.email.clone(),
+			email_verified: caller.email_verified,
+			name: caller.preferred_name.clone(),
+			permissions: caller.permissions.clone(),
+		};
+		parts.extensions.insert(caller);
+		Ok(Principal::User(user))
+	}
 }
 
-/// The gate of `/api/v1`: a grant's bearer, or the session's cookie with CSRF for anything that
-/// is not a read; then the caller's permissions, into the request's extensions as a [`Caller`];
-/// then the route's section, else 403.
-pub(crate) async fn gate(State(g): State<Gatekeeper>, mut req: Request, next: Next) -> Response {
-	let caller = if req.headers().contains_key(header::AUTHORIZATION) {
+/// Who calls: an MCP client's bearer, else the session's cookie, with CSRF on anything that is
+/// not a read.
+pub(crate) async fn caller_of(s: &SignIn, method: &Method, headers: &HeaderMap, freshness: Freshness) -> Result<Caller, Denied> {
+	if headers.contains_key(header::AUTHORIZATION) {
 		// No cookie is read: nothing a cross-site request rides on.
-		bearer(&g.sign_in, req.headers(), g.gate.freshness).await
-	} else {
-		let safe = matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
-		if !safe && !g.sign_in.cookies.csrf_ok(req.headers()) {
-			return Refusal::new(Code::Csrf, "the page is out of date: reload it").into_response();
-		}
-		check(&g.sign_in, req.headers(), g.gate.freshness).await
-	};
-	let caller = match caller {
-		Ok(c) => c,
-		Err(denied) => return denied.into_response(&g.sign_in),
-	};
-	if g.gate.section.is_some_and(|section| !section.may(&caller.permissions)) {
-		return Refusal::new(Code::Forbidden, "your permissions do not allow this").into_response();
+		return bearer(s, headers, freshness).await;
 	}
-	req.extensions_mut().insert(caller);
-	let mut res = next.run(req).await;
-	// PII and secrets pass through here: nothing is cached.
-	res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-	res
+	if !matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS) && !s.cookies.csrf_ok(headers) {
+		return Err(Denied::Csrf);
+	}
+	check(s, headers, freshness).await
 }
 
 /// `GetMe`, asked once more when concierge did not answer (a timeout included): one slow
@@ -497,6 +498,9 @@ pub(crate) enum Denied {
 	/// No session, or one closed: sign in again (401, the cookies cleared).
 	#[error("sign in")]
 	Unauthenticated,
+	/// A cookie's write without the page's CSRF header.
+	#[error("the page is out of date: reload it")]
+	Csrf,
 	/// Concierge cannot be asked now; nothing is closed (503).
 	#[error("sign-in is unavailable, try again")]
 	Unavailable,
@@ -511,6 +515,7 @@ impl Refuses<Denied> for Code {
 	fn refusal(d: Denied) -> Refusal<Self> {
 		match d {
 			Denied::Unauthenticated => Refusal::new(Self::Unauthenticated, d.to_string()),
+			Denied::Csrf => Refusal::new(Self::Csrf, d.to_string()),
 			Denied::Unavailable => Refusal::new(Self::Unavailable, d.to_string()),
 			Denied::BadGateway => Refusal::new(Self::BadGateway, d.to_string()),
 			Denied::Internal(e) => e.into(),

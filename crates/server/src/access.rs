@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
 	api::{ApiResult, Code},
-	http::{ApiRoute, Gate},
+	http::{ApiRoute, USER},
 	signin::Caller,
 };
 
@@ -66,8 +66,8 @@ impl JsonSchema for Need {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	vec![
-		ApiRoute::new(Method::POST, "/access/requests", Gate::USER, request_access),
-		ApiRoute::new(Method::GET, "/access/requests/mine", Gate::USER, my_access_requests),
+		ApiRoute::new(Method::POST, "/access/requests", USER, request_access),
+		ApiRoute::new(Method::GET, "/access/requests/mine", USER, my_access_requests),
 	]
 }
 

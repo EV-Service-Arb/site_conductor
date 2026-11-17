@@ -2,8 +2,8 @@
 //! again instead of being reloaded.
 //!
 //! ```text
-//! GET /api/v1/live    Origin = PANEL_PUBLIC_ORIGIN, exactly                 else 403
-//!                     the session, as the /api/v1 gate                      else 401 / 503
+//! GET /api/v1/live    the session, its row's gate                            else 401 / 503
+//!                     Origin = PANEL_PUBLIC_ORIGIN, exactly                 else 403
 //!                     ≤ 5 sockets per user, ≤ 200 in all                    else 429
 //!                     → 101; the bus subscribed before the answer, so nothing committed after
 //!                       it is missed
@@ -37,12 +37,13 @@ use std::{
 };
 
 use axum::{
+	Extension,
 	extract::{
 		State,
 		ws::{CloseFrame, Message, Utf8Bytes, WebSocket, WebSocketUpgrade, rejection::WebSocketUpgradeRejection},
 	},
-	http::{HeaderMap, StatusCode, header},
-	response::{IntoResponse, Response},
+	http::{HeaderMap, Method, StatusCode, header},
+	response::Response,
 };
 use ev_lib::api::Refusal;
 use sa_auth::Service;
@@ -60,6 +61,7 @@ use crate::{
 	api::Code,
 	cookies,
 	forward::Services,
+	http::{ApiRoute, SOCKET},
 	signin::{self, Caller, Denied, Freshness, SignIn},
 };
 
@@ -133,28 +135,31 @@ impl Live {
 	}
 }
 
-/// `GET /api/v1/live`. The upgrade is extracted as a `Result` so a request that is not a
-/// handshake is still answered 403/401 first, the same as one that is.
-pub async fn upgrade(State(live): State<Live>, headers: HeaderMap, ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>) -> Response {
+pub(crate) fn routes() -> Vec<ApiRoute> {
+	vec![ApiRoute::new(Method::GET, "/live", SOCKET, live)]
+}
+
+/// A socket telling what changed: each table committed to, as it commits.
+///
+/// Opened from the panel's own pages, on the browser's session: 403 from another origin (asked
+/// before the handshake itself), 429 past a user's or the server's sockets.
+async fn live(
+	State(live): State<Live>,
+	Extension(caller): Extension<Caller>,
+	headers: HeaderMap,
+	ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
+) -> Result<Response, Refusal<Code>> {
 	if !same_origin(&headers, live.sign_in.panel_origin()) {
 		tracing::info!(origin = ?headers.get(header::ORIGIN), "live: a handshake from another origin refused");
-		return Refusal::new(Code::Csrf, "the page is out of date: reload it").into_response();
+		return Err(Refusal::new(Code::Csrf, "the page is out of date: reload it"));
 	}
-	let caller = match signin::check(&live.sign_in, &headers, Freshness::Cached).await {
-		Ok(c) => c,
-		Err(denied) => return denied.into_response(&live.sign_in),
-	};
-	let ws = match ws {
-		Ok(ws) => ws,
-		Err(rejection) => return rejection.into_response(),
-	};
-	// The check passed, so the cookie is there and names a session.
+	let ws = ws.map_err(|r| Refusal::new(Code::BadRequest, r.body_text()))?;
 	let Some(key) = live.sign_in.cookies().get(&headers, cookies::SESSION).and_then(SessionKey::of_cookie) else {
-		return Denied::Unauthenticated.into_response(&live.sign_in);
+		return Err(Refusal::new(Code::Unauthenticated, "a live socket opens on the browser's session"));
 	};
 	let Some(slot) = live.slots.take(caller.user_id, &live.limits) else {
 		tracing::info!(user_id = %caller.user_id, "live: too many sockets");
-		return Refusal::new(Code::TooMany, "too many live connections").into_response();
+		return Err(Refusal::new(Code::TooMany, "too many live connections"));
 	};
 	// Only the cookie is kept, to ask for the session again.
 	let mut cookie = HeaderMap::new();
@@ -163,7 +168,7 @@ pub async fn upgrade(State(live): State<Live>, headers: HeaderMap, ws: Result<We
 	}
 	let rx = live.sign_in.panel.bus().subscribe();
 	let span = tracing::info_span!("live", user_id = %caller.user_id);
-	ws.max_message_size(4096).max_frame_size(4096).max_write_buffer_size(256 * 1024).on_upgrade(move |socket| {
+	Ok(ws.max_message_size(4096).max_frame_size(4096).max_write_buffer_size(256 * 1024).on_upgrade(move |socket| {
 		Connection {
 			socket,
 			live,
@@ -175,7 +180,7 @@ pub async fn upgrade(State(live): State<Live>, headers: HeaderMap, ws: Result<We
 		}
 		.run()
 		.instrument(span)
-	})
+	}))
 }
 
 /// Follows every service's change feed until `shutdown`, onto `bus`.
@@ -353,6 +358,7 @@ impl Connection {
 						Step::Nothing
 					}
 					Err(Denied::Unavailable | Denied::BadGateway) => Step::Nothing,
+					Err(Denied::Csrf) => unreachable!("a session check asks for no CSRF"),
 				},
 			};
 			match step {

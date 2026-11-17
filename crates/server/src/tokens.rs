@@ -14,7 +14,7 @@ use axum::{
 };
 use ev_lib::api::{Body, Ids, JsonSchema, Params, Refusal};
 use jiff::Timestamp;
-use sa_auth::{Principal, Service};
+use sa_auth::{Principal, Service, Tokens};
 use sa_core::{
 	prices::{Item, Sale, Scope},
 	tokens::ChargePage,
@@ -30,7 +30,7 @@ use uuid::Uuid;
 use crate::{
 	api::{ApiResult, Code},
 	forward::Services,
-	http::{ApiRoute, Gate, Section},
+	http::{ApiRoute, FRESH, USER},
 	signin::Caller,
 };
 
@@ -301,20 +301,19 @@ pub struct FlowsDto {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
-	let admin = Gate::section(Section::Tokens);
+	let admin = USER.needs(Tokens::Grant);
 	vec![
-		ApiRoute::new(M::GET, "/tokens", user, tokens),
-		ApiRoute::new(M::GET, "/tokens/ledger", user, ledger),
-		ApiRoute::new(M::GET, "/tokens/usage", user, token_usage),
-		ApiRoute::new(M::POST, "/tokens/claim", user, claim_tokens),
-		ApiRoute::new(M::PUT, "/tokens/settings", user, set_spending),
+		ApiRoute::new(M::GET, "/tokens", USER, tokens),
+		ApiRoute::new(M::GET, "/tokens/ledger", USER, ledger),
+		ApiRoute::new(M::GET, "/tokens/usage", USER, token_usage),
+		ApiRoute::new(M::POST, "/tokens/claim", USER, claim_tokens),
+		ApiRoute::new(M::PUT, "/tokens/settings", USER, set_spending),
 		ApiRoute::new(M::GET, "/admin/tokens", admin, token_holders),
 		// Tokens must not be handed out on a permission revoked a moment ago.
-		ApiRoute::new(M::POST, "/admin/tokens/{user_id}", admin.fresh(), change_balance),
+		ApiRoute::new(M::POST, "/admin/tokens/{user_id}", FRESH.needs(Tokens::Grant), change_balance),
 		ApiRoute::new(M::GET, "/admin/tokens/prices", admin, token_prices),
 		// A price is what every request on the shared keys charges.
-		ApiRoute::new(M::PUT, "/admin/tokens/prices", admin.fresh(), set_token_prices),
+		ApiRoute::new(M::PUT, "/admin/tokens/prices", FRESH.needs(Tokens::Grant), set_token_prices),
 		ApiRoute::new(M::GET, "/admin/tokens/flows", admin, token_flows),
 	]
 }

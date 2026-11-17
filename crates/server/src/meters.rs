@@ -12,6 +12,7 @@ use axum::{Json, extract::State, http::Method};
 use ev_lib::api::{JsonSchema, Params, Refusal};
 use eyre::WrapErr;
 use jiff::{SignedDuration, Timestamp};
+use sa_auth::Tokens;
 use sa_core::{
 	meters::{ALL, Meter, Stop, Vendor},
 	prices::Item,
@@ -25,7 +26,7 @@ use tokio::sync::watch;
 
 use crate::{
 	api::{ApiResult, Code},
-	http::{ApiRoute, Gate, Section},
+	http::{ApiRoute, USER},
 };
 
 /// How often a reading is due.
@@ -180,7 +181,7 @@ pub struct ReadingsDto {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let admin = Gate::section(Section::Tokens);
+	let admin = USER.needs(Tokens::Grant);
 	vec![
 		ApiRoute::new(M::GET, "/admin/meters", admin, meters),
 		ApiRoute::new(M::GET, "/admin/meters/readings", admin, meter_readings),

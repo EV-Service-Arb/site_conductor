@@ -14,7 +14,7 @@ use ev_lib::api::{
 	Body, Created, ErrorCode, Ids, JsonSchema, OpenApi, Refusal, Refuses,
 	schemars::{Schema, SchemaGenerator, json_schema},
 };
-use sa_auth::SourceKind;
+use sa_auth::{SourceKind, Sources};
 use sa_core::{
 	Invalid,
 	ids::{BrandId, SiteOrigin},
@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
 	connected,
-	http::{ApiRoute, ApiState, Gate, Section},
+	http::{ApiRoute, ApiState, FRESH, USER},
 	signin::Caller,
 };
 
@@ -108,15 +108,15 @@ impl From<sa_auth::Denied> for Code {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let admin = Gate::section(Section::Admin);
+	let admin = USER.needs(Sources::Manage);
 	vec![
-		ApiRoute::new(M::GET, "/me", Gate::USER, me),
-		ApiRoute::new(M::GET, "/openapi.json", Gate::USER, openapi),
+		ApiRoute::new(M::GET, "/me", USER, me),
+		ApiRoute::new(M::GET, "/openapi.json", USER, openapi),
 		ApiRoute::new(M::GET, "/sources", admin, list_sources),
 		ApiRoute::new(M::GET, "/sources/sites", admin, connected::sites),
 		// A key must not be minted or revoked on a permission revoked a moment ago.
-		ApiRoute::new(M::POST, "/sources", admin.fresh(), add_source),
-		ApiRoute::new(M::DELETE, "/sources/{key_id}", admin.fresh(), revoke_source),
+		ApiRoute::new(M::POST, "/sources", FRESH.needs(Sources::Manage), add_source),
+		ApiRoute::new(M::DELETE, "/sources/{key_id}", FRESH.needs(Sources::Manage), revoke_source),
 	]
 }
 

@@ -834,7 +834,7 @@ async fn the_alerts_page_links_telegram_and_chooses_rules() {
 
 /// A signed-in caller holding nothing in `sa` is shown nothing: every `/api/v1` route but `/me`,
 /// the access requests and the alerts answers 403; with every permission, none
-/// of them does. The live socket opens for both: what it tells is judged per message.
+/// of them does. The live socket opens for both: what it tells, everyone is told.
 #[tokio::test]
 async fn no_permission_opens_no_section() {
 	let db = TestDb::create().await;
@@ -861,8 +861,10 @@ async fn no_permission_opens_no_section() {
 		)
 	};
 	let document = http::document();
+	// a socket's handshake is asked below
 	let routes: Vec<(Method, &str, bool)> = document
 		.operations()
+		.filter(|(_, _, op)| !op.extensions.contains_key("x-socket"))
 		.map(|(path, method, op)| (method.to_uppercase().parse().unwrap(), path, op.extensions.contains_key("x-permission")))
 		.collect();
 	let open: BTreeSet<&str> = routes.iter().filter(|r| !r.2).map(|r| r.1).collect();

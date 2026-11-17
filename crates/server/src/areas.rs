@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
 	api::{ApiResult, Code},
 	gmbs::{SuggestionDto, SuggestionsDto},
-	http::{ApiRoute, ApiState, Gate},
+	http::{ApiRoute, ApiState, USER},
 	signin::Caller,
 };
 
@@ -117,14 +117,13 @@ impl From<Locality> for LocalityDto {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::GET, "/areas", user, areas),
-		ApiRoute::new(M::GET, "/areas/{slug}", user, area),
-		ApiRoute::new(M::PUT, "/areas/{slug}", user, put_area),
-		ApiRoute::new(M::GET, "/kit/cities", user, cities),
-		ApiRoute::new(M::GET, "/kit/cities/{place_id}", user, city),
-		ApiRoute::new(M::GET, "/kit/locality", user, locality),
+		ApiRoute::new(M::GET, "/areas", USER, areas),
+		ApiRoute::new(M::GET, "/areas/{slug}", USER, area),
+		ApiRoute::new(M::PUT, "/areas/{slug}", USER, put_area),
+		ApiRoute::new(M::GET, "/kit/cities", USER, cities),
+		ApiRoute::new(M::GET, "/kit/cities/{place_id}", USER, city),
+		ApiRoute::new(M::GET, "/kit/locality", USER, locality),
 	]
 }
 
@@ -168,7 +167,7 @@ async fn put_area(State(s): State<ApiState>, Spends(caller, by): Spends<PlacesRe
 			margin_m,
 		},
 	};
-	let area = s.panel.put_area(by, &slug, new, Timestamp::now()).await??;
+	let area = s.sign_in.panel.put_area(by, &slug, new, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, slug, "area drawn");
 	Ok(Json(area.into()))
 }

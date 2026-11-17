@@ -382,17 +382,9 @@ async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 			let write = !matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
 			// a write must not outlive a revoked grant by even the cached GetMe's minute
 			let freshness = if write { Freshness::Fresh } else { Freshness::Cached };
-			// an MCP client's bearer: no cookie for a cross-site request to ride on, and ours, so it never goes up
-			let caller = if req.headers().contains_key(header::AUTHORIZATION) {
-				let caller = signin::bearer(&f.sign_in, req.headers(), freshness).await;
-				req.headers_mut().remove(header::AUTHORIZATION);
-				caller
-			} else {
-				if write && !f.sign_in.cookies().csrf_ok(req.headers()) {
-					return Refusal::new(Code::Csrf, "the page is out of date: reload it").into_response();
-				}
-				signin::check(&f.sign_in, req.headers(), freshness).await
-			};
+			let caller = signin::caller_of(&f.sign_in, req.method(), req.headers(), freshness).await;
+			// an MCP client's bearer is ours: it never goes up
+			req.headers_mut().remove(header::AUTHORIZATION);
 			match caller {
 				Ok(caller) => {
 					puller = Some(caller.user_id);

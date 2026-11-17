@@ -22,7 +22,7 @@ use uuid::Uuid;
 
 use crate::{
 	api::{ApiResult, Id},
-	http::{ApiRoute, Gate},
+	http::{ApiRoute, SLOW, USER},
 	signin::Caller,
 };
 
@@ -278,26 +278,25 @@ pub enum ActionState {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
 	let big = |h: axum::routing::MethodRouter<_>| h.layer(DefaultBodyLimit::max(MAX_BODY));
 	vec![
-		ApiRoute::new(M::GET, "/assistant/chats", user, chats),
-		ApiRoute::new(M::POST, "/assistant/chats", user, create_chat).layer(big),
-		ApiRoute::new(M::GET, "/assistant/chats/{id}", user, chat),
-		ApiRoute::new(M::PUT, "/assistant/chats/{id}/turns", user, write_chat_turns).layer(big),
-		ApiRoute::new(M::PUT, "/assistant/chats/{id}/title", user, rename_chat),
-		ApiRoute::new(M::PUT, "/assistant/chats/{id}/pinned", user, pin_chat),
-		ApiRoute::new(M::PUT, "/assistant/chats/{id}/archived", user, archive_chat),
-		ApiRoute::new(M::DELETE, "/assistant/chats/{id}", user, delete_chat),
-		ApiRoute::new(M::DELETE, "/assistant/archived", user, clear_archived_chats),
-		ApiRoute::new(M::GET, "/assistant/chats/{id}/access", user, chat_access),
-		ApiRoute::new(M::POST, "/assistant/chats/{id}/members", user, invite_to_chat),
-		ApiRoute::new(M::DELETE, "/assistant/chats/{id}/members/{user}", user, remove_chat_member),
-		ApiRoute::new(M::PUT, "/assistant/chats/{id}/general", user, set_chat_general),
-		ApiRoute::new(M::GET, "/assistant/people", user, chat_people),
+		ApiRoute::new(M::GET, "/assistant/chats", USER, chats),
+		ApiRoute::new(M::POST, "/assistant/chats", USER, create_chat).layer(big),
+		ApiRoute::new(M::GET, "/assistant/chats/{id}", USER, chat),
+		ApiRoute::new(M::PUT, "/assistant/chats/{id}/turns", USER, write_chat_turns).layer(big),
+		ApiRoute::new(M::PUT, "/assistant/chats/{id}/title", USER, rename_chat),
+		ApiRoute::new(M::PUT, "/assistant/chats/{id}/pinned", USER, pin_chat),
+		ApiRoute::new(M::PUT, "/assistant/chats/{id}/archived", USER, archive_chat),
+		ApiRoute::new(M::DELETE, "/assistant/chats/{id}", USER, delete_chat),
+		ApiRoute::new(M::DELETE, "/assistant/archived", USER, clear_archived_chats),
+		ApiRoute::new(M::GET, "/assistant/chats/{id}/access", USER, chat_access),
+		ApiRoute::new(M::POST, "/assistant/chats/{id}/members", USER, invite_to_chat),
+		ApiRoute::new(M::DELETE, "/assistant/chats/{id}/members/{user}", USER, remove_chat_member),
+		ApiRoute::new(M::PUT, "/assistant/chats/{id}/general", USER, set_chat_general),
+		ApiRoute::new(M::GET, "/assistant/people", USER, chat_people),
 		// The answer takes the model's turns and the operations it calls.
-		ApiRoute::new(M::POST, "/assistant/chats/{id}/ask", user.slow(), crate::ask::ask),
-		ApiRoute::new(M::POST, "/assistant/chats/{id}/act", user, crate::ask::act),
+		ApiRoute::new(M::POST, "/assistant/chats/{id}/ask", SLOW, crate::ask::ask),
+		ApiRoute::new(M::POST, "/assistant/chats/{id}/act", USER, crate::ask::act),
 	]
 }
 

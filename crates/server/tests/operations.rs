@@ -38,3 +38,21 @@ fn the_overview_names_every_operation_and_no_other() {
 	let table: BTreeSet<(String, String)> = document.operations().map(|(path, method, _)| (method.to_uppercase(), path.to_owned())).collect();
 	assert_eq!(overview, table);
 }
+
+/// Every operation says what it refuses (`x-errors`), every one behind a gate, and the sockets are
+/// rows as well.
+#[test]
+fn every_operation_names_its_refusals() {
+	let document = serde_json::to_value(http::document()).unwrap();
+	let mut sockets = BTreeSet::new();
+	for (path, item) in document["paths"].as_object().unwrap() {
+		for (method, op) in item.as_object().unwrap() {
+			let errors = op["x-errors"].as_object().unwrap_or_else(|| panic!("{method} {path} names no x-errors"));
+			assert_eq!(errors.get("unauthenticated"), Some(&401.into()), "{method} {path}: a row is gated");
+			if op["x-socket"] == true {
+				sockets.insert(format!("{} {path}", method.to_uppercase()));
+			}
+		}
+	}
+	assert_eq!(sockets, BTreeSet::from(["GET /gmails/{id}/browser".to_owned(), "GET /live".to_owned()]));
+}

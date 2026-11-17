@@ -2,7 +2,10 @@
 //! country; its fingerprint set once; started at a GBP's point on the runner as the conductor;
 //! its viewer refused to another origin and another person.
 
-use std::sync::{Arc, Mutex};
+use std::{
+	sync::{Arc, Mutex},
+	time::Duration,
+};
 
 use axum::{
 	Json, Router,
@@ -665,6 +668,11 @@ async fn a_phones_viewer_is_the_runners_its_frames_checked_and_passed_both_ways(
 	viewer.send(Message::text(touch.to_string())).await.unwrap();
 	viewer.send(Message::text(json!({ "type": "shell", "line": "reboot" }).to_string())).await.unwrap();
 	assert_eq!(next(&mut viewer).await, json!({ "closed": 1007 }), "not a frame of the viewer's");
+	// the runner's end takes the frame on its own task, which the close does not wait for
+	let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+	while heard.lock().unwrap().is_empty() && tokio::time::Instant::now() < deadline {
+		tokio::time::sleep(Duration::from_millis(1)).await;
+	}
 	let heard: Vec<Value> = heard.lock().unwrap().iter().map(|t| serde_json::from_str(t).unwrap()).collect();
 	assert_eq!(heard, [touch], "only the viewer's frames reach the runner");
 }

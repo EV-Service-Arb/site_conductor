@@ -87,7 +87,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
   src/concierge.rs       concierge over gRPC: ExchangeCode, RefreshClientToken, GetMe,
                          PublishCatalog; its development stand-in (PANEL_DEV_SIGN_IN)
   src/cookies.rs         __Host- cookies, the double-submit CSRF check
-  src/http.rs            the router; the /api/v1 route table and the section each sits under
+  src/http.rs            the router; the /api/v1 route table and each row's gate
   src/api.rs             GET /me, /sources
   src/connected.rs       GET /sources/sites: each site key's landing report beside sites' view
   src/access.rs          /api/v1/access/requests
@@ -152,15 +152,16 @@ GET /auth/callback   state = the cookie's (constant time), and not redeemed befo
                      when within 30 s of expiry, see below); GetMe (cached ≤ 60 s per session,
                      asked afresh for POST/DELETE /sources, the Telegram link and a chat added,
                      one retry when concierge does not answer) → the caller's permissions, else 401 (cookies
-                     cleared) / 503; then the route's section, else 403
+                     cleared) / 503; then the row's permission, else 403
 POST /auth/logout    CSRF; every session of the user is closed
 ```
 
 - **Permissions, no admission.** Any active concierge account signs in. `GetMe` answers the
   concrete `sa` permissions the user holds (no alias, no wildcard; anything outside `sa` is a
-  failed answer). Every `/api/v1` route sits under one section — Admin
-  (`sa:admin:sources:manage`), Tokens (`sa:admin:tokens:grant`) — or none (`/me`,
-  `/access/requests*`, `/alerts*`, `/assistant*`, the caller's own gmails, GMBs, trades, tokens and review kit, the kit's areas). Each fresh
+  failed answer). Every `/api/v1` row names at most one permission, its `x-permission` and
+  exactly what its gate checks (`sa_auth::Gate`, the conductor's `Vouch` the session):
+  `sa:admin:sources:manage` for the source keys, `sa:admin:tokens:grant` for everyone's tokens,
+  none for the rest (the caller's own gmails, GMBs, trades, tokens, alerts, chats and review kit). Each fresh
   `GetMe` upserts the user (`users`: id, email, name), whom tokens and gmails belong to.
 - **The catalog.** `serve` publishes `Catalog::collect("sa", PANEL_BUILD_EPOCH)` — the whole `sa`
   namespace, every service's permissions — with `PublishCatalog` before it serves (the image
@@ -333,8 +334,9 @@ conductor ── GET /dashboards (Conductor), every 60 s, conditional ──▶ 
 ```
 
 - **Datasources are derived:** one Infinity datasource per service's API (`/api/<service>`), its
-  uid the service's name, and `conductor` for the conductor's own GETs (`/api/v1`, each route's
-  section checked against the viewer); its url that API on the loopback listener and nothing
+  uid the service's name, and `conductor` for the conductor's own GETs (`/api/v1`, each row's
+  gate taking the viewer's token on a request the loopback listener marked); its url that API on
+  the loopback listener and nothing
   beyond it allowed; written, with the dashboards' provider and the conductor's own dashboards,
   before Grafana starts.
 - **Dashboards are the services':** coupled to a service's API, they ship with its release, built
@@ -414,13 +416,14 @@ person.
 
 **One table, everything derived** (ev_lib `api`): `http::api_routes` is what the router is built
 from; each operation's request and answer are its handler's signature, its description the
-handler's `///`, its id the handler's name, its permission its section, and what it spends its
+handler's `///`, its id the handler's name, its permission its gate's, and what it spends its
 `sa_core::prices::Spends<Tool, _>` (`x-spends`: the tool's items), which hands the handler the
 `Spender` that whatever buys takes. `GET /openapi.json` is that document, narrowed to the operations the caller's
 permissions open; the front end's client and types are generated from it (`nix run .#gen`), and
-an agent's tools read it. Below, the overview (a test holds it to the table); what each answers
-is in the document. Slow: 8 at once, 10 min each, not the bounds above. The browser viewer's
-socket (`GET /gmails/{id}/browser`) is outside the gate, as `/live` is.
+an agent's tools read it. Below, the overview (a test holds it to the table), its permissions
+`sa:admin:…`; what each answers is in the document. Slow: 8 at once, 10 min each, not the bounds
+above; a socket's handshake: as `/live`'s. Every refusal is the row's `x-errors`; every answer
+`no-store`, and a 401 clears the cookies.
 
 **The catalog** (`catalog.rs`): sites (`/api/v1/openapi.json`), review_archive and playbook
 (`/openapi.json`) derive theirs the same way; the conductor pulls each as it pulls `/dashboards` (Conductor, every
@@ -436,10 +439,11 @@ POST   /me/claude/connect
 PUT    /me/claude
 DELETE /me/claude
 GET    /openapi.json
-GET    /sources                             Admin
-POST   /sources                             Admin, fresh
-GET    /sources/sites                       Admin
-DELETE /sources/{key_id}                    Admin, fresh
+GET    /live                                socket
+GET    /sources                             sources:manage
+POST   /sources                             sources:manage, fresh
+GET    /sources/sites                       sources:manage
+DELETE /sources/{key_id}                    sources:manage, fresh
 POST   /access/requests
 GET    /access/requests/mine
 GET    /alerts
@@ -452,6 +456,7 @@ POST   /gmails
 PATCH  /gmails/{id}
 DELETE /gmails/{id}
 GET    /gmails/{id}/connections
+GET    /gmails/{id}/browser                 socket: the viewer
 PUT    /gmails/{id}/{imap,maps_key,browser}
 POST   /gmails/{id}/{imap,maps_key,browser}/test
 DELETE /gmails/{id}/{imap,maps_key,browser}
@@ -504,14 +509,14 @@ GET    /tokens/ledger
 GET    /tokens/usage
 POST   /tokens/claim
 PUT    /tokens/settings
-GET    /admin/tokens                        Tokens
-POST   /admin/tokens/{user_id}              Tokens, fresh
-GET    /admin/tokens/prices                 Tokens
-PUT    /admin/tokens/prices                 Tokens, fresh
-GET    /admin/tokens/flows                  Tokens
-GET    /admin/usage                         Tokens
-GET    /admin/meters                        Tokens
-GET    /admin/meters/readings               Tokens
+GET    /admin/tokens                        tokens:grant
+POST   /admin/tokens/{user_id}              tokens:grant, fresh
+GET    /admin/tokens/prices                 tokens:grant
+PUT    /admin/tokens/prices                 tokens:grant, fresh
+GET    /admin/tokens/flows                  tokens:grant
+GET    /admin/usage                         tokens:grant
+GET    /admin/meters                        tokens:grant
+GET    /admin/meters/readings               tokens:grant
 GET    /assistant/chats
 POST   /assistant/chats
 GET    /assistant/chats/{id}
@@ -598,10 +603,10 @@ A screen reads through the API and is told, over one WebSocket, when what it rea
 changed. Nothing is sent but the hint.
 
 ```text
-GET /api/v1/live    Origin = PANEL_PUBLIC_ORIGIN exactly                     else 403
-                    the session, as the /api/v1 gate (cached GetMe)          else 401 / 503
+GET /api/v1/live    the session, its row's gate (cached GetMe)               else 401 / 503
+                    Origin = PANEL_PUBLIC_ORIGIN exactly                     else 403
                     ≤ 5 sockets per user, ≤ 200 in all                       else 429
-                    → 101; any signed-in user: what they are told is judged per message
+                    → 101; any signed-in user
 server → client     {"type":"hello","at","user_id"}                          at once
                     {"type":"changed","topic","at"}                          a table committed to
                     {"type":"resync"}                                        read everything again

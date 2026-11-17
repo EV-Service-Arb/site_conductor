@@ -29,7 +29,7 @@ use zeroize::Zeroizing;
 use crate::{
 	api::{ApiResult, Code},
 	connections::CheckedDto,
-	http::{ApiRoute, ApiState, Gate},
+	http::{ApiRoute, ApiState, USER},
 	signin::Caller,
 };
 
@@ -206,12 +206,11 @@ pub(crate) struct Pasted {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::GET, "/me/claude", user, claude),
-		ApiRoute::new(M::POST, "/me/claude/connect", user, connect),
-		ApiRoute::new(M::PUT, "/me/claude", user, set_claude),
-		ApiRoute::new(M::DELETE, "/me/claude", user, remove_claude),
+		ApiRoute::new(M::GET, "/me/claude", USER, claude),
+		ApiRoute::new(M::POST, "/me/claude/connect", USER, connect),
+		ApiRoute::new(M::PUT, "/me/claude", USER, set_claude),
+		ApiRoute::new(M::DELETE, "/me/claude", USER, remove_claude),
 	]
 }
 
@@ -221,7 +220,7 @@ fn model(state: &ApiState) -> ApiResult<&Model> {
 
 /// The caller's own Claude, which their assistant's answers run on; `null`, they run on the panel's.
 async fn claude(State(state): State<ApiState>, Extension(caller): Extension<Caller>) -> ApiResult<Json<Option<ClaudeDto>>> {
-	Ok(Json(state.panel.claude(caller.user_id).await?.map(ClaudeDto::from)))
+	Ok(Json(state.sign_in.panel.claude(caller.user_id).await?.map(ClaudeDto::from)))
 }
 
 /// Starts connecting the caller's own Claude: open `url`, authorize, and paste the code it shows
@@ -248,14 +247,14 @@ async fn set_claude(State(state): State<ApiState>, Extension(caller): Extension<
 	if let Err(said) = model.answer(&token, &probe).await? {
 		return Err(Refusal::new(Code::BadRequest, format!("Claude refuses the token it gave: {said}")));
 	}
-	let set = state.panel.set_claude(caller.user_id, &token, expires_at, now).await?;
+	let set = state.sign_in.panel.set_claude(caller.user_id, &token, expires_at, now).await?;
 	tracing::info!(user_id = %caller.user_id, "a person's Claude connected");
 	Ok(Json(set.into()))
 }
 
 /// Disconnects the caller's own Claude: their answers run on the panel's again. 404 none.
 async fn remove_claude(State(state): State<ApiState>, Extension(caller): Extension<Caller>) -> ApiResult<NoContent> {
-	state.panel.remove_claude(caller.user_id).await??;
+	state.sign_in.panel.remove_claude(caller.user_id).await??;
 	tracing::info!(user_id = %caller.user_id, "a person's Claude disconnected");
 	Ok(NoContent)
 }

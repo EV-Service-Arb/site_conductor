@@ -15,8 +15,7 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::{get, post},
 };
-use ev_lib::api::{Guard, OpenApi, Refusal, Route};
-use sa_auth::{PermissionSet, Sources, Tokens};
+use ev_lib::api::{OpenApi, Refusal, Route};
 use sa_panel::Panel;
 use tower::{BoxError, ServiceBuilder, limit::GlobalConcurrencyLimitLayer};
 use tower_http::timeout::TimeoutLayer;
@@ -35,7 +34,7 @@ use crate::{
 	ingest, kit,
 	live::{self, Live, LiveLimits},
 	mcp, meters, oauth, queries_cache,
-	signin::{self, Freshness, Gatekeeper, SignIn},
+	signin::{self, Freshness, SignIn},
 	tokens,
 	tools::Tools,
 	trash, usage,
@@ -44,83 +43,44 @@ use crate::{
 /// One `/api/v1` operation.
 pub(crate) type ApiRoute = Route<ApiState, Gate>;
 
-/// A part of the conductor's API, and the permission that opens it.
+/// Who passes an `/api/v1` row: a signed-in person holding its permission, if it names one.
+pub(crate) type Gate = sa_auth::Gate<Flags>;
+
+/// What a row's gate decides beside its permission.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Section {
-	/// Sources and their keys.
-	Admin,
-	/// Everyone's tokens.
-	Tokens,
-}
-
-impl Section {
-	pub fn may(self, permissions: &PermissionSet) -> bool {
-		match self {
-			Self::Admin => permissions.may(Sources::Manage),
-			Self::Tokens => permissions.may(Tokens::Grant),
-		}
-	}
-
-	fn permission(self) -> &'static str {
-		match self {
-			Self::Admin => Sources::Manage.as_str(),
-			Self::Tokens => Tokens::Grant.as_str(),
-		}
-	}
-}
-
-/// Who passes an `/api/v1` route's gate, and its budget.
-#[derive(Clone, Copy, Debug)]
-pub struct Gate {
-	/// `None`: every signed-in user.
-	pub section: Option<Section>,
+pub(crate) struct Flags {
 	pub(crate) freshness: Freshness,
-	/// Waits on a browser or takes a film's bytes: 8 at once, 10 min each, not the API's bounds.
-	pub(crate) slow: bool,
+	pub(crate) budget: Budget,
 }
 
-impl Gate {
-	pub(crate) const USER: Self = Self {
-		section: None,
-		freshness: Freshness::Cached,
-		slow: false,
-	};
-
-	pub(crate) const fn section(section: Section) -> Self {
-		Self {
-			section: Some(section),
-			..Self::USER
-		}
-	}
-
-	/// Asks concierge afresh: for what must not outlive a revoked permission by a minute.
-	pub(crate) const fn fresh(self) -> Self {
-		Self {
-			freshness: Freshness::Fresh,
-			..self
-		}
-	}
-
-	pub(crate) const fn slow(self) -> Self {
-		Self { slow: true, ..self }
-	}
+/// Which bound a row's requests share.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Budget {
+	Api,
+	/// Waits on a browser or takes a film's bytes: 8 at once, 10 min each.
+	Slow,
+	/// A socket's handshake: the socket lives on after the 101, and a burst of reconnecting tabs
+	/// must not shed the API's requests.
+	Socket,
 }
 
-impl Guard<ApiState> for Gate {
-	type Refusal = sa_auth::Denied;
-
-	fn permission(&self) -> Option<&'static str> {
-		self.section.map(Section::permission)
-	}
-
-	fn refusals(&self) -> Vec<sa_auth::Denied> {
-		Vec::new()
-	}
-
-	async fn admit(&self, _: &mut axum::http::request::Parts, _: &ApiState) -> Result<(), ev_lib::api::Refusal<sa_auth::Denied>> {
-		Ok(()) // `signin::gate`, layered by `app`'s `mount` and the Grafana mount's `viewer_gate`, is the check
-	}
-}
+pub(crate) const USER: Gate = sa_auth::Gate::USER.with(Flags {
+	freshness: Freshness::Cached,
+	budget: Budget::Api,
+});
+/// Asks concierge afresh: for what must not outlive a revoked permission by a minute.
+pub(crate) const FRESH: Gate = sa_auth::Gate::USER.with(Flags {
+	freshness: Freshness::Fresh,
+	budget: Budget::Api,
+});
+pub(crate) const SLOW: Gate = sa_auth::Gate::USER.with(Flags {
+	freshness: Freshness::Cached,
+	budget: Budget::Slow,
+});
+pub(crate) const SOCKET: Gate = sa_auth::Gate::USER.with(Flags {
+	freshness: Freshness::Cached,
+	budget: Budget::Socket,
+});
 
 /// The conductor's own `/api/v1` document, derived from its table.
 pub fn document() -> OpenApi {
@@ -170,16 +130,6 @@ pub fn app(
 		.route("/auth/callback", get(signin::callback))
 		.route("/auth/logout", post(signin::logout));
 	let auth = bounded(auth, limits.auth_concurrent, limits.auth_timeout).with_state(sign_in.clone());
-	let gate = |gate| {
-		let keeper = Gatekeeper { sign_in: sign_in.clone(), gate };
-		middleware::from_fn_with_state(keeper, signin::gate)
-	};
-	let (slow, routes): (Vec<_>, Vec<_>) = api_routes().into_iter().partition(|r| r.guard.slow);
-	let mount = |routes: Vec<ApiRoute>| {
-		routes
-			.into_iter()
-			.fold(Router::new(), |routes, r| routes.merge(Router::new().route(r.path, r.handler()).route_layer(gate(r.guard))))
-	};
 	let catalog = forward.as_ref().map_or_else(|| Catalog::new(document()), |f| f.catalog().clone());
 	let tools = Tools::new(catalog.clone());
 	let agents = mcp::Mcp {
@@ -193,41 +143,49 @@ pub fn app(
 	let state = ApiState {
 		catalog,
 		tools: tools.clone(),
-		panel: sign_in.panel.clone(),
+		sign_in: sign_in.clone(),
+		live: Live::new(sign_in.clone(), limits.live),
 		sites: forward.as_ref().map(|f| f.services().clone()),
 		pages: pages.clone(),
 		web: web.cloned(),
 		probe: connected::probe_client(),
 		telegram,
-		browsers: browsers.clone(),
+		browsers,
 		model,
 	};
-	let slow = bounded(mount(slow).with_state(state.clone()), 8, Duration::from_secs(600));
+	let mount = |budget: Budget| {
+		api_routes()
+			.into_iter()
+			.filter(|r| r.guard.flags.budget == budget)
+			.fold(Router::new(), |routes, r| routes.merge(Router::new().route(r.path, r.handler())))
+			.with_state(state.clone())
+	};
 	if let Some(grafana) = grafana {
-		let own = api_routes().into_iter().filter(|r| r.method == Method::GET).fold(Router::new(), |routes, r| {
-			routes.merge(
-				Router::new()
-					.route(r.path, r.handler())
-					.route_layer(middleware::from_fn_with_state((grafana.clone(), r.guard.section), crate::grafana::viewer_gate)),
-			)
-		});
+		let own = api_routes()
+			.into_iter()
+			.filter(|r| r.method == Method::GET && r.guard.flags.budget != Budget::Socket)
+			.fold(Router::new(), |routes, r| routes.merge(Router::new().route(r.path, r.handler())));
 		grafana.own(bounded(own.with_state(state.clone()), limits.api_concurrent, limits.api_timeout));
 	}
-	let api = bounded(mount(routes).with_state(state), limits.api_concurrent, limits.api_timeout);
-	// Its own budget: the bound and the timeout cover the handshake only (the socket lives on
-	// after the 101), and a burst of reconnecting tabs must not shed the API's requests.
-	let live = Router::new().route("/api/v1/live", get(live::upgrade)).with_state(Live::new(sign_in.clone(), limits.live));
-	let live = bounded(live, limits.live.upgrade_concurrent, limits.live.upgrade_timeout);
-	let viewer = bounded(browser::viewer_routes(sign_in.clone(), browsers), limits.live.upgrade_concurrent, limits.live.upgrade_timeout);
+	let session = sign_in.clone();
+	let v1 = bounded(mount(Budget::Api), limits.api_concurrent, limits.api_timeout)
+		.merge(bounded(mount(Budget::Slow), 8, Duration::from_secs(600)))
+		.merge(bounded(mount(Budget::Socket), limits.live.upgrade_concurrent, limits.live.upgrade_timeout))
+		.layer(middleware::map_response(move |mut res: Response| {
+			let session = session.clone();
+			async move {
+				// PII and secrets pass through here: nothing is cached.
+				res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+				// only `unauthenticated` is a 401: the session is over
+				if res.status() == StatusCode::UNAUTHORIZED { signin::signed_out(&session, res) } else { res }
+			}
+		}));
 	let app = Router::new()
 		.route("/health", get(|| async { "ok" }))
 		.merge(auth)
-		.merge(live)
-		.merge(viewer)
 		.merge(agents)
-		.nest("/api/v1", slow)
 		.merge(queries_cache::routes(sign_in.panel.clone(), &limits))
-		.nest("/api/v1", api);
+		.nest("/api/v1", v1);
 	let app = match forward {
 		Some(forward) => app
 			.merge(ingest::routes(forward.clone(), &limits))
@@ -261,6 +219,7 @@ pub(crate) fn api_routes() -> Vec<ApiRoute> {
 		kit::routes(),
 		areas::routes(),
 		meters::routes(),
+		live::routes(),
 	]
 	.into_iter()
 	.flatten()
@@ -273,7 +232,10 @@ pub(crate) struct ApiState {
 	pub(crate) catalog: Catalog,
 	/// What an agent reaches the operations with: the in-page assistant's loop, an MCP client.
 	pub(crate) tools: Tools,
-	pub(crate) panel: Panel,
+	/// Its `panel` is the engine.
+	pub(crate) sign_in: SignIn,
+	/// `/live`'s sockets.
+	pub(crate) live: Live,
 	/// With the forward configured.
 	pub(crate) sites: Option<Services>,
 	/// What the Connected sites page asks the landings with.
@@ -292,7 +254,13 @@ pub(crate) struct ApiState {
 
 impl FromRef<ApiState> for Panel {
 	fn from_ref(s: &ApiState) -> Self {
-		s.panel.clone()
+		s.sign_in.panel.clone()
+	}
+}
+
+impl FromRef<ApiState> for Live {
+	fn from_ref(s: &ApiState) -> Self {
+		s.live.clone()
 	}
 }
 

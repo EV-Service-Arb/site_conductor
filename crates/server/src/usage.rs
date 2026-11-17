@@ -13,7 +13,7 @@ use axum::{
 };
 use ev_lib::api::{JsonSchema, Params, Refusal};
 use jiff::Timestamp;
-use sa_auth::{Principal, Service};
+use sa_auth::{Principal, Service, Tokens};
 use sa_core::{
 	prices::{Item, Scope},
 	usage::{Bill, UsagePage},
@@ -26,7 +26,7 @@ use crate::{
 	api::{ApiResult, Code},
 	browser::Connected,
 	forward::Services,
-	http::{ApiRoute, Gate, Section},
+	http::{ApiRoute, USER},
 	signin::Caller,
 };
 
@@ -122,8 +122,8 @@ pub async fn run(panel: Panel, services: Option<Services>, browsers: Option<Conn
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
 	vec![
-		ApiRoute::new(M::POST, "/map/loaded", Gate::USER, map_loaded),
-		ApiRoute::new(M::GET, "/admin/usage", Gate::section(Section::Tokens), spend),
+		ApiRoute::new(M::POST, "/map/loaded", USER, map_loaded),
+		ApiRoute::new(M::GET, "/admin/usage", USER.needs(Tokens::Grant), spend),
 	]
 }
 

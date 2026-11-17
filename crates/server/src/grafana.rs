@@ -23,11 +23,10 @@ use std::{
 };
 
 use axum::{
-	Router,
+	Extension, Router,
 	body::{Body, to_bytes},
 	extract::{Request, State},
-	http::{HeaderMap, HeaderValue, Method, StatusCode, Uri, header},
-	middleware::Next,
+	http::{HeaderMap, HeaderValue, Method, StatusCode, Uri, header, request::Parts},
 	response::{IntoResponse, Response},
 	routing::{any, post},
 };
@@ -44,7 +43,6 @@ use tokio::sync::watch;
 use crate::{
 	api::Code,
 	forward::{self, DASHBOARDS, Forward},
-	http::Section,
 	signin::{self, Caller, Denied, Freshness},
 };
 
@@ -98,10 +96,11 @@ impl Grafana {
 			.route("/api/{*rest}", any(as_viewer))
 			.with_state(self.clone())
 			.nest("/api/v1", self.own.get().expect("http::app hands the conductor's routes over before Grafana is reached").clone())
+			.layer(Extension(Loopback(self.viewers.clone())))
 	}
 
-	/// The conductor's own GET routes, as a viewer reaches them: a [`Caller`] in the request's
-	/// extensions, put there by the loopback listener.
+	/// The conductor's own GET rows, as a viewer reaches them: their gate takes the viewer's token
+	/// on the loopback listener.
 	pub(crate) fn own(&self, routes: Router) {
 		assert!(self.own.set(routes).is_ok(), "one http::app per Grafana");
 	}
@@ -392,30 +391,24 @@ async fn query(State(g): State<Grafana>, req: Request) -> Response {
 	answer
 }
 
-async fn as_viewer(State(g): State<Grafana>, req: Request) -> Response {
-	match vouched(&g, &req) {
-		Some(viewer) => g.forward.as_user(req, |service| forward::user(viewer, service)).await,
-		None => Refusal::new(Code::Unauthenticated, "sign in").into_response(),
+async fn as_viewer(State(g): State<Grafana>, Extension(loopback): Extension<Loopback>, req: Request) -> Response {
+	let (parts, body) = req.into_parts();
+	match loopback.viewer(&parts) {
+		Some(viewer) => g.forward.as_user(Request::from_parts(parts, body), |service| forward::user(viewer, service)).await,
+		None => Refusal::new(Code::Unauthenticated, "a viewer's token, on a GET").into_response(),
 	}
 }
 
-/// Who a loopback request stands for: its token's viewer, on a GET.
-fn vouched(g: &Grafana, req: &Request) -> Option<Caller> {
-	let token = req.headers().get(VIEWER_HEADER).and_then(|t| t.to_str().ok());
-	token.and_then(|t| g.viewers.get(t)).filter(|_| req.method() == Method::GET)
-}
+/// What the loopback listener marks each request with: only a viewer's token says who it is.
+#[derive(Clone)]
+pub(crate) struct Loopback(Arc<Viewers>);
 
-/// The gate of the conductor's own routes on the loopback listener: the token's viewer, and the
-/// route's section open to them.
-pub(crate) async fn viewer_gate(State((g, section)): State<(Grafana, Option<Section>)>, mut req: Request, next: Next) -> Response {
-	let Some(viewer) = vouched(&g, &req) else {
-		return Refusal::new(Code::Unauthenticated, "sign in").into_response();
-	};
-	if section.is_some_and(|s| !s.may(&viewer.permissions)) {
-		return Refusal::new(Code::Forbidden, "your permissions do not allow this").into_response();
+impl Loopback {
+	/// Who a loopback request stands for: its token's viewer, on a GET.
+	pub(crate) fn viewer(&self, parts: &Parts) -> Option<Caller> {
+		let token = parts.headers.get(VIEWER_HEADER)?.to_str().ok()?; // a token is visible ASCII: one that is not is no viewer's
+		self.0.get(token).filter(|_| parts.method == Method::GET)
 	}
-	req.extensions_mut().insert(viewer);
-	next.run(req).await
 }
 
 /// Grafana holds no identity: each query a viewer's browser sends it has a token written into

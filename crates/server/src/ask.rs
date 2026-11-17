@@ -103,13 +103,13 @@ pub(crate) async fn ask(
 	Body(q): Body<Question>,
 ) -> ApiResult<Json<ChatDto>> {
 	let model = state.model.clone().ok_or_else(|| Refusal::new(Code::Unavailable, "the assistant is not connected"))?;
-	let (token, bill) = match (state.panel.claude_token(caller.user_id).await?, model.owner()) {
+	let (token, bill) = match (state.sign_in.panel.claude_token(caller.user_id).await?, model.owner()) {
 		(Some(own), _) => (own, Bill::Theirs),
 		(None, Some(owner)) => (owner.clone(), Bill::Ours),
 		(None, None) => return Err(Refusal::new(Code::Unavailable, "the assistant runs on your own Claude here: connect it")),
 	};
 	let reader = (&caller).into();
-	let read: Chat<Turn> = state.panel.assistant_chat(reader, chat).await??;
+	let read: Chat<Turn> = state.sign_in.panel.assistant_chat(reader, chat).await??;
 	let started = Timestamp::now();
 	if q.from > read.turns.len() {
 		return Err(Refusal::new(Code::BadRequest, format!("from {} is past the chat's {} turns", q.from, read.turns.len())));
@@ -151,7 +151,7 @@ pub(crate) async fn ask(
 		from,
 	};
 	let mut tab = match bill {
-		Bill::Ours => match state.panel.model_tab(by, &answer.id, started).await? {
+		Bill::Ours => match state.sign_in.panel.model_tab(by, &answer.id, started).await? {
 			Ok(tab) => Some(tab),
 			Err(why) => {
 				answer.text = format!("I can't answer on the panel's Claude: {why}.");
@@ -185,7 +185,7 @@ pub(crate) async fn ask(
 		let reply = match model.answer(&token, &asked).await? {
 			Ok(reply) => reply,
 			Err(said) if bill == Bill::Theirs => {
-				state.panel.claude_refused(caller.user_id, said, Timestamp::now()).await?;
+				state.sign_in.panel.claude_refused(caller.user_id, said, Timestamp::now()).await?;
 				answer
 					.text
 					.push_str("\n\nYour Claude connection was refused: reconnect it, or disconnect it to ask on the panel's.");
@@ -195,7 +195,7 @@ pub(crate) async fn ask(
 		};
 		let used = tokens(&reply)?;
 		answer.cost.tokens.add(&used);
-		let spent = state.panel.model_used(by, answered_by(&reply)?, &used, tab.as_mut(), Timestamp::now()).await?;
+		let spent = state.sign_in.panel.model_used(by, answered_by(&reply)?, &used, tab.as_mut(), Timestamp::now()).await?;
 		answer.cost.charged = tab.as_ref().map_or(0, |t| t.charged);
 		let content = reply["content"].as_array().cloned().ok_or_else(|| eyre::eyre!("the model answered no content: {reply}"))?;
 		let mut results = Vec::new();
@@ -260,7 +260,7 @@ pub(crate) async fn act(
 	Ids(Id { id: chat }): Ids<Id<Uuid>>,
 	Body(a): Body<Act>,
 ) -> ApiResult<Json<ChatDto>> {
-	let read: Chat<Turn> = state.panel.assistant_chat((&caller).into(), chat).await??;
+	let read: Chat<Turn> = state.sign_in.panel.assistant_chat((&caller).into(), chat).await??;
 	let at = read
 		.turns
 		.iter()
@@ -287,7 +287,11 @@ pub(crate) async fn act(
 	}
 	action.state = ActionState::Done;
 	let tail = turns.split_off(at);
-	let done = state.panel.assistant_turns((&caller).into(), chat, read.summary.version, at, tail, Timestamp::now()).await??;
+	let done = state
+		.sign_in
+		.panel
+		.assistant_turns((&caller).into(), chat, read.summary.version, at, tail, Timestamp::now())
+		.await??;
 	Ok(Json(done.into()))
 }
 
@@ -327,7 +331,12 @@ impl Written<'_> {
 			cost: Some(answer.cost.clone()),
 		};
 		let turns: Vec<Turn> = asked[self.from..].iter().cloned().chain([turn]).collect();
-		let chat = self.state.panel.assistant_turns(self.caller.into(), self.chat, self.base, self.from, turns, now).await??;
+		let chat = self
+			.state
+			.sign_in
+			.panel
+			.assistant_turns(self.caller.into(), self.chat, self.base, self.from, turns, now)
+			.await??;
 		self.base = chat.summary.version;
 		Ok(chat.into())
 	}
