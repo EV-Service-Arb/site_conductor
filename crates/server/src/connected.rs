@@ -16,7 +16,11 @@ use sa_core::{
 use sa_panel::store::sources::SourceRow;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::{api::ApiResult, forward::Services, http::ApiState};
+use crate::{
+	api::ApiResult,
+	forward::{Forward, Services},
+	http::ApiState,
+};
 
 const REPORT_PATH: &str = "/.well-known/sa-site";
 const REPORT_MAX: usize = 64 * 1024;
@@ -105,8 +109,9 @@ pub(crate) async fn sites(State(s): State<ApiState>) -> ApiResult<Json<Connected
 		.filter(|k| k.grant.kind == SourceKind::Site && k.revoked_at.is_none())
 		.collect();
 	let reports = futures::future::join_all(keys.iter().map(|k| probe(&s.probe, k)));
-	let received = sites_read(s.sites.as_ref(), feeds::SOURCES_RECEIVED);
-	let internal_reads = sites_read(s.sites.as_ref(), feeds::INTERNAL_READS);
+	let services = s.forward.as_ref().map(Forward::services);
+	let received = sites_read(services, feeds::SOURCES_RECEIVED);
+	let internal_reads = sites_read(services, feeds::INTERNAL_READS);
 	let (reports, received, internal_reads) = tokio::join!(reports, received, internal_reads);
 	let sites = keys
 		.into_iter()

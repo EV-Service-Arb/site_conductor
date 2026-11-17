@@ -289,7 +289,13 @@ second block below to it.
   session and hands it the map: the heat, the pressure field and the competitors are its drawing,
   the model's wasm shipped with the payload it reads. Only a pull spends (Pull latest,
   `sa:placement:study:spend`): the forward knows one by placement's document in the catalog, not
-  by its path, and buys the Places searches it lacks at the puller's tokens (Tokens and GBPs). Unset, `/api/placement` answers 503 and the map says placement is not
+  by its path, and buys the Places searches it lacks at the puller's tokens (Tokens and GBPs).
+  A study's definition (`sa_core::placement::Definition`) is the conductor's: `POST
+  /api/v1/areas/{slug}/studies` builds it from the area and one of the caller's categories (or
+  none: the grid alone), PUTs it at placement as the caller under its id, and hands the browser
+  only that id, which the overlay shows. A category without a study, a Google category or a
+  keyword, or set up for another country, is refused by that word; placement's `unstudied` comes
+  back as it is. Unset, `/api/placement` answers 503 and the map says placement is not
   connected.
 
 ## Browsers
@@ -527,6 +533,7 @@ GET    /kit/areas/{slug}/gmbs
 GET    /areas
 GET    /areas/{slug}
 PUT    /areas/{slug}
+POST   /areas/{slug}/studies                placement:study:read
 GET    /kit/cities
 GET    /kit/cities/{place_id}
 GET    /kit/locality
