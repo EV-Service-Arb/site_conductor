@@ -52,12 +52,12 @@ pub struct Trash {
 impl Panel {
 	pub async fn trash(&self, owner: Uuid, keep_by_default: bool) -> eyre::Result<Trash> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the trash")?;
-		let (keep_days, never_purge) = db::settings(&mut conn, owner).await?;
+		let (keep_days, never_purge, counted_from) = db::settings(&mut conn, owner).await?;
 		let settings = Settings {
 			keep_days,
 			never_purge: never_purge.unwrap_or(keep_by_default),
 		};
-		let purge_at = |removed: Timestamp| (!settings.never_purge).then(|| removed + SignedDuration::from_hours(24 * keep_days));
+		let purge_at = |removed: Timestamp| (!settings.never_purge).then(|| counted_from.map_or(removed, |c| c.max(removed)) + SignedDuration::from_hours(24 * keep_days));
 		let mut gmails = Vec::new();
 		for g in db::gmails(&mut conn, owner, None).await? {
 			let blocked = db::gmail_blocked(&mut conn, owner, &g).await?;
@@ -87,13 +87,14 @@ impl Panel {
 		Ok(Trash { settings, gmails, gmbs })
 	}
 
-	/// `never_purge` `None`: left as it was.
-	pub async fn set_trash_settings(&self, owner: Uuid, keep_days: i64, never_purge: Option<bool>) -> eyre::Result<Result<(), Refused>> {
+	/// `never_purge` `None`: left as it was. Turned off at `now`, what is in the trash counts its
+	/// kept days from `now`.
+	pub async fn set_trash_settings(&self, owner: Uuid, keep_days: i64, never_purge: Option<bool>, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
 		if ![1, 7, 30, 90].contains(&keep_days) {
 			return Ok(Err(Refused::Invalid(format!("{keep_days} days: the trash keeps 1, 7, 30 or 90"))));
 		}
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for trash settings")?;
-		db::set_settings(&mut conn, owner, keep_days, never_purge).await?;
+		db::set_settings(&mut conn, owner, keep_days, never_purge, now).await?;
 		Ok(Ok(()))
 	}
 
@@ -130,6 +131,28 @@ impl Panel {
 		db::restore(&mut tx, None, Some(id)).await?;
 		tx.commit().await.wrap_err("committing a GBP's restore")?;
 		self.snapshot_due.notify_one();
+		Ok(Ok(()))
+	}
+
+	/// The owner's trashed gmail `id` gone for good at `now`, with every GBP of it in the trash.
+	pub async fn erase_gmail(&self, owner: Uuid, id: i64, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+		let mut tx = self.store.begin_write().await?;
+		if db::gmails(&mut tx, owner, Some(id)).await?.is_empty() {
+			return Ok(Err(Refused::NotFound));
+		}
+		db::erase(&mut tx, Some(id), None, now).await?;
+		tx.commit().await.wrap_err("committing a gmail's erase")?;
+		Ok(Ok(()))
+	}
+
+	/// The owner's trashed GBP `id` gone for good at `now`.
+	pub async fn erase_gmb(&self, owner: Uuid, id: i64, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+		let mut tx = self.store.begin_write().await?;
+		if db::gmb_of(&mut tx, owner, id).await?.is_none() {
+			return Ok(Err(Refused::NotFound));
+		}
+		db::erase(&mut tx, None, Some(id), now).await?;
+		tx.commit().await.wrap_err("committing a GBP's erase")?;
 		Ok(Ok(()))
 	}
 

@@ -498,6 +498,7 @@ GET    /kit/locality
 GET    /google-categories/{country}
 GET    /trash
 POST   /trash/{gmails,gmbs}/{id}/restore
+DELETE /trash/{gmails,gmbs}/{id}
 PUT    /trash/settings
 GET    /tokens
 GET    /tokens/ledger
@@ -778,8 +779,10 @@ priced in money, so an account overshoots by its hours behind.
   gmail removed removes its GBPs.
 - **The trash.** A removed gmail or GBP is its owner's to restore (a gmail with the GBPs removed
   at its `removed_at`) until purged: `keep_days` after its removal (30 unsaid; 1, 7, 30 or 90), never with
-  `never_purge` (an admin's say; unsaid, on under dev sign-in). Purged is gone for good: its
-  gmail's IMAP and Maps key deleted, its row kept.
+  `never_purge` (an admin's say; unsaid, on under dev sign-in); `never_purge` turned off counts
+  the kept days from then, so nothing goes the moment it may. The owner may purge one at once: a
+  gmail with every GBP of it in the trash. Purged is gone for good: its gmail's IMAP and Maps key
+  deleted, its row kept.
 
 ```text
 follow (10 s)   GET review_archive /api/conductor/charges?after=<cursor>&limit=500 (Conductor)

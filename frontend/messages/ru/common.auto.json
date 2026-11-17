@@ -3231,6 +3231,18 @@
     "en": "Nothing removed.",
     "t": "Ничего не удалено."
   },
+  "trash.erase": {
+    "en": "Delete for good",
+    "t": "Удалить навсегда"
+  },
+  "trash.erase.body": {
+    "en": "It cannot be restored after this.",
+    "t": "После этого восстановить будет невозможно."
+  },
+  "trash.erase.title": {
+    "en": "Delete {name} for good?",
+    "t": "Удалить {name} навсегда?"
+  },
   "trash.for.days": {
     "en": ", restorable for {days} days",
     "t": " и восстановим {days} дн."
@@ -3270,6 +3282,10 @@
   "trash.never": {
     "en": "Never delete for good",
     "t": "Никогда не удалять навсегда"
+  },
+  "trash.never.hint": {
+    "en": "Turned off, the kept days count from then: nothing here is deleted for good at that moment.",
+    "t": "Если отключено, отсчёт дней хранения начинается с этого момента: ничего здесь не удаляется навсегда сразу."
   },
   "trash.never.on": {
     "en": "Nothing here is deleted for good.",

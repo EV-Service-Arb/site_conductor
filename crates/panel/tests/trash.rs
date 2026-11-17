@@ -159,7 +159,7 @@ async fn the_purge_ends_a_restore_once_the_kept_days_pass() {
 	let one = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();
 	connect(&db, gmail.id).await;
 	p.remove_gmail(owner, gmail.id, now()).await.unwrap().unwrap();
-	p.set_trash_settings(owner, 7, None).await.unwrap().unwrap();
+	p.set_trash_settings(owner, 7, None, now()).await.unwrap().unwrap();
 
 	p.purge(now() + days(6), false).await.unwrap();
 	assert_eq!(listed(&p.trash(owner, false).await.unwrap()), (vec![(gmail.id, 1)], vec![]));
@@ -184,15 +184,54 @@ async fn never_purge_keeps_everything() {
 	p.purge(now() + days(365), true).await.unwrap();
 	assert_eq!(p.trash(owner, true).await.unwrap().gmails.len(), 1);
 
-	p.set_trash_settings(owner, 1, Some(true)).await.unwrap().unwrap();
+	p.set_trash_settings(owner, 1, Some(true), now()).await.unwrap().unwrap();
 	p.purge(now() + days(365), false).await.unwrap();
 	assert_eq!(p.trash(owner, false).await.unwrap().gmails.len(), 1, "their own say over the default");
 
-	p.set_trash_settings(owner, 1, Some(false)).await.unwrap().unwrap();
+	p.set_trash_settings(owner, 1, Some(false), now() + days(365)).await.unwrap().unwrap();
+	assert_eq!(p.trash(owner, false).await.unwrap().gmails[0].purge_at, Some(now() + days(366)), "the count starts over");
 	p.purge(now() + days(365), false).await.unwrap();
+	assert_eq!(p.trash(owner, false).await.unwrap().gmails.len(), 1, "nothing goes the moment it may");
+	p.purge(now() + days(366), false).await.unwrap();
 	assert!(p.trash(owner, false).await.unwrap().gmails.is_empty());
 
-	assert!(matches!(p.set_trash_settings(owner, 91, None).await.unwrap(), Err(Refused::Invalid(_))));
-	assert!(matches!(p.set_trash_settings(owner, 0, None).await.unwrap(), Err(Refused::Invalid(_))));
-	assert!(matches!(p.set_trash_settings(owner, 5, None).await.unwrap(), Err(Refused::Invalid(_))), "1, 7, 30 or 90 only");
+	assert!(matches!(p.set_trash_settings(owner, 91, None, now()).await.unwrap(), Err(Refused::Invalid(_))));
+	assert!(matches!(p.set_trash_settings(owner, 0, None, now()).await.unwrap(), Err(Refused::Invalid(_))));
+	assert!(
+		matches!(p.set_trash_settings(owner, 5, None, now()).await.unwrap(), Err(Refused::Invalid(_))),
+		"1, 7, 30 or 90 only"
+	);
+}
+
+#[tokio::test]
+async fn an_erase_is_gone_for_good_at_once() {
+	let db = TestDb::create().await;
+	let (p, owner) = opened(&db).await;
+	let trade = p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap().id;
+	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
+	let other = p.add_gmail(owner, "b@gmail.com", now()).await.unwrap().unwrap();
+	let one = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();
+	let loose = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, LOOSE, "Loose"), now()).await.unwrap().unwrap();
+	let two = p.add_gmb(Some(Spender::new(owner)), existing(trade, other.id, TWO, "Two"), now()).await.unwrap().unwrap();
+	connect(&db, gmail.id).await;
+	p.set_trash_settings(owner, 1, Some(true), now()).await.unwrap().unwrap();
+	p.remove_gmb(owner, loose.id, now()).await.unwrap().unwrap();
+	p.remove_gmb(owner, two.id, now()).await.unwrap().unwrap();
+	let later = now() + days(1);
+	p.remove_gmail(owner, gmail.id, later).await.unwrap().unwrap();
+
+	p.erase_gmb(owner, two.id, later).await.unwrap().unwrap();
+	assert_eq!(listed(&p.trash(owner, false).await.unwrap()), (vec![(gmail.id, 1)], vec![loose.id]));
+	assert!(matches!(p.restore_gmb(owner, two.id).await.unwrap(), Err(Refused::NotFound)));
+
+	p.erase_gmail(owner, gmail.id, later).await.unwrap().unwrap();
+	assert_eq!(listed(&p.trash(owner, false).await.unwrap()), (vec![], vec![]), "a GBP whose gmail cannot come back goes with it");
+	assert_eq!(connections(&db, gmail.id).await, (0, 0));
+	assert!(matches!(p.restore_gmb(owner, one.id).await.unwrap(), Err(Refused::NotFound)));
+	assert!(matches!(p.erase_gmail(owner, gmail.id, later).await.unwrap(), Err(Refused::NotFound)));
+	assert!(matches!(p.erase_gmb(owner, one.id, later).await.unwrap(), Err(Refused::NotFound)));
+	assert!(
+		matches!(p.erase_gmail(owner, other.id, later).await.unwrap(), Err(Refused::NotFound)),
+		"a live gmail is not erased"
+	);
 }

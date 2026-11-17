@@ -233,6 +233,7 @@ export const VIEWS = {
                 ]
               }
             },
+            "required": [],
             "type": [
               "object",
               "null"

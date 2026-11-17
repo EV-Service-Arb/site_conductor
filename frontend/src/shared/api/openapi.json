@@ -4768,6 +4768,43 @@
         "x-errors": {}
       }
     },
+    "/trash/gmails/{id}": {
+      "delete": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Deletes a trashed gmail for good, with every GBP of it in the trash.",
+        "operationId": "erase_gmail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers: `error` is for a person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        },
+        "x-errors": {}
+      }
+    },
     "/trash/gmails/{id}/restore": {
       "post": {
         "tags": [
@@ -4776,6 +4813,43 @@
         "summary": "Restores a gmail, with the GBPs removed with it.",
         "description": "409 blocked: a live gmail's address, a live GBP's name, place or phone.",
         "operationId": "restore_gmail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers: `error` is for a person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "no content"
+          }
+        },
+        "x-errors": {}
+      }
+    },
+    "/trash/gmbs/{id}": {
+      "delete": {
+        "tags": [
+          "trash"
+        ],
+        "summary": "Deletes a trashed GBP for good.",
+        "operationId": "erase_gmb",
         "parameters": [
           {
             "in": "path",
@@ -4849,7 +4923,7 @@
         "tags": [
           "trash"
         ],
-        "summary": "Sets how long the caller's trash keeps what they removed. `never_purge` needs `sa:admin:trash:keep` (403).",
+        "summary": "Sets how long the caller's trash keeps what they removed. `never_purge` needs `sa:admin:trash:keep` (403); turned off, the kept days count from now.",
         "operationId": "set_trash_settings",
         "requestBody": {
           "description": "`PUT /trash/settings`.",

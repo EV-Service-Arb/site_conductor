@@ -1575,6 +1575,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/trash/gmails/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Deletes a trashed gmail for good, with every GBP of it in the trash. */
+        delete: operations["erase_gmail"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/trash/gmails/{id}/restore": {
         parameters: {
             query?: never;
@@ -1590,6 +1607,23 @@ export interface paths {
          */
         post: operations["restore_gmail"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trash/gmbs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Deletes a trashed GBP for good. */
+        delete: operations["erase_gmb"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1623,7 +1657,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Sets how long the caller's trash keeps what they removed. `never_purge` needs `sa:admin:trash:keep` (403). */
+        /** Sets how long the caller's trash keeps what they removed. `never_purge` needs `sa:admin:trash:keep` (403); turned off, the kept days count from now. */
         put: operations["set_trash_settings"];
         post?: never;
         delete?: never;
@@ -7109,7 +7143,65 @@ export interface operations {
             };
         };
     };
+    erase_gmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers: `error` is for a person. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     restore_gmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description What every failed operation answers: `error` is for a person. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    erase_gmb: {
         parameters: {
             query?: never;
             header?: never;

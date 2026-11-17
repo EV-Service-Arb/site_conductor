@@ -44,26 +44,33 @@ pub(crate) struct TrashedGmb {
 	gmail_gone: bool,
 }
 
-/// `(keep_days, never_purge)`, each `None` unsaid.
-pub(crate) async fn settings(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<(i64, Option<bool>)> {
-	let row: Option<(i64, Option<bool>)> = sqlx::query_as("SELECT keep_days, never_purge FROM trash_settings WHERE user_id = $1")
+/// `(keep_days, never_purge, counted_from)`, `never_purge` `None` unsaid; `counted_from` is when
+/// `never_purge` was last turned off, which no removal is counted from before.
+pub(crate) async fn settings(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<(i64, Option<bool>, Option<Timestamp>)> {
+	let row: Option<(i64, Option<bool>, Option<i64>)> = sqlx::query_as("SELECT keep_days, never_purge, counted_from FROM trash_settings WHERE user_id = $1")
 		.bind(owner)
 		.fetch_optional(&mut *conn)
 		.await
 		.wrap_err("reading trash settings")?;
-	Ok(row.map_or((KEEP_DAYS, None), |(d, n)| (d, n)))
+	match row {
+		None => Ok((KEEP_DAYS, None, None)),
+		Some((d, n, c)) => Ok((d, n, c.map(from_db).transpose()?)),
+	}
 }
 
-/// `never_purge` `None`: left as it was.
-pub(crate) async fn set_settings(conn: &mut SqliteConnection, owner: Uuid, keep_days: i64, never_purge: Option<bool>) -> eyre::Result<()> {
+/// `never_purge` `None`: left as it was. Turned off at `now`, the count starts over from it.
+pub(crate) async fn set_settings(conn: &mut SqliteConnection, owner: Uuid, keep_days: i64, never_purge: Option<bool>, now: Timestamp) -> eyre::Result<()> {
 	sqlx::query(
-		"INSERT INTO trash_settings (user_id, keep_days, never_purge) VALUES ($1, $2, $3) ON CONFLICT (user_id) DO UPDATE SET \
-		 keep_days = excluded.keep_days, never_purge = CASE WHEN $4 THEN excluded.never_purge ELSE trash_settings.never_purge END",
+		"INSERT INTO trash_settings (user_id, keep_days, never_purge, counted_from) VALUES ($1, $2, $3, CASE WHEN $3 = 0 THEN $5 END) \
+		 ON CONFLICT (user_id) DO UPDATE SET keep_days = excluded.keep_days, \
+		 never_purge = CASE WHEN $4 THEN excluded.never_purge ELSE trash_settings.never_purge END, \
+		 counted_from = CASE WHEN $3 = 0 AND trash_settings.never_purge IS NOT 0 THEN $5 ELSE trash_settings.counted_from END",
 	)
 	.bind(owner)
 	.bind(keep_days)
 	.bind(never_purge)
 	.bind(never_purge.is_some())
+	.bind(to_db(now))
 	.execute(&mut *conn)
 	.await
 	.wrap_err("setting trash settings")?;
@@ -206,7 +213,8 @@ pub(crate) async fn restore(conn: &mut SqliteConnection, gmail: Option<i64>, gmb
 pub(crate) async fn purge(conn: &mut SqliteConnection, now: Timestamp, keep_by_default: bool) -> eyre::Result<()> {
 	const DUE: &str = "removed_at IS NOT NULL AND purged_at IS NULL \
 		AND NOT coalesce((SELECT never_purge FROM trash_settings t WHERE t.user_id = owner), $2) \
-		AND removed_at + coalesce((SELECT keep_days FROM trash_settings t WHERE t.user_id = owner), $3) * $4 <= $1";
+		AND max(removed_at, coalesce((SELECT counted_from FROM trash_settings t WHERE t.user_id = owner), removed_at)) \
+		+ coalesce((SELECT keep_days FROM trash_settings t WHERE t.user_id = owner), $3) * $4 <= $1";
 	let gmails: Vec<i64> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("UPDATE gmails SET purged_at = $1 WHERE {DUE} RETURNING id")))
 		.bind(to_db(now))
 		.bind(keep_by_default)
@@ -223,10 +231,43 @@ pub(crate) async fn purge(conn: &mut SqliteConnection, now: Timestamp, keep_by_d
 		.execute(&mut *conn)
 		.await
 		.wrap_err("purging GBPs")?;
+	disconnect(conn, gmails).await
+}
+
+async fn disconnect(conn: &mut SqliteConnection, gmails: Vec<i64>) -> eyre::Result<()> {
 	for g in gmails {
 		for which in [Connection::Imap, Connection::MapsKey] {
 			connections::delete(conn, g, which).await?;
 		}
+	}
+	Ok(())
+}
+
+/// Gone for good at `now`: GBP `gmb_id`, else gmail `gmail` with every GBP of it in the trash,
+/// which could not come back without it, and its connections.
+pub(crate) async fn erase(conn: &mut SqliteConnection, gmail: Option<i64>, gmb_id: Option<i64>, now: Timestamp) -> eyre::Result<()> {
+	if let Some(g) = gmail {
+		sqlx::query("UPDATE gmbs SET purged_at = $2 WHERE gmail_id = $1 AND removed_at IS NOT NULL AND purged_at IS NULL")
+			.bind(g)
+			.bind(to_db(now))
+			.execute(&mut *conn)
+			.await
+			.wrap_err("erasing a gmail's GBPs")?;
+		sqlx::query("UPDATE gmails SET purged_at = $2 WHERE id = $1")
+			.bind(g)
+			.bind(to_db(now))
+			.execute(&mut *conn)
+			.await
+			.wrap_err("erasing a gmail")?;
+		disconnect(conn, vec![g]).await?;
+	}
+	if let Some(b) = gmb_id {
+		sqlx::query("UPDATE gmbs SET purged_at = $2 WHERE id = $1")
+			.bind(b)
+			.bind(to_db(now))
+			.execute(&mut *conn)
+			.await
+			.wrap_err("erasing a GBP")?;
 	}
 	Ok(())
 }

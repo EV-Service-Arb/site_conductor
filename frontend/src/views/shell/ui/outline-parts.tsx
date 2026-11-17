@@ -13,7 +13,7 @@ import {
   buttonVariants,
 } from "@evinvest/uikit";
 import { Trash2, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { select, useTrash, trash as trashKeys, move, gmbs } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
@@ -51,6 +51,8 @@ export function Remove({ title, body, remove, onRemoved }: { title: string; body
 export function RemoveDialog({ title, body, remove, onRemoved, onClose }: { title: string; body: string; remove: () => Promise<void>; onRemoved: () => void; onClose: () => void }) {
   const t = useT();
   const button = useButtonSize();
+  const action = useRef<HTMLButtonElement>(null);
+  useEffect(() => action.current!.focus(), []); // after the dialog's own focus on Cancel: the trash takes it back, so Enter removes
   const act = async () => {
     try {
       await remove();
@@ -68,7 +70,7 @@ export function RemoveDialog({ title, body, remove, onRemoved, onClose }: { titl
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t(move.cancel, "Cancel")}</AlertDialogCancel>
-          <AlertDialogAction className={buttonVariants({ variant: "destructive", size: button() })} onClick={() => void act()}>
+          <AlertDialogAction ref={action} className={buttonVariants({ variant: "destructive", size: button() })} onClick={() => void act()}>
             {t(gmbs.remove, "Remove")}
           </AlertDialogAction>
         </AlertDialogFooter>
