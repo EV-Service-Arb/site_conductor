@@ -726,7 +726,7 @@ if [ "$run_panel" = 1 ]; then
 	say "starting the conductor on $origin (dev sign-in: $role)"
 	serving panel "$root" "$own_cargo b -q -p sa_server" "panel serve --bind 127.0.0.1:$PANEL_PORT" -i 'crates/gen/**' -e rs,toml,sql,lock &
 	essential+=("$!")
-	wait_for panel "$origin/health" 30 "$!" || die "the conductor did not start"
+	wait_for panel "$origin/health" 900 "$!" || die "the conductor did not start"
 fi
 
 if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
