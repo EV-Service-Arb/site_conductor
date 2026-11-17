@@ -1,6 +1,6 @@
 /**
  * A stand-in for the conductor's backend, for `next dev` without Rust or concierge: `/api/v1`
- * (who you are, sources, access requests, gmails, tokens, alerts — read only), `/auth/*`, review_archive's and sites' GMB tags,
+ * (who you are, sources, access requests, gmails, tokens, alerts — read only; areas, one city to find), `/auth/*`, review_archive's and sites' GMB tags,
  * the live socket, and a gmail's connections with its browser (`stub-browser.ts`). Same shapes, same gate (401 without a session, CSRF on writes). The sites'
  * API and bundle are sites_panel's: run it for `/sites`.
  *
@@ -118,6 +118,8 @@ const meters = (() => {
     })),
   } satisfies Meters;
 })();
+const clermont = { place_id: "ChIJstubclermontstub0001", name: "Clermont-Ferrand", location: { lat: 45.7772, lng: 3.087 }, viewport: { south: 45.7408, west: 3.0533, north: 45.8143, east: 3.1678 }, country: "FR" };
+const areas = new Map<string, { slug: string; name: string; country: string; center: { lat: number; lng: number }; radius_m: number; city: string | null }>();
 const tokens = { balance: 75, daily: 15, cap: 500, kickbacks: [{ id: 1, at: minsAgo(90), amount: 12, service: "review_archive", key: "run:42", label: "Plombier Paris 11 (stub)", by: null, note: null }] };
 const ledger = Array.from({ length: 8 }, (_, i) => ({ id: 8 - i, at: minsAgo(60 * 24 * i), delta: i % 2 ? -12 : 15, kind: i % 2 ? "charge" : "accrual", service: i % 2 ? "review_archive" : null, key: i % 2 ? `run:${40 - i}` : null, label: i % 2 ? "Plombier Paris 11 (stub)" : null, by: null, note: null }));
 const usageDays = Array.from({ length: 30 }, (_, i) => ({ day: iso(new Date(now().getTime() - (29 - i) * 86_400_000)).slice(0, 10), charges: i % 3, tokens: (i % 3) * 12 }));
@@ -164,6 +166,21 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
     const made = { id: gmails.length + 1, gmail, role: null, cap: null, created_at: iso(now()) };
     gmails.push(made);
     return send(res, 201, made);
+  }
+  if (path === "/areas" && req.method === "GET") return send(res, 200, { areas: [...areas.values()] });
+  if (path === "/kit/cities") return send(res, 200, { suggestions: [{ place_id: clermont.place_id, main: clermont.name, secondary: "France" }] });
+  if (path === `/kit/cities/${clermont.place_id}` || path === "/kit/locality") return send(res, 200, clermont);
+  const area = path.match(/^\/areas\/([a-z0-9-]+)$/);
+  if (area && req.method === "PUT") {
+    const { name, center, radius_m, city } = (await readJson(req)) as { name: string; center: { lat: number; lng: number }; radius_m: number; city: string | null };
+    const made = { slug: area[1]!, name, country: "FR", center, radius_m, city };
+    areas.set(made.slug, made);
+    return send(res, 200, made);
+  }
+  const kitArea = path.match(/^\/kit\/areas\/([a-z0-9-]+)\/gmbs$/);
+  if (kitArea) {
+    const a = areas.get(kitArea[1]!);
+    return a === undefined ? send(res, 404, { code: "not_found", error: "not found" }) : send(res, 200, { area: a, gmbs: [] });
   }
   // no browser key unless given: the home page shows the outline without a map, and no window over it
   if (path === "/map") return process.env.STUB_MAP_KEY ? send(res, 200, { key: process.env.STUB_MAP_KEY, account: "evinvest" }) : send(res, 404, { code: "not_found", error: "not found" });

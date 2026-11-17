@@ -266,13 +266,11 @@ async fn a_kit_areas_link_is_the_kit_page() {
 		.execute(&pool)
 		.await
 		.unwrap();
-	sqlx::query(
-		"INSERT INTO areas (slug, kind, name, country, lat, lng, radius_m, margin_m, created_by, created_at) VALUES ('chassieu-10km', 'circle', 'Chassieu', 'FR', 45.74, 4.97, 10000, 2000, $1, 0)",
-	)
-	.bind(user)
-	.execute(&pool)
-	.await
-	.unwrap();
+	sqlx::query("INSERT INTO areas (slug, name, country, lat, lng, radius_m, created_by, created_at) VALUES ('chassieu-10km', 'Chassieu', 'FR', 45.74, 4.97, 10000, $1, 0)")
+		.bind(user)
+		.execute(&pool)
+		.await
+		.unwrap();
 
 	for path in ["/chassieu-10km/", "/chassieu-10km"] {
 		let (status, h, body) = get_(&app, path).await;
