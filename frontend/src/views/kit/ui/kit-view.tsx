@@ -94,7 +94,7 @@ function AreaKit({ slug }: { slug: string }) {
   );
 }
 
-function List({ area, gmbs, total, find, onFind, onShow }: { area: { name: string; margin_m: number }; gmbs: readonly KitNearby[]; total: number; find: string; onFind: (s: string) => void; onShow: (id: number) => void }) {
+function List({ area, gmbs, total, find, onFind, onShow }: { area: { name: string; radius_m: number }; gmbs: readonly KitNearby[]; total: number; find: string; onFind: (s: string) => void; onShow: (id: number) => void }) {
   const t = useT();
   const locale = useLocale();
   const today = new Date().toDateString();
@@ -102,7 +102,7 @@ function List({ area, gmbs, total, find, onFind, onShow }: { area: { name: strin
     <>
       <header className="flex items-baseline gap-2 border-b border-border px-4 py-3">
         <h1 className="text-xl font-semibold text-ink">{area.name}</h1>
-        {area.margin_m > 0 && <span className="text-sm text-ink-soft">+ {formatDistance(area.margin_m, locale)}</span>}
+        <span className="text-sm text-ink-soft">{formatDistance(area.radius_m, locale)}</span>
       </header>
       <main className="flex flex-1 flex-col gap-3 p-3">
         <label className="relative">
@@ -113,7 +113,7 @@ function List({ area, gmbs, total, find, onFind, onShow }: { area: { name: strin
           {t(kit.page.nearest, "Nearest first")} <span className="font-normal tabular-nums">{gmbs.length}</span>
         </h2>
         {total === 0 ? (
-          <p className="px-1 text-sm text-ink-soft">{t(kit.area.noGbps, "None of your GBPs with a point is in it or next to it.")}</p>
+          <p className="px-1 text-sm text-ink-soft">{t(kit.area.noGbps, "None of your GBPs with a point is in it.")}</p>
         ) : (
           <ul className="flex flex-col divide-y divide-border overflow-hidden rounded-xl border border-border">
             {gmbs.map((g) => (
