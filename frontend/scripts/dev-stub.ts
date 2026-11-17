@@ -6,6 +6,7 @@
  *
  *   npm run dev:stub                  # on STUB_PORT (the dev shell's), signed in as an operator
  *   STUB_ROLE=admin npm run dev:stub  # as an admin
+ *   STUB_MAP_KEY=… STUB_MAP_LOAD=409  # the map, its buy refused
  *   STUB_ME=503 npm run dev:stub      # the gate refusing: 401 | 503
  *   STUB_LIVE=off npm run dev:stub     # no /api/v1/live socket (4401 | 4403: close at once)
  *   STUB_LIVE_EVERY=5 npm run dev:stub # live activity every 5 s rather than every 20–40 s
@@ -80,10 +81,10 @@ function signedIn(req: IncomingMessage): boolean {
 
 const gmails: { id: number; gmail: string; role: "owner" | "manager" | null; cap: number | null; created_at: string }[] = [{ id: 1, gmail: "owner@gmail.com", role: "manager", cap: 6, created_at: minsAgo(60 * 24 * 30) }];
 const gmbs: Json[] = [
-  { id: 1, gmail_id: 1, place_id: "ChIJstubstubstub00001", name: "Plombier Paris 11 (stub)", address: "12 rue Oberkampf, Paris", state: "verified", next: ["suspended", "verifying"], country: { code: "FR", by_hand: false }, phone: null, trade_id: null, areas: [], hidden_address: null, customers_visit: null, film: null, created_at: minsAgo(60 * 24 * 30), enabled: true, location: { lat: 48.8649, lng: 2.3766, placed: false } },
-  { id: 2, gmail_id: 1, place_id: "ChIJstubstubstub00002", name: "Serrurier Lyon 3 (stub)", address: "4 cours Gambetta, Lyon", state: "suspended", next: ["verified", "verifying"], country: { code: "FR", by_hand: true }, phone: null, trade_id: null, areas: [], hidden_address: null, customers_visit: null, film: null, created_at: minsAgo(60 * 24 * 20), enabled: true, location: null },
-  { id: 3, gmail_id: null, place_id: null, name: "Électricien Lille (stub draft)", address: null, state: "draft", next: ["verifying"], country: null, phone: null, trade_id: null, areas: [], hidden_address: null, customers_visit: null, film: null, created_at: minsAgo(60 * 24), enabled: true, location: null },
-  { id: 4, gmail_id: 1, place_id: null, name: "Plombier Lyon 8 (stub draft)", address: null, state: "draft", next: ["verifying"], country: { code: "FR", by_hand: true }, phone: "+33 4 28 29 41 07", trade_id: 1, areas: ["Lyon 8e", "Vénissieux", "Bron"], hidden_address: "14 rue Laënnec, 69008 Lyon", customers_visit: false, film: null, created_at: minsAgo(60 * 5), enabled: true, location: { lat: 45.7347, lng: 4.8691, placed: true } },
+  { id: 1, gmail_id: 1, place_id: "ChIJstubstubstub00001", name: "Plombier Paris 11 (stub)", address: "12 rue Oberkampf, Paris", state: "verified", next: ["suspended", "verifying"], country: { code: "FR", by_hand: false }, phone: null, trade_id: null, areas: [], hidden_address: null, customers_visit: null, film: null, created_at: minsAgo(60 * 24 * 30), enabled: true, location: { lat: 48.8649, lng: 2.3766, placed: false } , spots: [] },
+  { id: 2, gmail_id: 1, place_id: "ChIJstubstubstub00002", name: "Serrurier Lyon 3 (stub)", address: "4 cours Gambetta, Lyon", state: "suspended", next: ["verified", "verifying"], country: { code: "FR", by_hand: true }, phone: null, trade_id: null, areas: [], hidden_address: null, customers_visit: null, film: null, created_at: minsAgo(60 * 24 * 20), enabled: true, location: null , spots: [] },
+  { id: 3, gmail_id: null, place_id: null, name: "Électricien Lille (stub draft)", address: null, state: "draft", next: ["verifying"], country: null, phone: null, trade_id: null, areas: [], hidden_address: null, customers_visit: null, film: null, created_at: minsAgo(60 * 24), enabled: true, location: { lat: 50.6292, lng: 3.0573, placed: false }, spots: [{ lat: 50.6292, lng: 3.0573, label: "Lille, Grand Place", note: null }] },
+  { id: 4, gmail_id: 1, place_id: null, name: "Plombier Lyon 8 (stub draft)", address: null, state: "draft", next: ["verifying"], country: { code: "FR", by_hand: true }, phone: "+33 4 28 29 41 07", trade_id: 1, areas: ["Lyon 8e", "Vénissieux", "Bron"], hidden_address: "14 rue Laënnec, 69008 Lyon", customers_visit: false, film: null, created_at: minsAgo(60 * 5), enabled: true, location: { lat: 45.7347, lng: 4.8691, placed: true }, spots: [{ lat: 45.7347, lng: 4.8691, label: "14 rue Laënnec, 69008 Lyon", note: null }] },
 ];
 const googleCategories: GoogleCategory[] = [
   { id: "gcid:plumber", names: { en: "Plumber", fr: "Plombier" } },
@@ -166,6 +167,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   }
   // no browser key unless given: the home page shows the outline without a map, and no window over it
   if (path === "/map") return process.env.STUB_MAP_KEY ? send(res, 200, { key: process.env.STUB_MAP_KEY, account: "evinvest" }) : send(res, 404, { code: "not_found", error: "not found" });
+  if (path === "/map/load" && process.env.STUB_MAP_LOAD === "409") return send(res, 409, { code: "conflict", error: "map.map costs 1 token, you hold 0" });
   if (path === "/map/load" || path === "/map/street_view") return send(res, 200, { balance: tokens.balance });
   if (path === "/gmbs/resolve") return send(res, 200, { candidates: [{ place_id: "ChIJstubstubstub00009", name: "Électricien Lille (stub)", address: "8 rue Faidherbe, Lille" }] });
   const placing = path.match(/^\/gmbs\/(\d+)\/location$/);

@@ -281,7 +281,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       {map.status === "ok" && <Locate map={map.map} />}
       {map.status === "error" && (
         <div className="absolute inset-x-6 top-6">
-          <ErrorState failure={{ kind: "invalid", message: map.message }} />
+          <ErrorState failure={map.failure} />
         </div>
       )}
       {peekedListed && windows && !windowed && map.status === "ok" && peekedListed.gmb.location && (

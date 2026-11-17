@@ -8,7 +8,7 @@
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { type RefObject, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
-import { api, ok } from "@/shared/api";
+import { type ApiFailure, ApiError, api, ok } from "@/shared/api";
 import type { MapConfig } from "@/shared/api/schema";
 import { setQuery, useQuery } from "@/shared/lib/query";
 
@@ -66,7 +66,7 @@ function theMap({ key, account }: MapConfig, scheme: string): { account: string;
   return kept.saMap;
 }
 
-export type TheMap = { status: "loading" } | { status: "ok"; map: google.maps.Map; account: string } | { status: "error"; message: string };
+export type TheMap = { status: "loading" } | { status: "ok"; map: google.maps.Map; account: string } | { status: "error"; failure: ApiFailure | { kind: "invalid"; message: string } };
 
 /** The page session's map, inside `host`; its polarity is the host's `--scheme`. */
 export function useTheMap(config: MapConfig): { host: RefObject<HTMLDivElement | null>; map: TheMap } {
@@ -80,7 +80,7 @@ export function useTheMap(config: MapConfig): { host: RefObject<HTMLDivElement |
     let live = true;
     map.then(
       (m) => live && setMap({ status: "ok", map: m, account }),
-      (e: unknown) => live && setMap({ status: "error", message: e instanceof Error ? e.message : String(e) }),
+      (e: unknown) => live && setMap({ status: "error", failure: e instanceof ApiError ? e.failure : { kind: "invalid", message: e instanceof Error ? e.message : String(e) } }),
     );
     return () => {
       live = false;
