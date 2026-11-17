@@ -4435,6 +4435,7 @@ name = "sa_gen"
 version = "0.1.0"
 dependencies = [
  "ev_lib 0.33.0",
+ "sa_auth",
  "sa_browsers",
  "sa_server",
  "serde_json",

@@ -4,13 +4,8 @@
 //! ```text
 //! /api, /auth, /health, /grafana,  never the front end: a route of theirs, else a JSON 404
 //! /cabinet, the forward's prefixes
-//! /review_archive/<view>,          the review_archive page, the sites page: the element routes
-//! /sites/<view>                    inside it; /…/<view>/<file.txt> is the page's own <file.txt>,
-//!                                  the payload Next's client-side navigation asks for
-//! a directory                      its index.html (the export writes leads/index.html);
-//!                                  /leads is redirected to /leads/ first
+//! a view (`View::parse` takes it) the one page, index.html; a kit area only if it was drawn
 //! a file                           itself
-//! /<area>/, a kit area's slug      kit/index.html; /<area>/<file.txt> kit's <file.txt>
 //! anything else                    404.html, status 404
 //! ```
 //!
@@ -29,17 +24,17 @@ use axum::{
 	Router,
 	body::Body,
 	extract::Request,
-	http::{HeaderValue, StatusCode, header},
+	http::{HeaderValue, StatusCode, Uri, header},
 	response::{IntoResponse, Response},
 };
-use ev_lib::api::Refusal;
+use ev_lib::{api::Refusal, views::Views};
 use sa_panel::Panel;
 use tower_http::{
 	services::{ServeDir, ServeFile},
 	set_status::SetStatus,
 };
 
-use crate::api::Code;
+use crate::{api::Code, view::View};
 
 /// The pages' policy: never framed, no `<base>`, forms posted only here. What a page loads is
 /// left to the browser's defaults: Maps JS, the platform's elements and Turnstile come from
@@ -55,9 +50,6 @@ const HASHED: &str = "/_next/static/";
 /// `/cabinet` once served the cabinet's account chip here, and a tab still on an earlier
 /// build may ask for `/cabinet/mfe/*`: a script request must get a 404, not the panel's HTML.
 const RESERVED: [&str; 7] = ["/api", "/auth", "/mcp", "/mfe", "/health", "/grafana", "/cabinet"];
-
-/// The pages a mounted element routes inside of: a link to one of its views loads its page.
-const ELEMENT_PAGES: [&str; 2] = ["/review_archive", "/sites"];
 
 /// The export's files.
 #[derive(Clone, Debug)]
@@ -93,35 +85,15 @@ fn reserved(path: &str) -> bool {
 /// Whether `/<slug>` is one of the conductor's own paths or pages, which no kit area may take.
 pub(crate) fn taken(slug: &str, files: Option<&Files>) -> bool {
 	let path = format!("/{slug}");
-	reserved(&path) || ELEMENT_PAGES.contains(&path.as_str()) || files.is_some_and(|f| f.root.join(slug).exists())
+	reserved(&path) || View::parse(&path).is_ok_and(|v| !matches!(v, View::Area { .. })) || files.is_some_and(|f| f.root.join(slug).exists())
 }
 
-/// The kit's page, or its file, that `/<slug>/[<file.txt>]` asks for, if `slug` is an area's.
-async fn area_page(panel: &Panel, path: &str) -> eyre::Result<Option<String>> {
-	let mut parts = path.trim_start_matches('/').splitn(2, '/');
-	let slug = parts.next().expect("splitn yields one at least");
-	let file = match parts.next() {
-		None | Some("") => "",
-		Some(f) if f.contains('.') && !f.contains('/') => f,
-		Some(_) => return Ok(None),
-	};
-	if !sa_core::ids::is_slug(slug) || panel.area(slug).await?.is_none() {
-		return Ok(None);
-	}
-	Ok(Some(format!("/kit/{file}")))
-}
-
-/// What a path below an element's page is served from: a view (no dot in its last segment) is
-/// the page itself, and a file below a view is the page's file of that name.
-fn element_page(path: &str) -> Option<String> {
-	ELEMENT_PAGES.into_iter().find_map(|page| {
-		let rest = path.strip_prefix(page)?.strip_prefix('/')?;
-		let (view, last) = rest.rsplit_once('/').unwrap_or(("", rest));
-		match (view.is_empty(), last.contains('.')) {
-			(_, false) if !rest.is_empty() => Some(format!("{page}/")),
-			(false, true) => Some(format!("{page}/{last}")),
-			_ => None,
-		}
+/// Whether `path_and_query` is a view the page shows: any `View` but an area nobody drew.
+async fn shown(panel: &Panel, path_and_query: &str) -> eyre::Result<bool> {
+	Ok(match View::parse(path_and_query) {
+		Ok(View::Area { area }) => panel.area(&area).await?.is_some(),
+		Ok(_) => true,
+		Err(_) => false, // not a view: a file of the export, or none
 	})
 }
 
@@ -129,41 +101,26 @@ async fn page(mut files: Files, panel: Panel, mut req: Request) -> Response {
 	if reserved(req.uri().path()) {
 		return dressed(Refusal::new(Code::NotFound, "not found").into_response(), false);
 	}
-	if let Some(page) = element_page(req.uri().path()) {
-		let query = req.uri().query().map(|q| format!("?{q}")).unwrap_or_default();
-		*req.uri_mut() = format!("{page}{query}").parse().expect("a part of a URI stays one");
+	let asked = req.uri().path_and_query().map_or(req.uri().path(), |pq| pq.as_str()).to_owned();
+	match shown(&panel, &asked).await {
+		Ok(true) => *req.uri_mut() = Uri::from_static("/"),
+		Ok(false) => {}
+		Err(e) => {
+			crate::report(&e, "looking a kit area up");
+			return dressed(StatusCode::INTERNAL_SERVER_ERROR.into_response(), false);
+		}
 	}
-	let path = req.uri().path();
-	let hashed = path.starts_with(HASHED);
+	let hashed = req.uri().path().starts_with(HASHED);
 	// Every file in the image has the Nix store's mtime, 1970: answering If-Modified-Since
 	// from it would keep a browser on the previous release's HTML, whose chunks are gone.
 	// So nothing is revalidated by date — the HTML is small, and the rest is hashed.
 	for h in [header::IF_MODIFIED_SINCE, header::IF_UNMODIFIED_SINCE] {
 		req.headers_mut().remove(h);
 	}
-	let area_req = Request::builder().uri(req.uri().clone()).body(Body::empty()).expect("a URI that arrived stays one");
-	let mut res = match files.dir.try_call(req).await {
-		Ok(res) => res.map(Body::new),
-		Err(e) => return failed(&e),
-	};
-	if res.status() == StatusCode::NOT_FOUND {
-		match area_page(&panel, area_req.uri().path()).await {
-			Ok(None) => {}
-			Ok(Some(kit)) => {
-				let mut kit_req = area_req;
-				*kit_req.uri_mut() = kit.parse().expect("a slug and a file name make a path");
-				res = match files.dir.try_call(kit_req).await {
-					Ok(res) => res.map(Body::new),
-					Err(e) => return failed(&e),
-				};
-			}
-			Err(e) => {
-				crate::report(&e, "looking a kit area up");
-				return dressed(StatusCode::INTERNAL_SERVER_ERROR.into_response(), false);
-			}
-		}
+	match files.dir.try_call(req).await {
+		Ok(res) => dressed(res.map(Body::new), hashed),
+		Err(e) => failed(&e),
 	}
-	dressed(res, hashed)
 }
 
 fn failed(e: &io::Error) -> Response {
@@ -214,31 +171,6 @@ mod tests {
 		}
 		for p in ["/mfe/review_archive/x.js", "/mfe/sites/mfe-sites.js", "/api/sites/leads", "/api/playbook/search"] {
 			assert!(reserved(p), "{p}");
-		}
-	}
-
-	#[test]
-	fn an_elements_views_load_its_page() {
-		let page = |p: &str| element_page(p);
-		for p in ["/review_archive/gmails/3", "/review_archive/members/1/tokens", "/review_archive/telegram"] {
-			assert_eq!(page(p).as_deref(), Some("/review_archive/"), "{p}");
-		}
-		for p in ["/sites/leads", "/sites/leads/", "/sites/leads/aquafix/L-1"] {
-			assert_eq!(page(p).as_deref(), Some("/sites/"), "{p}");
-		}
-		assert_eq!(page("/sites/leads/index.txt").as_deref(), Some("/sites/index.txt"));
-		assert_eq!(page("/sites/leads/aquafix/__next._tree.txt").as_deref(), Some("/sites/__next._tree.txt"));
-		for p in [
-			"/review_archive",
-			"/review_archive/",
-			"/review_archive/index.txt",
-			"/review_archived/x",
-			"/sites",
-			"/sites/",
-			"/sites/index.txt",
-			"/sitesx/a",
-		] {
-			assert_eq!(page(p), None, "{p}");
 		}
 	}
 }

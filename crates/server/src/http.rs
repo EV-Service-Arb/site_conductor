@@ -84,7 +84,14 @@ pub(crate) const SOCKET: Gate = sa_auth::Gate::USER.with(Flags {
 
 /// The conductor's own `/api/v1` document, derived from its table.
 pub fn document() -> OpenApi {
-	let mut doc = ev_lib::api::document("Service-Arb conductor", env!("CARGO_PKG_VERSION"), "/api/v1", &api_routes(), ev_lib::api_docs!(), None);
+	let mut doc = ev_lib::api::document(
+		"Service-Arb conductor",
+		env!("CARGO_PKG_VERSION"),
+		"/api/v1",
+		&api_routes(),
+		ev_lib::api_docs!(),
+		Some(<crate::view::View as ev_lib::views::Views>::table()),
+	);
 	doc.info.description =
 		Some("The Service-Arb panel, as the signed-in user: `search` for an operation, then `call` it. What removes or spends runs only once the user agreed to it.".into());
 	doc

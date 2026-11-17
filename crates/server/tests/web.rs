@@ -1,5 +1,5 @@
-//! The front end's files behind the API's routes: directories, the 404 page, the headers, and
-//! nothing outside the directory.
+//! The front end's files behind the API's routes: the one page for every view, the 404 page, the
+//! headers, and nothing outside the directory.
 
 use std::path::{Path, PathBuf};
 
@@ -16,13 +16,6 @@ use uuid::Uuid;
 
 /// Pages shaped like Next's export: its bootstrap and payload inline, its chunks by `src`.
 const INDEX: &str = r#"<html><script src="/_next/static/chunks/app-3f2a.js" async=""></script><script>self.__next_f=[]</script></html>"#;
-const LEADS: &str = r#"<html><script>self.__next_f.push([1,"leads"])</script><SCRIPT id="x">self.__next_f=[]</SCRIPT></html>"#;
-
-/// The page the sites' element mounts in, routing inside it.
-const SITES: &str = r#"<html><mfe-sites-panel api="/api/sites" base="/sites"></mfe-sites-panel></html>"#;
-
-/// The page a kit area's link serves.
-const KIT: &str = r#"<html><main id="kit"></main></html>"#;
 
 /// A scratch directory holding `web/` (a stand-in export) and, beside it, a file the server
 /// must never hand out.
@@ -36,14 +29,8 @@ impl Export {
 		for (path, body) in [
 			("web/index.html", INDEX),
 			("web/404.html", "<html>not here</html>"),
-			("web/leads/index.html", LEADS),
-			("web/sites/index.html", SITES),
-			("web/sites/index.txt", "sites payload"),
-			("web/sites/__next._tree.txt", "sites tree"),
 			("web/_next/static/chunks/app-3f2a.js", "console.log(1)"),
 			("web/favicon.ico", "ico"),
-			("web/kit/index.html", KIT),
-			("web/kit/index.txt", "kit payload"),
 			("secret.txt", "do not serve"),
 		] {
 			let path = root.join(path);
@@ -110,12 +97,18 @@ async fn pages_directories_and_the_404_page() {
 	assert!(is_page(&h), "{h:?}");
 	assert!(!h.contains_key(header::LAST_MODIFIED), "the store's 1970 mtime is never told");
 
-	let (status, h, body) = get_(&app, "/leads/").await;
-	assert_eq!((status, body.as_str()), (StatusCode::OK, LEADS));
-	assert!(is_page(&h));
-	let (status, h, _) = get_(&app, "/leads").await;
-	assert!(status.is_redirection(), "{status}");
-	assert_eq!(h[header::LOCATION], "/leads/");
+	for uri in [
+		"/sources",
+		"/sources/",
+		"/assistant?chat=0199b7c8-0000-7000-8000-000000000000",
+		"/access?need=sa:operator&continue=/",
+	] {
+		let (status, h, body) = get_(&app, uri).await;
+		assert_eq!((status, body.as_str()), (StatusCode::OK, INDEX), "a view is the page: {uri}");
+		assert!(is_page(&h), "{uri}");
+	}
+	let (status, _, _) = get_(&app, "/sources?nope=1").await;
+	assert_eq!(status, StatusCode::NOT_FOUND, "a key no view has is no view");
 
 	let (status, h, body) = get_(&app, "/no/such/screen/").await;
 	assert_eq!((status, body.as_str()), (StatusCode::NOT_FOUND, "<html>not here</html>"));
@@ -153,28 +146,17 @@ async fn hashed_assets_are_immutable_and_nothing_revalidates_by_date() {
 	assert_eq!((status, body.as_str()), (StatusCode::OK, INDEX));
 }
 
-/// Any view of the sites page loads the page, and the payload Next's client-side navigation asks
-/// for under a view is the page's: a click from a conductor screen to `/sites/leads` stays soft.
-/// The bundle the page loads is the forward's (`/mfe/sites`), never a page.
+/// A service's views are the page too, for its element to route; its bundle is the forward's.
 #[tokio::test]
-async fn the_sites_page_serves_every_view_of_it() {
+async fn a_services_views_are_the_page() {
 	let export = Export::new();
 	let db = TestDb::create().await;
 	let app = app(&export.web(), &db).await;
-	for uri in ["/sites/", "/sites/leads", "/sites/leads/", "/sites/leads/aquafix/L-1"] {
+	for uri in ["/sites", "/sites/leads", "/sites/leads/aquafix/L-1", "/review_archive/gmbs/3"] {
 		let (status, h, body) = get_(&app, uri).await;
-		assert_eq!((status, body.as_str()), (StatusCode::OK, SITES), "{uri}");
+		assert_eq!((status, body.as_str()), (StatusCode::OK, INDEX), "{uri}");
 		assert!(is_page(&h), "{uri}");
 	}
-	for (uri, body) in [
-		("/sites/leads/index.txt?_rsc=1x2y", "sites payload"),
-		("/sites/leads/aquafix/__next._tree.txt", "sites tree"),
-		("/sites/index.txt", "sites payload"),
-	] {
-		let (status, _, got) = get_(&app, uri).await;
-		assert_eq!((status, got.as_str()), (StatusCode::OK, body), "{uri}");
-	}
-	assert_eq!(get_(&app, "/sites/leads/nothing.txt").await.0, StatusCode::NOT_FOUND);
 	let (status, h, body) = get_(&app, "/mfe/sites/mfe-sites.js").await;
 	assert_eq!(
 		(status, body.as_str()),
@@ -235,7 +217,7 @@ async fn nothing_outside_the_directory() {
 		"/../secret.txt",
 		"/%2e%2e/secret.txt",
 		"/..%2fsecret.txt",
-		"/leads/..%2f..%2fsecret.txt",
+		"/sources/..%2f..%2fsecret.txt",
 		"/%2fetc%2fpasswd",
 		"//etc/passwd",
 	] {
@@ -276,15 +258,15 @@ async fn a_kit_areas_link_is_the_kit_page() {
 
 	for path in ["/chassieu-10km/", "/chassieu-10km"] {
 		let (status, h, body) = get_(&app, path).await;
-		assert_eq!((status, body.as_str()), (StatusCode::OK, KIT), "{path}");
+		assert_eq!((status, body.as_str()), (StatusCode::OK, INDEX), "{path}");
 		assert!(is_page(&h), "{h:?}");
 	}
-	let (status, _, body) = get_(&app, "/chassieu-10km/index.txt").await;
-	assert_eq!((status, body.as_str()), (StatusCode::OK, "kit payload"));
 	for path in ["/lyon/", "/chassieu-10km/deeper/", "/chassieu-10km/a/b.txt"] {
 		let (status, _, body) = get_(&app, path).await;
-		assert_eq!((status, body.as_str()), (StatusCode::NOT_FOUND, "<html>not here</html>"), "{path}");
+		assert_eq!(
+			(status, body.as_str()),
+			(StatusCode::NOT_FOUND, "<html>not here</html>"),
+			"an area nobody drew, or below one: {path}"
+		);
 	}
-	let (status, _, body) = get_(&app, "/leads/").await;
-	assert_eq!((status, body.as_str()), (StatusCode::OK, LEADS), "a page of the export is never an area's");
 }
