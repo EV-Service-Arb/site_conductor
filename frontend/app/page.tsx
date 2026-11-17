@@ -57,10 +57,9 @@ function framed(at: Exclude<At, { view: "access" | "area" }>): ReactNode {
       return <WalletView />;
     case "alerts":
       return <AlertsView />;
-    case "sites":
-      return <SitesView />;
     default:
-      at.view satisfies `review_archive${string}`;
+      if (at.view === "sites" || at.view.startsWith("sites.")) return <SitesView />;
+      at.view satisfies `review_archive${string}` | `sites${string}`;
       return <ReviewArchiveView />;
   }
 }

@@ -19,6 +19,7 @@ use serde_json::{Value, json};
 use tokio_tungstenite::tungstenite::{self, client::IntoClientRequest};
 
 const SEED: &str = "k1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
+const USER: &str = "6f1d2c3b-0000-4000-8000-000000000001";
 
 struct Runner {
 	base: String,
@@ -52,7 +53,7 @@ impl Runner {
 		let multilogin = Multilogin::serve(sessions.clone()).await;
 		if !left.is_empty() {
 			let since = jiff::Timestamp::now() - jiff::SignedDuration::from_secs(150);
-			let records: Vec<Value> = left.iter().map(|(p, _)| json!({ "phone": p, "token": "run-token", "since": since })).collect();
+			let records: Vec<Value> = left.iter().map(|(p, _)| json!({ "phone": p, "token": "run-token", "since": since, "user": USER })).collect();
 			std::fs::write(sessions.join("phones.json"), serde_json::to_vec(&records).unwrap()).unwrap();
 			for (p, status) in left {
 				multilogin.0.lock().unwrap().status.insert((*p).to_owned(), *status);
@@ -132,7 +133,7 @@ impl Runner {
 	}
 
 	async fn launch(&self, gmail: i64, run: &str) -> (u16, String) {
-		let launch = json!({ "run": run, "browser": { "provider": "orbita",
+		let launch = json!({ "run": run, "user": USER, "browser": { "provider": "orbita",
 			"preferences": { "gologin": { "proxy": { "username": "u", "password": "secret-of-u" }, "profile_token": "three-minute-token", "name": "a@gmail.com" } },
 			"config": { "gologin": { "profile_token": "three-minute-token" } },
 			"proxy": "http://203.0.113.9:8080", "zone": "Europe/Paris", "locale": "fr-FR", "screen": [412, 915] } });
@@ -146,8 +147,12 @@ impl Runner {
 	}
 
 	async fn launch_phone(&self, gmail: i64, phone: &str) -> (u16, String) {
-		let launch = json!({ "run": "gmb:7", "browser": { "provider": "multilogin_phone", "token": "run-token", "phone": phone,
-			"geo": [45.764, 4.8357], "zone": "Europe/Paris", "country": "FR" } });
+		self.launch_phone_for(gmail, phone, 30).await
+	}
+
+	async fn launch_phone_for(&self, gmail: i64, phone: &str, minutes: u64) -> (u16, String) {
+		let launch = json!({ "run": "gmb:7", "user": USER, "browser": { "provider": "multilogin_phone", "token": "run-token", "phone": phone,
+			"geo": [45.764, 4.8357], "zone": "Europe/Paris", "country": "FR", "minutes": minutes } });
 		self.call(reqwest::Method::POST, &format!("/profiles/{gmail}/launch"), Some(launch), true).await
 	}
 
@@ -476,6 +481,16 @@ async fn a_phone_whose_exit_is_elsewhere_is_stopped() {
 
 // r[verify browsers.phone-stops]
 #[tokio::test]
+async fn a_phone_stops_at_the_minutes_its_launch_affords() {
+	let r = Runner::start(1).await;
+	assert_eq!(r.launch_phone_for(1, "p1", 0).await.0, 204);
+	eventually("the phone stopped", || r.multilogin.status("p1") == Some(2)).await;
+	eventually("its minutes counted", || !r.records().contains("p1")).await;
+	assert_eq!(r.used().await, [("phone.running".to_owned(), 1)], "a started minute counts whole");
+}
+
+// r[verify browsers.phone-stops]
+#[tokio::test]
 async fn sigterm_stops_every_phone_before_the_runner_exits() {
 	let mut r = Runner::start(2).await;
 	assert_eq!(r.launch_phone(1, "p1").await.0, 204);
@@ -524,6 +539,7 @@ async fn the_feed_resumes_after_its_cursor_and_outlives_the_runner() {
 		(json!(2), json!("phone.running"), json!(1), json!(2))
 	);
 	assert!(phone["at"].as_str().unwrap().parse::<jiff::Timestamp>().unwrap() > before, "at its stop: {phone}");
+	assert_eq!((&first["used"][0]["user"], &phone["user"]), (&json!(USER), &json!(USER)), "each for whom it was launched");
 	assert_eq!(r.usage(2, 10).await, json!({ "used": [], "next": 2 }), "nothing new: the cursor stays");
 	assert_eq!(r.call(reqwest::Method::GET, "/usage?after=-1&limit=10", None, true).await.0, 400);
 	assert_eq!(r.call(reqwest::Method::POST, "/profiles/1/stop", None, true).await.0, 204);

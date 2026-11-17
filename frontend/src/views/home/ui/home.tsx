@@ -1,7 +1,7 @@
 "use client";
 
 import { useResource } from "@evinvest/api/react";
-import { Button, ResourceError, Skeleton, cn } from "@evinvest/uikit";
+import { Button, Skeleton, cn } from "@evinvest/uikit";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -279,7 +279,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       {map.status === "ok" && <Locate map={map.map} />}
       {map.status === "error" && (
         <div className="absolute inset-x-6 top-6">
-          <ResourceError variant="alert" message={map.message} />
+          <ErrorState failure={map.failure} />
         </div>
       )}
       {peekedListed && windows && !windowed && map.status === "ok" && peekedListed.gmb.location && (

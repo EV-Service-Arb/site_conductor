@@ -87,10 +87,11 @@
         github = v_flakes.github {
           inherit pkgs pname rs;
           enable = true;
-          lastSupportedVersion = "nightly-2026-09-03";
+          lastSupportedVersion = "nightly-2026-09-24";
           containerRelease = { registry = "ghcr.io/ev-service-arb"; };
           figma = { };
           jobs.default = true;
+          jobs.errors.install.packages = [ "ffmpeg" ]; # crates/browsers/tests/runner.rs cuts its films with it
           lfs = false;
         };
         readme = v_flakes.readme-fw {

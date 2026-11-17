@@ -11,7 +11,7 @@ import { type T, useLocale, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 
 import type { Display } from "../model/chat";
-import { ago } from "./time";
+import { ago } from "@/shared/lib/time";
 
 export type Confirm = { kind: "delete" | "leave"; chat: ChatSummary } | { kind: "clear" };
 

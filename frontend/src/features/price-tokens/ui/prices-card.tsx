@@ -43,8 +43,8 @@ type Field = "price" | "cost";
 const draftKey = (item: PricedItem, field: Field) => `${item}:${field}`;
 
 /**
- * Every costly action, by where it happens and with what: its price to a person in tokens (sold
- * ones only) and what a unit costs us in dollars, set in place; only what changed is sent.
+ * Every costly action, by where it happens and with what: its price to a person in tokens and what
+ * a unit costs us in dollars, set in place; only what changed is sent.
  */
 export function PricesCard({ prices, onSaved }: { prices: Price[]; onSaved: (prices: Price[]) => void }) {
   const t = useT();
@@ -54,11 +54,11 @@ export function PricesCard({ prices, onSaved }: { prices: Price[]; onSaved: (pri
   const [busy, setBusy] = useState(false);
   const shownPrice = (p: Price) => drafts[draftKey(p.item, "price")] ?? p.price?.tokens.toString() ?? "";
   const shownCost = (p: Price) => drafts[draftKey(p.item, "cost")] ?? (p.cost === null ? "" : (p.cost.usd_micros / 1e6).toString());
-  const priceChanged = prices.filter((p) => p.sale === "sold" && tokens(shownPrice(p)) !== (p.price?.tokens ?? null));
+  const priceChanged = prices.filter((p) => tokens(shownPrice(p)) !== (p.price?.tokens ?? null));
   const costChanged = prices.filter((p) => usdMicros(shownCost(p)) !== (p.cost?.usd_micros ?? null));
   const invalid = priceChanged.some((p) => tokens(shownPrice(p)) === undefined) || costChanged.some((p) => usdMicros(shownCost(p)) === undefined);
   const changes = priceChanged.length + costChanged.length;
-  const unsold = prices.filter((p) => p.sale === "sold" && p.price === null).length;
+  const unsold = prices.filter((p) => p.price === null).length;
   const uncosted = prices.filter((p) => p.cost === null).length;
 
   const save = () => {
@@ -91,7 +91,7 @@ export function PricesCard({ prices, onSaved }: { prices: Price[]; onSaved: (pri
           <p className="basis-full text-xs text-ink-soft">
             {t(
               pricesKeys.why,
-              "Tokens: what each thing costs a person; empty is not sold, so a Places request is refused and a walk step not walked. Cached answers and a person's own Maps keys cost nothing. $: what one unit costs us, for the spending below.",
+              "Tokens: what each thing costs a person, 0 for free; empty is not sold, so it is refused: a Places request, a map, a browser's start, a walk step. Cached answers and a person's own Maps keys cost nothing. $: what one unit costs us, for the spending below.",
             )}
           </p>
         </header>
@@ -109,22 +109,18 @@ export function PricesCard({ prices, onSaved }: { prices: Price[]; onSaved: (pri
                         <span className="text-xs text-ink-soft">{p.description}</span>
                       </div>
                       <label className="flex items-center gap-1.5 text-xs text-ink-soft">
-                        {p.sale === "sold" ? (
-                          <Input
-                            type="number"
-                            inputMode="numeric"
-                            min={0}
-                            size={size}
-                            className="w-24 tabular-nums"
-                            aria-label={t(pricesKeys.tokens.label, "{item}: tokens {per}", { item: p.title, per: perUnit(t, p) })}
-                            aria-invalid={tokens(shownPrice(p)) === undefined || undefined}
-                            value={shownPrice(p)}
-                            placeholder={t(pricesKeys.unsold, "not sold")}
-                            onChange={edit(p.item, "price")}
-                          />
-                        ) : (
-                          <span className="w-24 text-center">{t(pricesKeys.metered, "nobody charged")}</span>
-                        )}
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          size={size}
+                          className="w-24 tabular-nums"
+                          aria-label={t(pricesKeys.tokens.label, "{item}: tokens {per}", { item: p.title, per: perUnit(t, p) })}
+                          aria-invalid={tokens(shownPrice(p)) === undefined || undefined}
+                          value={shownPrice(p)}
+                          placeholder={t(pricesKeys.unsold, "not sold")}
+                          onChange={edit(p.item, "price")}
+                        />
                         <span className="w-12">{t(pricesKeys.tokens, "tokens")}</span>
                       </label>
                       <label className="flex items-center gap-1.5 text-xs text-ink-soft">

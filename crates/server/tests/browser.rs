@@ -17,7 +17,9 @@ use axum::{
 };
 use base64::Engine;
 use sa_auth::{Principal, Service};
+use sa_core::prices::{BrowserStart, Item, PhoneTime};
 use sa_panel::{
+	Panel,
 	browsers::Browsers,
 	import::Export,
 	testing::{TestDb, operator, panel},
@@ -162,6 +164,7 @@ struct World {
 	runner: Log,
 	/// What ip-api's stub answers through, as a proxy: any user, any password.
 	proxy: String,
+	panel: Panel,
 	db: TestDb,
 }
 
@@ -188,6 +191,12 @@ impl World {
 			kickbacks: vec![],
 		};
 		panel.import_review_archive(empty).await.unwrap().unwrap();
+		let prices = [
+			(Item::from(PhoneTime::Running), Some(4)),
+			(BrowserStart::Gologin.into(), Some(1)),
+			(BrowserStart::Mimic.into(), Some(1)),
+		];
+		panel.set_prices(&prices, &[], "admin@localhost", jiff::Timestamp::now()).await.unwrap().unwrap();
 		let who = DevIdentity {
 			user_id: DevIdentity::named("dev@localhost"),
 			permissions: operator(),
@@ -199,7 +208,16 @@ impl World {
 		};
 		let browsers = Browsers::stubbed(&gologin_base, &multilogin_base, "http://ip-api.test/json/");
 		let connected = Connected::try_new(browsers, &runner_base, SEED.parse().unwrap()).unwrap();
-		let app = http::app(SignIn::new(panel, Concierge::dev(who), config), None, None, Default::default(), None, Some(connected), None, None);
+		let app = http::app(
+			SignIn::new(panel.clone(), Concierge::dev(who), config),
+			None,
+			None,
+			Default::default(),
+			None,
+			Some(connected),
+			None,
+			None,
+		);
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		Self {
@@ -209,6 +227,7 @@ impl World {
 			multilogin: ml,
 			runner: runner_log,
 			proxy: proxy.strip_prefix("http://").unwrap().to_owned(),
+			panel,
 			db,
 		}
 	}
@@ -341,6 +360,29 @@ async fn a_proxy_is_kept_only_once_it_goes_through_out_in_the_gmails_country_and
 }
 
 #[tokio::test]
+async fn a_start_unpriced_or_past_the_balance_is_refused_before_the_runner_hears_of_it() {
+	let mut w = World::new().await;
+	let a = w.gmail("a@gmail.com").await;
+	let (status, set) = w.set(a, "pixel_7", &w.proxy("fr")).await;
+	assert_eq!(status, StatusCode::OK, "{set}");
+	let start = async |w: &mut World, tokens: Option<i64>| {
+		w.panel
+			.set_prices(&[(BrowserStart::Gologin.into(), tokens)], &[], "admin@localhost", jiff::Timestamp::now())
+			.await
+			.unwrap()
+			.unwrap();
+		w.call(Method::POST, &format!("/api/v1/gmails/{a}/browser/start"), Some(json!({ "gmb": null }))).await
+	};
+	for tokens in [None, Some(501)] {
+		let (status, refused) = start(&mut w, tokens).await;
+		assert_eq!(status, StatusCode::CONFLICT, "{tokens:?}: {refused}");
+	}
+	assert!(w.launches().is_empty(), "the runner never asked");
+	let (status, body) = start(&mut w, Some(500)).await;
+	assert_eq!(status, StatusCode::NO_CONTENT, "the whole balance is enough: {body}");
+}
+
+#[tokio::test]
 async fn a_start_is_at_the_gbps_point_its_profile_made_once_and_told_to_the_runner_as_the_conductor() {
 	let mut w = World::new().await;
 	let a = w.gmail("a@gmail.com").await;
@@ -355,6 +397,7 @@ async fn a_start_is_at_the_gbps_point_its_profile_made_once_and_told_to_the_runn
 	let asserted = launch.assertion(Service::Browsers, None);
 	assert_eq!(asserted.principal, Principal::Conductor);
 	let launch: Value = serde_json::from_slice(&launch.body).unwrap();
+	assert_eq!(launch["user"], DevIdentity::named("dev@localhost").to_string(), "its uses charged to whom started it");
 	let orbita = &launch["browser"];
 	assert_eq!(
 		(&orbita["provider"], &orbita["zone"], &orbita["locale"]),
@@ -563,7 +606,7 @@ async fn a_cloud_phone_is_made_at_its_set_up_its_model_drawn_its_proxy_replaced_
 	assert_eq!(w.multilogin.paths(), ["/workspace/automation_token"], "a run's own token, nothing else");
 	assert_eq!(
 		w.launches()[0]["browser"],
-		json!({ "provider": "multilogin_phone", "token": "three-hour-token", "phone": "ph-1", "geo": [45.75, 4.85], "zone": "Europe/Paris", "country": "FR" })
+		json!({ "provider": "multilogin_phone", "token": "three-hour-token", "phone": "ph-1", "geo": [45.75, 4.85], "zone": "Europe/Paris", "country": "FR", "minutes": 500 / 4 })
 	);
 
 	assert_eq!(w.film(a, vec![7u8; 1 << 20]).await, StatusCode::NO_CONTENT);

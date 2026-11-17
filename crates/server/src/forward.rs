@@ -32,7 +32,10 @@ use ev_lib::api::{
 };
 use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use sa_auth::{Assertion, Hop, Principal, Service, Signer, User};
-use sa_core::prices::{Item, Sale, Scope};
+use sa_core::{
+	placement::{BILLED, Billed},
+	prices::{Item, Scope},
+};
 
 use crate::{
 	api::Code,
@@ -349,18 +352,18 @@ impl Forward {
 			.parse()
 			.expect("a path that arrived in a URI, and a number");
 		let res = self.pass(route, req, principal).await;
-		let billed = match res.headers().get("x-billed") {
-			Some(v) => match v.to_str().ok().and_then(|v| v.parse::<u64>().ok()) {
-				Some(n) => n,
-				None => return Refusal::<Code>::from(eyre::eyre!("placement's x-billed of {sha} is {v:?}, not a count")).into_response(),
+		let billed: Billed = match res.headers().get(BILLED) {
+			Some(v) => match serde_json::from_slice(v.as_bytes()) {
+				Ok(b) => b,
+				Err(e) => return Refusal::<Code>::from(eyre::eyre!("placement's {BILLED} of {sha} is {v:?}: {e}")).into_response(),
 			},
 			// placement says it on every pull it ran: a refusal without it never reached one
-			None if !res.status().is_success() => 0,
-			None => return Refusal::<Code>::from(eyre::eyre!("placement answered the pull of {sha} without x-billed")).into_response(),
+			None if !res.status().is_success() => Billed::new(),
+			None => return Refusal::<Code>::from(eyre::eyre!("placement answered the pull of {sha} without {BILLED}")).into_response(),
 		};
 		let failed = !res.status().is_success();
 		if res.status() != StatusCode::PAYMENT_REQUIRED {
-			return match held.paid(billed, sha, failed).await {
+			return match held.paid(&billed, sha, failed).await {
 				Ok(()) => res,
 				Err(e) => Refusal::<Code>::from(e).into_response(),
 			};
@@ -378,7 +381,7 @@ impl Forward {
 			Err(e) => return Refusal::<Code>::from(eyre::eyre!("placement's 402 for {sha}, {:?}: {e}", String::from_utf8_lossy(&body))).into_response(),
 		};
 		let why = held.unaffordable(&theirs);
-		if let Err(e) = held.paid(billed, sha, failed).await {
+		if let Err(e) = held.paid(&billed, sha, failed).await {
 			return Refusal::<Code>::from(e).into_response();
 		}
 		Refusal::new(Code::Unaffordable, why).into_response()
@@ -505,13 +508,13 @@ fn pulled(doc: &OpenApi, prefix: &str, method: &Method, path: &str) -> Result<Op
 	}
 }
 
-/// Whether `op` buys a sold item of placement's: a pull, charged at the forward.
+/// Whether `op` buys an item of placement's: a pull, charged at the forward.
 fn pulls(op: &Operation) -> bool {
 	op.extensions.get("x-spends").is_some_and(|v| {
 		serde_json::from_value::<Vec<Item>>(v.clone())
 			.expect("x-spends names priced items")
 			.into_iter()
-			.any(|i| i.scope() == Scope::Placement && i.sale() == Sale::Sold)
+			.any(|i| i.scope() == Scope::Placement)
 	})
 }
 

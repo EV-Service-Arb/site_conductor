@@ -1638,7 +1638,7 @@ dependencies = [
 
 [[package]]
 name = "ev_lib"
-version = "0.33.0"
+version = "0.34.0"
 dependencies = [
  "aide",
  "axum",
@@ -4353,7 +4353,7 @@ dependencies = [
  "base64 0.22.1",
  "concierge_iam",
  "ed25519-dalek",
- "ev_lib 0.33.0",
+ "ev_lib 0.34.0",
  "getrandom 0.3.4",
  "hex",
  "schemars",
@@ -4392,6 +4392,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -4410,7 +4411,7 @@ name = "sa_core"
 version = "0.1.0"
 dependencies = [
  "axum",
- "ev_lib 0.33.0",
+ "ev_lib 0.34.0",
  "futures",
  "hex",
  "hmac 0.13.0",
@@ -4435,7 +4436,7 @@ dependencies = [
 name = "sa_gen"
 version = "0.1.0"
 dependencies = [
- "ev_lib 0.33.0",
+ "ev_lib 0.34.0",
  "sa_auth",
  "sa_browsers",
  "sa_server",
@@ -4448,7 +4449,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",
- "ev_lib 0.33.0",
+ "ev_lib 0.34.0",
  "eyre",
  "futures",
  "getrandom 0.3.4",
@@ -4516,7 +4517,7 @@ dependencies = [
  "base64 0.22.1",
  "clap",
  "color-eyre",
- "ev_lib 0.33.0",
+ "ev_lib 0.34.0",
  "eyre",
  "futures",
  "getrandom 0.3.4",

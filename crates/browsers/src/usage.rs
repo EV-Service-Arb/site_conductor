@@ -12,6 +12,7 @@ use std::{
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_core::{prices::Item, usage::Used};
+use uuid::Uuid;
 
 const FILE: &str = "usage.jsonl";
 
@@ -55,7 +56,7 @@ impl Usage {
 	}
 
 	/// On disk before it returns.
-	pub(crate) fn record(&self, item: Item, units: i64, at: Timestamp) -> eyre::Result<()> {
+	pub(crate) fn record(&self, item: Item, units: i64, at: Timestamp, user: Uuid) -> eyre::Result<()> {
 		assert!(units > 0, "{item}: {units} units");
 		let mut inner = self.inner.lock().expect("never held across a panic");
 		let Inner { file, len, used } = &mut *inner;
@@ -64,6 +65,7 @@ impl Usage {
 			item,
 			units,
 			at,
+			user: Some(user),
 		};
 		let mut line = serde_json::to_vec(&u)?;
 		line.push(b'\n');

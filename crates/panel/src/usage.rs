@@ -3,23 +3,23 @@
 //!
 //! ```text
 //! a Google answer bought ─ kept and counted in one write (queries cache)
-//! a map built in a browser, a panorama opened ─ counted as it is
-//! GET <service> usage feed?after=<cursor> ─ a page ─ one write: its rows, the cursor moved
+//! a map built in a browser, a panorama opened ─ bought first: counted and charged in one write
+//! GET <service> usage feed?after=<cursor> ─ a page ─ one write: its rows, each charged to whom it
+//!                                                    names, the cursor moved
 //! ```
 //!
-//! **A use is counted before the cursor passes it**, and a page is taken only from where its
-//! service's cursor stands.
+//! **A use is counted and charged before the cursor passes it**, and a page is taken only from
+//! where its service's cursor stands.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_core::{
-	prices::{Item, MapLoad, ModelTokens, Spender},
+	prices::{Item, MapLoad, ModelTokens, Scope, Spender},
 	usage::{Bill, UsagePage},
 };
 use strum::VariantArray;
-use uuid::Uuid;
 
 pub use crate::store::usage::{Cost, Day};
 use crate::{
@@ -52,15 +52,28 @@ fn spent(balance: i64) -> String {
 }
 
 impl Panel {
-	/// The user's browser built a map on `account`'s browser key.
-	pub async fn map_loaded(&self, user: Uuid, account: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+	/// The user's browser builds a map on `account`'s browser key: bought, or refused before it
+	/// loads. Their balance then.
+	pub async fn buy_map(&self, by: Spender<MapLoad>, account: &str, now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
+		let user = by.user();
 		if self.accounts.get(account).is_none_or(|a| a.provides.browser.is_none()) {
 			return Ok(Err(Refused::Invalid(format!("{account:?} is no Google account with a browser key"))));
 		}
 		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		let item = Item::from(MapLoad::Map);
+		let Some(price) = ledger::price(&mut tx, item).await? else {
+			return Ok(Err(Refused::Conflict("the map is not priced yet: ask an admin to price it".to_owned())));
+		};
+		let balance = ledger::renewed(&mut tx, user, now, &self.renewal).await?;
+		if balance < price {
+			return Ok(Err(Refused::Conflict(format!("the map costs {price} tokens, and you hold {balance}"))));
+		}
 		let used = Use {
 			at: now,
-			item: MapLoad::Map.into(),
+			item,
 			units: 1,
 			bill: Bill::Ours,
 			account: Some(account.to_owned()),
@@ -69,8 +82,27 @@ impl Panel {
 			key: None,
 		};
 		db::record(&mut tx, &used).await?;
-		tx.commit().await.wrap_err("committing a map load")?;
-		Ok(Ok(()))
+		if price > 0 {
+			let entry = Entry {
+				at: now,
+				delta: -price,
+				kind: Kind::Charge,
+				charged: Some(Charged {
+					service: item.tool().to_owned(),
+					key: now.to_string(),
+					label: Some("The map".to_owned()),
+				}),
+				by: None,
+				note: None,
+			};
+			ledger::append(&mut tx, user, &entry).await?;
+		}
+		tx.commit().await.wrap_err("committing a map bought")?;
+		if price > 0 {
+			tracing::info!(user_id = %user, tokens = price, "a map bought");
+			self.snapshot_due.notify_one();
+		}
+		Ok(Ok(balance - price))
 	}
 
 	/// The tab `by`'s answer `answer` runs up on our Claude, at the prices in effect now; refused
@@ -159,9 +191,11 @@ impl Panel {
 		db::cursor(&mut conn, service).await
 	}
 
-	/// A page of `service`'s usage feed, asked for after `after`, counted and the cursor moved in one
-	/// write; a page that does not start at the cursor, or names an item another service does, fails
-	/// whole. How many uses were taken.
+	/// A page of `service`'s usage feed, asked for after `after`, counted, each use naming whom it
+	/// was made for charged to them at its price up to their balance, and the cursor moved, in one
+	/// write; a page that does not start at the cursor, names an item another service does, names a
+	/// person for a use charged otherwise or none for one charged here, or charges an unpriced item,
+	/// fails whole. How many uses were taken.
 	pub async fn take_usage(&self, service: &str, items: &BTreeSet<Item>, page: UsagePage, after: i64) -> eyre::Result<usize> {
 		let last = page.used.last().map_or(after, |u| u.id);
 		eyre::ensure!(page.next == last, "{service} answered next {} for a page ending at {last}", page.next);
@@ -170,12 +204,20 @@ impl Panel {
 			eyre::ensure!(u.id > prev, "{service}'s use {} after {prev}: ids ascend past the cursor", u.id);
 			eyre::ensure!(u.units > 0, "{service}'s use {} of {} units", u.id, u.units);
 			eyre::ensure!(items.contains(&u.item), "{service}'s use {} is of {}, not its", u.id, u.item);
+			eyre::ensure!(
+				u.user.is_some() == (u.item.scope() == Scope::Browsers),
+				"{service}'s use {} of {} names {:?}: a use is for a person exactly when it is charged as it is taken",
+				u.id,
+				u.item,
+				u.user
+			);
 			prev = u.id;
 		}
 		if page.used.is_empty() {
 			return Ok(0);
 		}
 		let mut tx = self.store.begin_write().await?;
+		let mut charged = false;
 		for u in &page.used {
 			let used = Use {
 				at: u.at,
@@ -184,13 +226,45 @@ impl Panel {
 				bill: Bill::Ours,
 				account: None,
 				source: service.to_owned(),
-				user: None,
+				user: u.user,
 				key: None,
 			};
 			db::record(&mut tx, &used).await?;
+			let Some(user) = u.user else { continue };
+			let Some(price) = ledger::price(&mut tx, u.item).await? else {
+				eyre::bail!(
+					"{service}'s use {} of {} for {user} is unpriced: an admin took its price off after it was let start; price it again",
+					u.id,
+					u.item
+				);
+			};
+			let per = u.item.per();
+			let due = (u.units * price + per - 1) / per;
+			let balance = ledger::renewed(&mut tx, user, Timestamp::now(), &self.renewal).await?;
+			// its cost is known only once it is done: what it costs past the balance is let go
+			let charge = due.min(balance.max(0));
+			if charge > 0 {
+				let entry = Entry {
+					at: u.at,
+					delta: -charge,
+					kind: Kind::Charge,
+					charged: Some(Charged {
+						service: u.item.tool().to_owned(),
+						key: format!("{service}:{}", u.id),
+						label: Some(format!("{} · {} {}", u.item.title(), u.units, u.item.unit())),
+					}),
+					by: None,
+					note: None,
+				};
+				ledger::append(&mut tx, user, &entry).await?;
+				charged = true;
+			}
 		}
 		eyre::ensure!(db::move_cursor(&mut tx, service, after, page.next).await?, "{service}'s usage cursor moved meanwhile");
 		tx.commit().await.wrap_err("committing a page of usage")?;
+		if charged {
+			self.snapshot_due.notify_one();
+		}
 		Ok(page.used.len())
 	}
 
