@@ -162,8 +162,7 @@
             src = lib.cleanSource ./crates/sandbox/js;
             filter = path: _type: baseNameOf path != "node_modules";
           };
-          # shortcut: no package-lock.json until @evinvest/api is published (the epic's release); `nix build` prints the hash then
-          npmDepsHash = lib.fakeHash;
+          npmDepsHash = "sha256-dwu/lQeOn2Lh03/7W8RMMX90E0vIstOF9dXaafdk4lQ=";
           dontNpmBuild = true;
           installPhase = ''
             runHook preInstall
