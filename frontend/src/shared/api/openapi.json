@@ -3726,6 +3726,159 @@
         "x-errors": {}
       }
     },
+    "/placement/catalog": {
+      "get": {
+        "tags": [
+          "placement"
+        ],
+        "summary": "What a category may be studied by, and where: placement's trade files and the countries it has a base for.",
+        "operationId": "catalog",
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers: `error` is for a person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "What placement studies: the trade files a category's `study` names one of, and the countries it\nhas a base for.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Catalog"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {},
+        "x-permission": "sa:placement:study:read"
+      }
+    },
+    "/placement/study": {
+      "get": {
+        "tags": [
+          "placement"
+        ],
+        "summary": "A study of an area: under one of the caller's categories, or the area's grid alone; never spends.",
+        "description": "404 no such area or category of the caller's; 422 a category not set up to be studied\n(`no_study`, `no_google_category`, `no_keywords`), set up for `another_country`, or one\nplacement does not study (`unstudied`); 503 placement not connected.",
+        "operationId": "study",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "area",
+            "description": "The area's slug.",
+            "required": true,
+            "schema": {
+              "description": "The area's slug.",
+              "type": "string"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "description": "`<trade id>.<country>`: one of the caller's trades as set up for a country. None: the area's\ngrid alone, nothing billed.",
+            "schema": {
+              "description": "`<trade id>.<country>`: one of the caller's trades as set up for a country. None: the area's\ngrid alone, nothing billed.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers: `error` is for a person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "placement's payload, for the map's overlay.",
+            "content": {
+              "application/json": {}
+            }
+          }
+        },
+        "x-errors": {},
+        "x-permission": "sa:placement:study:read"
+      }
+    },
+    "/placement/study/pull": {
+      "post": {
+        "tags": [
+          "placement"
+        ],
+        "summary": "Builds a study again, buying the Places searches it lacks at the caller's tokens.",
+        "description": "As the study is refused, and: 402 `unaffordable` when the sweep needs more searches than the\nbalance affords, nothing bought; 409 while a pull's item is unpriced. What it bought is charged,\nand owed back when the pull failed.",
+        "operationId": "pull",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "area",
+            "description": "The area's slug.",
+            "required": true,
+            "schema": {
+              "description": "The area's slug.",
+              "type": "string"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "description": "`<trade id>.<country>`: one of the caller's trades as set up for a country. None: the area's\ngrid alone, nothing billed.",
+            "schema": {
+              "description": "`<trade id>.<country>`: one of the caller's trades as set up for a country. None: the area's\ngrid alone, nothing billed.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "What every failed operation answers: `error` is for a person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "placement's payload, for the map's overlay.",
+            "content": {
+              "application/json": {}
+            }
+          }
+        },
+        "x-errors": {},
+        "x-permission": "sa:placement:study:spend",
+        "x-spends": [
+          "placement.search",
+          "ads.location",
+          "ads.keyword_ideas",
+          "ads.historical_metrics",
+          "dataforseo.keywords_for_keywords",
+          "dataforseo.search_volume"
+        ]
+      }
+    },
     "/sources": {
       "get": {
         "tags": [
@@ -5625,6 +5778,29 @@
           "candidates"
         ]
       },
+      "Catalog": {
+        "description": "What placement studies: the trade files a category's `study` names one of, and the countries it\nhas a base for.",
+        "type": "object",
+        "properties": {
+          "countries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Country"
+            }
+          },
+          "trades": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "trades",
+          "countries"
+        ]
+      },
       "Category": {
         "description": "A trade set up for a country: Plumbing · FR.",
         "type": "object",
@@ -6146,6 +6322,12 @@
           "unavailable",
           "browsers_not_connected",
           "bad_gateway",
+          "no_study",
+          "no_google_category",
+          "no_keywords",
+          "another_country",
+          "unstudied",
+          "unaffordable",
           "internal"
         ]
       },

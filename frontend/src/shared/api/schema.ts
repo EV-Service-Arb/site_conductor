@@ -1266,6 +1266,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/placement/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What a category may be studied by, and where: placement's trade files and the countries it has a base for. */
+        get: operations["catalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/placement/study": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A study of an area: under one of the caller's categories, or the area's grid alone; never spends.
+         * @description 404 no such area or category of the caller's; 422 a category not set up to be studied
+         *     (`no_study`, `no_google_category`, `no_keywords`), set up for `another_country`, or one
+         *     placement does not study (`unstudied`); 503 placement not connected.
+         */
+        get: operations["study"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/placement/study/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Builds a study again, buying the Places searches it lacks at the caller's tokens.
+         * @description As the study is refused, and: 402 `unaffordable` when the sweep needs more searches than the
+         *     balance affords, nothing bought; 409 while a pull's item is unpriced. What it bought is charged,
+         *     and owed back when the pull failed.
+         */
+        post: operations["pull"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sources": {
         parameters: {
             query?: never;
@@ -1885,6 +1946,14 @@ export interface components {
         Candidates: {
             candidates: components["schemas"]["Place"][];
         };
+        /**
+         * @description What placement studies: the trade files a category's `study` names one of, and the countries it
+         *     has a base for.
+         */
+        Catalog: {
+            countries: components["schemas"]["Country"][];
+            trades: string[];
+        };
         /** @description A trade set up for a country: Plumbing · FR. */
         Category: {
             country: components["schemas"]["Country"];
@@ -2049,7 +2118,7 @@ export interface components {
          * @description Which failure, for a client to act on; the status follows from it.
          * @enum {string}
          */
-        ErrorCode: "bad_request" | "unauthenticated" | "csrf" | "forbidden" | "not_found" | "conflict" | "too_large" | "too_many" | "unavailable" | "browsers_not_connected" | "bad_gateway" | "internal";
+        ErrorCode: "bad_request" | "unauthenticated" | "csrf" | "forbidden" | "not_found" | "conflict" | "too_large" | "too_many" | "unavailable" | "browsers_not_connected" | "bad_gateway" | "no_study" | "no_google_category" | "no_keywords" | "another_country" | "unstudied" | "unaffordable" | "internal";
         /** @description Where a gmail's proxy comes out, at its last check. */
         Exit: {
             city: string;
@@ -3570,6 +3639,7 @@ export type Browser = components['schemas']['Browser'];
 export type CallInput = components['schemas']['CallInput'];
 export type Caller = components['schemas']['Caller'];
 export type Candidates = components['schemas']['Candidates'];
+export type Catalog = components['schemas']['Catalog'];
 export type Category = components['schemas']['Category'];
 export type Chat = components['schemas']['Chat'];
 export type ChatSummary = components['schemas']['ChatSummary'];
@@ -6385,6 +6455,112 @@ export interface operations {
             };
         };
     };
+    catalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /**
+             * @description What placement studies: the trade files a category's `study` names one of, and the countries it
+             *     has a base for.
+             */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Catalog"];
+                };
+            };
+            /** @description What every failed operation answers: `error` is for a person. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    study: {
+        parameters: {
+            query: {
+                /** @description The area's slug. */
+                area: string;
+                /**
+                 * @description `<trade id>.<country>`: one of the caller's trades as set up for a country. None: the area's
+                 *     grid alone, nothing billed.
+                 */
+                category?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description placement's payload, for the map's overlay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description What every failed operation answers: `error` is for a person. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    pull: {
+        parameters: {
+            query: {
+                /** @description The area's slug. */
+                area: string;
+                /**
+                 * @description `<trade id>.<country>`: one of the caller's trades as set up for a country. None: the area's
+                 *     grid alone, nothing billed.
+                 */
+                category?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description placement's payload, for the map's overlay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description What every failed operation answers: `error` is for a person. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     list_sources: {
         parameters: {
             query?: never;
@@ -7279,7 +7455,7 @@ export const billValues: ReadonlyArray<FlattenedDeepRequired<components>["schema
 export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Country"]> = ["FR", "US", "CA", "GB"];
 export const destinationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DestinationKind"]> = ["channel", "private", "group"];
 export const deviceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Device"]> = ["pixel_7", "galaxy_s23", "redmi_note_14"];
-export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["bad_request", "unauthenticated", "csrf", "forbidden", "not_found", "conflict", "too_large", "too_many", "unavailable", "browsers_not_connected", "bad_gateway", "internal"];
+export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["bad_request", "unauthenticated", "csrf", "forbidden", "not_found", "conflict", "too_large", "too_many", "unavailable", "browsers_not_connected", "bad_gateway", "no_study", "no_google_category", "no_keywords", "another_country", "unstudied", "unaffordable", "internal"];
 export const feedbackValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Feedback"]> = ["up", "down"];
 export const flowKindDtoValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FlowKindDto"]> = ["renewal", "purchase", "set", "spend", "grant_claimed", "refund", "granted"];
 export const generalAccessValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GeneralAccess"]> = ["none", "view"];

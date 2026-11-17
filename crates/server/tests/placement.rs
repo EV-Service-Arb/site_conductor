@@ -17,12 +17,12 @@ use sa_core::{
 	prices::{AdsRequest, DataForSeoTask, Item, PlacementRequest, Tool},
 };
 use sa_panel::{
-	areas::{Area, Shape},
+	areas::Area,
 	import::Export,
 	testing::{TestDb, admin, operator, panel},
 	tokens::Change,
 };
-use sa_places::{LatLng, Viewport};
+use sa_places::LatLng;
 use sa_server::{
 	concierge::DevIdentity,
 	testing::{Browser, Log, app_with, upstream},
@@ -112,16 +112,8 @@ impl Conductor {
 			name: "Lyon".into(),
 			country: "FR".into(),
 			center: LatLng { lat: 45.76, lng: 4.84 },
-			shape: Shape::City {
-				place_id: "ChIJl4foalHq9EcR8CG75CqrCAQ".into(),
-				viewport: Viewport {
-					south: 45.7,
-					west: 4.77,
-					north: 45.81,
-					east: 4.9,
-				},
-			},
-			margin_m: 2000,
+			radius_m: 6000,
+			city: None,
 			created_by: DevIdentity::named(EMAIL),
 			created_at: now,
 		};

@@ -67,10 +67,10 @@ export function attach(map: google.maps.Map): Promise<Overlay | null> {
       }
       throw e;
     }
-    const module = await import("@/shared/placement_overlay/placement_overlay");
-    await module.default();
+    const drawing = await import("@/shared/placement_overlay/placement_overlay");
+    await drawing.default();
     set({ status: "ok", trades: catalog.trades, countries: catalog.countries, data: null, legend: null, notice: null, pulling: false, pullFailed: null, refused: null });
-    return new module.Overlay(map, (e: Event) => {
+    return new drawing.Overlay(map, (e: Event) => {
       switch (e.kind) {
         case "data":
           return update({ data: e.detail });

@@ -24,7 +24,7 @@ use sa_core::{
 	placement::{self, BILLED, Billed, Catalog, Definition, Gcid, NEED},
 	prices::{AdsRequest, DataForSeoTask, PlacementRequest, Spends},
 };
-use sa_panel::{areas::Shape, gmbs::GoogleCategory};
+use sa_panel::gmbs::GoogleCategory;
 use serde::Deserialize;
 
 use crate::{
@@ -144,7 +144,9 @@ async fn pull(
 		}
 		(status, need) => {
 			let refused = refused(res, "/studies/pull").await;
-			eyre::ensure!(need.is_none(), "placement answered the pull of {sha} {status} with {NEED}");
+			if need.is_some() {
+				return Err(eyre::eyre!("placement answered the pull of {sha} {status} with {NEED}").into());
+			}
 			held.paid(&billed, &sha, failed).await?;
 			Err(refused)
 		}
@@ -194,22 +196,13 @@ async fn define(s: &ApiState, caller: &Caller, at: StudyIn) -> ApiResult<Definit
 			})
 		}
 	};
-	let margin_m = area.margin_m as f64;
 	let def = Definition {
-		area: match area.shape {
-			Shape::City { viewport, .. } => placement::Area::City {
-				slug: area.slug,
-				country,
-				viewport,
-				margin_m,
-			},
-			Shape::Circle { radius_m } => placement::Area::Circle {
-				slug: area.slug,
-				country,
-				center: area.center,
-				radius_m: radius_m as f64,
-				margin_m,
-			},
+		area: placement::Area::Circle {
+			slug: area.slug,
+			country,
+			center: area.center,
+			radius_m: area.radius_m as f64,
+			margin_m: 0.,
 		},
 		category,
 	};
