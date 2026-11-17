@@ -37,6 +37,10 @@ use crate::{
 	signin::{self, Caller, Freshness, SignIn},
 };
 
+/// What the forward answers itself on a service's API, before the service or in its place: each
+/// forwarded operation's refusals beside the service's own.
+pub const REFUSALS: [Code; 6] = [Code::BadRequest, Code::Unauthenticated, Code::Csrf, Code::Unavailable, Code::BadGateway, Code::Internal];
+
 /// Longest prefixes first: the first match wins.
 const ROUTES: [Route; 8] = [
 	Route {

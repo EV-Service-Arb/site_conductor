@@ -14,14 +14,17 @@ pub struct User {
 	pub name: String,
 }
 
-/// Seen between `first` and `last`: the email and name kept are the latest seen.
+/// Seen between `first` and `last`: the email and name kept are the latest seen; `last_seen` moves
+/// by the day, so the gate's GetMe tells no change for a user it saw today.
 pub async fn seen(conn: &mut SqliteConnection, user: &User, first: Timestamp, last: Timestamp) -> eyre::Result<()> {
 	sqlx::query(
 		"INSERT INTO users (user_id, email, name, first_seen, last_seen) VALUES ($1, $2, $3, $4, $5) \
 		 ON CONFLICT (user_id) DO UPDATE SET \
 		 email = CASE WHEN excluded.last_seen >= last_seen THEN excluded.email ELSE email END, \
 		 name = CASE WHEN excluded.last_seen >= last_seen THEN excluded.name ELSE name END, \
-		 first_seen = min(first_seen, excluded.first_seen), last_seen = max(last_seen, excluded.last_seen)",
+		 first_seen = min(first_seen, excluded.first_seen), last_seen = max(last_seen, excluded.last_seen) \
+		 WHERE excluded.email IS NOT users.email OR excluded.name IS NOT users.name \
+		 OR excluded.first_seen < users.first_seen OR excluded.last_seen >= users.last_seen + 86400000000",
 	)
 	.bind(user.user_id)
 	.bind(&user.email)

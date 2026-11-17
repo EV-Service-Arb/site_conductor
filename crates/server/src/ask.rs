@@ -4,17 +4,12 @@
 //! proposed, never done: the user confirms it from the answer's actions. The turns are written
 //! through the chats' versioned store as the loop goes, each write told to the caller's screens.
 
-use std::collections::BTreeMap;
-
 use axum::{
 	Extension, Json,
 	extract::State,
 	http::{HeaderMap, StatusCode},
 };
-use ev_lib::api::{
-	Body, ErrorCode, Ids, JsonSchema, Refusal,
-	schemars::{generate::SchemaSettings, schema_for},
-};
+use ev_lib::api::{Body, ErrorCode, Ids, JsonSchema, Refusal};
 use jiff::Timestamp;
 use sa_core::{
 	prices::{ModelTokens, Spends},
@@ -43,8 +38,8 @@ leads, its reviews, tokens that pay for Google requests. You act for the person 
 \n\
 Tools: `search` finds the panel's operations by what they do (use it before `call`; an empty query lists them all); \
 `call` runs one by its id. An operation that destroys or spends is not run: it becomes a proposal the person confirms, \
-so say what it will do. `open` offers a view (a URL of this site) as a link; `run` offers a binding of the page's \
-keymap. The <page> block says what is open, the views there are, and the bindings bound now.\n\
+so say what it will do. `open` offers a view as a link; `run` offers a binding of the page's keymap. The <page> block \
+says what is open and the bindings bound now.\n\
 \n\
 Answer briefly, in the person's language. Formatting: **bold**, `- ` items, `@[label](location:<gbp id>)` to name a GBP.";
 
@@ -85,8 +80,6 @@ pub(crate) struct Question {
 	files: Vec<Attachment>,
 	/// The page the question is asked on: what is open.
 	url: String,
-	/// The views a person can be shown, by name: the page's route table.
-	views: BTreeMap<String, String>,
 	bindings: Vec<Bound>,
 }
 
@@ -165,7 +158,13 @@ pub(crate) async fn ask(
 
 	history.push(json!({ "role": "user", "content": question(&q) }));
 	let permissions = caller.permissions.clone();
-	let tools = tool_definitions(&state.tools.own(|p| p.is_none_or(|p| permissions.iter().any(|h| h == p))));
+	let tools: Vec<Value> = state
+		.tools
+		.definitions(|p| p.is_none_or(|p| permissions.iter().any(|h| h == p)), true)
+		.into_iter()
+		.map(|t| json!({ "name": t.name, "description": t.description, "input_schema": t.input }))
+		.collect();
+	let tools = Value::Array(tools);
 	let mut rounds = 0;
 	let end = loop {
 		rounds += 1;
@@ -357,41 +356,13 @@ fn conversation(turns: &[Turn]) -> Vec<Value> {
 fn question(q: &Question) -> String {
 	let mentions: Vec<String> = q.mentions.iter().map(|m| format!("@[{}](location:{})", m.label, m.id)).collect();
 	let bindings: Vec<String> = q.bindings.iter().map(|b| format!("- `{}` ({}): {}", b.id, b.sequence, b.label)).collect();
-	let views: Vec<String> = q.views.iter().map(|(name, path)| format!("- {name}: {path}")).collect();
 	format!(
-		"{}\n\n<page>\nOpen: {}\nAbout: {}\nViews:\n{}\nBindings:\n{}\n</page>",
+		"{}\n\n<page>\nOpen: {}\nAbout: {}\nBindings:\n{}\n</page>",
 		q.text,
 		q.url,
 		if mentions.is_empty() { "nothing named".to_owned() } else { mentions.join(", ") },
-		views.join("\n"),
 		bindings.join("\n")
 	)
-}
-
-fn tool_definitions(own: &[tools::Own]) -> Value {
-	let schema = |s: ev_lib::api::schemars::Schema| serde_json::to_value(s).expect("a schema serializes");
-	let call = SchemaSettings::draft07().into_generator().into_root_schema_for::<tools::Call>();
-	let mut tools = json!([
-		{ "name": "search", "description": "Finds the panel's operations matching what you need: their ids, parameters, body schemas and whether they destroy or spend.", "input_schema": schema(schema_for!(Search)) },
-		{ "name": "call", "description": "Runs one operation by its id, as the person asking. One that destroys or spends becomes a proposal they confirm.", "input_schema": schema(call) },
-		{ "name": "open", "description": "Offers a view as a link: a URL of this site, from the page's views.", "input_schema": { "type": "object", "properties": { "url": { "type": "string" }, "label": { "type": "string" } }, "required": ["url", "label"] } },
-		{ "name": "run", "description": "Offers a binding of the page's keymap, by its id, as a button.", "input_schema": { "type": "object", "properties": { "binding": { "type": "string" }, "label": { "type": "string" } }, "required": ["binding", "label"] } },
-	]);
-	let list = tools.as_array_mut().expect("a list");
-	list.extend(own.iter().map(|t| json!({ "name": t.name, "description": t.description, "input_schema": t.input })));
-	tools
-}
-
-#[derive(Deserialize)]
-struct Open {
-	url: String,
-	label: String,
-}
-
-#[derive(Deserialize)]
-struct Run {
-	binding: String,
-	label: String,
 }
 
 /// Runs one tool the model asked for: what it answers the model, and the step the person sees.
@@ -419,16 +390,18 @@ async fn use_tool(state: &ApiState, headers: &HeaderMap, permissions: &sa_auth::
 			};
 			call(state, headers, c, answer, action).await
 		}
-		Some("open") => match serde_json::from_value::<Open>(input.clone()) {
-			Ok(o) if o.url.starts_with('/') && !o.url.starts_with("//") => {
-				let step = format!("Linked {}", o.url);
-				answer.actions.push(action(&o.label, Target::Href(o.url)));
-				(json!({ "offered": "a link" }), step)
-			}
-			Ok(_) => (json!({ "error": "a URL of this site starts with one /" }), "Linked".to_owned()),
+		Some("open") => match serde_json::from_value::<tools::Open>(input.clone()) {
+			Ok(o) => match state.tools.open(&o, |p| p.is_none_or(|p| permissions.iter().any(|h| h == p))) {
+				Ok(href) => {
+					let step = format!("Linked {href}");
+					answer.actions.push(action(&o.label, Target::Href(href)));
+					(json!({ "offered": "a link" }), step)
+				}
+				Err(e) => (json!({ "error": e }), format!("Linked {}", o.view)),
+			},
 			Err(e) => (json!({ "error": e.to_string() }), "Linked".to_owned()),
 		},
-		Some("run") => match serde_json::from_value::<Run>(input.clone()) {
+		Some("run") => match serde_json::from_value::<tools::Run>(input.clone()) {
 			Ok(r) if q.bindings.iter().any(|b| b.id == r.binding) => {
 				let step = format!("Offered {}", r.binding);
 				answer.actions.push(action(&r.label, Target::Binding(r.binding)));

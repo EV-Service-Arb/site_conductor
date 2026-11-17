@@ -55,7 +55,9 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 			{ "type": "text", "text": "Reading your trades." },
 			tool_use("t2", "call", json!({ "operation": "trades" })),
 			tool_use("t3", "call", json!({ "operation": "delete_trade", "path": { "id": 7 } })),
-			tool_use("t4", "open", json!({ "url": "/trash", "label": "Open the trash" })),
+			tool_use("t4", "open", json!({ "view": "home", "params": { "trash": true }, "label": "Open the trash" })),
+			tool_use("t5", "open", json!({ "view": "admin_tokens", "params": {}, "label": "Everyone's tokens" })),
+			tool_use("t6", "open", json!({ "view": "home", "params": { "nope": 1 }, "label": "Somewhere" })),
 		] }),
 		json!({ "stop_reason": "end_turn", "content": [{ "type": "text", "text": "Confirm to delete it." }] }),
 	])
@@ -82,7 +84,7 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 	let year = Timestamp::now() + jiff::SignedDuration::from_hours(24 * 365);
 	p.set_claude(DevIdentity::named(email), "theirs", year, Timestamp::now()).await.unwrap();
 
-	let question = json!({ "from": 0, "text": "delete my trade 7", "mentions": [], "files": [], "url": "/", "views": { "trash": "/?trash" }, "bindings": [] });
+	let question = json!({ "from": 0, "text": "delete my trade 7", "mentions": [], "files": [], "url": "/", "bindings": [] });
 	let (status, _, answer) = b
 		.send_body(&app, Method::POST, &format!("/api/v1/assistant/chats/{chat}/ask"), &json, true, Body::from(question.to_string()))
 		.await;
@@ -99,8 +101,9 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 		json!({ "call": { "operation": "delete_trade", "path": { "id": 7 }, "query": null, "body": null } })
 	);
 	assert_eq!(said["actions"][0]["state"], "proposed");
-	assert_eq!(said["actions"][1]["target"], json!({ "href": "/trash" }));
-	assert_eq!(said["steps"].as_array().unwrap().len(), 4);
+	assert_eq!(said["actions"][1]["target"], json!({ "href": "/?trash=" }), "a view by its name, its href the table's");
+	assert_eq!(said["actions"].as_array().unwrap().len(), 2, "not a view the asker may not open, nor one of no such key");
+	assert_eq!(said["steps"].as_array().unwrap().len(), 6);
 	let used: Vec<(String, i64, i64)> = p
 		.used(Timestamp::from_second(0).unwrap(), Timestamp::now())
 		.await
@@ -122,6 +125,10 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 	let trades: Value = serde_json::from_str(results(2)[0]["content"].as_str().unwrap()).unwrap();
 	assert_eq!(trades, json!({ "trades": [] }), "read through the gate as the asker");
 	assert!(results(2)[1]["content"].as_str().unwrap().contains("proposed"));
+	assert!(results(2)[3]["content"].as_str().unwrap().contains("not the person's to open"), "{}", results(2)[3]);
+	assert!(results(2)[4]["content"].as_str().unwrap().contains("nope"), "{}", results(2)[4]);
+	let open = sent[0]["tools"].as_array().unwrap().iter().find(|t| t["name"] == "open").cloned().unwrap();
+	assert!(open["description"].as_str().unwrap().contains("- home (/)"), "the views are the tool's: {open}");
 	drop(sent);
 
 	let made = json!({ "name": "Plumbing" });
