@@ -99,14 +99,14 @@ async fn an_area_has_the_country_its_place_or_its_centre_lies_in() {
 			.await;
 		(status, serde_json::from_slice::<Value>(&bytes).unwrap_or(Value::Null))
 	};
-	let (status, city) = put("lyon", json!({ "kind": "city", "place_id": "ChIJlyonlyonlyonlyonly", "margin_m": 0 })).await;
-	assert_eq!((status, &city["country"]), (StatusCode::OK, &json!("FR")), "{city}");
-	let (status, circle) = put(
-		"berlin-5km",
-		json!({ "kind": "circle", "name": "Berlin", "lat": 52.52, "lng": 13.4, "radius_m": 5000, "margin_m": 0 }),
+	let (status, city) = put(
+		"lyon",
+		json!({ "name": "Lyon", "center": { "lat": 45.76, "lng": 4.84 }, "radius_m": 8000, "city": "ChIJlyonlyonlyonlyonly" }),
 	)
 	.await;
+	assert_eq!((status, &city["country"]), (StatusCode::OK, &json!("FR")), "{city}");
+	let (status, circle) = put("berlin-5km", json!({ "name": "Berlin", "center": { "lat": 52.52, "lng": 13.4 }, "radius_m": 5000, "city": null })).await;
 	assert_eq!((status, &circle["country"]), (StatusCode::OK, &json!("DE")), "{circle}");
-	let (status, sea) = put("sea", json!({ "kind": "circle", "name": "Sea", "lat": 0.0, "lng": 0.0, "radius_m": 5000, "margin_m": 0 })).await;
+	let (status, sea) = put("sea", json!({ "name": "Sea", "center": { "lat": 0.0, "lng": 0.0 }, "radius_m": 5000, "city": null })).await;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{sea}");
 }

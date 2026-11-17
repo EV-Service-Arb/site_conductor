@@ -48,7 +48,7 @@ export type Notice = Infer<typeof noticeParser> & { text: string };
 
 /** What gop builds and caches: the conductor's category applied to the conductor's area; no category, the area's grid alone. */
 type Definition = {
-  area: { slug: string; country: string; margin_m: number } & ({ kind: "city"; viewport: { south: number; west: number; north: number; east: number } } | { kind: "circle"; center: { lat: number; lng: number }; radius_m: number });
+  area: { kind: "circle"; slug: string; country: string; center: { lat: number; lng: number }; radius_m: number; margin_m: number };
   category: { trade: number; country: string; study: string; keywords: string[]; google_primary: { id: string; name: string }; google_additional: { id: string; name: string }[] } | null;
 };
 
@@ -283,6 +283,5 @@ function gridOnly(area: Area): Definition {
 }
 
 function framed(a: Area): Definition["area"] {
-  const base = { slug: a.slug, country: a.country, margin_m: a.margin_m };
-  return a.shape.kind === "city" ? { ...base, kind: "city", viewport: a.shape.viewport } : { ...base, kind: "circle", center: a.center, radius_m: a.shape.radius_m };
+  return { kind: "circle", slug: a.slug, country: a.country, center: a.center, radius_m: a.radius_m, margin_m: 0 };
 }

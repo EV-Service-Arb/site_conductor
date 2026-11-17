@@ -3,21 +3,13 @@
     "en": "Lowercase letters, digits, - and _; up to 64.",
     "t": "Строчные латинские буквы, цифры, - и _; до 64."
   },
-  "area.circle": {
-    "en": "A circle around the point",
-    "t": "Круг вокруг точки"
-  },
-  "area.itsCity": {
-    "en": "Its city · {name}",
-    "t": "Её город · {name}"
+  "area.centre": {
+    "en": "The area's centre: drag it",
+    "t": "Центр области: перетащите его"
   },
   "area.link": {
     "en": "its link",
     "t": "ссылка"
-  },
-  "area.margin": {
-    "en": "and next to it, within",
-    "t": "и рядом, в пределах"
   },
   "area.name": {
     "en": "its name",
@@ -27,21 +19,13 @@
     "en": "Chassieu",
     "t": "Chassieu"
   },
-  "area.noCity": {
-    "en": "No city there: a circle around the point.",
-    "t": "Там нет города: круг вокруг точки."
-  },
   "area.noneFound": {
     "en": "No city found.",
     "t": "Город не найден."
   },
   "area.orClick": {
-    "en": "or click the map: its city, else a circle around the point",
-    "t": "или щёлкните по карте: её город, иначе круг вокруг точки"
-  },
-  "area.picked": {
-    "en": "Picked on the map",
-    "t": "Выбрано на карте"
+    "en": "or click the map; drag the centre after",
+    "t": "или нажмите на карту; потом перетащите центр"
   },
   "area.radius": {
     "en": "radius",
@@ -79,10 +63,6 @@
     "en": "a circle of {radius}",
     "t": "круг {radius}"
   },
-  "kit.area.isCity": {
-    "en": "the city",
-    "t": "город"
-  },
   "kit.area.kit": {
     "en": "Review kit · {n} places",
     "t": "Набор для отзывов · мест: {n}"
@@ -91,13 +71,9 @@
     "en": "Review kit · a new area",
     "t": "Набор для отзывов · новая зона"
   },
-  "kit.area.nextToIt": {
-    "en": "Next to it",
-    "t": "Рядом"
-  },
   "kit.area.noGbps": {
-    "en": "None of your GBPs with a point is in it or next to it.",
-    "t": "Ни один ваш GBP с точкой не в ней и не рядом."
+    "en": "None of your GBPs with a point is in it.",
+    "t": "Ни одного вашего GBP с точкой в ней нет."
   },
   "kit.area.notFound": {
     "en": "No area is at /{slug}/.",
@@ -110,10 +86,6 @@
   "kit.area.scan": {
     "en": "Scan with your phone to take it out; signed-in only.",
     "t": "Отсканируйте телефоном, чтобы взять с собой; только после входа."
-  },
-  "kit.area.summary": {
-    "en": "{shape}, and {margin} around it",
-    "t": "{shape} и {margin} вокруг"
   },
   "kit.areas": {
     "en": "Areas",

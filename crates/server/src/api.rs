@@ -44,19 +44,6 @@ pub enum Code {
 	Conflict,
 	TooLarge,
 	TooMany,
-	/// A pull needs more than the balance affords.
-	Unaffordable,
-	/// The category names no placement trade to study it by.
-	NoStudy,
-	/// The category has no primary Google category.
-	NoGoogleCategory,
-	/// The category has no keyword.
-	NoKeywords,
-	/// The category is set up for another country than the area's.
-	AnotherCountry,
-	/// Nothing placement serves studies it: no such trade file, no base for the country, or the
-	/// trade refuses it.
-	Unstudied,
 	/// Not now: the message says until when.
 	Unavailable,
 	/// No browser provider is configured: no browser route answers anything else.
@@ -76,8 +63,6 @@ impl ErrorCode for Code {
 			Self::Conflict => StatusCode::CONFLICT,
 			Self::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
 			Self::TooMany => StatusCode::TOO_MANY_REQUESTS,
-			Self::Unaffordable => StatusCode::PAYMENT_REQUIRED,
-			Self::NoStudy | Self::NoGoogleCategory | Self::NoKeywords | Self::AnotherCountry | Self::Unstudied => StatusCode::UNPROCESSABLE_ENTITY,
 			Self::Unavailable | Self::BrowsersNotConnected => StatusCode::SERVICE_UNAVAILABLE,
 			Self::BadGateway => StatusCode::BAD_GATEWAY,
 			Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
@@ -231,7 +216,7 @@ pub(crate) struct AddSource {
 	#[schemars(with = "KeyedSourceKind")]
 	kind: SourceKind,
 	/// At least one.
-	brands: Vec<String>,
+	brands: BTreeSet<BrandId>,
 	/// A `site` key's landing, `https://<domain>[:port]`; no other kind has one.
 	#[schemars(pattern(sa_core::ids::SITE_ORIGIN_PATTERN))]
 	origin: Option<String>,
@@ -268,18 +253,17 @@ async fn add_source(State(panel): State<Panel>, Extension(caller): Extension<Cal
 	if !kind.keyed() {
 		return Err(Refusal::new(Code::BadRequest, format!("a key of kind {kind} is not issued: it is written without one")));
 	}
-	let brands = b.brands.iter().map(|b| BrandId::parse(b)).collect::<Result<BTreeSet<_>, _>>()?;
 	if !sa_core::ids::is_slug(&b.key_id) {
 		return Err(Refusal::new(Code::BadRequest, "key_id is a lowercase slug of 1–64 of [a-z0-9_-]"));
 	}
-	if brands.is_empty() {
+	if b.brands.is_empty() {
 		return Err(Refusal::new(Code::BadRequest, "a source writes for at least one brand"));
 	}
 	let origin = b.origin.as_deref().map(SiteOrigin::parse).transpose()?;
 	if origin.is_some() != (kind == SourceKind::Site) {
 		return Err(Refusal::new(Code::BadRequest, "a site key has an origin, and no other kind has one"));
 	}
-	let Some(added) = panel.add_source(&b.key_id, kind, brands, origin).await? else {
+	let Some(added) = panel.add_source(&b.key_id, kind, b.brands, origin).await? else {
 		return Err(Refusal::new(Code::Conflict, format!("a source {} exists already", b.key_id)));
 	};
 	tracing::info!(user_id = %caller.user_id, key_id = added.key_id, kind = %kind, "source added from the panel");

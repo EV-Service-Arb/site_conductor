@@ -6,6 +6,7 @@ import type { AssistantTurn, UserTurn } from "@/entities/assistant";
 import type { Chat, Question, Turn } from "@/shared/api/schema";
 import { api, ok } from "@/shared/api";
 import { type Carried, setCarried } from "@/shared/lib/location";
+import { DESKTOP_QUERY } from "@/shared/lib/use-media-query";
 
 /** `ask`: actions wait for a press; `act`: the first is taken at once, and can be undone. */
 export type Approval = "ask" | "act";
@@ -29,6 +30,8 @@ interface Prefs {
   approval: Approval;
   /** The last shown, which the toggle opens; the one open is `?assistant=`. */
   mode: Mode;
+  /** Folded by this browser's choice, which a page without `?assistant=` follows. */
+  folded: boolean;
   /** The chat in the sidebar or the floating window; `null` for a new one. */
   current: string | null;
   /** Something happened in a chat while folded. */
@@ -39,10 +42,10 @@ interface State extends Prefs {
   running: Running | null;
 }
 
-const KEY = "sa:assistant/3";
-const PREFS = ["width", "approval", "mode", "current", "unread"] as const satisfies readonly (keyof Prefs)[];
+const KEY = "sa:assistant/4";
+const PREFS = ["width", "approval", "mode", "folded", "current", "unread"] as const satisfies readonly (keyof Prefs)[];
 export const WIDTH = { min: 340, max: 760, initial: 420 } as const;
-const INITIAL: State = { width: WIDTH.initial, approval: "ask", mode: "sidebar", current: null, unread: false, running: null };
+const INITIAL: State = { width: WIDTH.initial, approval: "ask", mode: "sidebar", folded: false, current: null, unread: false, running: null };
 
 let state: State | null = null;
 const listeners = new Set<() => void>();
@@ -50,7 +53,8 @@ const listeners = new Set<() => void>();
 function current(): State {
   if (state === null) {
     const kept = localStorage.getItem(KEY);
-    state = kept === null ? INITIAL : { ...(JSON.parse(kept) as Prefs), running: null };
+    // on a phone it covers the page, so it waits to be asked for
+    state = kept === null ? { ...INITIAL, folded: !window.matchMedia(DESKTOP_QUERY).matches } : { ...(JSON.parse(kept) as Prefs), running: null };
   }
   return state;
 }
@@ -77,7 +81,13 @@ export const newId = () => crypto.randomUUID();
 /** The sidebar or the floating window, else (`null`) folded. */
 export function show(mode: Mode | null): void {
   setCarried({ assistant: mode ?? undefined });
-  if (mode !== null) set((s) => ({ ...s, mode, unread: false }));
+  set((s) => (mode === null ? { ...s, folded: true } : { ...s, mode, folded: false, unread: false }));
+}
+
+/** A page without `?assistant=` shows it as this browser last left it. */
+export function restore(): void {
+  const s = current();
+  setCarried((c) => (c.assistant === undefined && !s.folded ? { assistant: s.mode } : {}));
 }
 
 export function setWidth(width: number): void {

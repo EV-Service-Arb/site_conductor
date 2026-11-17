@@ -29,7 +29,7 @@ use crate::{
 	claude::{self, Model},
 	connected, connections,
 	execute::Sandbox,
-	forward::Forward,
+	forward::{Forward, Services},
 	gmbs,
 	grafana::Grafana,
 	ingest, kit,
@@ -141,7 +141,7 @@ pub fn app(
 		tools: tools.clone(),
 		sign_in: sign_in.clone(),
 		live: Live::new(sign_in.clone(), limits.live),
-		forward: forward.clone(),
+		sites: forward.as_ref().map(|f| f.services().clone()),
 		pages: pages.clone(),
 		web: web.cloned(),
 		probe: connected::probe_client(),
@@ -241,7 +241,7 @@ pub(crate) struct ApiState {
 	/// `/live`'s sockets.
 	pub(crate) live: Live,
 	/// With the forward configured.
-	pub(crate) forward: Option<Forward>,
+	pub(crate) sites: Option<Services>,
 	/// What the Connected sites page asks the landings with.
 	pub(crate) probe: reqwest::Client,
 	/// With `TELEGRAM_BOT_TOKEN`.

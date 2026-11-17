@@ -37,7 +37,7 @@ async fn list() -> Json<String> {
 #[test]
 fn a_tool_is_marked_and_nothing_else_is() {
 	let routes = [Route::new(Method::GET, "/search", Open, search), Route::new(Method::GET, "/list", Open, list)];
-	let doc = document("t", "1", "/", &routes, &[("agent::search", "Finds."), ("agent::list", "Lists.")], None);
+	let doc = document("t", "1", "/", &routes, &[("it::agent::search", "Finds."), ("it::agent::list", "Lists.")], None);
 	let marked: Vec<_> = doc.operations().map(|(path, _, op)| (path.to_owned(), op.extensions.get("x-tool").cloned())).collect();
 	assert_eq!(marked, [("/list".to_owned(), None), ("/search".to_owned(), Some(serde_json::Value::Bool(true)))]);
 }

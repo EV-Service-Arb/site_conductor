@@ -212,8 +212,6 @@ second block below to it.
 /api/review_archive/*            → review_archive /*            session + User; CSRF on writes
 /mfe/review_archive/*            → review_archive /mfe/*        open: the dashboard's bundle
 /api/playbook/*                  → playbook /*                  session + User; CSRF on writes
-/api/placement/*                 → placement /*                 session + User; CSRF on writes
-/mfe/placement/*                 → placement /mfe/*             open: the map overlay's module
 ```
 
 ```text
@@ -223,8 +221,6 @@ second block below to it.
 /api/review_archive       public
 /mfe/review_archive       public
 /api/playbook             public
-/api/placement            public
-/mfe/placement            public
 /api                      public                  the conductor's own, and nothing else's
 /api/v1                   public
 /api/queries_cache        public, rate-limited    open to everyone
@@ -290,18 +286,8 @@ second block below to it.
   `PANEL_SITES_URL` (all four, or none), nothing is forwarded, nothing ingested, the hubs hear
   nothing of sites, and review_archive is neither followed nor told.
 - **Placement** (`PANEL_PLACEMENT_URL`, optional, needs the four) is gmaps_optimal_placement's
-  `serve --behind-conductor`. The home map imports its `/mfe/placement/overlay.js` once per page
-  session and hands it the map: the heat, the pressure field and the competitors are its drawing,
-  the model's wasm shipped with the payload it reads. Only a pull spends (Pull latest,
-  `sa:placement:study:spend`): the forward knows one by placement's document in the catalog, not
-  by its path, and buys the Places searches it lacks at the puller's tokens (Tokens and GBPs).
-  A study's definition (`sa_core::placement::Definition`) is the conductor's: `POST
-  /api/v1/areas/{slug}/studies` builds it from the area and one of the caller's categories (or
-  none: the grid alone), PUTs it at placement as the caller under its id, and hands the browser
-  only that id, which the overlay shows. A category without a study, a Google category or a
-  keyword, or set up for another country, is refused by that word; placement's `unstudied` comes
-  back as it is. Unset, `/api/placement` answers 503 and the map says placement is not
-  connected.
+  `serve --behind-conductor`, reached by the conductor's own operations only: nothing of it is
+  forwarded.
 
 ## Browsers
 
@@ -539,7 +525,6 @@ GET    /kit/areas/{slug}/gmbs
 GET    /areas
 GET    /areas/{slug}
 PUT    /areas/{slug}
-POST   /areas/{slug}/studies                placement:study:read
 GET    /kit/cities
 GET    /kit/cities/{place_id}
 GET    /kit/locality
@@ -735,19 +720,7 @@ nothing. The operator's `locate` tries the gmail's keys, then the house pays.
 review_archive's lookups are the house's for now.
 
 **A study's pull is sold per search** (`placement.search`), and per Ads request and DataForSEO
-task it buys, charged by the forward, under the same lock; refused while any of them is unpriced:
-
-```text
-a pull: placement's operation (its pulled document) whose x-spends names a sold item of scope Placement
-  ─ price set, budget = balance ÷ price ─▶ placement, its {sha}, ?budget=<n>
-  ├─ the sweep needs more than n: 402 unaffordable, nothing bought ─▶ the person told so, with their balance
-  └─ x-billed: {item: count} on any answer, places.search ≤ n ─▶ the ledger: the searches × price, the
-                    Ads and DataForSEO ones × theirs up to what the balance has left; a pull that failed
-                    owes it all back, as a failed walk does: the failure is the house's
-```
-
-Until the catalog holds placement's document, nothing signed in passes to placement (503): a pull
-would reach it with the caller's own budget.
+task it buys; refused while any of them is unpriced.
 
 A person's front end reads the prices with their balance, and an action costing more than
 their `confirm_above` (100 unsaid) asks them first.
@@ -955,8 +928,8 @@ photos saved  → a use (photo, g), once
   download works.
 - **Photos** are re-encoded on the way in (JPEG, ≤ 2048 px, upright, no EXIF): what a reviewer
   saves carries nothing of where it was taken.
-- **Areas** are geography, everyone's, and carry their country (ISO 3166-1 alpha-2, Places'): a city (Google's locality: inside its viewport is in) or a
-  circle, and a margin around it that is "next to it". `/<slug>/` is the kit's page when the slug is
+- **Areas** are geography, everyone's, and carry their country (ISO 3166-1 alpha-2, Places'): a circle
+  around a centre, and the locality it was drawn from, if any, an outline to see it by. `/<slug>/` is the kit's page when the slug is
   an area's; a slug never takes a path of the conductor's own (the front end's directories, the
   reserved and forwarded prefixes).
 

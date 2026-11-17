@@ -6,12 +6,12 @@ use sa_core::{
 	gbp::Country,
 	prices::{PlacesRequest, Spender},
 };
-use sa_places::{LatLng, Locality, Suggestion, Viewport};
+use sa_places::{LatLng, Locality, Suggestion};
 use uuid::Uuid;
 
 use crate::{Panel, Refused, store::areas as db};
 
-/// A place on the map, everyone's: the kit's `/<slug>/` lists a caller's GBPs in it and next to it, a study's frame.
+/// A circle on the map, everyone's: the kit's `/<slug>/` lists a caller's GBPs in it, a study's frame.
 #[derive(Clone, Debug)]
 pub struct Area {
 	pub slug: String,
@@ -19,30 +19,20 @@ pub struct Area {
 	/// ISO 3166-1 alpha-2.
 	pub country: String,
 	pub center: LatLng,
-	pub shape: Shape,
-	/// How far outside it a GBP is still next to it.
-	pub margin_m: i64,
+	pub radius_m: i64,
+	/// The locality's place it was drawn from: an outline to see it by, not its edge.
+	pub city: Option<String>,
 	pub created_by: Uuid,
 	pub created_at: Timestamp,
 }
 
+/// An area as asked for.
 #[derive(Clone, Debug)]
-pub enum Shape {
-	/// Google's locality: inside its viewport is in.
-	City {
-		place_id: String,
-		viewport: Viewport,
-	},
-	Circle {
-		radius_m: i64,
-	},
-}
-
-/// An area as asked for: a city by its place, or a circle drawn by hand.
-#[derive(Clone, Debug)]
-pub enum NewArea {
-	City { place_id: String, margin_m: i64 },
-	Circle { name: String, center: LatLng, radius_m: i64, margin_m: i64 },
+pub struct NewArea {
+	pub name: String,
+	pub center: LatLng,
+	pub radius_m: i64,
+	pub city: Option<String>,
 }
 
 impl Panel {
@@ -54,50 +44,35 @@ impl Panel {
 		db::areas(&mut *self.store.pool().acquire().await.wrap_err("a connection for areas")?).await
 	}
 
-	/// Area `slug` drawn as `new` asks, over what it was if `user` drew it; a city's viewport and
-	/// country asked of Places for them, a circle's country too.
+	/// Area `slug` drawn as `new` asks, over what it was if `user` drew it; its country its city's
+	/// (Places), else its centre's.
 	pub async fn put_area(&self, by: Spender<PlacesRequest>, slug: &str, new: NewArea, now: Timestamp) -> eyre::Result<Result<Area, Refused>> {
 		let user = by.user();
 		if !sa_core::ids::is_slug(slug) || slug.contains('_') {
 			return Ok(Err(Refused::Invalid(format!("{slug:?}: an area's link is lowercase letters, digits and dashes"))));
 		}
-		let (name, country, center, shape, margin_m) = match new {
-			NewArea::City { place_id, margin_m } => {
-				let l = match self.locality(by, &place_id).await? {
-					Ok(l) => l,
-					Err(e) => return Ok(Err(e)),
-				};
-				(
-					l.name,
-					l.country,
-					l.location,
-					Shape::City {
-						place_id: l.place_id,
-						viewport: l.viewport,
-					},
-					margin_m,
-				)
-			}
-			NewArea::Circle { name, center, radius_m, margin_m } => {
-				let Some(name) = Some(name.trim().to_owned()).filter(|n| !n.is_empty()) else {
-					return Ok(Err(Refused::Invalid("an area has a name".to_owned())));
-				};
-				if !(1..=100_000).contains(&radius_m) {
-					return Ok(Err(Refused::Invalid("a circle's radius is 1 m to 100 km".to_owned())));
-				}
+		let NewArea { name, center, radius_m, city } = new;
+		let Some(name) = Some(name.trim().to_owned()).filter(|n| !n.is_empty()) else {
+			return Ok(Err(Refused::Invalid("an area has a name".to_owned())));
+		};
+		if !(1..=100_000).contains(&radius_m) {
+			return Ok(Err(Refused::Invalid("an area's radius is 1 m to 100 km".to_owned())));
+		}
+		let country = match &city {
+			Some(place_id) => match self.locality(by, place_id).await? {
+				Ok(l) => l.country,
+				Err(e) => return Ok(Err(e)),
+			},
+			None => {
 				let purse = self.purse(by);
 				let payer = self.payer(by.user(), None, Some(&purse)).await?;
-				let country = match self.google.country_at(center, &payer).await {
+				match self.google.country_at(center, &payer).await {
 					Ok(Some(c)) => c,
-					Ok(None) => return Ok(Err(Refused::Invalid("a circle's centre is in a country".to_owned()))),
+					Ok(None) => return Ok(Err(Refused::Invalid("an area's centre is in a country".to_owned()))),
 					Err(e) => return Ok(Err(crate::gmbs::places_error(e)?)),
-				};
-				(name, country, center, Shape::Circle { radius_m }, margin_m)
+				}
 			}
 		};
-		if !(0..=50_000).contains(&margin_m) {
-			return Ok(Err(Refused::Invalid("the margin is 0 to 50 km".to_owned())));
-		}
 		let mut tx = self.store.begin_write().await?;
 		if let Some(was) = db::area(&mut tx, slug).await?
 			&& was.created_by != user
@@ -109,8 +84,8 @@ impl Panel {
 			name,
 			country,
 			center,
-			shape,
-			margin_m,
+			radius_m,
+			city,
 			created_by: user,
 			created_at: now,
 		};

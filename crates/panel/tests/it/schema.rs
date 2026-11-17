@@ -321,7 +321,7 @@ async fn the_sites_tables_go_and_sent_buttons_name_their_calls() {
 			.unwrap()
 	};
 	let before = buttons().await;
-	sqlx::raw_sql(include_str!("../migrations/20261117090000_buttons_by_operation.up.sql"))
+	sqlx::raw_sql(include_str!("../../migrations/20261117090000_buttons_by_operation.up.sql"))
 		.execute(&pool)
 		.await
 		.unwrap();
@@ -336,7 +336,7 @@ async fn the_sites_tables_go_and_sent_buttons_name_their_calls() {
 		],
 		"a button names its operation and that path's parameters"
 	);
-	sqlx::raw_sql(include_str!("../migrations/20261117090000_buttons_by_operation.down.sql"))
+	sqlx::raw_sql(include_str!("../../migrations/20261117090000_buttons_by_operation.down.sql"))
 		.execute(&pool)
 		.await
 		.unwrap();

@@ -4,7 +4,7 @@ import { Button, Skeleton, buttonVariants, toast } from "@evinvest/uikit";
 import { href } from "@evinvest/views";
 import { Copy, ExternalLink, Plus, QrCode, X } from "lucide-react";
 
-import { AreaDraw, TARGET_NAME, kit, open, openKit, outlineOf, useGmails, useOutline, windowKeys } from "@/entities/gmb";
+import { AreaDraw, TARGET_NAME, kit, open, openKit, useGmails, useOutline, windowKeys } from "@/entities/gmb";
 import { api } from "@/shared/api";
 import type { KitNearby } from "@/shared/api/schema";
 import { VIEWS } from "@/shared/api/views";
@@ -79,7 +79,7 @@ function Area({ map, slug }: { map: google.maps.Map; slug: string }) {
   const button = useButtonSize();
   const res = useResource(api, "/kit/areas/{slug}/gmbs", { params: { path: { slug } } });
   const area = res.status === "ok" ? res.data.area : null;
-  useOutline(map, area === null ? null : outlineOf(area), beside());
+  useOutline(map, area, beside());
   if (res.status === "loading") return <Skeleton className="m-4 h-64" />;
   if (res.status === "error")
     return (
@@ -92,22 +92,18 @@ function Area({ map, slug }: { map: google.maps.Map; slug: string }) {
   const a = res.data.area;
   const page = href(VIEWS, { view: "area", params: { area: a.slug } });
   const link = `${window.location.origin}${page}`;
-  const inside = gmbs.filter((g) => g.inside);
-  const near = gmbs.filter((g) => !g.inside);
-  const shape = a.shape.kind === "city" ? t(kit.area.isCity, "the city") : t(kit.area.isCircle, "a circle of {radius}", { radius: formatDistance(a.shape.radius_m, locale) });
   return (
     <div className="flex flex-col gap-4 p-4">
       <div className="flex flex-col gap-0.5">
         <p className="text-lg font-semibold text-ink">{a.name}</p>
-        <p className="text-sm text-ink-soft">{a.margin_m > 0 ? t(kit.area.summary, "{shape}, and {margin} around it", { shape, margin: formatDistance(a.margin_m, locale) }) : shape}</p>
+        <p className="text-sm text-ink-soft">{t(kit.area.isCircle, "a circle of {radius}", { radius: formatDistance(a.radius_m, locale) })}</p>
       </div>
-      <Group title={t(kit.area.inIt, "In it")} gmbs={inside} locale={locale} />
-      <Group title={t(kit.area.nextToIt, "Next to it")} gmbs={near} locale={locale} />
-      {gmbs.length === 0 && <p className="text-sm text-ink-soft">{t(kit.area.noGbps, "None of your GBPs with a point is in it or next to it.")}</p>}
+      <Group title={t(kit.area.inIt, "In it")} gmbs={gmbs} locale={locale} />
+      {gmbs.length === 0 && <p className="text-sm text-ink-soft">{t(kit.area.noGbps, "None of your GBPs with a point is in it.")}</p>}
       <div className="flex items-center gap-3 rounded-lg border border-border p-3">
         <Qr text={link} className="size-24 shrink-0 rounded p-1" />
         <div className="flex min-w-0 flex-col gap-1">
-          <p className="text-sm font-medium text-ink">{t(kit.area.kit, "Review kit · {n} places", { n: inside.length + near.length })}</p>
+          <p className="text-sm font-medium text-ink">{t(kit.area.kit, "Review kit · {n} places", { n: gmbs.length })}</p>
           <p className="truncate font-mono text-xs text-ink-soft">{link}</p>
           <p className="text-xs text-ink-soft">{t(kit.area.scan, "Scan with your phone to take it out; signed-in only.")}</p>
         </div>

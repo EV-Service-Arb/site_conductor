@@ -3,7 +3,7 @@ export const VIEWS = {
   "carried": {
     "properties": {
       "assistant": {
-        "description": "Where the assistant is shown; folded without it.",
+        "description": "Where the assistant is shown; without it, as this browser last left it.",
         "enum": [
           "sidebar",
           "floating",

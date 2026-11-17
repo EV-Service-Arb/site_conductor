@@ -112,7 +112,7 @@ pub struct Outline {
 	find: Option<String>,
 	/// The GBPs needing this, first.
 	issue: Option<Issue>,
-	/// Where the assistant is shown; folded without it.
+	/// Where the assistant is shown; without it, as this browser last left it.
 	assistant: Option<Mode>,
 }
 

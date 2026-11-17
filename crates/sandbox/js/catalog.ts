@@ -399,33 +399,11 @@ export interface paths {
         /** The area at `/<slug>/`. */
         get: operations["area"];
         /**
-         * Draws the area at `/<slug>/`: a city (its outline and country asked of Places, paid by the caller) or a circle (its centre's country reverse-geocoded), with a margin around it that is "next to it"; over what it was if the caller drew it.
+         * Draws the area at `/<slug>/`, a circle; its country its city's, else its centre's (Places, paid by the caller); over what it was if the caller drew it.
          * @description 400 a link the conductor's own pages hold, or a centre in no country; 409 someone else's area.
          */
         put: operations["put_area"];
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/areas/{slug}/studies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Defines placement's study of the area at `/<slug>/` under one of the caller's categories, or of the area alone; buys nothing.
-         * @description 404 no such area or category of the caller's; 422 a category not set up to be studied
-         *     (`no_study`, `no_google_category`, `no_keywords`), set up for `another_country`, or one
-         *     placement does not study (`unstudied`); 503 placement not connected.
-         */
-        post: operations["define_study"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1821,71 +1799,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/placement/studies/{sha}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * A study's payload.
-         * @description Built on the first read and kept; never spends. A study whose answers are not all in the work
-         *     dir opens on what it holds, and its notice says how many are missing.
-         */
-        get: operations["placement.study"];
-        /**
-         * Defines a study.
-         * @description Refused unless `sha` is the definition's id and the definition holds: its trade is served, its
-         *     country has a base, the trade takes it. Buys nothing.
-         */
-        put: operations["placement.define"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/placement/studies/{sha}/pull": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Builds a study again, buying at most `budget` Places searches.
-         * @description Refused `unaffordable` before the first search when the sweep counts past the budget, and
-         *     stopped with it when it outgrows its count. Every answer carries `x-billed`, the searches it
-         *     bought. After a pull that did not end whole, re-asks only what was written before that one began.
-         */
-        post: operations["placement.pull"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/placement/trades.json": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** What a category may be studied by, and where: the trade files and the country bases served. */
-        get: operations["placement.trades"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/playbook/guide": {
         parameters: {
             query?: never;
@@ -3152,7 +3065,7 @@ export interface components {
         };
         AddSource: {
             /** @description At least one. */
-            brands: string[];
+            brands: components["schemas"]["BrandId"][];
             /** @description A lowercase slug of 1–64 of `[a-z0-9_-]`, never reused. */
             key_id: string;
             kind: components["schemas"]["KeyedSourceKind"];
@@ -3179,24 +3092,14 @@ export interface components {
         AnswerState: "working" | "writing" | "done" | "stopped";
         Area: {
             center: components["schemas"]["LatLng"];
+            /** @description The locality's place it was drawn from: an outline to see it by, not its edge. */
+            city: string | null;
             /** @description ISO 3166-1 alpha-2. */
             country: string;
-            /** Format: int64 */
-            margin_m: number;
             name: string;
-            shape: components["schemas"]["AreaShape"];
-            slug: string;
-        };
-        AreaShape: {
-            /** @constant */
-            kind: "city";
-            place_id: string;
-            viewport: components["schemas"]["Viewport"];
-        } | {
-            /** @constant */
-            kind: "circle";
             /** Format: int64 */
             radius_m: number;
+            slug: string;
         };
         Areas: {
             areas: components["schemas"]["Area"][];
@@ -3255,6 +3158,11 @@ export interface components {
             /** @description Its keys, as the keycaps read. */
             sequence: string;
         };
+        /**
+         * @description A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.
+         * @example aquafix
+         */
+        BrandId: string;
         BrandReads: {
             /** Format: date-time */
             experiments: string | null;
@@ -3330,12 +3238,6 @@ export interface components {
             lang: string;
             /** @description Placement's trade that studies it. */
             study: string | null;
-        };
-        /** @description A trade of the caller's, as set up for a country. */
-        CategoryIn: {
-            country: components["schemas"]["Country"];
-            /** Format: int64 */
-            trade: number;
         };
         /** @description A chat, whole. */
         Chat: {
@@ -3485,7 +3387,7 @@ export interface components {
          * @description Which refusal, for a client to act on: its status follows from it.
          * @enum {string}
          */
-        ErrorCode: "another_country" | "bad_gateway" | "bad_request" | "browsers_not_connected" | "conflict" | "csrf" | "forbidden" | "internal" | "no_google_category" | "no_keywords" | "no_study" | "not_found" | "too_large" | "too_many" | "unaffordable" | "unauthenticated" | "unavailable" | "unstudied";
+        ErrorCode: "bad_gateway" | "bad_request" | "browsers_not_connected" | "conflict" | "csrf" | "forbidden" | "internal" | "not_found" | "too_large" | "too_many" | "unauthenticated" | "unavailable";
         /** @description Where a gmail's proxy comes out, at its last check. */
         Exit: {
             city: string;
@@ -3821,8 +3723,6 @@ export interface components {
             distance_m: number;
             /** Format: int64 */
             id: number;
-            /** @description `false`: within the margin outside it. */
-            inside: boolean;
             last_shown: string | null;
             location: components["schemas"]["LatLng"];
             name: string;
@@ -4271,20 +4171,9 @@ export interface components {
          */
         Provider: "multilogin" | "multilogin_browser" | "gologin";
         PutArea: {
-            /** @constant */
-            kind: "city";
-            /** Format: int64 */
-            margin_m: number;
-            place_id: string;
-        } | {
-            /** @constant */
-            kind: "circle";
-            /** Format: double */
-            lat: number;
-            /** Format: double */
-            lng: number;
-            /** Format: int64 */
-            margin_m: number;
+            center: components["schemas"]["LatLng"];
+            /** @description A locality's place id, from `/kit/cities`. */
+            city?: string | null;
             name: string;
             /** Format: int64 */
             radius_m: number;
@@ -4716,14 +4605,6 @@ export interface components {
          * @enum {string}
          */
         Stop: "at_free" | "never";
-        Study: {
-            /** @description The definition's id at placement: what its overlay shows. */
-            sha: string;
-        };
-        StudyOf: {
-            /** @description One of the caller's; none: the area's grid alone, nothing billed. */
-            category?: components["schemas"]["CategoryIn"] | null;
-        };
         /** @description A place what is being typed may be heading for. */
         Suggestion: {
             /** @description Its name, or the address's first line. */
@@ -5032,234 +4913,6 @@ export interface components {
          */
         Vendor: "google";
         Viewport: {
-            /** Format: double */
-            east: number;
-            /** Format: double */
-            north: number;
-            /** Format: double */
-            south: number;
-            /** Format: double */
-            west: number;
-        };
-        /**
-         * @description An area as the conductor keeps it: a city's viewport or a circle, and a margin around it that
-         *     is still "next to it".
-         */
-        "placement.Area": {
-            country: components["schemas"]["placement.Country"];
-            /** @constant */
-            kind: "city";
-            /** Format: double */
-            margin_m: number;
-            slug: string;
-            viewport: components["schemas"]["placement.Viewport"];
-        } | {
-            center: components["schemas"]["placement.LatLng"];
-            country: components["schemas"]["placement.Country"];
-            /** @constant */
-            kind: "circle";
-            /** Format: double */
-            margin_m: number;
-            /** Format: double */
-            radius_m: number;
-            slug: string;
-        };
-        /**
-         * @description An address the study is actually about. The usual question is "is *this* one good", not only
-         *     "where is best".
-         */
-        "placement.Candidate": {
-            /** @description [lat, lon] */
-            at: number[];
-            name: string;
-        };
-        /**
-         * @description A trade set up for a country. `study` names the placement trade that carries what only an
-         *     expert writes: the demand model, the tier vocabulary, λ.
-         */
-        "placement.Category": {
-            country: components["schemas"]["placement.Country"];
-            google_additional: components["schemas"]["placement.Gcid"][];
-            google_primary: components["schemas"]["placement.Gcid"];
-            /** @description [`keywords`]' form. */
-            keywords: string[];
-            study: string;
-            /** Format: uint64 */
-            trade: number;
-        };
-        /**
-         * @description ISO 3166-1 alpha-2, of the countries GBPs are in.
-         * @enum {string}
-         */
-        "placement.Country": "FR" | "US" | "CA" | "GB";
-        "placement.Definition": {
-            area: components["schemas"]["placement.Area"];
-            /** @description None is the area on its own: the grid's layers, and not one billed call. */
-            category?: components["schemas"]["placement.Category"] | null;
-        };
-        /** @description Why the request was refused. */
-        "placement.Error": {
-            code: components["schemas"]["placement.ErrorCode"];
-            /** @description For a person. */
-            error: string;
-        };
-        /**
-         * @description Which refusal, for a client to act on: its status follows from it.
-         * @enum {string}
-         */
-        "placement.ErrorCode": "bad_request" | "forbidden" | "internal" | "not_found" | "too_large" | "unaffordable" | "unauthenticated" | "unstudied" | "csrf" | "unavailable" | "bad_gateway" | "conflict";
-        /** @description One of Google's Business Profile categories, named in the country's language. */
-        "placement.Gcid": {
-            id: string;
-            name: string;
-        };
-        "placement.LatLng": {
-            /** Format: double */
-            lat: number;
-            /** Format: double */
-            lng: number;
-        };
-        "placement.LayerOut": {
-            name: string;
-            note: string;
-            scale: components["schemas"]["placement.Scale"];
-            values: number[];
-        };
-        "placement.Notice": {
-            /**
-             * Format: uint
-             * @description Searches the work dir is missing and nobody bought — at least this many. Set when that is
-             *     the reason.
-             */
-            missing: number | null;
-            text: string;
-        };
-        "placement.Payload": {
-            candidates: components["schemas"]["placement.Candidate"][];
-            center: number[];
-            imputed: number[];
-            layers: components["schemas"]["placement.LayerOut"][];
-            name: string;
-            /**
-             * @description Why the map is less than what was asked for — a spent day of Places quota, or searches the
-             *     work dir does not hold and this build would not buy.
-             * @default null
-             */
-            notice: components["schemas"]["placement.Notice"] | null;
-            place: string[];
-            /** @description 8 numbers per cell: (lon, lat) SW, SE, NE, NW. */
-            ring: number[];
-            /**
-             * @description Absent when a location was opened without one. Everything above is the location's, comes out
-             *     of the statistical archive, and costs nothing to ask for.
-             */
-            trade: components["schemas"]["placement.Trade"] | null;
-            /** Format: uint8 */
-            zoom: number;
-        };
-        /** @description Whoever is already selling the service. The inventory that produces one is `gmaps_optimal_placement_sources`. */
-        "placement.PoiOut": {
-            addr: string;
-            /**
-             * Format: uint64
-             * @description Unix seconds the freshest answer naming it was written. Provenance, like `imputed`: nothing is
-             *     evicted, so without it a map drawn from two-year-old competitors looks like one drawn this morning.
-             */
-            fetched_s: number;
-            id: string;
-            kind: string;
-            kind_label: string;
-            /** Format: double */
-            lat: number;
-            /** Format: double */
-            lng: number;
-            /** Format: double */
-            n_rev: number;
-            name: string;
-            /** Format: double */
-            rating: number | null;
-            /**
-             * @description What the probe saw of this business from each of `Payload::nodes`, and nothing modelled: a
-             *     competitor's real reach is lumpy and one radial decay cannot say so. Empty alongside `nodes`.
-             */
-            seen: number[];
-            tel: string;
-            tier: string;
-            /**
-             * Format: double
-             * @description How much this one counts, from `rank`, normalised so the median of its tier is 1.
-             */
-            w: number;
-            web: string;
-        };
-        "placement.QueryOut": {
-            /**
-             * Format: uint
-             * @description Distinct competitors on the map it returned, over every tile. The queries overlap by design.
-             */
-            hits: number;
-            text: string;
-        };
-        /**
-         * @description - `percentile`: Rank, not magnitude — these quantities are heavy-tailed and a linear ramp shows one hot pixel.
-         * @enum {string}
-         */
-        "placement.Scale": "linear" | "percentile";
-        /** @description What a category may be studied by, and where. */
-        "placement.Served": {
-            /** @description The countries a base is served for. */
-            countries: components["schemas"]["placement.Country"][];
-            /** @description The trade files a category's `study` names one of. */
-            trades: string[];
-        };
-        "placement.TermOut": {
-            text: string;
-            /** Format: double */
-            weight: number;
-        };
-        "placement.TierOut": {
-            name: string;
-            /** Format: double */
-            weight: number;
-        };
-        /**
-         * @description The half of a payload a trade decides, and the whole of the half that is billed. One `Option`
-         *     rather than eight, because a demand surface with no competitors under it is not a state this
-         *     tool has anything to say about.
-         */
-        "placement.Trade": {
-            demand: number[];
-            /** @description The demand expression itself — the map has no other honest caption for it. */
-            demand_note: string;
-            /**
-             * Format: double
-             * @description Catchment decay, metres. The map's opening slider position.
-             */
-            lambda_m: number;
-            /**
-             * @description Where the probe stood, in the order `PoiOut::seen` is indexed by. Empty until a study has been
-             *     probed, which is what decides whether the map offers an observed coverage layer at all.
-             */
-            nodes: number[][];
-            pois: components["schemas"]["placement.PoiOut"][];
-            /** @description The inventory sweep's queries, most competitors on this map first. */
-            queries: components["schemas"]["placement.QueryOut"][];
-            /**
-             * Format: uint
-             * @description Places searches the inventory sweep was answered with — what re-asking it buys again.
-             */
-            searches: number;
-            /**
-             * @description The category's keywords and what each is worth: its search volume over the largest. `w` is
-             *     already scored against them; the what-if needs them because the business it scores does not
-             *     exist yet.
-             */
-            terms: components["schemas"]["placement.TermOut"][];
-            tiers: components["schemas"]["placement.TierOut"][];
-            /** @description Keywords the volume provider has no data for, so they weigh nothing and are left out. */
-            unweighted: string[];
-        };
-        "placement.Viewport": {
             /** Format: double */
             east: number;
             /** Format: double */
@@ -6351,7 +6004,7 @@ export interface components {
              * Format: int64
              * @description Required: `null` unlinks.
              */
-            gmb_id: number;
+            gmb_id: number | null;
         };
         /** @description A GMB's place and how its leads stand. */
         "sites.GmbPlace": {
@@ -7036,7 +6689,7 @@ export interface components {
              * @description Required: taking a brand's prices off its sites over a version the editor did not see is
              *     not something to do by default. Null for pricing never set.
              */
-            expected_updated_at: string;
+            expected_updated_at: string | null;
         };
         "sites.RevertPlaceSettings": {
             /**
@@ -7158,7 +6811,6 @@ export type Advance = components['schemas']['Advance'];
 export type Alerts = components['schemas']['Alerts'];
 export type AnswerState = components['schemas']['AnswerState'];
 export type Area = components['schemas']['Area'];
-export type AreaShape = components['schemas']['AreaShape'];
 export type Areas = components['schemas']['Areas'];
 export type Ask = components['schemas']['Ask'];
 export type Attachment = components['schemas']['Attachment'];
@@ -7167,13 +6819,13 @@ export type Balance = components['schemas']['Balance'];
 export type BalanceChange = components['schemas']['BalanceChange'];
 export type Bill = components['schemas']['Bill'];
 export type Bound = components['schemas']['Bound'];
+export type BrandId = components['schemas']['BrandId'];
 export type BrandReads = components['schemas']['BrandReads'];
 export type Browser = components['schemas']['Browser'];
 export type CallInput = components['schemas']['CallInput'];
 export type Caller = components['schemas']['Caller'];
 export type Candidates = components['schemas']['Candidates'];
 export type Category = components['schemas']['Category'];
-export type CategoryIn = components['schemas']['CategoryIn'];
 export type Chat = components['schemas']['Chat'];
 export type ChatSummary = components['schemas']['ChatSummary'];
 export type Chats = components['schemas']['Chats'];
@@ -7315,8 +6967,6 @@ export type StartBrowser = components['schemas']['StartBrowser'];
 export type State = components['schemas']['State'];
 export type Step = components['schemas']['Step'];
 export type Stop = components['schemas']['Stop'];
-export type Study = components['schemas']['Study'];
-export type StudyOf = components['schemas']['StudyOf'];
 export type Suggestion = components['schemas']['Suggestion'];
 export type Suggestions = components['schemas']['Suggestions'];
 export type Switch = components['schemas']['Switch'];
@@ -7343,26 +6993,6 @@ export type Usage = components['schemas']['Usage'];
 export type UsageDay = components['schemas']['UsageDay'];
 export type Vendor = components['schemas']['Vendor'];
 export type Viewport = components['schemas']['Viewport'];
-export type PlacementArea = components['schemas']['placement.Area'];
-export type PlacementCandidate = components['schemas']['placement.Candidate'];
-export type PlacementCategory = components['schemas']['placement.Category'];
-export type PlacementCountry = components['schemas']['placement.Country'];
-export type PlacementDefinition = components['schemas']['placement.Definition'];
-export type PlacementError = components['schemas']['placement.Error'];
-export type PlacementErrorCode = components['schemas']['placement.ErrorCode'];
-export type PlacementGcid = components['schemas']['placement.Gcid'];
-export type PlacementLatLng = components['schemas']['placement.LatLng'];
-export type PlacementLayerOut = components['schemas']['placement.LayerOut'];
-export type PlacementNotice = components['schemas']['placement.Notice'];
-export type PlacementPayload = components['schemas']['placement.Payload'];
-export type PlacementPoiOut = components['schemas']['placement.PoiOut'];
-export type PlacementQueryOut = components['schemas']['placement.QueryOut'];
-export type PlacementScale = components['schemas']['placement.Scale'];
-export type PlacementServed = components['schemas']['placement.Served'];
-export type PlacementTermOut = components['schemas']['placement.TermOut'];
-export type PlacementTierOut = components['schemas']['placement.TierOut'];
-export type PlacementTrade = components['schemas']['placement.Trade'];
-export type PlacementViewport = components['schemas']['placement.Viewport'];
 export type PlaybookError = components['schemas']['playbook.Error'];
 export type PlaybookErrorCode = components['schemas']['playbook.ErrorCode'];
 export type ReviewArchiveBoard = components['schemas']['review_archive.Board'];
@@ -7566,15 +7196,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -7604,15 +7225,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7693,15 +7305,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -7731,15 +7334,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7825,15 +7419,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -7863,15 +7448,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7952,15 +7528,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -7990,15 +7557,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8083,15 +7641,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8121,15 +7670,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8213,15 +7753,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8251,15 +7782,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8341,15 +7863,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8379,15 +7892,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8474,15 +7978,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8512,15 +8007,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8602,15 +8088,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8640,15 +8117,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8735,15 +8203,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8773,15 +8232,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8863,15 +8313,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -8901,15 +8342,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8999,15 +8431,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9037,15 +8460,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9137,15 +8551,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9175,15 +8580,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9270,15 +8666,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9308,15 +8695,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9398,15 +8776,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9436,15 +8805,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9526,15 +8886,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9564,15 +8915,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9660,15 +9002,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9698,15 +9031,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9794,15 +9118,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9832,15 +9147,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9922,15 +9228,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -9960,15 +9257,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10054,15 +9342,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10092,15 +9371,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10182,15 +9452,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10220,15 +9481,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10309,15 +9561,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10347,15 +9590,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10438,15 +9672,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10476,15 +9701,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10571,15 +9787,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10609,148 +9816,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    define_study: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StudyOf"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Study"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10830,15 +9895,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10868,15 +9924,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10958,15 +10005,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -10996,15 +10034,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11090,15 +10119,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11128,15 +10148,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11220,15 +10231,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11258,15 +10260,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11348,15 +10341,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11386,15 +10370,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11478,15 +10453,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11516,15 +10482,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11612,15 +10569,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11650,15 +10598,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11744,15 +10683,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11782,15 +10712,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11878,15 +10799,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -11916,15 +10828,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12012,15 +10915,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12050,15 +10944,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12146,15 +11031,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12184,15 +11060,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12275,15 +11142,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12313,15 +11171,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12407,15 +11256,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12445,15 +11285,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12541,15 +11372,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12579,15 +11401,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12675,15 +11488,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12713,15 +11517,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12806,15 +11601,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12844,15 +11630,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12934,15 +11711,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -12972,15 +11740,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13066,15 +11825,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13104,15 +11854,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13194,15 +11935,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13232,15 +11964,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13328,15 +12051,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13366,15 +12080,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13460,15 +12165,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13498,15 +12194,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13593,15 +12280,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13631,15 +12309,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13721,15 +12390,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13759,15 +12419,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13853,15 +12504,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -13891,15 +12533,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13981,15 +12614,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14019,15 +12643,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14113,15 +12728,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14151,15 +12757,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14241,15 +12838,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14279,15 +12867,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14370,15 +12949,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14408,15 +12978,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14499,15 +13060,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14537,15 +13089,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14633,15 +13176,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14671,15 +13205,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14766,15 +13291,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14804,15 +13320,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14894,15 +13401,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -14932,15 +13430,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15023,15 +13512,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15061,15 +13541,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15156,15 +13627,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15194,15 +13656,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15284,15 +13737,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15322,15 +13766,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15413,15 +13848,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15451,15 +13877,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15545,15 +13962,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15583,15 +13991,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15675,15 +14074,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15713,15 +14103,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15808,15 +14189,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15846,15 +14218,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15941,15 +14304,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -15979,15 +14333,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16071,15 +14416,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16109,15 +14445,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16199,15 +14526,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16237,15 +14555,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16334,15 +14643,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16372,15 +14672,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16466,15 +14757,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16504,15 +14786,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16596,15 +14869,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16634,15 +14898,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16730,15 +14985,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16768,15 +15014,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16858,15 +15095,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -16896,15 +15124,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16990,15 +15209,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17028,15 +15238,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17118,15 +15319,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17156,15 +15348,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17252,15 +15435,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17290,15 +15464,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17386,15 +15551,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17424,15 +15580,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17516,15 +15663,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17554,15 +15692,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17645,15 +15774,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17683,15 +15803,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17776,15 +15887,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17814,15 +15916,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17905,15 +15998,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -17943,15 +16027,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18035,15 +16110,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -18073,15 +16139,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18165,15 +16222,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -18203,15 +16251,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18296,15 +16335,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -18334,15 +16364,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18429,15 +16450,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -18467,15 +16479,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18562,15 +16565,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -18600,15 +16594,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18754,15 +16739,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -18792,15 +16768,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18886,15 +16853,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -18924,15 +16882,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19012,15 +16961,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -19050,15 +16990,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19140,15 +17071,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -19178,15 +17100,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19332,15 +17245,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -19370,15 +17274,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19464,15 +17359,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -19502,15 +17388,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19591,15 +17468,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -19629,15 +17497,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19719,15 +17578,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -19757,15 +17607,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19851,15 +17692,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -19889,15 +17721,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19979,15 +17802,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -20017,15 +17831,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20107,15 +17912,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -20145,15 +17941,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20240,15 +18027,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -20278,15 +18056,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20371,15 +18140,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -20409,15 +18169,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20499,15 +18250,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -20537,15 +18279,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20627,15 +18360,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -20665,15 +18389,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20759,15 +18474,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -20797,15 +18503,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20887,15 +18584,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -20925,15 +18613,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21021,15 +18700,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -21059,15 +18729,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21156,15 +18817,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -21194,15 +18846,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21285,15 +18928,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -21323,15 +18957,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21416,15 +19041,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -21454,15 +19070,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21551,15 +19158,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -21589,15 +19187,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21681,15 +19270,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -21719,15 +19299,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21817,15 +19388,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -21855,15 +19417,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21954,15 +19507,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -21992,15 +19536,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22087,15 +19622,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -22125,15 +19651,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22217,15 +19734,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -22255,15 +19763,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22345,15 +19844,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -22383,15 +19873,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22473,15 +19954,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -22511,15 +19983,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22601,15 +20064,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -22639,15 +20093,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22729,15 +20174,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -22767,15 +20203,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22857,15 +20284,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -22895,15 +20313,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -22988,15 +20397,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             /** @description `csrf`, `forbidden` */
             403: {
                 headers: {
@@ -23026,15 +20426,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -23076,413 +20467,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    "placement.study": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The definition's id: the SHA-256 of its canonical form, hex. */
-                sha: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Payload"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-        };
-    };
-    "placement.define": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The definition's id: the SHA-256 of its canonical form, hex. */
-                sha: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["placement.Definition"];
-            };
-        };
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-        };
-    };
-    "placement.pull": {
-        parameters: {
-            query: {
-                /** @description How many Places searches the pull may buy. */
-                budget: number;
-            };
-            header?: never;
-            path: {
-                /** @description The definition's id: the SHA-256 of its canonical form, hex. */
-                sha: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Payload"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-        };
-    };
-    "placement.trades": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description What a category may be studied by, and where. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Served"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
-                };
-            };
-            /** @description `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["placement.Error"];
                 };
             };
         };
@@ -32110,7 +29094,7 @@ export const billValues: ReadonlyArray<FlattenedDeepRequired<components>["schema
 export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Country"]> = ["FR", "US", "CA", "GB"];
 export const destinationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DestinationKind"]> = ["channel", "private", "group"];
 export const deviceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Device"]> = ["pixel_7", "galaxy_s23", "redmi_note_14"];
-export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["another_country", "bad_gateway", "bad_request", "browsers_not_connected", "conflict", "csrf", "forbidden", "internal", "no_google_category", "no_keywords", "no_study", "not_found", "too_large", "too_many", "unaffordable", "unauthenticated", "unavailable", "unstudied"];
+export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["bad_gateway", "bad_request", "browsers_not_connected", "conflict", "csrf", "forbidden", "internal", "not_found", "too_large", "too_many", "unauthenticated", "unavailable"];
 export const feedbackValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Feedback"]> = ["up", "down"];
 export const flowKindDtoValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FlowKindDto"]> = ["renewal", "purchase", "set", "spend", "grant_claimed", "refund", "granted"];
 export const generalAccessValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GeneralAccess"]> = ["none", "view"];
@@ -32133,9 +29117,6 @@ export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schem
 export const stopValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Stop"]> = ["at_free", "never"];
 export const tabValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tab"]> = ["launch", "browser", "kit", "connections"];
 export const vendorValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Vendor"]> = ["google"];
-export const placementCountryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["placement.Country"]> = ["FR", "US", "CA", "GB"];
-export const placementErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["placement.ErrorCode"]> = ["bad_request", "forbidden", "internal", "not_found", "too_large", "unaffordable", "unauthenticated", "unstudied", "csrf", "unavailable", "bad_gateway", "conflict"];
-export const placementScaleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["placement.Scale"]> = ["linear", "percentile"];
 export const playbookErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["playbook.ErrorCode"]> = ["bad_request", "forbidden", "over_budget", "unanswerable", "unauthenticated", "csrf", "unavailable", "bad_gateway", "internal"];
 export const review_archiveErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["review_archive.ErrorCode"]> = ["bad_request", "busy", "conflict", "forbidden", "internal", "invalid", "not_found", "timed_out", "too_large", "unauthenticated", "unclaimable", "csrf", "unavailable", "bad_gateway"];
 export const review_archiveEventValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["review_archive.Event"]> = ["review.new", "review.changed", "review.gone", "review.reappeared", "run.failed"];

@@ -15,13 +15,12 @@ use sa_core::{
 	gbp::Country,
 	prices::{PlacesRequest, Spender},
 };
-use sa_places::{LatLng, Viewport};
+use sa_places::LatLng;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
 	Panel, Refused,
-	areas::Shape,
 	store::{
 		areas as areas_db, gmbs as gmbs_db,
 		kit::{self as db, Removable},
@@ -154,8 +153,6 @@ pub struct Nearby {
 	pub gmb: crate::store::gmbs::Gmb,
 	/// From the area's centre.
 	pub distance_m: f64,
-	/// `false`: within the margin outside it.
-	pub inside: bool,
 	pub target: Option<Target>,
 	pub last_shown: Option<Timestamp>,
 }
@@ -446,7 +443,7 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
-	/// The owner's GBPs with a point in area `slug` or within its margin, nearest its centre first.
+	/// The owner's GBPs with a point in area `slug`, nearest its centre first.
 	pub async fn area_gmbs(&self, owner: Uuid, slug: &str) -> eyre::Result<Result<Vec<Nearby>, Refused>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for an area")?;
 		let Some(area) = areas_db::area(&mut conn, slug).await? else {
@@ -455,18 +452,14 @@ impl Panel {
 		let mut near = Vec::new();
 		for g in gmbs_db::gmbs(&mut conn, owner).await? {
 			let Some(at) = g.location.map(|p| p.at) else { continue };
-			let outside = match &area.shape {
-				Shape::City { viewport, .. } => metres(at, clamp(at, viewport)),
-				Shape::Circle { radius_m } => (metres(at, area.center) - *radius_m as f64).max(0.),
-			};
-			if outside > area.margin_m as f64 {
+			let distance_m = metres(at, area.center);
+			if distance_m > area.radius_m as f64 {
 				continue;
 			}
 			let target = db::target(&mut conn, g.id).await?.map(|t| t.0);
 			let last_shown = db::last_shown(&mut conn, g.id).await?;
 			near.push(Nearby {
-				distance_m: metres(at, area.center),
-				inside: outside == 0.,
+				distance_m,
 				target,
 				last_shown,
 				gmb: g,
@@ -556,23 +549,6 @@ fn reencode(upload: &[u8]) -> Result<(Vec<u8>, (u32, u32)), String> {
 	let mut jpeg = Vec::new();
 	img.write_with_encoder(JpegEncoder::new_with_quality(&mut jpeg, 90)).map_err(refused)?;
 	Ok((jpeg, (img.width(), img.height())))
-}
-
-/// The point of `viewport` nearest `at`.
-fn clamp(at: LatLng, v: &Viewport) -> LatLng {
-	let lng = if v.west <= v.east {
-		at.lng.clamp(v.west, v.east)
-	} else if at.lng >= v.west || at.lng <= v.east {
-		at.lng // across the antimeridian, and inside
-	} else if (v.west - at.lng) < (at.lng - v.east) {
-		v.west
-	} else {
-		v.east
-	};
-	LatLng {
-		lat: at.lat.clamp(v.south, v.north),
-		lng,
-	}
 }
 
 /// Great-circle metres.

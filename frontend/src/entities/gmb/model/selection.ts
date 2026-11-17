@@ -6,7 +6,7 @@ import type { Gmail } from "@/shared/api/schema";
 import { setCarried, useCarried } from "@/shared/lib/location";
 
 import { useGmails, useGmbTags } from "./gmails-context";
-import { ISSUES, type Issue, issueOf } from "./issues";
+import { ISSUES, type Issue, issueOf, issuesOf } from "./issues";
 import { type Listed, narrowed } from "./narrow";
 import { type Pattern, useScope } from "./scope";
 
@@ -65,7 +65,7 @@ export function useSelection(): Selection | null {
   };
   const rows = narrowed(gmails.data, null, "").sort((a, b) => rank(a) - rank(b));
   const filtered = scope.gmails !== null || scope.categories !== null || filter.trim() !== "" || only !== null;
-  const chosen = edit ?? (filtered ? new Set(found.filter((l) => only === null || issueOf(l.gmb, tags) === only).map((l) => l.gmb.id)) : null);
+  const chosen = edit ?? (filtered ? new Set(found.filter((l) => only === null || issuesOf(l.gmb, tags).includes(only as Issue)).map((l) => l.gmb.id)) : null);
   const isSelected = (gmb: number) => chosen === null || chosen.has(gmb);
   const move = (gmbs: readonly number[], into: boolean) => {
     if (chosen === null && into) return setCarried({ gmbs: sorted(gmbs) });

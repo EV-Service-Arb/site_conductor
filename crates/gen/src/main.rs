@@ -16,10 +16,9 @@ use sa_browsers::view::{Close as ViewerClose, In as ViewerIn, Out as ViewerOut};
 use sa_server::view::View;
 
 /// Where each sibling commits its document in its checkout; `None`: none committed yet, the copy kept.
-const DOCUMENTS: [(sa_auth::Service, Option<&str>); 4] = [
+const DOCUMENTS: [(sa_auth::Service, Option<&str>); 3] = [
 	(sa_auth::Service::Sites, Some("frontend/src/shared/api/openapi.json")),
 	(sa_auth::Service::ReviewArchive, Some("crates/review_archive_server/openapi.json")),
-	(sa_auth::Service::Placement, Some("docs/openapi.json")),
 	(sa_auth::Service::Playbook, Some("playbook_web/openapi.json")),
 ];
 
@@ -66,7 +65,7 @@ fn main() {
 		if let Some(source) = source {
 			let raw = std::fs::read_to_string(&source).unwrap_or_else(|e| panic!("{service}'s document at {}: {e}", source.display()));
 			let mut doc: serde_json::Value = serde_json::from_str(&raw).unwrap_or_else(|e| panic!("{}: {e}", source.display()));
-			forwarded(service, &mut doc);
+			forwarded(&mut doc);
 			std::fs::write(&copy, serde_json::to_string_pretty(&doc).expect("a document serializes") + "\n").expect("frontend/src/shared/api is writable");
 		}
 		let theirs = match std::fs::read_to_string(&copy) {
@@ -104,8 +103,8 @@ fn main() {
 
 /// A service's document as its operations are answered through the forward: the forward's own
 /// refusals beside each operation's, as its `x-errors`, its answers and its `ErrorCode` list them.
-fn forwarded(service: sa_auth::Service, doc: &mut serde_json::Value) {
-	use ev_lib::api::{ErrorCode, openapi::Operation};
+fn forwarded(doc: &mut serde_json::Value) {
+	use ev_lib::api::ErrorCode;
 	let items = doc["paths"].as_object_mut().expect("a document has paths").values_mut();
 	let operations = items.flat_map(|item| {
 		item.as_object_mut()
@@ -115,9 +114,8 @@ fn forwarded(service: sa_auth::Service, doc: &mut serde_json::Value) {
 	});
 	let mut words: Vec<String> = Vec::new();
 	for (_, op) in operations {
-		let read: Operation = serde_json::from_value(op.clone()).unwrap_or_else(|e| panic!("{service}'s operation: {e}"));
 		let op = op.as_object_mut().expect("an operation is an object");
-		for code in sa_server::forward::refusals(service, &read) {
+		for &code in <sa_auth::Hop as strum::VariantArray>::VARIANTS {
 			let word = serde_json::to_value(code).expect("a code serializes").as_str().expect("a code is a word").to_owned();
 			let status = code.status().as_u16();
 			let errors = op.get_mut("x-errors").and_then(serde_json::Value::as_object_mut).expect("every operation has x-errors");
