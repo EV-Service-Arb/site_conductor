@@ -148,7 +148,7 @@
           pname = "sa_sandbox";
           version = manifest.version;
           src = pureSrc;
-          cargoLock.lockFile = ./Cargo.lock;
+          inherit cargoLock;
           cargoBuildFlags = [ "-p" "sa_sandbox" ];
           doCheck = false; # its tests run Deno against loopback stand-ins, in the devShell and CI
           auditable = false;
