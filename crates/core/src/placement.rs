@@ -1,9 +1,8 @@
 //! What the conductor hands placement to have a study built: its area and its category, named as
-//! the conductor names them, addressed by the SHA-256 of their canonical form; and what a pull
-//! bought, as placement answers it.
+//! the conductor names them, addressed by the SHA-256 of their canonical form; and the searches a
+//! study lacks, which the conductor buys for a pull.
 
-use std::collections::BTreeMap;
-
+use jiff::Timestamp;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -12,17 +11,31 @@ use crate::{
 	Invalid,
 	gbp::{Country, keywords},
 	geo::{LatLng, Viewport},
-	prices::Item,
 };
 
-/// The header on every answer to a pull: its [`Billed`], as JSON.
-pub const BILLED: &str = "x-billed";
+/// The one Places request a study is built from.
+pub const SEARCH_TEXT: &str = "https://places.googleapis.com/v1/places:searchText";
 
-/// The header on a pull refused `unaffordable` (402): at least how many Places searches it needs.
-pub const NEED: &str = "x-need";
+/// A [`SEARCH_TEXT`] a study lacks, as placement keys it under `Scheme::Gop`.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Ask {
+	/// `X-Goog-FieldMask`.
+	pub mask: String,
+	/// Sent verbatim: it is the key.
+	pub body: String,
+}
 
-/// What a pull bought, each item's count: its Places searches as `places.search`.
-pub type Billed = BTreeMap<Item, u64>;
+/// What a pull of a study still lacks.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Asks {
+	/// An answer fetched before this is asked again: when the first pull since the study's last
+	/// whole one began.
+	pub since: Timestamp,
+	/// Empty once the study is answered in full.
+	pub asks: Vec<Ask>,
+}
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

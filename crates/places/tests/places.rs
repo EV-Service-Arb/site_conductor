@@ -17,7 +17,7 @@ use axum::{
 use jiff::Timestamp;
 use sa_core::{
 	prices::PlacesRequest,
-	queries_cache::{Claim, Key, Put, Stored},
+	queries_cache::{Claim, Key, Put, Scheme, Stored},
 };
 use sa_places::{
 	Ask, Error, Google, InOrder, Keys, Rank, LatLng, Payer, Pending, QueriesCache, Remote, Spent,
@@ -135,43 +135,43 @@ async fn place_details(State(s): State<Stub>, headers: HeaderMap, Path(id): Path
 /// The queries cache as the conductor keeps it, in memory: the latest answer per key, a claim
 /// held until its holder puts or releases.
 #[derive(Debug, Default)]
-struct Memory(Mutex<(HashMap<Key, Stored>, HashSet<Key>)>);
+struct Memory(Mutex<(HashMap<(Scheme, Key), Stored>, HashSet<(Scheme, Key)>)>);
 
 impl QueriesCache for Memory {
-	fn get(&self, key: Key) -> Pending<'_, Option<Stored>> {
-		Box::pin(async move { Ok(self.0.lock().unwrap().0.get(&key).cloned()) })
+	fn get(&self, scheme: Scheme, key: Key) -> Pending<'_, Option<Stored>> {
+		Box::pin(async move { Ok(self.0.lock().unwrap().0.get(&(scheme, key)).cloned()) })
 	}
 
-	fn claim(&self, key: Key, fresh_since: Option<Timestamp>) -> Pending<'_, Claim> {
+	fn claim(&self, scheme: Scheme, key: Key, fresh_since: Option<Timestamp>) -> Pending<'_, Claim> {
 		Box::pin(async move {
 			let (kept, claims) = &mut *self.0.lock().unwrap();
 			let until = Timestamp::now();
-			Ok(match kept.get(&key) {
+			Ok(match kept.get(&(scheme, key)) {
 				Some(k) if fresh_since.is_none_or(|since| k.fetched_at >= since) => Claim::Stored(k.clone()),
-				_ if !claims.insert(key) => Claim::Held { until },
+				_ if !claims.insert((scheme, key)) => Claim::Held { until },
 				_ => Claim::Granted { until },
 			})
 		})
 	}
 
-	fn put(&self, key: Key, put: Put) -> Pending<'_, ()> {
+	fn put(&self, scheme: Scheme, key: Key, put: Put) -> Pending<'_, ()> {
 		Box::pin(async move {
 			let (kept, claims) = &mut *self.0.lock().unwrap();
 			kept.insert(
-				key,
+				(scheme, key),
 				Stored {
 					answer: put.answer,
 					fetched_at: Timestamp::now(),
 				},
 			);
-			claims.remove(&key);
+			claims.remove(&(scheme, key));
 			Ok(())
 		})
 	}
 
-	fn release(&self, key: Key) -> Pending<'_, ()> {
+	fn release(&self, scheme: Scheme, key: Key) -> Pending<'_, ()> {
 		Box::pin(async move {
-			self.0.lock().unwrap().1.remove(&key);
+			self.0.lock().unwrap().1.remove(&(scheme, key));
 			Ok(())
 		})
 	}

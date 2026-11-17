@@ -19,7 +19,7 @@ pub use queries_cache::{Pending, QueriesCache, Remote};
 pub use sa_core::geo::{LatLng, Viewport};
 use sa_core::{
 	prices::PlacesRequest,
-	queries_cache::{Claim, Put},
+	queries_cache::{Claim, Put, Scheme},
 	usage::{Bill, Billed},
 };
 use serde::{Deserialize, Serialize};
@@ -169,6 +169,8 @@ pub enum Ask {
 	Cached,
 	/// Asked again, and the kept answer replaced.
 	Afresh,
+	/// One fetched since then; else asked again.
+	Since(jiff::Timestamp),
 }
 
 /// The Places API (New), through the queries cache and the keys.
@@ -334,6 +336,7 @@ impl Google {
 			url: &url,
 			mask: GEOCODE_MASK,
 			body: "",
+			scheme: Scheme::Places,
 			sku: PlacesRequest::Geocode,
 			subject: &point,
 		};
@@ -377,6 +380,7 @@ impl Google {
 			url: &url,
 			mask: GEOCODE_MASK,
 			body: "",
+			scheme: Scheme::Places,
 			sku: PlacesRequest::Geocode,
 			subject: &point,
 		};
@@ -462,6 +466,7 @@ impl Google {
 			url: &url,
 			mask: AUTOCOMPLETE_MASK,
 			body: &body,
+			scheme: Scheme::Places,
 			sku: PlacesRequest::Autocomplete,
 			subject: &input,
 		};
@@ -497,6 +502,7 @@ impl Google {
 			url: &url,
 			mask: SEARCH_MASK,
 			body: &body,
+			scheme: Scheme::Places,
 			sku: PlacesRequest::Search,
 			subject: query,
 		};
@@ -509,6 +515,7 @@ impl Google {
 				let req = Request::details(&details, &place.place_id);
 				self.cache
 					.put(
+						Scheme::Places,
 						req.key(),
 						Put {
 							answer: raw.clone(),
@@ -528,6 +535,22 @@ impl Google {
 		Ok(named)
 	}
 
+	/// `ask`, a search of placement's for a study, bought for `payer` unless the queries cache holds
+	/// an answer fetched since `since`.
+	pub async fn asked(&self, ask: &sa_core::placement::Ask, since: jiff::Timestamp, payer: &Payer<'_>) -> Result<(), Error> {
+		let url = format!("{}:searchText", self.base);
+		let req = Request {
+			method: "POST",
+			url: &url,
+			mask: &ask.mask,
+			body: &ask.body,
+			scheme: Scheme::Gop,
+			sku: PlacesRequest::Search,
+			subject: "a study's sweep",
+		};
+		self.ask(&req, None, Ask::Since(since), payer).await.map(drop)
+	}
+
 	/// The answer to `req`, and whether it was paid for now: from the cache unless older than
 	/// `max_age`, else claimed there and bought with the first key not sitting out.
 	async fn ask(&self, req: &Request<'_>, max_age: Option<Duration>, ask: Ask, payer: &Payer<'_>) -> Result<(serde_json::Value, bool), Error> {
@@ -536,9 +559,10 @@ impl Google {
 		let fresh_since = match ask {
 			Ask::Cached => max_age.map(|age| now - jiff::SignedDuration::try_from(age).expect("an age of seconds")),
 			Ask::Afresh => Some(now),
+			Ask::Since(since) => Some(since),
 		};
-		if ask == Ask::Cached
-			&& let Some(kept) = self.cache.get(key).await?
+		if ask != Ask::Afresh
+			&& let Some(kept) = self.cache.get(req.scheme, key).await?
 			&& fresh_since.is_none_or(|since| kept.fetched_at >= since)
 		{
 			return Ok((kept.answer, false));
@@ -550,7 +574,7 @@ impl Google {
 			return Err(Error::Unbought);
 		}
 		loop {
-			match self.cache.claim(key, fresh_since).await? {
+			match self.cache.claim(req.scheme, key, fresh_since).await? {
 				Claim::Stored(kept) => return Ok((kept.answer, false)),
 				Claim::Held { .. } => tokio::time::sleep(Duration::from_millis(500)).await,
 				Claim::Granted { .. } => break,
@@ -558,7 +582,7 @@ impl Google {
 		}
 		let bought = self.buy(req, payer).await;
 		if bought.is_err()
-			&& let Err(e) = self.cache.release(key).await
+			&& let Err(e) = self.cache.release(req.scheme, key).await
 		{
 			// the buy's error is the one to tell; the claim lapses with its lease anyway
 			tracing::warn!(error = %e, "releasing a claim after a failed buy");
@@ -570,6 +594,7 @@ impl Google {
 		};
 		self.cache
 			.put(
+				req.scheme,
 				key,
 				Put {
 					answer: answer.clone(),
@@ -708,6 +733,7 @@ impl<'a> Request<'a> {
 			url,
 			mask: DETAILS_MASK,
 			body: "",
+			scheme: Scheme::Places,
 			sku: PlacesRequest::Details,
 			subject: place_id,
 		}

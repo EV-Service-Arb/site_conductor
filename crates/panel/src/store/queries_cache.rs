@@ -121,18 +121,18 @@ fn stored((answer, fetched_at): (String, i64)) -> eyre::Result<Stored> {
 }
 
 impl sa_places::QueriesCache for Store {
-	fn get(&self, key: Key) -> sa_places::Pending<'_, Option<Stored>> {
-		Box::pin(async move { self.cached_query(Scheme::Places, key).await.map_err(store_error) })
+	fn get(&self, scheme: Scheme, key: Key) -> sa_places::Pending<'_, Option<Stored>> {
+		Box::pin(async move { self.cached_query(scheme, key).await.map_err(store_error) })
 	}
 
-	fn claim(&self, key: Key, fresh_since: Option<Timestamp>) -> sa_places::Pending<'_, Claim> {
-		Box::pin(async move { self.claim_query(Scheme::Places, key, fresh_since, Timestamp::now()).await.map_err(store_error) })
+	fn claim(&self, scheme: Scheme, key: Key, fresh_since: Option<Timestamp>) -> sa_places::Pending<'_, Claim> {
+		Box::pin(async move { self.claim_query(scheme, key, fresh_since, Timestamp::now()).await.map_err(store_error) })
 	}
 
-	fn put(&self, key: Key, put: Put) -> sa_places::Pending<'_, ()> {
+	fn put(&self, scheme: Scheme, key: Key, put: Put) -> sa_places::Pending<'_, ()> {
 		Box::pin(async move {
 			self.keep_query(
-				Scheme::Places,
+				scheme,
 				key,
 				&put.answer.to_string(),
 				Some(&put.request),
@@ -144,8 +144,8 @@ impl sa_places::QueriesCache for Store {
 		})
 	}
 
-	fn release(&self, key: Key) -> sa_places::Pending<'_, ()> {
-		Box::pin(async move { self.release_query(Scheme::Places, key).await.map_err(store_error) })
+	fn release(&self, scheme: Scheme, key: Key) -> sa_places::Pending<'_, ()> {
+		Box::pin(async move { self.release_query(scheme, key).await.map_err(store_error) })
 	}
 }
 

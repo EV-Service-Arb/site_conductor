@@ -4,7 +4,8 @@
 //! ```text
 //! GET  /placement/catalog                  → placement GET /trades.json
 //! GET  /placement/study?area&category      → Definition → placement POST /studies, the payload streamed back
-//! POST /placement/study/pull?area&category → held, budget → placement POST /studies/pull?budget, charged by x-billed
+//! POST /placement/study/pull?area&category → held: placement POST /studies/asks, each search bought,
+//!                                            until it lacks none → POST /studies/pull, charged what was bought
 //! ```
 
 use axum::{
@@ -21,8 +22,8 @@ use ev_lib::api::{
 use sa_auth::{Principal, Service};
 use sa_core::{
 	gbp::Country,
-	placement::{self, BILLED, Billed, Catalog, Definition, Gcid, NEED},
-	prices::{AdsRequest, DataForSeoTask, PlacementRequest, Spends},
+	placement::{self, Asks, Catalog, Definition, Gcid},
+	prices::{PlacementRequest, Spends},
 };
 use sa_panel::gmbs::GoogleCategory;
 use serde::Deserialize;
@@ -36,6 +37,8 @@ use crate::{
 
 /// The most of placement's refusal read.
 const REFUSAL: usize = 64 * 1024;
+/// The most of placement's asks read: a round of a sweep is a few hundred searches.
+const ASKS: usize = 4 * 1024 * 1024;
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
@@ -110,45 +113,53 @@ async fn study(State(s): State<ApiState>, Extension(caller): Extension<Caller>, 
 /// Builds a study again, buying the Places searches it lacks at the caller's tokens.
 ///
 /// As the study is refused, and: 402 `unaffordable` when the sweep needs more searches than the
-/// balance affords, nothing bought; 409 while a pull's item is unpriced. What it bought is charged,
-/// and owed back when the pull failed.
-async fn pull(
-	State(s): State<ApiState>,
-	Spends(caller, _): Spends<(PlacementRequest, (AdsRequest, DataForSeoTask)), Caller>,
-	Params(at): Params<StudyIn>,
-) -> ApiResult<Payload> {
+/// balance affords, nothing bought when that shows before the first; 409 while a search is
+/// unpriced. What it bought is charged, and owed back when the pull failed.
+async fn pull(State(s): State<ApiState>, Spends(caller, _): Spends<PlacementRequest, Caller>, Params(at): Params<StudyIn>) -> ApiResult<Payload> {
 	let def = define(&s, &caller, at).await?;
-	let sha = def.id();
 	let held = s.panel.pull(caller.user_id).await??;
-	let res = ask(&s, &caller, Method::POST, &format!("/studies/pull?budget={}", held.budget()), json(&def)).await?;
-	let billed: Billed = match res.headers().get(BILLED) {
-		Some(v) => serde_json::from_slice(v.as_bytes()).map_err(|e| eyre::eyre!("placement's {BILLED} of {sha} is {v:?}: {e}"))?,
-		// placement says it on every pull it ran: a refusal without it never reached one
-		None if !res.status().is_success() => Billed::new(),
-		None => return Err(eyre::eyre!("placement answered the pull of {sha} without {BILLED}").into()),
+	let pulled = match bought(&s, &caller, &def, &held).await {
+		Ok(()) => ask(&s, &caller, Method::POST, "/studies/pull", json(&def)).await,
+		Err(e) => Err(e),
 	};
-	let need = match res.headers().get(NEED) {
-		Some(v) => Some(v.to_str().ok().and_then(|v| v.parse::<u64>().ok()).ok_or_else(|| eyre::eyre!("placement's {NEED} of {sha} is {v:?}"))?),
-		None => None,
+	let (failed, answer) = match pulled {
+		Ok(res) if res.status() == StatusCode::OK => (false, Ok(Payload(res))),
+		Ok(res) => (true, Err(refused(res, "/studies/pull").await)),
+		Err(e) => (true, Err(e)),
 	};
-	let failed = !res.status().is_success();
-	match (res.status(), need) {
-		(StatusCode::OK, None) => {
-			held.paid(&billed, &sha, failed).await?;
-			Ok(Payload(res))
+	held.paid(&def.id(), failed).await?;
+	answer
+}
+
+/// Every search placement says `def` lacks, bought: it is asked again after each round, since what
+/// lies behind a page (the next one, a tile's quarters) is known only once it is answered.
+async fn bought(s: &ApiState, caller: &Caller, def: &Definition, held: &sa_panel::placement::Pull) -> ApiResult<()> {
+	let mut asked = std::collections::HashSet::new();
+	loop {
+		let res = ask(s, caller, Method::POST, "/studies/asks", json(def)).await?;
+		if res.status() != StatusCode::OK {
+			return Err(refused(res, "/studies/asks").await);
 		}
-		(StatusCode::PAYMENT_REQUIRED, Some(need)) => {
-			let why = held.unaffordable(need);
-			held.paid(&billed, &sha, failed).await?;
-			Err(ApiError::Unaffordable(why))
+		let body = to_bytes(res.into_body(), ASKS).await.map_err(|e| ApiError::BadGateway(format!("reading placement's asks: {e}")))?;
+		let Asks { since, asks } = serde_json::from_slice(&body).map_err(|e| eyre::eyre!("placement's asks of {}: {e}", def.id()))?;
+		if asks.is_empty() {
+			return Ok(());
 		}
-		(status, need) => {
-			let refused = refused(res, "/studies/pull").await;
-			if need.is_some() {
-				return Err(eyre::eyre!("placement answered the pull of {sha} {status} with {NEED}").into());
+		let need = u64::try_from(asks.len()).expect("a count of searches");
+		if asked.is_empty() && need > held.budget() {
+			return Err(ApiError::Unaffordable(held.unaffordable(need)));
+		}
+		for a in &asks {
+			// what was bought is answered, so asking it again would never end
+			if !asked.insert(a.body.clone()) {
+				return Err(eyre::eyre!("placement asked again for {} once it was bought", a.body).into());
 			}
-			held.paid(&billed, &sha, failed).await?;
-			Err(refused)
+			held.buy(a, since).await.map_err(|e| match e {
+				sa_places::Error::Unpaid(why) => ApiError::Unaffordable(why),
+				e @ sa_places::Error::Unbought => ApiError::Conflict(e.to_string()),
+				e @ (sa_places::Error::Api { .. } | sa_places::Error::Exhausted(_)) => ApiError::BadGateway(format!("{e}")),
+				e => eyre::eyre!(e).wrap_err("buying a study's search").into(),
+			})?;
 		}
 	}
 }
@@ -232,7 +243,6 @@ async fn refused(res: Response, path: &str) -> ApiError {
 	enum Code {
 		Unstudied,
 		Forbidden,
-		Unaffordable,
 		Internal,
 		#[serde(other)]
 		Other,
@@ -251,7 +261,7 @@ async fn refused(res: Response, path: &str) -> ApiError {
 		Ok(Theirs { code: Code::Unstudied, error }) => ApiError::Unstudied(Unstudied::Unstudied, error),
 		Ok(Theirs { code: Code::Forbidden, .. }) => ApiError::Forbidden,
 		Ok(Theirs { code: Code::Internal, error }) => ApiError::BadGateway(format!("placement failed: {error}")),
-		// an unaffordable pull carries x-need, handled before; anything else is what the conductor built or signed
-		Ok(Theirs { code: Code::Unaffordable | Code::Other, .. }) | Err(_) => ApiError::Internal(eyre::eyre!("placement answered {path} with {status}: {}", String::from_utf8_lossy(&body))),
+		// anything else is what the conductor built or signed
+		Ok(Theirs { code: Code::Other, .. }) | Err(_) => ApiError::Internal(eyre::eyre!("placement answered {path} with {status}: {}", String::from_utf8_lossy(&body))),
 	}
 }

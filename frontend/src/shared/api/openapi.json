@@ -3821,7 +3821,7 @@
           "placement"
         ],
         "summary": "Builds a study again, buying the Places searches it lacks at the caller's tokens.",
-        "description": "As the study is refused, and: 402 `unaffordable` when the sweep needs more searches than the\nbalance affords, nothing bought; 409 while a pull's item is unpriced. What it bought is charged,\nand owed back when the pull failed.",
+        "description": "As the study is refused, and: 402 `unaffordable` when the sweep needs more searches than the\nbalance affords, nothing bought when that shows before the first; 409 while a search is\nunpriced. What it bought is charged, and owed back when the pull failed.",
         "operationId": "pull",
         "parameters": [
           {
@@ -3870,12 +3870,7 @@
         "x-errors": {},
         "x-permission": "sa:placement:study:spend",
         "x-spends": [
-          "placement.search",
-          "ads.location",
-          "ads.keyword_ideas",
-          "ads.historical_metrics",
-          "dataforseo.keywords_for_keywords",
-          "dataforseo.search_volume"
+          "placement.search"
         ]
       }
     },

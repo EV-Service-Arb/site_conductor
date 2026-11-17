@@ -1317,8 +1317,8 @@ export interface paths {
         /**
          * Builds a study again, buying the Places searches it lacks at the caller's tokens.
          * @description As the study is refused, and: 402 `unaffordable` when the sweep needs more searches than the
-         *     balance affords, nothing bought; 409 while a pull's item is unpriced. What it bought is charged,
-         *     and owed back when the pull failed.
+         *     balance affords, nothing bought when that shows before the first; 409 while a search is
+         *     unpriced. What it bought is charged, and owed back when the pull failed.
          */
         post: operations["pull"];
         delete?: never;

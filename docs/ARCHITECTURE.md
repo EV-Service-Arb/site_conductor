@@ -121,7 +121,7 @@ crates/server/           the `panel` binary: CLI and HTTP, thin over `Panel`
                          spends is proposed, the user confirms it
   src/areas.rs           /api/v1/areas, and the cities and localities they are drawn from
   src/placement.rs       /api/v1/placement: a study's Definition built from the areas and trades, placement
-                         asked as the caller; a pull held, budgeted and charged
+                         asked as the caller; a pull held, what placement says it lacks bought, charged
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
                          work in `serve`
   src/telegram.rs        the Bot API, its long poll
@@ -265,13 +265,15 @@ reserved paths (`web.rs`) are derived from it.
 ```text
 GET  /placement/study?area&category ─ the area, the caller's category (or none) → Definition ─▶ placement POST /studies
      ◀── the payload, unread ── the front end hands it to the overlay (wasm, built with the front end)
-POST /placement/study/pull?…        ─ the same Definition ─▶ placement POST /studies/pull?budget (Tokens and GBPs)
+POST /placement/study/pull?…        ─ the same Definition ─▶ placement POST /studies/asks ─▶ [Ask], since
+     each Ask bought into the queries cache (`gop`), asked again until none ─▶ POST /studies/pull ◀── the payload
 ```
 
   The conductor decides what cannot be studied, by why (`no_study`, `no_google_category`,
   `no_keywords`, `another_country`; placement's `unstudied`); the front end only renders it. A study
   never spends; a pull (`sa:placement:study:spend`) buys the Places searches it lacks at the
-  puller's tokens. Unset, those routes answer 503 and the map says placement is not connected.
+  puller's tokens. Placement buys nothing: the conductor is the one center of data ingestion, and
+  what placement derives, for a map or for training, it derives from what the conductor holds. Unset, those routes answer 503 and the map says placement is not connected.
 
 ## Browsers
 
@@ -406,7 +408,8 @@ PUT    /api/queries_cache/{scheme}/{key}         {answer, request, bought: {item
 ```
 
 - **A key is its query's SHA-256**, under its client's scheme: `places` (sa_places: method,
-  URL, field mask, body) and `gop` (placement: URL, body). The cache derives none.
+  URL, field mask, body) and `gop` (placement: URL, body; its Places searches the conductor buys
+  for a pull, `sa_places::Google::asked`). The cache derives none.
 - **Buying is claim, buy, PUT.** A claim holds the key 30 s; whoever else asks waits on it and is
   served what was bought. A failed buy gives the claim up; a holder that dies lets it lapse.
 - **A PUT says what it bought** (`bought`: the catalog item and whose key, null for an answer kept
@@ -665,14 +668,14 @@ request below the price, or unpriced, is refused before Google is asked. A cache
 nothing. The operator's commands (`gmb add`, `locate`) try the gmail's keys, then the house pays.
 review_archive's lookups are the house's for now.
 
-**A study's pull is sold per search** (`placement.search`), and per Ads request and DataForSEO
-task it buys, charged by the conductor, under the same lock; refused while any of them is unpriced:
+**A study's pull is sold per search** (`placement.search`) the conductor buys for it, on the
+house's rotation, under the same lock; refused while it is unpriced:
 
 ```text
-POST /api/v1/placement/study/pull ─ price set, budget = balance ÷ price ─▶ placement …/pull?budget=<n>
-  ├─ the sweep needs more than n: 402, x-need, nothing bought ─▶ the person told the tokens it needs
-  └─ x-billed: {item: count} on any answer, places.search ≤ n ─▶ the ledger: the searches × price, the
-                    Ads and DataForSEO ones × theirs up to what the balance has left; a pull that failed
+POST /api/v1/placement/study/pull ─ price set, budget = balance ÷ price ─▶ placement …/asks: [Ask]
+  ├─ the first round needs more than n: 402, nothing bought ─▶ the person told the tokens it needs
+  ├─ each Ask bought (the pull its purse: none past n, else 402), asked again until none is lacking
+  └─ ─▶ placement …/pull ─▶ the ledger: the searches bought × price; a pull that failed
                     owes it all back, as a failed walk does: the failure is the house's
 ```
 
@@ -1002,9 +1005,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   browser's start or a study's pull for a person is charged at its price, and refused before it is
   sent when their balance is below it; a pull buys no search past what the balance affords. Their
   own keys and the queries cache cost nothing. A round of the assistant on the panel's Claude starts
-  only on a balance above 0, a cloud phone on one minute's; their cost, and a pull's Ads requests and
-  DataForSEO tasks, known once done, are charged up to what they hold, and a phone runs no longer
-  than its launch's balance affords.
+  only on a balance above 0, a cloud phone on one minute's; their cost, known once done, is charged
+  up to what they hold, and a phone runs no longer than its launch's balance affords.
 - **No Street View past the free ones.** No panorama opens on a browser key but one
   `POST /map/street_view` bought, and none is bought past its meter's free ones on that key's
   account.

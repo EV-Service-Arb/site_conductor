@@ -26,7 +26,8 @@ pub const LEASE: jiff::SignedDuration = jiff::SignedDuration::from_secs(30);
 pub enum Scheme {
 	/// `sa_places`: the conductor's and review_archive's Places requests.
 	Places,
-	/// gmaps_optimal_placement's `Work::cached_post`.
+	/// gmaps_optimal_placement's requests, [`gop`]'s digest: a study's Places searches, bought by
+	/// the conductor for a pull (`placement::Ask`), and its keyword volumes.
 	Gop,
 }
 
@@ -110,6 +111,11 @@ pub struct Put {
 	pub request: String,
 	/// What it was bought as; `None`, kept from another answer bought, nothing billed for it.
 	pub bought: Option<crate::usage::Billed>,
+}
+
+/// What a [`Scheme::Gop`] key is the digest of.
+pub fn gop(url: &str, body: &str) -> String {
+	format!("{url}\n{body}")
 }
 
 /// A query's path under the cache's URL (`<origin>/api/queries_cache`, what a client is given).
