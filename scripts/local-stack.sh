@@ -21,8 +21,8 @@
 # likewise (REVIEW_ARCHIVE_BIN / REVIEW_ARCHIVE_MFE_DIR), and Grafana's server (PANEL_GRAFANA_SERVER).
 # Under --watch each is cargo's (npm's for the bundles) of its checkout instead, and the *_BIN /
 # *_DIR overrides of the builds are refused.
-# SITES_DIR, REVIEW_ARCHIVE_DIR, AQUAFIX_DIR and VIFNET_DIR name the checkouts, by default beside
-# this one's. Each part's port is what its own dev shell sets (docs/port_range.md).
+# _.siblings-local.json names the siblings' checkouts; AQUAFIX_DIR and VIFNET_DIR the landings', by
+# default beside this one's. Each part's port is what its own dev shell sets (docs/port_range.md).
 set -euo pipefail
 
 need="run it as \`nix run .#local-stack\`, or inside \`nix develop\`: the flake sets the conductor's ports"
@@ -134,21 +134,15 @@ root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "run this from inside
 # sites/{panel,aquafix,vifnet}}), also when this is one of its worktrees.
 main_checkout="$(dirname "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)")"
 service_arb="$(dirname "$main_checkout")"
-if [ "$dev" = 1 ]; then
-	# DEV_PATH_<peer>: its user's path, flake.nix devUsers
-	dev_dir() {
-		local p="${1:-../$2}"
-		[[ "$p" = /* ]] || p="$main_checkout/$p"
-		realpath -m "$p"
-	}
-	SITES_DIR="${SITES_DIR:-$(dev_dir "${DEV_PATH_sites_panel:-}" sites_panel)}"
-	REVIEW_ARCHIVE_DIR="${REVIEW_ARCHIVE_DIR:-$(dev_dir "${DEV_PATH_review_archive:-}" review_archive)}"
-	PLACEMENT_DIR="${PLACEMENT_DIR:-$(dev_dir "${DEV_PATH_gmaps_optimal_placement:-}" gmaps_optimal_placement)}"
-fi
-SITES_DIR="${SITES_DIR:-$service_arb/sites/panel}"
-REVIEW_ARCHIVE_DIR="${REVIEW_ARCHIVE_DIR:-$service_arb/review_archive}"
-PLACEMENT_DIR="${PLACEMENT_DIR:-$service_arb/gmaps_optimal_placement}"
-PLAYBOOK_DIR="${PLAYBOOK_DIR:-$service_arb/playbook}"
+# the siblings' checkouts, one gitignored file for gen and this script alike: {"sites", "review_archive",
+# "placement", "playbook": <checkout root>}
+siblings="$root/_.siblings-local.json"
+[ -f "$siblings" ] || die "$siblings names each sibling's checkout root: sites, review_archive, placement, playbook"
+sibling() { jq -er --arg k "$1" '.[$k]' "$siblings" || die "$siblings names no $1"; }
+SITES_DIR="$(sibling sites)"
+REVIEW_ARCHIVE_DIR="$(sibling review_archive)"
+PLACEMENT_DIR="$(sibling placement)"
+PLAYBOOK_DIR="$(sibling playbook)"
 AQUAFIX_DIR="${AQUAFIX_DIR:-$service_arb/sites/aquafix}"
 VIFNET_DIR="${VIFNET_DIR:-$service_arb/sites/vifnet}"
 
@@ -256,28 +250,28 @@ if [ "$dev" = 1 ]; then
 		run_panel=0
 	fi
 	if [ -z "$SITES_PORT" ]; then
-		warn "skipping sites_panel: no checkout at $SITES_DIR (flake.nix devUsers, or SITES_DIR, names another)"
+		warn "skipping sites_panel: no checkout at $SITES_DIR (_.siblings-local.json names it)"
 		run_sites=0
 	elif answers "$SITES_PORT"; then
 		say "sites_panel already serves http://127.0.0.1:$SITES_PORT: using it"
 		run_sites=0
 	fi
 	if [ -z "$REVIEW_ARCHIVE_PORT" ]; then
-		warn "skipping review_archive: no checkout at $REVIEW_ARCHIVE_DIR (flake.nix devUsers, or REVIEW_ARCHIVE_DIR, names another)"
+		warn "skipping review_archive: no checkout at $REVIEW_ARCHIVE_DIR (_.siblings-local.json names it)"
 		run_review_archive=0
 	elif answers "$REVIEW_ARCHIVE_PORT"; then
 		say "review_archive already serves http://127.0.0.1:$REVIEW_ARCHIVE_PORT: using it"
 		run_review_archive=0
 	fi
 	if [ -z "$PLACEMENT_PORT" ]; then
-		warn "skipping gmaps_optimal_placement: no checkout at $PLACEMENT_DIR (flake.nix devUsers, or PLACEMENT_DIR, names another); the map says placement is not connected"
+		warn "skipping gmaps_optimal_placement: no checkout at $PLACEMENT_DIR (_.siblings-local.json names it); the map says placement is not connected"
 		run_placement=0
 	elif placement_answers; then
 		say "gmaps_optimal_placement already serves http://127.0.0.1:$PLACEMENT_PORT: using it"
 		run_placement=0
 	fi
 	if [ -z "$PLAYBOOK_PORT" ]; then
-		warn "skipping playbook: no checkout at $PLAYBOOK_DIR (PLAYBOOK_DIR names it); /mcp lists no playbook tools"
+		warn "skipping playbook: no checkout at $PLAYBOOK_DIR (_.siblings-local.json names it); /mcp lists no playbook tools"
 		run_playbook=0
 	elif answers "$PLAYBOOK_PORT"; then
 		say "playbook already serves http://127.0.0.1:$PLAYBOOK_PORT: using it"
@@ -292,7 +286,7 @@ elif answers "$PANEL_PORT"; then
 	exit 0
 fi
 [ "$dev" = 1 ] || [ -n "$PLAYBOOK_PORT" ] || {
-	warn "skipping playbook: no checkout at $PLAYBOOK_DIR (PLAYBOOK_DIR names it); /mcp lists no playbook tools"
+	warn "skipping playbook: no checkout at $PLAYBOOK_DIR (_.siblings-local.json names it); /mcp lists no playbook tools"
 	run_playbook=0
 }
 ports=()
@@ -361,7 +355,7 @@ if [ "$watch" = 1 ]; then
 	in_shell "$root" cargo b -q -p sa_server
 	PANEL_BIN="$root/target/debug/panel"
 	if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
-		[ -f "$SITES_DIR/flake.nix" ] || die "no sites_panel checkout at $SITES_DIR: SITES_DIR names it"
+		[ -f "$SITES_DIR/flake.nix" ] || die "no sites_panel checkout at $SITES_DIR: _.siblings-local.json names it"
 		say "building sites_panel and its bundle from $SITES_DIR"
 		in_shell "$SITES_DIR" cargo b -q -p panel_server
 		(cd "$SITES_DIR/frontend" && { [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; } && npm run -s build)
@@ -391,7 +385,7 @@ elif [ -z "${PANEL_WEB_DIR:-}" ]; then
 fi
 [ -x "$PANEL_BIN" ] || die "PANEL_BIN $PANEL_BIN is not an executable"
 if [ "$run_sites" = 1 ] && [ "$watch" = 0 ] && [ -z "${SITES_BIN:-}" ]; then
-	[ -f "$SITES_DIR/flake.nix" ] || die "no sites_panel checkout at $SITES_DIR: SITES_DIR names it"
+	[ -f "$SITES_DIR/flake.nix" ] || die "no sites_panel checkout at $SITES_DIR: _.siblings-local.json names it"
 	say "building sites_panel ($SITES_DIR#bin)"
 	nix build "$SITES_DIR#bin" --out-link "$state/build/sites"
 	SITES_BIN="$state/build/sites/bin/sites_panel"
@@ -536,11 +530,6 @@ fi
 if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
 	say "seeding $state/sites_panel.db"
 	sites_panel migrate
-	register() {
-		sites_panel place register "$1" "$2" >/dev/null 2>>"$state/logs/seed.log" || die "registering $1/$2 failed: see $state/logs/seed.log"
-	}
-	for slug in "${AQUAFIX_PLACES[@]}"; do register aquafix "$slug"; done
-	for slug in "${VIFNET_PLACES[@]}"; do register vifnet "$slug"; done
 fi
 
 # ── run ──────────────────────────────────────────────────────────────────────────────────
@@ -767,6 +756,21 @@ if [ "$run_panel" = 1 ]; then
 						input_filename as $file | .[$file | split("/") | last | sub("\\.json$"; "")] = {answer: $answer, fetched_at: ($at[$file] | todate)}))}
 				' "${batch[@]}" | api POST /admin/imports/queries-cache --data-binary @- >/dev/null
 			done
+		fi
+		# sites' places, registered through the conductor's forward; those it knows stay as they are
+		if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
+			sites() {
+				local method="$1" path="$2"
+				shift 2
+				curl -fsS --fail-with-body -X "$method" -b "$jar" -H "x-sa-csrf: $csrf" -H 'content-type: application/json' "$origin/api/sites$path" "$@"
+			}
+			known="$(sites GET /places | jq -c '[.places[] | [.brand, .location]]')"
+			register() {
+				jq -e --arg b "$1" --arg s "$2" 'any(. == [$b, $s])' <<<"$known" >/dev/null ||
+					sites POST /places -d "$(jq -nc --arg b "$1" --arg s "$2" '{brand: $b, slug: $s}')" >/dev/null
+			}
+			for slug in "${AQUAFIX_PLACES[@]}"; do register aquafix "$slug"; done
+			for slug in "${VIFNET_PLACES[@]}"; do register vifnet "$slug"; done
 		fi
 	elif [ "$fresh" = 1 ]; then
 		die "a new state is seeded as the admin: run it once without --role $role"

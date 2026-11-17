@@ -10,19 +10,15 @@ Grafana, and the conductor's GMBs and tokens reach review_archive. No concierge,
 ## Prerequisites
 
 - Nix with flakes. Everything else (Rust, Node, the sites' toolchains) comes from the flakes.
-- The others checked out beside this one, as `_sa/` holds them:
+- The siblings' checkouts named in `_.siblings-local.json` at this checkout's root (gitignored; gen reads
+  their committed documents from it too):
 
-  ```text
-  _sa/
-    site_conductor/  this repository (its worktrees work too: the others are found beside the main checkout)
-    sites/panel/     sites_panel
-    review_archive/  review_archive (skipped, with a message, when missing)
-    gmaps_optimal_placement/  placement, the home map's overlay (likewise; its first build takes minutes)
-    sites/aquafix/   Service-Arb/aquafix, up to date — the Next.js (kitstart) site
-    sites/vifnet/    Service-Arb/vifnet, likewise
+  ```json
+  { "sites": "<sites_panel>", "review_archive": "<review_archive>", "placement": "<gmaps_optimal_placement>", "playbook": "<playbook>" }
   ```
 
-  Elsewhere: `SITES_DIR=… REVIEW_ARCHIVE_DIR=… PLACEMENT_DIR=… AQUAFIX_DIR=… VIFNET_DIR=… nix run .#local-stack`. A landing checkout
+  A sibling whose checkout is missing is skipped with a message. The landings, `sites/aquafix/` and
+  `sites/vifnet/`, sit beside the main checkout (`AQUAFIX_DIR=… VIFNET_DIR=…` elsewhere); a landing checkout
   without `package.json` (the old Rust sites) is skipped with a message: `git pull` it.
 - Each part's port free: the one its own dev shell sets (docs/port_range.md).
 
@@ -62,11 +58,10 @@ checkout's) is stopped, together with the run that started it and whatever else 
 and this checkout's take their place. A peer already answering `/health` on its port is used as it
 is; the rest are started under `--watch`, and Ctrl-C stops only those. Something else on the
 conductor's ports is let be. The peers are the services whose bundles the front end
-mounts — `devPeers` in flake.nix — each from `../<name>` beside the main checkout; one not there
-is skipped with a warning. `devUsers` in flake.nix gives a user (`id -un`) another `path` for a
-peer (relative to the main checkout, or absolute), or a `command`, run as is in the peer's
-checkout in place of the stack's own serve, which must answer on the port its dev shell sets and
-watch by itself. `SITES_DIR` and `REVIEW_ARCHIVE_DIR` still win. `--port` takes two ports of
+mounts — `devPeers` in flake.nix — each from its `_.siblings-local.json` checkout; one not there
+is skipped with a warning. `devUsers` in flake.nix gives a user (`id -un`) a `command` for a peer,
+run as is in its checkout in place of the stack's own serve, which must answer on the port its dev
+shell sets and watch by itself. `--port` takes two ports of
 `SA_PORT_RANGE` (docs/port_range.md) and a state of its own, `.local-port-<n>/`: two conductors
 never share a `panel.db`. Next runs one `next dev` per `frontend/`: `--port` beside a dev stack of
 the same checkout fails to start its front end; run it from another checkout (a worktree). The concierge and banking bundles come from the platform's origin, so

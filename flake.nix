@@ -384,18 +384,16 @@
           text = lib.concatStrings (lib.mapAttrsToList (k: v: "export ${k}=${v}\n") localEnv) + builtins.readFile ./scripts/local-stack.sh;
         };
 
-        # `nix run .#dev`'s peers, from ../<name> unless their user's entry names a `path` or `command` (docs/LOCAL.md)
+        # `nix run .#dev`'s peers, from the checkouts _.siblings-local.json names; a user's entry may name a `command` (docs/LOCAL.md)
         devPeers = [ "sites_panel" "review_archive" "gmaps_optimal_placement" ];
-        devUsers = {
-          v.sites_panel.path = "../sites/panel";
-        };
+        devUsers = { };
         devPrelude = lib.concatStrings (lib.mapAttrsToList
           (user: peers:
             "if [ \"$(id -un)\" = ${lib.escapeShellArg user} ]; then\n"
             + lib.concatStrings (lib.mapAttrsToList
               (peer: o:
                 assert lib.assertMsg (builtins.elem peer devPeers) "devUsers.${user}.${peer}: not one of devPeers";
-                assert lib.assertMsg (lib.subtractLists [ "path" "command" ] (lib.attrNames o) == [ ]) "devUsers.${user}.${peer}: only path and command";
+                assert lib.assertMsg (lib.subtractLists [ "command" ] (lib.attrNames o) == [ ]) "devUsers.${user}.${peer}: only command";
                 lib.concatStrings (lib.mapAttrsToList (k: v: "export DEV_${lib.toUpper k}_${peer}=${lib.escapeShellArg v}\n") o))
               peers)
             + "fi\n")

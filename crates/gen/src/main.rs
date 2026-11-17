@@ -1,6 +1,6 @@
 //! `nix run .#gen`: the conductor's OpenAPI document, which the front end's client and types are
-//! generated from; the services' documents, copied in from where `_.documents-local.json` (beside
-//! this crate, gitignored) says each one's checkout keeps it (`null`: none yet, the copy kept);
+//! generated from; the services' documents, copied in from their checkouts (`_.siblings-local.json`
+//! at the repo's root, gitignored, names each one's root; [`DOCUMENTS`] where each commits it);
 //! and the views' table (`VIEWS`, for `@evinvest/views`), the services' nested in the conductor's.
 //! All into `frontend/src/shared/api/`, committed; the `generated` pre-commit hook re-runs it.
 
@@ -12,6 +12,14 @@ use ev_lib::{
 };
 use sa_browsers::view::{In as ViewerIn, Out as ViewerOut};
 use sa_server::view::View;
+
+/// Where each sibling commits its document in its checkout; `None`: none committed yet, the copy kept.
+const DOCUMENTS: [(sa_auth::Service, Option<&str>); 4] = [
+	(sa_auth::Service::Sites, None),
+	(sa_auth::Service::ReviewArchive, Some("crates/review_archive_server/openapi.json")),
+	(sa_auth::Service::Placement, Some("docs/openapi.json")),
+	(sa_auth::Service::Playbook, Some("playbook_web/openapi.json")),
+];
 
 fn main() {
 	let api = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../frontend/src/shared/api");
@@ -34,10 +42,17 @@ fn main() {
 		);
 	}
 	std::fs::write(&out, serde_json::to_string_pretty(&doc).expect("the document serializes") + "\n").expect("frontend/src/shared/api is writable");
-	let local = Path::new(env!("CARGO_MANIFEST_DIR")).join("_.documents-local.json");
-	let sources: BTreeMap<sa_auth::Service, Option<std::path::PathBuf>> =
-		serde_json::from_str(&std::fs::read_to_string(&local).unwrap_or_else(|e| panic!("{}: each service's document, by its checkout's path or null: {e}", local.display())))
+	let local = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../_.siblings-local.json");
+	let roots: BTreeMap<sa_auth::Service, std::path::PathBuf> =
+		serde_json::from_str(&std::fs::read_to_string(&local).unwrap_or_else(|e| panic!("{}: each sibling's checkout root: {e}", local.display())))
 			.unwrap_or_else(|e| panic!("{}: {e}", local.display()));
+	let sources: Vec<(sa_auth::Service, Option<std::path::PathBuf>)> = DOCUMENTS
+		.iter()
+		.map(|(service, at)| {
+			let root = roots.get(service).unwrap_or_else(|| panic!("{} names no {service}", local.display()));
+			(*service, at.map(|at| root.join(at)))
+		})
+		.collect();
 	let vendored = api.join("services");
 	std::fs::create_dir_all(&vendored).expect("frontend/src/shared/api is writable");
 	let mut table = <View as Views>::table().clone();
