@@ -25,7 +25,7 @@ import { useAlerts, alerts as alertsKeys } from "@/entities/alerts";
 import { api, ok } from "@/shared/api";
 import { type Alerts, type Destination, type Gmail, type Rule, ruleValues } from "@/shared/api/schema";
 import { type T, useT } from "@/shared/i18n";
-import { useResource } from "@/shared/lib/use-resource";
+import { useResource } from "@evinvest/api/react";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
@@ -54,7 +54,7 @@ const RULE_NAME = {
 export function AlertsView() {
   const t = useT();
   const alerts = useAlerts();
-  const gmails = useResource("gmbs", () => ok(api.GET("/gmails")), "gmbs", { live: ["gmails"] });
+  const gmails = useResource(api, "/gmails");
   const [busy, setBusy] = useState(false);
   const act = async (write: () => Promise<unknown>) => {
     setBusy(true);

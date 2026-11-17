@@ -1,6 +1,6 @@
-export { fetchMapConfig, fetchSitesPlaces, linkPlace, placeGmb, setTrades, switchGmbs } from "./api/gmbs";
+export { placeGmb, setTrades, switchGmbs } from "./api/gmbs";
+export { linkPlace, useSitesPlaces } from "./api/sites";
 export { browsersUnconnected, uploadFilm } from "./api/connections";
-export { fetchArchive } from "./api/tags";
 export { type Placed, categoryName, categoryOf } from "./model/category";
 export { GmailsProvider, useGmails, useGmbTags, useTrades, useTrash, useUndoable } from "./model/gmails-context";
 export { GMAIL_ROLE_NAME, STATE_NAME, STATE_TONE, googleName } from "./model/gmb";

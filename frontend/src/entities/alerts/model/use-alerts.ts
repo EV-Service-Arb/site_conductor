@@ -1,8 +1,9 @@
 "use client";
 
-import { api, ok } from "@/shared/api";
-import { useResource } from "@/shared/lib/use-resource";
+import { useResource } from "@evinvest/api/react";
+
+import { api } from "@/shared/api";
 
 export function useAlerts() {
-  return useResource("alerts", () => ok(api.GET("/alerts")), "alerts", { live: ["alerts"], focus: true });
+  return useResource(api, "/alerts");
 }

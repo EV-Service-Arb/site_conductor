@@ -4,8 +4,8 @@ import { Toaster } from "@evinvest/uikit";
 import { type ReactNode, useState } from "react";
 
 import { MeProvider } from "@/entities/session";
-import { api, ok } from "@/shared/api";
-import { useResource } from "@/shared/lib/use-resource";
+import { api } from "@/shared/api";
+import { useResource } from "@evinvest/api/react";
 import { ErrorState } from "@/shared/ui/error-state";
 
 import { NoAccessScreen, ShellSkeleton, UnavailableScreen } from "./access-screens";
@@ -30,13 +30,13 @@ export function PanelShell({ bare = false, children }: { bare?: boolean; childre
 
 /** `bare`: the gate alone, without the frame: a page of its own (the kit's `/<area>/`). */
 function PanelBody({ bare, children }: { bare: boolean; children: ReactNode }) {
-  const me = useResource("me", () => ok(api.GET("/me")));
+  const me = useResource(api, "/me");
   const [accessLost, setAccessLost] = useState(false);
 
   if (accessLost) return <NoAccessScreen />;
   if (me.status === "loading") return <ShellSkeleton />;
   if (me.status === "error") {
-    switch (me.failure.kind) {
+    switch (me.failure.code) {
       case "unauthenticated":
         return <ShellSkeleton />;
       case "unavailable":

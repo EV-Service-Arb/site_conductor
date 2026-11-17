@@ -16,8 +16,8 @@ app/                 the one page: which view it shows is the location's, parsed
 src/views/           one slice per screen, plus shell/ (the top bar, the access states, the window events)
 src/features/        account-chip · sign-out · wallet-element · sites-element · manage-sources · request-access
 src/entities/        session · source · tokens · gmb · alerts · assistant — what the screens make of the API's answers
-src/shared/          api/ (`api`: /api/v1 from openapi.json, its answers checked against it; `http`: the services' forwards;
-                     CSRF, the gate's answers), i18n/, lib/ (live/: the socket), mfe/, ui/
+src/shared/          api/ (`@evinvest/api` clients over the committed documents: `api` /api/v1, `reviewArchive`, `placement`
+                     their forwards; CSRF, sign-in), i18n/, lib/ (location: the views), mfe/, ui/
 messages/            @evinvest/i18n's catalogues (`npm run i18n` regenerates them); a root key lives in the slice it names
 tests/               vitest, in Node: the rules the screens obey live in plain modules; e2e/: the Figma frames
 ```
@@ -68,16 +68,14 @@ aquafix has one. What that needs of the backend and the flake:
 ## Live updates
 
 The shell opens one WebSocket per tab, same origin, `/api/v1/live` (cookie
-session), and relays it on `window` (CONTRACT §9): every server message as it came
-as `sa:live`, the connection's status as `sa:live-status` (answered again on
-`sa:live-status-request`). It closes with 4401 (session gone: the browser goes to
-sign-in) or 4403 (access lost: the "no access" screen). `shared/lib/live`
-reconnects with exponential backoff and jitter; a hidden tab keeps an open socket
-but makes no attempts, and reconnects at once when visible.
+session), with `@evinvest/api`'s `useLiveSocket`, and relays it on `window` (CONTRACT §9):
+every server message as it came as `ev:live`, the connection's status as `ev:live-status`
+(answered again on `ev:live-status-request`). It closes with 4401 (session gone: the browser
+goes to sign-in) or 4403 (access lost: the "no access" screen).
 
-The conductor's screens read the same events (`useResource(…, { live })`): a change
-on their topic, a `resync`, or the socket back after a drop re-reads them. The sites'
-elements do the same for theirs. The elements also tell the host: `sa:title-count`
+A read (`useResource(api, path)`) follows the tables its last answer read (`x-sa-reads`): a
+change on one, a `resync`, or the socket back after a drop re-reads it; one that read none
+re-reads on focus. The sites' elements do the same for theirs. The elements also tell the host: `sa:title-count`
 (the tab title's new leads: `(3) Leads — Service-Arb panel`), `sa:unauthenticated`
 (their API's 401: the sign-in), `ev:navigate` (a link the host routes).
 

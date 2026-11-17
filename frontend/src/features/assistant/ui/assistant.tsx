@@ -101,7 +101,7 @@ export function AssistantToggle() {
 function useNoticeShared(): void {
   const chats = useChats();
   const last = useRef<Map<string, string> | null>(null);
-  const data: ChatSummary[] | null = chats.status === "ok" ? chats.data : null;
+  const data: ChatSummary[] | null = chats.status === "ok" ? chats.data.chats : null;
   useEffect(() => {
     if (data === null) return;
     const now = new Map(data.map((c) => [c.id, c.updated_at]));

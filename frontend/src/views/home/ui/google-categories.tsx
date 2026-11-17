@@ -5,10 +5,10 @@ import { ChevronLeft, ChevronRight, ChevronsUpDown, Copy, GripVertical, Plus, X 
 import { type ReactNode, useMemo, useState } from "react";
 
 import { googleName, trades } from "@/entities/gmb";
-import { api, ok } from "@/shared/api";
+import { api } from "@/shared/api";
 import type { Category, Country, GoogleCategory } from "@/shared/api/schema";
 import { useLocale, useT, state } from "@/shared/i18n";
-import { useResource } from "@/shared/lib/use-resource";
+import { useResource } from "@evinvest/api/react";
 import { failureText } from "@/shared/ui/failure-text";
 import { useButtonSize } from "@/shared/ui/touch";
 
@@ -170,9 +170,9 @@ const WORD = /[^\p{L}\p{N}]+/u;
 function Search({ country, lang, exclude, onPick }: { country: Country; lang: string; exclude: ReadonlySet<string>; onPick: (g: GoogleCategory) => void }) {
   const t = useT();
   const locale = useLocale();
-  const list = useResource(`google-categories.${country}`, async () => (await ok(api.GET("/google-categories/{country}", { params: { path: { country } } }))).categories);
+  const list = useResource(api, "/google-categories/{country}", { params: { path: { country } } });
   const [search, setSearch] = useState("");
-  const data = list.status === "ok" ? list.data : null;
+  const data = list.status === "ok" ? list.data.categories : null;
   const indexed = useMemo(() => {
     const collator = new Intl.Collator(locale);
     return (data ?? [])

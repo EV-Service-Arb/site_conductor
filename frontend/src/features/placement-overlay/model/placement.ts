@@ -1,20 +1,18 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
-import { ApiError, api, http, ok, readCsrf } from "@/shared/api";
+import { api, placement, readCsrf } from "@/shared/api";
 import { type Infer, arrayOf, bool, nullable, num, object, oneOf, parse, str } from "@/shared/lib/parse";
 import { covers, useScope, useTrades } from "@/entities/gmb";
 import type { Area, Category, Trade } from "@/shared/api/schema";
 import { type Home, setHome, useHome } from "@/shared/lib/location";
-import { useResource } from "@/shared/lib/use-resource";
+import { useResource } from "@evinvest/api/react";
 
 // gmaps_optimal_placement behind the forward (docs/ARCHITECTURE.md, Forward): its overlay module
 // builds a category's study over an area and draws it on the map it is handed.
 const API = "/api/placement";
 const MODULE = "/mfe/placement/overlay.js";
-
-const servedParser = object({ trades: arrayOf(str), countries: arrayOf(str) });
 
 const layerParser = object({ id: str, name: str, note: str, trade: bool });
 const dataParser = nullable(
@@ -111,16 +109,15 @@ let attached: Promise<Handle | null> | null = null;
 
 export function attach(map: google.maps.Map): Promise<Handle | null> {
   attached ??= (async () => {
-    let served: Infer<typeof servedParser>;
-    try {
-      served = await http.get(`${API}/trades.json`, servedParser);
-    } catch (e) {
-      if (e instanceof ApiError && e.failure.kind === "unavailable") {
+    const answer = await placement.GET("/trades.json");
+    if (answer.error !== undefined) {
+      if (answer.error.code === "unavailable") {
         set({ status: "unconnected" });
         return null;
       }
-      throw e;
+      throw new Error(answer.error.error);
     }
+    const served = answer.data;
     const { overlay } = (await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ MODULE)) as OverlayModule;
     const handle = await overlay(map, {
       api: API,
@@ -235,10 +232,17 @@ export type Studied =
 /** The URL's study and area, resolved against the categories and the areas. */
 export function useStudied(view: MapView): Studied {
   const trades = useTrades();
-  // keyed by the pick: an area drawn a moment ago is read with it
-  const areas = useResource(`areas.${view.area}`, async () => (await ok(api.GET("/areas"))).areas, "areas");
-  if (trades.status === "error") return { status: "error", message: trades.failure.kind };
-  if (areas.status === "error") return { status: "error", message: areas.failure.kind };
+  const read = useResource(api, "/areas");
+  const areas = read.status === "ok" ? { ...read, data: read.data.areas } : read;
+  // an area drawn a moment ago may postdate the last read: read again once before calling it gone
+  const missing = view.area !== null && view.area !== "" && areas.status === "ok" && !areas.data.some((a) => a.slug === view.area) ? view.area : null;
+  const [asked, setAsked] = useState<string | null>(null);
+  if (missing !== null && asked !== missing) {
+    setAsked(missing);
+    read.reload();
+  }
+  if (trades.status === "error") return { status: "error", message: trades.failure.code };
+  if (areas.status === "error") return { status: "error", message: areas.failure.code };
   if (trades.status !== "ok" || areas.status !== "ok") return { status: "loading" };
   let picked: { trade: Trade; category: Category } | null = null;
   if (view.study !== null) {
@@ -249,7 +253,7 @@ export function useStudied(view: MapView): Studied {
     picked = { trade, category };
   }
   const area = view.area === null || view.area === "" ? null : (areas.data.find((a) => a.slug === view.area) ?? null);
-  if (view.area !== null && view.area !== "" && area === null && areas.fresh) throw new Error(`?area=${view.area}: no such area`);
+  if (missing !== null && asked === missing && areas.fresh) throw new Error(`?area=${view.area}: no such area`);
   const drawn = area === null ? null : picked === null ? { definition: gridOnly(area) } : define(picked.trade, picked.category, area);
   return { status: "ok", areas: areas.data, area, picked, drawn };
 }

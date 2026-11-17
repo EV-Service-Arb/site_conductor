@@ -7,7 +7,8 @@ import { PANEL } from "@config";
 
 import { covers, openCategories, openTrade, useScope, useTrades } from "@/entities/gmb";
 import type { Country } from "@/shared/api/schema";
-import { may, useMe } from "@/entities/session";
+import { useMe } from "@/entities/session";
+import { placement as placementApi } from "@/shared/api";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { type T, useT, placement as placementKeys, state, hotbar } from "@/shared/i18n";
 import { type Base, setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
@@ -321,7 +322,7 @@ function DataSection({ view, data, notice, pulling, pullFailed }: { view: MapVie
         </Fold>
       )}
       {/* a sweep never bought has no trade yet: what it lacks is the notice's */}
-      {(trade !== null || notice?.missing != null) && may(me, "sa:placement:study:spend") && (
+      {(trade !== null || notice?.missing != null) && placementApi.mayCall("post", "/studies/{sha}/pull", me.permissions) && (
         <PullButton searches={trade?.searches ?? notice!.missing!} pulling={pulling} />
       )}
       {pullFailed !== null && <Note tone="error">{pullFailed}</Note>}

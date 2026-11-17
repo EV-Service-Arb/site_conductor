@@ -9,7 +9,7 @@ import { may, useMe } from "@/entities/session";
 import { LinkPlaceButton } from "@/features/link-gmb-place";
 import { SpotsEditor } from "@/features/add-gmb";
 import { type Country, type Gmb, type GmbEdit, type GoogleCategory, countryValues } from "@/shared/api/schema";
-import { ApiError, api, ok } from "@/shared/api";
+import { Refused, api, ok } from "@/shared/api";
 import { type T, useLocale, useT, account, nav } from "@/shared/i18n";
 import { failureText } from "@/shared/ui/failure-text";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -50,8 +50,8 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
       setFailed(null);
       gmails.reload();
     } catch (e) {
-      if (!(e instanceof ApiError)) throw e;
-      if (e.failure.kind !== "unauthenticated") setFailed({ must, text: failureText(e.failure, t) });
+      if (!(e instanceof Refused)) throw e;
+      if (e.failure.code !== "unauthenticated") setFailed({ must, text: failureText(e.failure, t) });
     }
   };
   const text = (must: MustHave, value: string | null, edit: (v: string | null) => GmbEdit, type?: "tel") => (
@@ -430,8 +430,8 @@ function OntoGoogle({ gmbId, onMoved }: { gmbId: number; onMoved: () => void }) 
       await ok(api.PUT("/gmbs/{id}/state", { params: { path: { id: gmbId } }, body: { state: "verifying", ...(place.trim() !== "" && { place: place.trim() }) } }));
       onMoved();
     } catch (e) {
-      if (!(e instanceof ApiError)) throw e;
-      if (e.failure.kind !== "unauthenticated") setFailed(failureText(e.failure, t));
+      if (!(e instanceof Refused)) throw e;
+      if (e.failure.code !== "unauthenticated") setFailed(failureText(e.failure, t));
     } finally {
       setBusy(false);
     }

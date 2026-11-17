@@ -11,7 +11,7 @@ import { ClaimButton } from "@/features/claim-kickbacks";
 import { ViewLink } from "@/shared/lib/location";
 import { type T, useLocale, useT, account } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
-import { useResource } from "@/shared/lib/use-resource";
+import { useResource } from "@evinvest/api/react";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -32,7 +32,7 @@ export function TokensView() {
   const t = useT();
   const me = useMe();
   const tokens = useTokens();
-  const usage = useResource("tokens.usage", async () => (await ok(api.GET("/tokens/usage"))).days, "tokens.usage", { live: ["tokens"], focus: true });
+  const usage = useResource(api, "/tokens/usage");
   const [ledgerVersion, setLedgerVersion] = useState(0);
   const refresh = () => {
     tokens.reload();
@@ -82,7 +82,7 @@ export function TokensView() {
       <Section title={t(account.usage, "Usage")}>
         {usage.status === "loading" && <Skeleton className="h-24 w-full" />}
         {usage.status === "error" && <ErrorState failure={usage.failure} onRetry={usage.reload} />}
-        {usage.status === "ok" && <UsageFigures days={usage.data} />}
+        {usage.status === "ok" && <UsageFigures days={usage.data.days} />}
       </Section>
       <Section title={t(tokensKeys.ledger, "History")}>
         <Ledger key={ledgerVersion} />
@@ -107,7 +107,7 @@ function Ledger() {
   const t = useT();
   const locale = useLocale();
   const button = useButtonSize();
-  const first = useResource("tokens.ledger", () => ok(api.GET("/tokens/ledger", { params: { query: { limit: PAGE } } })), "tokens.ledger", { live: ["tokens"] });
+  const first = useResource(api, "/tokens/ledger", { params: { query: { limit: PAGE } } });
   const [more, setMore] = useState<Ledger | null>(null);
   const [busy, setBusy] = useState(false);
 

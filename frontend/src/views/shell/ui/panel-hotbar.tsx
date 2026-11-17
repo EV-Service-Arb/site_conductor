@@ -6,7 +6,7 @@ import { useAt } from "@/shared/lib/location";
 
 import { type T, useT, hotbar, placement } from "@/shared/i18n";
 import { live as liveKeys } from "../model/i18n";
-import type { LiveStatus } from "@/shared/lib/live";
+import { type LiveStatus, useLiveStatus } from "@evinvest/api/react";
 import { RunningBrowsers } from "@/features/browser-session";
 import { MapPanel, MapPreview } from "@/features/placement-overlay";
 import { setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
@@ -23,7 +23,8 @@ const LIVE_NAME = {
 const LIVE_TONE: Record<LiveStatus, StatusTone> = { live: "positive", connecting: "neutral", reconnecting: "warn", offline: "error", paused: "muted", closed: "error" };
 
 /** The strip along the bottom of every signed-in screen: the screen's actions, and how the tab is connected. */
-export function PanelHotbar({ live }: { live: LiveStatus }) {
+export function PanelHotbar() {
+  const live = useLiveStatus();
   const t = useT();
   const places = usePlacesShown();
   const onMap = useAt().view === "home";
@@ -45,7 +46,7 @@ export function PanelHotbar({ live }: { live: LiveStatus }) {
       status={
         <>
           <RunningBrowsers />
-          <StatusItem tone={LIVE_TONE[live]}>{LIVE_NAME[live](t)}</StatusItem>
+          {live !== null && <StatusItem tone={LIVE_TONE[live]}>{LIVE_NAME[live](t)}</StatusItem>}
         </>
       }
       labels={{ region: t(hotbar, "Hotbar"), customize: t(hotbar.customize, "Customize"), title: t(hotbar.title, "Customize hotbar"), description: t(hotbar.description, "Pinned actions show in the bar."), reset: t(hotbar.reset, "Reset to default"), done: t(hotbar.done, "Done"), hide: t(hotbar.hide, "Hide from hotbar") }}

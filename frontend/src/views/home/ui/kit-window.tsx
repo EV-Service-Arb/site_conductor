@@ -5,12 +5,12 @@ import { href } from "@evinvest/views";
 import { Copy, ExternalLink, Plus, QrCode, X } from "lucide-react";
 
 import { AreaDraw, TARGET_NAME, kit, open, openKit, outlineOf, useOutline, windowKeys } from "@/entities/gmb";
-import { api, ok } from "@/shared/api";
+import { api } from "@/shared/api";
 import type { KitNearby } from "@/shared/api/schema";
 import { VIEWS } from "@/shared/api/views";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDistance } from "@/shared/lib/format";
-import { useResource } from "@/shared/lib/use-resource";
+import { useResource } from "@evinvest/api/react";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { Qr } from "@/shared/ui/qr";
@@ -56,13 +56,13 @@ function Draw({ map }: { map: google.maps.Map }) {
 /** Every area drawn, anyone's: areas are geography. */
 function Areas() {
   const t = useT();
-  const areas = useResource("areas", async () => (await ok(api.GET("/areas"))).areas);
-  if (areas.status !== "ok" || areas.data.length === 0) return null;
+  const areas = useResource(api, "/areas");
+  if (areas.status !== "ok" || areas.data.areas.length === 0) return null;
   return (
     <section className="flex flex-col gap-2 border-t border-border pt-3">
       <h3 className={SECTION_HEAD}>{t(kit.areas, "Areas")}</h3>
       <span className="flex flex-wrap gap-1.5">
-        {areas.data.map((a) => (
+        {areas.data.areas.map((a) => (
           <button key={a.slug} type="button" onClick={() => openKit(a.slug)} className="flex items-center gap-1.5 rounded-md bg-hover px-2 py-1 text-xs text-ink outline-none hover:bg-hover/70 focus-visible:ring-2 focus-visible:ring-ring">
             {a.name}
             <span className="font-mono text-ink-soft">/{a.slug}/</span>
@@ -77,14 +77,14 @@ function Area({ map, slug }: { map: google.maps.Map; slug: string }) {
   const t = useT();
   const locale = useLocale();
   const button = useButtonSize();
-  const res = useResource(`kit.area.${slug}`, () => ok(api.GET("/kit/areas/{slug}/gmbs", { params: { path: { slug } } })), `kit.area.${slug}`, { focus: true });
+  const res = useResource(api, "/kit/areas/{slug}/gmbs", { params: { path: { slug } } });
   const area = res.status === "ok" ? res.data.area : null;
   useOutline(map, area === null ? null : outlineOf(area), beside());
   if (res.status === "loading") return <Skeleton className="m-4 h-64" />;
   if (res.status === "error")
     return (
       <div className="flex flex-col gap-3 p-4">
-        {res.failure.kind === "not_found" ? <p className="text-sm text-ink-soft">{t(kit.area.notFound, "No area is at /{slug}/.", { slug })}</p> : <ErrorState failure={res.failure} onRetry={res.reload} />}
+        {res.failure.code === "not_found" ? <p className="text-sm text-ink-soft">{t(kit.area.notFound, "No area is at /{slug}/.", { slug })}</p> : <ErrorState failure={res.failure} onRetry={res.reload} />}
         <NewArea />
       </div>
     );

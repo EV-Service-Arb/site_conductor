@@ -633,10 +633,11 @@ closes              4401 the session ended   1001 the server is stopping
   `resync` first on every connection and a `ping` every 25 s; a feed that ends, fails, or says
   nothing for 60 s is followed again after 1 s, doubling to 30 s, so what was missed meanwhile is
   read again. One that answers 404 has none yet: said once, asked again every 60 s.
-- **The shell relays.** The front end holds the one socket and re-dispatches on `window`, as
-  `CustomEvent`s: `sa:live` (each server message as is, and a `{type:"resync"}` after the shell
-  reconnects), `sa:live-status` (`{status}`; answered to an element's
-  `sa:live-status-request`). The sites elements dispatch `sa:title-count` (`{count}`, the nav
+- **The shell relays.** The front end holds the one socket (`@evinvest/api`'s `useLiveSocket`)
+  and re-dispatches on `window`, as `CustomEvent`s: `ev:live` (each server message as is, and a
+  `{type:"resync"}` after the shell reconnects), `ev:live-status` (`{status}`; answered to an
+  element's `ev:live-status-request`). Each read follows the tables its last answer named
+  (`x-sa-reads`); one that named none re-reads when the window regains focus. The sites elements dispatch `sa:title-count` (`{count}`, the nav
   only) and `sa:unauthenticated` (the shell opens its sign-in, returning to the current page).
 - **The bus is in-process** (`tokio::sync::broadcast`, one pod), 1024 messages per subscriber; a
   socket further behind skips the backlog and is sent `resync`. A frame that does not go out

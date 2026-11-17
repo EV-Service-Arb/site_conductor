@@ -121,8 +121,8 @@ export function stop(): void {
   stopping?.abort();
 }
 
-/** What the page tells the assistant: what is open, the views there are, the bindings bound now. */
-export type Page = Pick<Question, "url" | "views" | "bindings">;
+/** What the page tells the assistant: what is open, the bindings bound now. */
+export type Page = Pick<Question, "url" | "bindings">;
 
 /**
  * `asked` put at turn `from` of `chat` (a new chat for `null`), everything after it dropped, and answered by the
