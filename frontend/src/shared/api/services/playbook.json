@@ -1,0 +1,369 @@
+{
+  "components": {
+    "schemas": {
+      "Error": {
+        "description": "Why the request was refused.",
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "error": {
+            "description": "For a person.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "error"
+        ],
+        "type": "object"
+      },
+      "ErrorCode": {
+        "description": "Which refusal, for a client to act on: its status follows from it.",
+        "enum": [
+          "bad_request",
+          "forbidden",
+          "over_budget",
+          "unanswerable",
+          "unauthenticated"
+        ],
+        "type": "string"
+      }
+    }
+  },
+  "info": {
+    "description": "The service-arb playbook: dated, sourced knowledge on running Google Business Profiles into subcontracted trade work, used through the `service-arb` skill, which https://github.com/EV-Service-Arb/playbook installs.",
+    "title": "playbook",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/guide": {
+      "get": {
+        "description": "Lines ending `// inferred` are drafted, not yet vetted. The guides:\n- conversion: calls, VA, site\n- experts: who to refer someone to, and when not to\n- fulfilment: contractors, splits, getting paid\n- infra: gmails, devices, proxies, numbers, cards\n- market: which trade, which city, whether to enter\n- profile-creation: getting a listing to exist\n- ranking: name, categories, site, what to measure\n- reviews: rate, sourcing, deletion\n- suspension: what links profiles, what to do once one goes down\n- verification: video, live, instant",
+        "operationId": "guide",
+        "parameters": [
+          {
+            "description": "one of the guides listed",
+            "in": "query",
+            "name": "area",
+            "required": true,
+            "schema": {
+              "description": "one of the guides listed",
+              "type": "string"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain; charset=utf-8": {}
+            },
+            "description": "plain text"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_request`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`forbidden`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unanswerable`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`over_budget`"
+          }
+        },
+        "summary": "One guide, whole: how to decide in one area, as what matters, how to decide, and what to do when it goes wrong.",
+        "tags": [
+          "tools"
+        ],
+        "x-errors": {
+          "bad_request": 400,
+          "forbidden": 403,
+          "over_budget": 429,
+          "unanswerable": 422,
+          "unauthenticated": 401
+        },
+        "x-permission": "sa:playbook:mcp:use",
+        "x-tool": true
+      }
+    },
+    "/read": {
+      "get": {
+        "description": "Never a whole file.",
+        "operationId": "read",
+        "parameters": [
+          {
+            "description": "part of the header line of the chapter or section to read, e.g. `Selling calls` or `## facts`",
+            "in": "query",
+            "name": "header",
+            "required": true,
+            "schema": {
+              "description": "part of the header line of the chapter or section to read, e.g. `Selling calls` or `## facts`",
+              "type": "string"
+            },
+            "style": "form"
+          },
+          {
+            "description": "a line number inside the chapter, when the header text repeats in the file",
+            "in": "query",
+            "name": "line",
+            "schema": {
+              "description": "a line number inside the chapter, when the header text repeats in the file",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "style": "form"
+          },
+          {
+            "description": "a path as `search` returned it",
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "description": "a path as `search` returned it",
+              "type": "string"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain; charset=utf-8": {}
+            },
+            "description": "plain text"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_request`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`forbidden`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unanswerable`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`over_budget`"
+          }
+        },
+        "summary": "One chapter of a capture (a `###` under `## transcript` or `## summary`) or one section of a note, whole, with every line numbered.",
+        "tags": [
+          "tools"
+        ],
+        "x-errors": {
+          "bad_request": 400,
+          "forbidden": 403,
+          "over_budget": 429,
+          "unanswerable": 422,
+          "unauthenticated": 401
+        },
+        "x-permission": "sa:playbook:mcp:use",
+        "x-tool": true
+      }
+    },
+    "/search": {
+      "get": {
+        "description": "Each kind of source has its own slots, so none crowds out another: knowledge/structured/approved and knowledge/structured/suggested notes, the course (lessons and the recordings they link), calls, videos, texts. Within a kind, a passage holding the rarer of the pattern's alternatives ranks first. Each hit gives path:line, its header, its label, the source URL and the lines around it; the files past the slots follow as path:line, for `read`. A pattern hitting most of the scope is refused, with the sub-scopes it hits.\n\nA label is who said it, their base reliability, the date, and the effective reliability: base plus age, lower is better, 10 at most and as good as nothing. A call's base is its speaker's, so its label gives the age term to add to it instead.\n\nBase by role: 0 tested myself · 1 skool course material or in knowledge/structured/approved/ · 3 a gmbpp member tested it · 4 a gmbpp member claimed it or in knowledge/structured/suggested · 5 a gmbpp member heard or thought of it; a cheap group member tested it · 6 a cheap group member claimed it · 7 a cheap group member heard or thought of it.\nBase by person, whatever their role: 2 Eric · 2 Zach Peterson (youtube `@zachpeters0n`) · 3 Gabe Jacobs (skool `gabe-jacobs-9502`) · 3 Marcus Milan (youtube `@marcusmilxn`) · 3 Matt Gazda (youtube `@Matt_Gazda`).",
+        "operationId": "search",
+        "parameters": [
+          {
+            "description": "a regex, case-insensitive; each `|` alternative is scored on its own",
+            "in": "query",
+            "name": "pattern",
+            "required": true,
+            "schema": {
+              "description": "a regex, case-insensitive; each `|` alternative is scored on its own",
+              "type": "string"
+            },
+            "style": "form"
+          },
+          {
+            "description": "a path prefix to search under, e.g. `knowledge/references/loom` or `knowledge/structured/approved/profile`",
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "description": "a path prefix to search under, e.g. `knowledge/references/loom` or `knowledge/structured/approved/profile`",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "style": "form"
+          },
+          {
+            "description": "search what recordings showed on screen instead of what was said",
+            "in": "query",
+            "name": "screen",
+            "schema": {
+              "description": "search what recordings showed on screen instead of what was said",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain; charset=utf-8": {}
+            },
+            "description": "plain text"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_request`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`forbidden`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unanswerable`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`over_budget`"
+          }
+        },
+        "summary": "Case-insensitive regex over the service-arb playbook.",
+        "tags": [
+          "tools"
+        ],
+        "x-errors": {
+          "bad_request": 400,
+          "forbidden": 403,
+          "over_budget": 429,
+          "unanswerable": 422,
+          "unauthenticated": 401
+        },
+        "x-permission": "sa:playbook:mcp:use",
+        "x-tool": true
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ]
+}
