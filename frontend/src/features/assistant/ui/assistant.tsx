@@ -11,7 +11,7 @@ import { useQuery } from "@/shared/lib/query";
 import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
 import { ResizeEdge } from "@/shared/ui/resize-edge";
 
-import { type Mode, WIDTH, notice, openChat, setWidth, show, useAssistant } from "../model/chat";
+import { type Mode, WIDTH, notice, openChat, restore, setWidth, show, useAssistant } from "../model/chat";
 import { hideOnEscape, useKeymap } from "../model/keymap";
 import { copyLink } from "./chat-actions";
 import { ChatView } from "./chat-view";
@@ -27,6 +27,7 @@ export function Assistant() {
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const shown = useQuery("assistant") as Mode | null;
   if (shown !== null && shown !== "sidebar" && shown !== "floating") throw new Error(`?assistant=${String(shown)}: not sidebar or floating`);
+  useEffect(restore, []);
   // A link's display is the last shown, and whatever happens while open is seen.
   useEffect(() => {
     if (shown !== null) show(shown);
