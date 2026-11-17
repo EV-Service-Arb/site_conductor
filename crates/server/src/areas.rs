@@ -7,7 +7,7 @@ use jiff::Timestamp;
 use sa_core::prices::{PlacesRequest, Spends};
 use sa_panel::{
 	Panel,
-	areas::{Area, NewArea, Shape},
+	areas::{Area, NewArea},
 };
 use sa_places::{LatLng, Locality, Viewport};
 use serde::{Deserialize, Serialize};
@@ -29,14 +29,6 @@ pub(crate) struct ViewportDto {
 }
 
 #[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "AreaShape")]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub(crate) enum ShapeDto {
-	City { place_id: String, viewport: ViewportDto },
-	Circle { radius_m: i64 },
-}
-
-#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Area")]
 pub(crate) struct AreaDto {
 	pub slug: String,
@@ -44,8 +36,9 @@ pub(crate) struct AreaDto {
 	/// ISO 3166-1 alpha-2.
 	pub country: String,
 	pub center: LatLng,
-	pub shape: ShapeDto,
-	pub margin_m: i64,
+	pub radius_m: i64,
+	/// The locality's place it was drawn from: an outline to see it by, not its edge.
+	pub city: Option<String>,
 }
 
 #[derive(Clone, Debug, JsonSchema, Serialize)]
@@ -56,10 +49,13 @@ pub(crate) struct AreasDto {
 
 #[derive(Deserialize, JsonSchema)]
 #[schemars(rename = "PutArea")]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub(crate) enum PutAreaDto {
-	City { place_id: String, margin_m: i64 },
-	Circle { name: String, lat: f64, lng: f64, radius_m: i64, margin_m: i64 },
+#[serde(deny_unknown_fields)]
+pub(crate) struct PutAreaDto {
+	name: String,
+	center: LatLng,
+	radius_m: i64,
+	/// A locality's place id, from `/kit/cities`.
+	city: Option<String>,
 }
 
 #[derive(Clone, Debug, JsonSchema, Serialize)]
@@ -91,14 +87,8 @@ impl From<Area> for AreaDto {
 			name: a.name,
 			country: a.country,
 			center: a.center,
-			shape: match a.shape {
-				Shape::City { place_id, viewport } => ShapeDto::City {
-					place_id,
-					viewport: viewport.into(),
-				},
-				Shape::Circle { radius_m } => ShapeDto::Circle { radius_m },
-			},
-			margin_m: a.margin_m,
+			radius_m: a.radius_m,
+			city: a.city,
 		}
 	}
 }
@@ -151,22 +141,19 @@ async fn area(State(panel): State<Panel>, Ids(SlugIn { slug }): Ids<SlugIn>) -> 
 	Ok(Json(panel.area(&slug).await?.ok_or(ApiError::NotFound)?.into()))
 }
 
-/// Draws the area at `/<slug>/`: a city (its outline and country asked of Places, paid by the
-/// caller) or a circle (its centre's country reverse-geocoded), with a margin around it that is "next to it"; over what it was if the caller drew it.
+/// Draws the area at `/<slug>/`, a circle; its country its city's, else its centre's (Places, paid
+/// by the caller); over what it was if the caller drew it.
 ///
 /// 400 a link the conductor's own pages hold, or a centre in no country; 409 someone else's area.
 async fn put_area(State(s): State<ApiState>, Spends(caller, by): Spends<PlacesRequest, Caller>, Ids(SlugIn { slug }): Ids<SlugIn>, Body(b): Body<PutAreaDto>) -> ApiResult<Json<AreaDto>> {
 	if crate::web::taken(&slug, s.web.as_ref()) {
 		return Err(ApiError::BadRequest(format!("/{slug}/ is one of the conductor's own pages")));
 	}
-	let new = match b {
-		PutAreaDto::City { place_id, margin_m } => NewArea::City { place_id, margin_m },
-		PutAreaDto::Circle { name, lat, lng, radius_m, margin_m } => NewArea::Circle {
-			name,
-			center: LatLng { lat, lng },
-			radius_m,
-			margin_m,
-		},
+	let new = NewArea {
+		name: b.name,
+		center: b.center,
+		radius_m: b.radius_m,
+		city: b.city,
 	};
 	let area = s.panel.put_area(by, &slug, new, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, slug, "area drawn");

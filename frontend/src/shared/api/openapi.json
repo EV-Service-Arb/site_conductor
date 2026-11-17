@@ -830,7 +830,7 @@
         "tags": [
           "areas"
         ],
-        "summary": "Draws the area at `/<slug>/`: a city (its outline and country asked of Places, paid by the caller) or a circle (its centre's country reverse-geocoded), with a margin around it that is \"next to it\"; over what it was if the caller drew it.",
+        "summary": "Draws the area at `/<slug>/`, a circle; its country its city's, else its centre's (Places, paid by the caller); over what it was if the caller drew it.",
         "description": "400 a link the conductor's own pages hold, or a centre in no country; 409 someone else's area.",
         "operationId": "put_area",
         "parameters": [
@@ -5238,19 +5238,23 @@
           "center": {
             "$ref": "#/components/schemas/LatLng"
           },
+          "city": {
+            "description": "The locality's place it was drawn from: an outline to see it by, not its edge.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "country": {
             "description": "ISO 3166-1 alpha-2.",
             "type": "string"
           },
-          "margin_m": {
-            "type": "integer",
-            "format": "int64"
-          },
           "name": {
             "type": "string"
           },
-          "shape": {
-            "$ref": "#/components/schemas/AreaShape"
+          "radius_m": {
+            "type": "integer",
+            "format": "int64"
           },
           "slug": {
             "type": "string"
@@ -5261,49 +5265,8 @@
           "name",
           "country",
           "center",
-          "shape",
-          "margin_m"
-        ]
-      },
-      "AreaShape": {
-        "oneOf": [
-          {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "city"
-              },
-              "place_id": {
-                "type": "string"
-              },
-              "viewport": {
-                "$ref": "#/components/schemas/Viewport"
-              }
-            },
-            "required": [
-              "kind",
-              "place_id",
-              "viewport"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "circle"
-              },
-              "radius_m": {
-                "type": "integer",
-                "format": "int64"
-              }
-            },
-            "required": [
-              "kind",
-              "radius_m"
-            ]
-          }
+          "radius_m",
+          "city"
         ]
       },
       "Areas": {
@@ -6948,10 +6911,6 @@
             "type": "integer",
             "format": "int64"
           },
-          "inside": {
-            "description": "`false`: within the margin outside it.",
-            "type": "boolean"
-          },
           "last_shown": {
             "type": [
               "string",
@@ -6985,7 +6944,6 @@
           "address",
           "location",
           "distance_m",
-          "inside",
           "target",
           "last_shown"
         ]
@@ -8282,66 +8240,31 @@
         ]
       },
       "PutArea": {
-        "oneOf": [
-          {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "city"
-              },
-              "margin_m": {
-                "type": "integer",
-                "format": "int64"
-              },
-              "place_id": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "place_id",
-              "margin_m"
+        "type": "object",
+        "properties": {
+          "center": {
+            "$ref": "#/components/schemas/LatLng"
+          },
+          "city": {
+            "description": "A locality's place id, from `/kit/cities`.",
+            "type": [
+              "string",
+              "null"
             ]
           },
-          {
-            "type": "object",
-            "properties": {
-              "kind": {
-                "type": "string",
-                "const": "circle"
-              },
-              "lat": {
-                "type": "number",
-                "format": "double"
-              },
-              "lng": {
-                "type": "number",
-                "format": "double"
-              },
-              "margin_m": {
-                "type": "integer",
-                "format": "int64"
-              },
-              "name": {
-                "type": "string"
-              },
-              "radius_m": {
-                "type": "integer",
-                "format": "int64"
-              }
-            },
-            "additionalProperties": false,
-            "required": [
-              "kind",
-              "name",
-              "lat",
-              "lng",
-              "radius_m",
-              "margin_m"
-            ]
+          "name": {
+            "type": "string"
+          },
+          "radius_m": {
+            "type": "integer",
+            "format": "int64"
           }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "center",
+          "radius_m"
         ]
       },
       "Question": {

@@ -337,29 +337,50 @@ in_shell() {
 	(cd "$dir" && nix develop -c "$@")
 }
 REVIEW_ARCHIVE_WEB_BUILD="nix run .#build-mfe -- '$state/watch/review_archive-mfe'"
+# once more on a failure: other sessions sweep target dirs, mid-build too
+retried() { "$@" || { warn "retrying: $*"; "$@"; }; }
+# `peer_down <peer> <checkout> <why>`: dev goes on without a peer, the conductor answering 502 for
+# it; the stack needs every part
+peer_down() {
+	local locked head hint=""
+	locked="$(grep -m1 -o 'site_conductor?branch=main#[0-9a-f]*' "$2/Cargo.lock" | cut -d'#' -f2)" || true # no sa_* locked: no hint
+	head="$(git -C "$root" rev-parse HEAD)"
+	[ -z "$locked" ] || [ "$locked" = "$head" ] ||
+		hint="; its Cargo.lock has sa_* at ${locked:0:7}, this checkout is at ${head:0:7}: [patch.\"https://github.com/EV-Service-Arb/site_conductor\"] in $2/.cargo/config.toml points them at $root/crates"
+	[ "$dev" = 1 ] || die "$1 $3$hint"
+	warn "skipping $1: $3$hint (see $state/logs/); the conductor answers 502 for it"
+}
 if [ "$watch" = 1 ]; then
 	for v in PANEL_BIN PANEL_WEB_DIR SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR; do
 		[ -z "${!v:-}" ] || die "--watch builds every part from its checkout: unset $v"
 	done
 	# also when another conductor serves: `panel gen-data-key` makes the state's key
 	say "building the conductor from $root"
-	in_shell "$root" cargo b -q -p sa_server
+	retried in_shell "$root" cargo b -q -p sa_server
 	PANEL_BIN="$root/target/debug/panel"
 	if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
 		[ -f "$SITES_DIR/flake.nix" ] || die "no sites_panel checkout at $SITES_DIR: SITES_DIR names it"
 		say "building sites_panel and its bundle from $SITES_DIR"
-		in_shell "$SITES_DIR" cargo b -q -p panel_server
-		(cd "$SITES_DIR/frontend" && { [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; } && npm run -s build)
-		SITES_BIN="$SITES_DIR/target/debug/sites_panel"
-		SITES_MFE_DIR="$SITES_DIR/frontend/dist"
+		if retried in_shell "$SITES_DIR" cargo b -q -p panel_server &&
+			(cd "$SITES_DIR/frontend" && { [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; } && npm run -s build); then
+			SITES_BIN="$SITES_DIR/target/debug/sites_panel"
+			SITES_MFE_DIR="$SITES_DIR/frontend/dist"
+		else
+			peer_down sites_panel "$SITES_DIR" "did not build"
+			run_sites=0
+		fi
 	fi
 	if [ "$run_review_archive" = 1 ] && [ -z "${DEV_COMMAND_review_archive:-}" ]; then
 		[ -f "$REVIEW_ARCHIVE_DIR/flake.nix" ] || die "no review_archive checkout at $REVIEW_ARCHIVE_DIR: REVIEW_ARCHIVE_DIR names it"
 		say "building review_archive and its bundle from $REVIEW_ARCHIVE_DIR"
-		in_shell "$REVIEW_ARCHIVE_DIR" cargo b -q -p review_archive_server
-		(cd "$REVIEW_ARCHIVE_DIR" && nix run .#build-mfe -- "$state/watch/review_archive-mfe")
-		REVIEW_ARCHIVE_BIN="$REVIEW_ARCHIVE_DIR/target/debug/review_archive"
-		REVIEW_ARCHIVE_MFE_DIR="$state/watch/review_archive-mfe"
+		if retried in_shell "$REVIEW_ARCHIVE_DIR" cargo b -q -p review_archive_server &&
+			(cd "$REVIEW_ARCHIVE_DIR" && retried nix run .#build-mfe -- "$state/watch/review_archive-mfe"); then
+			REVIEW_ARCHIVE_BIN="$REVIEW_ARCHIVE_DIR/target/debug/review_archive"
+			REVIEW_ARCHIVE_MFE_DIR="$state/watch/review_archive-mfe"
+		else
+			peer_down review_archive "$REVIEW_ARCHIVE_DIR" "did not build"
+			run_review_archive=0
+		fi
 	fi
 fi
 if [ -z "${PANEL_BIN:-}" ]; then
@@ -631,18 +652,18 @@ essential=()
 custom() {
 	say "starting $1 from $2 with \`$3\`"
 	(cd "$2" && prefixed "$1" bash -c "$3") &
-	essential+=("$!")
+	[ "$dev" = 1 ] || essential+=("$!")
 }
 
 if [ "$run_sites" = 1 ]; then
 	if [ -n "${DEV_COMMAND_sites_panel:-}" ]; then
 		custom sites "$SITES_DIR" "$DEV_COMMAND_sites_panel"
-		wait_for sites "$sites_origin/health" 600 "$!" || die "sites_panel did not start"
+		wait_for sites "$sites_origin/health" 600 "$!" || peer_down sites_panel "$SITES_DIR" "did not start"
 	else
 		say "starting sites_panel on $sites_origin"
 		serving sites "$SITES_DIR" "cargo b -q -p panel_server" "sites_panel serve --bind 127.0.0.1:$SITES_PORT" -e rs,toml,sql,lock &
-		essential+=("$!")
-		wait_for sites "$sites_origin/health" 30 "$!" || die "sites_panel did not start"
+		[ "$dev" = 1 ] || essential+=("$!")
+		wait_for sites "$sites_origin/health" 30 "$!" || peer_down sites_panel "$SITES_DIR" "did not start"
 		if [ "$watch" = 1 ]; then
 			prefixed sites-mfe watched "$SITES_DIR" --postpone -w frontend/src -w frontend/messages -- "cd frontend && npm run -s build" &
 		fi
@@ -652,15 +673,15 @@ fi
 if [ "$run_review_archive" = 1 ]; then
 	if [ -n "${DEV_COMMAND_review_archive:-}" ]; then
 		custom review_archive "$REVIEW_ARCHIVE_DIR" "$DEV_COMMAND_review_archive"
-		wait_for review_archive "$review_archive_origin/health" 600 "$!" || die "review_archive did not start"
+		wait_for review_archive "$review_archive_origin/health" 600 "$!" || peer_down review_archive "$REVIEW_ARCHIVE_DIR" "did not start"
 	else
 		say "starting review_archive on $review_archive_origin"
 		mkdir -p "$REVIEW_ARCHIVE_DATA_DIR"
 		flock "$REVIEW_ARCHIVE_DATA_DIR/serve.lock" sleep infinity &
 		serving review_archive "$REVIEW_ARCHIVE_DIR" "cargo b -q -p review_archive_server" "review_archive serve --no-login-check" \
 			-w grafana -i 'crates/review_archive_web/**' -e rs,toml,sql,json,lock &
-		essential+=("$!")
-		wait_for review_archive "$review_archive_origin/health" 60 "$!" || die "review_archive did not start"
+		[ "$dev" = 1 ] || essential+=("$!")
+		wait_for review_archive "$review_archive_origin/health" 60 "$!" || peer_down review_archive "$REVIEW_ARCHIVE_DIR" "did not start"
 		if [ "$watch" = 1 ]; then
 			prefixed review_archive-mfe watched "$REVIEW_ARCHIVE_DIR" --postpone -w crates/review_archive_web -w crates/review_archive_client -w crates/review_archive_core -e rs,css,html,toml -- "$REVIEW_ARCHIVE_WEB_BUILD" &
 		fi

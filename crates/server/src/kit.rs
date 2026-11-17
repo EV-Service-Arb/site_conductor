@@ -182,8 +182,6 @@ pub(crate) struct NearbyDto {
 	pub address: Option<String>,
 	pub location: LatLng,
 	pub distance_m: f64,
-	/// `false`: within the margin outside it.
-	pub inside: bool,
 	pub target: Option<Target>,
 	pub last_shown: Option<String>,
 }
@@ -303,7 +301,6 @@ impl From<Nearby> for NearbyDto {
 			address: n.gmb.address,
 			location: n.gmb.location.expect("only a GBP with a point is by an area").at,
 			distance_m: n.distance_m.round(),
-			inside: n.inside,
 			target: n.target,
 			last_shown: n.last_shown.map(|t| t.to_string()),
 		}
