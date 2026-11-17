@@ -9,8 +9,7 @@ use axum::{
 use sa_auth::PermissionSet;
 use sa_panel::{
 	Panel,
-	live::{Audience, Signal},
-	testing::{TestDb, operator, panel},
+	testing::{TestDb, operator, panel, settled, told, topics},
 };
 use sa_server::{
 	concierge::{Concierge, DevIdentity},
@@ -150,7 +149,7 @@ async fn who_sees_a_chat_and_who_changes_it() {
 }
 
 #[tokio::test]
-async fn a_deleted_chat_takes_its_members_and_marks_and_tells_them() {
+async fn a_deleted_chat_takes_its_members_and_marks_and_tells_their_tables() {
 	let db = TestDb::create().await;
 	let p = panel(&db).await;
 	let mut owner = Person::new(&p, "owner@x.com", operator()).await;
@@ -162,20 +161,14 @@ async fn a_deleted_chat_takes_its_members_and_marks_and_tells_them() {
 	assert_eq!(member.call(Method::PUT, &format!("{url}/pinned"), Some(json!({ "on": true }))).await.0, StatusCode::NO_CONTENT);
 	assert!(member.call(Method::GET, "/api/v1/assistant/chats", None).await.1["chats"][0]["pinned_at"].is_string());
 
+	settled(&p).await;
 	let mut bus = p.bus().subscribe();
 	assert_eq!(owner.call(Method::DELETE, &url, None).await.0, StatusCode::NO_CONTENT);
-	let mut told = Vec::new();
-	while let Ok(Signal::Changed(c)) = bus.try_recv() {
-		assert_eq!((c.topic.as_str(), c.id), ("assistant", Some(chat.to_string())));
-		told.push(match c.audience {
-			Audience::User(u) => u,
-			a => panic!("{a:?}"),
-		});
-	}
-	told.sort();
-	let mut both = vec![owner.id, member.id];
-	both.sort();
-	assert_eq!(told, both, "the member is told of a chat gone");
+	assert_eq!(
+		told(&p, &mut bus).await,
+		topics(&["assistant_chats", "assistant_marks", "assistant_members", "sessions"]),
+		"the member's screens read their chats again"
+	);
 
 	let pool = db.pool().await;
 	for table in ["assistant_chats", "assistant_members", "assistant_marks"] {

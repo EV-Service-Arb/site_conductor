@@ -27,12 +27,10 @@ import {
   useKeymap,
 } from "@evinvest/uikit";
 import { ArrowUpRight, Bell, Globe, MapPin, Menu, PanelLeftClose, PanelLeftOpen, Wallet } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { unreached, useAlerts, alerts as alertsKeys } from "@/entities/alerts";
-import { DevSignInBadge, ownScreens, useMe } from "@/entities/session";
+import { DevSignInBadge, useMe } from "@/entities/session";
 import { useTokens, tokens as tokensKeys } from "@/entities/tokens";
 import { AccountChip } from "@/features/account-chip";
 import { AssistantToggle } from "@/features/assistant";
@@ -41,7 +39,7 @@ import { useSignOut } from "@/features/sign-out";
 import { PANEL } from "@config";
 
 import { safeLocalPath } from "@/shared/api";
-import { ROUTES } from "@/shared/config/routes";
+import { ViewLink, go, linkTo, useAt, usePath } from "@/shared/lib/location";
 import { LOCALES, type Locale, chooseLocale, useLocale, useT, nav, keys as keysKeys, usage } from "@/shared/i18n";
 
 import { toggleSidebar, useSidebarFolded } from "../model/sidebar";
@@ -58,8 +56,8 @@ export function PanelTopBar() {
   const t = useT();
   const me = useMe();
   const signOut = useSignOut();
-  const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePath();
+  const at = useAt();
   const apps = useApps();
   const switcher = useSwitcherGroups();
   const [open, setOpen] = useState(false);
@@ -73,11 +71,11 @@ export function PanelTopBar() {
       if (path === null) throw new Error(`ev:navigate: not a path on this origin: ${String(href)}`);
       e.preventDefault();
       setOpen(false);
-      router.push(path);
+      go(path);
     };
     window.addEventListener("ev:navigate", onNavigate);
     return () => window.removeEventListener("ev:navigate", onNavigate);
-  }, [router]);
+  }, []);
 
   return (
     <TopBar
@@ -95,7 +93,7 @@ export function PanelTopBar() {
                 <SheetTitle>{t(appKeys.name, "Service-Arb")}</SheetTitle>
                 <DevSignInBadge />
               </SheetHeader>
-              <NavMenuList groups={switcher} pathname={pathname} linkComponent={Link} onNavigate={() => setOpen(false)} className="w-auto" />
+              <NavMenuList groups={switcher} pathname={pathname} linkComponent={ViewLink} onNavigate={() => setOpen(false)} className="w-auto" />
               <div className="border-t border-border pt-2">
                 <Outline folded={false} onNavigate={() => setOpen(false)} className="h-auto w-auto border-r-0 bg-transparent p-0" />
               </div>
@@ -117,7 +115,7 @@ export function PanelTopBar() {
       end={
         <div className="flex items-center gap-1">
           <OwnScreens bar className="hidden md:flex" />
-          {PANEL.assistant && !`${pathname}/`.startsWith(ROUTES.assistant) && <AssistantToggle />}
+          {PANEL.assistant && at.view !== "assistant" && <AssistantToggle />}
           <AlertsLink />
           <LanguageMenu />
           <AccountChip me={me} onSignOut={signOut} className="ml-1" />
@@ -130,10 +128,10 @@ export function PanelTopBar() {
 
 /** The open app has none: the outline shows its views, whole or in its icons' flyouts, so the menu would only repeat them. */
 function AppItem({ app, menu }: { app: App; menu: boolean }) {
-  const pathname = usePathname();
+  const pathname = usePath();
   return (
-    <NavMenu label={app.label} href={app.href} current={app.here} linkComponent={Link}>
-      {menu ? "content" in app.section ? app.section.content : <NavMenuList groups={[app.section]} pathname={pathname} linkComponent={Link} /> : undefined}
+    <NavMenu label={app.label} href={app.href} current={app.here} linkComponent={ViewLink}>
+      {menu ? "content" in app.section ? app.section.content : <NavMenuList groups={[app.section]} pathname={pathname} linkComponent={ViewLink} /> : undefined}
     </NavMenu>
   );
 }
@@ -179,7 +177,7 @@ function useSwitcherGroups(): NavGroup[] {
       id: "apps",
       label: t(appKeys.name, "Service-Arb"),
       items: [
-        { id: "home", href: "/", label: t(nav.home, "Home"), icon: MapPin, description: t(nav.home.description, "Every GBP on one map"), match: "exact" },
+        { id: "home", href: linkTo({ view: "home", params: {} }), label: t(nav.home, "Home"), icon: MapPin, description: t(nav.home.description, "Every GBP on one map"), match: "exact" },
         ...apps.map((a) => ({ id: a.href, href: a.href, label: a.label, icon: a.icon, description: a.description })),
       ],
     },
@@ -201,13 +199,14 @@ function useSwitcherGroups(): NavGroup[] {
 
 function AppSwitcher() {
   const t = useT();
-  const pathname = usePathname();
+  const pathname = usePath();
+  const home = useAt().view === "home";
   const groups = useSwitcherGroups();
   return (
     <NavigationMenu viewport={false} aria-label={t(appsKeys.switch, "Switch service")}>
       <NavigationMenuList>
-        <NavMenu label={<span className="text-base font-semibold whitespace-nowrap text-ink">{t(appKeys.name, "Service-Arb")}</span>} href="/" current={pathname === "/"} linkComponent={Link} className="shrink-0 px-2">
-          <NavMenuList groups={groups} pathname={pathname} linkComponent={Link} />
+        <NavMenu label={<span className="text-base font-semibold whitespace-nowrap text-ink">{t(appKeys.name, "Service-Arb")}</span>} href={linkTo({ view: "home", params: {} })} current={home} linkComponent={ViewLink} className="shrink-0 px-2">
+          <NavMenuList groups={groups} pathname={pathname} linkComponent={ViewLink} />
         </NavMenu>
       </NavigationMenuList>
     </NavigationMenu>
@@ -220,10 +219,10 @@ function AlertsLink() {
   const alerts = useAlerts();
   return (
     <Button asChild variant="ghost" size="sm" icon className="relative">
-      <Link href={ROUTES.alerts} aria-label={t(nav.alerts, "Alerts")}>
+      <ViewLink to={{ view: "alerts", params: {} }} aria-label={t(nav.alerts, "Alerts")}>
         <Bell aria-hidden />
         {alerts.status === "ok" && unreached(alerts.data) && <NavDot corner tone="warn" label={t(alertsKeys.connect, "Connect Telegram")} />}
-      </Link>
+      </ViewLink>
     </Button>
   );
 }
@@ -251,13 +250,15 @@ function LanguageMenu() {
   );
 }
 
+/** The caller's own screens, beside the account chip, left to right; the wallet as it is built. */
+const OWN: readonly ("usage" | "tokens" | "wallet")[] = ["usage", "tokens", ...(PANEL.walletPage ? (["wallet"] as const) : [])];
+
 /** The screens the bar keeps behind its menu; a phone's Sheet lists them with the rest. */
 const inMenu = (id: string): id is "usage" => id === "usage";
 
 function ScreensMenu() {
   const t = useT();
-  const me = useMe();
-  const pathname = usePathname();
+  const at = useAt();
   const label = { usage: t(usage.title, "Usage") };
   return (
     <DropdownMenu>
@@ -267,13 +268,13 @@ function ScreensMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        {ownScreens(me, PANEL.walletPage)
+        {OWN
           .filter(inMenu)
           .map((id) => (
             <DropdownMenuItem key={id} asChild>
-              <Link href={ROUTES[id]} aria-current={pathname.startsWith(ROUTES[id]) ? "page" : undefined}>
+              <ViewLink to={{ view: id, params: {} }} aria-current={at.view === id ? "page" : undefined}>
                 {label[id]}
-              </Link>
+              </ViewLink>
             </DropdownMenuItem>
           ))}
       </DropdownMenuContent>
@@ -284,9 +285,8 @@ function ScreensMenu() {
 /** The caller's own screens; Tokens is labelled with the count, never called a balance: evinvest.ltd's wallet is another ledger. */
 function OwnScreens({ bar = false, className, onNavigate }: { bar?: boolean; className?: string; onNavigate?: () => void }) {
   const t = useT();
-  const me = useMe();
   const tokens = useTokens();
-  const pathname = usePathname();
+  const at = useAt();
   const label = {
     usage: t(usage.title, "Usage"),
     tokens: tokens.status === "ok" ? t(tokensKeys.count, "{n} tokens", { n: tokens.data.balance }) : t(nav.tokens, "Tokens"),
@@ -294,16 +294,16 @@ function OwnScreens({ bar = false, className, onNavigate }: { bar?: boolean; cla
   };
   return (
     <div className={cn("flex items-center gap-1", className)}>
-      {ownScreens(me, PANEL.walletPage)
+      {OWN
         .filter((id) => !(bar && inMenu(id)))
         .map((id) => {
-        const here = pathname.startsWith(ROUTES[id]);
+        const here = at.view === id;
         return (
-          <Link key={id} href={ROUTES[id]} onClick={() => onNavigate?.()} aria-current={here ? "page" : undefined} className={cn(navigationMenuTriggerStyle(), "justify-start gap-2", id === "wallet" && "md:size-8 md:justify-center md:px-0", here && "bg-hover/50")}>
+          <ViewLink key={id} to={{ view: id, params: {} }} onClick={() => onNavigate?.()} aria-current={here ? "page" : undefined} className={cn(navigationMenuTriggerStyle(), "justify-start gap-2", id === "wallet" && "md:size-8 md:justify-center md:px-0", here && "bg-hover/50")}>
             {id === "wallet" && <Wallet aria-hidden className="size-4" />}
             {/* the wallet is an icon in the bar, a labelled row in the sheet */}
             <span className={cn(id === "tokens" && "tabular-nums", id === "wallet" && "md:sr-only")}>{label[id]}</span>
-          </Link>
+          </ViewLink>
         );
       })}
     </div>

@@ -178,35 +178,25 @@ pub async fn chat_taken(conn: &mut SqliteConnection, chat: i64, topic: Option<i6
 		.wrap_err("looking a chat up")
 }
 
-/// Unlinks a private chat (`/stop`): the user it was linked to, `None` when it was not.
-pub async fn unlink_private(conn: &mut SqliteConnection, chat: i64) -> eyre::Result<Option<Uuid>> {
-	sqlx::query_scalar(
-		"DELETE FROM alert_destinations WHERE id = (SELECT destination_id FROM telegram_destinations WHERE chat_id = $1 AND kind = 'private') \
-		 RETURNING user_id",
-	)
-	.bind(chat)
-	.fetch_optional(&mut *conn)
-	.await
-	.wrap_err("unlinking a chat")
+/// Unlinks a private chat (`/stop`): `false` when it was not linked.
+pub async fn unlink_private(conn: &mut SqliteConnection, chat: i64) -> eyre::Result<bool> {
+	let gone = sqlx::query("DELETE FROM alert_destinations WHERE id = (SELECT destination_id FROM telegram_destinations WHERE chat_id = $1 AND kind = 'private')")
+		.bind(chat)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("unlinking a chat")?;
+	Ok(gone.rows_affected() == 1)
 }
 
 /// Nothing reaches `chat` (the bot is blocked there, or gone from it): nothing more goes there
-/// until a send succeeds again. The users whose destinations it held.
-pub async fn chat_dead(conn: &mut SqliteConnection, chat: i64, why: &str, now: Timestamp) -> eyre::Result<Vec<Uuid>> {
+/// until a send succeeds again.
+pub async fn chat_dead(conn: &mut SqliteConnection, chat: i64, why: &str, now: Timestamp) -> eyre::Result<()> {
 	sqlx::query(concat!(drop_pending!(), "chat_id = $2"))
 		.bind(why)
 		.bind(chat)
 		.execute(&mut *conn)
 		.await
 		.wrap_err("dropping what a dead chat was owed")?;
-	let users = sqlx::query_scalar(
-		"SELECT DISTINCT d.user_id FROM telegram_destinations t JOIN alert_destinations d ON d.id = t.destination_id \
-		 WHERE t.chat_id = $1 AND t.dead_at IS NULL",
-	)
-	.bind(chat)
-	.fetch_all(&mut *conn)
-	.await
-	.wrap_err("reading a dead chat's users")?;
 	sqlx::query("UPDATE telegram_destinations SET dead_at = $2, dead_reason = $3 WHERE chat_id = $1 AND dead_at IS NULL")
 		.bind(chat)
 		.bind(to_db(now))
@@ -214,7 +204,7 @@ pub async fn chat_dead(conn: &mut SqliteConnection, chat: i64, why: &str, now: T
 		.execute(&mut *conn)
 		.await
 		.wrap_err("marking a chat dead")?;
-	Ok(users)
+	Ok(())
 }
 
 /// A send to the destination succeeded: it is reached again.

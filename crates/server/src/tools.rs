@@ -203,6 +203,125 @@ pub(crate) fn tool_name(operation: &str) -> String {
 /// The tools every agent has, whatever the catalog holds: an operation's own tool may not take their names.
 pub(crate) const BUILT_IN: [&str; 4] = ["search", "call", "open", "run"];
 
+/// A tool as every transport gives it.
+pub struct Def {
+	pub name: String,
+	pub description: String,
+	/// A JSON Schema with nothing to resolve.
+	pub input: Value,
+	pub hints: Hints,
+}
+
+/// Offers a view as a link: one of the views' table, its params by name.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Open {
+	/// A view's name.
+	pub view: String,
+	/// Its params and query keys, by name.
+	pub params: Map<String, Value>,
+	pub label: String,
+}
+
+/// Offers a binding of the page's keymap as a button.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Run {
+	/// A binding's id, as the page names it.
+	pub binding: String,
+	pub label: String,
+}
+
+impl Tools {
+	/// Every tool `may`'s caller is given: `search` and `call`, each operation that is its own; with
+	/// `page`, the in-page assistant's `open` and `run` too.
+	pub fn definitions(&self, may: impl Fn(Option<&str>) -> bool + Copy, page: bool) -> Vec<Def> {
+		let schema = |s: ev_lib::api::schemars::Schema| serde_json::to_value(s).expect("a schema serializes");
+		let reads = Hints {
+			read_only: true,
+			idempotent: true,
+			destructive: false,
+			spends: Vec::new(),
+		};
+		let mut defs = vec![
+			Def {
+				name: "search".into(),
+				description: "Finds the panel's operations matching what you need: their ids, parameters, body schemas and hints (read_only, idempotent, destructive, spends). An empty query lists every operation you may call.".into(),
+				input: schema(ev_lib::api::schemars::schema_for!(Search)),
+				hints: reads.clone(),
+			},
+			Def {
+				name: "call".into(),
+				description: "Runs one operation by its id from `search`, as the person asking; answers its status and body. One whose hints say destructive or spends is not run: it is proposed, for the person to agree to.".into(),
+				input: schema(ev_lib::api::schemars::generate::SchemaSettings::draft07().into_generator().into_root_schema_for::<Call>()),
+				hints: Hints {
+					read_only: false,
+					idempotent: false,
+					destructive: true,
+					spends: Vec::new(),
+				},
+			},
+		];
+		if page {
+			let views = serde_json::to_value(&*self.catalog.views()).expect("a table serializes");
+			let listed: Vec<String> = views["views"]
+				.as_object()
+				.expect("a table holds its views")
+				.iter()
+				.filter(|(_, v)| may(v["needs"].as_str()))
+				.map(|(name, v)| {
+					let keys = |part: &str| {
+						v[part]["properties"]
+							.as_object()
+							.expect("a view's params and query are objects")
+							.keys()
+							.cloned()
+							.collect::<Vec<_>>()
+					};
+					let text = |field: &str| v[field].as_str().expect("a view has its path and description").to_owned();
+					format!("- {name} ({}): {}; params {:?}, query {:?}", text("path"), text("description"), keys("params"), keys("query"))
+				})
+				.collect();
+			defs.push(Def {
+				name: "open".into(),
+				description: format!("Offers a view as a link, by its name and params. The views:\n{}", listed.join("\n")),
+				input: schema(ev_lib::api::schemars::schema_for!(Open)),
+				hints: reads.clone(),
+			});
+			defs.push(Def {
+				name: "run".into(),
+				description: "Offers a binding of the page's keymap, by its id, as a button: the <page> block lists those bound now.".into(),
+				input: schema(ev_lib::api::schemars::schema_for!(Run)),
+				hints: reads,
+			});
+		}
+		defs.extend(self.own(may).into_iter().map(|t| Def {
+			name: t.name,
+			description: t.description,
+			input: t.input,
+			hints: t.hints,
+		}));
+		defs
+	}
+
+	/// The href `open` offers: a view of the table `may`'s caller may open, its params of its own.
+	pub fn open(&self, open: &Open, may: impl Fn(Option<&str>) -> bool) -> Result<String, String> {
+		let views = self.catalog.views();
+		let entry = serde_json::to_value(&*views).expect("a table serializes")["views"][&open.view].take();
+		if entry.is_null() {
+			return Err(format!("no view {:?}: open names one of the views listed", open.view));
+		}
+		if !may(entry["needs"].as_str()) {
+			return Err(format!("{} is not the person's to open", open.view));
+		}
+		let at = ev_lib::views::At {
+			view: open.view.clone(),
+			params: open.params.clone(),
+		};
+		views.href(&at, &Map::new()).map_err(|e| e.to_string())
+	}
+}
+
 /// An operation that is its own tool.
 pub struct Own {
 	pub name: String,

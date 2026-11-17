@@ -26,15 +26,20 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::any,
 };
+use ev_lib::api::Refusal;
 use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use sa_auth::{Assertion, Principal, Service, Signer, User};
 
 use crate::{
-	api::ApiError,
+	api::Code,
 	catalog::Catalog,
 	cookies,
 	signin::{self, Caller, Freshness, SignIn},
 };
+
+/// What the forward answers itself on a service's API, before the service or in its place: each
+/// forwarded operation's refusals beside the service's own.
+pub const REFUSALS: [Code; 6] = [Code::BadRequest, Code::Unauthenticated, Code::Csrf, Code::Unavailable, Code::BadGateway, Code::Internal];
 
 /// Longest prefixes first: the first match wins.
 const ROUTES: [Route; 8] = [
@@ -263,7 +268,7 @@ impl Forward {
 				let route = ROUTES.iter().find(|r| r.prefix == prefix).expect("apis() are ROUTES");
 				self.pass(route, req, Some(Principal::User(user(service)))).await
 			}
-			None => ApiError::NotFound.into_response(),
+			None => Refusal::new(Code::NotFound, "not found").into_response(),
 		}
 	}
 
@@ -271,8 +276,8 @@ impl Forward {
 	async fn pull(&self, route: &Route, mut req: Request, principal: Option<Principal>, user: uuid::Uuid, sha: &str) -> Response {
 		let held = match self.panel().pull(user).await {
 			Ok(Ok(held)) => held,
-			Ok(Err(refused)) => return ApiError::from(refused).into_response(),
-			Err(e) => return ApiError::from(e).into_response(),
+			Ok(Err(refused)) => return Refusal::<Code>::from(refused).into_response(),
+			Err(e) => return Refusal::<Code>::from(e).into_response(),
 		};
 		*req.uri_mut() = format!("{}?budget={}", req.uri().path(), held.budget())
 			.parse()
@@ -281,17 +286,17 @@ impl Forward {
 		let billed = match res.headers().get("x-billed") {
 			Some(v) => match v.to_str().ok().and_then(|v| v.parse::<u64>().ok()) {
 				Some(n) => n,
-				None => return ApiError::Internal(eyre::eyre!("placement's x-billed of {sha} is {v:?}, not a count")).into_response(),
+				None => return Refusal::<Code>::from(eyre::eyre!("placement's x-billed of {sha} is {v:?}, not a count")).into_response(),
 			},
 			// placement says it on every pull it ran: a refusal without it never reached one
 			None if !res.status().is_success() => 0,
-			None => return ApiError::Internal(eyre::eyre!("placement answered the pull of {sha} without x-billed")).into_response(),
+			None => return Refusal::<Code>::from(eyre::eyre!("placement answered the pull of {sha} without x-billed")).into_response(),
 		};
 		let failed = !res.status().is_success();
 		if res.status() != StatusCode::PAYMENT_REQUIRED {
 			return match held.paid(billed, sha, failed).await {
 				Ok(()) => res,
-				Err(e) => ApiError::from(e).into_response(),
+				Err(e) => Refusal::<Code>::from(e).into_response(),
 			};
 		}
 		#[derive(serde::Deserialize)]
@@ -300,28 +305,28 @@ impl Forward {
 		}
 		let body = match to_bytes(res.into_body(), ANSWER).await {
 			Ok(body) => body,
-			Err(e) => return ApiError::BadGateway(format!("reading placement's refusal: {e}")).into_response(),
+			Err(e) => return Refusal::new(Code::BadGateway, format!("reading placement's refusal: {e}")).into_response(),
 		};
 		let need = match serde_json::from_slice::<Unaffordable>(&body) {
 			Ok(u) => u.need,
-			Err(e) => return ApiError::Internal(eyre::eyre!("placement's 402 for {sha}, {:?}: {e}", String::from_utf8_lossy(&body))).into_response(),
+			Err(e) => return Refusal::<Code>::from(eyre::eyre!("placement's 402 for {sha}, {:?}: {e}", String::from_utf8_lossy(&body))).into_response(),
 		};
 		let why = held.unaffordable(need);
 		if let Err(e) = held.paid(billed, sha, failed).await {
-			return ApiError::from(e).into_response();
+			return Refusal::<Code>::from(e).into_response();
 		}
 		(StatusCode::PAYMENT_REQUIRED, why).into_response()
 	}
 
 	async fn pass(&self, route: &Route, req: Request, principal: Option<Principal>) -> Response {
 		if route.service == Service::Placement && self.services.upstreams.placement.is_none() {
-			return ApiError::Unavailable("placement not connected".to_owned()).into_response();
+			return Refusal::new(Code::Unavailable, "placement not connected").into_response();
 		}
 		let rest = &req.uri().path()[route.prefix.len()..];
 		// decoded as a service might, so no route reaches above its upstream prefix
 		let decoded = rest.to_ascii_lowercase().replace("%2e", ".").replace("%2f", "/").replace("%5c", "/").replace('\\', "/");
 		if decoded.split('/').any(|s| s == "." || s == "..") {
-			return ApiError::BadRequest("not a forwardable path".to_owned()).into_response();
+			return Refusal::new(Code::BadRequest, "not a forwardable path").into_response();
 		}
 		let upstream_path = format!("{}{rest}", route.upstream);
 		let upstream_path = if upstream_path.is_empty() { "/".to_owned() } else { upstream_path };
@@ -334,7 +339,7 @@ impl Forward {
 			Ok(res) => res,
 			Err(e) => {
 				tracing::warn!(error = %e, service = ?route.service, "a forward failed");
-				ApiError::BadGateway("the service did not answer".to_owned()).into_response()
+				Refusal::new(Code::BadGateway, "the service did not answer").into_response()
 			}
 		}
 	}
@@ -382,23 +387,15 @@ async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
 			let write = !matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
 			// a write must not outlive a revoked grant by even the cached GetMe's minute
 			let freshness = if write { Freshness::Fresh } else { Freshness::Cached };
-			// an MCP client's bearer: no cookie for a cross-site request to ride on, and ours, so it never goes up
-			let caller = if req.headers().contains_key(header::AUTHORIZATION) {
-				let caller = signin::bearer(&f.sign_in, req.headers(), freshness).await;
-				req.headers_mut().remove(header::AUTHORIZATION);
-				caller
-			} else {
-				if write && !f.sign_in.cookies().csrf_ok(req.headers()) {
-					return ApiError::Csrf.into_response();
-				}
-				signin::check(&f.sign_in, req.headers(), freshness).await
-			};
+			let caller = signin::caller_of(&f.sign_in, req.method(), req.headers(), freshness).await;
+			// an MCP client's bearer is ours: it never goes up
+			req.headers_mut().remove(header::AUTHORIZATION);
 			match caller {
 				Ok(caller) => {
 					puller = Some(caller.user_id);
 					Some(Principal::User(user(caller, route.service)))
 				}
-				Err(denied) => return denied.into_response(&f.sign_in),
+				Err(r) => return signin::refused(&f.sign_in, r),
 			}
 		}
 	};

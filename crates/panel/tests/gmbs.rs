@@ -46,7 +46,7 @@ async fn a_gmb_is_switched_by_its_owner_and_review_archive_is_told() {
 		kickbacks: vec![],
 	})
 	.await
-	.unwrap();
+	.unwrap().unwrap();
 	let owner = person(&p, "owner@localhost").await;
 	let other = person(&p, "other@localhost").await;
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();

@@ -12,9 +12,9 @@ use axum::{
 	extract::State,
 	http::{HeaderMap, HeaderValue, Method, StatusCode, header},
 };
-use ev_lib::api::JsonSchema;
+use ev_lib::api::{Body, Ids, JsonSchema, Params, Refusal};
 use jiff::Timestamp;
-use sa_auth::{Principal, Service};
+use sa_auth::{Principal, Service, Tokens};
 use sa_core::{
 	prices::{Item, Sale, Scope},
 	tokens::ChargePage,
@@ -28,9 +28,9 @@ use tokio::sync::watch;
 use uuid::Uuid;
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Ids, Params},
+	api::{ApiResult, Code},
 	forward::Services,
-	http::{ApiRoute, Gate, Section},
+	http::{ApiRoute, FRESH, USER},
 	signin::Caller,
 };
 
@@ -301,20 +301,19 @@ pub struct FlowsDto {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
-	let admin = Gate::section(Section::Tokens);
+	let admin = USER.needs(Tokens::Grant);
 	vec![
-		ApiRoute::new(M::GET, "/tokens", user, tokens),
-		ApiRoute::new(M::GET, "/tokens/ledger", user, ledger),
-		ApiRoute::new(M::GET, "/tokens/usage", user, token_usage),
-		ApiRoute::new(M::POST, "/tokens/claim", user, claim_tokens),
-		ApiRoute::new(M::PUT, "/tokens/settings", user, set_spending),
+		ApiRoute::new(M::GET, "/tokens", USER, tokens),
+		ApiRoute::new(M::GET, "/tokens/ledger", USER, ledger),
+		ApiRoute::new(M::GET, "/tokens/usage", USER, token_usage),
+		ApiRoute::new(M::POST, "/tokens/claim", USER, claim_tokens),
+		ApiRoute::new(M::PUT, "/tokens/settings", USER, set_spending),
 		ApiRoute::new(M::GET, "/admin/tokens", admin, token_holders),
 		// Tokens must not be handed out on a permission revoked a moment ago.
-		ApiRoute::new(M::POST, "/admin/tokens/{user_id}", admin.fresh(), change_balance),
+		ApiRoute::new(M::POST, "/admin/tokens/{user_id}", FRESH.needs(Tokens::Grant), change_balance),
 		ApiRoute::new(M::GET, "/admin/tokens/prices", admin, token_prices),
 		// A price is what every request on the shared keys charges.
-		ApiRoute::new(M::PUT, "/admin/tokens/prices", admin.fresh(), set_token_prices),
+		ApiRoute::new(M::PUT, "/admin/tokens/prices", FRESH.needs(Tokens::Grant), set_token_prices),
 		ApiRoute::new(M::GET, "/admin/tokens/flows", admin, token_flows),
 	]
 }
@@ -418,7 +417,7 @@ pub(crate) struct LedgerQuery {
 /// The caller's ledger, newest first.
 async fn ledger(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(q): Params<LedgerQuery>) -> ApiResult<Json<LedgerDto>> {
 	if !(1..=LEDGER_PAGE).contains(&q.limit) {
-		return Err(ApiError::BadRequest(format!("limit is 1 to {LEDGER_PAGE}")));
+		return Err(Refusal::new(Code::BadRequest, format!("limit is 1 to {LEDGER_PAGE}")));
 	}
 	let entries = panel.ledger(caller.user_id, q.before, q.limit).await??;
 	let next = (entries.len() as i64 == q.limit).then(|| entries.last().map(|(id, _)| *id)).flatten();
@@ -551,10 +550,10 @@ pub(crate) struct FlowsQuery {
 
 /// Everyone's ledger and grants in a window, oldest first: what Grafana's sa-tokens dashboard reads.
 pub(crate) async fn token_flows(State(panel): State<Panel>, Params(q): Params<FlowsQuery>) -> ApiResult<Json<FlowsDto>> {
-	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| ApiError::BadRequest(format!("{ms}: {e}")));
+	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| Refusal::new(Code::BadRequest, format!("{ms}: {e}")));
 	let (from, to) = (at(q.from)?, at(q.to)?);
 	if from >= to || to.duration_since(from) > FLOWS_SPAN {
-		return Err(ApiError::BadRequest(format!("from is before to, at most {} days", FLOWS_SPAN.as_hours() / 24)));
+		return Err(Refusal::new(Code::BadRequest, format!("from is before to, at most {} days", FLOWS_SPAN.as_hours() / 24)));
 	}
 	let flows = panel.flows(from, to).await??;
 	Ok(Json(FlowsDto {

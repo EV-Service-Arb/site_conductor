@@ -169,15 +169,6 @@ pub async fn mark(conn: &mut SqliteConnection, id: Uuid, user: Uuid, mark: Mark,
 	Ok(())
 }
 
-/// The owner and the members: whom a change to the chat is told to.
-pub async fn audience(conn: &mut SqliteConnection, id: Uuid) -> eyre::Result<Vec<Uuid>> {
-	sqlx::query_scalar("SELECT owner FROM assistant_chats WHERE id = $1 UNION SELECT user_id FROM assistant_members WHERE chat = $1")
-		.bind(id)
-		.fetch_all(&mut *conn)
-		.await
-		.wrap_err("reading a chat's audience")
-}
-
 pub async fn members(conn: &mut SqliteConnection, id: Uuid) -> eyre::Result<Vec<Person>> {
 	let rows: Vec<(Uuid, String, String)> = sqlx::query_as(
 		"SELECT u.user_id, u.name, u.email FROM assistant_members m JOIN users u ON u.user_id = m.user_id \
@@ -190,9 +181,9 @@ pub async fn members(conn: &mut SqliteConnection, id: Uuid) -> eyre::Result<Vec<
 	Ok(rows.into_iter().map(|(id, name, email)| Person { id, name, email }).collect())
 }
 
-/// `false`: they were the owner or a member already.
-pub async fn add_member(conn: &mut SqliteConnection, id: Uuid, user: Uuid, by: Uuid, now: Timestamp) -> eyre::Result<bool> {
-	let added = sqlx::query(
+/// The owner or a member already is left as they are.
+pub async fn add_member(conn: &mut SqliteConnection, id: Uuid, user: Uuid, by: Uuid, now: Timestamp) -> eyre::Result<()> {
+	sqlx::query(
 		"INSERT INTO assistant_members (chat, user_id, added_by, added_at) \
 		 SELECT $1, $2, $3, $4 FROM assistant_chats WHERE id = $1 AND owner != $2 \
 		 ON CONFLICT (chat, user_id) DO NOTHING",
@@ -204,7 +195,7 @@ pub async fn add_member(conn: &mut SqliteConnection, id: Uuid, user: Uuid, by: U
 	.execute(&mut *conn)
 	.await
 	.wrap_err("adding a chat's member")?;
-	Ok(added.rows_affected() == 1)
+	Ok(())
 }
 
 /// Their membership and marks gone; `false`: they were no member.

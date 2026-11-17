@@ -3,20 +3,21 @@
 import { Button, Card, CardContent, PageFrame, Settled, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn } from "@evinvest/uikit";
 import { useState } from "react";
 
-import { may, useMe } from "@/entities/session";
+import { useMe } from "@/entities/session";
 import { tokens } from "@/entities/tokens";
 import { api, ok } from "@/shared/api";
 import type { TokenHolder } from "@/shared/api/schema";
 import { MetersCard } from "./meters-card";
 import { GrantDialog } from "@/features/grant-tokens";
 import { PricesCard } from "@/features/price-tokens";
-import { ROUTES } from "@/shared/config/routes";
 import { useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorState } from "@/shared/ui/error-state";
 import { EDGE_CELL, TABLE_HEAD } from "@/shared/ui/table";
 import { useButtonSize } from "@/shared/ui/touch";
+import { mayOpen } from "@evinvest/views";
+import { VIEWS } from "@/shared/api/views";
 
 const HEAD = cn(TABLE_HEAD, EDGE_CELL);
 
@@ -30,7 +31,7 @@ export function AdminTokensView() {
   const meters = useResource("admin.meters", async () => ok(api.GET("/admin/meters")));
   const [changing, setChanging] = useState<TokenHolder | null>(null);
 
-  if (!may(me, "sa:admin:tokens:grant")) {
+  if (!mayOpen(VIEWS, "admin_tokens", me.permissions)) {
     return (
       <PageFrame breakpoint="md" title={t(tokens.admin.title, "Tokens of everyone")}>
         <ErrorState failure={{ kind: "forbidden", message: "" }} />
@@ -48,7 +49,7 @@ export function AdminTokensView() {
         <h2 className="text-sm font-semibold text-ink">{t(tokens.admin.spending, "Spending")}</h2>
         <iframe
           title={t(tokens.admin.spending, "Spending")}
-          src={`${ROUTES.grafana}d/sa-tokens/?kiosk&hideLogo&_dash.hideLinks&theme=dark`}
+          src={`/grafana/d/sa-tokens/?kiosk&hideLogo&_dash.hideLinks&theme=dark`}
           className="h-screen w-full rounded-lg border border-border"
         />
       </section>

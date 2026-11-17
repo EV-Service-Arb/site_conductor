@@ -89,8 +89,17 @@ impl World {
 		tokio::spawn(async move { axum::serve(listener, places).await.unwrap() });
 
 		let db = TestDb::create().await;
-		let google = Google::try_new(Keys::new(vec![("house".to_owned(), SHARED.to_owned())]), Arc::new(sa_places::InOrder), Arc::new(db.store().await)).unwrap().spend(true).at(base);
-		let panel = panel_on(db.store().await, DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(), google, sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some(SHARED), Some("browser-key"))]));
+		let store = db.store().await;
+		let google = Google::try_new(Keys::new(vec![("house".to_owned(), SHARED.to_owned())]), Arc::new(sa_places::InOrder), Arc::new(store.clone()))
+			.unwrap()
+			.spend(true)
+			.at(base);
+		let panel = panel_on(
+			store,
+			DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(),
+			google,
+			sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some(SHARED), Some("browser-key"))]),
+		);
 		let empty = Export {
 			people: vec![],
 			gmails: vec![],
@@ -98,7 +107,7 @@ impl World {
 			ledger: vec![],
 			kickbacks: vec![],
 		};
-		panel.import_review_archive(empty).await.unwrap();
+		panel.import_review_archive(empty).await.unwrap().unwrap();
 		let who = DevIdentity {
 			user_id: DevIdentity::named("dev@localhost"),
 			permissions,
@@ -108,16 +117,7 @@ impl World {
 			panel_origin: ORIGIN.to_owned(),
 			concierge_origin: ORIGIN.to_owned(),
 		};
-		let app = http::app(
-			SignIn::new(panel.clone(), Concierge::dev(who), config),
-			None,
-			None,
-			Default::default(),
-			None,
-			None,
-			None,
-			None,
-		);
+		let app = http::app(SignIn::new(panel.clone(), Concierge::dev(who), config), None, None, Default::default(), None, None, None, None);
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		Self { stub, panel, app, b, db }

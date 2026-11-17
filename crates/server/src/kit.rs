@@ -25,7 +25,7 @@ use axum::{
 	routing::{get, post},
 };
 use ev_lib::api::{
-	Created, GenContext, JsonSchema, OperationInput, OperationOutput,
+	Body, Created, GenContext, Ids, JsonSchema, Malformed, OperationInput, OperationOutput, Refusal,
 	openapi::{MediaType, Operation, ReferenceOr, RequestBody, Response as Answer, StatusCode as Status},
 };
 use jiff::Timestamp;
@@ -47,11 +47,11 @@ use tower_http::timeout::{RequestBodyTimeoutLayer, TimeoutLayer};
 use uuid::Uuid;
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Id, Ids},
+	api::{ApiResult, Code, Id},
 	areas::{AreaDto, SlugIn},
 	forward::Services,
 	gmbs::TradeIn,
-	http::{ApiRoute, ApiState, Gate, Limits},
+	http::{ApiRoute, ApiState, Limits, SLOW, USER},
 	ingest,
 	signin::Caller,
 };
@@ -233,7 +233,7 @@ impl Pages {
 		Self { services, kept: Arc::default() }
 	}
 
-	async fn all(&self) -> Result<Arc<Vec<Place>>, ApiError> {
+	async fn all(&self) -> Result<Arc<Vec<Place>>, Refusal<Code>> {
 		if let Some((at, places)) = self.kept.lock().expect("never poisoned: no panic while held").as_ref()
 			&& at.elapsed() < PAGES_FOR
 		{
@@ -241,18 +241,18 @@ impl Pages {
 		}
 		let fetched: Places = self.services.conductor_get(feeds::PLACES).await.map_err(|e| {
 			tracing::warn!(error = %e, "kit: sites' places");
-			ApiError::Unavailable("sites did not say which page is which place".to_owned())
+			Refusal::new(Code::Unavailable, "sites did not say which page is which place")
 		})?;
 		let places = Arc::new(fetched.places);
 		*self.kept.lock().expect("never poisoned: no panic while held") = Some((Instant::now(), places.clone()));
 		Ok(places)
 	}
 
-	async fn of_gmb(&self, gmb: i64) -> Result<Option<Place>, ApiError> {
+	async fn of_gmb(&self, gmb: i64) -> Result<Option<Place>, Refusal<Code>> {
 		Ok(self.all().await?.iter().find(|p| p.gmb_id == gmb).cloned())
 	}
 
-	async fn gmb_at(&self, brand: &str, slug: &str) -> Result<Option<i64>, ApiError> {
+	async fn gmb_at(&self, brand: &str, slug: &str) -> Result<Option<i64>, Refusal<Code>> {
 		Ok(self.all().await?.iter().find(|p| p.brand == brand && p.slug == slug).map(|p| p.gmb_id))
 	}
 }
@@ -347,19 +347,18 @@ fn ranked(drafts: Vec<Ranked>, target: Option<Target>) -> Vec<RankedDto> {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit", user, kit_pool),
-		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/drafts", user, add_kit_draft),
-		ApiRoute::new(M::PATCH, "/trades/{id}/{country}/kit/drafts/{draft}", user, edit_kit_draft),
-		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/drafts/{draft}", user, remove_kit_draft),
-		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/photos", user.slow(), add_kit_photo).layer(|h| h.layer(DefaultBodyLimit::max(PHOTO_MAX))),
-		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit/photos/{file}", user, kit_photo),
-		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/photos/{file}", user, remove_kit_photo),
-		ApiRoute::new(M::GET, "/gmbs/{id}/kit", user, gmb_kit),
-		ApiRoute::new(M::PUT, "/gmbs/{id}/kit", user, set_gmb_kit),
-		ApiRoute::new(M::POST, "/gmbs/{id}/kit/shown", user, kit_shown),
-		ApiRoute::new(M::GET, "/kit/areas/{slug}/gmbs", user, kit_area_gmbs),
+		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit", USER, kit_pool),
+		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/drafts", USER, add_kit_draft),
+		ApiRoute::new(M::PATCH, "/trades/{id}/{country}/kit/drafts/{draft}", USER, edit_kit_draft),
+		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/drafts/{draft}", USER, remove_kit_draft),
+		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/photos", SLOW, add_kit_photo).layer(|h| h.layer(DefaultBodyLimit::max(PHOTO_MAX))),
+		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit/photos/{file}", USER, kit_photo),
+		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/photos/{file}", USER, remove_kit_photo),
+		ApiRoute::new(M::GET, "/gmbs/{id}/kit", USER, gmb_kit),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/kit", USER, set_gmb_kit),
+		ApiRoute::new(M::POST, "/gmbs/{id}/kit/shown", USER, kit_shown),
+		ApiRoute::new(M::GET, "/kit/areas/{slug}/gmbs", USER, kit_area_gmbs),
 	]
 }
 
@@ -387,7 +386,7 @@ struct JpgIn {
 
 /// `<id>.jpg` → id.
 fn jpg(file: &str) -> ApiResult<i64> {
-	file.strip_suffix(".jpg").and_then(|id| id.parse().ok()).ok_or(ApiError::NotFound)
+	file.strip_suffix(".jpg").and_then(|id| id.parse().ok()).ok_or_else(|| Refusal::new(Code::NotFound, "not found"))
 }
 
 /// A photo's bytes, never changed under its id.
@@ -419,12 +418,12 @@ impl OperationOutput for Jpeg {
 struct Image(Bytes);
 
 impl<S: Send + Sync> FromRequest<S> for Image {
-	type Rejection = ApiError;
+	type Rejection = Refusal<Malformed>;
 
-	async fn from_request(req: Request, state: &S) -> Result<Self, ApiError> {
+	async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
 		Bytes::from_request(req, state).await.map(Self).map_err(|e| match e.status() {
-			StatusCode::PAYLOAD_TOO_LARGE => ApiError::TooLarge(format!("a photo is {} MiB at most", PHOTO_MAX >> 20)),
-			_ => ApiError::BadRequest(e.body_text()),
+			StatusCode::PAYLOAD_TOO_LARGE => Refusal::new(Malformed::TooLarge, format!("a photo is {} MiB at most", PHOTO_MAX >> 20)),
+			_ => Refusal::new(Malformed::BadRequest, e.body_text()),
 		})
 	}
 }
@@ -436,6 +435,10 @@ impl OperationInput for Image {
 			required: true,
 			..RequestBody::default()
 		}));
+	}
+
+	fn inferred_early_responses(ctx: &mut GenContext, op: &mut Operation) -> Vec<(Option<Status>, Answer)> {
+		Refusal::<Malformed>::inferred_responses(ctx, op)
 	}
 }
 
@@ -504,14 +507,12 @@ async fn remove_kit_photo(State(panel): State<Panel>, Extension(caller): Extensi
 /// The landing page of the GBP, `<origin>/avis/<slug>`: the origin of the active site key of its
 /// brand.
 async fn page_of(s: &ApiState, gmb: i64) -> ApiResult<Option<String>> {
-	let pages = s
-		.pages
-		.as_ref()
-		.ok_or_else(|| ApiError::Unavailable("sites not connected: no landing page is known".to_owned()))?;
+	let pages = s.pages.as_ref().ok_or_else(|| Refusal::new(Code::Unavailable, "sites not connected: no landing page is known"))?;
 	let Some(place) = pages.of_gmb(gmb).await? else {
 		return Ok(None);
 	};
 	let mut origins: Vec<String> = s
+		.sign_in
 		.panel
 		.store()
 		.sources()
@@ -525,12 +526,15 @@ async fn page_of(s: &ApiState, gmb: i64) -> ApiResult<Option<String>> {
 	match <[String; 1]>::try_from(origins) {
 		Ok([origin]) => Ok(Some(format!("{origin}{PAGE}{}", place.slug))),
 		Err(none) if none.is_empty() => Ok(None),
-		Err(many) => Err(ApiError::Conflict(format!("{}'s site keys have {} origins: {}", place.brand, many.len(), many.join(", ")))),
+		Err(many) => Err(Refusal::new(
+			Code::Conflict,
+			format!("{}'s site keys have {} origins: {}", place.brand, many.len(), many.join(", ")),
+		)),
 	}
 }
 
 async fn kit_dto(s: &ApiState, caller: &Caller, gmb: i64) -> ApiResult<GmbKitDto> {
-	let Kit { target, review_uri, drafts, funnel } = s.panel.kit(caller.user_id, gmb, Timestamp::now()).await??;
+	let Kit { target, review_uri, drafts, funnel } = s.sign_in.panel.kit(caller.user_id, gmb, Timestamp::now()).await??;
 	let page = page_of(s, gmb).await?;
 	let url = match (&page, target) {
 		(_, None) => None,
@@ -569,9 +573,9 @@ async fn set_gmb_kit(
 	Body(SetKitDto { target }): Body<SetKitDto>,
 ) -> ApiResult<Json<GmbKitDto>> {
 	if matches!(target, Some(Target::Drafts | Target::OneTap)) && page_of(&s, gmb).await?.is_none() {
-		return Err(ApiError::Conflict("no landing page of its: only Google's form".to_owned()));
+		return Err(Refusal::new(Code::Conflict, "no landing page of its: only Google's form"));
 	}
-	s.panel.set_kit_target(by, gmb, target, Timestamp::now()).await??;
+	s.sign_in.panel.set_kit_target(by, gmb, target, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, ?target, "kit target set");
 	Ok(Json(kit_dto(&s, &caller, gmb).await?))
 }
@@ -586,7 +590,7 @@ async fn kit_shown(State(panel): State<Panel>, Extension(caller): Extension<Call
 /// first.
 async fn kit_area_gmbs(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>) -> ApiResult<Json<AreaGmbsDto>> {
 	let gmbs = panel.area_gmbs(caller.user_id, &slug).await??;
-	let area = panel.area(&slug).await?.ok_or(ApiError::NotFound)?;
+	let area = panel.area(&slug).await?.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
 	Ok(Json(AreaGmbsDto {
 		area: area.into(),
 		gmbs: gmbs.into_iter().map(Into::into).collect(),
@@ -623,20 +627,21 @@ async fn landing_key(l: &Landing, headers: &HeaderMap, body: &[u8]) -> Result<Gr
 	l.panel.authenticate(batch, Timestamp::now()).await.map_err(ingest::refused)
 }
 
-fn answer(e: ApiError) -> Response {
-	e.into_response()
-}
-
 /// The GBP `view` showed, its brand one of `key`'s.
 async fn view_of(l: &Landing, key: &Grant, view: Uuid) -> Result<(), Response> {
-	let mut conn = l.panel.store().pool().acquire().await.map_err(|e| answer(ApiError::Internal(e.into())))?;
+	let mut conn = l.panel.store().pool().acquire().await.map_err(|e| Refusal::<Code>::from(eyre::Report::from(e)).into_response())?;
 	let gmb = sa_panel::store::kit::view_gmb(&mut conn, view)
 		.await
-		.map_err(|e| answer(ApiError::Internal(e)))?
-		.ok_or_else(|| answer(ApiError::NotFound))?;
-	let place = l.pages.of_gmb(gmb).await.map_err(answer)?.ok_or_else(|| answer(ApiError::NotFound))?;
+		.map_err(|e| Refusal::<Code>::from(e).into_response())?
+		.ok_or_else(|| Refusal::new(Code::NotFound, "not found").into_response())?;
+	let place = l
+		.pages
+		.of_gmb(gmb)
+		.await
+		.map_err(IntoResponse::into_response)?
+		.ok_or_else(|| Refusal::new(Code::NotFound, "not found").into_response())?;
 	if !key.brands.iter().any(|b| b.as_str() == place.brand) {
-		return Err(answer(ApiError::NotFound));
+		return Err(Refusal::new(Code::NotFound, "not found").into_response());
 	}
 	Ok(())
 }
@@ -656,15 +661,15 @@ async fn offer(State(l): State<Landing>, OriginalUri(uri): OriginalUri, headers:
 		Err(res) => return res,
 	};
 	let Ok(Query(q)) = q else {
-		return answer(ApiError::BadRequest("brand, slug and qr=1 if it came from the QR".to_owned()));
+		return Refusal::new(Code::BadRequest, "brand, slug and qr=1 if it came from the QR").into_response();
 	};
 	if !key.brands.iter().any(|b| b.as_str() == q.brand) {
-		return answer(ApiError::NotFound);
+		return Refusal::new(Code::NotFound, "not found").into_response();
 	}
 	let gmb = match l.pages.gmb_at(&q.brand, &q.slug).await {
 		Ok(Some(g)) => g,
-		Ok(None) => return answer(ApiError::NotFound),
-		Err(e) => return answer(e),
+		Ok(None) => return Refusal::new(Code::NotFound, "not found").into_response(),
+		Err(e) => return e.into_response(),
 	};
 	match l.panel.kit_offer(gmb, q.qr == Some(1), Timestamp::now()).await {
 		Ok(Ok(o)) => {
@@ -672,8 +677,8 @@ async fn offer(State(l): State<Landing>, OriginalUri(uri): OriginalUri, headers:
 			res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
 			res
 		}
-		Ok(Err(r)) => answer(r.into()),
-		Err(e) => answer(ApiError::Internal(e)),
+		Ok(Err(r)) => Refusal::<Code>::from(r).into_response(),
+		Err(e) => Refusal::<Code>::from(e).into_response(),
 	}
 }
 
@@ -690,15 +695,15 @@ async fn offered_photo(State(l): State<Landing>, OriginalUri(uri): OriginalUri, 
 		Err(res) => return res,
 	};
 	let (Ok(Query(q)), Ok(photo)) = (q, jpg(&file)) else {
-		return answer(ApiError::NotFound);
+		return Refusal::new(Code::NotFound, "not found").into_response();
 	};
 	if let Err(res) = view_of(&l, &key, q.view).await {
 		return res;
 	}
 	match l.panel.offered_photo(q.view, photo).await {
 		Ok(Ok(bytes)) => Jpeg(bytes).into_response(),
-		Ok(Err(r)) => answer(r.into()),
-		Err(e) => answer(ApiError::Internal(e)),
+		Ok(Err(r)) => Refusal::<Code>::from(r).into_response(),
+		Err(e) => Refusal::<Code>::from(e).into_response(),
 	}
 }
 
@@ -713,20 +718,20 @@ async fn event(State(l): State<Landing>, headers: HeaderMap, body: axum::body::B
 	};
 	let e: EventDto = match serde_json::from_slice(&body) {
 		Ok(e) => e,
-		Err(e) => return answer(ApiError::BadRequest(e.to_string())),
+		Err(e) => return Refusal::new(Code::BadRequest, e.to_string()).into_response(),
 	};
 	let event = match (e.copied, e.saved) {
 		(Some(draft), None) => Event::Copied(draft),
 		(None, Some(photos)) => Event::Saved(photos),
-		_ => return answer(ApiError::BadRequest("one of copied or saved".to_owned())),
+		_ => return Refusal::new(Code::BadRequest, "one of copied or saved").into_response(),
 	};
 	if let Err(res) = view_of(&l, &key, e.view).await {
 		return res;
 	}
 	match l.panel.kit_event(e.view, event, Timestamp::now()).await {
 		Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
-		Ok(Err(r)) => answer(r.into()),
-		Err(e) => answer(ApiError::Internal(e)),
+		Ok(Err(r)) => Refusal::<Code>::from(r).into_response(),
+		Err(e) => Refusal::<Code>::from(e).into_response(),
 	}
 }
 

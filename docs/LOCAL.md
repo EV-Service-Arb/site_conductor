@@ -4,7 +4,7 @@ The conductor with its Grafana, sites_panel, review_archive and both landings (a
 on one machine, wired as in the cluster: a lead posted on a landing reaches sites_panel through
 the conductor's ingest, a place's phone or hours edited on the sites page shows on the landing
 through sites' `/api/internal`, review_archive's overview and boards draw in the conductor's
-Grafana, and the conductor's GMBs and tokens reach review_archive. No concierge, no PostHog, no Telegram, no playbook (its forward answers 502), no Google for review_archive
+Grafana, and the conductor's GMBs and tokens reach review_archive. No concierge, no PostHog, no Telegram, no Google for review_archive
 (review_archive scans nothing): the conductor signs you in by itself (dev sign-in, below).
 
 ## Prerequisites
@@ -83,12 +83,13 @@ What it does (`scripts/local-stack.sh`, which the flake app runs as is):
    landing's `<site>-leads.db`, review_archive's data dir in `review_archive/`, and the logs in
    `logs/`. It persists between runs; `--reset` wipes it. A fresh `panel.db` imports an empty
    document from review_archive, which opens tokens and GMBs.
-2. Seeds, idempotently: the sources `aquafix-local` (brand `aquafix`, origin
+2. Starts playbook_web from its checkout (`PLAYBOOK_DIR`, beside the others) and the conductor, whose `/mcp` then lists playbook's tools; without the checkout its forward answers 502. Then seeds, idempotently, over HTTP as the dev admin (`/auth/login?as=`; only with `--role admin`, a new state needs it): the sources `aquafix-local` (brand `aquafix`, origin
    `<aquafix>`) and `vifnet-local` (brand `vifnet`, origin `<vifnet>`)
    in the conductor, each secret kept in `.local/secrets/` and reused, a key from an older run
    given its origin; the
    places `aquafix/{royat, clermont-ferrand, desgenettes, lyon-est, la-mouche, lyon-nord}` and
-   `vifnet/vifnet` in sites_panel, registered with nothing set (`sites_panel place register`).
+   `vifnet/vifnet` in sites_panel, registered with nothing set (`sites_panel place register`), and
+   gmaps_optimal_placement's cached answers into the queries cache (each as of its file's time).
 3. Starts `sites_panel serve` (its bundle from `PANEL_MFE_DIR`, the conductor's public key in
    `PANEL_ASSERTION_KEYS`), `review_archive serve` likewise (a headless Chromium on a signed-out
    profile: its Maps walks fail and say so), then `panel serve` in development, with dev sign-in, a signing key for this machine alone, `PANEL_SITES_URL`
@@ -169,8 +170,7 @@ PANEL_WEB_DIR="$(nix build .#frontend --print-out-paths)" panel serve
 The front end's dev server instead of the export is `--watch`. By hand:
 `cd frontend && PANEL_DEV_BACKEND=<conductor> npm run dev` serves on the dev shell's
 `PANEL_WEB_PORT`; the sign-in's redirect goes to `PANEL_PUBLIC_ORIGIN`, so run the conductor as
-above with `PANEL_PUBLIC_ORIGIN=http://localhost:$PANEL_WEB_PORT`. `npm run dev:stub` in
-`frontend/` stands in for the backend instead.
+above with `PANEL_PUBLIC_ORIGIN=http://localhost:$PANEL_WEB_PORT`.
 
 A session in curl (what a browser does):
 
@@ -199,8 +199,8 @@ replicated, off its volume over ssh (`PROD_SSH` in the script). Everyone's data 
 sign-in is prod's `admin@evinvest.ltd`. What prod sealed under its own `PANEL_DATA_KEY` (prod's
 sessions, its sources' secrets, sites' Google tokens) does not open here: the landings sign with
 the stack's own `<brand>-local` keys. Nothing walks Maps, nothing is told to Telegram. Prod's
-GMBs come without the cache that located them: `panel gmb locate` (the stack's `PANEL_DB_PATH`
-and data key) asks for their points once.
+GMBs come without the cache that located them: `POST /admin/gmbs/locate`, as the dev admin, asks
+for their points once.
 
 ## Google
 

@@ -2,9 +2,6 @@
 //! members ask in it, rename and invite; general access lets anyone in Service-Arb read it. Whoever
 //! may not read it is told it does not exist ([`Refused::NotFound`]). The turns' shape is the
 //! caller's `T`: stored as the JSON it serializes to.
-//!
-//! Every change is told on the bus (topic `assistant`, the chat's id) to its owner and members,
-//! those it removed among them; a mark only to whose it is.
 
 use std::collections::BTreeSet;
 
@@ -16,7 +13,7 @@ use uuid::Uuid;
 
 pub use crate::store::assistant::{General, Mark, Person, Role, Summary};
 use crate::{
-	Panel, Refused, live,
+	Panel, Refused,
 	store::{assistant as db, users},
 };
 
@@ -97,20 +94,6 @@ fn is_email(q: &str) -> bool {
 }
 
 impl Panel {
-	/// A chat's people besides `writer`, whom the route that wrote tells.
-	fn tell(&self, chat: Uuid, writer: Uuid, users: impl IntoIterator<Item = Uuid>) {
-		let at = Timestamp::now();
-		for user in users.into_iter().filter(|u| *u != writer) {
-			self.live.changed(live::Change {
-				topic: "assistant".into(),
-				brand: None,
-				id: Some(chat.to_string()),
-				at,
-				audience: live::Audience::User(user),
-			});
-		}
-	}
-
 	/// The chats `user` owns or is a member of, with their marks, newest first.
 	pub async fn assistant_chats(&self, user: Uuid) -> eyre::Result<Vec<Summary>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for chats")?;
@@ -173,9 +156,7 @@ impl Panel {
 		};
 		db::set_turns(&mut tx, id, &raw, now).await?;
 		let summary = db::chat(&mut tx, id, r.user, r.in_sa).await?.expect("theirs to write, a moment ago");
-		let audience = db::audience(&mut tx, id).await?;
 		tx.commit().await.wrap_err("committing turns")?;
-		self.tell(id, r.user, audience);
 		Ok(Ok(Chat { summary, turns: all }))
 	}
 
@@ -188,9 +169,7 @@ impl Panel {
 		db::set_title(&mut tx, id, title(raw_title)).await?;
 		let summary = db::chat(&mut tx, id, r.user, r.in_sa).await?.expect("theirs to write, a moment ago");
 		let turns = parse(id, &db::turns(&mut tx, id).await?)?;
-		let audience = db::audience(&mut tx, id).await?;
 		tx.commit().await.wrap_err("committing a title")?;
-		self.tell(id, r.user, audience);
 		Ok(Ok(Chat { summary, turns }))
 	}
 
@@ -212,28 +191,21 @@ impl Panel {
 		if let Err(e) = may(&mut tx, id, r, Needs::Own).await? {
 			return Ok(Err(e));
 		}
-		let audience = db::audience(&mut tx, id).await?;
 		db::delete(&mut tx, id).await?;
 		tx.commit().await.wrap_err("committing a chat's deletion")?;
-		self.tell(id, r.user, audience);
 		Ok(Ok(()))
 	}
 
 	/// Every chat `user` archived: deleted if theirs, else left.
 	pub async fn assistant_clear_archived(&self, user: Uuid) -> eyre::Result<()> {
 		let mut tx = self.store.begin_write().await?;
-		let mut told = Vec::new();
 		for (id, owned) in db::archived(&mut tx, user).await? {
-			told.push((id, db::audience(&mut tx, id).await?));
 			match owned {
 				true => db::delete(&mut tx, id).await?,
 				false => assert!(db::remove_member(&mut tx, id, user).await?, "a chat marked is the owner's or a member's"),
 			}
 		}
 		tx.commit().await.wrap_err("committing the archived chats' clearing")?;
-		for (id, audience) in told {
-			self.tell(id, user, audience);
-		}
 		Ok(())
 	}
 
@@ -252,19 +224,14 @@ impl Panel {
 			Ok(c) => c,
 			Err(e) => return Ok(Err(e)),
 		};
-		let mut added = false;
 		for &user in invited {
 			if !users::exists(&mut tx, user).await? {
 				return Ok(Err(Refused::Invalid(format!("no user {user}"))));
 			}
-			added |= db::add_member(&mut tx, id, user, r.user, now).await?;
+			db::add_member(&mut tx, id, user, r.user, now).await?;
 		}
-		let audience = db::audience(&mut tx, id).await?;
 		let access = access(&mut tx, chat).await?;
 		tx.commit().await.wrap_err("committing members")?;
-		if added {
-			self.tell(id, r.user, audience);
-		}
 		Ok(Ok(access))
 	}
 
@@ -278,12 +245,10 @@ impl Panel {
 		if chat.role != Role::Owner && member != r.user {
 			return Ok(Err(Refused::Forbidden));
 		}
-		let audience = db::audience(&mut tx, id).await?;
 		if !db::remove_member(&mut tx, id, member).await? {
 			return Ok(Err(Refused::NotFound));
 		}
 		tx.commit().await.wrap_err("committing a member's removal")?;
-		self.tell(id, r.user, audience);
 		Ok(Ok(()))
 	}
 
@@ -295,10 +260,8 @@ impl Panel {
 		};
 		db::set_general(&mut tx, id, general).await?;
 		chat.general = general;
-		let audience = db::audience(&mut tx, id).await?;
 		let access = access(&mut tx, chat).await?;
 		tx.commit().await.wrap_err("committing general access")?;
-		self.tell(id, r.user, audience);
 		Ok(Ok(access))
 	}
 

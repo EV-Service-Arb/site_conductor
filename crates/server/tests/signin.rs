@@ -22,7 +22,7 @@ use sa_core::notify::Locale;
 use sa_panel::{
 	alerts::Hub,
 	session::pkce_challenge,
-	testing::{TestDb, admin, operator, panel},
+	testing::{TestDb, admin, operator, panel, settled, told, topics},
 };
 use sa_server::{
 	alerts::Telegram,
@@ -834,7 +834,7 @@ async fn the_alerts_page_links_telegram_and_chooses_rules() {
 
 /// A signed-in caller holding nothing in `sa` is shown nothing: every `/api/v1` route but `/me`,
 /// the access requests and the alerts answers 403; with every permission, none
-/// of them does. The live socket opens for both: what it tells is judged per message.
+/// of them does. The live socket opens for both: what it tells, everyone is told.
 #[tokio::test]
 async fn no_permission_opens_no_section() {
 	let db = TestDb::create().await;
@@ -861,8 +861,10 @@ async fn no_permission_opens_no_section() {
 		)
 	};
 	let document = http::document();
+	// a socket's handshake is asked below
 	let routes: Vec<(Method, &str, bool)> = document
 		.operations()
+		.filter(|(_, _, op)| !op.extensions.contains_key("x-socket"))
 		.map(|(path, method, op)| (method.to_uppercase().parse().unwrap(), path, op.extensions.contains_key("x-permission")))
 		.collect();
 	let open: BTreeSet<&str> = routes.iter().filter(|r| !r.2).map(|r| r.1).collect();
@@ -997,11 +999,11 @@ async fn no_permission_opens_no_section() {
 	}
 }
 
-/// Every write through `/api/v1` that succeeds is told on the bus: its topic the path's first
-/// segment, its id the path's first parameter, its audience the section's holders or else the
-/// caller. A refused write tells nothing.
+/// Every write through `/api/v1` that commits is told on the bus by the tables it wrote, a refused
+/// one by none; beside them, every request's session check (told when prepared, whether its row
+/// moved or not).
 #[tokio::test]
-async fn every_write_is_told() {
+async fn every_committed_write_is_told_by_its_tables() {
 	let db = TestDb::create().await;
 	let panel = panel(&db).await;
 	let who = sa_server::concierge::DevIdentity {
@@ -1027,43 +1029,39 @@ async fn every_write_is_told() {
 	let login = b.get(&app, "/auth/login").await;
 	let callback = login.headers[header::LOCATION].to_str().unwrap().strip_prefix(PANEL).unwrap().to_owned();
 	assert_eq!(b.get(&app, &callback).await.status, StatusCode::SEE_OTHER);
+	settled(&panel).await;
 	let mut rx = panel.bus().subscribe();
-	let mut told = || {
-		let mut changes = Vec::new();
-		while let Ok(signal) = rx.try_recv() {
-			if let sa_panel::live::Signal::Changed(c) = signal {
-				changes.push((c.topic, c.id, c.audience));
-			}
-		}
-		changes
-	};
-	let me = sa_panel::live::Audience::User(who.user_id);
 	let chat = uuid::Uuid::now_v7();
 	let made = b
 		.send(&app, Method::POST, "/api/v1/assistant/chats", Some(json!({"id": chat, "title": null, "turns": []})), true)
 		.await;
 	assert_eq!(made.status, StatusCode::CREATED, "{}", made.body);
-	assert_eq!(told(), [("assistant".to_owned(), None, me.clone())]);
+	assert_eq!(
+		told(&panel, &mut rx).await,
+		topics(&["alert_access", "assistant_chats", "sessions", "users"]),
+		"GetMe's first answer is recorded too"
+	);
 	let renamed = b
 		.send(&app, Method::PUT, &format!("/api/v1/assistant/chats/{chat}/title"), Some(json!({"title": "x"})), true)
 		.await;
 	assert_eq!(renamed.status, StatusCode::OK, "{}", renamed.body);
-	assert_eq!(told(), [("assistant".to_owned(), Some(chat.to_string()), me)]);
+	assert_eq!(told(&panel, &mut rx).await, topics(&["assistant_chats", "sessions"]));
 	let refused = b
 		.send(&app, Method::POST, "/api/v1/assistant/chats", Some(json!({"id": chat, "title": null, "turns": []})), true)
 		.await;
 	assert_eq!(refused.status, StatusCode::CONFLICT);
-	assert_eq!(told(), [], "a refused write");
+	assert_eq!(told(&panel, &mut rx).await, topics(&["sessions"]), "a refused write");
 	let key = b
 		.send(&app, Method::POST, "/api/v1/sources", Some(json!({"key_id": "told", "kind": "sheet", "brands": ["fr"]})), true)
 		.await;
 	assert_eq!(key.status, StatusCode::CREATED, "{}", key.body);
 	assert_eq!(
-		told(),
-		[("sources".to_owned(), None, sa_panel::live::Audience::Holders(sa_auth::Sources::Manage.as_str().to_owned()))]
+		told(&panel, &mut rx).await,
+		topics(&["alert_access", "sessions", "sources", "users"]),
+		"a key is minted on GetMe asked afresh"
 	);
 	assert_eq!(b.get(&app, "/api/v1/sources").await.status, StatusCode::OK);
-	assert_eq!(told(), [], "a read");
+	assert_eq!(told(&panel, &mut rx).await, topics(&["sessions"]), "a read");
 }
 
 /// `/auth/login?return_to=` lands the browser back on a path of this origin, and refuses

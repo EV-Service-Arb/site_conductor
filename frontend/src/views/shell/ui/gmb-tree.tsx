@@ -2,8 +2,6 @@
 
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn } from "@evinvest/uikit";
 import { ChevronDown, CircleMinus, CirclePlus, Link2, Pencil, QrCode, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, MUST_HAVES, openOrFocus, openKit, openTrash, readiness, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, TABS, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, kit as kitKeys, trades as tradesKeys } from "@/entities/gmb";
@@ -14,7 +12,7 @@ import { LinkPlace } from "@/features/link-gmb-place";
 import { PlaceButton } from "@/features/place-gmb";
 import { api, ok } from "@/shared/api";
 import { type Gmb, type State, countryValues } from "@/shared/api/schema";
-import { ROUTES } from "@/shared/config/routes";
+import { ViewLink, useAt } from "@/shared/lib/location";
 import { useT } from "@/shared/i18n";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -33,12 +31,6 @@ const DOT: Record<State, string> = {
   suspended: "bg-accent-error",
 };
 
-/** The GMB the review archive's page is on, if any. */
-function pointedAt(pathname: string): number | null {
-  const m = /^\/review_archive\/gmbs\/(\d+)/.exec(pathname);
-  return m === null ? null : Number(m[1]);
-}
-
 /**
  * The caller's GMBs, the outline every page sits beside: the selection every app narrows to, and the
  * rest, rows dragged between them; the gmail, search and issue narrow the rows only. On the map the
@@ -52,7 +44,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   const { gmails: scope, categories } = useScope();
   const inView = useOnMap((s) => s.inView);
   const peeked = usePeeked();
-  const pathname = usePathname();
+  const at = useAt();
   const { sites, tags } = useGmbTags();
   const linked = may(me, "sa:sites:work:places:edit") ? tags.sites : null;
   const selection = useSelection();
@@ -85,7 +77,8 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
     found.map((l) => l.gmb),
     tags,
   );
-  const onMap = pathname === "/" && inView !== null;
+  const onMap = at.view === "home" && inView !== null;
+  const pointed = at.view === "review_archive.mine.gmb" ? at.params.gmb : null;
   const row = (l: Listed) => (
     <GmbRow
       key={l.gmb.id}
@@ -94,7 +87,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
       showGmail={scoped.length !== 1}
       onMap={onMap}
       peeked={l.gmb.id === peeked}
-      current={l.gmb.id === pointedAt(pathname)}
+      current={l.gmb.id === pointed}
       selected={isSelected(l.gmb.id)}
       linked={linked}
       onMove={move}
@@ -205,19 +198,9 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
 /** The review kit's areas, over the map. */
 function KitButton() {
   const t = useT();
-  const router = useRouter();
-  const pathname = usePathname();
   const button = useButtonSize();
   return (
-    <Button
-      variant="ghost"
-      size={button("sm")}
-      className="text-ink-soft"
-      onClick={() => {
-        if (pathname === "/") openKit("");
-        else router.push("/?kit");
-      }}
-    >
+    <Button variant="ghost" size={button("sm")} className="text-ink-soft" onClick={() => openKit("")}>
       <QrCode aria-hidden />
       {t(kitKeys.open, "Review kit")}
     </Button>
@@ -228,20 +211,10 @@ function KitButton() {
 function TrashButton() {
   const t = useT();
   const trash = useTrash();
-  const router = useRouter();
-  const pathname = usePathname();
   const button = useButtonSize();
   const n = trash.status === "ok" ? trash.data.gmails.length + trash.data.gmbs.length : null;
   return (
-    <Button
-      variant="ghost"
-      size={button("sm")}
-      className="text-ink-soft"
-      onClick={() => {
-        if (pathname === "/") openTrash(true);
-        else router.push("/?trash");
-      }}
-    >
+    <Button variant="ghost" size={button("sm")} className="text-ink-soft" onClick={() => openTrash(true)}>
       <Trash2 aria-hidden />
       {t(trashKeys.open, "Trash")}
       {n !== null && n > 0 && <span className="tabular-nums">{n}</span>}
@@ -401,6 +374,7 @@ function GmbRow({
   const hovered = useOnMap((s) => s.hovered === gmb.id);
   const [dialog, setDialog] = useState<"edit" | "link" | "remove" | null>(null);
   const name = gmb.name;
+  const first = TABS[gmb.state][0];
   const move = (selected ? t(gmbsKeys.deselect, "Leave out") : t(gmbsKeys.select, "Select"));
   const issue = issueOf(gmb, tags);
   const archive = tags.archive?.get(gmb.id);
@@ -477,20 +451,20 @@ function GmbRow({
         <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => openOrFocus(gmb, peeked)}>
           {label}
         </button>
-      ) : TABS[gmb.state][0] !== undefined ? (
-        <Link href={`/?gmb=${gmb.id}&tab=${TABS[gmb.state][0]}`} onClick={() => onNavigate?.()} className={body} title={name}>
+      ) : first !== undefined ? (
+        <ViewLink to={{ view: "home", params: { gmb: gmb.id, tab: first } }} onClick={() => onNavigate?.()} className={body} title={name}>
           {label}
-        </Link>
+        </ViewLink>
       ) : (
-        <Link
-          href={`${ROUTES.reviewArchive}gmbs/${gmb.id}`}
+        <ViewLink
+          to={{ view: "review_archive.mine.gmb", params: { gmb: gmb.id } }}
           onClick={() => onNavigate?.()}
           aria-current={current ? "page" : undefined}
           className={body}
           title={gmb.address ? `${name}\n${gmb.address}` : name}
         >
           {label}
-        </Link>
+        </ViewLink>
       )}
       {archive && <LiveReviews days={archive.live_30d} />}
       <Switch aria-label={t(gmbsKeys.switch, "{name} on or off", { name })} checked={gmb.enabled} onCheckedChange={(v) => void onFlip([gmb], v)} />

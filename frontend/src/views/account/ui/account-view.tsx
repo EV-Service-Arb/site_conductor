@@ -3,13 +3,12 @@
 import { PageFrame, Skeleton } from "@evinvest/uikit";
 import { ACCOUNT_SECTIONS } from "@evinvest/concierge";
 import { AccountPage } from "@evinvest/concierge/react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { panelRouteFor } from "@/features/account-chip";
 import { useSignOut } from "@/features/sign-out";
 import { platformMfe } from "@/shared/api";
-import { ROUTES } from "@/shared/config/routes";
+import { go, useAt } from "@/shared/lib/location";
 import { useLocale, useT, nav, account } from "@/shared/i18n";
 import { EmptyState } from "@/shared/ui/empty-state";
 
@@ -24,10 +23,10 @@ const TIMEOUT_MS = 8000;
 export function AccountView() {
   const t = useT();
   const locale = useLocale();
-  const router = useRouter();
   const signOut = useSignOut();
-  const raw = useSearchParams().get("section");
-  const section = ACCOUNT_SECTIONS.find((s) => s === raw);
+  const at = useAt();
+  if (at.view !== "account") throw new Error(`the account's page on ${at.view}`);
+  const section = ACCOUNT_SECTIONS.find((s) => s === at.params.section);
   // undefined while the registry is asked, null when it gave no account entry.
   const [scriptUrl, setScriptUrl] = useState<string | null | undefined>(undefined);
   useEffect(() => {
@@ -43,7 +42,7 @@ export function AccountView() {
   const loading = <Skeleton className="h-64 w-full" />;
   const onNavigate = (href: string): boolean => {
     const route = panelRouteFor(href);
-    if (route !== null) router.push(route);
+    if (route !== null) go(route);
     return route !== null;
   };
   return (
@@ -58,7 +57,7 @@ export function AccountView() {
           key={locale}
           scriptUrl={scriptUrl}
           {...(section === undefined ? {} : { section })}
-          onSection={(s) => router.replace(`${ROUTES.account}?section=${s}`, { scroll: false })}
+          onSection={(s) => go({ view: "account", params: { section: s } }, "replace")}
           onNavigate={onNavigate}
           onSignOut={signOut}
           // useSignOut ends the platform session itself, after the panel's.

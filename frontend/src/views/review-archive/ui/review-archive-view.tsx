@@ -4,7 +4,6 @@ import { useSyncExternalStore } from "react";
 import { PANEL } from "@config";
 
 import { SIGN_IN_PATH, csrfCookieName } from "@/shared/api";
-import { ROUTES } from "@/shared/config/routes";
 import { useT, reviewArchive } from "@/shared/i18n";
 import { RemoteElement } from "@/shared/mfe";
 
@@ -20,7 +19,7 @@ export function ReviewArchiveView() {
       className="h-full"
       tag="mfe-review-archive-dashboard"
       scriptUrl="/mfe/review_archive/mfe-review-archive-dashboard.js"
-      attributes={{ api: "/api/review_archive", "sign-in": SIGN_IN_PATH, "csrf-cookie": csrf, base: "/review_archive", grafana: ROUTES.grafana, ui: PANEL.reviewArchiveUi }}
+      attributes={{ api: "/api/review_archive", "sign-in": SIGN_IN_PATH, "csrf-cookie": csrf, base: "/review_archive", grafana: "/grafana/", ui: PANEL.reviewArchiveUi }}
       fallback={<p className="p-6 text-muted-foreground">{t(reviewArchive.loading, "Loading the review archive…")}</p>}
     />
   );

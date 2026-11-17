@@ -2,51 +2,37 @@ import { defineConfig, devices } from "@playwright/test";
 
 const port = (name: string): number => {
   const value = process.env[name];
-  if (!value) throw new Error(`${name}: the flake's localEnv sets it; run through \`nix run .#figma\``);
+  if (!value) throw new Error(`${name}: the flake's localEnv sets it; run through \`nix run .#e2e\` or \`nix run .#figma\``);
   return Number(value);
 };
-const STUB = port("FIGMA_STUB_PORT");
+const STACK = port("FIGMA_STACK_PORT");
 const WEB = port("FIGMA_WEB_PORT");
+if (WEB !== STACK + 1) throw new Error(`FIGMA_WEB_PORT ${WEB}: \`dev --port ${STACK}\` serves its next dev on ${STACK + 1}`);
 
-// `next dev` over the stub, as an admin, so every screen of the conductor's own has made-up data to
-// show. Run through the flake (`nix run .#figma`), which supplies `@playwright/test` with its pinned
-// browsers.
+export const SESSION = new URL("../../tmp/playwright/session.json", import.meta.url).pathname;
+
+// The real stack on ports of its own (`dev --port`: its conductor, dev sign-in as an admin, and its
+// `next dev`), never a running one's servers: those may face the real backend, as an operator. Run
+// through the flake, which supplies `@playwright/test` with its pinned browsers.
 export default defineConfig({
   testDir: ".",
   outputDir: "../../tmp/playwright",
   reporter: "list",
+  globalSetup: "./sign-in.ts",
   use: {
     baseURL: `http://localhost:${WEB}`, // `next dev` refuses its dev resources to any other host, so the page never hydrates
     deviceScaleFactor: 1,
-    // What the stub's `/auth/login` sets.
-    storageState: {
-      cookies: [
-        { name: "sa_session", value: "stub", domain: "localhost", path: "/", expires: -1, httpOnly: true, secure: false, sameSite: "Lax" },
-        { name: "sa_csrf", value: "stub-csrf", domain: "localhost", path: "/", expires: -1, httpOnly: false, secure: false, sameSite: "Lax" },
-      ],
-      origins: [],
-    },
+    storageState: SESSION,
   },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
     { name: "mobile", use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 } } },
   ],
-  // Never a running dev stack's servers: those may face the real backend, as an operator.
-  webServer: [
-    {
-      command: "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/dev-stub.ts",
-      cwd: "../..",
-      url: `http://127.0.0.1:${STUB}/api/v1/me`,
-      reuseExistingServer: false,
-      env: { STUB_PORT: String(STUB), STUB_ROLE: "admin", STUB_LIVE: "off" }, // no live activity moving a frame
-    },
-    {
-      command: `npx next dev --port ${WEB}`,
-      cwd: "../..",
-      url: `http://127.0.0.1:${WEB}/`,
-      reuseExistingServer: false,
-      timeout: 120_000,
-      env: { PANEL_DEV_BACKEND: `http://127.0.0.1:${STUB}`, PANEL_DEV_DIST: ".next/e2e" },
-    },
-  ],
+  webServer: {
+    command: `dev --port ${STACK} --role admin`,
+    cwd: "../../..",
+    url: `http://localhost:${WEB}/`,
+    reuseExistingServer: false,
+    timeout: 30 * 60_000, // the conductor's and its peers' builds
+  },
 });

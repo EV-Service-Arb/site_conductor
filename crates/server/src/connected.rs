@@ -96,6 +96,7 @@ pub(crate) struct ConnectedSites {
 /// All asked at once; whatever fails is a value in its place.
 pub(crate) async fn sites(State(s): State<ApiState>) -> ApiResult<Json<ConnectedSites>> {
 	let keys: Vec<SourceRow> = s
+		.sign_in
 		.panel
 		.store()
 		.sources()

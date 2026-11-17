@@ -1,7 +1,8 @@
-import { may } from "@/entities/session";
 import type { Caller } from "@/shared/api/schema";
 import { switchAccountPath } from "@/shared/api";
-import { ROUTES } from "@/shared/config/routes";
+import { href, mayOpen } from "@evinvest/views";
+
+import { VIEWS } from "@/shared/api/views";
 import type { T } from "@/shared/i18n";
 import { account } from "@/shared/i18n";
 
@@ -41,15 +42,15 @@ function clip(value: string): string {
 
 /** The chip is the account's: past the profile it holds only acting as a member, for whoever may. */
 export function panelGroups(me: Caller, t: T): ChipGroup[] {
-  if (!may(me, "sa:review_archive:members:act_as")) return [];
-  return [{ id: "sa", items: [{ id: "act-as", href: ROUTES.reviewArchiveActAs, label: t(account.actAs, "View as member…"), external: true }] }];
+  if (!mayOpen(VIEWS, "review_archive.pick", me.permissions)) return [];
+  return [{ id: "sa", items: [{ id: "act-as", href: href(VIEWS, { view: "review_archive.pick", params: {} }), label: t(account.actAs, "View as member…"), external: true }] }];
 }
 
 /** The element's attributes for `me` on `pathname`; an absent value is an absent attribute. */
 export function chipAttributes(me: Caller, pathname: string, t: T): ChipAttributes {
   const attrs: ChipAttributes = {
     "data-mode": "host",
-    "data-profile-href": ROUTES.account,
+    "data-profile-href": href(VIEWS, { view: "account", params: {} }),
     "data-switch-href": switchAccountPath(pathname),
     "data-groups": JSON.stringify(panelGroups(me, t)),
   };

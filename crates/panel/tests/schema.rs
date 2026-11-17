@@ -129,8 +129,8 @@ impl Feeds for TwoLeads {
 #[tokio::test]
 async fn the_runtime_does_its_work_on_a_fresh_database() {
 	let db = TestDb::create().await;
-	Store::open(db.path()).await.expect("created and migrated");
-	Store::open(db.path()).await.expect("again: nothing to do");
+	Store::open(db.path(), sa_panel::live::Bus::default()).await.expect("created and migrated");
+	Store::open(db.path(), sa_panel::live::Bus::default()).await.expect("again: nothing to do");
 	{
 		let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
 		let panel = panel_with(db.store().await, key);
@@ -463,11 +463,15 @@ async fn a_site_origin_is_set_once() {
 		}
 	};
 	assert_eq!(origin_of("aquafix-site").await, None, "made before origins");
-	panel.set_site_origin("aquafix-site", &origin("https://aquafix.top")).await.unwrap();
-	panel.set_site_origin("aquafix-site", &origin("https://aquafix.top")).await.expect("the same again is no change");
-	assert!(panel.set_site_origin("aquafix-site", &origin("https://elsewhere.top")).await.is_err());
-	assert!(panel.set_site_origin("aquafix-bot", &origin("https://aquafix.top")).await.is_err());
-	assert!(panel.set_site_origin("nobody", &origin("https://aquafix.top")).await.is_err());
+	panel.set_site_origin("aquafix-site", &origin("https://aquafix.top")).await.unwrap().unwrap();
+	panel
+		.set_site_origin("aquafix-site", &origin("https://aquafix.top"))
+		.await
+		.unwrap()
+		.expect("the same again is no change");
+	assert!(panel.set_site_origin("aquafix-site", &origin("https://elsewhere.top")).await.unwrap().is_err());
+	assert!(panel.set_site_origin("aquafix-bot", &origin("https://aquafix.top")).await.unwrap().is_err());
+	assert!(panel.set_site_origin("nobody", &origin("https://aquafix.top")).await.unwrap().is_err());
 	assert_eq!(origin_of("aquafix-site").await.as_deref(), Some("https://aquafix.top"));
 	assert_eq!(origin_of("vifnet-site").await.as_deref(), Some("https://vifnet.site"));
 

@@ -51,7 +51,7 @@ async fn setup(price: Option<i64>, balance: i64) -> (TestDb, Router, Log, Browse
 		kickbacks: vec![],
 	})
 	.await
-	.unwrap();
+	.unwrap().unwrap();
 	let now = jiff::Timestamp::now();
 	p.set_prices(&[(Item::Placement(PlacementRequest::Search), price)], &[], "admin@localhost", now)
 		.await

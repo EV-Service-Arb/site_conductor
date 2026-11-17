@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
-use ev_lib::api::{Created, JsonSchema};
+use ev_lib::api::{Body, Created, Ids, JsonSchema, Params, Refusal};
 use jiff::Timestamp;
 use sa_core::{
 	gbp::{Country, GmailRole, OnGoogle, State as GbpState},
@@ -19,8 +19,8 @@ use sa_panel::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Id, Ids, Params},
-	http::{ApiRoute, ApiState, Gate},
+	api::{ApiResult, Code, Id},
+	http::{ApiRoute, ApiState, USER},
 	signin::Caller,
 	tokens::BalanceDto,
 };
@@ -208,34 +208,33 @@ impl From<GoogleCategory> for GoogleCategoryDto {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::GET, "/gmails", user, gmails),
-		ApiRoute::new(M::POST, "/gmails", user, add_gmail),
-		ApiRoute::new(M::PATCH, "/gmails/{id}", user, set_gmail_role),
-		ApiRoute::new(M::DELETE, "/gmails/{id}", user, remove_gmail),
-		ApiRoute::new(M::GET, "/gmbs/resolve", user, resolve_place),
-		ApiRoute::new(M::GET, "/gmbs/suggest", user, suggest_places),
-		ApiRoute::new(M::POST, "/gmbs", user, create_gmb),
-		ApiRoute::new(M::POST, "/gmails/{id}/gmbs", user, add_gmb),
-		ApiRoute::new(M::PATCH, "/gmbs/{id}", user, edit_gmb),
-		ApiRoute::new(M::PUT, "/gmbs/{id}/state", user, move_gmb),
-		ApiRoute::new(M::DELETE, "/gmbs/{id}", user, remove_gmb),
-		ApiRoute::new(M::PUT, "/gmbs/enabled", user, switch_gmbs),
-		ApiRoute::new(M::PUT, "/gmbs/trade", user, set_gmb_trades),
-		ApiRoute::new(M::PUT, "/gmbs/{id}/spots", user, set_spots),
-		ApiRoute::new(M::PUT, "/gmbs/{id}/location", user, place_gmb),
-		ApiRoute::new(M::DELETE, "/gmbs/{id}/location", user, unplace_gmb),
-		ApiRoute::new(M::PUT, "/gmbs/{id}/country", user, set_gmb_country),
-		ApiRoute::new(M::GET, "/map", user, map_key),
-		ApiRoute::new(M::POST, "/map/street_view", user, street_view),
-		ApiRoute::new(M::GET, "/trades", user, trades),
-		ApiRoute::new(M::POST, "/trades", user, add_trade),
-		ApiRoute::new(M::PATCH, "/trades/{id}", user, rename_trade),
-		ApiRoute::new(M::DELETE, "/trades/{id}", user, delete_trade),
-		ApiRoute::new(M::PUT, "/trades/{id}/{country}", user, set_up_trade),
-		ApiRoute::new(M::DELETE, "/trades/{id}/{country}", user, remove_category),
-		ApiRoute::new(M::GET, "/google-categories/{country}", user, google_categories),
+		ApiRoute::new(M::GET, "/gmails", USER, gmails),
+		ApiRoute::new(M::POST, "/gmails", USER, add_gmail),
+		ApiRoute::new(M::PATCH, "/gmails/{id}", USER, set_gmail_role),
+		ApiRoute::new(M::DELETE, "/gmails/{id}", USER, remove_gmail),
+		ApiRoute::new(M::GET, "/gmbs/resolve", USER, resolve_place),
+		ApiRoute::new(M::GET, "/gmbs/suggest", USER, suggest_places),
+		ApiRoute::new(M::POST, "/gmbs", USER, create_gmb),
+		ApiRoute::new(M::POST, "/gmails/{id}/gmbs", USER, add_gmb),
+		ApiRoute::new(M::PATCH, "/gmbs/{id}", USER, edit_gmb),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/state", USER, move_gmb),
+		ApiRoute::new(M::DELETE, "/gmbs/{id}", USER, remove_gmb),
+		ApiRoute::new(M::PUT, "/gmbs/enabled", USER, switch_gmbs),
+		ApiRoute::new(M::PUT, "/gmbs/trade", USER, set_gmb_trades),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/spots", USER, set_spots),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/location", USER, place_gmb),
+		ApiRoute::new(M::DELETE, "/gmbs/{id}/location", USER, unplace_gmb),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/country", USER, set_gmb_country),
+		ApiRoute::new(M::GET, "/map", USER, map_key),
+		ApiRoute::new(M::POST, "/map/street_view", USER, street_view),
+		ApiRoute::new(M::GET, "/trades", USER, trades),
+		ApiRoute::new(M::POST, "/trades", USER, add_trade),
+		ApiRoute::new(M::PATCH, "/trades/{id}", USER, rename_trade),
+		ApiRoute::new(M::DELETE, "/trades/{id}", USER, delete_trade),
+		ApiRoute::new(M::PUT, "/trades/{id}/{country}", USER, set_up_trade),
+		ApiRoute::new(M::DELETE, "/trades/{id}/{country}", USER, remove_category),
+		ApiRoute::new(M::GET, "/google-categories/{country}", USER, google_categories),
 	]
 }
 
@@ -416,14 +415,15 @@ async fn suggest_places(State(panel): State<Panel>, Spends(_, by): Spends<Places
 /// loads and panoramas left, else the first within its allowance. 404 when none has a browser key:
 /// there is no map; 409 when none has room.
 async fn map_key(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
-	if s.panel.accounts().iter().all(|a| a.provides.browser.is_none()) {
-		return Err(ApiError::NotFound);
+	if s.sign_in.panel.accounts().iter().all(|a| a.provides.browser.is_none()) {
+		return Err(Refusal::new(Code::NotFound, "not found"));
 	}
 	let account = s
+		.sign_in
 		.panel
 		.map_account(Timestamp::now())
 		.await?
-		.ok_or_else(|| ApiError::Conflict("every Google account's free map loads and allowance this month are used".to_owned()))?;
+		.ok_or_else(|| Refusal::new(Code::Conflict, "every Google account's free map loads and allowance this month are used"))?;
 	Ok(Json(MapDto {
 		key: account.provides.browser.as_deref().expect("only an account with a browser key stands").to_owned(),
 		account: account.name.clone(),
@@ -437,11 +437,11 @@ async fn map_key(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
 /// stopped (with the account a reload would load on, when another has room).
 async fn street_view(State(s): State<ApiState>, Spends(_, by): Spends<StreetViewLoad, Caller>, Body(at): Body<PanoramaAt>) -> ApiResult<Json<BalanceDto>> {
 	let now = Timestamp::now();
-	match s.panel.open_street_view(by, &at.account, at.lat, at.lng, now).await? {
+	match s.sign_in.panel.open_street_view(by, &at.account, at.lat, at.lng, now).await? {
 		Ok(balance) => Ok(Json(BalanceDto { balance })),
-		Err(Refused::Conflict(why)) => match s.panel.map_account(now).await? {
-			Some(other) if other.name != at.account => Err(ApiError::Conflict(format!("{why}; reload the page: it then loads on {}, which has room", other.name))),
-			_ => Err(ApiError::Conflict(why)),
+		Err(Refused::Conflict(why)) => match s.sign_in.panel.map_account(now).await? {
+			Some(other) if other.name != at.account => Err(Refusal::new(Code::Conflict, format!("{why}; reload the page: it then loads on {}, which has room", other.name))),
+			_ => Err(Refusal::new(Code::Conflict, why)),
 		},
 		Err(refused) => Err(refused.into()),
 	}
@@ -509,7 +509,7 @@ async fn add_gmb(State(panel): State<Panel>, Spends(caller, by): Spends<PlacesRe
 		trade,
 	} = b;
 	if !sa_places::parse::looks_like_place_id(&place_id) {
-		return Err(ApiError::BadRequest(format!("{place_id:?} is not a place id")));
+		return Err(Refusal::new(Code::BadRequest, format!("{place_id:?} is not a place id")));
 	}
 	let existing = Existing {
 		gmail_id: gmail,

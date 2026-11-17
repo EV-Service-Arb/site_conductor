@@ -1,21 +1,22 @@
 "use client";
 
 import { Button, Card, CardContent, CardHeader, CardTitle, PageFrame, Skeleton } from "@evinvest/uikit";
-import Link from "next/link";
 import { useState } from "react";
 
-import { may, useMe } from "@/entities/session";
+import { useMe } from "@/entities/session";
 import { UsageFigures, useTokens, tokens as tokensKeys } from "@/entities/tokens";
 import { api, ok } from "@/shared/api";
 import type { Ledger, LedgerKind } from "@/shared/api/schema";
 import { ClaimButton } from "@/features/claim-kickbacks";
-import { ROUTES } from "@/shared/config/routes";
+import { ViewLink } from "@/shared/lib/location";
 import { type T, useLocale, useT, account } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { useResource } from "@/shared/lib/use-resource";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
+import { mayOpen } from "@evinvest/views";
+import { VIEWS } from "@/shared/api/views";
 
 const PAGE = 50;
 
@@ -46,10 +47,10 @@ export function TokensView() {
       description={t(tokensKeys.description, "What your walks may spend, what is owed back to you, and every change.")}
       width="content"
       actions={
-        may(me, "sa:admin:tokens:grant") && (
-          <Link className="text-sm text-ink hover:underline" href={ROUTES.adminTokens}>
+        mayOpen(VIEWS, "admin_tokens", me.permissions) && (
+          <ViewLink className="text-sm text-ink hover:underline" to={{ view: "admin_tokens", params: {} }}>
             {t(tokensKeys.admin, "All balances")}
-          </Link>
+          </ViewLink>
         )
       }
     >

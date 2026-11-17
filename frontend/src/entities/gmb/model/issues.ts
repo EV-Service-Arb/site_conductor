@@ -1,4 +1,5 @@
 import type { Gmb, Trade } from "@/shared/api/schema";
+import { VIEWS } from "@/shared/api/views";
 import type { T } from "@/shared/i18n";
 
 import { categoryOf } from "./category";
@@ -9,9 +10,10 @@ import { gmbs as gmbsKeys } from "./i18n";
 
 const issueKeys = gmbsKeys.issue;
 
-/** What needs the operator on a GMB, most pressing first. */
-export const ISSUES = ["overdue", "suspended", "failing", "draft", "unlocated", "no_site", "no_category", "off"] as const;
-export type Issue = (typeof ISSUES)[number];
+export type Issue = Exclude<(typeof VIEWS.carried.properties.issue.enum)[number], null>;
+
+/** What needs the operator on a GMB, most pressing first: `?issue`'s words, in `Issue`'s order (view.rs). */
+export const ISSUES = VIEWS.carried.properties.issue.enum.filter((w): w is Issue => w !== null);
 
 export const ISSUE_NAME = {
   overdue: (t) => t(issueKeys.overdue, "Overdue"),

@@ -2,7 +2,7 @@
 //! key, checked before they are stored and never answered back; its browser is [`crate::browser`]'s.
 
 use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
-use ev_lib::api::JsonSchema;
+use ev_lib::api::{Body, Ids, JsonSchema};
 use jiff::Timestamp;
 use sa_panel::{
 	Panel,
@@ -13,9 +13,9 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use crate::{
-	api::{ApiResult, Body, Id, Ids},
+	api::{ApiResult, Id},
 	browser::{BrowserDto, ExitDto},
-	http::{ApiRoute, ApiState, Gate},
+	http::{ApiRoute, ApiState, USER},
 	signin::Caller,
 	tokens::PriceDto,
 };
@@ -108,15 +108,14 @@ pub(crate) struct SetMapsKey {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let user = Gate::USER;
 	vec![
-		ApiRoute::new(M::GET, "/gmails/{id}/connections", user, gmail_connections),
-		ApiRoute::new(M::PUT, "/gmails/{id}/imap", user, set_imap),
-		ApiRoute::new(M::PUT, "/gmails/{id}/maps_key", user, set_maps_key),
-		ApiRoute::new(M::POST, "/gmails/{id}/imap/test", user, test_imap),
-		ApiRoute::new(M::POST, "/gmails/{id}/maps_key/test", user, test_maps_key),
-		ApiRoute::new(M::DELETE, "/gmails/{id}/imap", user, remove_imap),
-		ApiRoute::new(M::DELETE, "/gmails/{id}/maps_key", user, remove_maps_key),
+		ApiRoute::new(M::GET, "/gmails/{id}/connections", USER, gmail_connections),
+		ApiRoute::new(M::PUT, "/gmails/{id}/imap", USER, set_imap),
+		ApiRoute::new(M::PUT, "/gmails/{id}/maps_key", USER, set_maps_key),
+		ApiRoute::new(M::POST, "/gmails/{id}/imap/test", USER, test_imap),
+		ApiRoute::new(M::POST, "/gmails/{id}/maps_key/test", USER, test_maps_key),
+		ApiRoute::new(M::DELETE, "/gmails/{id}/imap", USER, remove_imap),
+		ApiRoute::new(M::DELETE, "/gmails/{id}/maps_key", USER, remove_maps_key),
 	]
 }
 
@@ -128,7 +127,7 @@ async fn gmail_connections(State(state): State<ApiState>, Extension(caller): Ext
 
 /// The gmail's connections, its browser's running asked of the runner.
 pub(crate) async fn answer(state: &ApiState, owner: uuid::Uuid, gmail: i64) -> ApiResult<ConnectionsDto> {
-	let c = state.panel.connections(owner, gmail).await??;
+	let c = state.sign_in.panel.connections(owner, gmail).await??;
 	let (running, film) = match (&c.browser, &state.browsers) {
 		(Some(browser), Some(b)) => {
 			let (running, on_runner) = b.state(gmail).await?;
@@ -155,7 +154,7 @@ async fn set_imap(State(state): State<ApiState>, Extension(caller): Extension<Ca
 		username: b.username,
 		password: Zeroizing::new(b.password),
 	};
-	state.panel.set_imap(caller.user_id, gmail, new, Timestamp::now()).await??;
+	state.sign_in.panel.set_imap(caller.user_id, gmail, new, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail's IMAP set");
 	answer(&state, caller.user_id, gmail).await.map(Json)
 }
@@ -170,7 +169,7 @@ async fn set_maps_key(
 	Ids(Id { id: gmail }): Ids<Id<i64>>,
 	Body(b): Body<SetMapsKey>,
 ) -> ApiResult<Json<ConnectionsDto>> {
-	state.panel.set_maps_key(caller.user_id, gmail, Zeroizing::new(b.key), Timestamp::now()).await??;
+	state.sign_in.panel.set_maps_key(caller.user_id, gmail, Zeroizing::new(b.key), Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, "gmail's Maps key set");
 	answer(&state, caller.user_id, gmail).await.map(Json)
 }
@@ -196,7 +195,7 @@ async fn remove_maps_key(State(panel): State<Panel>, Extension(caller): Extensio
 }
 
 async fn check(state: &ApiState, caller: &Caller, gmail: i64, which: Connection) -> ApiResult<Json<ConnectionsDto>> {
-	state.panel.check(caller.user_id, gmail, which, Timestamp::now()).await??;
+	state.sign_in.panel.check(caller.user_id, gmail, which, Timestamp::now()).await??;
 	answer(state, caller.user_id, gmail).await.map(Json)
 }
 

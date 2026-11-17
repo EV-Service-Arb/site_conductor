@@ -3,7 +3,7 @@
 import { PageFrame, Settled, Skeleton } from "@evinvest/uikit";
 import { useState } from "react";
 
-import { may, useMe } from "@/entities/session";
+import { useMe } from "@/entities/session";
 import { joinConnectedSites, sources as sourcesKeys } from "@/entities/source";
 import { AddSourceForm, SecretDialog } from "@/features/manage-sources";
 import { api, ok } from "@/shared/api";
@@ -16,6 +16,8 @@ import { ErrorState } from "@/shared/ui/error-state";
 import { ConnectedSitesTable } from "./connected-sites-table";
 import { SourcesTable } from "./sources-table";
 import { connected as connectedKeys } from "../model/i18n";
+import { mayOpen } from "@evinvest/views";
+import { VIEWS } from "@/shared/api/views";
 
 /** Admin only (spec §5.4): the signing keys the sources ingest with. */
 export function SourcesView() {
@@ -25,7 +27,7 @@ export function SourcesView() {
   const connected = useResource("connected-sites", async () => joinConnectedSites(await ok(api.GET("/sources/sites"))), "connected-sites", { live: ["sources"] });
   const [added, setAdded] = useState<NewSourceKey | null>(null);
 
-  if (!may(me, "sa:admin:sources:manage")) {
+  if (!mayOpen(VIEWS, "sources", me.permissions)) {
     return (
       <PageFrame breakpoint="md" title={t(sourcesKeys.title, "Sources")}>
         <ErrorState failure={{ kind: "forbidden", message: "" }} />

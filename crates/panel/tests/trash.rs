@@ -37,7 +37,7 @@ async fn opened(db: &TestDb) -> (Panel, Uuid) {
 		kickbacks: vec![],
 	})
 	.await
-	.unwrap();
+	.unwrap().unwrap();
 	let owner = Uuid::now_v7();
 	p.user_seen(
 		&User {

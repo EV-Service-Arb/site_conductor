@@ -125,7 +125,6 @@ pub struct Panel {
 	store: Store,
 	key: Arc<DataKey>,
 	rotations: Arc<session::Rotations>,
-	live: live::Bus,
 	renewal: Renewal,
 	google: Arc<sa_places::Google>,
 	/// The Google billing accounts our keys bill on.
@@ -140,19 +139,12 @@ impl Panel {
 			store,
 			key: Arc::new(key),
 			rotations: Arc::default(),
-			live: live::Bus::default(),
 			renewal,
 			google: Arc::new(google),
 			accounts,
 			purses: Arc::default(),
 			snapshot_due: Arc::default(),
 		}
-	}
-
-	/// This panel on `bus` instead of its own: a bus of another capacity, or one shared.
-	pub fn with_live(mut self, bus: live::Bus) -> Self {
-		self.live = bus;
-		self
 	}
 
 	pub fn store(&self) -> &Store {
@@ -165,7 +157,7 @@ impl Panel {
 
 	/// What changed: see [`live`].
 	pub fn bus(&self) -> &live::Bus {
-		&self.live
+		self.store.bus()
 	}
 
 	/// Registers a source that may write events of `kind` for `brands`, with a fresh
@@ -187,9 +179,11 @@ impl Panel {
 	}
 
 	/// Gives a site key issued before origins its origin, once; the same origin again is no change.
-	pub async fn set_site_origin(&self, key_id: &str, origin: &SiteOrigin) -> eyre::Result<()> {
-		eyre::ensure!(self.store.set_site_origin(key_id, origin).await?, "no active site key {key_id} without another origin");
-		Ok(())
+	pub async fn set_site_origin(&self, key_id: &str, origin: &SiteOrigin) -> eyre::Result<Result<(), Refused>> {
+		Ok(match self.store.set_site_origin(key_id, origin).await? {
+			true => Ok(()),
+			false => Err(Refused::Conflict(format!("no active site key {key_id} without another origin"))),
+		})
 	}
 
 	/// Revokes a source's key; `false` when there was no such key, or it was revoked already.

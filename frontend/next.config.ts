@@ -2,20 +2,18 @@ import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
 /**
- * The panel is a static export: every screen reads `/api/v1` from the browser
- * with the session cookie, so there is nothing for a Node server to render. The
- * Rust binary serves `out/` next to `/api` and `/auth` on one origin (see
- * README.md, "How it is served").
+ * The panel is a static export of one page, which the Rust binary serves for every path that is a
+ * view (`VIEWS`), next to `/api` and `/auth` on one origin (see README.md, "How it is served").
  *
- * `next dev` instead proxies `/api`, `/auth` and the sites' bundle to a backend — the real one,
- * or `npm run dev:stub` — so the cookies and the CSRF header behave as in production.
+ * `next dev` instead proxies the backend's prefixes to a running one, so the cookies and the CSRF
+ * header behave as in production, and answers every other path with the page.
  */
 export default function config(phase: string): NextConfig {
   if (phase === PHASE_DEVELOPMENT_SERVER) {
     const backend = process.env.PANEL_DEV_BACKEND;
-    if (!backend) throw new Error("PANEL_DEV_BACKEND: the origin `next dev` proxies to, `panel serve`'s or `npm run dev:stub`'s");
+    if (!backend) throw new Error("PANEL_DEV_BACKEND: the origin `next dev` proxies to, `panel serve`'s");
     return {
-      // Next refuses a second `next dev` on one dist dir: the e2e harness runs beside a dev stack's.
+      // Next refuses a second `next dev` on one dist dir: a stack on ports of its own (`dev --port`) runs beside the usual one.
       ...(process.env.PANEL_DEV_DIST !== undefined && { distDir: process.env.PANEL_DEV_DIST }),
       // Next writes AGENTS.md and CLAUDE.md into the project on `next dev` otherwise.
       agentRules: false,
@@ -24,29 +22,18 @@ export default function config(phase: string): NextConfig {
       // a study's Pull buys its whole sweep in one request, minutes long; Next's proxy cuts at 30 s
       experimental: { proxyTimeout: 15 * 60_000 },
       async rewrites() {
+        // the backend's prefixes; every other path is the page, which parses it
         const afterFiles = [
-          { source: "/api/:path*", destination: `${backend}/api/:path*` },
-          { source: "/auth/:path*", destination: `${backend}/auth/:path*` },
+          ...["/api", "/auth", "/mcp", "/.well-known", "/mfe", "/grafana"].map((p) => ({ source: `${p}/:path*`, destination: `${backend}${p}/:path*` })),
           { source: "/mcp", destination: `${backend}/mcp` },
-          { source: "/mcp/:path*", destination: `${backend}/mcp/:path*` },
-          { source: "/.well-known/:path*", destination: `${backend}/.well-known/:path*` },
-          { source: "/mfe/:path*", destination: `${backend}/mfe/:path*` },
           { source: "/grafana/", destination: `${backend}/grafana/` }, // `:path*` empty drops the slash: /grafana, unrouted
-          { source: "/grafana/:path*", destination: `${backend}/grafana/:path*` },
-          // an element's views are its page, as `panel serve` answers them (web.rs, ELEMENT_PAGES)
-          { source: "/review_archive/:view+", destination: "/review_archive" },
-          { source: "/sites/:view+", destination: "/sites" },
         ];
-        // a kit area's page, after every page and file, as `panel serve` answers `/<slug>/` (web.rs)
-        return { beforeFiles: [], afterFiles, fallback: [{ source: "/:slug/", destination: "/kit" }] };
+        return { beforeFiles: [], afterFiles, fallback: [{ source: "/:path*", destination: "/" }] };
       },
     };
   }
   return {
     output: "export",
-    // `leads/index.html` rather than `leads.html`: a directory per screen is what
-    // a static file server resolves without per-route rules.
-    trailingSlash: true,
     images: { unoptimized: true },
   };
 }

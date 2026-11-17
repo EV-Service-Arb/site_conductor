@@ -134,12 +134,13 @@ fn png(shade: u8) -> Vec<u8> {
 async fn kit(db: &TestDb) -> Kit {
 	let pages = Arc::new(Mutex::new(Vec::new()));
 	let base = stand_ins(pages.clone()).await;
-	let google = Google::try_new(Keys::new(vec![("house".to_owned(), "k".to_owned())]), Arc::new(sa_places::InOrder), Arc::new(db.store().await))
+	let store = db.store().await;
+	let google = Google::try_new(Keys::new(vec![("house".to_owned(), "k".to_owned())]), Arc::new(sa_places::InOrder), Arc::new(store.clone()))
 		.unwrap()
 		.spend(true)
 		.at(format!("{base}/v1/places"));
 	let panel = panel_on(
-		db.store().await,
+		store,
 		DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(),
 		google,
 		sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some("k"), None)]),
@@ -154,7 +155,7 @@ async fn kit(db: &TestDb) -> Kit {
 			kickbacks: vec![],
 		})
 		.await
-		.unwrap();
+		.unwrap().unwrap();
 	panel
 		.set_prices(&[PlacesRequest::Details].map(|r| (Item::Places(r), Some(0))), &[], "admin@localhost", now)
 		.await

@@ -148,6 +148,7 @@ fi
 SITES_DIR="${SITES_DIR:-$service_arb/sites/panel}"
 REVIEW_ARCHIVE_DIR="${REVIEW_ARCHIVE_DIR:-$service_arb/review_archive}"
 PLACEMENT_DIR="${PLACEMENT_DIR:-$service_arb/gmaps_optimal_placement}"
+PLAYBOOK_DIR="${PLAYBOOK_DIR:-$service_arb/playbook}"
 AQUAFIX_DIR="${AQUAFIX_DIR:-$service_arb/sites/aquafix}"
 VIFNET_DIR="${VIFNET_DIR:-$service_arb/sites/vifnet}"
 
@@ -189,6 +190,7 @@ fi
 SITES_PORT="$(shell_port "$SITES_DIR" PANEL_BIND)"
 REVIEW_ARCHIVE_PORT="$(shell_port "$REVIEW_ARCHIVE_DIR" REVIEW_ARCHIVE_SERVER_BIND)"
 PLACEMENT_PORT="$(shell_port "$PLACEMENT_DIR" PLACEMENT_PORT)"
+PLAYBOOK_PORT="$(shell_port "$PLAYBOOK_DIR" PORT)"
 AQUAFIX_PORT=""
 VIFNET_PORT=""
 if [ "$sites" = 1 ] || [ "$dev" = 0 ]; then
@@ -203,6 +205,7 @@ run_panel=1
 run_sites=1
 run_review_archive=1
 run_placement=1
+run_playbook=1
 # placement serves no /health: its overlay module is what the conductor needs of it
 placement_answers() { curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$PLACEMENT_PORT/mfe/overlay.js" 2>/dev/null; }
 # `take_over <port>`: a conductor or its next dev listening there stops, with the run that started it
@@ -273,6 +276,13 @@ if [ "$dev" = 1 ]; then
 		say "gmaps_optimal_placement already serves http://127.0.0.1:$PLACEMENT_PORT: using it"
 		run_placement=0
 	fi
+	if [ -z "$PLAYBOOK_PORT" ]; then
+		warn "skipping playbook: no checkout at $PLAYBOOK_DIR (PLAYBOOK_DIR names it); /mcp lists no playbook tools"
+		run_playbook=0
+	elif answers "$PLAYBOOK_PORT"; then
+		say "playbook already serves http://127.0.0.1:$PLAYBOOK_PORT: using it"
+		run_playbook=0
+	fi
 	if [ "$run_panel$run_sites$run_review_archive" = 000 ]; then
 		if busy "$WEB_DEV_PORT"; then say "open http://localhost:$WEB_DEV_PORT"; else say "open http://127.0.0.1:$PANEL_PORT"; fi
 		exit 0
@@ -281,11 +291,16 @@ elif answers "$PANEL_PORT"; then
 	echo "a stack already serves http://127.0.0.1:$PANEL_PORT (and http://localhost:$WEB_DEV_PORT under --watch): use it, or --port-offset <n> for another" >&2
 	exit 0
 fi
+[ "$dev" = 1 ] || [ -n "$PLAYBOOK_PORT" ] || {
+	warn "skipping playbook: no checkout at $PLAYBOOK_DIR (PLAYBOOK_DIR names it); /mcp lists no playbook tools"
+	run_playbook=0
+}
 ports=()
 [ "$run_panel" = 1 ] && ports+=("$PANEL_PORT")
 [ "$run_sites" = 1 ] && ports+=("$SITES_PORT")
 [ "$run_review_archive" = 1 ] && ports+=("$REVIEW_ARCHIVE_PORT")
 [ "$run_placement" = 1 ] && ports+=("$PLACEMENT_PORT")
+[ "$run_playbook" = 1 ] && ports+=("$PLAYBOOK_PORT")
 [ "$sites" = 1 ] && ports+=("$AQUAFIX_PORT" "$VIFNET_PORT")
 [ "$watch" = 1 ] && [ "$run_panel" = 1 ] && ports+=("$WEB_DEV_PORT")
 for port in "${ports[@]}"; do
@@ -410,6 +425,12 @@ if [ "$run_review_archive" = 1 ] && [ "$watch" = 0 ] && { [ -z "${REVIEW_ARCHIVE
 	fi
 fi
 
+if [ "$run_playbook" = 1 ] && [ -z "${PLAYBOOK_BIN:-}" ]; then
+	say "building playbook_web ($PLAYBOOK_DIR#playbook_web)"
+	nix build "$PLAYBOOK_DIR#playbook_web" --out-link "$state/build/playbook"
+	PLAYBOOK_BIN="$state/build/playbook/bin/playbook_web"
+fi
+
 # ── the environments ─────────────────────────────────────────────────────────────────────
 
 [ -s "$state/data-key" ] || "$PANEL_BIN" gen-data-key >"$state/data-key"
@@ -422,6 +443,11 @@ fi
 sites_origin="http://127.0.0.1:$SITES_PORT"
 review_archive_origin="http://127.0.0.1:$REVIEW_ARCHIVE_PORT"
 placement_origin="${PLACEMENT_PORT:+http://127.0.0.1:$PLACEMENT_PORT}"
+# playbook_web where it runs, else nowhere: the conductor's variable is required, and the forward answers 502 for it
+playbook_origin="http://127.0.0.1:9"
+if [ -n "$PLAYBOOK_PORT" ] && { [ "$run_playbook" = 1 ] || answers "$PLAYBOOK_PORT"; }; then
+	playbook_origin="http://127.0.0.1:$PLAYBOOK_PORT"
+fi
 # The gmails' browsers only with the caller's GOLOGIN_TOKEN or MULTILOGIN_TOKEN: neither runs without a plan's.
 browsers_origin=""
 [ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ] || [ "$run_panel" = 0 ] || browsers_origin="http://127.0.0.1:$BROWSERS_PORT"
@@ -452,7 +478,7 @@ panel() {
 		MULTILOGIN_TOKEN="${browsers_origin:+${MULTILOGIN_TOKEN:-}}" \
 		PANEL_GRAFANA_SERVER="$PANEL_GRAFANA_SERVER" \
 		PANEL_GRAFANA_DIR="$state/grafana" \
-		PANEL_PLAYBOOK_URL="http://127.0.0.1:9" \
+		PANEL_PLAYBOOK_URL="$playbook_origin" \
 		TOKENS_START_CAP_MULTIPLE=1 \
 		"$PANEL_BIN" --config "$conductor_config" ${spend_flag:+"$spend_flag"} "$@"
 }
@@ -464,6 +490,21 @@ sites_panel() {
 		PANEL_ASSERTION_KEYS="$assertion_public" \
 		PANEL_MFE_DIR="$SITES_MFE_DIR" \
 		"$SITES_BIN" "$@"
+}
+
+# playbook_web in a dir of its own (it keeps mcp.db in its working directory), trusting the
+# conductor's assertions; concierge is never asked: its projection only fails to sync.
+playbook() {
+	mkdir -p "$state/playbook"
+	cd "$state/playbook"
+	env -u SENTRY_DSN \
+		APP_ENV=development \
+		PORT="$PLAYBOOK_PORT" \
+		PUBLIC_URL="$playbook_origin" \
+		PANEL_ASSERTION_KEYS="$assertion_public" \
+		CONCIERGE_GRPC_ADDR="http://127.0.0.1:9" \
+		CONCIERGE_CLIENT_SECRET="local" \
+		"$PLAYBOOK_BIN" "$@"
 }
 
 # review_archive on its data dir (REVIEW_ARCHIVE_DATA_DIR, e.g. a copy of its checkout's data/),
@@ -488,37 +529,9 @@ EOF
 # ── seed: idempotent, so every run may do it ─────────────────────────────────────────────
 
 # a conductor or sites_panel already serving has its own state, seeded by the run that started it
+fresh=0
 if [ "$run_panel" = 1 ]; then
-	say "seeding $state/panel.db"
-	fresh=0
 	[ -e "$state/panel.db" ] || fresh=1
-	panel migrate
-	# Tokens and GMBs open with the import from review_archive: here, of nothing, into a new panel.db
-	# (one copied in has its own).
-	if [ "$fresh" = 1 ]; then
-		echo '{"people": [], "gmails": [], "gmbs": [], "ledger": [], "kickbacks": []}' >"$state/review-archive-export.json"
-		panel import review-archive "$state/review-archive-export.json"
-	fi
-	# The stack's own keys, `<brand>-local`: a copy of prod has prod's `<brand>-site`, whose secrets
-	# are not here. A secret is shown once: kept in .local/secrets/<key id> for the next run. Its origin
-	# is the landing's; the same origin again is no change, another one is refused.
-	source_key() {
-		local key_id="$1" brand="$2" origin="$3" file="$state/secrets/$1"
-		if panel source list | awk -v k="$key_id" '$1 == k && $NF == "active" { found = 1 } END { exit !found }'; then
-			[ -s "$file" ] || die "source $key_id exists but its secret is not in $file — start over with --reset"
-			panel source set-origin "$key_id" "$origin" || die "source $key_id has another origin than $origin — start over with --reset"
-		else
-			panel source add "$key_id" --kind site --brand "$brand" --origin "$origin" | awk '$1 == "secret:" { print $2 }' >"$file"
-			[ -s "$file" ] || die "panel source add $key_id printed no secret"
-		fi
-	}
-	# a landing with no checkout has no port, and no source either
-	[ -z "$AQUAFIX_PORT" ] || source_key aquafix-local aquafix "http://localhost:$AQUAFIX_PORT"
-	[ -z "$VIFNET_PORT" ] || source_key vifnet-local vifnet "http://localhost:$VIFNET_PORT"
-	# What gmaps_optimal_placement's own work dir holds, into this conductor's queries cache (a newer
-	# answer cached stays).
-	placement_cached="${XDG_CACHE_HOME:-$HOME/.cache}/gmaps_optimal_placement/data/places_cache"
-	[ ! -d "$placement_cached" ] || panel import queries-cache gop "$placement_cached"
 fi
 if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
 	say "seeding $state/sites_panel.db"
@@ -604,10 +617,10 @@ browsers() {
 		PANEL_ASSERTION_KEYS="$assertion_public" \
 		"$root/target/debug/sa_browsers" "$@"
 }
-export -f panel sites_panel review_archive browsers
+export -f panel sites_panel review_archive browsers playbook
 export state conductor_config spend_flag public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_origin browsers_origin \
 	PANEL_GRAFANA_SERVER PANEL_BIN SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR REVIEW_ARCHIVE_DATA_DIR REVIEW_ARCHIVE_PORT \
-	PANEL_PORT SITES_PORT BROWSERS_PORT root
+	PANEL_PORT SITES_PORT BROWSERS_PORT root PLAYBOOK_BIN PLAYBOOK_PORT playbook_origin
 watched() {
 	local dir="$1"
 	shift
@@ -667,6 +680,13 @@ if [ "$run_review_archive" = 1 ]; then
 	fi
 fi
 
+if [ "$run_playbook" = 1 ]; then
+	# not watched, and not essential: /mcp lists no playbook tools without it
+	say "starting playbook_web on $playbook_origin"
+	prefixed playbook playbook &
+	wait_for playbook "$playbook_origin/health" 60 "$!" || warn "playbook_web did not come up; /mcp lists no playbook tools"
+fi
+
 if [ "$run_placement" = 1 ]; then
 	# not watched, and not essential: the map goes on without it; its first build takes minutes
 	say "starting gmaps_optimal_placement on $placement_origin (the home map's overlay)"
@@ -698,6 +718,59 @@ if [ "$run_panel" = 1 ]; then
 	serving panel "$root" "cargo b -q -p sa_server" "panel serve --bind 127.0.0.1:$PANEL_PORT" -i 'crates/gen/**' -e rs,toml,sql,lock &
 	essential+=("$!")
 	wait_for panel "$origin/health" 30 "$!" || die "the conductor did not start"
+	# Dev sign-in's session, as the admin: the seeds are the conductor's own operations.
+	if [ "$role" = admin ]; then
+		say "seeding $state/panel.db over HTTP"
+		jar="$state/session.jar"
+		rm -f "$jar"
+		login="$(curl -fsS -o /dev/null -c "$jar" -w '%{redirect_url}' "$origin/auth/login?as=$DEV_EMAIL")"
+		curl -fsS -o /dev/null -b "$jar" -c "$jar" "$origin${login#"$public_origin"}"
+		csrf="$(awk '$6 == "sa_csrf" { print $7 }' "$jar")"
+		[ -n "$csrf" ] || die "dev sign-in as $DEV_EMAIL gave no session"
+		# `api <method> <path> [curl's arguments]`
+		api() {
+			local method="$1" path="$2"
+			shift 2
+			curl -fsS --fail-with-body -X "$method" -b "$jar" -H "x-sa-csrf: $csrf" -H 'content-type: application/json' "$origin/api/v1$path" "$@"
+		}
+		# Tokens and GMBs open with the import from review_archive: here, of nothing, into a new panel.db
+		# (one copied in has its own).
+		if [ "$fresh" = 1 ]; then
+			api POST /admin/imports/review-archive -d '{"people": [], "gmails": [], "gmbs": [], "ledger": [], "kickbacks": []}' >/dev/null
+		fi
+		# The stack's own keys, `<brand>-local`: a copy of prod has prod's `<brand>-site`, whose secrets
+		# are not here. A secret is shown once: kept in .local/secrets/<key id> for the next run. Its origin
+		# is the landing's; the same origin again is no change, another one is refused.
+		source_key() {
+			local key_id="$1" brand="$2" landing="$3" file="$state/secrets/$1"
+			if api GET /sources | jq -e --arg k "$key_id" '.sources[] | select(.key_id == $k and .revoked_at == null)' >/dev/null; then
+				[ -s "$file" ] || die "source $key_id exists but its secret is not in $file — start over with --reset"
+				api PUT "/sources/$key_id/origin" -d "$(jq -nc --arg o "$landing" '{origin: $o}')" >/dev/null || die "source $key_id has another origin than $landing — start over with --reset"
+			else
+				api POST /sources -d "$(jq -nc --arg k "$key_id" --arg b "$brand" --arg o "$landing" '{key_id: $k, kind: "site", brands: [$b], origin: $o}')" | jq -r .secret >"$file"
+				[ -s "$file" ] || die "the source $key_id came with no secret"
+			fi
+		}
+		# a landing with no checkout has no port, and no source either
+		[ -z "$AQUAFIX_PORT" ] || source_key aquafix-local aquafix "http://localhost:$AQUAFIX_PORT"
+		[ -z "$VIFNET_PORT" ] || source_key vifnet-local vifnet "http://localhost:$VIFNET_PORT"
+		# What gmaps_optimal_placement's own work dir holds, into this conductor's queries cache, each answer
+		# as of its file's time (a newer answer cached stays).
+		placement_cached="${XDG_CACHE_HOME:-$HOME/.cache}/gmaps_optimal_placement/data/places_cache"
+		if [ -d "$placement_cached" ]; then
+			mapfile -d '' -t answers_files < <(find "$placement_cached" -maxdepth 1 -name '*.json' -print0)
+			for ((i = 0; i < ${#answers_files[@]}; i += 500)); do
+				batch=("${answers_files[@]:i:500}")
+				jq -n --arg scheme gop --rawfile times <(stat -c '%n	%Y' "${batch[@]}") '
+					($times | split("\n") | map(select(length > 0) | split("\t") | {(.[0]): (.[1] | tonumber)}) | add) as $at
+					| {scheme: $scheme, answers: (reduce inputs as $answer ({};
+						input_filename as $file | .[$file | split("/") | last | sub("\\.json$"; "")] = {answer: $answer, fetched_at: ($at[$file] | todate)}))}
+				' "${batch[@]}" | api POST /admin/imports/queries-cache --data-binary @- >/dev/null
+			done
+		fi
+	elif [ "$fresh" = 1 ]; then
+		die "a new state is seeded as the admin: run it once without --role $role"
+	fi
 fi
 
 if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
@@ -708,7 +781,8 @@ if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
 		# shell, whose js-local lays our packages' checkouts over the install (frontend/_.js-local.json)
 		prefixed web in_shell "$root" bash -c \
 			'cd frontend && if [ node_modules/.package-lock.json -nt package-lock.json ]; then js-local; else npm ci; fi'
-		PANEL_DEV_BACKEND="$origin" \
+		# Next refuses a second `next dev` on one dist dir: a stack on ports of its own runs beside the usual one
+		PANEL_DEV_BACKEND="$origin" PANEL_DEV_DIST=".next${own_port:+/port-$own_port}" \
 			prefixed web npx next dev --port "$WEB_DEV_PORT"
 	) &
 	web_pid=$!

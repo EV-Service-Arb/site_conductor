@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 
 import type { Gmail } from "@/shared/api/schema";
-import { setQuery, useQuery } from "@/shared/lib/query";
+import { setCarried, useCarried } from "@/shared/lib/location";
 
 import { useGmails, useGmbTags } from "./gmails-context";
 import { ISSUES, type Issue, issueOf } from "./issues";
@@ -38,24 +38,13 @@ export interface Selection {
 }
 
 /** `?gmbs`, an edit of what the filters select: absent, none made; empty, nothing selected. */
-function editOf(raw: string | null): ReadonlySet<number> | null {
-  if (raw === null) return null;
-  return new Set(
-    raw === ""
-      ? []
-      : raw.split(",").map((s) => {
-          const id = Number(s);
-          if (!Number.isSafeInteger(id)) throw new Error(`?gmbs=${raw}: not GMB ids`);
-          return id;
-        }),
-  );
-}
+const editOf = (gmbs: readonly number[] | undefined): ReadonlySet<number> | null => (gmbs === undefined ? null : new Set(gmbs));
 
-const joined = (gmbs: Iterable<number>) => [...gmbs].sort((a, b) => a - b).join(",");
+const sorted = (gmbs: Iterable<number>) => [...gmbs].sort((a, b) => a - b);
 
 /** Selects exactly `gmbs` (`null`: every GMB); the filters no longer say what is selected, so they go. */
 export function select(gmbs: Iterable<number> | null): void {
-  setQuery({ gmbs: gmbs === null ? null : joined(gmbs), gmail: null, category: null, find: null, issue: null });
+  setCarried({ gmbs: gmbs === null ? undefined : sorted(gmbs), gmail: undefined, category: undefined, find: undefined, issue: undefined });
 }
 
 /** The selection, and the outline's rows beside it; `null` while the gmails load. */
@@ -63,10 +52,10 @@ export function useSelection(): Selection | null {
   const gmails = useGmails();
   const scope = useScope();
   const { tags } = useGmbTags();
-  const filter = useQuery("find") ?? "";
-  const only = useQuery("issue");
-  const edit = editOf(useQuery("gmbs"));
-  if (only !== null && !(ISSUES as readonly string[]).includes(only)) throw new Error(`?issue=${only}: not one of ${ISSUES.join(", ")}`);
+  const carried = useCarried();
+  const filter = carried.find ?? "";
+  const only = carried.issue ?? null;
+  const edit = editOf(carried.gmbs);
   if (gmails.status !== "ok") return null;
   const scoped = gmails.data.gmails.filter((g) => scope.gmails?.has(g.id));
   const found = narrowed(gmails.data, scope, filter);
@@ -79,24 +68,24 @@ export function useSelection(): Selection | null {
   const chosen = edit ?? (filtered ? new Set(found.filter((l) => only === null || issueOf(l.gmb, tags) === only).map((l) => l.gmb.id)) : null);
   const isSelected = (gmb: number) => chosen === null || chosen.has(gmb);
   const move = (gmbs: readonly number[], into: boolean) => {
-    if (chosen === null && into) return setQuery({ gmbs: joined(gmbs) });
+    if (chosen === null && into) return setCarried({ gmbs: sorted(gmbs) });
     const next = new Set(chosen ?? rows.map((l) => l.gmb.id));
     for (const id of gmbs) {
       if (into) next.add(id);
       else next.delete(id);
     }
     if (rows.every((l) => next.has(l.gmb.id))) select(null);
-    else setQuery({ gmbs: joined(next) });
+    else setCarried({ gmbs: sorted(next) });
   };
-  return { scoped, categories: scope.categories, filter, only: only as Issue | null, found, rows, chosen, selected: rows.filter((l) => isSelected(l.gmb.id)), edited: edit !== null, isSelected, move };
+  return { scoped, categories: scope.categories, filter, only, found, rows, chosen, selected: rows.filter((l) => isSelected(l.gmb.id)), edited: edit !== null, isSelected, move };
 }
 
 export function setFilter(filter: string): void {
-  setQuery({ find: filter === "" ? null : filter, gmbs: null });
+  setCarried({ find: filter === "" ? undefined : filter, gmbs: undefined });
 }
 
 export function setOnly(issue: Issue | null): void {
-  setQuery({ issue, gmbs: null });
+  setCarried({ issue: issue ?? undefined, gmbs: undefined });
 }
 
 /** Tells the elements the selected ids (`null`: every GMB) on each change and to one that asks, and takes the selection an element makes. */
@@ -104,14 +93,14 @@ export function PublishSelection() {
   const selection = useSelection();
   const gmails = useGmails();
   const chosen = selection?.chosen;
-  const edit = editOf(useQuery("gmbs"));
+  const edit = editOf(useCarried().gmbs);
   const known = gmails.status === "ok" ? new Set(gmails.data.gmbs.map((b) => b.id)) : undefined;
   const told = chosen === undefined ? undefined : JSON.stringify(chosen === null ? null : [...chosen].sort((a, b) => a - b));
 
   // a selected GMB removed, here or elsewhere: out of the selection
   const stale = edit !== null && known !== undefined && [...edit].some((id) => !known.has(id));
   useEffect(() => {
-    if (stale && edit !== null && known !== undefined) setQuery({ gmbs: joined([...edit].filter((id) => known.has(id))) });
+    if (stale && edit !== null && known !== undefined) setCarried({ gmbs: sorted([...edit].filter((id) => known.has(id))) });
   });
 
   useEffect(() => {

@@ -17,10 +17,10 @@ use sa_core::{
 };
 use sa_panel::{
 	Panel,
-	gmbs::{Existing, Gmb, Located, Unplaced},
+	gmbs::{Existing, Gmb, Unplaced},
 	import::Export,
 	seal::DataKey,
-	testing::{TestDb, account, operator, panel_on},
+	testing::{TestDb, account, admin, panel_on},
 };
 use sa_places::{Google, Keys};
 use sa_server::{
@@ -73,14 +73,15 @@ async fn places() -> (Arc<Mutex<Vec<String>>>, String) {
 /// A panel on `db` asking `base` with a key (`None`: keyless), its answers in `db`, its requests free.
 async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
 	let keys = Keys::new(base.map(|_| vec![("house".to_owned(), "k".to_owned())]).unwrap_or_default());
-	let google = Google::try_new(keys, Arc::new(sa_places::InOrder), Arc::new(db.store().await)).unwrap().spend(true);
+	let store = db.store().await;
+	let google = Google::try_new(keys, Arc::new(sa_places::InOrder), Arc::new(store.clone())).unwrap().spend(true);
 	let google = match base {
 		Some(b) => google.at(b),
 		None => google,
 	};
 	let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
 	let accounts = base.map(|_| vec![sa_panel::testing::account("house", Some("k"), None)]).unwrap_or_default();
-	let p = panel_on(db.store().await, key, google, sa_places::Accounts::new(accounts));
+	let p = panel_on(store, key, google, sa_places::Accounts::new(accounts));
 	// what a point costs is tests/connections.rs's
 	p.set_prices(
 		&[PlacesRequest::Details, PlacesRequest::Search, PlacesRequest::Autocomplete].map(|r| (Item::Places(r), Some(0))),
@@ -102,13 +103,13 @@ async fn opened(p: &Panel) {
 		ledger: vec![],
 		kickbacks: vec![],
 	};
-	p.import_review_archive(empty).await.unwrap();
+	p.import_review_archive(empty).await.unwrap().unwrap();
 }
 
 fn app(panel: Panel) -> Router {
 	let who = DevIdentity {
 		user_id: DevIdentity::named("dev@localhost"),
-		permissions: operator(),
+		permissions: admin(),
 		email: "dev@localhost".to_owned(),
 	};
 	let config = SignInConfig {
@@ -178,13 +179,16 @@ async fn locate_fills_only_the_missing_points_and_pays_for_each_once() {
 	}
 
 	let keyed = panel(&db, Some(&base)).await;
-	assert_eq!(keyed.locate().await.unwrap(), located(2, &[], &[]));
+	let app = app(keyed.clone());
+	let mut b = Browser::default();
+	b.sign_in(&app).await;
+	assert_eq!(locate(&mut b, &app).await, located(2, &[], &[]));
 	let gbps = keyed.gmails(owner).await.unwrap().1;
 	assert!(
 		gbps.iter().all(|b| b.location.is_some() && b.country.is_some_and(|c| !c.by_hand)),
 		"Google's country over one by hand"
 	);
-	assert_eq!(keyed.locate().await.unwrap(), located(0, &[], &[]));
+	assert_eq!(locate(&mut b, &app).await, located(0, &[], &[]));
 	assert_eq!(asked.lock().unwrap().len(), 2, "a second run asks nothing");
 }
 
@@ -206,14 +210,14 @@ async fn add(p: &Panel, owner: uuid::Uuid, gmail_id: i64, place: &str) -> Gmb {
 	p.add_gmb(Some(Spender::new(owner)), existing, jiff::Timestamp::now()).await.unwrap().unwrap()
 }
 
-fn located(n: usize, no_point: &[&str], no_country: &[&str]) -> Located {
-	let owned = |places: &[&str]| places.iter().map(|p| p.to_string()).collect();
-	Located {
-		located: n,
-		no_point: owned(no_point),
-		no_country: owned(no_country),
-		refused: vec![],
-	}
+fn located(n: usize, no_point: &[&str], no_country: &[&str]) -> Value {
+	json!({ "located": n, "no_point": no_point, "no_country": no_country, "refused": [] })
+}
+
+async fn locate(b: &mut Browser, app: &Router) -> Value {
+	let (status, done) = call(b, app, Method::POST, "/api/v1/admin/gmbs/locate", None).await;
+	assert_eq!(status, StatusCode::OK, "{done}");
+	done
 }
 
 async fn seen(p: &Panel, email: &str) -> uuid::Uuid {
@@ -250,7 +254,7 @@ async fn a_service_area_gmb_has_no_point_until_placed_on_the_map() {
 	)
 	.await;
 	assert_eq!((status, &assist["location"]), (StatusCode::CREATED, &Value::Null), "{assist}");
-	assert_eq!(keyed.locate().await.unwrap(), located(1, &[ASSIST], &[ASSIST]), "listed, and the run goes on to the next place");
+	assert_eq!(locate(&mut b, &app).await, located(1, &[ASSIST], &[ASSIST]), "listed, and the run goes on to the next place");
 
 	let location = format!("/api/v1/gmbs/{}/location", assist["id"]);
 	let point = |gmails: &Value| gmails["gmbs"].as_array().unwrap().iter().find(|g| g["id"] == assist["id"]).unwrap()["location"].clone();
@@ -266,7 +270,7 @@ async fn a_service_area_gmb_has_no_point_until_placed_on_the_map() {
 	assert_eq!(point(&listed), Value::Null, "a point placed by hand is taken back");
 	let (status, _) = call(&mut b, &app, Method::PUT, &location, Some(json!({ "lat": 43.6, "lng": -79.65 }))).await;
 	assert_eq!(status, StatusCode::NO_CONTENT);
-	assert_eq!(keyed.locate().await.unwrap(), located(0, &[], &[ASSIST]), "placed, still without a country");
+	assert_eq!(locate(&mut b, &app).await, located(0, &[], &[ASSIST]), "placed, still without a country");
 	assert_eq!(*asked.lock().unwrap(), [ASSIST, FLORE], "a place is not paid for again");
 }
 
@@ -321,8 +325,9 @@ async fn the_map_is_told_only_when_configured() {
 		),
 	] {
 		let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
-		let keyless = Google::try_new(Keys::new(vec![]), Arc::new(sa_places::InOrder), Arc::new(db.store().await)).unwrap();
-		let app = app(panel_on(db.store().await, key, keyless, sa_places::Accounts::new(accounts)));
+		let store = db.store().await;
+		let keyless = Google::try_new(Keys::new(vec![]), Arc::new(sa_places::InOrder), Arc::new(store.clone())).unwrap();
+		let app = app(panel_on(store, key, keyless, sa_places::Accounts::new(accounts)));
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		assert_eq!(call(&mut b, &app, Method::GET, "/api/v1/map", None).await, want);

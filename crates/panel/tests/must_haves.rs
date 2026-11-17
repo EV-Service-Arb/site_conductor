@@ -28,7 +28,7 @@ async fn opened(db: &TestDb) -> (Panel, Uuid) {
 		kickbacks: vec![],
 	})
 	.await
-	.unwrap();
+	.unwrap().unwrap();
 	let owner = Uuid::now_v7();
 	let user = User {
 		user_id: owner,

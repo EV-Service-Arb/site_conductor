@@ -1,22 +1,24 @@
+import Ajv2020 from "ajv/dist/2020";
+
+import openapi from "@/shared/api/openapi.json";
 import type { BrowserIn, BrowserOut } from "@/shared/api/schema";
-import { type Parser, arrayOf, nullable, num, object, oneOf, parse, str } from "@/shared/lib/parse";
 
 /** The server's close codes for the viewer's socket. */
 export const CLOSE = { signedOut: 4401, notRunning: 4404, takenOver: 4409, stopped: 4410, goingAway: 1001 } as const;
 
-const OUT: { [K in BrowserOut["type"]]: Parser<Extract<BrowserOut, { type: K }>> } = {
-  frame: object({ type: oneOf(["frame"]), data: str, width: num, height: num }),
-  tabs: object({ type: oneOf(["tabs"]), tabs: arrayOf(object({ id: str, title: str, url: str })), active: nullable(str) }),
-  dialog: object({ type: oneOf(["dialog"]), kind: str, message: str, default: nullable(str) }),
-  dialog_closed: object({ type: oneOf(["dialog_closed"]) }),
-  error: object({ type: oneOf(["error"]), message: str }),
-};
+const ajv = new Ajv2020({ strict: false, validateFormats: false, validateSchema: false });
+ajv.addSchema(openapi, "api");
+const OUT = (() => {
+  const validate = ajv.getSchema<BrowserOut>("api#/components/schemas/BrowserOut");
+  if (validate === undefined) throw new Error("the document's BrowserOut does not compile");
+  return validate;
+})();
 
+/** A viewer frame, checked against the document's `BrowserOut`. */
 export function parseOut(text: string): BrowserOut {
   const v: unknown = JSON.parse(text);
-  const type = typeof v === "object" && v !== null && "type" in v ? v.type : undefined;
-  if (typeof type !== "string" || !(type in OUT)) throw new Error(`browser socket: unknown frame ${String(type)}`);
-  return parse(OUT[type as BrowserOut["type"]] as Parser<BrowserOut>, v);
+  if (!OUT(v)) throw new Error(`browser socket: ${ajv.errorsText(OUT.errors)}`);
+  return v as BrowserOut;
 }
 
 /** A client frame is at most 4 KiB; a code point is at most 6 bytes of JSON (`\u` escapes), so 600 stay under it with the envelope. */

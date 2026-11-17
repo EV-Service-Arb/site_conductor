@@ -2,26 +2,34 @@
 //! session, and a WebSocket client written out here (the handshake and the frames this
 //! contract uses), so the test speaks the wire a browser does.
 
-use std::{collections::HashMap, convert::Infallible, net::SocketAddr, time::Duration};
+use std::{
+	collections::{BTreeSet, HashMap},
+	convert::Infallible,
+	net::SocketAddr,
+	time::Duration,
+};
 
 use axum::{
 	Router,
 	body::{Body, Bytes},
-	http::{Method, Request, StatusCode, header},
+	http::{HeaderMap, Method, Request, StatusCode, header},
 	routing::get,
 };
 use jiff::Timestamp;
 use sa_auth::PermissionSet;
 use sa_panel::{
 	Panel,
-	live::{Audience, Bus, Change, Signal},
-	testing::{TestDb, admin, operator, panel},
+	live::{Bus, Signal},
+	seal::DataKey,
+	store::Store,
+	testing::{TestDb, admin, operator, panel, panel_with, settled, topics},
 };
 use sa_server::{
-	concierge::{DEV_CODE, DevIdentity},
+	concierge::DEV_CODE,
+	forward::{Services, Upstreams},
 	http::Limits,
 	live::{self, CLOSE_SESSION_ENDED, LiveLimits},
-	testing::{app_with, services, upstream},
+	testing::{SEED, app_with, upstream},
 };
 use serde_json::{Value, json};
 use tokio::{
@@ -37,10 +45,6 @@ const PATIENCE: Duration = Duration::from_secs(10);
 
 fn email(permissions: &PermissionSet) -> String {
 	format!("dev-{}@localhost", permissions.iter().count())
-}
-
-fn user_id(permissions: &PermissionSet) -> uuid::Uuid {
-	DevIdentity::named(&email(permissions))
 }
 
 /// Sites' change feed, as the test feeds it: each connection opens with `resync`, then every
@@ -85,10 +89,19 @@ async fn alone(panel: Panel, permissions: PermissionSet, limits: Limits) -> (Rou
 	serve(panel, permissions, limits, "http://127.0.0.1:9").await
 }
 
-/// The feed followed onto `bus` until the sender is dropped.
-fn follow(base: &str, bus: &Bus) -> watch::Sender<bool> {
+/// The feeds followed onto `bus` until the sender is dropped: sites' at `base`, review_archive
+/// with none yet.
+async fn follow(base: &str, bus: &Bus) -> watch::Sender<bool> {
+	let (none, _) = upstream(Router::new()).await;
+	let services = Services::new(Upstreams {
+		review_archive: none.parse().unwrap(),
+		playbook: base.parse().unwrap(),
+		sites: base.parse().unwrap(),
+		placement: None,
+		signer: SEED.parse().unwrap(),
+	});
 	let (stop, stopped) = watch::channel(false);
-	tokio::spawn(live::follow(services(base), bus.clone(), stopped));
+	tokio::spawn(live::follow(services, bus.clone(), stopped));
 	stop
 }
 
@@ -100,11 +113,11 @@ struct Browser {
 }
 
 impl Browser {
-	async fn send(&mut self, app: &Router, method: Method, uri: &str) -> (StatusCode, Option<String>) {
+	async fn send(&mut self, app: &Router, method: Method, uri: &str) -> (StatusCode, HeaderMap) {
 		self.send_body(app, method, uri, None).await
 	}
 
-	async fn send_body(&mut self, app: &Router, method: Method, uri: &str, json: Option<serde_json::Value>) -> (StatusCode, Option<String>) {
+	async fn send_body(&mut self, app: &Router, method: Method, uri: &str, json: Option<serde_json::Value>) -> (StatusCode, HeaderMap) {
 		let mut req = Request::builder().method(method).uri(uri);
 		if json.is_some() {
 			req = req.header(header::CONTENT_TYPE, "application/json");
@@ -127,13 +140,12 @@ impl Browser {
 				self.jar.insert(k.to_owned(), v.to_owned());
 			}
 		}
-		let location = res.headers().get(header::LOCATION).map(|l| l.to_str().unwrap().to_owned());
-		(res.status(), location)
+		(res.status(), res.headers().clone())
 	}
 
 	async fn sign_in(&mut self, app: &Router) {
-		let (_, location) = self.send(app, Method::GET, "/auth/login").await;
-		let path = location.unwrap().strip_prefix(ORIGIN).unwrap().to_owned();
+		let (_, headers) = self.send(app, Method::GET, "/auth/login").await;
+		let path = headers[header::LOCATION].to_str().unwrap().strip_prefix(ORIGIN).unwrap().to_owned();
 		assert!(path.starts_with(&format!("/auth/callback?code={DEV_CODE}")), "{path}");
 		assert_eq!(self.send(app, Method::GET, &path).await.0, StatusCode::SEE_OTHER);
 		assert!(self.jar.contains_key("sa_session"));
@@ -227,6 +239,16 @@ impl Ws {
 		}
 	}
 
+	/// The next frame but the changes the writes before it told.
+	async fn past_changes(&mut self) -> Frame {
+		loop {
+			match self.next().await {
+				Frame::Text(f) if f["type"] == "changed" => {}
+				f => return f,
+			}
+		}
+	}
+
 	async fn text(&mut self) -> Value {
 		match self.next().await {
 			Frame::Text(v) => v,
@@ -267,7 +289,8 @@ async fn open(addr: SocketAddr, b: &Browser) -> Ws {
 #[tokio::test]
 async fn refused_before_the_upgrade_and_open_to_anyone_signed_in() {
 	let db = TestDb::create().await;
-	let (app, addr) = alone(panel(&db).await, admin(), Limits::default()).await;
+	let panel = panel(&db).await;
+	let (app, addr) = alone(panel.clone(), admin(), Limits::default()).await;
 	assert_eq!(Ws::connect(addr, Some(ORIGIN), None).await.err(), Some(401), "no session");
 	assert_eq!(Ws::connect(addr, Some(ORIGIN), Some("sa_session=nonsense")).await.err(), Some(401), "no such session");
 
@@ -278,7 +301,7 @@ async fn refused_before_the_upgrade_and_open_to_anyone_signed_in() {
 	assert_eq!(Ws::connect(addr, None, cookie.as_deref()).await.err(), Some(403), "no Origin at all");
 	assert!(Ws::connect(addr, Some(ORIGIN), cookie.as_deref()).await.is_ok(), "ours");
 
-	let (app, addr) = alone(panel(&db).await, PermissionSet::from_iter(Vec::<String>::new()), Limits::default()).await;
+	let (app, addr) = alone(panel.clone(), PermissionSet::from_iter(Vec::<String>::new()), Limits::default()).await;
 	let b = signed_in(&app).await;
 	let mut ws = Ws::connect(addr, Some(ORIGIN), b.cookie().as_deref()).await.expect("no permission needed: what it is told is");
 	let hello = ws.text().await;
@@ -286,44 +309,52 @@ async fn refused_before_the_upgrade_and_open_to_anyone_signed_in() {
 	hello["at"].as_str().unwrap().parse::<Timestamp>().expect("RFC 3339");
 }
 
-/// The conductor's own writes: the keys to whoever manages them, a user's alerts to that user.
+/// What a screen read is what it is told of: a GET's `x-sa-reads` names the tables its handler
+/// read, and a write through `/api/v1` to one of them is told on every socket, whoever may read it.
 #[tokio::test]
-async fn the_conductors_own_changes_go_to_who_may_read_them() {
+async fn a_write_tells_every_socket_the_tables_a_read_named() {
 	let db = TestDb::create().await;
 	let panel = panel(&db).await;
 	let (admin_app, admin_addr) = alone(panel.clone(), admin(), Limits::default()).await;
 	let (op_app, op_addr) = alone(panel.clone(), operator(), Limits::default()).await;
 	let mut admin_b = signed_in(&admin_app).await;
-	let mut op_b = signed_in(&op_app).await;
+	let op_b = signed_in(&op_app).await;
 	let mut admin_ws = open(admin_addr, &admin_b).await;
 	let mut op = open(op_addr, &op_b).await;
+	let (status, headers) = admin_b.send(&admin_app, Method::GET, "/api/v1/sources").await;
+	assert_eq!(status, StatusCode::OK);
+	assert_eq!(headers["x-sa-reads"], "conductor.sources", "the table it read, not the gate's sessions");
+	heard(&panel, [&mut admin_ws, &mut op]).await;
 
 	let key = json!({"key_id": "vifnet-site", "kind": "site", "brands": ["vifnet"], "origin": "https://vifnet.site"});
 	assert_eq!(admin_b.send_body(&admin_app, Method::POST, "/api/v1/sources", Some(key)).await.0, StatusCode::CREATED);
-	for (permissions, chat, rule, app, b) in [(admin(), 1, "payment_received", &admin_app, &mut admin_b), (operator(), 2, "new_lead", &op_app, &mut op_b)] {
-		let user = user_id(&permissions);
-		let destination: i64 = sqlx::query_scalar("INSERT INTO alert_destinations (user_id, method, created_at) VALUES ($1, 'telegram', 0) RETURNING id")
-			.bind(user)
-			.fetch_one(panel.store().pool())
-			.await
-			.unwrap();
-		sqlx::query("INSERT INTO telegram_destinations (destination_id, kind, chat_id) VALUES ($1, 'private', $2)")
-			.bind(destination)
-			.bind(chat)
-			.execute(panel.store().pool())
-			.await
-			.unwrap();
-		let rules = json!({"rules": {rule: true}});
-		assert_eq!(
-			b.send_body(app, Method::PUT, &format!("/api/v1/alerts/destinations/{destination}/rules"), Some(rules)).await.0,
-			StatusCode::OK
-		);
-	}
+	let [admin_heard, op_heard] = heard(&panel, [&mut admin_ws, &mut op]).await;
+	assert_eq!(
+		admin_heard,
+		topics(&["alert_access", "sessions", "sources", "users"]),
+		"the read's table, the gate's session check and its GetMe asked afresh"
+	);
+	assert_eq!(op_heard, admin_heard, "the operator, who may not read the keys, is told the same");
+}
 
-	let admin_saw: Vec<String> = [admin_ws.text().await, admin_ws.text().await].iter().map(|f| f["topic"].as_str().unwrap().to_owned()).collect();
-	assert_eq!(admin_saw, ["sources", "alerts"]);
-	// Frames keep their order: had the operator been told of the keys, they would come first.
-	assert_eq!(op.text().await["topic"], "alerts");
+/// What each socket was told until now: once the pool settled, a `resync` put on the bus is the last.
+async fn heard<const N: usize>(panel: &Panel, sockets: [&mut Ws; N]) -> [BTreeSet<String>; N] {
+	settled(panel).await;
+	panel.bus().publish(Signal::Resync);
+	let mut heard = Vec::new();
+	for ws in sockets {
+		let mut topics = BTreeSet::new();
+		loop {
+			let frame = ws.text().await;
+			match frame["type"].as_str() {
+				Some("resync") => break,
+				Some("changed") => topics.insert(frame["topic"].as_str().unwrap().to_owned()),
+				_ => panic!("{frame}"),
+			};
+		}
+		heard.push(topics);
+	}
+	heard.try_into().unwrap()
 }
 
 /// sites' feed: each table it committed to is told to everyone signed in (what they may read is
@@ -339,8 +370,9 @@ async fn sites_changes_reach_every_reader_and_the_feed_comes_back() {
 	let (an_app, an_addr) = serve(panel.clone(), analyst, Limits::default(), &base).await;
 	let mut op = open(op_addr, &signed_in(&op_app).await).await;
 	let mut an = open(an_addr, &signed_in(&an_app).await).await;
+	heard(&panel, [&mut op, &mut an]).await;
 
-	let _following = follow(&base, panel.bus());
+	let _following = follow(&base, panel.bus()).await;
 	assert_eq!(op.text().await, json!({"type": "resync"}), "the feed's first line");
 	assert_eq!(an.text().await, json!({"type": "resync"}));
 	let line = |topic: &str| json!({"type": "changed", "topic": topic}).to_string();
@@ -369,22 +401,25 @@ async fn signing_out_closes_a_socket_the_feed_was_telling() {
 	let (app, addr) = serve(panel.clone(), admin(), Limits::default(), &base).await;
 	let mut b = signed_in(&app).await;
 	let mut ws = open(addr, &b).await;
-	let _following = follow(&base, panel.bus());
+	heard(&panel, [&mut ws]).await;
+	let _following = follow(&base, panel.bus()).await;
 	assert_eq!(ws.text().await, json!({"type": "resync"}));
 	lines.send(Some(json!({"type": "changed", "topic": "sites.leads"}).to_string())).unwrap();
 	assert_eq!(ws.text().await["topic"], "sites.leads");
 	assert_eq!(b.send(&app, Method::POST, "/auth/logout").await.0, StatusCode::NO_CONTENT);
-	assert_eq!(ws.next().await, Frame::Close(CLOSE_SESSION_ENDED));
+	assert_eq!(ws.past_changes().await, Frame::Close(CLOSE_SESSION_ENDED));
 }
 
 #[tokio::test]
 async fn a_new_sign_in_closes_the_socket_of_the_session_it_replaces() {
 	let db = TestDb::create().await;
-	let (app, addr) = alone(panel(&db).await, admin(), Limits::default()).await;
+	let panel = panel(&db).await;
+	let (app, addr) = alone(panel.clone(), admin(), Limits::default()).await;
 	let mut b = signed_in(&app).await;
 	let mut ws = open(addr, &b).await;
+	heard(&panel, [&mut ws]).await;
 	b.sign_in(&app).await;
-	assert_eq!(ws.next().await, Frame::Close(CLOSE_SESSION_ENDED));
+	assert_eq!(ws.past_changes().await, Frame::Close(CLOSE_SESSION_ENDED));
 }
 
 /// A session ended with nobody telling the bus (expired, or deleted from the database) is
@@ -399,20 +434,12 @@ async fn a_session_gone_is_found_at_the_recheck() {
 		},
 		..Default::default()
 	};
-	let (app, addr) = alone(panel(&db).await, admin(), limits).await;
+	let panel = panel(&db).await;
+	let (app, addr) = alone(panel.clone(), admin(), limits).await;
 	let mut ws = open(addr, &signed_in(&app).await).await;
+	heard(&panel, [&mut ws]).await;
 	sqlx::query("DELETE FROM sessions").execute(&db.pool().await).await.unwrap();
-	assert_eq!(ws.next().await, Frame::Close(CLOSE_SESSION_ENDED));
-}
-
-fn change(topic: &str, id: Option<String>) -> Change {
-	Change {
-		topic: topic.into(),
-		brand: Some("aquafix".into()),
-		id,
-		at: Timestamp::now(),
-		audience: Audience::Holders("sa:sites:work:read".into()),
-	}
+	assert_eq!(ws.past_changes().await, Frame::Close(CLOSE_SESSION_ENDED));
 }
 
 /// The test's runtime has one thread: the ten changes are published before the socket's task
@@ -420,18 +447,20 @@ fn change(topic: &str, id: Option<String>) -> Change {
 #[tokio::test]
 async fn a_reader_behind_is_told_to_resync() {
 	let db = TestDb::create().await;
-	let panel = panel(&db).await.with_live(Bus::new(2));
+	let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
+	let panel = panel_with(Store::open(db.path(), Bus::new(2)).await.unwrap(), key);
 	let (app, addr) = alone(panel.clone(), admin(), Limits::default()).await;
 	let mut ws = open(addr, &signed_in(&app).await).await;
+	heard(&panel, [&mut ws]).await;
 	for i in 0..10 {
-		panel.bus().changed(change("lead", Some(format!("L-{i}"))));
+		panel.bus().changed(&format!("sites.lead_{i}"));
 	}
 	assert_eq!(ws.text().await, json!({"type": "resync"}));
 	// What was left of the backlog is skipped: the next frame is what comes after.
 	panel.bus().publish(Signal::Resync);
 	assert_eq!(ws.text().await, json!({"type": "resync"}));
-	panel.bus().changed(change("places", None));
-	assert_eq!(ws.text().await["topic"], "places");
+	panel.bus().changed("sites.places");
+	assert_eq!(ws.text().await["topic"], "sites.places");
 }
 
 #[tokio::test]
@@ -441,7 +470,8 @@ async fn too_many_sockets_are_refused() {
 		live: LiveLimits { per_user: 2, ..Default::default() },
 		..Default::default()
 	};
-	let (app, addr) = alone(panel(&db).await, admin(), limits).await;
+	let panel = panel(&db).await;
+	let (app, addr) = alone(panel.clone(), admin(), limits).await;
 	let b = signed_in(&app).await;
 	let first = open(addr, &b).await;
 	let _second = open(addr, &b).await;
@@ -465,8 +495,10 @@ async fn a_silent_peer_is_dropped() {
 		},
 		..Default::default()
 	};
-	let (app, addr) = alone(panel(&db).await, admin(), limits).await;
+	let panel = panel(&db).await;
+	let (app, addr) = alone(panel.clone(), admin(), limits).await;
 	let mut ws = open(addr, &signed_in(&app).await).await;
+	heard(&panel, [&mut ws]).await;
 	// Pings arrive and go unanswered, then the server hangs up.
 	assert_eq!(ws.raw().await, Frame::Ping);
 	loop {
@@ -479,6 +511,7 @@ async fn a_silent_peer_is_dropped() {
 
 	// Answered, the socket stays.
 	let mut ws = open(addr, &signed_in(&app).await).await;
+	heard(&panel, [&mut ws]).await;
 	for _ in 0..8 {
 		assert_eq!(ws.raw().await, Frame::Ping);
 		ws.pong().await;

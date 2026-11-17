@@ -1,35 +1,21 @@
-import { ROUTES } from "@/shared/config/routes";
+import { ViewError, parse } from "@evinvest/views";
 
-// The panel's own screens: a chip link to one of them is a soft navigation through the router.
-// Deliberately absent: the review archive's own views (tokens, act-as — the chip's `external`
-// items) and the sites' (their element routes them), and everything outside the app (`/auth`,
-// `/api`, `/cabinet`): those stay full navigations.
-const SOFT_ROUTES: readonly string[] = ["/", ROUTES.sources, ROUTES.tokens, ROUTES.adminTokens, ROUTES.usage, ROUTES.account, ROUTES.wallet, ROUTES.reviewArchive];
-
-// The export is built with `trailingSlash`, so `/usage` and `/usage/` are one screen.
-const bare = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
-
-const BY_PATH = new Map(SOFT_ROUTES.map((route) => [bare(route), route]));
-
-// Only resolves relative paths; never fetched.
-const BASE = "http://panel.invalid";
+import { VIEWS } from "@/shared/api/views";
 
 /**
- * The router target for a chip link (`ev:navigate`'s `detail.href`, path + search + hash), or
- * null when it is not one of the panel's screens and the browser should follow the link itself.
- * The target is spelled as the panel's own `<Link href>`s spell it (`ROUTES`), query and hash kept.
+ * The href for a chip link (`ev:navigate`'s `detail.href`) when it is one of the panel's views,
+ * for a soft move; null when the browser should follow the link itself (`/auth`, another origin).
  */
 export function panelRouteFor(href: unknown): string | null {
   if (typeof href !== "string" || !href.startsWith("/") || href.startsWith("//") || href.startsWith("/\\")) return null;
-  let url: URL;
   try {
-    url = new URL(href, BASE);
-  } catch {
-    return null;
+    parse(VIEWS, href);
+  } catch (e) {
+    // no view of the panel's: a page of the browser's to load
+    if (e instanceof ViewError) return null;
+    throw e;
   }
-  if (url.origin !== BASE) return null;
-  const route = BY_PATH.get(bare(url.pathname));
-  return route === undefined ? null : route + url.search + url.hash;
+  return href;
 }
 
 /** `panelRouteFor` of an `ev:navigate` event's `detail.href`; a missing or malformed detail is null. */

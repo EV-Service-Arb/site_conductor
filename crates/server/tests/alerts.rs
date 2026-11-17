@@ -35,7 +35,7 @@ use sa_panel::{
 	seal::DataKey,
 	session::{RefreshError, Refresher, Tokens},
 	telegram::{Account, Chat, Update},
-	testing::{self as aliases, TestDb},
+	testing::{self as aliases, TestDb, settled, told, topics},
 	tokens::User,
 };
 use sa_server::{
@@ -494,7 +494,7 @@ async fn setup() -> Setup {
 			kickbacks: vec![],
 		})
 		.await
-		.unwrap();
+		.unwrap().unwrap();
 	Setup {
 		db: db.pool().await,
 		_db: db,
@@ -1224,45 +1224,41 @@ async fn access_is_asked_again_when_a_message_is_sent() {
 	assert_eq!(outbox_errors(&s).await, [not_confirmed.clone(), not_confirmed]);
 }
 
-/// Each change of a user's destinations the bot makes tells their live sockets, and nobody else's:
-/// linked, `/stop`, and found blocked.
+/// Each change of a user's destinations the bot makes is told by its tables: linked, `/stop`, and
+/// found blocked.
 #[tokio::test]
-async fn a_destination_changing_tells_its_user() {
+async fn a_destination_changing_is_told_by_its_tables() {
 	let s = setup().await;
 	let user = Uuid::now_v7();
+	settled(&s.panel).await;
 	let mut rx = s.panel.bus().subscribe();
-	let mut told = || {
-		let mut users = Vec::new();
-		while let Ok(signal) = rx.try_recv() {
-			if let sa_panel::live::Signal::Changed(c) = signal
-				&& c.topic == "alerts"
-			{
-				assert!(c.visible_to(user, &aliases::operator()));
-				assert!(!c.visible_to(Uuid::now_v7(), &aliases::admin()));
-				users.push(c.audience);
-			}
-		}
-		users
-	};
-	let mine = sa_panel::live::Audience::User(user);
 	s.link(user, aliases::operator(), 1, t0()).await;
-	assert_eq!(told(), std::slice::from_ref(&mine), "linked");
+	assert_eq!(
+		told(&s.panel, &mut rx).await,
+		topics(&["alert_access", "alert_destinations", "telegram_destinations", "telegram_link_tokens"]),
+		"linked"
+	);
 	s.n.handle(Update::Stop { chat: private(1) }, t0()).await.unwrap();
-	assert_eq!(told(), std::slice::from_ref(&mine), "/stop");
+	assert_eq!(
+		told(&s.panel, &mut rx).await,
+		topics(&["alert_destinations", "alert_rules", "telegram_destinations", "telegram_outbox"]),
+		"/stop"
+	);
 	s.n.handle(Update::Stop { chat: private(1) }, t0()).await.unwrap();
-	assert_eq!(told(), [], "nothing was linked");
-	s.link(user, aliases::operator(), 1, t0()).await;
-	assert!(s.unlink(user).await);
-	assert_eq!(told(), std::slice::from_ref(&mine), "linked; a removal from the page is its route's to tell");
+	assert_eq!(
+		told(&s.panel, &mut rx).await,
+		topics(&["alert_destinations", "alert_rules", "telegram_destinations", "telegram_outbox", "telegram_replies"]),
+		"nothing was linked: the delete, its cascade and the reply are told as prepared"
+	);
 
 	s.link(user, aliases::operator(), 1, t0()).await;
 	s.lead("L-1", t0());
 	s.fan_out(&s.n, t0()).await.unwrap();
-	told();
+	told(&s.panel, &mut rx).await;
 	s.mock
 		.script(403, json!({"ok": false, "error_code": 403, "description": "Forbidden: bot was blocked by the user"}));
 	assert_eq!(s.n.deliver(at(0)).await.unwrap().dead, 1);
-	assert_eq!(told(), [mine], "blocked");
+	assert_eq!(told(&s.panel, &mut rx).await, topics(&["telegram_destinations", "telegram_outbox"]), "blocked");
 }
 
 // ── the buttons ──────────────────────────────────────────────────────────────────────────

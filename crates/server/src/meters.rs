@@ -9,9 +9,10 @@
 use std::{sync::Mutex, time::Duration};
 
 use axum::{Json, extract::State, http::Method};
-use ev_lib::api::JsonSchema;
+use ev_lib::api::{JsonSchema, Params, Refusal};
 use eyre::WrapErr;
 use jiff::{SignedDuration, Timestamp};
+use sa_auth::Tokens;
 use sa_core::{
 	meters::{ALL, Meter, Stop, Vendor},
 	prices::Item,
@@ -24,8 +25,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
 use crate::{
-	api::{ApiError, ApiResult, Params},
-	http::{ApiRoute, Gate, Section},
+	api::{ApiResult, Code},
+	http::{ApiRoute, USER},
 };
 
 /// How often a reading is due.
@@ -180,7 +181,7 @@ pub struct ReadingsDto {
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
-	let admin = Gate::section(Section::Tokens);
+	let admin = USER.needs(Tokens::Grant);
 	vec![
 		ApiRoute::new(M::GET, "/admin/meters", admin, meters),
 		ApiRoute::new(M::GET, "/admin/meters/readings", admin, meter_readings),
@@ -290,10 +291,10 @@ pub(crate) struct Window {
 /// The vendors' readings of their meters in a window, oldest first: what the sa-meters dashboard
 /// reads.
 pub(crate) async fn meter_readings(State(panel): State<Panel>, Params(q): Params<Window>) -> ApiResult<Json<ReadingsDto>> {
-	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| ApiError::BadRequest(format!("{ms}: {e}")));
+	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| Refusal::new(Code::BadRequest, format!("{ms}: {e}")));
 	let (from, to) = (at(q.from)?, at(q.to)?);
 	if from >= to || to.duration_since(from) > SPAN {
-		return Err(ApiError::BadRequest(format!("from is before to, at most {} days", SPAN.as_hours() / 24)));
+		return Err(Refusal::new(Code::BadRequest, format!("from is before to, at most {} days", SPAN.as_hours() / 24)));
 	}
 	Ok(Json(ReadingsDto {
 		readings: panel.meter_readings(from, to).await?.into_iter().map(ReadingDto::from).collect(),

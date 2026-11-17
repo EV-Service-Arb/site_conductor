@@ -12,25 +12,22 @@ phone: [☰] [Service-Arb⌄] … [(V)⌄]   ☰ → Sheet: Sites, Review Archiv
 ```
 
 ```text
-app/                 routes: (panel)/ is everything behind sign-in, access/ is not
+app/                 the one page: which view it shows is the location's, parsed by `VIEWS` (src/shared/lib/location)
 src/views/           one slice per screen, plus shell/ (the top bar, the access states, the window events)
 src/features/        account-chip · sign-out · wallet-element · sites-element · manage-sources · request-access
 src/entities/        session · source · tokens · gmb · alerts · assistant — what the screens make of the API's answers
 src/shared/          api/ (`api`: /api/v1 from openapi.json, its answers checked against it; `http`: the services' forwards;
                      CSRF, the gate's answers), i18n/, lib/ (live/: the socket), mfe/, ui/
 messages/            @evinvest/i18n's catalogues (`npm run i18n` regenerates them); a root key lives in the slice it names
-scripts/dev-stub.ts  a stand-in backend for local work
 tests/               vitest, in Node: the rules the screens obey live in plain modules; e2e/: the Figma frames
 ```
 
 ## Running it
 
 ```sh
-npm ci
-npm run dev:stub     # on STUB_PORT — /api/v1 (me, sources, access) and /auth; STUB_ROLE=admin, STUB_ME=401|503,
-                     # STUB_LIVE=off for no socket, STUB_LIVE_EVERY=5 for busier live activity
-PANEL_DEV_BACKEND=http://127.0.0.1:$STUB_PORT npm run dev
-                     # on PANEL_WEB_PORT — proxies /api, /auth and /mfe to PANEL_DEV_BACKEND
+nix run .#dev        # the conductor and its peers, and this front end's next dev on PANEL_WEB_PORT
+PANEL_DEV_BACKEND=<conductor> npm run dev
+                     # by hand: proxies the backend's prefixes to PANEL_DEV_BACKEND, every other path to the page
 ```
 
 The ports are the dev shell's (`nix develop`). Against the real backend, point `PANEL_DEV_BACKEND`
@@ -46,8 +43,9 @@ for what acts on the platform session. The panel's own chip entries are the call
 stand-in, while the bundle loads or when it cannot, opens the same entries.
 
 Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
-`nix run .#figma` puts the conductor's own screens into Figma, both breakpoints, over the stub as an
-admin (`tests/e2e`; the loop is the `figma-render` skill).
+`nix run .#figma` puts the conductor's own screens into Figma, both breakpoints, over a stack of its
+own (`dev --port`) as an admin (`tests/e2e`; the loop is the `figma-render` skill); `nix run .#e2e`
+runs the other specs over the same.
 
 ## How it is served
 
@@ -58,10 +56,8 @@ same origin as `/api` and `/auth` — one image, one Service, one IngressRoute, 
 aquafix has one. What that needs of the backend and the flake:
 
 - `panel serve` gets a fallback: files from a directory (say `PANEL_WEB_DIR`),
-  a directory answering with its `index.html` (the export writes `sources/index.html`
-  and links `/sources/`), and `404.html` with status 404 for anything else. `/api`,
-  `/auth` and `/health` keep their routes ahead of it; `/sites/<view>` and
-  `/review_archive/<view>` without a dot get their page's `index.html`, the element routing.
+  `index.html` for every path that is a view (`View::parse`), and `404.html` with status
+  404 for anything else. `/api`, `/auth` and `/health` keep their routes ahead of it.
 - Cache headers: `/_next/static/*` is content-hashed — `public, max-age=31536000,
   immutable`; every HTML file `no-cache`.
 - The flake builds `frontend/` with `buildNpmPackage` (needs `npmDepsHash`) and puts
@@ -103,8 +99,8 @@ z ─────┬─ A   assistant: show / hide          (not on its full-scr
        ├─ G ──┬─ H  home      S  sites       R  review archive
        │      ├─ C  sources   T  tokens      U  usage
        │      └─ W  wallet    E  alerts      Y  account
-       │      (each only when the caller may open it)
-       ├─ V   sites: its views, as mfe-sites-nav binds them (L leads, P places, …)
+       │      (each view's `key`, only when the caller may open it)
+       ├─ V   sites: its views, as mfe-sites-nav binds them (L leads, P places, …); the sites nest's `scope`
        └─ ?   keybinds: every key bound right now
 Ctrl+Z           undo    the page's one history: a GMB's point, its switch, its trade
 Ctrl+Shift+Z     redo    (⌘Z, ⇧⌘Z on macOS; Ctrl+Y too)
@@ -116,8 +112,8 @@ Esc closes the hint and the help.
 The outline holds the selection every app narrows to. Gmails (`?gmail=2,12`), a search
 (`?find=`) and an issue (`?issue=`) select what they match, every GMB without them;
 rows dragged between "Selected" and "Not selected" edit that, `?gmbs=` (empty: none),
-until a filter changes. These are the outline's keys of the query (`shared/lib/query`),
-kept from page to page; `?gmb=` (the open card) and `?at=` (`<lat>,<lng>,<zoom>`) are
-`/`'s. The host tells the elements the selection as `sa:gmbs` `{ids}` (`null`: every
+until a filter changes. These are the views' carried keys (`Outline` in
+`crates/server/src/view.rs`), kept from page to page; `?gmb=` (the open card) and `?at=`
+(`<lat>,<lng>,<zoom>`) are Home's. The host tells the elements the selection as `sa:gmbs` `{ids}` (`null`: every
 GMB) on each change and again on `sa:gmbs-request`; an element selects with
 `sa:gmbs-select` `{ids}`, which clears the filters (CONTRACT §9).

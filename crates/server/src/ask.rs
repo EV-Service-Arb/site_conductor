@@ -4,32 +4,24 @@
 //! proposed, never done: the user confirms it from the answer's actions. The turns are written
 //! through the chats' versioned store as the loop goes, each write told to the caller's screens.
 
-use std::collections::BTreeMap;
-
 use axum::{
 	Extension, Json,
 	extract::State,
 	http::{HeaderMap, StatusCode},
 };
-use ev_lib::api::{
-	JsonSchema,
-	schemars::{generate::SchemaSettings, schema_for},
-};
+use ev_lib::api::{Body, ErrorCode, Ids, JsonSchema, Refusal};
 use jiff::Timestamp;
 use sa_core::{
 	prices::{ModelTokens, Spends},
 	usage::Bill,
 };
-use sa_panel::{
-	assistant::Chat,
-	live::{Audience, Change},
-};
+use sa_panel::assistant::Chat;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::{
-	api::{ApiError, ApiResult, Body, Id, Ids},
+	api::{ApiResult, Code, Id},
 	assistant::{Action, ActionState, AnswerState, Attachment, ChatDto, Cost, Mention, Step, Target, Turn, Used},
 	claude::{MODEL, SUBSCRIPTION},
 	http::ApiState,
@@ -46,8 +38,8 @@ leads, its reviews, tokens that pay for Google requests. You act for the person 
 \n\
 Tools: `search` finds the panel's operations by what they do (use it before `call`; an empty query lists them all); \
 `call` runs one by its id. An operation that destroys or spends is not run: it becomes a proposal the person confirms, \
-so say what it will do. `open` offers a view (a URL of this site) as a link; `run` offers a binding of the page's \
-keymap. The <page> block says what is open, the views there are, and the bindings bound now.\n\
+so say what it will do. `open` offers a view as a link; `run` offers a binding of the page's keymap. The <page> block \
+says what is open and the bindings bound now.\n\
 \n\
 Answer briefly, in the person's language. Formatting: **bold**, `- ` items, `@[label](location:<gbp id>)` to name a GBP.";
 
@@ -88,8 +80,6 @@ pub(crate) struct Question {
 	files: Vec<Attachment>,
 	/// The page the question is asked on: what is open.
 	url: String,
-	/// The views a person can be shown, by name: the page's route table.
-	views: BTreeMap<String, String>,
 	bindings: Vec<Bound>,
 }
 
@@ -105,17 +95,17 @@ pub(crate) async fn ask(
 	Ids(Id { id: chat }): Ids<Id<Uuid>>,
 	Body(q): Body<Question>,
 ) -> ApiResult<Json<ChatDto>> {
-	let model = state.model.clone().ok_or_else(|| ApiError::Unavailable("the assistant is not connected".into()))?;
-	let (token, bill) = match (state.panel.claude_token(caller.user_id).await?, model.owner()) {
+	let model = state.model.clone().ok_or_else(|| Refusal::new(Code::Unavailable, "the assistant is not connected"))?;
+	let (token, bill) = match (state.sign_in.panel.claude_token(caller.user_id).await?, model.owner()) {
 		(Some(own), _) => (own, Bill::Theirs),
 		(None, Some(owner)) => (owner.clone(), Bill::Ours),
-		(None, None) => return Err(ApiError::Unavailable("the assistant runs on your own Claude here: connect it".into())),
+		(None, None) => return Err(Refusal::new(Code::Unavailable, "the assistant runs on your own Claude here: connect it")),
 	};
 	let reader = (&caller).into();
-	let read: Chat<Turn> = state.panel.assistant_chat(reader, chat).await??;
+	let read: Chat<Turn> = state.sign_in.panel.assistant_chat(reader, chat).await??;
 	let started = Timestamp::now();
 	if q.from > read.turns.len() {
-		return Err(ApiError::BadRequest(format!("from {} is past the chat's {} turns", q.from, read.turns.len())));
+		return Err(Refusal::new(Code::BadRequest, format!("from {} is past the chat's {} turns", q.from, read.turns.len())));
 	}
 	let mut turns = read.turns;
 	turns.truncate(q.from);
@@ -154,7 +144,7 @@ pub(crate) async fn ask(
 		from,
 	};
 	let mut tab = match bill {
-		Bill::Ours => match state.panel.model_tab(by, &answer.id, started).await? {
+		Bill::Ours => match state.sign_in.panel.model_tab(by, &answer.id, started).await? {
 			Ok(tab) => Some(tab),
 			Err(why) => {
 				answer.text = format!("I can't answer on the panel's Claude: {why}.");
@@ -168,7 +158,13 @@ pub(crate) async fn ask(
 
 	history.push(json!({ "role": "user", "content": question(&q) }));
 	let permissions = caller.permissions.clone();
-	let tools = tool_definitions(&state.tools.own(|p| p.is_none_or(|p| permissions.iter().any(|h| h == p))));
+	let tools: Vec<Value> = state
+		.tools
+		.definitions(|p| p.is_none_or(|p| permissions.iter().any(|h| h == p)), true)
+		.into_iter()
+		.map(|t| json!({ "name": t.name, "description": t.description, "input_schema": t.input }))
+		.collect();
+	let tools = Value::Array(tools);
 	let mut rounds = 0;
 	let end = loop {
 		rounds += 1;
@@ -188,17 +184,17 @@ pub(crate) async fn ask(
 		let reply = match model.answer(&token, &asked).await? {
 			Ok(reply) => reply,
 			Err(said) if bill == Bill::Theirs => {
-				state.panel.claude_refused(caller.user_id, said, Timestamp::now()).await?;
+				state.sign_in.panel.claude_refused(caller.user_id, said, Timestamp::now()).await?;
 				answer
 					.text
 					.push_str("\n\nYour Claude connection was refused: reconnect it, or disconnect it to ask on the panel's.");
 				break AnswerState::Stopped;
 			}
-			Err(said) => return Err(ApiError::Unavailable(format!("the panel's Claude refused its token: {said}"))),
+			Err(said) => return Err(Refusal::new(Code::Unavailable, format!("the panel's Claude refused its token: {said}"))),
 		};
 		let used = tokens(&reply)?;
 		answer.cost.tokens.add(&used);
-		let spent = state.panel.model_used(by, answered_by(&reply)?, &used, tab.as_mut(), Timestamp::now()).await?;
+		let spent = state.sign_in.panel.model_used(by, answered_by(&reply)?, &used, tab.as_mut(), Timestamp::now()).await?;
 		answer.cost.charged = tab.as_ref().map_or(0, |t| t.charged);
 		let content = reply["content"].as_array().cloned().ok_or_else(|| eyre::eyre!("the model answered no content: {reply}"))?;
 		let mut results = Vec::new();
@@ -254,7 +250,8 @@ pub(crate) struct Act {
 /// Does an answer's proposed operation, as the caller and through the same gate as their own
 /// request; the action is marked done in the chat.
 ///
-/// 409 the action is not a proposed operation; the operation's own refusal answers as it refused.
+/// 409 the action is not a proposed operation; the operation's own refusal answers with its code, or
+/// `bad_gateway` for a service's word the conductor has none of.
 pub(crate) async fn act(
 	State(state): State<ApiState>,
 	Extension(caller): Extension<Caller>,
@@ -262,37 +259,38 @@ pub(crate) async fn act(
 	Ids(Id { id: chat }): Ids<Id<Uuid>>,
 	Body(a): Body<Act>,
 ) -> ApiResult<Json<ChatDto>> {
-	let read: Chat<Turn> = state.panel.assistant_chat((&caller).into(), chat).await??;
+	let read: Chat<Turn> = state.sign_in.panel.assistant_chat((&caller).into(), chat).await??;
 	let at = read
 		.turns
 		.iter()
 		.position(|t| matches!(t, Turn::Assistant { id, .. } if *id == a.turn))
-		.ok_or(ApiError::NotFound)?;
+		.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
 	let mut turns = read.turns;
 	let Turn::Assistant { actions, .. } = &mut turns[at] else {
 		unreachable!("found as an answer")
 	};
-	let action = actions.iter_mut().find(|x| x.id == a.action).ok_or(ApiError::NotFound)?;
+	let action = actions.iter_mut().find(|x| x.id == a.action).ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
 	let (ActionState::Proposed, Target::Call(call)) = (&action.state, &action.target) else {
-		return Err(ApiError::Conflict("only a proposed operation is done here: a view or a binding is the page's".into()));
+		return Err(Refusal::new(Code::Conflict, "only a proposed operation is done here: a view or a binding is the page's"));
 	};
-	let answer = state.tools.call(&headers, call.clone()).await.map_err(ApiError::BadRequest)?;
+	let answer = state.tools.call(&headers, call.clone()).await.map_err(|m| Refusal::new(Code::BadRequest, m))?;
 	let status = StatusCode::from_u16(answer.status).map_err(|e| eyre::eyre!("the app answered {}: {e}", answer.status))?;
 	if !status.is_success() {
-		let why = answer.body["error"].as_str().map_or_else(|| answer.body.to_string(), str::to_owned);
-		return Err(match status {
-			StatusCode::BAD_REQUEST => ApiError::BadRequest(why),
-			StatusCode::FORBIDDEN => ApiError::Forbidden,
-			StatusCode::NOT_FOUND => ApiError::NotFound,
-			StatusCode::CONFLICT => ApiError::Conflict(why),
-			StatusCode::PAYLOAD_TOO_LARGE => ApiError::TooLarge(why),
-			StatusCode::SERVICE_UNAVAILABLE => ApiError::Unavailable(why),
-			s => eyre::eyre!("{} answered {s}: {why}", call.operation).into(),
+		let error = answer.body["error"].as_str().map_or_else(|| answer.body.to_string(), str::to_owned);
+		let word = answer.body["code"].as_str();
+		return Err(match word.and_then(|w| serde_json::from_value::<Code>(w.into()).ok()).filter(|c| c.status() == status) {
+			Some(code) => Refusal::new(code, error),
+			// another service's word, which the conductor's codes do not hold
+			None => Refusal::new(Code::BadGateway, format!("{} refused ({}): {error}", call.operation, word.unwrap_or(status.as_str()))),
 		});
 	}
 	action.state = ActionState::Done;
 	let tail = turns.split_off(at);
-	let done = state.panel.assistant_turns((&caller).into(), chat, read.summary.version, at, tail, Timestamp::now()).await??;
+	let done = state
+		.sign_in
+		.panel
+		.assistant_turns((&caller).into(), chat, read.summary.version, at, tail, Timestamp::now())
+		.await??;
 	Ok(Json(done.into()))
 }
 
@@ -332,18 +330,13 @@ impl Written<'_> {
 			cost: Some(answer.cost.clone()),
 		};
 		let turns: Vec<Turn> = asked[self.from..].iter().cloned().chain([turn]).collect();
-		let chat = self.state.panel.assistant_turns(self.caller.into(), self.chat, self.base, self.from, turns, now).await??;
+		let chat = self
+			.state
+			.sign_in
+			.panel
+			.assistant_turns(self.caller.into(), self.chat, self.base, self.from, turns, now)
+			.await??;
 		self.base = chat.summary.version;
-		// The asker's screens follow the answer as it grows; the route tells its end.
-		if started.is_none() {
-			self.state.panel.bus().changed(Change {
-				topic: "assistant".into(),
-				brand: None,
-				id: Some(self.chat.to_string()),
-				at: now,
-				audience: Audience::User(self.caller.user_id),
-			});
-		}
 		Ok(chat.into())
 	}
 }
@@ -363,41 +356,13 @@ fn conversation(turns: &[Turn]) -> Vec<Value> {
 fn question(q: &Question) -> String {
 	let mentions: Vec<String> = q.mentions.iter().map(|m| format!("@[{}](location:{})", m.label, m.id)).collect();
 	let bindings: Vec<String> = q.bindings.iter().map(|b| format!("- `{}` ({}): {}", b.id, b.sequence, b.label)).collect();
-	let views: Vec<String> = q.views.iter().map(|(name, path)| format!("- {name}: {path}")).collect();
 	format!(
-		"{}\n\n<page>\nOpen: {}\nAbout: {}\nViews:\n{}\nBindings:\n{}\n</page>",
+		"{}\n\n<page>\nOpen: {}\nAbout: {}\nBindings:\n{}\n</page>",
 		q.text,
 		q.url,
 		if mentions.is_empty() { "nothing named".to_owned() } else { mentions.join(", ") },
-		views.join("\n"),
 		bindings.join("\n")
 	)
-}
-
-fn tool_definitions(own: &[tools::Own]) -> Value {
-	let schema = |s: ev_lib::api::schemars::Schema| serde_json::to_value(s).expect("a schema serializes");
-	let call = SchemaSettings::draft07().into_generator().into_root_schema_for::<tools::Call>();
-	let mut tools = json!([
-		{ "name": "search", "description": "Finds the panel's operations matching what you need: their ids, parameters, body schemas and whether they destroy or spend.", "input_schema": schema(schema_for!(Search)) },
-		{ "name": "call", "description": "Runs one operation by its id, as the person asking. One that destroys or spends becomes a proposal they confirm.", "input_schema": schema(call) },
-		{ "name": "open", "description": "Offers a view as a link: a URL of this site, from the page's views.", "input_schema": { "type": "object", "properties": { "url": { "type": "string" }, "label": { "type": "string" } }, "required": ["url", "label"] } },
-		{ "name": "run", "description": "Offers a binding of the page's keymap, by its id, as a button.", "input_schema": { "type": "object", "properties": { "binding": { "type": "string" }, "label": { "type": "string" } }, "required": ["binding", "label"] } },
-	]);
-	let list = tools.as_array_mut().expect("a list");
-	list.extend(own.iter().map(|t| json!({ "name": t.name, "description": t.description, "input_schema": t.input })));
-	tools
-}
-
-#[derive(Deserialize)]
-struct Open {
-	url: String,
-	label: String,
-}
-
-#[derive(Deserialize)]
-struct Run {
-	binding: String,
-	label: String,
 }
 
 /// Runs one tool the model asked for: what it answers the model, and the step the person sees.
@@ -425,16 +390,18 @@ async fn use_tool(state: &ApiState, headers: &HeaderMap, permissions: &sa_auth::
 			};
 			call(state, headers, c, answer, action).await
 		}
-		Some("open") => match serde_json::from_value::<Open>(input.clone()) {
-			Ok(o) if o.url.starts_with('/') && !o.url.starts_with("//") => {
-				let step = format!("Linked {}", o.url);
-				answer.actions.push(action(&o.label, Target::Href(o.url)));
-				(json!({ "offered": "a link" }), step)
-			}
-			Ok(_) => (json!({ "error": "a URL of this site starts with one /" }), "Linked".to_owned()),
+		Some("open") => match serde_json::from_value::<tools::Open>(input.clone()) {
+			Ok(o) => match state.tools.open(&o, |p| p.is_none_or(|p| permissions.iter().any(|h| h == p))) {
+				Ok(href) => {
+					let step = format!("Linked {href}");
+					answer.actions.push(action(&o.label, Target::Href(href)));
+					(json!({ "offered": "a link" }), step)
+				}
+				Err(e) => (json!({ "error": e }), format!("Linked {}", o.view)),
+			},
 			Err(e) => (json!({ "error": e.to_string() }), "Linked".to_owned()),
 		},
-		Some("run") => match serde_json::from_value::<Run>(input.clone()) {
+		Some("run") => match serde_json::from_value::<tools::Run>(input.clone()) {
 			Ok(r) if q.bindings.iter().any(|b| b.id == r.binding) => {
 				let step = format!("Offered {}", r.binding);
 				answer.actions.push(action(&r.label, Target::Binding(r.binding)));

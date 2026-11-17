@@ -2,7 +2,6 @@
 
 import { Popover, PopoverContent, PopoverTrigger, Switch, cn } from "@evinvest/uikit";
 import { Check, ChevronDown, ChevronRight, ListFilter, Plug, Settings } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
 import { type MouseEvent, useEffect, useState } from "react";
 
 import { chooseCategoryScope, chooseGmailScope, covers, GMAIL_ROLE_NAME, inCategories, openAccount, openCategories, type Pattern, type Selection, under, useScope, useTrades, scopeKeys, gmbs as gmbsKeys } from "@/entities/gmb";
@@ -293,15 +292,12 @@ function Matrix({ all, gmbs, trades, picked }: { all: readonly Gmb[]; gmbs: Gmb[
 /** The categories' own window, where they are managed; the picker only selects. */
 function ManageCategories({ onOpened }: { onOpened: () => void }) {
   const t = useT();
-  const router = useRouter();
-  const pathname = usePathname();
   return (
     <button
       type="button"
       onClick={() => {
         onOpened();
-        if (pathname === "/") openCategories(true);
-        else router.push("/?categories");
+        openCategories(true);
       }}
       aria-label={t(scopeKeys.categories.manage, "Manage categories")}
       title={t(scopeKeys.categories.manage, "Manage categories")}
@@ -315,16 +311,13 @@ function ManageCategories({ onOpened }: { onOpened: () => void }) {
 /** A gmail's own window, its connections, over the map as a trade's is. */
 function OpenAccount({ gmail, onOpened }: { gmail: Gmail; onOpened: () => void }) {
   const t = useT();
-  const router = useRouter();
-  const pathname = usePathname();
   const label = t(account.open, "Connections of {gmail}", { gmail: gmail.gmail });
   return (
     <button
       type="button"
       onClick={() => {
         onOpened();
-        if (pathname === "/") openAccount({ gmail: gmail.id, tab: "connections" });
-        else router.push(`/?account=${gmail.id}&tab=connections`);
+        openAccount({ gmail: gmail.id, tab: "connections" });
       }}
       aria-label={label}
       title={label}
