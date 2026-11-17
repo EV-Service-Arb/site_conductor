@@ -25,7 +25,11 @@
           "forbidden",
           "over_budget",
           "unanswerable",
-          "unauthenticated"
+          "unauthenticated",
+          "csrf",
+          "unavailable",
+          "bad_gateway",
+          "internal"
         ],
         "type": "string"
       }
@@ -111,6 +115,36 @@
               }
             },
             "description": "`over_budget`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "One guide, whole: how to decide in one area, as what matters, how to decide, and what to do when it goes wrong.",
@@ -118,11 +152,15 @@
           "tools"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
+          "csrf": 403,
           "forbidden": 403,
+          "internal": 500,
           "over_budget": 429,
           "unanswerable": 422,
-          "unauthenticated": 401
+          "unauthenticated": 401,
+          "unavailable": 503
         },
         "x-permission": "sa:playbook:mcp:use",
         "x-tool": true
@@ -227,6 +265,36 @@
               }
             },
             "description": "`over_budget`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "One chapter of a capture (a `###` under `## transcript` or `## summary`) or one section of a note, whole, with every line numbered.",
@@ -234,11 +302,15 @@
           "tools"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
+          "csrf": 403,
           "forbidden": 403,
+          "internal": 500,
           "over_budget": 429,
           "unanswerable": 422,
-          "unauthenticated": 401
+          "unauthenticated": 401,
+          "unavailable": 503
         },
         "x-permission": "sa:playbook:mcp:use",
         "x-tool": true
@@ -343,6 +415,36 @@
               }
             },
             "description": "`over_budget`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`"
           }
         },
         "summary": "Case-insensitive regex over the service-arb playbook.",
@@ -350,11 +452,15 @@
           "tools"
         ],
         "x-errors": {
+          "bad_gateway": 502,
           "bad_request": 400,
+          "csrf": 403,
           "forbidden": 403,
+          "internal": 500,
           "over_budget": 429,
           "unanswerable": 422,
-          "unauthenticated": 401
+          "unauthenticated": 401,
+          "unavailable": 503
         },
         "x-permission": "sa:playbook:mcp:use",
         "x-tool": true
