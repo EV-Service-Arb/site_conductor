@@ -1,7 +1,7 @@
 "use client";
 
-import { Badge, Button, ConfirmDialog, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch, type Tone } from "@evinvest/uikit";
-import { RotateCcw, Trash2, X } from "lucide-react";
+import { Badge, Button, ConfirmDialog, FloatingPanel, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch, type Tone } from "@evinvest/uikit";
+import { RotateCcw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { move, openTrash, STATE_NAME, STATE_TONE, useGmails, trash as trashKeys, windowKeys } from "@/entities/gmb";
@@ -13,6 +13,8 @@ import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 const DAY_MS = 86_400_000;
+/** Where the home's floating windows first open: over the map, beside the outline. */
+export const FLOAT_AT = { x: 500, y: 140 };
 const KEEP_DAYS = [1, 7, 30, 90] as const; // as the server accepts
 const SECTION = "flex flex-col gap-2";
 const SECTION_HEAD = "flex items-baseline gap-2 text-xs font-semibold tracking-wide text-ink-soft uppercase";
@@ -23,7 +25,7 @@ function days(from: string, to: string): number {
   return Math.max(0, Math.round(d));
 }
 
-/** What the caller removed (`?trash`), over the map as the Categories window: restorable until purged. */
+/** What the caller removed (`?trash`), floating over the map as the Categories window: restorable until purged. */
 export function TrashWindow({ trash }: { trash: Trash }) {
   const t = useT();
   const button = useButtonSize();
@@ -75,20 +77,19 @@ export function TrashWindow({ trash }: { trash: Trash }) {
   );
 
   return (
-    <section aria-label={t(trashKeys.title, "Trash")} className="absolute inset-y-0 right-0 left-0 flex flex-col overflow-y-auto border-l border-border bg-background md:left-36">
-      <header className="flex items-start gap-3 border-b border-border px-6 pt-4 pb-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-            <Trash2 aria-hidden className="size-4 shrink-0 text-ink-soft" />
-            {t(trashKeys.title, "Trash")}
-          </h2>
-          <p className="text-sm text-ink-soft">{t(trashKeys.what, "What you removed: every service stops working on it until it is restored.")}</p>
-        </div>
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => openTrash(false)}>
-          <X aria-hidden />
-        </Button>
-      </header>
-      <div className="flex max-w-3xl flex-col gap-6 p-6">
+    <FloatingPanel
+      title={
+        <span className="flex items-center gap-2">
+          <Trash2 aria-hidden className="size-4 shrink-0 text-ink-soft" />
+          {t(trashKeys.title, "Trash")}
+        </span>
+      }
+      at={FLOAT_AT}
+      closeLabel={t(windowKeys.close, "Close the window")}
+      onClose={() => openTrash(false)}
+    >
+      <div className="flex w-3xl max-w-full flex-col gap-6 p-6">
+        <p className="-mt-2 text-sm text-ink-soft">{t(trashKeys.what, "What you removed: every service stops working on it until it is restored.")}</p>
         <Settings trash={trash} onSet={reload} />
         {trash.gmails.length === 0 && trash.gmbs.length === 0 ? (
           <p className="text-sm text-ink-soft">{t(trashKeys.empty, "Nothing removed.")}</p>
@@ -117,7 +118,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
           </>
         )}
       </div>
-    </section>
+    </FloatingPanel>
   );
 }
 

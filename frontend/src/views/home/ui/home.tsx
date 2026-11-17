@@ -49,7 +49,23 @@ export function Home() {
       )}
       {config.status === "ok" && config.data === null && <EmptyState className="m-6" title={t(home.noMap, "No map here")} description={t(home.noMap.why, "No Google account in the conductor's config has a browser key. Your GMBs are in the list beside.")} />}
       {config.status === "ok" && config.data !== null && <GmbMap config={config.data} />}
+      <Floats />
     </div>
+  );
+}
+
+/** The windows floating over the page, with a map under them or none. */
+function Floats() {
+  const gmails = useGmails();
+  const trades = useTrades();
+  const trash = useTrash();
+  const categoriesWindow = useCategoriesWindow();
+  const trashWindow = useTrashWindow();
+  return (
+    <>
+      {categoriesWindow && trades.status === "ok" && gmails.status === "ok" && <CategoriesWindow trades={trades.data} gmbs={gmails.data.gmbs} />}
+      {trashWindow && trash.status === "ok" && <TrashWindow trash={trash.data} />}
+    </>
   );
 }
 
@@ -196,9 +212,6 @@ function GmbMap({ config }: { config: MapConfig }) {
   useEffect(() => {
     if (gone) setQuery({ trade: null, tab: null });
   }, [gone]);
-  const categoriesWindow = useCategoriesWindow();
-  const trashWindow = useTrashWindow();
-  const trash = useTrash();
   const accountWindow = useAccountWindow();
   const kitWindow = useKitWindow();
   const account = accountWindow !== null && gmails.status === "ok" ? gmails.data.gmails.find((g) => g.id === accountWindow.gmail) : undefined;
@@ -292,8 +305,6 @@ function GmbMap({ config }: { config: MapConfig }) {
       {peekedListed && windows && !windowed && !peekedListed.gmb.location && <Peek listed={peekedListed} onClose={() => peek(null)} className="absolute top-4 right-4" />}
       {peekedListed && windows && windowed && <LocationWindow listed={peekedListed} tab={tab} />}
       {opened && tradeWindow && gmails.status === "ok" && windows && <TradeWindow trade={opened} tab={tradeWindow.tab} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
-      {categoriesWindow && trades.status === "ok" && gmails.status === "ok" && windows && <CategoriesWindow trades={trades.data} gmbs={gmails.data.gmbs} />}
-      {trashWindow && trash.status === "ok" && windows && <TrashWindow trash={trash.data} />}
       {account && accountWindow && gmails.status === "ok" && windows && <AccountWindow gmail={account} tab={accountWindow.tab} gbps={under(gmails.data, account.id).length} />}
       {kitWindow !== null && map.status === "ok" && windows && <KitWindow map={map.map} area={kitWindow} />}
       {map.status === "ok" && windows && <StudyAreaWindow map={map.map} />}
