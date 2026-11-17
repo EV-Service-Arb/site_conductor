@@ -2815,6 +2815,10 @@
     "en": "All balances",
     "t": "Все балансы"
   },
+  "tokens.admin.age": {
+    "en": "Age",
+    "t": "Возраст"
+  },
   "tokens.admin.balance": {
     "en": "Tokens",
     "t": "Токены"
@@ -2826,6 +2830,14 @@
   "tokens.admin.empty": {
     "en": "Nobody has signed in yet.",
     "t": "Ещё никто не входил."
+  },
+  "tokens.admin.noMatch": {
+    "en": "Nobody matches.",
+    "t": "Никто не найден."
+  },
+  "tokens.admin.search": {
+    "en": "Name or email",
+    "t": "Имя или электронная почта"
   },
   "tokens.admin.spending": {
     "en": "Spending",

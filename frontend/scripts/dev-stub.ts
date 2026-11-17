@@ -182,7 +182,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   if (path === "/tokens/ledger") return send(res, 200, { entries: ledger, next: null });
   if (path === "/tokens/usage") return send(res, 200, { days: usageDays });
   if (path === "/admin/meters") return send(res, 200, meters);
-  if (path === "/admin/tokens") return send(res, 200, { users: [{ user_id: USER_ID, email: "stub@example.test", name: `Stub ${ROLE}`, balance: tokens.balance }] });
+  if (path === "/admin/tokens") return send(res, 200, { users: [{ user_id: USER_ID, email: "stub@example.test", name: `Stub ${ROLE}`, balance: tokens.balance, first_seen: minsAgo(60 * 24 * 40) }, ...Array.from({ length: 30 }, (_, i) => ({ user_id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`, email: `person${i}@example.test`, name: i % 3 ? "" : `Person ${i}`, balance: (i * 397) % 2000, first_seen: minsAgo(60 * (i * 53 % 900)) }))] });
   if (path === "/assistant/chats" && !write) return send(res, 200, { chats: [] });
   if (path.startsWith("/sources") && ROLE !== "admin") return send(res, 403, { code: "forbidden", error: "your permissions do not allow this" });
   if (path === "/sources" && req.method === "GET") return send(res, 200, { sources });

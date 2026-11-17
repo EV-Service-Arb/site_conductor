@@ -9755,6 +9755,10 @@
           "email": {
             "type": "string"
           },
+          "first_seen": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
@@ -9767,7 +9771,8 @@
           "user_id",
           "email",
           "name",
-          "balance"
+          "balance",
+          "first_seen"
         ]
       },
       "TokenHolders": {

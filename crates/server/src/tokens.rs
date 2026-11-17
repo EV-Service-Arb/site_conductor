@@ -16,7 +16,7 @@ use ev_lib::api::JsonSchema;
 use jiff::Timestamp;
 use sa_auth::{Principal, Service};
 use sa_core::{
-	prices::{Item, Sale, Scope},
+	prices::{Item, Scope},
 	tokens::ChargePage,
 };
 use sa_panel::{
@@ -81,7 +81,7 @@ pub struct TokensDto {
 	pub daily: i64,
 	pub cap: i64,
 	pub kickbacks: Vec<KickbackDto>,
-	/// Each sold, priced item: its tokens.
+	/// Each priced item: its tokens.
 	pub prices: BTreeMap<Item, i64>,
 	/// An action costing more asks first.
 	pub confirm_above: i64,
@@ -143,6 +143,8 @@ pub struct TokenHolderDto {
 	pub email: String,
 	pub name: String,
 	pub balance: i64,
+	/// RFC 3339.
+	pub first_seen: String,
 }
 
 /// `GET /admin/tokens`.
@@ -203,13 +205,12 @@ pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<boo
 	tokio::join!(follow, push);
 }
 
-/// A catalog item, its price (`null`: not sold, or metered) and what `per` units cost us (`null`: unknown).
+/// A catalog item, its price (`null`: refused) and what `per` units cost us (`null`: unknown).
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Price")]
 pub struct PriceDto {
 	pub item: Item,
 	pub scope: Scope,
-	pub sale: Sale,
 	/// What one is counted in.
 	pub unit: &'static str,
 	/// How many units the price and the cost are for.
@@ -250,7 +251,7 @@ pub struct PricesDto {
 	pub prices: Vec<PriceDto>,
 }
 
-/// The items given, each priced at 0 tokens or more or `null` off sale, each costed at 0 µ$ a unit
+/// The items given, each priced at 0 tokens or more or `null` refused, each costed at 0 µ$ a unit
 /// or more or `null` unknown; the others stay.
 #[derive(Deserialize, JsonSchema)]
 #[schemars(rename = "SetPrices")]
@@ -449,11 +450,12 @@ async fn token_holders(State(panel): State<Panel>) -> ApiResult<Json<TokenHolder
 	Ok(Json(TokenHoldersDto {
 		users: holders
 			.into_iter()
-			.map(|(u, balance)| TokenHolderDto {
+			.map(|(u, first_seen, balance)| TokenHolderDto {
 				user_id: u.user_id,
 				email: u.email,
 				name: u.name,
 				balance,
+				first_seen: first_seen.to_string(),
 			})
 			.collect(),
 	}))
@@ -475,7 +477,6 @@ impl From<Priced> for PriceDto {
 		Self {
 			item,
 			scope: item.scope(),
-			sale: item.sale(),
 			unit: item.unit(),
 			per: item.per(),
 			tool: item.tool(),
@@ -496,18 +497,17 @@ impl From<Priced> for PriceDto {
 	}
 }
 
-/// Every item of the price catalog (`sa_core::prices`): Places requests, Street View, review_archive's
-/// walk steps; each priced in tokens or not sold.
+/// Every item of the price catalog (`sa_core::prices`), each priced in tokens or refused.
 async fn token_prices(State(panel): State<Panel>) -> ApiResult<Json<PricesDto>> {
 	Ok(Json(PricesDto {
 		prices: panel.prices().await?.into_iter().map(PriceDto::from).collect(),
 	}))
 }
 
-/// Prices the items given, 0 or more tokens or `null` off sale, and costs them, 0 µ$ a unit or
+/// Prices the items given, 0 or more tokens or `null` refused, and costs them, 0 µ$ a unit or
 /// more or `null` unknown; the others stay.
 ///
-/// 400 an item not in the catalog, or a metered one priced.
+/// 400 an item not in the catalog.
 async fn set_token_prices(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<SetPricesDto>) -> ApiResult<Json<PricesDto>> {
 	let (priced, costs) = (b.prices.into_iter().collect::<Vec<_>>(), b.costs.into_iter().collect::<Vec<_>>());
 	panel.set_prices(&priced, &costs, &caller.email, Timestamp::now()).await??;

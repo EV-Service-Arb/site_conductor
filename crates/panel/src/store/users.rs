@@ -5,7 +5,7 @@ use jiff::Timestamp;
 use sqlx::SqliteConnection;
 use uuid::Uuid;
 
-use super::to_db;
+use super::{from_db, to_db};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct User {
@@ -34,12 +34,15 @@ pub async fn seen(conn: &mut SqliteConnection, user: &User, first: Timestamp, la
 	Ok(())
 }
 
-pub async fn all(conn: &mut SqliteConnection) -> eyre::Result<Vec<User>> {
-	let rows: Vec<(Uuid, String, String)> = sqlx::query_as("SELECT user_id, email, name FROM users ORDER BY email, user_id")
+/// Everyone, with when they were first seen.
+pub async fn all(conn: &mut SqliteConnection) -> eyre::Result<Vec<(User, Timestamp)>> {
+	let rows: Vec<(Uuid, String, String, i64)> = sqlx::query_as("SELECT user_id, email, name, first_seen FROM users ORDER BY email, user_id")
 		.fetch_all(&mut *conn)
 		.await
 		.wrap_err("listing users")?;
-	Ok(rows.into_iter().map(|(user_id, email, name)| User { user_id, email, name }).collect())
+	rows.into_iter()
+		.map(|(user_id, email, name, first)| Ok((User { user_id, email, name }, from_db(first)?)))
+		.collect()
 }
 
 pub async fn exists(conn: &mut SqliteConnection, user: Uuid) -> eyre::Result<bool> {

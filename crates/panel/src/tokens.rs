@@ -18,7 +18,7 @@ use eyre::WrapErr;
 use jiff::{Timestamp, civil::Date, tz::TimeZone};
 use sa_core::{
 	gbp::Snapshot,
-	prices::{Item, Sale},
+	prices::Item,
 	tokens::{ChargePage, Renewal, split},
 };
 use sqlx::SqliteConnection;
@@ -169,16 +169,16 @@ impl Panel {
 		Ok(Ok(db::flows(&mut conn, from, to).await?))
 	}
 
-	/// Everyone's balance, renewed.
-	pub async fn holders(&self, now: Timestamp) -> eyre::Result<Result<Vec<(User, i64)>, Refused>> {
+	/// Everyone's balance, renewed, beside when they were first seen.
+	pub async fn holders(&self, now: Timestamp) -> eyre::Result<Result<Vec<(User, Timestamp, i64)>, Refused>> {
 		let mut tx = self.store.begin_write().await?;
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
 		let mut out = Vec::new();
-		for u in users::all(&mut tx).await? {
+		for (u, first_seen) in users::all(&mut tx).await? {
 			let balance = db::renewed(&mut tx, u.user_id, now, &self.renewal).await?;
-			out.push((u, balance));
+			out.push((u, first_seen, balance));
 		}
 		tx.commit().await.wrap_err("committing renewals")?;
 		Ok(Ok(out))
@@ -239,15 +239,10 @@ impl Panel {
 			.collect())
 	}
 
-	/// What `user` reads before they spend: the sold items' prices, and above what an action asks them first.
+	/// What `user` reads before they spend: the prices, and above what an action asks them first.
 	pub async fn spending(&self, user: Uuid) -> eyre::Result<(BTreeMap<Item, i64>, i64)> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a person's spending")?;
-		let prices = db::prices(&mut conn)
-			.await?
-			.into_iter()
-			.filter(|(item, _)| item.sale() == Sale::Sold)
-			.map(|(item, p)| (item, p.tokens))
-			.collect();
+		let prices = db::prices(&mut conn).await?.into_iter().map(|(item, p)| (item, p.tokens)).collect();
 		Ok((prices, db::confirm_above(&mut conn, user).await?))
 	}
 
@@ -260,13 +255,9 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
-	/// An admin (`by`, their email) prices each item given at 0 tokens or more, `None` taking it
-	/// off sale, and costs each at 0 µ$ or more, `None` unknown: every one, or none. Only a sold
-	/// item has a price.
+	/// An admin (`by`, their email) prices each item given at 0 tokens or more, `None` refusing
+	/// it, and costs each at 0 µ$ or more, `None` unknown: every one, or none.
 	pub async fn set_prices(&self, prices: &[(Item, Option<i64>)], costs: &[(Item, Option<i64>)], by: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
-		if let Some((item, _)) = prices.iter().find(|(i, _)| i.sale() == Sale::Metered) {
-			return Ok(Err(Refused::Invalid(format!("{item} is metered: nobody is charged for it"))));
-		}
 		if prices.iter().chain(costs).any(|(_, n)| n.is_some_and(|n| n < 0)) {
 			return Ok(Err(Refused::Invalid("a price and a cost are 0 or more".to_owned())));
 		}
@@ -357,7 +348,7 @@ impl Panel {
 			return Ok(None);
 		};
 		let mut balances = BTreeMap::new();
-		for u in users::all(&mut tx).await? {
+		for (u, _) in users::all(&mut tx).await? {
 			balances.insert(u.user_id, db::renewed(&mut tx, u.user_id, now, &self.renewal).await?);
 		}
 		let gmbs = gmbs_db::managed(&mut tx).await?;

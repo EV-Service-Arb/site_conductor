@@ -3204,6 +3204,8 @@ export interface components {
             /** Format: int64 */
             balance: number;
             email: string;
+            /** @description RFC 3339. */
+            first_seen: string;
             name: string;
             /** Format: uuid */
             user_id: string;

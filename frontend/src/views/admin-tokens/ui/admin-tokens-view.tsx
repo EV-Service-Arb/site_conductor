@@ -1,12 +1,13 @@
 "use client";
 
-import { Button, Card, CardContent, PageFrame, Settled, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn } from "@evinvest/uikit";
+import { PageFrame, Settled, Skeleton } from "@evinvest/uikit";
 import { useState } from "react";
 
 import { may, useMe } from "@/entities/session";
 import { tokens } from "@/entities/tokens";
 import { api, ok } from "@/shared/api";
 import type { TokenHolder } from "@/shared/api/schema";
+import { HoldersCard } from "./holders-card";
 import { MetersCard } from "./meters-card";
 import { GrantDialog } from "@/features/grant-tokens";
 import { PricesCard } from "@/features/price-tokens";
@@ -15,16 +16,11 @@ import { useT } from "@/shared/i18n";
 import { useResource } from "@/shared/lib/use-resource";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorState } from "@/shared/ui/error-state";
-import { EDGE_CELL, TABLE_HEAD } from "@/shared/ui/table";
-import { useButtonSize } from "@/shared/ui/touch";
-
-const HEAD = cn(TABLE_HEAD, EDGE_CELL);
 
 /** Prices, everyone's spending and balances, for whoever grants tokens. */
 export function AdminTokensView() {
   const t = useT();
   const me = useMe();
-  const button = useButtonSize();
   const holders = useResource("admin.tokens", async () => (await ok(api.GET("/admin/tokens"))).users, "admin.tokens", { live: ["admin"] });
   const prices = useResource("admin.prices", async () => (await ok(api.GET("/admin/tokens/prices"))).prices, "admin.prices", { live: ["admin"] });
   const meters = useResource("admin.meters", async () => ok(api.GET("/admin/meters")));
@@ -56,37 +52,7 @@ export function AdminTokensView() {
         {holders.status === "error" && <ErrorState failure={holders.failure} onRetry={holders.reload} />}
         {holders.status === "ok" && holders.data.length === 0 && <EmptyState title={t(tokens.admin.empty, "Nobody has signed in yet.")} description="" />}
         {holders.status === "ok" && holders.data.length > 0 && (
-          <Card className="overflow-hidden py-0">
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className={HEAD}>{t(tokens.admin.user, "Person")}</TableHead>
-                    <TableHead className={cn(HEAD, "text-right")}>{t(tokens.admin.balance, "Tokens")}</TableHead>
-                    <TableHead className={HEAD}>
-                      <span className="sr-only">{t(tokens.admin.change, "Change")}</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {holders.data.map((h) => (
-                    <TableRow key={h.user_id}>
-                      <TableCell className={EDGE_CELL}>
-                        <span className="text-ink">{h.name || h.email}</span>
-                        {h.name && <span className="ml-2 text-ink-soft">{h.email}</span>}
-                      </TableCell>
-                      <TableCell className={cn(EDGE_CELL, "text-right tabular-nums")}>{h.balance}</TableCell>
-                      <TableCell className={cn(EDGE_CELL, "text-right")}>
-                        <Button variant="ghost" size={button("sm")} onClick={() => setChanging(h)}>
-                          {t(tokens.admin.change, "Change")}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <HoldersCard holders={holders.data} onChange={setChanging} />
         )}
       </Settled>
       {changing && (

@@ -11,7 +11,7 @@ import { type T, useLocale, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 
 import { ChatActions, ControlsContext, useControls } from "./chat-actions";
-import { age } from "./time";
+import { age } from "@/shared/lib/time";
 
 const DAY = 24 * 60 * 60 * 1000;
 
