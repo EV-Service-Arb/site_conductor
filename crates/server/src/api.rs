@@ -198,12 +198,14 @@ async fn list_sources(State(panel): State<Panel>) -> ApiResult<Json<SourcesDto>>
 #[serde(deny_unknown_fields)]
 pub(crate) struct AddSource {
 	/// A lowercase slug of 1–64 of `[a-z0-9_-]`, never reused.
+	#[schemars(pattern(sa_core::ids::SLUG_PATTERN))]
 	key_id: String,
 	#[schemars(with = "KeyedSourceKind")]
 	kind: SourceKind,
 	/// At least one.
 	brands: Vec<String>,
 	/// A `site` key's landing, `https://<domain>[:port]`; no other kind has one.
+	#[schemars(pattern(sa_core::ids::SITE_ORIGIN_PATTERN))]
 	origin: Option<String>,
 }
 
@@ -261,6 +263,7 @@ async fn add_source(State(panel): State<Panel>, Extension(caller): Extension<Cal
 
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct KeyId {
+	#[schemars(pattern(sa_core::ids::SLUG_PATTERN))]
 	pub(crate) key_id: String,
 }
 

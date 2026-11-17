@@ -51,6 +51,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 #[serde(deny_unknown_fields)]
 pub(crate) struct Origin {
 	/// `https://<domain>[:port]`, no path.
+	#[schemars(pattern(sa_core::ids::SITE_ORIGIN_PATTERN))]
 	origin: String,
 }
 

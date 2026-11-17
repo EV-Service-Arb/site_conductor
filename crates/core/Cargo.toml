@@ -34,6 +34,7 @@ uuid = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 http-body-util.workspace = true
+regex.workspace = true
 tokio.workspace = true
 
 [[test]]

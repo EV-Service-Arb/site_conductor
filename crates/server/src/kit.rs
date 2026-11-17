@@ -26,7 +26,8 @@ use axum::{
 };
 use ev_lib::api::{
 	Body, Created, GenContext, Ids, JsonSchema, Malformed, OperationInput, OperationOutput, Refusal,
-	openapi::{MediaType, Operation, ReferenceOr, RequestBody, Response as Answer, StatusCode as Status},
+	openapi::{MediaType, Operation, ReferenceOr, RequestBody, Response as Answer, SchemaObject, StatusCode as Status},
+	schemars::json_schema,
 };
 use jiff::Timestamp;
 use sa_auth::SourceKind;
@@ -431,7 +432,23 @@ impl<S: Send + Sync> FromRequest<S> for Image {
 impl OperationInput for Image {
 	fn operation_input(_: &mut GenContext, op: &mut Operation) {
 		op.request_body = Some(ReferenceOr::Item(RequestBody {
-			content: ["image/jpeg", "image/png", "image/webp"].into_iter().map(|t| (t.into(), MediaType::default())).collect(),
+			content: ["image/jpeg", "image/png", "image/webp"]
+				.into_iter()
+				.map(|t| {
+					let photo = SchemaObject {
+						json_schema: json_schema!({ "type": "string", "format": "binary", "maxLength": PHOTO_MAX }),
+						example: None,
+						external_docs: None,
+					};
+					(
+						t.into(),
+						MediaType {
+							schema: Some(photo),
+							..MediaType::default()
+						},
+					)
+				})
+				.collect(),
 			required: true,
 			..RequestBody::default()
 		}));

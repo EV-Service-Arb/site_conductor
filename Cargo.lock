@@ -4416,6 +4416,7 @@ dependencies = [
  "hmac 0.13.0",
  "http-body-util",
  "jiff",
+ "regex",
  "sa_alerts",
  "sa_auth",
  "schemars",

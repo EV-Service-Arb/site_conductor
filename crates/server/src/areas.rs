@@ -130,6 +130,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 /// A path's area.
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct SlugIn {
+	#[schemars(pattern(sa_core::ids::SLUG_PATTERN))]
 	pub(crate) slug: String,
 }
 
