@@ -28,6 +28,7 @@ use axum::{
 };
 use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use sa_auth::{Assertion, Principal, Service, Signer, User};
+use sa_core::placement::{BILLED, Billed};
 
 use crate::{
 	api::ApiError,
@@ -277,18 +278,18 @@ impl Forward {
 			.parse()
 			.expect("a path that arrived in a URI, and a number");
 		let res = self.pass(route, req, principal).await;
-		let billed = match res.headers().get("x-billed") {
-			Some(v) => match v.to_str().ok().and_then(|v| v.parse::<u64>().ok()) {
-				Some(n) => n,
-				None => return ApiError::Internal(eyre::eyre!("placement's x-billed of {sha} is {v:?}, not a count")).into_response(),
+		let billed: Billed = match res.headers().get(BILLED) {
+			Some(v) => match serde_json::from_slice(v.as_bytes()) {
+				Ok(b) => b,
+				Err(e) => return ApiError::Internal(eyre::eyre!("placement's {BILLED} of {sha} is {v:?}: {e}")).into_response(),
 			},
 			// placement says it on every pull it ran: a refusal without it never reached one
-			None if !res.status().is_success() => 0,
-			None => return ApiError::Internal(eyre::eyre!("placement answered the pull of {sha} without x-billed")).into_response(),
+			None if !res.status().is_success() => Billed::new(),
+			None => return ApiError::Internal(eyre::eyre!("placement answered the pull of {sha} without {BILLED}")).into_response(),
 		};
 		let failed = !res.status().is_success();
 		if res.status() != StatusCode::PAYMENT_REQUIRED {
-			return match held.paid(billed, sha, failed).await {
+			return match held.paid(&billed, sha, failed).await {
 				Ok(()) => res,
 				Err(e) => ApiError::from(e).into_response(),
 			};
@@ -306,7 +307,7 @@ impl Forward {
 			Err(e) => return ApiError::Internal(eyre::eyre!("placement's 402 for {sha}, {:?}: {e}", String::from_utf8_lossy(&body))).into_response(),
 		};
 		let why = held.unaffordable(need);
-		if let Err(e) = held.paid(billed, sha, failed).await {
+		if let Err(e) = held.paid(&billed, sha, failed).await {
 			return ApiError::from(e).into_response();
 		}
 		(StatusCode::PAYMENT_REQUIRED, why).into_response()

@@ -282,7 +282,7 @@
         "tags": [
           "tokens"
         ],
-        "summary": "Every item of the price catalog (`sa_core::prices`): Places requests, Street View, review_archive's walk steps; each priced in tokens or not sold.",
+        "summary": "Every item of the price catalog (`sa_core::prices`), each priced in tokens or refused.",
         "operationId": "token_prices",
         "responses": {
           "default": {
@@ -313,11 +313,11 @@
         "tags": [
           "tokens"
         ],
-        "summary": "Prices the items given, 0 or more tokens or `null` off sale, and costs them, 0 µ$ a unit or more or `null` unknown; the others stay.",
-        "description": "400 an item not in the catalog, or a metered one priced.",
+        "summary": "Prices the items given, 0 or more tokens or `null` refused, and costs them, 0 µ$ a unit or more or `null` unknown; the others stay.",
+        "description": "400 an item not in the catalog.",
         "operationId": "set_token_prices",
         "requestBody": {
-          "description": "The items given, each priced at 0 tokens or more or `null` off sale, each costed at 0 µ$ a unit\nor more or `null` unknown; the others stay.",
+          "description": "The items given, each priced at 0 tokens or more or `null` refused, each costed at 0 µ$ a unit\nor more or `null` unknown; the others stay.",
           "content": {
             "application/json": {
               "schema": {
@@ -3455,19 +3455,20 @@
         "x-errors": {}
       }
     },
-    "/map/loaded": {
+    "/map/load": {
       "post": {
         "tags": [
           "usage"
         ],
-        "summary": "Records that the caller's browser built a Google map on an account's browser key: a billed load of ours. 400 an account without one.",
-        "operationId": "map_loaded",
+        "summary": "Buys the Google map the caller's browser builds on an account's browser key, before it builds it: recorded and charged (`map.map`, the admin's price) in one write.",
+        "description": "400 an account without one; 409 not priced, or past the balance.",
+        "operationId": "buy_map",
         "requestBody": {
-          "description": "The account a page's map loaded on.",
+          "description": "The account a page's map loads on.",
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Loaded"
+                "$ref": "#/components/schemas/MapOn"
               }
             }
           },
@@ -3484,11 +3485,21 @@
               }
             }
           },
-          "204": {
-            "description": "no content"
+          "200": {
+            "description": "The answer to a balance change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Balance"
+                }
+              }
+            }
           }
         },
-        "x-errors": {}
+        "x-errors": {},
+        "x-spends": [
+          "map.map"
+        ]
       }
     },
     "/map/street_view": {
@@ -7232,19 +7243,6 @@
           "kickback"
         ]
       },
-      "Loaded": {
-        "description": "The account a page's map loaded on.",
-        "type": "object",
-        "properties": {
-          "account": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "account"
-        ]
-      },
       "Locality": {
         "type": "object",
         "properties": {
@@ -7286,6 +7284,19 @@
         },
         "required": [
           "key",
+          "account"
+        ]
+      },
+      "MapOn": {
+        "description": "The account a page's map loads on.",
+        "type": "object",
+        "properties": {
+          "account": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
           "account"
         ]
       },
@@ -8105,7 +8116,7 @@
         ]
       },
       "Price": {
-        "description": "A catalog item, its price (`null`: not sold, or metered) and what `per` units cost us (`null`: unknown).",
+        "description": "A catalog item, its price (`null`: refused) and what `per` units cost us (`null`: unknown).",
         "type": "object",
         "properties": {
           "cost": {
@@ -8139,9 +8150,6 @@
               }
             ]
           },
-          "sale": {
-            "$ref": "#/components/schemas/Sale"
-          },
           "scope": {
             "$ref": "#/components/schemas/Scope"
           },
@@ -8162,7 +8170,6 @@
         "required": [
           "item",
           "scope",
-          "sale",
           "unit",
           "per",
           "tool",
@@ -8584,16 +8591,8 @@
           "stream"
         ]
       },
-      "Sale": {
-        "description": "Whether a person pays tokens for it.\n\n- `sold`: At the admin's price; unpriced, refused.\n- `metered`: Counted and costed; nobody is charged.",
-        "type": "string",
-        "enum": [
-          "sold",
-          "metered"
-        ]
-      },
       "Scope": {
-        "description": "Where it happens: who counts it, and charges for it if it is sold.\n\n- `conductor`: At the buy, before Google is asked.\n- `review_archive`: After the fact, through its charge feed.\n- `browsers`: sa_browsers' runner: nobody is charged.\n- `placement`: gmaps_optimal_placement's studies: a pull's searches charged at the conductor's forward.",
+        "description": "Where it happens: who counts it and charges for it.\n\n- `conductor`: At the buy, before Google is asked.\n- `review_archive`: After the fact, through its charge feed.\n- `browsers`: sa_browsers' runner: charged as its usage feed is taken, to whom each use names.\n- `placement`: gmaps_optimal_placement's studies: what a pull bought, charged at the conductor's forward.",
         "type": "string",
         "enum": [
           "conductor",
@@ -8703,7 +8702,7 @@
         ]
       },
       "SetPrices": {
-        "description": "The items given, each priced at 0 tokens or more or `null` off sale, each costed at 0 µ$ a unit\nor more or `null` unknown; the others stay.",
+        "description": "The items given, each priced at 0 tokens or more or `null` refused, each costed at 0 µ$ a unit\nor more or `null` unknown; the others stay.",
         "type": "object",
         "properties": {
           "costs": {
@@ -9841,7 +9840,7 @@
             }
           },
           "prices": {
-            "description": "Each sold, priced item: its tokens.",
+            "description": "Each priced item: its tokens.",
             "type": "object",
             "properties": {
               "ads.historical_metrics": {

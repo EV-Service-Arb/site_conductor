@@ -1,7 +1,8 @@
 "use client";
 
 // One Google map per page session, kept while its page is away and re-inserted when it is back:
-// every `google.maps.Map` built is a billed map load. The script comes straight from Google.
+// every `google.maps.Map` built is a billed map load, bought before it is built. The script comes
+// straight from Google.
 // Raster, without a map id: only such a map takes `styles`, which is what hides Google's own places.
 
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
@@ -35,8 +36,9 @@ function theMap({ key, account }: MapConfig, scheme: string): { account: string;
   const element = document.createElement("div");
   element.style.width = "100%";
   element.style.height = "100%";
-  const map = Promise.all([importLibrary("maps"), importLibrary("core")]).then(
-    ([{ Map, RenderingType }, { ColorScheme, ControlPosition }]) =>
+  const map = ok(api.POST("/map/load", { body: { account } }))
+    .then(() => Promise.all([importLibrary("maps"), importLibrary("core")]))
+    .then(([{ Map, RenderingType }, { ColorScheme, ControlPosition }]) =>
       new Map(element, {
         renderingType: RenderingType.RASTER,
         colorScheme: scheme === "dark" ? ColorScheme.DARK : ColorScheme.LIGHT,
@@ -56,8 +58,10 @@ function theMap({ key, account }: MapConfig, scheme: string): { account: string;
         clickableIcons: false,
       }),
   );
-  // counted once built: each is a load Google bills; a failed count is only lost from the tally
-  void map.then(() => ok(api.POST("/map/loaded", { body: { account } }))).catch((e: unknown) => console.warn("a map load went uncounted", e));
+  // a refused buy builds nothing: the next mount asks again
+  void map.catch(() => {
+    if (kept.saMap?.map === map) delete kept.saMap;
+  });
   kept.saMap = { account, element, map };
   return kept.saMap;
 }

@@ -1,21 +1,20 @@
-//! What our tools spend on vendors (`sa_panel::usage`): a map built in the browser, everyone's
+//! What our tools spend on vendors (`sa_panel::usage`): a map bought for the browser, everyone's
 //! usage for Grafana, and in `serve` each service's usage feed followed (review_archive's walks,
 //! the browsers' runner's phones and starts).
 
 use std::{collections::BTreeSet, time::Duration};
 
 use axum::{
-	Extension, Json,
+	Json,
 	body::{Body, to_bytes},
 	extract::State,
 	http::{HeaderMap, Method, StatusCode},
-	response::NoContent,
 };
 use ev_lib::api::JsonSchema;
 use jiff::Timestamp;
 use sa_auth::{Principal, Service};
 use sa_core::{
-	prices::{Item, Scope},
+	prices::{Item, MapLoad, Scope, Spends},
 	usage::{Bill, UsagePage},
 };
 use sa_panel::{Panel, usage::Day};
@@ -28,6 +27,7 @@ use crate::{
 	forward::Services,
 	http::{ApiRoute, Gate, Section},
 	signin::Caller,
+	tokens::BalanceDto,
 };
 
 /// Each feed is asked this often while it has no more.
@@ -122,23 +122,25 @@ pub async fn run(panel: Panel, services: Option<Services>, browsers: Option<Conn
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
 	vec![
-		ApiRoute::new(M::POST, "/map/loaded", Gate::USER, map_loaded),
+		ApiRoute::new(M::POST, "/map/load", Gate::USER, buy_map),
 		ApiRoute::new(M::GET, "/admin/usage", Gate::section(Section::Tokens), spend),
 	]
 }
 
-/// The account a page's map loaded on.
+/// The account a page's map loads on.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct Loaded {
+pub(crate) struct MapOn {
 	account: String,
 }
 
-/// Records that the caller's browser built a Google map on an account's browser key: a billed load
-/// of ours. 400 an account without one.
-async fn map_loaded(State(panel): State<Panel>, Extension(caller): Extension<Caller>, api::Body(on): api::Body<Loaded>) -> ApiResult<NoContent> {
-	panel.map_loaded(caller.user_id, &on.account, Timestamp::now()).await??;
-	Ok(NoContent)
+/// Buys the Google map the caller's browser builds on an account's browser key, before it builds
+/// it: recorded and charged (`map.map`, the admin's price) in one write.
+///
+/// 400 an account without one; 409 not priced, or past the balance.
+async fn buy_map(State(panel): State<Panel>, Spends(_, by): Spends<MapLoad, Caller>, api::Body(on): api::Body<MapOn>) -> ApiResult<Json<BalanceDto>> {
+	let balance = panel.buy_map(by, &on.account, Timestamp::now()).await??;
+	Ok(Json(BalanceDto { balance }))
 }
 
 /// Grafana's `${__from}` and `${__to}`.

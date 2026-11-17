@@ -166,7 +166,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   }
   // no browser key unless given: the home page shows the outline without a map, and no window over it
   if (path === "/map") return process.env.STUB_MAP_KEY ? send(res, 200, { key: process.env.STUB_MAP_KEY, account: "evinvest" }) : send(res, 404, { code: "not_found", error: "not found" });
-  if (path === "/map/loaded" || path === "/map/street_view") return send(res, path === "/map/loaded" ? 204 : 200, path === "/map/loaded" ? undefined : { balance: tokens.balance });
+  if (path === "/map/load" || path === "/map/street_view") return send(res, 200, { balance: tokens.balance });
   if (path === "/gmbs/resolve") return send(res, 200, { candidates: [{ place_id: "ChIJstubstubstub00009", name: "Électricien Lille (stub)", address: "8 rue Faidherbe, Lille" }] });
   const placing = path.match(/^\/gmbs\/(\d+)\/location$/);
   if (placing && req.method === "PUT") {

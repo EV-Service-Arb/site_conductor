@@ -4,6 +4,7 @@
 
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::prices::Item;
 
@@ -38,6 +39,9 @@ pub struct Used {
 	/// More than 0, in the item's unit.
 	pub units: i64,
 	pub at: Timestamp,
+	/// Whom it was made for, charged as it is taken; none for one charged otherwise (review_archive's
+	/// walks, through its charge feed).
+	pub user: Option<Uuid>,
 }
 
 /// A page of a usage feed.

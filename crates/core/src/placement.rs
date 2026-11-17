@@ -1,5 +1,8 @@
 //! What the conductor hands placement to have a study built: its area and its category, named as
-//! the conductor names them, addressed by the SHA-256 of their canonical form.
+//! the conductor names them, addressed by the SHA-256 of their canonical form; and what a pull
+//! bought, as placement answers it.
+
+use std::collections::BTreeMap;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -9,7 +12,14 @@ use crate::{
 	Invalid,
 	gbp::{Country, keywords},
 	geo::{LatLng, Viewport},
+	prices::Item,
 };
+
+/// The header on every answer to a pull: its [`Billed`], as JSON.
+pub const BILLED: &str = "x-billed";
+
+/// What a pull bought, each item's count: its Places searches as `places.search`.
+pub type Billed = BTreeMap<Item, u64>;
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

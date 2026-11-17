@@ -933,7 +933,7 @@ async fn no_permission_opens_no_section() {
 			"/trash/gmails/{id}",
 			"/trash/gmbs/{id}",
 			"/trash/settings",
-			"/map/loaded",
+			"/map/load",
 			"/assistant/chats",
 			"/assistant/chats",
 			"/assistant/chats/{id}",

@@ -17,7 +17,7 @@ use eyre::WrapErr;
 use icu_locale::{LanguageIdentifier, LocaleExpander};
 use jiff::Timestamp;
 use sa_browsers::{Device, Launch};
-use sa_core::prices::{BrowserStart, PhoneTime, Spender};
+use sa_core::prices::{BrowserStart, Item, PhoneTime, Spender};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -29,7 +29,7 @@ use crate::{
 	seal::gmail_browser_aad,
 	store::{
 		browsers::{self as db, Fingerprint, Noise, Proxy},
-		gmbs as gmbs_db,
+		gmbs as gmbs_db, tokens as ledger,
 	},
 	tokens::is_open,
 };
@@ -316,7 +316,8 @@ impl Panel {
 	}
 
 	/// What sa_browsers starts the gmail's browser with: at `gmb`'s point, else with the position
-	/// blocked; GoLogin's profile made the first time.
+	/// blocked; GoLogin's profile made the first time. Refused while its start (a phone: its
+	/// minute) is unpriced or past the balance; a phone runs no longer than the balance affords.
 	pub async fn launch(&self, b: &Browsers, by: Spender<(PhoneTime, BrowserStart)>, id: i64, gmb: Option<i64>, now: Timestamp) -> eyre::Result<Result<Launch, Refused>> {
 		let owner = by.user();
 		let (gmail, browser, sealed, gmb) = {
@@ -344,6 +345,28 @@ impl Panel {
 		}
 		if let Some(why) = &browser.checked.error {
 			return Ok(Err(Refused::Conflict(format!("its proxy's last check failed ({why}): test it again"))));
+		}
+		let item = match browser.provider {
+			Provider::Gologin => Item::from(BrowserStart::Gologin),
+			Provider::MultiloginBrowser => BrowserStart::Mimic.into(),
+			Provider::Multilogin => PhoneTime::Running.into(),
+		};
+		assert_eq!(item.per(), 1, "a start and a phone's minute are priced one by one");
+		let (price, balance) = {
+			let mut tx = self.store.begin_write().await?;
+			let Some(price) = ledger::price(&mut tx, item).await? else {
+				return Ok(Err(Refused::Conflict(format!(
+					"{} ({}) is not priced yet: ask an admin to price it",
+					item.title(),
+					item.tool_title()
+				))));
+			};
+			let balance = ledger::renewed(&mut tx, owner, now, &self.renewal).await?;
+			tx.commit().await.wrap_err("committing a renewal")?;
+			(price, balance)
+		};
+		if balance < price {
+			return Ok(Err(Refused::Conflict(format!("{} costs {price} tokens a {}, and you hold {balance}", item.title(), item.unit()))));
 		}
 		let place = match &gmb {
 			Some(g) => {
@@ -398,10 +421,18 @@ impl Panel {
 				geo: place.fix,
 				zone: place.zone,
 				country: browser.exit.country,
+				minutes: match price {
+					0 => u64::MAX,
+					price => u64::try_from(balance / price).expect("a balance at its price or above"),
+				},
 			},
 			(p, device, profile) => eyre::bail!("gmail {id}'s {p} browser is stored as {device} with profile {profile:?}"),
 		};
-		Ok(Ok(Launch { run, browser: browser_of }))
+		Ok(Ok(Launch {
+			run,
+			user: owner,
+			browser: browser_of,
+		}))
 	}
 
 	/// GoLogin's profile, made and its noise read back and kept.

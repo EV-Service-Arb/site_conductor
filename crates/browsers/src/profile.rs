@@ -140,6 +140,7 @@ pub(crate) async fn run(runner: Runner, start: Start, mut stopping: watch::Recei
 			orbita(
 				&runner,
 				gmail,
+				launch.user,
 				&dir,
 				Orbita {
 					preferences,
@@ -152,8 +153,30 @@ pub(crate) async fn run(runner: Runner, start: Start, mut stopping: watch::Recei
 				&mut ends,
 			)
 			.await,
-		Browser::MultiloginBrowser { token, folder, profile } => mimic::life(&runner, gmail, &token, &folder, &profile, &mut ends).await,
-		Browser::MultiloginPhone { token, phone, geo, zone, country } => phone::life(&runner, gmail, phone::Run { token, phone, geo, zone, country }, &mut ends).await,
+		Browser::MultiloginBrowser { token, folder, profile } => mimic::life(&runner, gmail, launch.user, &token, &folder, &profile, &mut ends).await,
+		Browser::MultiloginPhone {
+			token,
+			phone,
+			geo,
+			zone,
+			country,
+			minutes,
+		} =>
+			phone::life(
+				&runner,
+				gmail,
+				phone::Run {
+					user: launch.user,
+					token,
+					phone,
+					geo,
+					zone,
+					country,
+					minutes,
+				},
+				&mut ends,
+			)
+			.await,
 	};
 	let scrubbed = scrub(&dir).await;
 	let why = match lived.and(scrubbed) {
@@ -229,7 +252,7 @@ struct Orbita {
 	screen: (u32, u32),
 }
 
-async fn orbita(runner: &Runner, gmail: i64, dir: &Path, o: Orbita, ends: &mut Ends<'_>) -> eyre::Result<()> {
+async fn orbita(runner: &Runner, gmail: i64, user: uuid::Uuid, dir: &Path, o: Orbita, ends: &mut Ends<'_>) -> eyre::Result<()> {
 	let Orbita {
 		preferences,
 		config,
@@ -296,7 +319,7 @@ async fn orbita(runner: &Runner, gmail: i64, dir: &Path, o: Orbita, ends: &mut E
 		status = child.wait() => eyre::bail!("it exited ({}) before it was up; see {}/orbita.log", status?, dir.display()),
 	};
 	up(runner, gmail, Up::Devtools(devtools.clone()));
-	runner.0.usage.record(Item::Browser(BrowserStart::Gologin), 1, jiff::Timestamp::now())?;
+	runner.0.usage.record(Item::Browser(BrowserStart::Gologin), 1, jiff::Timestamp::now(), user)?;
 	let facing = async {
 		match with_film {
 			true => film::facing(&devtools).await,
