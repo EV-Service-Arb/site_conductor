@@ -45,7 +45,7 @@ for what acts on the platform session. The panel's own chip entries are the call
 (wallet, Usage, Sources) and the review archive's (token history, view as member); the chip's
 stand-in, while the bundle loads or when it cannot, opens the same entries.
 
-Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
+Checks: `nix run .#test` (from the repo root) runs them with the rest of the repo's; `npm run build` builds.
 `nix run .#figma` puts the conductor's own screens into Figma, both breakpoints, over the stub as an
 admin (`tests/e2e`; the loop is the `figma-render` skill).
 
