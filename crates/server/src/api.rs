@@ -44,6 +44,8 @@ pub enum Code {
 	Conflict,
 	TooLarge,
 	TooMany,
+	/// A pull needs more than the balance affords.
+	Unaffordable,
 	/// Not now: the message says until when.
 	Unavailable,
 	/// No browser provider is configured: no browser route answers anything else.
@@ -63,6 +65,7 @@ impl ErrorCode for Code {
 			Self::Conflict => StatusCode::CONFLICT,
 			Self::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
 			Self::TooMany => StatusCode::TOO_MANY_REQUESTS,
+			Self::Unaffordable => StatusCode::PAYMENT_REQUIRED,
 			Self::Unavailable | Self::BrowsersNotConnected => StatusCode::SERVICE_UNAVAILABLE,
 			Self::BadGateway => StatusCode::BAD_GATEWAY,
 			Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
@@ -94,6 +97,19 @@ impl Refuses<Refused> for Code {
 impl Refuses<Invalid> for Code {
 	fn refusal(e: Invalid) -> Refusal<Self> {
 		Refusal::new(Self::BadRequest, e.0)
+	}
+}
+
+impl From<sa_auth::Hop> for Code {
+	fn from(h: sa_auth::Hop) -> Self {
+		match h {
+			sa_auth::Hop::BadRequest => Self::BadRequest,
+			sa_auth::Hop::Unauthenticated => Self::Unauthenticated,
+			sa_auth::Hop::Csrf => Self::Csrf,
+			sa_auth::Hop::Unavailable => Self::Unavailable,
+			sa_auth::Hop::BadGateway => Self::BadGateway,
+			sa_auth::Hop::Internal => Self::Internal,
+		}
 	}
 }
 

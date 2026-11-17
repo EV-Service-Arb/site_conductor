@@ -25,6 +25,7 @@ use eyre::WrapErr;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use sa_auth::{PermissionSet, Principal, Service};
 use serde_json::{Map, Value};
+use strum::VariantArray;
 use tokio::sync::watch;
 
 use crate::{
@@ -33,12 +34,6 @@ use crate::{
 	view::View,
 };
 
-/// The services that serve their document, and where (docs/ARCHITECTURE.md, The catalog).
-const DOCUMENTS: [(Service, &str); 3] = [
-	(Service::Sites, "/api/v1/openapi.json"),
-	(Service::ReviewArchive, "/openapi.json"),
-	(Service::Playbook, "/openapi.json"),
-];
 const PULL_EVERY: Duration = Duration::from_secs(60);
 const PULL_TIMEOUT: Duration = Duration::from_secs(10);
 const DOCUMENT_ANSWER: usize = 16 * 1024 * 1024;
@@ -148,7 +143,8 @@ impl Catalog {
 	}
 
 	async fn pull(&self, services: &Services, etags: &Mutex<BTreeMap<String, HeaderValue>>) {
-		for (service, path) in DOCUMENTS {
+		let documents = Service::VARIANTS.iter().copied().filter(|s| services.serves(*s)).filter_map(|s| Some((s, s.document()?)));
+		for (service, path) in documents {
 			let name = service.to_string();
 			match self.pull_one(services, service, path, etags).await {
 				Ok(None) => {}

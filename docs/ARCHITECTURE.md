@@ -287,9 +287,9 @@ second block below to it.
 - **Placement** (`PANEL_PLACEMENT_URL`, optional, needs the four) is gmaps_optimal_placement's
   `serve --behind-conductor`. The home map imports its `/mfe/placement/overlay.js` once per page
   session and hands it the map: the heat, the pressure field and the competitors are its drawing,
-  the model's wasm shipped with the payload it reads. A GET there never spends; a POST (Pull
-  latest, `sa:placement:study:spend`) buys the Places searches it lacks, at the puller's tokens
-  (Tokens and GBPs). Unset, `/api/placement` answers 503 and the map says placement is not
+  the model's wasm shipped with the payload it reads. Only a pull spends (Pull latest,
+  `sa:placement:study:spend`): the forward knows one by placement's document in the catalog, not
+  by its path, and buys the Places searches it lacks at the puller's tokens (Tokens and GBPs). Unset, `/api/placement` answers 503 and the map says placement is not
   connected.
 
 ## Browsers
@@ -695,11 +695,15 @@ review_archive's lookups are the house's for now.
 lock:
 
 ```text
-POST /api/placement/studies/{sha}/pull ─ price set, budget = balance ÷ price ─▶ placement …/pull?budget=<n>
-  ├─ the sweep needs more than n: 402 {need}, nothing bought ─▶ the person told the tokens it needs
-  └─ x-billed: <k> on any answer, k ≤ n ─▶ the ledger: −k × price; a pull that failed owes it all back,
-                                          as a failed walk does: the failure is the house's
+a pull: placement's operation (its pulled document) whose x-spends names a sold item of scope Placement
+  ─ price set, budget = balance ÷ price ─▶ placement, its {sha}, ?budget=<n>
+  ├─ the sweep needs more than n: 402 unaffordable, nothing bought ─▶ the person told so, with their balance
+  └─ x-billed: <k> on any answer, k ≤ n ─▶ the ledger: −k × placement.search; a pull that failed owes it
+                                          all back, as a failed walk does: the failure is the house's
 ```
+
+Until the catalog holds placement's document, nothing signed in passes to placement (503): a pull
+would reach it with the caller's own budget.
 
 A person's front end reads the sold prices with their balance, and an action costing more than
 their `confirm_above` (100 unsaid) asks them first.

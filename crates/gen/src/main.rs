@@ -15,7 +15,7 @@ use sa_server::view::View;
 
 /// Where each sibling commits its document in its checkout; `None`: none committed yet, the copy kept.
 const DOCUMENTS: [(sa_auth::Service, Option<&str>); 4] = [
-	(sa_auth::Service::Sites, None),
+	(sa_auth::Service::Sites, Some("frontend/src/shared/api/openapi.json")),
 	(sa_auth::Service::ReviewArchive, Some("crates/review_archive_server/openapi.json")),
 	(sa_auth::Service::Placement, Some("docs/openapi.json")),
 	(sa_auth::Service::Playbook, Some("playbook_web/openapi.json")),
@@ -62,7 +62,7 @@ fn main() {
 		if let Some(source) = source {
 			let raw = std::fs::read_to_string(&source).unwrap_or_else(|e| panic!("{service}'s document at {}: {e}", source.display()));
 			let mut doc: serde_json::Value = serde_json::from_str(&raw).unwrap_or_else(|e| panic!("{}: {e}", source.display()));
-			forwarded(&mut doc);
+			forwarded(service, &mut doc);
 			std::fs::write(&copy, serde_json::to_string_pretty(&doc).expect("a document serializes") + "\n").expect("frontend/src/shared/api is writable");
 		}
 		let theirs = match std::fs::read_to_string(&copy) {
@@ -93,25 +93,8 @@ fn main() {
 
 /// A service's document as its operations are answered through the forward: the forward's own
 /// refusals beside each operation's, as its `x-errors`, its answers and its `ErrorCode` list them.
-fn forwarded(doc: &mut serde_json::Value) {
-	use ev_lib::api::ErrorCode;
-	let codes: Vec<(String, u16)> = sa_server::forward::REFUSALS
-		.iter()
-		.map(|c| {
-			(
-				serde_json::to_value(c).expect("a code serializes").as_str().expect("a code is a word").to_owned(),
-				c.status().as_u16(),
-			)
-		})
-		.collect();
-	let words = doc["components"]["schemas"]["ErrorCode"]["enum"]
-		.as_array_mut()
-		.expect("a service's document names its ErrorCode");
-	for (word, _) in &codes {
-		if !words.iter().any(|w| w == word.as_str()) {
-			words.push(serde_json::Value::String(word.clone()));
-		}
-	}
+fn forwarded(service: sa_auth::Service, doc: &mut serde_json::Value) {
+	use ev_lib::api::{ErrorCode, openapi::Operation};
 	let items = doc["paths"].as_object_mut().expect("a document has paths").values_mut();
 	let operations = items.flat_map(|item| {
 		item.as_object_mut()
@@ -119,12 +102,16 @@ fn forwarded(doc: &mut serde_json::Value) {
 			.iter_mut()
 			.filter(|(m, _)| ["get", "put", "post", "patch", "delete"].contains(&m.as_str()))
 	});
+	let mut words: Vec<String> = Vec::new();
 	for (_, op) in operations {
+		let read: Operation = serde_json::from_value(op.clone()).unwrap_or_else(|e| panic!("{service}'s operation: {e}"));
 		let op = op.as_object_mut().expect("an operation is an object");
-		for (word, status) in &codes {
+		for code in sa_server::forward::refusals(service, &read) {
+			let word = serde_json::to_value(code).expect("a code serializes").as_str().expect("a code is a word").to_owned();
+			let status = code.status().as_u16();
 			let errors = op.get_mut("x-errors").and_then(serde_json::Value::as_object_mut).expect("every operation has x-errors");
-			match errors.get(word) {
-				Some(s) => assert_eq!(s.as_u64(), Some(u64::from(*status)), "{word}: the forward's status and the service's differ"),
+			match errors.get(&word) {
+				Some(s) => assert_eq!(s.as_u64(), Some(u64::from(status)), "{word}: the forward's status and the service's differ"),
 				None => {
 					errors.insert(word.clone(), serde_json::json!(status));
 				}
@@ -134,6 +121,17 @@ fn forwarded(doc: &mut serde_json::Value) {
 				.expect("an operation has its responses")
 				.entry(status.to_string())
 				.or_insert_with(|| serde_json::json!({ "description": format!("`{word}`"), "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }));
+			if !words.contains(&word) {
+				words.push(word);
+			}
+		}
+	}
+	let listed = doc["components"]["schemas"]["ErrorCode"]["enum"]
+		.as_array_mut()
+		.expect("a service's document names its ErrorCode");
+	for word in words {
+		if !listed.iter().any(|w| w == word.as_str()) {
+			listed.push(serde_json::Value::String(word));
 		}
 	}
 }
