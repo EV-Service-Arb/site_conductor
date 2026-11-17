@@ -1,10 +1,11 @@
 "use client";
 
 import { type KeyBinding, useBinding } from "@evinvest/uikit";
+import { mayOpen } from "@evinvest/views";
 
 import { PANEL } from "@config";
 
-import { may, ownScreens, seesSites, useMe } from "@/entities/session";
+import { seesSites, useMe } from "@/entities/session";
 import { VIEWS } from "@/shared/api/views";
 import { type T, useT, admin, keys, nav, usage } from "@/shared/i18n";
 import { type At, go } from "@/shared/lib/location";
@@ -28,19 +29,7 @@ const LABEL: Record<Keyed, (t: T) => string> = {
 export function NavKeys() {
   const t = useT();
   const me = useMe();
-  const own = ownScreens(me, PANEL.walletPage);
-  const opens: Record<Keyed, boolean> = {
-    home: true,
-    sites: seesSites(me),
-    review_archive: true,
-    sources: may(me, "sa:admin:sources:manage"),
-    admin_tokens: may(me, "sa:admin:tokens:grant"),
-    tokens: own.includes("tokens"),
-    usage: own.includes("usage"),
-    wallet: own.includes("wallet"),
-    alerts: true,
-    account: true,
-  };
+  const opens = (view: Keyed) => (view === "sites" ? seesSites(me) : (view !== "wallet" || PANEL.walletPage) && mayOpen(VIEWS, view, me.permissions));
   useBinding({
     on: { key: "g" },
     label: t(keys.go, "Go to"),
@@ -48,7 +37,7 @@ export function NavKeys() {
       const entry = VIEWS.views[view];
       // a nest's own page is the root of the service's views under it
       const at = { view, params: "nest" in entry ? { below: "" } : {} } as At;
-      return { on: { key: entry.key }, id: view, run: { label: LABEL[view](t), run: opens[view] ? () => go(at) : null } };
+      return { on: { key: entry.key }, id: view, run: { label: LABEL[view](t), run: opens(view) ? () => go(at) : null } };
     }),
   });
   return null;

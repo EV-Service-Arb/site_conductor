@@ -2,9 +2,9 @@
 
 import type { NavIcon, NavSection } from "@evinvest/uikit";
 import { Archive, Coins, Globe, KeyRound, MapPin, Settings, ShieldCheck } from "lucide-react";
-import { href } from "@evinvest/views";
+import { href, mayOpen } from "@evinvest/views";
 
-import { may, seesSites, useMe } from "@/entities/session";
+import { seesSites, useMe } from "@/entities/session";
 import { SitesElement } from "@/features/sites-element";
 import { VIEWS } from "@/shared/api/views";
 import { useT, admin, nav, reviewArchive } from "@/shared/i18n";
@@ -28,10 +28,10 @@ export function useApps(onNavigate?: () => void): App[] {
   const carried = useCarried();
   const link = (to: At) => href(VIEWS, to, carried);
   const adminItems = [
-    ...(may(me, "sa:admin:tokens:grant")
+    ...(mayOpen(VIEWS, "admin_tokens", me.permissions)
       ? [{ id: "tokens", href: link({ view: "admin_tokens", params: {} }), label: t(admin.tokens, "Tokens"), icon: Coins, description: t(admin.tokens.description, "Prices, spending and everyone's balance") }]
       : []),
-    ...(may(me, "sa:admin:sources:manage") ? [{ id: "sources", href: link({ view: "sources", params: {} }), label: t(nav.sources, "Sources"), icon: KeyRound, description: t(admin.sources.description, "Source keys and the sites they connect") }] : []),
+    ...(mayOpen(VIEWS, "sources", me.permissions) ? [{ id: "sources", href: link({ view: "sources", params: {} }), label: t(nav.sources, "Sources"), icon: KeyRound, description: t(admin.sources.description, "Source keys and the sites they connect") }] : []),
   ];
   return [
     ...(seesSites(me)

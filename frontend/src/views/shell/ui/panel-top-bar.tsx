@@ -30,7 +30,7 @@ import { ArrowUpRight, Bell, Globe, MapPin, Menu, PanelLeftClose, PanelLeftOpen,
 import { useEffect, useState } from "react";
 
 import { unreached, useAlerts, alerts as alertsKeys } from "@/entities/alerts";
-import { DevSignInBadge, ownScreens, useMe } from "@/entities/session";
+import { DevSignInBadge, useMe } from "@/entities/session";
 import { useTokens, tokens as tokensKeys } from "@/entities/tokens";
 import { AccountChip } from "@/features/account-chip";
 import { AssistantToggle } from "@/features/assistant";
@@ -250,12 +250,14 @@ function LanguageMenu() {
   );
 }
 
+/** The caller's own screens, beside the account chip, left to right; the wallet as it is built. */
+const OWN: readonly ("usage" | "tokens" | "wallet")[] = ["usage", "tokens", ...(PANEL.walletPage ? (["wallet"] as const) : [])];
+
 /** The screens the bar keeps behind its menu; a phone's Sheet lists them with the rest. */
 const inMenu = (id: string): id is "usage" => id === "usage";
 
 function ScreensMenu() {
   const t = useT();
-  const me = useMe();
   const at = useAt();
   const label = { usage: t(usage.title, "Usage") };
   return (
@@ -266,7 +268,7 @@ function ScreensMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        {ownScreens(me, PANEL.walletPage)
+        {OWN
           .filter(inMenu)
           .map((id) => (
             <DropdownMenuItem key={id} asChild>
@@ -283,7 +285,6 @@ function ScreensMenu() {
 /** The caller's own screens; Tokens is labelled with the count, never called a balance: evinvest.ltd's wallet is another ledger. */
 function OwnScreens({ bar = false, className, onNavigate }: { bar?: boolean; className?: string; onNavigate?: () => void }) {
   const t = useT();
-  const me = useMe();
   const tokens = useTokens();
   const at = useAt();
   const label = {
@@ -293,7 +294,7 @@ function OwnScreens({ bar = false, className, onNavigate }: { bar?: boolean; cla
   };
   return (
     <div className={cn("flex items-center gap-1", className)}>
-      {ownScreens(me, PANEL.walletPage)
+      {OWN
         .filter((id) => !(bar && inMenu(id)))
         .map((id) => {
         const here = at.view === id;

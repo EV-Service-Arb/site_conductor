@@ -3,7 +3,7 @@
 import { Button, Card, CardContent, PageFrame, Settled, Skeleton, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn } from "@evinvest/uikit";
 import { useState } from "react";
 
-import { may, useMe } from "@/entities/session";
+import { useMe } from "@/entities/session";
 import { tokens } from "@/entities/tokens";
 import { api, ok } from "@/shared/api";
 import type { TokenHolder } from "@/shared/api/schema";
@@ -16,6 +16,8 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorState } from "@/shared/ui/error-state";
 import { EDGE_CELL, TABLE_HEAD } from "@/shared/ui/table";
 import { useButtonSize } from "@/shared/ui/touch";
+import { mayOpen } from "@evinvest/views";
+import { VIEWS } from "@/shared/api/views";
 
 const HEAD = cn(TABLE_HEAD, EDGE_CELL);
 
@@ -29,7 +31,7 @@ export function AdminTokensView() {
   const meters = useResource("admin.meters", async () => ok(api.GET("/admin/meters")));
   const [changing, setChanging] = useState<TokenHolder | null>(null);
 
-  if (!may(me, "sa:admin:tokens:grant")) {
+  if (!mayOpen(VIEWS, "admin_tokens", me.permissions)) {
     return (
       <PageFrame breakpoint="md" title={t(tokens.admin.title, "Tokens of everyone")}>
         <ErrorState failure={{ kind: "forbidden", message: "" }} />

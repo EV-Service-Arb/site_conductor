@@ -1,7 +1,6 @@
-import { may } from "@/entities/session";
 import type { Caller } from "@/shared/api/schema";
 import { switchAccountPath } from "@/shared/api";
-import { href } from "@evinvest/views";
+import { href, mayOpen } from "@evinvest/views";
 
 import { VIEWS } from "@/shared/api/views";
 import type { T } from "@/shared/i18n";
@@ -43,7 +42,7 @@ function clip(value: string): string {
 
 /** The chip is the account's: past the profile it holds only acting as a member, for whoever may. */
 export function panelGroups(me: Caller, t: T): ChipGroup[] {
-  if (!may(me, "sa:review_archive:members:act_as")) return [];
+  if (!mayOpen(VIEWS, "review_archive.pick", me.permissions)) return [];
   return [{ id: "sa", items: [{ id: "act-as", href: href(VIEWS, { view: "review_archive.pick", params: {} }), label: t(account.actAs, "View as member…"), external: true }] }];
 }
 
