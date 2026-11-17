@@ -2274,6 +2274,8 @@ export interface components {
             id: number;
             /** @description Optional, the caller's say: nothing here judges it. */
             role: components["schemas"]["GmailRole"] | null;
+            /** @description Its window's tabs, in order. */
+            tabs: components["schemas"]["Tab"][];
         };
         GmailBody: {
             /**
@@ -2333,9 +2335,13 @@ export interface components {
             phone: string | null;
             /** @description Google's place id; `null` while a draft, and maybe while verifying or suspended: off Maps. */
             place_id: string | null;
+            /** @description A draft's must-haves not ready; `null` past a draft. */
+            readiness: components["schemas"]["Readiness"] | null;
             /** @description A draft's candidate spots, in order, its location the first's; none past a draft. */
             spots: components["schemas"]["Spot"][];
             state: components["schemas"]["State"];
+            /** @description Its window's tabs, in order: its state's. */
+            tabs: components["schemas"]["Tab"][];
             /**
              * Format: int64
              * @description Its category is this trade in its country.
@@ -2753,6 +2759,16 @@ export interface components {
             /** Format: int64 */
             output: number;
         };
+        /**
+         * @description What a draft needs before Google's form: the form's order, then what stands behind it.
+         *
+         *     - `category`: Its trade set up in its country, with Google's category.
+         *     - `site`: A landing page of sites' shows it.
+         *     - `hidden_address`: The address its film is shot at, and whether customers visit.
+         *     - `profile`: Its gmail's browser set up.
+         * @enum {string}
+         */
+        MustHave: "name" | "areas" | "phone" | "film" | "gmail" | "category" | "site" | "hidden_address" | "profile";
         /** @enum {string} */
         Need: "sa:admin:sources:manage" | "sa:admin:tokens:grant" | "sa:admin:trash:keep" | "sa:placement:study:read" | "sa:placement:study:spend" | "sa:playbook:mcp:use" | "sa:review_archive:archive:operate" | "sa:review_archive:members:act_as" | "sa:sites:analysis:experiments:edit" | "sa:sites:analysis:read" | "sa:sites:work:invoices:create" | "sa:sites:work:leads:edit" | "sa:sites:work:pii:see" | "sa:sites:work:places:edit" | "sa:sites:work:pricing:edit" | "sa:sites:work:read" | "sa:admin" | "sa:everyone" | "sa:operator";
         NewChat: {
@@ -2982,6 +2998,12 @@ export interface components {
             detail: string;
             /** @constant */
             state: "failed";
+        };
+        /** @description A draft's must-haves, in [`MustHave`]'s order, that are not ready. */
+        Readiness: {
+            missing: components["schemas"]["MustHave"][];
+            /** @description Not known now: sites could not be read. */
+            unknown: components["schemas"]["MustHave"][];
         };
         RefusedPlace: {
             place_id: string;
@@ -3387,6 +3409,11 @@ export interface components {
             enabled: boolean;
             gmbs: number[];
         };
+        Tab: {
+            id: string;
+            title: string;
+            url: string;
+        };
         /** @description What an action does: a view, an operation, or a binding of the page's keymap — nothing else. */
         Target: {
             href: string;
@@ -3678,7 +3705,12 @@ export interface components {
             /** Format: double */
             west: number;
         };
-        /** @description A frame from the viewer; at most 4 KiB. Points are in the last frame's space. */
+        /**
+         * @description Why the conductor closed the socket: its close frame's code.
+         * @enum {integer}
+         */
+        BrowserClose: 4401 | 4404 | 4409 | 4410 | 1000 | 1001 | 1003 | 1007;
+        /** @description A frame from the viewer; at most [`FRAME_MAX`] bytes. Points are in the last frame's space. */
         BrowserIn: {
             phase: components["schemas"]["TouchPhase"];
             /** @constant */
@@ -3760,11 +3792,6 @@ export interface components {
             message: string;
             /** @constant */
             type: "error";
-        };
-        Tab: {
-            id: string;
-            title: string;
-            url: string;
         };
         /** @enum {string} */
         TouchPhase: "start" | "move" | "end";
@@ -3876,6 +3903,7 @@ export type MeterTotal = components['schemas']['MeterTotal'];
 export type MeterUse = components['schemas']['MeterUse'];
 export type Meters = components['schemas']['Meters'];
 export type ModelUsed = components['schemas']['ModelUsed'];
+export type MustHave = components['schemas']['MustHave'];
 export type Need = components['schemas']['Need'];
 export type NewChat = components['schemas']['NewChat'];
 export type NewGmail = components['schemas']['NewGmail'];
@@ -3905,6 +3933,7 @@ export type QueriesCacheImport = components['schemas']['QueriesCacheImport'];
 export type Question = components['schemas']['Question'];
 export type ReadInternalReads = components['schemas']['ReadInternalReads'];
 export type ReadMapOfTimestamp = components['schemas']['ReadMap_of_Timestamp'];
+export type Readiness = components['schemas']['Readiness'];
 export type RefusedPlace = components['schemas']['RefusedPlace'];
 export type ReportSources = components['schemas']['ReportSources'];
 export type ReviewArchiveExport = components['schemas']['ReviewArchiveExport'];
@@ -3946,6 +3975,7 @@ export type Stop = components['schemas']['Stop'];
 export type Suggestion = components['schemas']['Suggestion'];
 export type Suggestions = components['schemas']['Suggestions'];
 export type Switch = components['schemas']['Switch'];
+export type Tab = components['schemas']['Tab'];
 export type Target = components['schemas']['Target'];
 export type TelegramLink = components['schemas']['TelegramLink'];
 export type Title = components['schemas']['Title'];
@@ -3968,9 +3998,9 @@ export type Usage = components['schemas']['Usage'];
 export type UsageDay = components['schemas']['UsageDay'];
 export type Vendor = components['schemas']['Vendor'];
 export type Viewport = components['schemas']['Viewport'];
+export type BrowserClose = components['schemas']['BrowserClose'];
 export type BrowserIn = components['schemas']['BrowserIn'];
 export type BrowserOut = components['schemas']['BrowserOut'];
-export type Tab = components['schemas']['Tab'];
 export type TouchPhase = components['schemas']['TouchPhase'];
 export type $defs = Record<string, never>;
 export interface operations {
@@ -16299,9 +16329,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "image/jpeg": unknown;
-                "image/png": unknown;
-                "image/webp": unknown;
+                "image/jpeg": string;
+                "image/png": string;
+                "image/webp": string;
             };
         };
         responses: {
@@ -17100,6 +17130,7 @@ export const keyedSourceKindValues: ReadonlyArray<FlattenedDeepRequired<componen
 export const kitTargetValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitTarget"]> = ["google", "drafts", "one_tap"];
 export const ledgerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["LedgerKind"]> = ["add", "set", "charge", "accrual", "kickback"];
 export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MentionKind"]> = ["location"];
+export const mustHaveValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MustHave"]> = ["name", "areas", "phone", "film", "gmail", "category", "site", "hidden_address", "profile"];
 export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
 export const onGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OnGoogle"]> = ["verifying", "verified", "suspended"];
 export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Permission"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
@@ -17113,4 +17144,5 @@ export const sourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["
 export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["State"]> = ["draft", "verifying", "verified", "suspended"];
 export const stopValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Stop"]> = ["at_free", "never"];
 export const vendorValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Vendor"]> = ["google"];
+export const browserCloseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BrowserClose"]> = [4401, 4404, 4409, 4410, 1000, 1001, 1003, 1007];
 export const touchPhaseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["TouchPhase"]> = ["start", "move", "end"];

@@ -3228,7 +3228,8 @@
             "name": "slug",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
             },
             "style": "simple"
           }
@@ -3373,7 +3374,8 @@
             "name": "slug",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
             },
             "style": "simple"
           }
@@ -11299,7 +11301,8 @@
             "name": "slug",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
             },
             "style": "simple"
           }
@@ -13620,7 +13623,8 @@
             "name": "key_id",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
             },
             "style": "simple"
           }
@@ -13761,7 +13765,8 @@
             "name": "key_id",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
             },
             "style": "simple"
           }
@@ -16175,9 +16180,27 @@
         ],
         "requestBody": {
           "content": {
-            "image/jpeg": {},
-            "image/png": {},
-            "image/webp": {}
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 10485760
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 10485760
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 10485760
+              }
+            }
           },
           "required": true
         },
@@ -17361,7 +17384,8 @@
           },
           "key_id": {
             "description": "A lowercase slug of 1–64 of `[a-z0-9_-]`, never reused.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
           },
           "kind": {
             "$ref": "#/components/schemas/KeyedSourceKind"
@@ -17371,7 +17395,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "pattern": "^(https://([a-z0-9-]+\\.)*[a-z][a-z0-9-]*|http://(localhost|127\\.0\\.0\\.1))(:[0-9]{1,5})?$"
           }
         },
         "additionalProperties": false,
@@ -18794,6 +18819,13 @@
                 "type": "null"
               }
             ]
+          },
+          "tabs": {
+            "description": "Its window's tabs, in order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tab"
+            }
           }
         },
         "required": [
@@ -18801,7 +18833,8 @@
           "gmail",
           "role",
           "created_at",
-          "browser"
+          "browser",
+          "tabs"
         ]
       },
       "GmailBody": {
@@ -18969,6 +19002,17 @@
               "null"
             ]
           },
+          "readiness": {
+            "description": "A draft's must-haves not ready; `null` past a draft.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Readiness"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "spots": {
             "description": "A draft's candidate spots, in order, its location the first's; none past a draft.",
             "type": "array",
@@ -18978,6 +19022,13 @@
           },
           "state": {
             "$ref": "#/components/schemas/State"
+          },
+          "tabs": {
+            "description": "Its window's tabs, in order: its state's.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tab"
+            }
           },
           "trade_id": {
             "description": "Its category is this trade in its country.",
@@ -19006,7 +19057,9 @@
           "created_at",
           "enabled",
           "location",
-          "spots"
+          "spots",
+          "tabs",
+          "readiness"
         ]
       },
       "GmbEdit": {
@@ -20182,6 +20235,21 @@
           "output"
         ]
       },
+      "MustHave": {
+        "description": "What a draft needs before Google's form: the form's order, then what stands behind it.\n\n- `category`: Its trade set up in its country, with Google's category.\n- `site`: A landing page of sites' shows it.\n- `hidden_address`: The address its film is shot at, and whether customers visit.\n- `profile`: Its gmail's browser set up.",
+        "type": "string",
+        "enum": [
+          "name",
+          "areas",
+          "phone",
+          "film",
+          "gmail",
+          "category",
+          "site",
+          "hidden_address",
+          "profile"
+        ]
+      },
       "Need": {
         "type": "string",
         "enum": [
@@ -20444,7 +20512,8 @@
         "properties": {
           "origin": {
             "description": "`https://<domain>[:port]`, no path.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^(https://([a-z0-9-]+\\.)*[a-z][a-z0-9-]*|http://(localhost|127\\.0\\.0\\.1))(:[0-9]{1,5})?$"
           }
         },
         "additionalProperties": false,
@@ -21016,6 +21085,29 @@
               "detail"
             ]
           }
+        ]
+      },
+      "Readiness": {
+        "description": "A draft's must-haves, in [`MustHave`]'s order, that are not ready.",
+        "type": "object",
+        "properties": {
+          "missing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MustHave"
+            }
+          },
+          "unknown": {
+            "description": "Not known now: sites could not be read.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MustHave"
+            }
+          }
+        },
+        "required": [
+          "missing",
+          "unknown"
         ]
       },
       "RefusedPlace": {
@@ -22285,6 +22377,25 @@
           "enabled"
         ]
       },
+      "Tab": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "url"
+        ]
+      },
       "Target": {
         "description": "What an action does: a view, an operation, or a binding of the page's keymap — nothing else.",
         "oneOf": [
@@ -23146,8 +23257,32 @@
           "east"
         ]
       },
+      "BrowserClose": {
+        "description": "Why the conductor closed the socket: its close frame's code.",
+        "type": "integer",
+        "enum": [
+          4401,
+          4404,
+          4409,
+          4410,
+          1000,
+          1001,
+          1003,
+          1007
+        ],
+        "x-enum-varnames": [
+          "SignedOut",
+          "NotRunning",
+          "Replaced",
+          "Stopped",
+          "Normal",
+          "GoingAway",
+          "TextOnly",
+          "NotAFrame"
+        ]
+      },
       "BrowserIn": {
-        "description": "A frame from the viewer; at most 4 KiB. Points are in the last frame's space.",
+        "description": "A frame from the viewer; at most [`FRAME_MAX`] bytes. Points are in the last frame's space.",
         "oneOf": [
           {
             "description": "A finger: the browser is a phone.",
@@ -23238,7 +23373,8 @@
             "type": "object",
             "properties": {
               "text": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 600
               },
               "type": {
                 "type": "string",
@@ -23472,25 +23608,6 @@
               "message"
             ]
           }
-        ]
-      },
-      "Tab": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "url"
         ]
       },
       "TouchPhase": {
