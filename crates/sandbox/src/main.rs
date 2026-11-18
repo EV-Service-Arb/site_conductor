@@ -2,7 +2,7 @@
 //! the conductor's `/api/run`. Nothing here holds a secret of the conductor's: a run brings its own
 //! token, and an assertion is all the runner trusts.
 
-use std::{net::SocketAddr, os::unix::process::ExitStatusExt, path::PathBuf, process::Stdio, sync::Arc};
+use std::{net::SocketAddr, os::unix::process::ExitStatusExt, path::PathBuf, process::Stdio, sync::Arc, time::Duration};
 
 use axum::{
 	Json, Router,
@@ -50,6 +50,9 @@ enum Cmd {
 		/// The conductor's public keys, as the services take them (`sa_auth::Keys`).
 		#[arg(long, env = "PANEL_ASSERTION_KEYS")]
 		keys: String,
+		/// How long a run lives before it is killed; the conductor tells the agent `LIMIT`.
+		#[arg(long, env = "SANDBOX_LIMIT_SECS", default_value_t = LIMIT.as_secs())]
+		limit_secs: u64,
 	},
 }
 
@@ -64,6 +67,7 @@ async fn main() -> eyre::Result<()> {
 		js,
 		conductor,
 		keys,
+		limit_secs,
 	} = Cli::parse().cmd;
 	let keys: Keys = keys.parse().map_err(|e| eyre::eyre!("PANEL_ASSERTION_KEYS: {e}"))?;
 	eyre::ensure!(max > 0, "SANDBOX_MAX is at least 1");
@@ -85,6 +89,7 @@ async fn main() -> eyre::Result<()> {
 		origin: conductor.as_str().trim_end_matches('/').to_owned(),
 		cache,
 		keys,
+		limit: Duration::from_secs(limit_secs),
 	}));
 	let listener = tokio::net::TcpListener::bind(bind).await.wrap_err_with(|| format!("binding {bind}"))?;
 	tracing::info!(%bind, net = runner.0.net, "serving");
@@ -122,7 +127,7 @@ impl Runner {
 			.wrap_err_with(|| format!("starting {}", r.deno.display()))?;
 		let (mut stdout, mut stderr) = (child.stdout.take().expect("piped"), child.stderr.take().expect("piped"));
 		let (mut out, mut err) = (Kept::default(), Kept::default());
-		let finished = tokio::time::timeout(LIMIT, async {
+		let finished = tokio::time::timeout(r.limit, async {
 			tokio::try_join!(out.drain(&mut stdout), err.drain(&mut stderr))?;
 			child.wait().await
 		})
@@ -161,6 +166,7 @@ struct Inner {
 	/// `DENO_DIR`, shared by the runs: the code cannot write, only Deno's own caches do.
 	cache: PathBuf,
 	keys: Keys,
+	limit: Duration,
 }
 
 fn routes(runner: Runner) -> Router {
@@ -175,7 +181,7 @@ fn routes(runner: Runner) -> Router {
 async fn conductor_only(State(runner): State<Runner>, req: Request, next: Next) -> Response {
 	let token = req.headers().get(sa_auth::HEADER).and_then(|v| v.to_str().ok());
 	let now = jiff::Timestamp::now().as_second();
-	let verified = token.map(|t| sa_auth::verify(&runner.0.keys, t, Service::Sandbox, req.method().as_str(), req.uri().path(), None, now));
+	let verified = token.map(|t| sa_auth::verify(&runner.0.keys, t, Service::Sandbox, sa_auth::Request { method: req.method().as_str(), path: req.uri().path(), body: None }, now));
 	match verified {
 		Some(Ok(a)) if a.principal == Principal::Conductor => next.run(req).await,
 		refused => {

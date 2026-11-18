@@ -11,20 +11,28 @@ use std::{
 	},
 	time::Duration,
 };
+use tokio::sync::Notify;
 
 use axum::{Router, extract::State, routing::get};
 use sa_auth::{Assertion, Principal, Service, Signer};
-use sa_sandbox::{Ended, LIMIT, OUTPUT, Ran};
+use sa_sandbox::{Ended, OUTPUT, Ran};
 use serde_json::json;
 
+const LIMIT: Duration = Duration::from_secs(3); // the runner's, set below: the shipped 60 s would hold the suite
 const SEED: &str = "k1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
+
+/// What the stand-in conductor was sent.
+struct Heard {
+	requests: AtomicUsize,
+	/// A permit per request: awaited after one, it returns at once.
+	request: Notify,
+}
 
 struct Runner {
 	base: String,
 	signer: Signer,
 	http: reqwest::Client,
-	/// Requests the stand-in conductor was sent.
-	heard: Arc<AtomicUsize>,
+	heard: Arc<Heard>,
 	/// An origin a run must not reach.
 	elsewhere: String,
 	_js: tempfile::TempDir,
@@ -32,9 +40,9 @@ struct Runner {
 }
 impl Runner {
 	async fn start(max: usize) -> Self {
-		let heard = Arc::new(AtomicUsize::new(0));
+		let heard = Arc::new(Heard { requests: AtomicUsize::new(0), request: Notify::new() });
 		let conductor = listen(heard.clone()).await;
-		let elsewhere = listen(Arc::new(AtomicUsize::new(0))).await;
+		let elsewhere = listen(Arc::new(Heard { requests: AtomicUsize::new(0), request: Notify::new() })).await;
 		let js = tempfile::tempdir().unwrap();
 		std::fs::write(js.path().join("prelude.ts"), "export const api = { url: Deno.env.get(\"SA_RUN_URL\")! };\n").unwrap();
 		std::fs::write(js.path().join("deno.json"), "{}\n").unwrap();
@@ -44,6 +52,7 @@ impl Runner {
 			.arg("serve")
 			.env("SANDBOX_BIND", format!("127.0.0.1:{port}"))
 			.env("SANDBOX_MAX", max.to_string())
+			.env("SANDBOX_LIMIT_SECS", LIMIT.as_secs().to_string())
 			.env("SANDBOX_DENO", deno())
 			.env("SANDBOX_JS", js.path())
 			.env("SANDBOX_CONDUCTOR_URL", format!("{conductor}/api/run"))
@@ -97,14 +106,15 @@ impl Runner {
 	}
 }
 
-async fn listen(heard: Arc<AtomicUsize>) -> String {
+async fn listen(heard: Arc<Heard>) -> String {
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let at = listener.local_addr().unwrap();
 	let app = Router::new()
 		.route(
 			"/api/run/hello",
-			get(|State(heard): State<Arc<AtomicUsize>>| async move {
-				heard.fetch_add(1, Ordering::SeqCst);
+			get(|State(heard): State<Arc<Heard>>| async move {
+				heard.requests.fetch_add(1, Ordering::SeqCst);
+				heard.request.notify_one();
 				"hello from the conductor"
 			}),
 		)
@@ -163,7 +173,7 @@ for (const [what, attempt] of Object.entries(tries)) {{
 	let ran = r.run(&code).await;
 	assert_eq!(ran.ended, Ended::Exited(0), "{}", ran.stderr);
 	assert_eq!(ran.stdout, "hello from the conductor\nelsewhere NotCapable\nread NotCapable\nenv NotCapable\nrun NotCapable\n");
-	assert_eq!(r.heard.load(Ordering::SeqCst), 1);
+	assert_eq!(r.heard.requests.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
@@ -173,7 +183,7 @@ async fn a_type_error_runs_nothing() {
 	assert_eq!(ran.ended, Ended::Exited(1));
 	assert!(ran.stderr.contains("TS2322"), "{}", ran.stderr);
 	assert!(ran.stderr.contains("main.ts:2"), "{}", ran.stderr);
-	assert_eq!(r.heard.load(Ordering::SeqCst), 0);
+	assert_eq!(r.heard.requests.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -186,14 +196,13 @@ async fn output_is_kept_up_to_its_cap() {
 #[tokio::test]
 async fn a_run_past_its_limit_is_killed_and_holds_its_slot_until_then() {
 	let r = Runner::start(1).await;
+	let endless = r.run("await fetch(`${api.url}/hello`);\nsetInterval(() => {}, 1000);\n");
 	let busy = async {
-		tokio::time::sleep(Duration::from_secs(5)).await;
+		r.heard.request.notified().await; // the run is up, so the one slot is its
 		r.post("console.log(1)", true).await.0
 	};
-	let endless = tokio::time::timeout(LIMIT + Duration::from_secs(10), r.run("console.log(\"started\");\nsetInterval(() => {}, 1000);\n"));
 	let (ran, busy) = tokio::join!(endless, busy);
 	assert_eq!(busy, 503, "the one slot is the endless run's");
-	let ran = ran.unwrap();
-	assert_eq!((ran.ended, ran.stdout.as_str()), (Ended::Killed, "started\n"));
+	assert_eq!(ran.ended, Ended::Killed);
 	assert_eq!(r.run("console.log(1)").await.stdout, "1\n");
 }
