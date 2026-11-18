@@ -205,6 +205,8 @@ pub struct KitSummary {
 /// An owner's kit, over a period.
 #[derive(Clone, Debug)]
 pub struct Scope {
+	/// What its QRs carry, for the events they bring to be tagged with it.
+	pub id: i64,
 	pub slug: String,
 	pub name: String,
 	pub area: Option<String>,
@@ -501,24 +503,41 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
-	/// The operator showed the owner's GBP `gmb`'s QR.
-	pub async fn kit_shown(&self, owner: Uuid, gmb: i64, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+	/// The operator showed the owner's GBP `gmb`'s QR, from kit `kit`'s page if given: `NotFound`
+	/// unless the GBP is in it.
+	pub async fn kit_shown(&self, owner: Uuid, gmb: i64, kit: Option<&str>, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
 		let mut tx = self.store.begin_write().await?;
 		if gmbs_db::gmb_of(&mut tx, Some(owner), gmb).await?.is_none() {
 			return Ok(Err(Refused::NotFound));
 		}
-		db::shown(&mut tx, gmb, now).await?;
+		let kit = match kit {
+			None => None,
+			Some(slug) => match db::kit(&mut tx, owner, slug).await? {
+				Some(k) if db::members(&mut tx, k.id).await?.iter().any(|(g, _)| *g == gmb) => Some(k.id),
+				_ => return Ok(Err(Refused::NotFound)),
+			},
+		};
+		db::shown(&mut tx, gmb, kit, now).await?;
 		tx.commit().await.wrap_err("committing a QR shown")?;
 		Ok(Ok(()))
 	}
 
-	/// A reviewer opened GBP `gmb`'s page: a view, holding the drafts it is offered for
-	/// [`LEASE`]. `NotFound` while the kit is off.
-	pub async fn kit_offer(&self, gmb: i64, qr: bool, now: Timestamp) -> eyre::Result<Result<Offer, Refused>> {
+	/// A reviewer opened GBP `gmb`'s page, from kit `kit`'s QR if given (removed or not, its owner's
+	/// GBP's): a view, holding the drafts it is offered for [`LEASE`]. `NotFound` while the kit is
+	/// off.
+	pub async fn kit_offer(&self, gmb: i64, qr: bool, kit: Option<i64>, now: Timestamp) -> eyre::Result<Result<Offer, Refused>> {
 		let mut tx = self.store.begin_write().await?;
 		let Some(g) = gmbs_db::gmb_of(&mut tx, None, gmb).await? else {
 			return Ok(Err(Refused::NotFound));
 		};
+		if let Some(k) = kit {
+			let Some(owner) = db::kit_owner(&mut tx, k).await? else {
+				return Ok(Err(Refused::NotFound));
+			};
+			if gmbs_db::gmb_of(&mut tx, Some(owner), gmb).await?.is_none() {
+				return Ok(Err(Refused::NotFound));
+			}
+		}
 		let Some((target, review_uri)) = db::target(&mut tx, gmb).await? else {
 			return Ok(Err(Refused::NotFound));
 		};
@@ -537,7 +556,7 @@ impl Panel {
 		// none left for this GBP: nothing to copy, so straight to Google's form
 		let target = if drafts.is_empty() { Target::Google } else { target };
 		let view = Uuid::now_v7();
-		db::add_view(&mut tx, view, gmb, qr, now, now + LEASE, &drafts.iter().map(|d| d.id).collect::<Vec<_>>()).await?;
+		db::add_view(&mut tx, view, gmb, qr, kit, now, now + LEASE, &drafts.iter().map(|d| d.id).collect::<Vec<_>>()).await?;
 		tx.commit().await.wrap_err("committing a view")?;
 		Ok(Ok(Offer {
 			target,
@@ -653,13 +672,13 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
-	/// Gone with its selection; no draft, photo or use goes with it.
-	pub async fn delete_kit(&self, owner: Uuid, slug: &str) -> eyre::Result<Result<(), Refused>> {
+	/// Out of the owner's kits, its slug free again; the events tagged with it keep it.
+	pub async fn remove_kit(&self, owner: Uuid, slug: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
 		let mut tx = self.store.begin_write().await?;
-		if !db::delete_kit(&mut tx, owner, slug).await? {
+		if !db::remove_kit(&mut tx, owner, slug, now).await? {
 			return Ok(Err(Refused::NotFound));
 		}
-		tx.commit().await.wrap_err("committing a kit's deletion")?;
+		tx.commit().await.wrap_err("committing a kit's removal")?;
 		Ok(Ok(()))
 	}
 
@@ -731,6 +750,7 @@ impl Panel {
 			.map(|(at, gmb, kind, detail)| Happened { at, gmb, kind, detail })
 			.collect();
 		Ok(Ok(Scope {
+			id: k.id,
 			slug: k.slug,
 			name: k.name,
 			area: k.area,
@@ -848,7 +868,11 @@ async fn pool(conn: &mut sqlx::SqliteConnection, trade: i64, country: Country, k
 			let places = places.remove(&d.id).unwrap_or_default();
 			Draft {
 				keywords: keywords.iter().filter(|k| mentions(&text, &fold(k))).cloned().collect(),
-				names: local.iter().filter(|a| !places.contains(&a.slug) && mentions(&text, &fold(&a.name))).map(|a| a.name.clone()).collect(),
+				names: local
+					.iter()
+					.filter(|a| !places.contains(&a.slug) && mentions(&text, &fold(&a.name)))
+					.map(|a| a.name.clone())
+					.collect(),
 				places,
 				id: d.id,
 				text: d.text,
