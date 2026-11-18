@@ -8,7 +8,10 @@ const WIDTH = 64;
 /** The stack's phases (`local-stack`'s timeline.tsv) and the tests, on one axis, written to `out`. */
 export default class Timeline implements Reporter {
   private readonly spans: Span[] = [];
-  constructor(private readonly options: { stack: string; out: string }) {}
+  private readonly options: { stack: string; out: string };
+  constructor(options: { stack: string; out: string }) {
+    this.options = options;
+  }
 
   onTestEnd(test: TestCase, result: TestResult) {
     const start = result.startTime.getTime();
