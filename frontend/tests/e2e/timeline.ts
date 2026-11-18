@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 
 import type { FullResult, Reporter, TestCase, TestResult } from "@playwright/test/reporter";
 
@@ -36,6 +36,25 @@ export default class Timeline implements Reporter {
     });
     const text = [`total ${(total / 1000).toFixed(1)}s from the stack's first build`, ...lines].join("\n");
     writeFileSync(this.options.out, text + "\n");
+    // GitHub renders a mermaid block in a job's summary; mermaid takes no ":" or ";" inside a task's name
+    const task = (s: Span) => `${s.name.replace(/[:;#]/g, " ")} :${s.start - t0}, ${s.end - t0}`;
+    const summary = [
+      "<details><summary>e2e timeline</summary>",
+      "",
+      "```mermaid",
+      "gantt",
+      "  dateFormat x",
+      "  axisFormat %M:%S",
+      "  section stack",
+      ...stack.map((s) => "  " + task(s)),
+      "  section tests",
+      ...this.spans.map((s) => "  " + task(s)),
+      "```",
+      "</details>",
+      "",
+    ].join("\n");
+    writeFileSync(this.options.out.replace(/\.txt$/, ".md"), summary);
+    if (process.env.GITHUB_STEP_SUMMARY !== undefined) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
     console.log(`\n${text}\n(${this.options.out})`);
   }
 }

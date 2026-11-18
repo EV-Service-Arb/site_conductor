@@ -17,6 +17,7 @@ const STACK_TIMELINE = new URL(`../../../.local-port-${STACK}/timeline.tsv`, imp
 // through the flake, which supplies `@playwright/test` with its pinned browsers.
 export default defineConfig({
   testDir: ".",
+  fullyParallel: true, // the specs share no server state: each page is its own context, over the one session
   outputDir: "../../tmp/playwright",
   reporter: [["list"], ["./timeline.ts", { stack: STACK_TIMELINE, out: new URL("../../tmp/playwright/timeline.txt", import.meta.url).pathname }]],
   globalSetup: "./sign-in.ts",
