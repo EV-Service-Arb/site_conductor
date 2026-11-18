@@ -4926,16 +4926,24 @@ export interface components {
             /** @description Nothing purged, ever. */
             never_purge: boolean;
         };
+        /** @description What tells a trashed GBP apart. */
+        TrashedGbp: {
+            address: string | null;
+            /** Format: int64 */
+            id: number;
+            name: string;
+            phone: string | null;
+            /** @description Google's place id. */
+            place_id: string | null;
+            state: components["schemas"]["State"];
+        };
         /** @description A gmail in the trash. */
         TrashedGmail: {
             /** @description Why it cannot be restored now. */
             blocked: string | null;
             gmail: string;
-            /**
-             * Format: uint
-             * @description Its GBPs removed with it, which come back with it.
-             */
-            gmbs: number;
+            /** @description Its GBPs removed with it, which come back with it. */
+            gmbs: components["schemas"]["TrashedGbp"][];
             /** Format: int64 */
             id: number;
             /** @description RFC 3339; `null`: kept until restored. */
@@ -4945,11 +4953,15 @@ export interface components {
         };
         /** @description A GBP in the trash on its own. */
         TrashedGmb: {
+            address: string | null;
             blocked: string | null;
             gmail: string | null;
             /** Format: int64 */
             id: number;
             name: string;
+            phone: string | null;
+            /** @description Google's place id. */
+            place_id: string | null;
             /** @description RFC 3339; `null`: kept until restored. */
             purge_at: string | null;
             /** @description RFC 3339. */
@@ -7123,6 +7135,7 @@ export type TradeName = components['schemas']['TradeName'];
 export type Trades = components['schemas']['Trades'];
 export type Trash = components['schemas']['Trash'];
 export type TrashSettings = components['schemas']['TrashSettings'];
+export type TrashedGbp = components['schemas']['TrashedGbp'];
 export type TrashedGmail = components['schemas']['TrashedGmail'];
 export type TrashedGmb = components['schemas']['TrashedGmb'];
 export type Turn = components['schemas']['Turn'];

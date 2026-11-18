@@ -17,18 +17,16 @@ use super::{
 const KEEP_DAYS: i64 = 30;
 const DAY_US: i64 = 86_400_000_000;
 
-const GMB: &str = "SELECT b.id, b.name, b.state, b.gmail_id, g.gmail, b.removed_at, b.place_id, b.phone, \
+const GMB: &str = "SELECT b.id, b.name, b.state, b.gmail_id, g.gmail, b.removed_at, b.place_id, b.address, b.phone, \
 	b.gmail_id IS NOT NULL AND (g.removed_at IS NOT NULL) FROM gmbs b LEFT JOIN gmails g ON g.id = b.gmail_id \
 	WHERE b.owner = $1 AND b.removed_at IS NOT NULL AND b.purged_at IS NULL";
 
-type GmbRow = (i64, String, String, Option<i64>, Option<String>, i64, Option<String>, Option<String>, bool);
+type GmbRow = (i64, String, String, Option<i64>, Option<String>, i64, Option<String>, Option<String>, Option<String>, bool);
 
 pub(crate) struct TrashedGmail {
 	pub id: i64,
 	pub gmail: String,
 	pub removed_at: Timestamp,
-	/// Its GBPs removed with it, which come back with it.
-	pub gmbs: usize,
 }
 
 pub(crate) struct TrashedGmb {
@@ -38,8 +36,9 @@ pub(crate) struct TrashedGmb {
 	pub gmail_id: Option<i64>,
 	pub gmail: Option<String>,
 	pub removed_at: Timestamp,
-	place_id: Option<String>,
-	phone: Option<String>,
+	pub place_id: Option<String>,
+	pub address: Option<String>,
+	pub phone: Option<String>,
 	/// Its gmail is not live.
 	gmail_gone: bool,
 }
@@ -79,9 +78,8 @@ pub(crate) async fn set_settings(conn: &mut SqliteConnection, owner: Uuid, keep_
 
 /// The owner's gmails in the trash, newest first; `id` only that one.
 pub(crate) async fn gmails(conn: &mut SqliteConnection, owner: Uuid, id: Option<i64>) -> eyre::Result<Vec<TrashedGmail>> {
-	let rows: Vec<(i64, String, i64, i64)> = sqlx::query_as(
-		"SELECT g.id, g.gmail, g.removed_at, (SELECT COUNT(*) FROM gmbs b WHERE b.gmail_id = g.id AND b.removed_at = g.removed_at) \
-		 FROM gmails g WHERE g.owner = $1 AND g.removed_at IS NOT NULL AND g.purged_at IS NULL AND g.id IS coalesce($2, g.id) \
+	let rows: Vec<(i64, String, i64)> = sqlx::query_as(
+		"SELECT g.id, g.gmail, g.removed_at FROM gmails g WHERE g.owner = $1 AND g.removed_at IS NOT NULL AND g.purged_at IS NULL AND g.id IS coalesce($2, g.id) \
 		 ORDER BY g.removed_at DESC, g.id",
 	)
 	.bind(owner)
@@ -90,18 +88,17 @@ pub(crate) async fn gmails(conn: &mut SqliteConnection, owner: Uuid, id: Option<
 	.await
 	.wrap_err("listing trashed gmails")?;
 	rows.into_iter()
-		.map(|(id, gmail, removed_at, gmbs)| {
+		.map(|(id, gmail, removed_at)| {
 			Ok(TrashedGmail {
 				id,
 				gmail,
 				removed_at: from_db(removed_at)?,
-				gmbs: usize::try_from(gmbs).expect("a count"),
 			})
 		})
 		.collect()
 }
 
-fn gmb((id, name, state, gmail_id, gmail, removed_at, place_id, phone, gmail_gone): GmbRow) -> eyre::Result<TrashedGmb> {
+fn gmb((id, name, state, gmail_id, gmail, removed_at, place_id, address, phone, gmail_gone): GmbRow) -> eyre::Result<TrashedGmb> {
 	Ok(TrashedGmb {
 		id,
 		name,
@@ -110,6 +107,7 @@ fn gmb((id, name, state, gmail_id, gmail, removed_at, place_id, phone, gmail_gon
 		gmail,
 		removed_at: from_db(removed_at)?,
 		place_id,
+		address,
 		phone,
 		gmail_gone,
 	})
@@ -128,7 +126,7 @@ pub(crate) async fn gmbs(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Resu
 }
 
 /// The GBPs removed with the owner's trashed gmail `id`, or GBP `gmb` alone.
-async fn coming_back(conn: &mut SqliteConnection, owner: Uuid, gmail: Option<i64>, gmb_id: Option<i64>) -> eyre::Result<Vec<TrashedGmb>> {
+pub(crate) async fn coming_back(conn: &mut SqliteConnection, owner: Uuid, gmail: Option<i64>, gmb_id: Option<i64>) -> eyre::Result<Vec<TrashedGmb>> {
 	let rows: Vec<GmbRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
 		"{GMB} AND (b.id IS $3 OR (b.gmail_id IS $2 AND b.removed_at = g.removed_at)) ORDER BY b.id"
 	)))

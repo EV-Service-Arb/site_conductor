@@ -39555,6 +39555,49 @@
           "never_purge"
         ]
       },
+      "TrashedGbp": {
+        "description": "What tells a trashed GBP apart.",
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "place_id": {
+            "description": "Google's place id.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/State"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state",
+          "place_id",
+          "address",
+          "phone"
+        ]
+      },
       "TrashedGmail": {
         "description": "A gmail in the trash.",
         "type": "object",
@@ -39571,9 +39614,10 @@
           },
           "gmbs": {
             "description": "Its GBPs removed with it, which come back with it.",
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrashedGbp"
+            }
           },
           "id": {
             "type": "integer",
@@ -39604,6 +39648,12 @@
         "description": "A GBP in the trash on its own.",
         "type": "object",
         "properties": {
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "blocked": {
             "type": [
               "string",
@@ -39622,6 +39672,19 @@
           },
           "name": {
             "type": "string"
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "place_id": {
+            "description": "Google's place id.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "purge_at": {
             "description": "RFC 3339; `null`: kept until restored.",
@@ -39642,6 +39705,9 @@
           "id",
           "name",
           "state",
+          "place_id",
+          "address",
+          "phone",
           "gmail",
           "removed_at",
           "purge_at",

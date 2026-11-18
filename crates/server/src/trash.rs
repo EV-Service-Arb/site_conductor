@@ -12,7 +12,7 @@ use sa_auth::Trash as TrashPermission;
 use sa_core::gbp::State as GbpState;
 use sa_panel::{
 	Panel,
-	trash::{Settings, Trash, TrashedGmail, TrashedGmb},
+	trash::{Listing, Settings, Trash, TrashedGmail, TrashedGmb},
 };
 use serde::{Deserialize, Serialize};
 
@@ -42,18 +42,30 @@ pub struct TrashedGmailDto {
 	/// RFC 3339; `null`: kept until restored.
 	pub purge_at: Option<String>,
 	/// Its GBPs removed with it, which come back with it.
-	pub gmbs: usize,
+	pub gmbs: Vec<TrashedGbpDto>,
 	/// Why it cannot be restored now.
 	pub blocked: Option<String>,
+}
+
+/// What tells a trashed GBP apart.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "TrashedGbp")]
+pub struct TrashedGbpDto {
+	pub id: i64,
+	pub name: String,
+	pub state: GbpState,
+	/// Google's place id.
+	pub place_id: Option<String>,
+	pub address: Option<String>,
+	pub phone: Option<String>,
 }
 
 /// A GBP in the trash on its own.
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "TrashedGmb")]
 pub struct TrashedGmbDto {
-	pub id: i64,
-	pub name: String,
-	pub state: GbpState,
+	#[serde(flatten)]
+	pub gbp: TrashedGbpDto,
 	pub gmail: Option<String>,
 	/// RFC 3339.
 	pub removed_at: String,
@@ -98,8 +110,21 @@ impl From<TrashedGmail> for TrashedGmailDto {
 			gmail: g.gmail,
 			removed_at: g.removed_at.to_string(),
 			purge_at: g.purge_at.map(|t| t.to_string()),
-			gmbs: g.gmbs,
+			gmbs: g.gmbs.into_iter().map(Into::into).collect(),
 			blocked: g.blocked,
+		}
+	}
+}
+
+impl From<Listing> for TrashedGbpDto {
+	fn from(l: Listing) -> Self {
+		Self {
+			id: l.id,
+			name: l.name,
+			state: l.state,
+			place_id: l.place_id,
+			address: l.address,
+			phone: l.phone,
 		}
 	}
 }
@@ -107,9 +132,7 @@ impl From<TrashedGmail> for TrashedGmailDto {
 impl From<TrashedGmb> for TrashedGmbDto {
 	fn from(b: TrashedGmb) -> Self {
 		Self {
-			id: b.id,
-			name: b.name,
-			state: b.state,
+			gbp: b.listing.into(),
 			gmail: b.gmail,
 			removed_at: b.removed_at.to_string(),
 			purge_at: b.purge_at.map(|t| t.to_string()),

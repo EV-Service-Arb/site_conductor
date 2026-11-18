@@ -3263,6 +3263,10 @@
     "en": "It will ask: keywords in its language · Google's category · the study, if a grid covers it.",
     "t": "Спросит: ключевые слова на её языке · категорию Google · исследование, если есть сетка."
   },
+  "trash.address": {
+    "en": "Address",
+    "t": "Адрес"
+  },
   "trash.empty": {
     "en": "Nothing removed.",
     "t": "Ничего не удалено."
@@ -3331,6 +3335,14 @@
     "en": "Trash",
     "t": "Корзина"
   },
+  "trash.phone": {
+    "en": "Phone",
+    "t": "Телефон"
+  },
+  "trash.place": {
+    "en": "Place",
+    "t": "Место"
+  },
   "trash.removed": {
     "en": "removed {days} d ago",
     "t": "удалено {days} дн. назад"
@@ -3354,6 +3366,10 @@
   "trash.with": {
     "en": "{n} GBPs with it",
     "t": "{n} GBP вместе с ним"
+  },
+  "trash.with.none": {
+    "en": "No GBPs went with it.",
+    "t": "Вместе с этим не было удалено ни одного GBP."
   },
   "undo.changed": {
     "en": "Not undone: {label} has changed since. The history is cleared.",

@@ -24,16 +24,25 @@ pub struct TrashedGmail {
 	/// `None`: kept until restored.
 	pub purge_at: Option<Timestamp>,
 	/// Its GBPs removed with it, which come back with it.
-	pub gmbs: usize,
+	pub gmbs: Vec<Listing>,
 	/// Why it cannot be restored now.
 	pub blocked: Option<String>,
 }
 
+/// What tells a trashed GBP apart.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TrashedGmb {
+pub struct Listing {
 	pub id: i64,
 	pub name: String,
 	pub state: State,
+	pub place_id: Option<String>,
+	pub address: Option<String>,
+	pub phone: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TrashedGmb {
+	pub listing: Listing,
 	pub gmail_id: Option<i64>,
 	pub gmail: Option<String>,
 	pub removed_at: Timestamp,
@@ -49,6 +58,19 @@ pub struct Trash {
 	pub gmbs: Vec<TrashedGmb>,
 }
 
+impl From<db::TrashedGmb> for Listing {
+	fn from(b: db::TrashedGmb) -> Self {
+		Self {
+			id: b.id,
+			name: b.name,
+			state: b.state,
+			place_id: b.place_id,
+			address: b.address,
+			phone: b.phone,
+		}
+	}
+}
+
 impl Panel {
 	pub async fn trash(&self, owner: Uuid, keep_by_default: bool) -> eyre::Result<Trash> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the trash")?;
@@ -61,26 +83,26 @@ impl Panel {
 		let mut gmails = Vec::new();
 		for g in db::gmails(&mut conn, owner, None).await? {
 			let blocked = db::gmail_blocked(&mut conn, owner, &g).await?;
+			let with = db::coming_back(&mut conn, owner, Some(g.id), None).await?;
 			gmails.push(TrashedGmail {
 				id: g.id,
 				gmail: g.gmail,
 				removed_at: g.removed_at,
 				purge_at: purge_at(g.removed_at),
-				gmbs: g.gmbs,
+				gmbs: with.into_iter().map(Listing::from).collect(),
 				blocked,
 			});
 		}
 		let mut gmbs = Vec::new();
 		for b in db::gmbs(&mut conn, owner).await? {
 			let blocked = db::gmb_blocked(&mut conn, &b).await?;
+			let (gmail_id, gmail, removed_at) = (b.gmail_id, b.gmail.clone(), b.removed_at);
 			gmbs.push(TrashedGmb {
-				id: b.id,
-				name: b.name,
-				state: b.state,
-				gmail_id: b.gmail_id,
-				gmail: b.gmail,
-				removed_at: b.removed_at,
-				purge_at: purge_at(b.removed_at),
+				listing: b.into(),
+				gmail_id,
+				gmail,
+				removed_at,
+				purge_at: purge_at(removed_at),
 				blocked,
 			});
 		}

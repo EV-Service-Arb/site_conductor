@@ -89,7 +89,7 @@ async fn connect(db: &TestDb, gmail: i64) {
 }
 
 fn listed(t: &Trash) -> (Vec<(i64, usize)>, Vec<i64>) {
-	(t.gmails.iter().map(|g| (g.id, g.gmbs)).collect(), t.gmbs.iter().map(|b| b.id).collect())
+	(t.gmails.iter().map(|g| (g.id, g.gmbs.len())).collect(), t.gmbs.iter().map(|b| b.listing.id).collect())
 }
 
 #[tokio::test]
