@@ -587,7 +587,7 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 		Some(json!({ "name": "Lyon 8", "trade": heating["id"], "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] })),
 	)
 	.await;
-	assert_eq!(first["tabs"], json!(["launch", "browser"]), "a draft's window");
+	assert_eq!(first["tabs"], json!(["profile", "log", "launch"]), "a draft's window, under no gmail yet");
 	assert_eq!(
 		first["readiness"],
 		json!({ "missing": ["category", "areas", "phone", "hidden_address", "film", "gmail", "profile"], "unknown": ["site"] }),
@@ -873,4 +873,100 @@ async fn a_removed_gmail_is_restored_from_the_trash_and_only_an_admin_keeps_it_f
 	assert_eq!(listed["gmails"][0]["id"], gmail["id"], "{listed}");
 	let (status, _) = call(&mut b, &app, Method::POST, &format!("/api/v1/trash/gmails/{}/restore", gmail["id"]), None).await;
 	assert_eq!(status, StatusCode::NOT_FOUND, "out of the trash");
+}
+
+async fn log(b: &mut Browser, app: &Router, gbp: i64) -> Vec<Value> {
+	let (status, log) = call(b, app, Method::GET, &format!("/api/v1/gmbs/{gbp}/log"), None).await;
+	assert_eq!(status, StatusCode::OK, "{log}");
+	log["events"].as_array().unwrap().clone()
+}
+
+/// A Sync is one `synced` event with each field before and after, one that changed nothing too; a point placed by
+/// hand is an edit; newest first.
+#[tokio::test]
+async fn a_gbps_log_holds_each_sync_with_what_it_changed() {
+	let (_asked, base) = places().await;
+	let db = TestDb::create().await;
+	let keyless = panel(&db, None).await;
+	opened(&keyless).await;
+	let owner = seen(&keyless, "dev@localhost").await;
+	let gmail = keyless.add_gmail(owner, "a@gmail.com", jiff::Timestamp::now()).await.unwrap().unwrap();
+	let gbp = add(&keyless, owner, gmail.id, PROCOPE).await;
+	let app = app(panel(&db, Some(&base)).await, admin());
+	let mut b = Browser::default();
+	b.sign_in(&app).await;
+	let (status, _) = call(&mut b, &app, Method::PUT, &format!("/api/v1/gmbs/{}/location", gbp.id), Some(json!({ "lat": 1.0, "lng": 1.0 }))).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	sync(&mut b, &app, gbp.id).await;
+	let synced = sync(&mut b, &app, gbp.id).await;
+	assert!(synced["synced_at"].is_string(), "{synced}");
+
+	let events = log(&mut b, &app, gbp.id).await;
+	let kinds = events.iter().map(|e| e["kind"].as_str().unwrap()).collect::<Vec<_>>();
+	assert_eq!(kinds, ["synced", "synced", "edited", "added"], "{events:?}");
+	assert_eq!(events[0]["changes"], json!([]), "a Sync that changed nothing is still one");
+	let phone = events[1]["changes"].as_array().unwrap().iter().find(|c| c["field"] == "phone").cloned();
+	assert_eq!(phone, Some(json!({ "field": "phone", "from": null, "to": "+33140467900" })), "{:?}", events[1]);
+	assert_eq!(events[2]["changes"][0]["field"], "point");
+	assert!(events[3]["by"].as_str().unwrap().contains("dev@localhost"), "{:?}", events[3]);
+	assert_eq!(events[3]["gmail_id"], gmail.id);
+}
+
+/// A state's move is logged from and to, in the write that made it.
+#[tokio::test]
+async fn a_gbps_log_holds_its_state_moves() {
+	let (_asked, base) = places().await;
+	let db = TestDb::create().await;
+	let p = panel(&db, Some(&base)).await;
+	opened(&p).await;
+	let app = app(p, admin());
+	let mut b = Browser::default();
+	b.sign_in(&app).await;
+	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
+	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
+	let new = json!({ "name": "Café de Flore", "trade": trade["id"], "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] });
+	let (_, draft) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(new)).await;
+	let gbp = draft["id"].as_i64().unwrap();
+	call(&mut b, &app, Method::PATCH, &format!("/api/v1/gmbs/{gbp}"), Some(json!({ "gmail_id": gmail["id"] }))).await;
+	let (status, _) = call(
+		&mut b,
+		&app,
+		Method::PUT,
+		&format!("/api/v1/gmbs/{gbp}/state"),
+		Some(json!({ "state": "verifying", "place": FLORE })),
+	)
+	.await;
+	assert_eq!(status, StatusCode::OK);
+
+	let events = log(&mut b, &app, gbp).await;
+	let state = events.iter().find(|e| e["kind"] == "state").unwrap();
+	assert_eq!((&state["from"], &state["to"]), (&json!("draft"), &json!("verifying")));
+	let moved = events.iter().find(|e| e["kind"] == "gmail").unwrap();
+	assert_eq!(
+		(&moved["from"], &moved["to"], &moved["gmail_id"]),
+		(&Value::Null, &gmail["id"], &Value::Null),
+		"under none until moved"
+	);
+	let (status, only) = call(&mut b, &app, Method::GET, &format!("/api/v1/gmbs/{gbp}/log?kinds=state,added"), None).await;
+	assert_eq!(status, StatusCode::OK);
+	assert_eq!(
+		only["events"].as_array().unwrap().iter().map(|e| e["kind"].clone()).collect::<Vec<_>>(),
+		[json!("state"), json!("added")]
+	);
+	let (status, _) = call(&mut b, &app, Method::GET, &format!("/api/v1/gmbs/{gbp}/log?kinds=nope"), None).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+/// The log is append-only; another owner's GBP has none to read.
+#[tokio::test]
+async fn a_gbps_log_is_append_only_and_its_owners() {
+	let db = TestDb::create().await;
+	let (app, mut b, _, theirs) = beside_another(&db).await;
+	let (status, _) = call(&mut b, &app, Method::GET, &format!("/api/v1/gmbs/{theirs}/log"), None).await;
+	assert_eq!(status, StatusCode::NOT_FOUND);
+	let pool = db.store().await.pool().clone();
+	for refused in ["UPDATE gmb_events SET at = 0", "DELETE FROM gmb_events"] {
+		let err = sqlx::query(refused).execute(&pool).await.unwrap_err();
+		assert!(err.to_string().contains("append-only"), "{refused}: {err}");
+	}
 }

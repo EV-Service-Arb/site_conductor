@@ -143,6 +143,10 @@ pub struct Outline {
 #[derive(Clone, Copy, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Tab {
+	/// A GBP as Google shows it, and what the conductor knows of it.
+	Profile,
+	/// What happened to a GBP.
+	Log,
 	/// A draft's launch onto Google.
 	Launch,
 	/// The gmail's browser.

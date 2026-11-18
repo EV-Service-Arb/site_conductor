@@ -132,7 +132,12 @@ impl Panel {
 		if let Some(why) = db::gmail_blocked(&mut tx, owner, &g).await? {
 			return Ok(Err(Refused::Conflict(why)));
 		}
+		let back = db::coming_back(&mut tx, owner, Some(id), None).await?;
 		db::restore(&mut tx, Some(id), None).await?;
+		let now = Timestamp::now();
+		for b in back {
+			crate::store::gmbs::log(&mut tx, Some(b.id), b.gmail_id, Some(owner), now, &crate::store::gmbs::Event::Restored).await?;
+		}
 		tx.commit().await.wrap_err("committing a gmail's restore")?;
 		self.snapshot_due.notify_one();
 		Ok(Ok(()))
@@ -151,6 +156,7 @@ impl Panel {
 			return Ok(Err(Refused::Conflict(why)));
 		}
 		db::restore(&mut tx, None, Some(id)).await?;
+		crate::store::gmbs::log(&mut tx, Some(id), b.gmail_id, Some(owner), Timestamp::now(), &crate::store::gmbs::Event::Restored).await?;
 		tx.commit().await.wrap_err("committing a GBP's restore")?;
 		self.snapshot_due.notify_one();
 		Ok(Ok(()))

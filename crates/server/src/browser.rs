@@ -55,6 +55,7 @@ use sa_browsers::{
 use sa_core::prices::{BrowserStart, PhoneTime, Spends};
 use sa_panel::{
 	browsers::{Browsers, LIBRARY_MAX, NewBrowser, Provider, Run},
+	gmbs::Event,
 	live::{Ended, Signal},
 	session::SessionKey,
 };
@@ -351,10 +352,12 @@ async fn start_browser(
 ) -> ApiResult<NoContent> {
 	let c = connected(&state)?;
 	let launch = state.sign_in.panel.launch(&c.browsers, by, gmail, b.gmb, Timestamp::now()).await??;
+	let (_, film) = c.state(gmail).await?;
 	c.runner
 		.expect_done(Method::POST, &format!("/profiles/{gmail}/launch"), Some(&launch))
 		.await?
 		.map_err(|_| Refusal::new(Code::Conflict, "it runs for another GBP, or for the gmail alone: stop it first"))?;
+	state.sign_in.panel.log_browser(caller.user_id, gmail, b.gmb, &Event::Launched { film }).await?;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, run = launch.run, "gmail's browser up");
 	Ok(NoContent)
 }
@@ -363,10 +366,14 @@ async fn start_browser(
 async fn stop_browser(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>) -> ApiResult<NoContent> {
 	let c = connected(&state)?;
 	state.sign_in.panel.browser_of(caller.user_id, gmail).await??;
+	let (running, _) = c.state(gmail).await?;
 	c.runner
 		.expect_done(Method::POST, &format!("/profiles/{gmail}/stop"), None)
 		.await?
 		.map_err(|t| Refusal::new(Code::Conflict, t))?;
+	if let Some(r) = running {
+		state.sign_in.panel.log_browser(caller.user_id, gmail, r.gmb, &Event::Stopped).await?;
+	}
 	Ok(NoContent)
 }
 

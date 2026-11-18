@@ -166,7 +166,9 @@ impl Panel {
 		if db::fitting(&mut tx, owner, &ids, brand).await? != ids.len() {
 			return Ok(Err(Refused::Conflict("a brand is given only to GBPs of its gmail and its category".to_owned())));
 		}
+		let befores = crate::store::gmbs::of_ids(&mut tx, &ids).await?;
 		db::set_brands(&mut tx, &ids, brand).await?;
+		crate::store::gmbs::record_since(&mut tx, Some(owner), Timestamp::now(), &befores).await?;
 		tx.commit().await.wrap_err("committing GBPs' brand")?;
 		Ok(Ok(()))
 	}

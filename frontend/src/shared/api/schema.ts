@@ -1205,6 +1205,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/gmbs/{id}/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A GBP's log, newest first, a page at a time: what changed of it (each field before and after) and what was done with it, in the write that did it; and its gmails' own while it was under them. */
+        get: operations["gmb_log"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/gmbs/{id}/photos/{photo}": {
         parameters: {
             query?: never;
@@ -2335,6 +2352,12 @@ export interface components {
             /** @description Placement's trade that studies it. */
             study: string | null;
         };
+        /** @description A field of a GBP, before and after. */
+        Changed: {
+            field: components["schemas"]["Field"];
+            from: unknown;
+            to: unknown;
+        };
         /** @description A chat, whole. */
         Chat: {
             /** @description RFC 3339; the caller's own. */
@@ -2558,6 +2581,8 @@ export interface components {
         };
         /** @enum {string} */
         Feedback: "up" | "down";
+        /** @enum {string} */
+        Field: "name" | "place_id" | "address" | "phone" | "website" | "hours" | "google_primary" | "country" | "point" | "photos" | "areas" | "hidden_address" | "customers_visit" | "spots";
         /** @description One flow: `tokens` what the balance moved by, a grant's amount for `granted`. */
         Flow: {
             /** @description RFC 3339. */
@@ -2690,7 +2715,9 @@ export interface components {
             /** @description A draft's candidate spots, in order, its location the first's; none past a draft. */
             spots: components["schemas"]["Spot"][];
             state: components["schemas"]["State"];
-            /** @description Its window's tabs, in order: its state's. */
+            /** @description RFC 3339: when a Sync last wrote it. */
+            synced_at: string | null;
+            /** @description Its window's tabs, in order. */
             tabs: components["schemas"]["Tab"][];
             /**
              * Format: int64
@@ -3064,6 +3091,92 @@ export interface components {
             place_id: string;
             viewport: components["schemas"]["Viewport"];
         };
+        /** @description `GET /gmbs/{id}/log`. */
+        LogDto: {
+            /** @description Newest first. */
+            events: components["schemas"]["LoggedDto"][];
+            /**
+             * Format: int64
+             * @description `before` for the older page; `null` past the first event.
+             */
+            next: number | null;
+        };
+        /** @description A row of a GBP's log. */
+        LoggedDto: {
+            /** @description RFC 3339. */
+            at: string;
+            /** @description Who did it, by name; `null` for Google, or a run. */
+            by: string | null;
+            /**
+             * Format: int64
+             * @description The gmail it was under.
+             */
+            gmail_id: number | null;
+            /** Format: int64 */
+            id: number;
+            /** @description Its gmail's (a browser run for the gmail alone), not its own. */
+            of_gmail: boolean;
+        } & ({
+            /** @constant */
+            kind: "added";
+            state: components["schemas"]["State"];
+        } | {
+            from: components["schemas"]["State"];
+            /** @constant */
+            kind: "state";
+            to: components["schemas"]["State"];
+        } | {
+            changes: components["schemas"]["Changed"][];
+            /** @constant */
+            kind: "edited";
+        } | {
+            changes: components["schemas"]["Changed"][];
+            /** @constant */
+            kind: "synced";
+        } | {
+            /** Format: int64 */
+            from: number | null;
+            /** @constant */
+            kind: "gmail";
+            /** Format: int64 */
+            to: number | null;
+        } | {
+            /** Format: int64 */
+            from: number | null;
+            /** @constant */
+            kind: "trade";
+            /** Format: int64 */
+            to: number | null;
+        } | {
+            /** Format: int64 */
+            from: number | null;
+            /** @constant */
+            kind: "brand";
+            /** Format: int64 */
+            to: number | null;
+        } | {
+            film: string | null;
+            /** @constant */
+            kind: "film";
+        } | {
+            /** @constant */
+            kind: "switched";
+            on: boolean;
+        } | {
+            /** @constant */
+            kind: "removed";
+        } | {
+            /** @constant */
+            kind: "restored";
+        } | {
+            /** @description The launch plays a film as the camera. */
+            film: boolean;
+            /** @constant */
+            kind: "launched";
+        } | {
+            /** @constant */
+            kind: "stopped";
+        });
         /**
          * @description `GET /map`: the Maps JS key this page loads on, referrer-restricted, and its account, which the
          *     page's map loads and panoramas name.
@@ -3896,12 +4009,14 @@ export interface components {
             gmbs: number[];
         };
         /**
-         * @description - `launch`: A draft's launch onto Google.
+         * @description - `profile`: A GBP as Google shows it, and what the conductor knows of it.
+         *     - `log`: What happened to a GBP.
+         *     - `launch`: A draft's launch onto Google.
          *     - `browser`: The gmail's browser.
          *     - `connections`: A gmail's inbox and Maps key.
          * @enum {string}
          */
-        Tab: "launch" | "browser" | "connections";
+        Tab: "profile" | "log" | "launch" | "browser" | "connections";
         /** @description What an action does: a view, an operation, or a binding of the page's keymap — nothing else. */
         Target: {
             href: string;
@@ -4346,6 +4461,7 @@ export type Caller = components['schemas']['Caller'];
 export type Candidates = components['schemas']['Candidates'];
 export type Catalog = components['schemas']['Catalog'];
 export type Category = components['schemas']['Category'];
+export type Changed = components['schemas']['Changed'];
 export type Chat = components['schemas']['Chat'];
 export type ChatSummary = components['schemas']['ChatSummary'];
 export type Chats = components['schemas']['Chats'];
@@ -4370,6 +4486,7 @@ export type ExportGmb = components['schemas']['ExportGmb'];
 export type ExportKickback = components['schemas']['ExportKickback'];
 export type ExportPerson = components['schemas']['ExportPerson'];
 export type Feedback = components['schemas']['Feedback'];
+export type Field = components['schemas']['Field'];
 export type Flow = components['schemas']['Flow'];
 export type FlowKindDto = components['schemas']['FlowKindDto'];
 export type Flows = components['schemas']['Flows'];
@@ -4416,6 +4533,8 @@ export type Ledger = components['schemas']['Ledger'];
 export type LedgerEntry = components['schemas']['LedgerEntry'];
 export type LedgerKind = components['schemas']['LedgerKind'];
 export type Locality = components['schemas']['Locality'];
+export type LogDto = components['schemas']['LogDto'];
+export type LoggedDto = components['schemas']['LoggedDto'];
 export type MapConfig = components['schemas']['MapConfig'];
 export type MapOn = components['schemas']['MapOn'];
 export type MapsKey = components['schemas']['MapsKey'];
@@ -15679,6 +15798,141 @@ export interface operations {
             };
         };
     };
+    gmb_log: {
+        parameters: {
+            query?: {
+                /** @description The previous page's `next`. */
+                before?: number | null;
+                /** @description Comma-separated; none, every kind. */
+                kinds?: string | null;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /gmbs/{id}/log`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogDto"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     gmb_photo: {
         parameters: {
             query?: never;
@@ -22604,6 +22858,7 @@ export const destinationKindValues: ReadonlyArray<FlattenedDeepRequired<componen
 export const deviceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Device"]> = ["pixel_7", "galaxy_s23", "redmi_note_14"];
 export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["another_country", "bad_gateway", "bad_request", "browsers_not_connected", "conflict", "csrf", "forbidden", "internal", "no_google_category", "no_keywords", "no_study", "not_found", "too_large", "too_many", "unaffordable", "unauthenticated", "unavailable", "unstudied"];
 export const feedbackValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Feedback"]> = ["up", "down"];
+export const fieldValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Field"]> = ["name", "place_id", "address", "phone", "website", "hours", "google_primary", "country", "point", "photos", "areas", "hidden_address", "customers_visit", "spots"];
 export const flowKindDtoValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FlowKindDto"]> = ["renewal", "purchase", "set", "spend", "grant_claimed", "refund", "granted"];
 export const generalAccessValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GeneralAccess"]> = ["none", "view"];
 export const gmailRoleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GmailRole"]> = ["owner", "manager"];
@@ -22625,7 +22880,7 @@ export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schem
 export const sourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "panel", "booking", "bot"];
 export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["State"]> = ["draft", "verifying", "verified", "suspended"];
 export const stopValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Stop"]> = ["at_free", "never"];
-export const tabValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tab"]> = ["launch", "browser", "connections"];
+export const tabValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tab"]> = ["profile", "log", "launch", "browser", "connections"];
 export const vendorValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Vendor"]> = ["google"];
 export const browserCloseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BrowserClose"]> = [4401, 4404, 4409, 4410, 1000, 1001, 1003, 1007];
 export const touchPhaseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["TouchPhase"]> = ["start", "move", "end"];

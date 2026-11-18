@@ -354,6 +354,8 @@ export const VIEWS = {
           "tab": {
             "description": "The open window's tab.",
             "enum": [
+              "profile",
+              "log",
               "launch",
               "browser",
               "connections",

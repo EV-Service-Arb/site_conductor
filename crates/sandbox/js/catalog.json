@@ -14867,6 +14867,206 @@
         }
       }
     },
+    "/api/v1/gmbs/{id}/log": {
+      "get": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "A GBP's log, newest first, a page at a time: what changed of it (each field before and after) and what was done with it, in the write that did it; and its gmails' own while it was under them.",
+        "operationId": "gmb_log",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "description": "The previous page's `next`.",
+            "schema": {
+              "description": "The previous page's `next`.",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "kinds",
+            "description": "Comma-separated; none, every kind.",
+            "schema": {
+              "description": "Comma-separated; none, every kind.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`GET /gmbs/{id}/log`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      }
+    },
     "/api/v1/gmbs/{id}/photos/{photo}": {
       "get": {
         "tags": [
@@ -25393,6 +25593,169 @@
           },
           "400": {
             "description": "`invalid`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/review_archive.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/review_archive.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden`, `unclaimable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/review_archive.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/review_archive.Error"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "`timed_out`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/review_archive.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/review_archive.Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`busy`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/review_archive.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/review_archive.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/review_archive.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/review_archive.Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "busy": 429,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "invalid": 400,
+          "not_found": 404,
+          "timed_out": 408,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unclaimable": 403
+        }
+      }
+    },
+    "/api/review_archive/me/gmbs/{gmb}/events": {
+      "get": {
+        "tags": [
+          "review_archive"
+        ],
+        "summary": "What happened to the GMB's reviews and scans: reviews that appeared, went (suspended with 5 stars, else removed) or returned, appeals asked and withdrawn, failed scans of its place. Whole UTC days, newest first; `next` pages back.",
+        "operationId": "review_archive.gmb_events",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gmb",
+            "description": "The conductor's id of the member's GMB.",
+            "required": true,
+            "schema": {
+              "description": "The conductor's id of the member's GMB.",
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "description": "RFC 3339: what happened before it; absent, up to now.",
+            "schema": {
+              "description": "RFC 3339: what happened before it; absent, up to now.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What happened to a GMB's reviews and scans, newest first, in whole UTC days.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/review_archive.GmbEvents"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`, `invalid`",
             "content": {
               "application/json": {
                 "schema": {
@@ -37513,6 +37876,22 @@
           "study"
         ]
       },
+      "Changed": {
+        "description": "A field of a GBP, before and after.",
+        "type": "object",
+        "properties": {
+          "field": {
+            "$ref": "#/components/schemas/Field"
+          },
+          "from": true,
+          "to": true
+        },
+        "required": [
+          "field",
+          "from",
+          "to"
+        ]
+      },
       "Chat": {
         "description": "A chat, whole.",
         "type": "object",
@@ -38261,6 +38640,25 @@
           "down"
         ]
       },
+      "Field": {
+        "type": "string",
+        "enum": [
+          "name",
+          "place_id",
+          "address",
+          "phone",
+          "website",
+          "hours",
+          "google_primary",
+          "country",
+          "point",
+          "photos",
+          "areas",
+          "hidden_address",
+          "customers_visit",
+          "spots"
+        ]
+      },
       "Flow": {
         "description": "One flow: `tokens` what the balance moved by, a grant's amount for `granted`.",
         "type": "object",
@@ -38642,8 +39040,15 @@
           "state": {
             "$ref": "#/components/schemas/State"
           },
+          "synced_at": {
+            "description": "RFC 3339: when a Sync last wrote it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "tabs": {
-            "description": "Its window's tabs, in order: its state's.",
+            "description": "Its window's tabs, in order.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Tab"
@@ -38689,6 +39094,7 @@
           "hours",
           "google_primary",
           "photos",
+          "synced_at",
           "tabs",
           "readiness"
         ]
@@ -39767,6 +40173,326 @@
           "location",
           "viewport",
           "country"
+        ]
+      },
+      "LogDto": {
+        "description": "`GET /gmbs/{id}/log`.",
+        "type": "object",
+        "properties": {
+          "events": {
+            "description": "Newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoggedDto"
+            }
+          },
+          "next": {
+            "description": "`before` for the older page; `null` past the first event.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "required": [
+          "events",
+          "next"
+        ]
+      },
+      "LoggedDto": {
+        "description": "A row of a GBP's log.",
+        "type": "object",
+        "properties": {
+          "at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
+          "by": {
+            "description": "Who did it, by name; `null` for Google, or a run.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gmail_id": {
+            "description": "The gmail it was under.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "of_gmail": {
+            "description": "Its gmail's (a browser run for the gmail alone), not its own.",
+            "type": "boolean"
+          }
+        },
+        "oneOf": [
+          {
+            "description": "Created.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "added"
+              },
+              "state": {
+                "$ref": "#/components/schemas/State"
+              }
+            },
+            "required": [
+              "kind",
+              "state"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "from": {
+                "$ref": "#/components/schemas/State"
+              },
+              "kind": {
+                "type": "string",
+                "const": "state"
+              },
+              "to": {
+                "$ref": "#/components/schemas/State"
+              }
+            },
+            "required": [
+              "kind",
+              "from",
+              "to"
+            ]
+          },
+          {
+            "description": "By hand.",
+            "type": "object",
+            "properties": {
+              "changes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Changed"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "const": "edited"
+              }
+            },
+            "required": [
+              "kind",
+              "changes"
+            ]
+          },
+          {
+            "description": "Overwritten with its profile on Google; one that changed nothing too.",
+            "type": "object",
+            "properties": {
+              "changes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Changed"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "const": "synced"
+              }
+            },
+            "required": [
+              "kind",
+              "changes"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "kind": {
+                "type": "string",
+                "const": "gmail"
+              },
+              "to": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              }
+            },
+            "required": [
+              "kind",
+              "from",
+              "to"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "kind": {
+                "type": "string",
+                "const": "trade"
+              },
+              "to": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              }
+            },
+            "required": [
+              "kind",
+              "from",
+              "to"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              },
+              "kind": {
+                "type": "string",
+                "const": "brand"
+              },
+              "to": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64"
+              }
+            },
+            "required": [
+              "kind",
+              "from",
+              "to"
+            ]
+          },
+          {
+            "description": "verif_vid's film, set or cleared.",
+            "type": "object",
+            "properties": {
+              "film": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "film"
+              }
+            },
+            "required": [
+              "kind",
+              "film"
+            ]
+          },
+          {
+            "description": "Its owner's switch.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "switched"
+              },
+              "on": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "on"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "removed"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "restored"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Its gmail's browser launched: at its point, or for the gmail alone (then each of its GBPs').",
+            "type": "object",
+            "properties": {
+              "film": {
+                "description": "The launch plays a film as the camera.",
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "const": "launched"
+              }
+            },
+            "required": [
+              "kind",
+              "film"
+            ]
+          },
+          {
+            "description": "Its gmail's browser stopped by its owner.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "stopped"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        ],
+        "required": [
+          "id",
+          "at",
+          "by",
+          "gmail_id",
+          "of_gmail"
         ]
       },
       "MapConfig": {
@@ -42230,9 +42956,11 @@
         ]
       },
       "Tab": {
-        "description": "- `launch`: A draft's launch onto Google.\n- `browser`: The gmail's browser.\n- `connections`: A gmail's inbox and Maps key.",
+        "description": "- `profile`: A GBP as Google shows it, and what the conductor knows of it.\n- `log`: What happened to a GBP.\n- `launch`: A draft's launch onto Google.\n- `browser`: The gmail's browser.\n- `connections`: A gmail's inbox and Maps key.",
         "type": "string",
         "enum": [
+          "profile",
+          "log",
           "launch",
           "browser",
           "connections"
@@ -43516,6 +44244,177 @@
           "gmbs"
         ]
       },
+      "review_archive.GmbEvent": {
+        "description": "One thing that happened, when.",
+        "type": "object",
+        "properties": {
+          "at": {
+            "description": "When.",
+            "type": "string"
+          }
+        },
+        "oneOf": [
+          {
+            "description": "A review was listed for the first time.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "appeared"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/review_archive.ReviewRef"
+              }
+            ],
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "A 5-star review went from the listing.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "suspended"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/review_archive.ReviewRef"
+              }
+            ],
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "A review of fewer stars went from the listing.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "removed"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/review_archive.ReviewRef"
+              }
+            ],
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "A gone review was listed again.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "returned"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/review_archive.ReviewRef"
+              }
+            ],
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Its reinstatement was asked of Google.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "reinstatement_set"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/review_archive.ReviewRef"
+              }
+            ],
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "The appeal was withdrawn.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "reinstatement_cleared"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/review_archive.ReviewRef"
+              }
+            ],
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "A scan of its place failed.",
+            "type": "object",
+            "properties": {
+              "error": {
+                "description": "Why.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "scan_failed"
+              },
+              "run": {
+                "description": "The run.",
+                "type": "integer",
+                "format": "int64"
+              }
+            },
+            "required": [
+              "kind",
+              "run",
+              "error"
+            ]
+          }
+        ],
+        "required": [
+          "at"
+        ]
+      },
+      "review_archive.GmbEvents": {
+        "description": "What happened to a GMB's reviews and scans, newest first, in whole UTC days.",
+        "type": "object",
+        "properties": {
+          "events": {
+            "description": "Newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/review_archive.GmbEvent"
+            }
+          },
+          "next": {
+            "description": "`before` for the older days; none when these reach the first.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "events",
+          "next"
+        ]
+      },
       "review_archive.GmbReviews": {
         "description": "A GMB's reviews, as [`MyGmbs`] tells them.",
         "type": "object",
@@ -44445,6 +45344,38 @@
           "captured_at",
           "capture_url",
           "capture_corrupted"
+        ]
+      },
+      "review_archive.ReviewRef": {
+        "description": "The review an event is about.",
+        "type": "object",
+        "properties": {
+          "author": {
+            "description": "Unknown for a move recorded before authors were kept.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rating": {
+            "description": "Its stars.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          },
+          "review_id": {
+            "description": "Google's id.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "review_id",
+          "rating",
+          "author"
         ]
       },
       "review_archive.RunDto": {
@@ -48295,6 +49226,8 @@
             "tab": {
               "description": "The open window's tab.",
               "enum": [
+                "profile",
+                "log",
                 "launch",
                 "browser",
                 "connections",

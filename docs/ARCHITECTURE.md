@@ -535,6 +535,7 @@ PATCH  /gmbs/{id}
 PUT    /gmbs/{id}/state
 POST   /gmbs/{id}/sync
 GET    /gmbs/{id}/photos/{photo}
+GET    /gmbs/{id}/log
 DELETE /gmbs/{id}
 PUT    /gmbs/{enabled,trade,brand}
 PUT    /gmbs/{id}/spots
