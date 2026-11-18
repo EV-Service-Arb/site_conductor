@@ -149,7 +149,8 @@ jobs:
             echo "::error::Bulk-provision all repos: https://github.com/valeratrades/nix/tree/e4338bf5943d7403b949a8e079f9073987d9cd68/home/scripts/shared_github_secrets.bash"
             exit 1
           fi
-      - env:
+      - continue-on-error: true
+        env:
           GH_TOKEN: ${{ secrets.loc_gist_token }}
         if: env.BADGE_MESSAGE != ''
         name: Update badge gist
@@ -247,7 +248,8 @@ jobs:
             exit 1
           fi
           "
-      - env:
+      - continue-on-error: true
+        env:
           GH_TOKEN: ${{ secrets.loc_gist_token }}
         if: github.ref_name == github.event.repository.default_branch && matrix.rust == 'nightly'
         name: Update badge gist
