@@ -33,14 +33,15 @@ export function KitQr({ slug, gmb }: { slug: string; gmb: number }) {
   const shown = kit.data.gmbs.filter((g) => g.url !== null || g.id === gmb);
   const at = shown.findIndex((g) => g.id === gmb);
   if (at < 0) return <p className="p-5 text-sm text-ink-soft">{t(kitKeys.gmb.notIn, "Not in this kit any more.")}</p>;
-  return <Shown key={gmb} slug={slug} kit={kit.data.name} gmbs={shown} at={at} />;
+  return <Shown key={gmb} slug={slug} kit={kit.data.name} gmbs={shown} at={at} onSet={kit.reload} />;
 }
 
-function Shown({ slug, kit, gmbs, at }: { slug: string; kit: string; gmbs: readonly KitMember[]; at: number }) {
+function Shown({ slug, kit, gmbs, at, onSet }: { slug: string; kit: string; gmbs: readonly KitMember[]; at: number; onSet: () => void }) {
   const t = useT();
   const gmb = gmbs[at]!;
   const res = useResource(api, "/gmbs/{id}/kit", { params: { path: { id: gmb.id }, query: { since: sinceOf("today") } } });
-  const url = res.status === "ok" ? res.data.url : null;
+  // the kit's QR, not the GBP's own: what it opens is tagged with the kit
+  const url = gmb.url;
   const start = useRef<number | null>(null);
   const step = (by: number) => {
     const next = gmbs[(at + by + gmbs.length) % gmbs.length];
@@ -48,8 +49,8 @@ function Shown({ slug, kit, gmbs, at }: { slug: string; kit: string; gmbs: reado
   };
   useEffect(() => {
     if (url === null) return;
-    ok(api.POST("/gmbs/{id}/kit/shown", { params: { path: { id: gmb.id } } })).catch((e: unknown) => notifyFailure(e, t));
-  }, [gmb.id, url, t]);
+    ok(api.POST("/gmbs/{id}/kit/shown", { params: { path: { id: gmb.id }, query: { kit: slug } } })).catch((e: unknown) => notifyFailure(e, t));
+  }, [gmb.id, slug, url, t]);
   const lead = res.status !== "ok" || res.data.target === null ? null : res.data.target === "google" ? t(kitKeys.page.lead.google, "Google's review form") : res.data.target === "one_tap" ? t(kitKeys.page.lead.oneTap, "one tap copies a drafted review, then Google") : t(kitKeys.page.lead.drafts, "a drafted review to start from, then Google");
   return (
     <div
@@ -90,7 +91,7 @@ function Shown({ slug, kit, gmbs, at }: { slug: string; kit: string; gmbs: reado
         {res.status === "error" ? (
           <ErrorState failure={res.failure} onRetry={res.reload} />
         ) : url === null ? (
-          res.status === "ok" ? <p className="py-24 text-base text-neutral-600">{t(kitKeys.page.off, "Its kit is off: pick where its QR leads below.")}</p> : <Skeleton className="aspect-square w-full max-w-sm" />
+          res.status !== "loading" ? <p className="py-24 text-base text-neutral-600">{t(kitKeys.page.off, "Its kit is off: pick where its QR leads below.")}</p> : <Skeleton className="aspect-square w-full max-w-sm" />
         ) : (
           <>
             <Qr text={url} className="aspect-square w-full max-w-sm" />
@@ -100,7 +101,7 @@ function Shown({ slug, kit, gmbs, at }: { slug: string; kit: string; gmbs: reado
         )}
       </main>
       <footer className="flex flex-col gap-2 px-3 pt-3 pb-4">
-        {res.status === "ok" && <KitTargetSegment gmb={gmb.id} kit={res.data} onSet={res.reload} />}
+        {res.status === "ok" && <KitTargetSegment gmb={gmb.id} kit={res.data} onSet={() => (res.reload(), onSet())} />}
         {url !== null && <p className="truncate px-1 font-mono text-xs text-ink-soft">{url}</p>}
       </footer>
     </div>

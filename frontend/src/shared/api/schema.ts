@@ -1179,7 +1179,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** The operator showed the GBP's QR: the funnel's `shown`. */
+        /**
+         * The operator showed the GBP's QR: the tally's `shown`, tagged with the kit whose page showed it.
+         * @description 404 a kit the GBP is not in.
+         */
         post: operations["kit_shown"];
         delete?: never;
         options?: never;
@@ -1377,7 +1380,7 @@ export interface paths {
          */
         put: operations["put_kit"];
         post?: never;
-        /** Deletes the caller's kit: only the selection goes, no draft, photo or use. */
+        /** Removes the caller's kit: its slug is free again; nothing it collected goes, its events keep its tag. */
         delete: operations["delete_kit"];
         options?: never;
         head?: never;
@@ -15293,7 +15296,10 @@ export interface operations {
     };
     kit_shown: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The kit whose page shows it. */
+                kit?: string | null;
+            };
             header?: never;
             path: {
                 id: number;

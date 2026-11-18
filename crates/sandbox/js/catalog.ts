@@ -1179,7 +1179,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** The operator showed the GBP's QR: the funnel's `shown`. */
+        /**
+         * The operator showed the GBP's QR: the tally's `shown`, tagged with the kit whose page showed it.
+         * @description 404 a kit the GBP is not in.
+         */
         post: operations["kit_shown"];
         delete?: never;
         options?: never;
@@ -1377,7 +1380,7 @@ export interface paths {
          */
         put: operations["put_kit"];
         post?: never;
-        /** Deletes the caller's kit: only the selection goes, no draft, photo or use. */
+        /** Removes the caller's kit: its slug is free again; nothing it collected goes, its events keep its tag. */
         delete: operations["delete_kit"];
         options?: never;
         head?: never;
@@ -2255,6 +2258,23 @@ export interface paths {
         };
         /** The archive's tag on each of the member's GMBs, for the conductor's page. */
         get: operations["review_archive.my_gmbs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review_archive/me/gmbs/{gmb}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What happened to the GMB's reviews and scans: reviews that appeared, went (suspended with 5 stars, else removed) or returned, appeals asked and withdrawn, failed scans of its place. Whole UTC days, newest first; `next` pages back. */
+        get: operations["review_archive.gmb_events"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5577,6 +5597,46 @@ export interface components {
              */
             id: number;
         };
+        /** @description One thing that happened, when. */
+        "review_archive.GmbEvent": {
+            /** @description When. */
+            at: string;
+        } & (({
+            /** @constant */
+            kind: "appeared";
+        } & components["schemas"]["review_archive.ReviewRef"]) | ({
+            /** @constant */
+            kind: "suspended";
+        } & components["schemas"]["review_archive.ReviewRef"]) | ({
+            /** @constant */
+            kind: "removed";
+        } & components["schemas"]["review_archive.ReviewRef"]) | ({
+            /** @constant */
+            kind: "returned";
+        } & components["schemas"]["review_archive.ReviewRef"]) | ({
+            /** @constant */
+            kind: "reinstatement_set";
+        } & components["schemas"]["review_archive.ReviewRef"]) | ({
+            /** @constant */
+            kind: "reinstatement_cleared";
+        } & components["schemas"]["review_archive.ReviewRef"]) | {
+            /** @description Why. */
+            error: string;
+            /** @constant */
+            kind: "scan_failed";
+            /**
+             * Format: int64
+             * @description The run.
+             */
+            run: number;
+        });
+        /** @description What happened to a GMB's reviews and scans, newest first, in whole UTC days. */
+        "review_archive.GmbEvents": {
+            /** @description Newest first. */
+            events: components["schemas"]["review_archive.GmbEvent"][];
+            /** @description `before` for the older days; none when these reach the first. */
+            next: string | null;
+        };
         /** @description A GMB's reviews, as [`MyGmbs`] tells them. */
         "review_archive.GmbReviews": {
             /** @description An enabled track's latest finished non-ad-hoc run `failed` (a `partial` run still made a snapshot). */
@@ -5987,6 +6047,18 @@ export interface components {
             target_id: number;
             /** @description The text, as last seen. */
             text: string | null;
+        };
+        /** @description The review an event is about. */
+        "review_archive.ReviewRef": {
+            /** @description Unknown for a move recorded before authors were kept. */
+            author: string | null;
+            /**
+             * Format: uint8
+             * @description Its stars.
+             */
+            rating: number | null;
+            /** @description Google's id. */
+            review_id: string;
         };
         /** @description A run of a scan. */
         "review_archive.RunDto": {
@@ -7511,6 +7583,8 @@ export type ReviewArchiveError = components['schemas']['review_archive.Error'];
 export type ReviewArchiveErrorCode = components['schemas']['review_archive.ErrorCode'];
 export type ReviewArchiveEvent = components['schemas']['review_archive.Event'];
 export type ReviewArchiveGmailOverview = components['schemas']['review_archive.GmailOverview'];
+export type ReviewArchiveGmbEvent = components['schemas']['review_archive.GmbEvent'];
+export type ReviewArchiveGmbEvents = components['schemas']['review_archive.GmbEvents'];
 export type ReviewArchiveGmbReviews = components['schemas']['review_archive.GmbReviews'];
 export type ReviewArchiveGmbSummary = components['schemas']['review_archive.GmbSummary'];
 export type ReviewArchiveJobAccepted = components['schemas']['review_archive.JobAccepted'];
@@ -7529,6 +7603,7 @@ export type ReviewArchivePostDto = components['schemas']['review_archive.PostDto
 export type ReviewArchiveReinstatementDto = components['schemas']['review_archive.ReinstatementDto'];
 export type ReviewArchiveReviewDetail = components['schemas']['review_archive.ReviewDetail'];
 export type ReviewArchiveReviewDto = components['schemas']['review_archive.ReviewDto'];
+export type ReviewArchiveReviewRef = components['schemas']['review_archive.ReviewRef'];
 export type ReviewArchiveRunDto = components['schemas']['review_archive.RunDto'];
 export type ReviewArchiveRunStatus = components['schemas']['review_archive.RunStatus'];
 export type ReviewArchiveScanState = components['schemas']['review_archive.ScanState'];
@@ -18412,7 +18487,10 @@ export interface operations {
     };
     kit_shown: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The kit whose page shows it. */
+                kit?: string | null;
+            };
             header?: never;
             path: {
                 id: number;
@@ -26729,6 +26807,122 @@ export interface operations {
                 };
             };
             /** @description `invalid` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `forbidden`, `unclaimable` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `timed_out` */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `busy` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.Error"];
+                };
+            };
+        };
+    };
+    "review_archive.gmb_events": {
+        parameters: {
+            query?: {
+                /** @description RFC 3339: what happened before it; absent, up to now. */
+                before?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description The conductor's id of the member's GMB. */
+                gmb: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What happened to a GMB's reviews and scans, newest first, in whole UTC days. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["review_archive.GmbEvents"];
+                };
+            };
+            /** @description `bad_request`, `invalid` */
             400: {
                 headers: {
                     [name: string]: unknown;

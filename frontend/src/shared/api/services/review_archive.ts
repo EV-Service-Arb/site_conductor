@@ -132,6 +132,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/gmbs/{gmb}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What happened to the GMB's reviews and scans: reviews that appeared, went (suspended with 5 stars, else removed) or returned, appeals asked and withdrawn, failed scans of its place. Whole UTC days, newest first; `next` pages back. */
+        get: operations["gmb_events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/gmbs/{gmb}/reinstatements/{review}": {
         parameters: {
             query?: never;
@@ -611,6 +628,46 @@ export interface components {
              */
             id: number;
         };
+        /** @description One thing that happened, when. */
+        GmbEvent: {
+            /** @description When. */
+            at: string;
+        } & (({
+            /** @constant */
+            kind: "appeared";
+        } & components["schemas"]["ReviewRef"]) | ({
+            /** @constant */
+            kind: "suspended";
+        } & components["schemas"]["ReviewRef"]) | ({
+            /** @constant */
+            kind: "removed";
+        } & components["schemas"]["ReviewRef"]) | ({
+            /** @constant */
+            kind: "returned";
+        } & components["schemas"]["ReviewRef"]) | ({
+            /** @constant */
+            kind: "reinstatement_set";
+        } & components["schemas"]["ReviewRef"]) | ({
+            /** @constant */
+            kind: "reinstatement_cleared";
+        } & components["schemas"]["ReviewRef"]) | {
+            /** @description Why. */
+            error: string;
+            /** @constant */
+            kind: "scan_failed";
+            /**
+             * Format: int64
+             * @description The run.
+             */
+            run: number;
+        });
+        /** @description What happened to a GMB's reviews and scans, newest first, in whole UTC days. */
+        GmbEvents: {
+            /** @description Newest first. */
+            events: components["schemas"]["GmbEvent"][];
+            /** @description `before` for the older days; none when these reach the first. */
+            next: string | null;
+        };
         /** @description A GMB's reviews, as [`MyGmbs`] tells them. */
         GmbReviews: {
             /** @description An enabled track's latest finished non-ad-hoc run `failed` (a `partial` run still made a snapshot). */
@@ -1022,6 +1079,18 @@ export interface components {
             /** @description The text, as last seen. */
             text: string | null;
         };
+        /** @description The review an event is about. */
+        ReviewRef: {
+            /** @description Unknown for a move recorded before authors were kept. */
+            author: string | null;
+            /**
+             * Format: uint8
+             * @description Its stars.
+             */
+            rating: number | null;
+            /** @description Google's id. */
+            review_id: string;
+        };
         /** @description A run of a scan. */
         RunDto: {
             /**
@@ -1275,6 +1344,8 @@ export type Error = components['schemas']['Error'];
 export type ErrorCode = components['schemas']['ErrorCode'];
 export type Event = components['schemas']['Event'];
 export type GmailOverview = components['schemas']['GmailOverview'];
+export type GmbEvent = components['schemas']['GmbEvent'];
+export type GmbEvents = components['schemas']['GmbEvents'];
 export type GmbReviews = components['schemas']['GmbReviews'];
 export type GmbSummary = components['schemas']['GmbSummary'];
 export type JobAccepted = components['schemas']['JobAccepted'];
@@ -1293,6 +1364,7 @@ export type PostDto = components['schemas']['PostDto'];
 export type ReinstatementDto = components['schemas']['ReinstatementDto'];
 export type ReviewDetail = components['schemas']['ReviewDetail'];
 export type ReviewDto = components['schemas']['ReviewDto'];
+export type ReviewRef = components['schemas']['ReviewRef'];
 export type RunDto = components['schemas']['RunDto'];
 export type RunStatus = components['schemas']['RunStatus'];
 export type ScanState = components['schemas']['ScanState'];
@@ -2038,6 +2110,122 @@ export interface operations {
                 };
             };
             /** @description `invalid` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `forbidden`, `unclaimable` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `timed_out` */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `busy` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    gmb_events: {
+        parameters: {
+            query?: {
+                /** @description RFC 3339: what happened before it; absent, up to now. */
+                before?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description The conductor's id of the member's GMB. */
+                gmb: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What happened to a GMB's reviews and scans, newest first, in whole UTC days. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GmbEvents"];
+                };
+            };
+            /** @description `bad_request`, `invalid` */
             400: {
                 headers: {
                     [name: string]: unknown;

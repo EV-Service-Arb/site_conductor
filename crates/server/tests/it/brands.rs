@@ -82,9 +82,9 @@ async fn a_branded_gbps_drafts_carry_its_brands_photos_the_less_used_first_never
 	assert_eq!(k.event(json!({ "view": view, "saved": [k.photos[0], third] })).await, StatusCode::NO_CONTENT);
 
 	let later = Timestamp::now() + SignedDuration::from_mins(16);
-	let again = k.panel.kit_offer(k.seven, true, later).await.unwrap().unwrap();
+	let again = k.panel.kit_offer(k.seven, true, None, later).await.unwrap().unwrap();
 	assert!(again.drafts.iter().all(|d| d.photos.iter().map(|p| p.id).eq([k.photos[1]])), "only the one not saved there");
-	let elsewhere = k.panel.kit_offer(k.three, true, later).await.unwrap().unwrap();
+	let elsewhere = k.panel.kit_offer(k.three, true, None, later).await.unwrap().unwrap();
 	assert_eq!(
 		elsewhere.drafts[0].photos.iter().map(|p| p.id).collect::<Vec<_>>(),
 		[k.photos[1], k.photos[0]],

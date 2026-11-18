@@ -242,7 +242,13 @@ pub(super) async fn kit(db: &TestDb) -> Kit {
 	];
 	let mut drafts = Vec::new();
 	for n in 1..=8 {
-		drafts.push(panel.add_draft(owner, trade, Country::FR, &format!("Draft {n}: quick and clean."), &[], now).await.unwrap().unwrap());
+		drafts.push(
+			panel
+				.add_draft(owner, trade, Country::FR, &format!("Draft {n}: quick and clean."), &[], now)
+				.await
+				.unwrap()
+				.unwrap(),
+		);
 	}
 	let app = app_with(panel.clone(), operator(), "dev@localhost", &base.parse().unwrap(), http::Limits::default());
 	let mut browser = Browser::default();
@@ -302,7 +308,7 @@ async fn the_offer_skips_what_went_there_and_what_another_view_holds_the_less_us
 	assert_eq!(k.event(json!({ "view": seven, "copied": k.drafts[0] })).await, StatusCode::NOT_FOUND, "not offered to that view");
 
 	let later = Timestamp::now() + SignedDuration::from_mins(16);
-	let lapsed: Vec<i64> = k.panel.kit_offer(k.seven, true, later).await.unwrap().unwrap().drafts.iter().map(|d| d.id).collect();
+	let lapsed: Vec<i64> = k.panel.kit_offer(k.seven, true, None, later).await.unwrap().unwrap().drafts.iter().map(|d| d.id).collect();
 	assert_eq!(lapsed, [4, 5, 6, 7, 8, 1].map(|n| k.drafts[n - 1]), "every lease lapsed; 3 went there, 1 and 2 were copied once");
 }
 
@@ -326,7 +332,7 @@ async fn a_photo_saved_on_a_gbp_drops_out_there_and_its_draft_stays() {
 	);
 
 	let later = Timestamp::now() + SignedDuration::from_mins(16);
-	let again = k.panel.kit_offer(k.seven, true, later).await.unwrap().unwrap();
+	let again = k.panel.kit_offer(k.seven, true, None, later).await.unwrap().unwrap();
 	let fourth = again.drafts.iter().find(|d| d.id == fourth).expect("its draft is still offered");
 	assert_eq!(fourth.photos.iter().map(|p| p.id).collect::<Vec<_>>(), [k.photos[1]], "the saved photo dropped out there");
 	let three = k.panel.kit(k.owner, k.three, Timestamp::UNIX_EPOCH, later).await.unwrap().unwrap();
@@ -490,11 +496,62 @@ async fn what_a_brands_photo_shows_rides_to_the_landing() {
 	let db = TestDb::create().await;
 	let mut k = kit(&db).await;
 	let (status, photos) = k
-		.call(Method::PATCH, &format!("/api/v1/brands/{}/photos/{}.jpg", k.brand, k.photos[0]), Some(json!({ "shows": "  The new tap  " })))
+		.call(
+			Method::PATCH,
+			&format!("/api/v1/brands/{}/photos/{}.jpg", k.brand, k.photos[0]),
+			Some(json!({ "shows": "  The new tap  " })),
+		)
 		.await;
 	assert_eq!(status, StatusCode::OK, "{photos}");
 	let (_, body) = k.get("/api/kit/v1/offer?brand=aquafix&slug=lyon-7&qr=1").await;
 	let o: Value = serde_json::from_slice(&body).unwrap();
-	let shown: Vec<&Value> = o["drafts"].as_array().unwrap().iter().flat_map(|d| d["photos"].as_array().unwrap()).filter(|p| p["id"] == k.photos[0]).map(|p| &p["shows"]).collect();
-	assert!(!shown.is_empty() && shown.iter().all(|s| *s == "The new tap"), "{o}");
+	let shown: Vec<&Value> = o["drafts"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.flat_map(|d| d["photos"].as_array().unwrap())
+		.filter(|p| p["id"] == k.photos[0])
+		.map(|p| &p["shows"])
+		.collect();
+	assert!(!shown.is_empty(), "{o}");
+	assert!(shown.iter().all(|s| *s == "The new tap"), "{o}");
+}
+
+#[tokio::test]
+async fn a_kits_qr_and_shows_tag_what_they_bring_with_it_and_its_removal_keeps_them() {
+	let db = TestDb::create().await;
+	let mut k = kit(&db).await;
+	let put = json!({ "name": "Lyon east", "area": null, "gmbs": [k.seven] });
+	let (status, _) = k.call(Method::PUT, "/api/v1/kits/lyon-east", Some(put.clone())).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	let (_, kit) = k.call(Method::GET, "/api/v1/kits/lyon-east?since=0", None).await;
+	let url = kit["gmbs"][0]["url"].as_str().unwrap().to_owned();
+	let id: i64 = url.split("&kit=").nth(1).expect("a kit's QR carries it").parse().unwrap();
+
+	let (status, _) = k.call(Method::POST, &format!("/api/v1/gmbs/{}/kit/shown?kit=lyon-east", k.seven), None).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	let (status, _) = k.call(Method::POST, &format!("/api/v1/gmbs/{}/kit/shown?kit=lyon-east", k.three), None).await;
+	assert_eq!(status, StatusCode::NOT_FOUND, "Lyon 3 is not in it");
+	let (status, _) = k.get(&format!("/api/kit/v1/offer?brand=aquafix&slug=lyon-7&qr=1&kit={}", id + 100)).await;
+	assert_eq!(status, StatusCode::NOT_FOUND, "no such kit");
+	let (status, body) = k.get(&format!("/api/kit/v1/offer?brand=aquafix&slug=lyon-7&qr=1&kit={id}")).await;
+	assert_eq!(status, StatusCode::OK);
+	let o: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(k.event(json!({ "view": o["view"], "copied": o["drafts"][0]["id"] })).await, StatusCode::NO_CONTENT);
+
+	let (status, _) = k.call(Method::DELETE, "/api/v1/kits/lyon-east", None).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	let (status, _) = k.call(Method::PUT, "/api/v1/kits/lyon-east", Some(put)).await;
+	assert_eq!(status, StatusCode::NO_CONTENT, "a removed kit's slug is free");
+
+	let pool = db.pool().await;
+	let shown: Vec<Option<i64>> = sqlx::query_scalar("SELECT kit_id FROM kit_shown ORDER BY at").fetch_all(&pool).await.unwrap();
+	assert_eq!(shown, [Some(id)]);
+	let copied: Option<i64> = sqlx::query_scalar("SELECT v.kit_id FROM kit_uses u JOIN kit_views v ON v.id = u.view_id")
+		.fetch_one(&pool)
+		.await
+		.unwrap();
+	assert_eq!(copied, Some(id), "a copy is its view's kit's");
+	let removed: Option<i64> = sqlx::query_scalar("SELECT removed_at FROM kits WHERE id = $1").bind(id).fetch_one(&pool).await.unwrap();
+	assert!(removed.is_some(), "kept, removed");
 }

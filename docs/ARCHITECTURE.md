@@ -1011,6 +1011,10 @@ a review of g first seen at s (review_archive's feed) → kit_posted, decided on
 ```
 
 - **A use is the copy**, not the post: a copy never posted still keeps the draft off g.
+- **An event is stored once, tagged with the kit it came from**: a QR shown from a kit's page, a
+  page opened from a kit's QR (`<page>?qr&kit=<id>`); a copy, a save and a review matched to a copy
+  through their view. A kit is removed, never deleted, so its tags keep pointing at it; its slug is
+  free again.
 - **A tally** is per GBP, since the period the client sends (`since`, its local midnight for a
   day) or since it joined the kit, the later; a kit's is its GBPs' summed, so a GBP in two counts
   in both.
