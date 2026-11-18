@@ -171,8 +171,10 @@ const OWN: [Path; 15] = [
 	},
 ];
 
-/// Hop-by-hop headers (RFC 9110 §7.6.1) and what only the panel may say: never passed on.
-pub(crate) const DROPPED_UP: [&str; 11] = [
+/// Hop-by-hop headers (RFC 9110 §7.6.1) and what only the panel may say: never passed on. Dates are
+/// dropped both ways: a service's Nix-store files all date from 1970, so revalidating by date pins a
+/// browser to the first release it loaded; an ETag still revalidates.
+pub(crate) const DROPPED_UP: [&str; 13] = [
 	"connection",
 	"keep-alive",
 	"proxy-connection",
@@ -184,9 +186,13 @@ pub(crate) const DROPPED_UP: [&str; 11] = [
 	sa_auth::HEADER,
 	cookies::CSRF_HEADER,
 	crate::grafana::VIEWER_HEADER,
+	"if-modified-since",
+	"if-unmodified-since",
 ];
 
-pub(crate) const DROPPED_DOWN: [&str; 8] = ["connection", "keep-alive", "proxy-connection", "te", "trailer", "transfer-encoding", "upgrade", "set-cookie"];
+pub(crate) const DROPPED_DOWN: [&str; 9] = [
+	"connection", "keep-alive", "proxy-connection", "te", "trailer", "transfer-encoding", "upgrade", "set-cookie", "last-modified",
+];
 
 /// How long a call of the conductor's own to a service may take.
 pub(crate) const SITES_TIMEOUT: Duration = Duration::from_secs(10);
