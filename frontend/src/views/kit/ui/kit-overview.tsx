@@ -62,7 +62,7 @@ function Desk({ kit, go }: { kit: Kit; go: (at: KitAt) => void }) {
   const button = useButtonSize();
   const name = new Map(kit.gmbs.map((g) => [g.id, g.name]));
   return (
-    <div className="flex flex-col gap-5 p-5">
+    <div className="@container flex flex-col gap-5 p-5">
       <Header kit={kit} />
       <Tally tally={kit.tally} className="rounded-lg border border-border p-4" />
       <section className="flex flex-col gap-1">
@@ -71,7 +71,8 @@ function Desk({ kit, go }: { kit: Kit; go: (at: KitAt) => void }) {
           <span className="flex-1" />
           <span className={HINT}>{t(kitKeys.gbps.hint, "a row opens it · q in it shows its QR")}</span>
         </h3>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-xl text-sm">
           <thead className="text-xs text-ink-soft">
             <tr className="[&>th]:px-2 [&>th]:py-1 [&>th]:text-right [&>th]:font-normal">
               <th className="!text-left">{t(kitKeys.gbps.name, "GBP")}</th>
@@ -108,6 +109,7 @@ function Desk({ kit, go }: { kit: Kit; go: (at: KitAt) => void }) {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
       {kit.pools.length > 0 && (
         <section className="flex flex-col gap-2">
@@ -115,7 +117,7 @@ function Desk({ kit, go }: { kit: Kit; go: (at: KitAt) => void }) {
             {t(kitKeys.pools, "Pools")}
             <span className={HINT}>{t(kitKeys.pools.hint, "what the GBPs draw from · each draft and photo once per GBP")}</span>
           </h3>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
             {kit.pools.map((p) => (
               <button key={`${p.trade}.${p.country}`} type="button" onClick={() => go({ kit: kit.slug, pool: `${p.trade}.${p.country}` })} className="flex flex-col gap-1 rounded-lg border border-border p-3 text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring">
                 <span className="flex items-baseline gap-2">

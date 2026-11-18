@@ -3,7 +3,7 @@
 import { useResource } from "@evinvest/api/react";
 import { Button, ConfirmDialog, Input, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
 import { Check, Map as MapIcon, Pencil, Search, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { AreaDraw, CategoryChip, floatKit, isSlug, kit as kitKeys, move, slugOf, useGmails, useOutline, useSelection, windowKeys } from "@/entities/gmb";
 import { Refused, api, ok } from "@/shared/api";
@@ -66,6 +66,9 @@ function Editor({ map, slug, name0, area0, gmbs0, title }: { map: google.maps.Ma
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
   const [inArea, setInArea] = useState<AreaGmbs | null>(null);
+  // a source picked brings its GBPs in checked, Suspended ones left out; unchecking is by hand
+  const onArea = useCallback((read: AreaGmbs) => setInArea((was) => (was?.area.slug === read.area.slug && was.gmbs.length === read.gmbs.length ? was : read)), []);
+  const [taken, setTaken] = useState<string | null>(null);
   const read = inArea !== null && inArea.area.slug === area ? inArea : null;
   const circle = read?.area ?? null;
   useOutline(map, drawing ? null : circle, 0);
@@ -82,6 +85,7 @@ function Editor({ map, slug, name0, area0, gmbs0, title }: { map: google.maps.Ma
           : own.filter((g) => `${g.name} ${g.address ?? ""}`.toLowerCase().includes(find.trim().toLowerCase())).slice(0, 20);
   const listed = [...[...chosen].flatMap((id) => byId.get(id) ?? []), ...offered.filter((g) => !chosen.has(g.id))];
   const finalSlug = slugTyped ?? (slug !== "" ? slug : slugOf(name));
+  const take = (ids: readonly number[]) => setChosen((s) => new Set([...s, ...ids.filter((id) => byId.get(id)?.state !== "suspended")]));
   const toggle = (id: number) => setChosen((s) => (s.has(id) ? new Set([...s].filter((x) => x !== id)) : new Set([...s, id])));
   const save = async () => {
     setBusy(true);
@@ -95,6 +99,11 @@ function Editor({ map, slug, name0, area0, gmbs0, title }: { map: google.maps.Ma
       setBusy(false);
     }
   };
+  const offeredKey = `${source}:${offered.map((g) => g.id).join(",")}`;
+  if (source !== "hand" && offered.length > 0 && taken !== offeredKey) {
+    setTaken(offeredKey);
+    take(offered.map((g) => g.id));
+  }
   const waiting = [...chosen].flatMap((id) => byId.get(id) ?? []).filter((g) => g.state !== "verified");
   return (
     <div className="pointer-events-none absolute inset-4 flex items-start justify-end">
@@ -143,7 +152,7 @@ function Editor({ map, slug, name0, area0, gmbs0, title }: { map: google.maps.Ma
                   </Button>
                 </div>
               ))}
-            {area !== null && <InArea slug={area} onRead={setInArea} />}
+            {area !== null && <InArea slug={area} onRead={onArea} />}
             {source === "area" && read !== null && <p className="text-xs text-ink-soft">{t(kitKeys.edit.inArea, "{n} of your GBPs in it or next to it", { n: read.gmbs.length })}</p>}
             {source === "hand" && (
               <label className="relative">
@@ -158,15 +167,15 @@ function Editor({ map, slug, name0, area0, gmbs0, title }: { map: google.maps.Ma
                 const n = near.get(g.id);
                 const waits = WAITS[g.state];
                 return (
-                  <li key={g.id}>
-                    <button type="button" aria-pressed={on} onClick={() => toggle(g.id)} className={cn("flex w-full items-center gap-3 px-3 py-2 text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring", g.state === "suspended" && !on && "opacity-50")}>
+                  <li key={g.id} className={cn("flex items-center gap-3 pr-3 hover:bg-hover", g.state === "suspended" && !on && "opacity-50")}>
+                    <button type="button" aria-pressed={on} onClick={() => toggle(g.id)} className="flex min-w-0 flex-1 items-center gap-3 py-2 pl-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <span className={cn("flex size-4 shrink-0 items-center justify-center rounded border", on ? "border-ink bg-ink text-background" : "border-border")}>{on && <Check aria-hidden className="size-3" />}</span>
                       <span className="flex min-w-0 flex-1 flex-col">
                         <span className="truncate text-sm text-ink">{g.name}</span>
                         <span className={cn("truncate text-xs", waits ? "text-accent-warn" : "text-ink-soft")}>{waits ? waits(t) : n ? (n.inside ? t(kitKeys.edit.inIt, "in it") : t(kitKeys.edit.nextTo, "next to it · {d}", { d: formatDistance(n.distance_m, locale) })) : g.address}</span>
                       </span>
-                      <CategoryChip gmb={g} />
                     </button>
+                    <CategoryChip gmb={g} />
                   </li>
                 );
               })}

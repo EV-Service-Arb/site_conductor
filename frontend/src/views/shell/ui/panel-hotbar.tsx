@@ -43,7 +43,7 @@ export function PanelHotbar() {
   const toggleBase = () => setBase(satellite ? "schematic" : "satellite");
   useBinding({ on: { key: "p" }, id: "places", run: { label: t(hotbar.places, "Google's places"), run: onMap ? togglePlaces : null } });
   useBinding({ on: { key: "b" }, id: "base", run: { label: t(hotbar.base, "Satellite"), run: onMap ? toggleBase : null } });
-  useBinding({ on: { key: "k" }, id: "kits", run: { label: t(hotbar.kits, "Review kits"), run: () => openKit("") } });
+  useBinding({ on: { key: "k" }, id: "kit-list", run: { label: t(hotbar.kits, "Review kits"), run: () => openKit("") } });
   const kitActions: HotbarAction[] = kits.status === "ok" ? kits.data.kits.map((k) => ({ id: `kit:${k.slug}`, label: k.name, icon: QrCode, pressed: kitOpen === k.slug, onSelect: () => openKit(k.slug) })) : [];
   const actions: HotbarAction[] = [
     ...(onMap
@@ -53,7 +53,7 @@ export function PanelHotbar() {
           { id: "places", label: t(hotbar.places, "Google's places"), icon: MapPin, binding: "places", pressed: places, onSelect: togglePlaces },
         ]
       : []),
-    { id: "kits", label: t(hotbar.kits, "Review kits"), icon: QrCode, binding: "kits", pressed: kitOpen === "", onSelect: () => openKit("") },
+    { id: "kit-list", label: t(hotbar.kits, "Review kits"), icon: QrCode, binding: "kit-list", pressed: kitOpen === "", onSelect: () => openKit("") },
     ...kitActions,
   ];
   return (

@@ -954,32 +954,45 @@ push (a change, a page, 60 s)
 
 The operator shows a GBP's QR on their phone; the reviewer scans it and lands on the GBP's page on
 its landing, which offers drafts to copy into Google's form (what that form takes, per OS:
-docs/review_kit.typ). Drafts and photos are a category's: its owner's, per trade and country.
+docs/review_kit.typ). Drafts and photos are a category's: its owner's, per trade and country. A
+**kit** is an owner's named selection of their GBPs (`kits`, `kit_members`): it owns no content,
+only which GBPs and since when each; its area is a reference, never its membership.
 
 ```text
-operator phone (conductor, signed in)          reviewer phone (landing, public)
-/<area>/ ──▶ a GBP ──▶ QR ──────────scan──────▶ <site key origin>/avis/<slug>?qr
+operator (conductor, signed in)                reviewer phone (landing, public)
+/kit/<slug>/<gbp>/qr ──▶ QR ───────scan──────▶ <site key origin>/avis/<slug>?qr
    │ POST /gmbs/{id}/kit/shown                     │ the landing's route handlers, HMAC (its site key)
    ▼                                               ▼
 conductor /api/v1 (session)                conductor /api/kit/v1 (in-cluster, as ingest)
-  drafts, photos, target, areas              offer: a view, ≤ 6 drafts leased to it
+  kits, drafts, photos, target, areas        offer: a view, ≤ 6 drafts leased to it
                                              copied / saved → a use
               └──────────── kit_* tables ─────────────┘
 conductor ── GET /api/conductor/places (Conductor), kept 60 s ──▶ sites: GBP ↔ (brand, slug)
+conductor ── GET /api/conductor/reviews (Conductor), followed ──▶ review_archive: reviews seen, gone, back
 ```
 
 ```text
 offer, per view of GBP g:
-  the drafts of g's category, not removed
+  the drafts of g's category, not removed, in g's places (none tagged, or an area holding g's point)
     − copied on g                 − offered to another view of g whose 15-min lease runs
   order: copies ↑, then saves of its photos not saved on g ↑, then the oldest
-  take 6 (one_tap: 1), lease them to this view; each its photos not saved on g, saves ↑
+  take 6 (one_tap: 1), lease them to this view; each its photos in its order, in g's places, not saved on g
   none left: the view is answered as `google`
 copy tap      → a use (draft, g), once     the reviewer's tap, before Google's form opens
 photos saved  → a use (photo, g), once
 ```
 
+```text
+a review of g first seen at s (review_archive's feed) → kit_posted, decided once:
+  the oldest copy (draft d on g at t) not matched yet, t ≤ s ≤ t + 14 d,
+  carrying ≥ ½ of d's words (≥ 3 letters, folded)  → on Google from d; else a review not from drafts
+  after: only its gone_at follows the feed
+```
+
 - **A use is the copy**, not the post: a copy never posted still keeps the draft off g.
+- **A tally** is per GBP, since the period the client sends (`since`, its local midnight for a
+  day) or since it joined the kit, the later; a kit's is its GBPs' summed, so a GBP in two counts
+  in both.
 - **The target**: `google` (no draft, the page redirects), `drafts`, `one_tap`; none is the kit
   off. A GBP with no landing page has only `google`, and its QR is Google's review link itself
   (Places' `writeAReviewUri`, asked when the target is set).
@@ -989,11 +1002,10 @@ photos saved  → a use (photo, g), once
   must hold the place's brand. A view's photos are fetched through the landing, same-origin, so a
   download works.
 - **Photos** are re-encoded on the way in (JPEG, ≤ 2048 px, upright, no EXIF): what a reviewer
-  saves carries nothing of where it was taken.
+  saves carries nothing of where it was taken; what one shows is its alt and caption there.
 - **Areas** are geography, everyone's, and carry their country (ISO 3166-1 alpha-2, Places'): a circle
-  around a centre, and the locality it was drawn from, if any, an outline to see it by. `/<slug>/` is the kit's page when the slug is
-  an area's; a slug never takes a path of the conductor's own (the front end's directories, the
-  reserved and forwarded prefixes).
+  around a centre, and the locality it was drawn from, if any, an outline to see it by. A kit is at
+  `/kit/<slug>`, its slug the owner's, never `new`.
 
 ## Alerts
 

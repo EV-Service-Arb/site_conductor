@@ -41,7 +41,7 @@ export function KitPool({ trade, country, members = [] }: { trade: number; count
   const cat = { trade, country, reload: pool.reload };
   const places = areas.status === "ok" ? areas.data.areas.filter((a) => a.country === country) : [];
   return (
-    <div className="flex flex-col">
+    <div className="@container flex flex-col">
       <nav role="tablist" className="flex gap-1 border-b border-border px-5">
         {(["drafts", "photos"] as const).map((k) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={cn("-mb-px border-b-2 px-3 py-2 text-sm outline-none", tab === k ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink")}>
@@ -93,13 +93,13 @@ function Drafts({ pool, cat, places, went, of }: { pool: Pool; cat: Cat; places:
     filter === null ? true : filter === "untagged" ? d.keywords.length === 0 && d.places.length === 0 : "keyword" in filter ? d.keywords.includes(filter.keyword) : d.places.includes(filter.place),
   );
   const chip = (on: boolean, label: string, pick: () => void, place = false) => (
-    <button key={label} type="button" aria-pressed={on} onClick={pick} className={cn("rounded px-2 py-0.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring", on ? "bg-ink text-background" : place ? "bg-accent-warn/15 text-accent-warn" : "bg-hover text-ink-soft hover:text-ink")}>
+    <button key={label} type="button" aria-pressed={on} onClick={pick} className={cn("rounded px-2 whitespace-nowrap py-0.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring", on ? "bg-ink text-background" : place ? "bg-accent-warn/15 text-accent-warn" : "bg-hover text-ink-soft hover:text-ink")}>
       {label}
     </button>
   );
   const editing = open === "new" ? null : pool.drafts.find((d) => d.id === open);
   return (
-    <div className="flex min-h-96 flex-col md:flex-row">
+    <div className="flex min-h-96 flex-col @3xl:flex-row">
       <section className="flex min-w-0 flex-1 flex-col gap-2 p-5">
         <div className="flex flex-wrap gap-1">
           {chip(filter === null, t(kitKeys.pool.all, "All {n}", { n: pool.drafts.length }), () => setFilter(null))}
@@ -148,7 +148,7 @@ function Drafts({ pool, cat, places, went, of }: { pool: Pool; cat: Cat; places:
           {t(kitKeys.drafts.add, "Add a draft")}
         </Button>
       </section>
-      <aside className="border-t border-border p-5 md:w-88 md:shrink-0 md:border-t-0 md:border-l">
+      <aside className="border-t border-border p-5 @3xl:w-88 @3xl:shrink-0 @3xl:border-t-0 @3xl:border-l">
         {open === null ? (
           <p className="text-sm text-ink-soft">{t(kitKeys.pool.pick, "Pick a draft to edit it, or add one.")}</p>
         ) : (
@@ -261,7 +261,7 @@ function Photos({ pool, cat, places, went, members }: { pool: Pool; cat: Cat; pl
   const photo = pool.photos.find((p) => p.id === open);
   const silent = pool.photos.filter((p) => p.shows === null).length;
   return (
-    <div className="flex min-h-96 flex-col md:flex-row">
+    <div className="flex min-h-96 flex-col @3xl:flex-row">
       <section className="flex min-w-0 flex-1 flex-col gap-2 p-5">
         <h3 className={SECTION_HEAD}>
           {t(kitKeys.pool.leastUsed, "Least used first")}
@@ -291,7 +291,7 @@ function Photos({ pool, cat, places, went, members }: { pool: Pool; cat: Cat; pl
         </ul>
         <p className="text-xs text-ink-soft">{t(kitKeys.pool.reencoded, "Uploads are re-encoded: JPEG ≤ 2048 px, upright, no EXIF — nothing of where it was taken leaves with it.")}</p>
       </section>
-      <aside className="border-t border-border p-5 md:w-88 md:shrink-0 md:border-t-0 md:border-l">
+      <aside className="border-t border-border p-5 @3xl:w-88 @3xl:shrink-0 @3xl:border-t-0 @3xl:border-l">
         {photo === undefined ? <p className="text-sm text-ink-soft">{t(kitKeys.pool.pickPhoto, "Pick a photo: what it shows, where it goes.")}</p> : <PhotoEditor key={photo.id} cat={cat} photo={photo} pool={pool} places={places} savedOn={members.filter((m) => went.photos.get(photo.id)?.has(m.id))} onDone={() => setOpen(null)} />}
       </aside>
     </div>
