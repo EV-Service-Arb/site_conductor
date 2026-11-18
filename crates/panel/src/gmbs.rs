@@ -23,23 +23,10 @@ use crate::{
 };
 pub use crate::{
 	google_categories::GoogleCategory,
-	store::gmbs::{Category, GbpCountry, Gmail, Gmb, GmbId, Point, Spot, Trade, TradeId},
+	store::gmbs::{Category, GbpCountry, Gmail, Gmb, GmbId, GmbPhoto, Point, Spot, Trade, TradeId},
 };
 
 const MAX_SPOTS: usize = 20;
-
-/// What [`Panel::locate`] did.
-#[derive(Debug, Default, PartialEq)]
-pub struct Located {
-	/// Places given a point or a country.
-	pub located: usize,
-	/// Service-area places not placed yet: for the map to place.
-	pub no_point: Vec<String>,
-	/// For a person to set the country of.
-	pub no_country: Vec<String>,
-	/// Places Places refused, or put in a country not served, and why.
-	pub refused: Vec<(String, String)>,
-}
 
 /// A GBP that is on Google already, added under a gmail.
 #[derive(Clone, Debug)]
@@ -568,46 +555,99 @@ impl Panel {
 		Ok(Ok(moved))
 	}
 
-	/// Every GBP on Google without a point or a country of Google's, asked of Places (its cache
-	/// first: the field mask keys it, so an answer from before countries is asked again). Its
-	/// gmail's keys first; the house pays for the rotation: the operator asks, not the owner.
-	pub async fn locate(&self) -> eyre::Result<Located> {
-		let unlocated = db::unlocated(&mut *self.store.pool().acquire().await.wrap_err("a connection for the unlocated")?).await?;
-		let mut out = Located::default();
-		for (id, place_id, pointless, owner, gmail) in unlocated {
-			let payer = self.payer(owner, Some(gmail), None).await?;
-			let place = match self.google.details(&place_id, Ask::Cached, &payer).await {
-				Ok(p) => p,
-				Err(sa_places::Error::Invalid(why)) => {
-					out.refused.push((place_id, why));
-					continue;
-				}
-				Err(e) => return Err(eyre::eyre!(e).wrap_err(format!("locating {place_id}"))),
-			};
-			let country = match google_country(Some(&place)) {
-				Ok(c) => c,
-				Err(r) => {
-					out.refused.push((place_id, r.to_string()));
-					continue;
-				}
-			};
-			let mut tx = self.store.begin_write().await?;
-			match place.location {
-				Some(at) => db::set_point(&mut tx, id, at).await?,
-				None if pointless => out.no_point.push(place_id.clone()),
-				None => {}
-			}
-			match country {
-				Some(c) => db::set_country(&mut tx, id, c).await?,
-				None => out.no_country.push(place_id.clone()),
-			}
-			tx.commit().await.wrap_err("committing a GMB's point and country")?;
-			if place.location.is_some() || country.is_some() {
-				out.located += 1;
+	/// The owner's verified GBP `id` overwritten with its profile on Google, asked afresh and paid by
+	/// `by`: its name, address, phone, website, hours, primary category, country, point (none on
+	/// Google: one placed by hand kept) and photos.
+	pub async fn sync(&self, by: Spender<PlacesRequest>, id: i64) -> eyre::Result<Result<Gmb, Refused>> {
+		let owner = by.user();
+		let Some(read) = db::gmb_of(&mut *self.store.pool().acquire().await.wrap_err("a connection for a GBP")?, Some(owner), id).await? else {
+			return Ok(Err(Refused::NotFound));
+		};
+		if read.state != State::Verified {
+			return Ok(Err(Refused::Conflict(format!("GBP {id} is {}: a verified one's profile is synced", read.state))));
+		}
+		let place_id = read.place_id.clone().expect("a verified GBP is on Maps");
+		let purse = self.purse(by);
+		let payer = self.payer(owner, read.gmail_id, Some(&purse)).await?;
+		let profile = match self.google.profile(&place_id, Ask::Afresh, &payer).await {
+			Ok(p) => p,
+			Err(e) => return Ok(Err(places_error(e)?)),
+		};
+		if profile.place.place_id != place_id {
+			return Ok(Err(Refused::Conflict(format!(
+				"Google now names GBP {id}'s place {}: a place is set once",
+				profile.place.place_id
+			))));
+		}
+		let checked = (|| {
+			let named = name(profile.place.name.as_deref().ok_or_else(|| Refused::Invalid(format!("Google gives {place_id} no name")))?)?;
+			let phone = profile
+				.phone
+				.as_deref()
+				.map(sa_core::gbp::phone)
+				.transpose()
+				.map_err(|e| Refused::Invalid(format!("Google's phone for GBP {id}: {e}")))?;
+			Ok((named, phone, google_country(Some(&profile.place))?))
+		})();
+		let (named, phone, country) = match checked {
+			Ok(c) => c,
+			Err(r) => return Ok(Err(r)),
+		};
+		let google_primary = profile.primary_type.as_deref().zip(country.or(read.country.map(|c| c.code))).and_then(|(t, c)| {
+			GoogleCategory::find(c, &format!("gcid:{t}")).ok().map(|g| g.id) // a type the catalog lacks is no category of the country's
+		});
+		let mut photos = Vec::with_capacity(profile.photos.len());
+		for p in profile.photos.iter().take(10) {
+			match self.google.photo(&p.name, &payer).await {
+				Ok(bytes) => photos.push((bytes, p.author.clone())),
+				Err(e) => return Ok(Err(places_error(e)?)),
 			}
 		}
+		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		let Some(gbp) = db::gmb_of(&mut tx, Some(owner), id).await? else {
+			return Ok(Err(Refused::NotFound));
+		};
+		if gbp.state != read.state || gbp.place_id != read.place_id {
+			return Ok(Err(Refused::Conflict(format!("GBP {id} changed meanwhile: read it again"))));
+		}
+		let unique = Unique {
+			name: Some(&named),
+			phone: phone.as_deref(),
+			..Unique::default()
+		};
+		if let Some(why) = db::taken(&mut tx, unique, Some(id)).await? {
+			return Ok(Err(Refused::Conflict(why)));
+		}
+		// country first: the schema refuses a placed GBP without one
+		if let Some(c) = country {
+			db::set_country(&mut tx, id, c).await?;
+		}
+		if let Some(at) = profile.place.location {
+			db::set_point(&mut tx, id, at).await?;
+		}
+		let synced = db::Synced {
+			name: &named,
+			address: profile.place.address.as_deref(),
+			phone: phone.as_deref(),
+			website: profile.website.as_deref(),
+			hours: &profile.hours,
+			google_primary,
+			photos: &photos,
+		};
+		db::sync(&mut tx, id, &synced).await?;
+		let gbp = db::gmb_of(&mut tx, Some(owner), id).await?.expect("read in this transaction");
+		tx.commit().await.wrap_err("committing a synced GBP")?;
 		self.snapshot_due.notify_one();
-		Ok(out)
+		Ok(Ok(gbp))
+	}
+
+	/// Photo `photo` of the owner's GBP `id`, as its last Sync took it.
+	pub async fn gmb_photo(&self, owner: Uuid, id: i64, photo: i64) -> eyre::Result<Result<Vec<u8>, Refused>> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a GBP's photo")?;
+		Ok(db::photo(&mut conn, owner, id, photo).await?.ok_or(Refused::NotFound))
 	}
 
 	/// GBP `id` in `country`, while Google gives it none. `owner` is whose it must be; `None`, the

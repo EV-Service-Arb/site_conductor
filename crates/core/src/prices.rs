@@ -88,6 +88,12 @@ pub enum PlacesRequest {
 	/// Geocoding: the town a point on the map lies in, when a review kit's area is drawn.
 	#[strum(message = "Town by a point", props(meter = "google:BAC8-4E68-E261"))]
 	Geocode,
+	/// Place Details Enterprise: a place by its id with its phone, website, hours and photos, a Sync.
+	#[strum(message = "Profile (sync)", props(meter = "google:2D9A-3DE0-3766"))]
+	Profile,
+	/// Place Details Photos: one photo's bytes, a Sync's.
+	#[strum(message = "Photo (sync)", props(meter = "google:DCD1-FE97-8C71"))]
+	Photo,
 }
 
 /// What Street View on the browser's Maps key loads: Google bills each panorama opened (Dynamic

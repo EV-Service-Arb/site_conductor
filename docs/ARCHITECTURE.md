@@ -93,7 +93,7 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
                          PublishCatalog; its development stand-in (PANEL_DEV_SIGN_IN)
   src/cookies.rs         __Host- cookies, the double-submit CSRF check
   src/http.rs            the router; the /api/v1 route table and each row's gate
-  src/admin.rs           the admin operations: a site key's origin, a gmail for a person, locate, the imports
+  src/admin.rs           the admin operations: a site key's origin, a gmail for a person, the imports
   src/api.rs             GET /me, /sources
   src/connected.rs       GET /sources/sites: each site key's landing report beside sites' view
   src/access.rs          /api/v1/access/requests
@@ -532,6 +532,8 @@ POST   /gmbs
 POST   /gmails/{id}/gmbs
 PATCH  /gmbs/{id}
 PUT    /gmbs/{id}/state
+POST   /gmbs/{id}/sync
+GET    /gmbs/{id}/photos/{photo}
 DELETE /gmbs/{id}
 PUT    /gmbs/{enabled,trade}
 PUT    /gmbs/{id}/spots
@@ -588,7 +590,6 @@ GET    /admin/meters/readings               tokens:grant
 POST   /admin/gmails                        tokens:grant, fresh
 POST   /admin/imports/review-archive        tokens:grant, fresh
 POST   /admin/imports/queries-cache         sources:manage, fresh, slow
-POST   /admin/gmbs/locate                   sources:manage, fresh, slow
 GET    /assistant/chats
 POST   /assistant/chats
 GET    /assistant/chats/{id}
@@ -755,7 +756,7 @@ Places requests charge at the buy.
 other gmails' keys, free; then the Google accounts' Places keys (below) at the admin's price per
 request kind (Places' SKU), held under one lock per person from the balance read to the charge, so a
 request below the price is refused before Google is asked. A cached answer costs
-nothing. The operator's `locate` tries the gmail's keys, then the house pays.
+nothing.
 review_archive's lookups are the house's for now.
 
 **A study's pull is sold per search** (`placement.search`) the conductor buys for it, on the
@@ -935,15 +936,16 @@ push (a change, a page, 60 s)
   sites down or refusing leaves the GMBs without the link.
 - **A GBP's point** is on its row: Google's, else one the operator places on the map (a
   service-area place has none on Google, a GBP without a place none at all). Google's replaces a placed one, a
-  placed one never replaces Google's. Google's is written with the GBP from the answer that named
-  it; a GBP added without a key, or imported, has none until `POST /admin/gmbs/locate` asks for the
-  missing ones and lists those Google gives no point: an operation, so the spend is explicit and
-  an agent proposes it; run after a deploy that brings points, and after `local-stack --from-prod`.
+  placed one never replaces Google's. Google's arrives with the answer that named the GBP, or by
+  **Sync** (`POST /gmbs/{id}/sync`): its owner's, a verified GBP's only, paid, asked afresh, it
+  overwrites the name, address, phone, website, hours, primary category (`gcid:<primaryType>` the
+  catalog knows), country, point and photos (`gmb_photos`, at most 10) with Places (New)'s. A GBP
+  added without a key, or imported, has no point until synced. Categories as configured (the
+  additional ones) and the owner's own photos are the Business Profile API's, which is not asked.
 - **The review kit** is below.
 - **A GBP's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
   language table) follows the point's rule: Google's (its address), else set by hand
-  (`PUT /gmbs/{id}/country`); `locate` asks for the missing ones too and
-  lists those Google gives none.
+  (`PUT /gmbs/{id}/country`); a Sync brings Google's over one set by hand.
 
 ## Review kit
 

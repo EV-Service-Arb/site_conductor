@@ -25,6 +25,10 @@ const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
   enabled,
   location: located ? { lat: 45.76, lng: 4.83, placed: false } : null,
   spots: [],
+  website: null,
+  hours: [],
+  google_primary: null,
+  photos: [],
   readiness: null,
   tabs: ["kit"],
 });

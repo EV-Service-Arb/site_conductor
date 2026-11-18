@@ -68,6 +68,13 @@ export function placeGmb(gmb: Gmb, at: LatLng, t: T): Promise<UndoEntry> {
   return set(LOCATION, [gmb], { lat: at.lat, lng: at.lng, placed: true }, t(undo.placed, "{name} placed on the map", { name: gmb.name }), t);
 }
 
+/** A verified GBP overwritten with its profile on Google, asked afresh and paid by the caller. */
+export function syncGmb(gmb: Gmb): Promise<Gmb> {
+  return ok(api.POST("/gmbs/{id}/sync", { params: { path: { id: gmb.id } } }));
+}
+
+export const gmbPhotoSrc = (gmb: number, photo: number) => api.url("/gmbs/{id}/photos/{photo}", { path: { id: gmb, photo } }).href;
+
 /** All of `gmbs` or none: one not the caller's refuses the lot. */
 export function switchGmbs(gmbs: Gmb[], enabled: boolean, t: T): Promise<UndoEntry> {
   return set(ENABLED, gmbs, enabled, (enabled ? t(undo.on, "{n} switched on", { n: gmbs.length }) : t(undo.off, "{n} switched off", { n: gmbs.length })), t);

@@ -61,28 +61,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/gmbs/locate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Locates every GBP on Google that has no point or no country of Google's yet, through Places.
-         * @description Each place is asked of its gmail's keys first, then the shared ones, which the house pays for.
-         *     Run after a deploy that brings points or countries, and after a copy of prod. 503 when no Google
-         *     account has a Places key.
-         */
-        post: operations["locate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/admin/imports/queries-cache": {
         parameters: {
             query?: never;
@@ -1102,6 +1080,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/gmbs/{id}/photos/{photo}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A photo a GBP's last Sync took, never another under its id. */
+        get: operations["gmb_photo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/gmbs/{id}/spots": {
         parameters: {
             query?: never;
@@ -1130,6 +1125,27 @@ export interface paths {
         /** Moves a GBP to another state. 400 a move its `next` lacks. */
         put: operations["move_gmb"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gmbs/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Overwrites a verified GBP with its profile on Google, asked afresh, paid by the caller: name, address, phone, website, hours, primary category, country, point (none on Google: one placed by hand kept), photos. With no trade, it takes the caller's one trade set up there with that category.
+         * @description 409 for a GBP not verified, a name or phone another live GBP has, or a place Google now names
+         *     otherwise.
+         */
+        post: operations["sync_gmb"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3692,8 +3708,12 @@ export interface components {
              * @description `null`: a draft no gmail manages yet.
              */
             gmail_id: number | null;
+            /** @description `gcid:plumber`, when the catalog knows Google's. */
+            google_primary: string | null;
             /** @description Where its verification film is shot. */
             hidden_address: string | null;
+            /** @description A line a weekday, Monday first. */
+            hours: string[];
             /** Format: int64 */
             id: number;
             /**
@@ -3706,6 +3726,8 @@ export interface components {
             next: components["schemas"]["State"][];
             /** @description `+` and digits; one live GBP's. */
             phone: string | null;
+            /** @description In Google's order, each at `GET /gmbs/{id}/photos/{photo}`. */
+            photos: components["schemas"]["GmbPhoto"][];
             /** @description Google's place id; `null` while a draft, and maybe while verifying or suspended: off Maps. */
             place_id: string | null;
             /** @description A draft's must-haves not ready; `null` past a draft. */
@@ -3720,6 +3742,8 @@ export interface components {
              * @description Its category is this trade in its country.
              */
             trade_id: number | null;
+            /** @description Google's, from its last Sync, as `hours`, `google_primary` and `photos`. */
+            website: string | null;
         };
         /** @description Absent fields stay; `null` clears. */
         GmbEdit: {
@@ -3760,6 +3784,16 @@ export interface components {
             target: components["schemas"]["KitTarget"] | null;
             /** @description What its QR encodes; `null` while off. */
             url: string | null;
+        };
+        /** @description A photo a Sync took of a GBP's profile on Google. */
+        GmbPhoto: {
+            /** @description Google's attribution. */
+            author: string | null;
+            /**
+             * Format: int64
+             * @description Never another photo's.
+             */
+            id: number;
         };
         /** @description `GET /google-categories/{country}`. */
         GoogleCategories: {
@@ -3964,19 +3998,6 @@ export interface components {
             name: string;
             place_id: string;
             viewport: components["schemas"]["Viewport"];
-        };
-        Located: {
-            /**
-             * Format: uint
-             * @description Places given a point or a country.
-             */
-            located: number;
-            /** @description For a person to set the country of. */
-            no_country: string[];
-            /** @description Service-area places not placed yet: for the map to place. */
-            no_point: string[];
-            /** @description Places Places refused, or put in a country not served. */
-            refused: components["schemas"]["RefusedPlace"][];
         };
         /**
          * @description `GET /map`: the Maps JS key this page loads on, referrer-restricted, and its account, which the
@@ -4299,7 +4320,7 @@ export interface components {
             unit: string;
         };
         /** @enum {string} */
-        PricedItem: "places.details" | "places.search" | "places.autocomplete" | "places.geocode" | "street_view.panorama" | "map.map" | "walk.open" | "walk.reviews" | "walk.sort" | "walk.sort_retry" | "walk.step" | "phone.running" | "placement.search" | "ads.location" | "ads.keyword_ideas" | "ads.historical_metrics" | "dataforseo.keywords_for_keywords" | "dataforseo.search_volume" | "browser.gologin" | "browser.mimic" | "claude.input" | "claude.cache_write" | "claude.cache_read" | "claude.output";
+        PricedItem: "places.details" | "places.search" | "places.autocomplete" | "places.geocode" | "places.profile" | "places.photo" | "street_view.panorama" | "map.map" | "walk.open" | "walk.reviews" | "walk.sort" | "walk.sort_retry" | "walk.step" | "phone.running" | "placement.search" | "ads.location" | "ads.keyword_ideas" | "ads.historical_metrics" | "dataforseo.keywords_for_keywords" | "dataforseo.search_volume" | "browser.gologin" | "browser.mimic" | "claude.input" | "claude.cache_write" | "claude.cache_read" | "claude.output";
         /** @description Every item, in the catalog's order. */
         Prices: {
             prices: components["schemas"]["Price"][];
@@ -4384,10 +4405,6 @@ export interface components {
             missing: components["schemas"]["MustHave"][];
             /** @description Not known now: sites could not be read. */
             unknown: components["schemas"]["MustHave"][];
-        };
-        RefusedPlace: {
-            place_id: string;
-            why: string;
         };
         ReportSources: {
             experiments: components["schemas"]["SourceState"];
@@ -4510,6 +4527,10 @@ export interface components {
                 /** Format: double */
                 "places.geocode"?: number;
                 /** Format: double */
+                "places.photo"?: number;
+                /** Format: double */
+                "places.profile"?: number;
+                /** Format: double */
                 "places.search"?: number;
                 /** Format: double */
                 "street_view.panorama"?: number;
@@ -4559,6 +4580,10 @@ export interface components {
                 "places.details"?: number;
                 /** Format: double */
                 "places.geocode"?: number;
+                /** Format: double */
+                "places.photo"?: number;
+                /** Format: double */
+                "places.profile"?: number;
                 /** Format: double */
                 "places.search"?: number;
                 /** Format: double */
@@ -4873,6 +4898,10 @@ export interface components {
                 "places.details"?: number;
                 /** Format: int64 */
                 "places.geocode"?: number;
+                /** Format: int64 */
+                "places.photo"?: number;
+                /** Format: int64 */
+                "places.profile"?: number;
                 /** Format: int64 */
                 "places.search"?: number;
                 /** Format: int64 */
@@ -7014,6 +7043,7 @@ export type Gmails = components['schemas']['Gmails'];
 export type Gmb = components['schemas']['Gmb'];
 export type GmbEdit = components['schemas']['GmbEdit'];
 export type GmbKit = components['schemas']['GmbKit'];
+export type GmbPhoto = components['schemas']['GmbPhoto'];
 export type GoogleCategories = components['schemas']['GoogleCategories'];
 export type GoogleCategory = components['schemas']['GoogleCategory'];
 export type Imap = components['schemas']['Imap'];
@@ -7037,7 +7067,6 @@ export type Ledger = components['schemas']['Ledger'];
 export type LedgerEntry = components['schemas']['LedgerEntry'];
 export type LedgerKind = components['schemas']['LedgerKind'];
 export type Locality = components['schemas']['Locality'];
-export type Located = components['schemas']['Located'];
 export type MapConfig = components['schemas']['MapConfig'];
 export type MapOn = components['schemas']['MapOn'];
 export type MapsKey = components['schemas']['MapsKey'];
@@ -7083,7 +7112,6 @@ export type Question = components['schemas']['Question'];
 export type ReadInternalReads = components['schemas']['ReadInternalReads'];
 export type ReadMapOfTimestamp = components['schemas']['ReadMap_of_Timestamp'];
 export type Readiness = components['schemas']['Readiness'];
-export type RefusedPlace = components['schemas']['RefusedPlace'];
 export type ReportSources = components['schemas']['ReportSources'];
 export type ReviewArchiveExport = components['schemas']['ReviewArchiveExport'];
 export type Role = components['schemas']['Role'];
@@ -7587,133 +7615,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Gmail"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    locate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Located"];
                 };
             };
             /** @description `bad_request` */
@@ -16859,6 +16760,137 @@ export interface operations {
             };
         };
     };
+    gmb_photo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                photo: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A JPEG. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     set_spots: {
         parameters: {
             query?: never;
@@ -17007,6 +17039,136 @@ export interface operations {
                 "application/json": components["schemas"]["Advance"];
             };
         };
+        responses: {
+            /** @description A GBP of the caller's. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gmb"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    sync_gmb: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description A GBP of the caller's. */
             200: {
@@ -32007,7 +32169,7 @@ export const mustHaveValues: ReadonlyArray<FlattenedDeepRequired<components>["sc
 export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:members:act_as", "sa:own:credentials", "sa:own:payments", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
 export const onGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OnGoogle"]> = ["verifying", "verified", "suspended"];
 export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Permission"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:members:act_as", "sa:own:credentials", "sa:own:payments", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
-export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "placement.search", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic", "claude.input", "claude.cache_write", "claude.cache_read", "claude.output"];
+export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "places.profile", "places.photo", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "placement.search", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic", "claude.input", "claude.cache_write", "claude.cache_read", "claude.output"];
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
 export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "payment_received", "source_silent", "booked", "access_requested", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed"];

@@ -1,4 +1,4 @@
-export { placeGmb, setTrades, switchGmbs } from "./api/gmbs";
+export { gmbPhotoSrc, placeGmb, setTrades, switchGmbs, syncGmb } from "./api/gmbs";
 export { linkPlace } from "./api/sites";
 export { browsersUnconnected, uploadFilm } from "./api/connections";
 export { type Placed, categoryName, categoryOf } from "./model/category";

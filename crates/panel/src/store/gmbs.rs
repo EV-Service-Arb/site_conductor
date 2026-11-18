@@ -14,7 +14,8 @@ use super::{from_db, to_db};
 use crate::google_categories::GoogleCategory;
 
 const GMB: &str = "SELECT b.id, b.gmail_id, b.place_id, b.name, b.address, b.state, b.country, b.country_by IS NOT NULL AS country_by_hand, b.phone, \
-	b.trade_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, NOT EXISTS (SELECT 1 FROM gmbs_off o WHERE o.gmb_id = b.id) AS enabled, \
+	b.trade_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, b.website, b.hours, b.google_primary, \
+	(SELECT json_group_array(json_object('id', p.id, 'author', p.author)) FROM (SELECT * FROM gmb_photos p WHERE p.gmb_id = b.id ORDER BY p.n) p) AS photos, NOT EXISTS (SELECT 1 FROM gmbs_off o WHERE o.gmb_id = b.id) AS enabled, \
 	(SELECT json_group_array(json_object('lat', s.lat, 'lng', s.lng, 'label', s.label, 'note', s.note)) FROM (SELECT * FROM gmb_spots s WHERE s.gmb_id = b.id ORDER BY s.pos) s) AS spots FROM gmbs b";
 
 /// Whether the gmail's browser's last check went through.
@@ -76,6 +77,36 @@ pub struct Gmb {
 	pub location: Option<Point>,
 	/// A draft's candidate spots, its point the first; none past a draft.
 	pub spots: Vec<Spot>,
+	/// Google's, from the last Sync, as each below.
+	pub website: Option<String>,
+	/// A line a weekday, Monday first.
+	pub hours: Vec<String>,
+	/// `gcid:plumber`: Google's primary category, when the catalog knows it.
+	pub google_primary: Option<String>,
+	/// In Google's order.
+	pub photos: Vec<GmbPhoto>,
+}
+
+/// A photo a Sync took of a GBP's profile on Google.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, schemars::JsonSchema, serde::Serialize)]
+pub struct GmbPhoto {
+	/// Never another photo's.
+	pub id: i64,
+	/// Google's attribution.
+	pub author: Option<String>,
+}
+
+/// What a Sync writes over a GBP: Google's, each as it answered.
+pub struct Synced<'a> {
+	pub name: &'a str,
+	pub address: Option<&'a str>,
+	/// In [`sa_core::gbp::phone`]'s form, free ([`taken`]).
+	pub phone: Option<&'a str>,
+	pub website: Option<&'a str>,
+	pub hours: &'a [String],
+	pub google_primary: Option<&'a str>,
+	/// Each photo's bytes and author.
+	pub photos: &'a [(Vec<u8>, Option<String>)],
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, schemars::JsonSchema, serde::Serialize)]
@@ -457,16 +488,57 @@ pub async fn unplace(conn: &mut SqliteConnection, owner: Uuid, gmb_id: i64) -> e
 	Ok(Ok(()))
 }
 
-/// The live GBPs on Google without a point or a country of Google's: each id, its place, and
-/// whether it has no point.
-pub async fn unlocated(conn: &mut SqliteConnection) -> eyre::Result<Vec<(i64, String, bool, Uuid, i64)>> {
-	sqlx::query_as(
-		"SELECT id, place_id, lat IS NULL, owner, gmail_id FROM gmbs \
-		 WHERE removed_at IS NULL AND place_id IS NOT NULL AND (lat IS NULL OR country IS NULL OR country_by IS NOT NULL) ORDER BY id",
+/// GBP `id`'s profile as `s` says, its photos replaced; with no trade, it takes the one trade of
+/// its owner's set up in its country with its Google primary category, if just one is.
+pub async fn sync(conn: &mut SqliteConnection, id: i64, s: &Synced<'_>) -> eyre::Result<()> {
+	sqlx::query("UPDATE gmbs SET name = $2, address = $3, phone = $4, website = $5, hours = $6, google_primary = $7 WHERE id = $1")
+		.bind(id)
+		.bind(s.name)
+		.bind(s.address)
+		.bind(s.phone)
+		.bind(s.website)
+		.bind((!s.hours.is_empty()).then(|| serde_json::to_string(s.hours).expect("strings serialize")))
+		.bind(s.google_primary)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("syncing a GBP")?;
+	sqlx::query(
+		"UPDATE gmbs SET trade_id = (SELECT c.trade_id FROM categories c JOIN trades t ON t.id = c.trade_id \
+		 WHERE t.owner = gmbs.owner AND c.country = gmbs.country AND c.google_primary = gmbs.google_primary) \
+		 WHERE id = $1 AND trade_id IS NULL AND (SELECT count(*) FROM categories c JOIN trades t ON t.id = c.trade_id \
+		 WHERE t.owner = gmbs.owner AND c.country = gmbs.country AND c.google_primary = gmbs.google_primary) = 1",
 	)
-	.fetch_all(&mut *conn)
+	.bind(id)
+	.execute(&mut *conn)
 	.await
-	.wrap_err("listing the GMBs without a point or a country")
+	.wrap_err("giving a synced GBP its trade")?;
+	sqlx::query("DELETE FROM gmb_photos WHERE gmb_id = $1")
+		.bind(id)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("dropping a GBP's photos")?;
+	for (n, (bytes, author)) in s.photos.iter().enumerate() {
+		sqlx::query("INSERT INTO gmb_photos (gmb_id, n, bytes, author) VALUES ($1, $2, $3, $4)")
+			.bind(id)
+			.bind(i64::try_from(n).expect("a few photos"))
+			.bind(bytes)
+			.bind(author.as_deref())
+			.execute(&mut *conn)
+			.await
+			.wrap_err("adding a GBP's photo")?;
+	}
+	Ok(())
+}
+
+/// Photo `photo` of the owner's GBP `id`, not removed.
+pub async fn photo(conn: &mut SqliteConnection, owner: Uuid, id: i64, photo: i64) -> eyre::Result<Option<Vec<u8>>> {
+	sqlx::query_scalar("SELECT p.bytes FROM gmb_photos p JOIN gmbs b ON b.id = p.gmb_id WHERE p.gmb_id = $1 AND p.id = $2 AND b.owner = $3 AND b.removed_at IS NULL")
+		.bind(id)
+		.bind(photo)
+		.bind(owner)
+		.fetch_optional(&mut *conn)
+		.await
+		.wrap_err("loading a GBP's photo")
 }
 
 /// Google's country for GBP `id`, over one set by hand.
@@ -783,6 +855,10 @@ struct GmbRow {
 	lng: Option<f64>,
 	placed: bool,
 	created_at: i64,
+	website: Option<String>,
+	hours: Option<String>,
+	google_primary: Option<String>,
+	photos: String,
 	enabled: bool,
 	spots: String,
 }
@@ -831,5 +907,15 @@ fn gmb(r: GmbRow) -> eyre::Result<Gmb> {
 		enabled: r.enabled,
 		location,
 		spots: serde_json::from_str(&r.spots).wrap_err_with(|| format!("GMB {}'s spots", r.id))?,
+		website: r.website,
+		hours: r
+			.hours
+			.as_deref()
+			.map(serde_json::from_str)
+			.transpose()
+			.wrap_err_with(|| format!("GMB {}'s hours", r.id))?
+			.unwrap_or_default(),
+		google_primary: r.google_primary,
+		photos: serde_json::from_str(&r.photos).wrap_err_with(|| format!("GMB {}'s photos", r.id))?,
 	})
 }

@@ -393,7 +393,7 @@ fn jpg(file: &str) -> ApiResult<i64> {
 }
 
 /// A photo's bytes, never changed under its id.
-struct Jpeg(Vec<u8>);
+pub(crate) struct Jpeg(pub(crate) Vec<u8>);
 
 impl IntoResponse for Jpeg {
 	fn into_response(self) -> Response {

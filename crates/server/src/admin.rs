@@ -9,19 +9,18 @@ use axum::{
 	http::Method,
 	response::NoContent,
 };
-use ev_lib::api::{Body, Created, Ids, JsonSchema, Refusal};
+use ev_lib::api::{Body, Created, Ids, JsonSchema};
 use jiff::Timestamp;
 use sa_auth::{Sources, Tokens};
 use sa_core::{
 	ids::SiteOrigin,
-	prices::{PlacesRequest, Spends},
 	queries_cache::{Key, Scheme},
 };
 use sa_panel::{Panel, import::Export};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-	api::{ApiResult, Code, KeyId},
+	api::{ApiResult, KeyId},
 	gmbs::GmailDto,
 	http::{ApiRoute, FRESH, Flags, Gate},
 	signin::{Caller, Freshness},
@@ -41,7 +40,6 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 	vec![
 		ApiRoute::new(M::PUT, "/sources/{key_id}/origin", FRESH.needs(Sources::Manage), set_origin),
 		ApiRoute::new(M::POST, "/admin/gmails", FRESH.needs(Tokens::Grant), add_gmail_for),
-		ApiRoute::new(M::POST, "/admin/gmbs/locate", SLOW_FRESH.needs(Sources::Manage), locate),
 		ApiRoute::new(M::POST, "/admin/imports/review-archive", FRESH.needs(Tokens::Grant), import_review_archive).layer(big),
 		ApiRoute::new(M::POST, "/admin/imports/queries-cache", SLOW_FRESH.needs(Sources::Manage), import_queries_cache).layer(big),
 	]
@@ -80,44 +78,6 @@ async fn add_gmail_for(State(panel): State<Panel>, Extension(caller): Extension<
 	let added = panel.add_gmail(owner, &b.gmail, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, owner = %owner, gmail_id = added.id, "gmail added for a person");
 	Ok(Created(GmailDto::from(added)))
-}
-
-#[derive(JsonSchema, Serialize)]
-#[schemars(rename = "Located")]
-pub(crate) struct LocatedDto {
-	/// Places given a point or a country.
-	located: usize,
-	/// Service-area places not placed yet: for the map to place.
-	no_point: Vec<String>,
-	/// For a person to set the country of.
-	no_country: Vec<String>,
-	/// Places Places refused, or put in a country not served.
-	refused: Vec<RefusedPlace>,
-}
-
-#[derive(JsonSchema, Serialize)]
-pub(crate) struct RefusedPlace {
-	place_id: String,
-	why: String,
-}
-
-/// Locates every GBP on Google that has no point or no country of Google's yet, through Places.
-///
-/// Each place is asked of its gmail's keys first, then the shared ones, which the house pays for.
-/// Run after a deploy that brings points or countries, and after a copy of prod. 503 when no Google
-/// account has a Places key.
-async fn locate(State(panel): State<Panel>, Spends(caller, _): Spends<PlacesRequest, Caller>) -> ApiResult<Json<LocatedDto>> {
-	if !panel.accounts().iter().any(|a| a.provides.places.is_some()) {
-		return Err(Refusal::new(Code::Unavailable, "locating asks Places: no Google account has a Places key"));
-	}
-	let done = panel.locate().await?;
-	tracing::info!(user_id = %caller.user_id, located = done.located, "GBPs located");
-	Ok(Json(LocatedDto {
-		located: done.located,
-		no_point: done.no_point,
-		no_country: done.no_country,
-		refused: done.refused.into_iter().map(|(place_id, why)| RefusedPlace { place_id, why }).collect(),
-	}))
 }
 
 /// Writes review_archive's people, gmails, GMBs, tokens and kick-backs, as its

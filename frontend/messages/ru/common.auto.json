@@ -1787,6 +1787,18 @@
     "en": "{name} on or off",
     "t": "{name}: вкл. или выкл."
   },
+  "gmbs.sync": {
+    "en": "Sync from Google",
+    "t": "Синхронизировать с Google"
+  },
+  "gmbs.sync.done": {
+    "en": "{name} synced from Google",
+    "t": "{name}: данные синхронизированы с Google"
+  },
+  "gmbs.sync.noPoint": {
+    "en": "Google shows {name} at no point: set its location on the map",
+    "t": "Google не показывает точку для {name}: укажите её положение на карте"
+  },
   "gmbs.tag.overdue": {
     "en": "{n} overdue",
     "t": "просрочено: {n}"
@@ -1835,6 +1847,10 @@
     "en": "Nothing needs you",
     "t": "Ничего не требует внимания"
   },
+  "home.peek.hours": {
+    "en": "Hours",
+    "t": "Часы работы"
+  },
   "home.peek.leads": {
     "en": "{n} leads in 7 days",
     "t": "заявок за 7 дней: {n}"
@@ -1850,6 +1866,10 @@
   "home.peek.open": {
     "en": "Open",
     "t": "Открыть"
+  },
+  "home.peek.photoBy": {
+    "en": "Photo: {author}",
+    "t": "Фото: {author}"
   },
   "home.peek.rating": {
     "en": "★ {rating} ({n} reviews)",

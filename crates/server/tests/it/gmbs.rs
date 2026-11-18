@@ -1,5 +1,5 @@
-//! A GMB's point: Places asked once for it, carried by `GET /gmails`, filled in later by
-//! `locate`, placed by hand where Places has none; and the browser's map.
+//! A GMB's point: Places asked once for it, carried by `GET /gmails`, overwritten by a Sync,
+//! placed by hand where Places has none; and the browser's map.
 
 use std::sync::{Arc, Mutex};
 
@@ -36,22 +36,44 @@ const PROCOPE: &str = "ChIJprocopeprocopeproc";
 const FLORE: &str = "ChIJfloreflorefloreflo";
 /// A service-area business: Places gives it no point.
 const ASSIST: &str = "ChIJassistassistassis";
+/// A place Google has merged into Procope: it answers under Procope's id.
+const MERGED: &str = "ChIJmergedmergedmerged";
+const PHOTO: &[u8] = b"a photo of the shop";
 
-/// Places, counting what it is asked.
+/// Places, counting what it is asked: `<id>` its details, `profile <id>` its profile, `photo <ref>`
+/// a photo's link. A profile's photos are `places/<id>/photos/front` and `…/back`, each at
+/// `/img/<ref>`.
 async fn places() -> (Arc<Mutex<Vec<String>>>, String) {
-	async fn details(State(asked): State<Arc<Mutex<Vec<String>>>>, Path(id): Path<String>) -> Response {
-		asked.lock().unwrap().push(id.clone());
+	async fn details(State(asked): State<Arc<Mutex<Vec<String>>>>, Path(id): Path<String>, headers: axum::http::HeaderMap) -> Response {
+		let profile = headers["x-goog-fieldmask"].to_str().unwrap().contains("photos");
+		asked.lock().unwrap().push(if profile { format!("profile {id}") } else { id.clone() });
 		let (lat, lng) = match id.as_str() {
 			PROCOPE => (48.853, 2.3389),
 			FLORE => (48.854, 2.3326),
 			ASSIST => return Json(json!({ "id": id, "displayName": { "text": "Mold Assist" } })).into_response(),
+			MERGED => return Json(json!({ "id": PROCOPE, "displayName": { "text": "Le Procope" } })).into_response(),
 			_ => return (StatusCode::NOT_FOUND, "not found").into_response(),
 		};
-		Json(
-			json!({ "id": id, "displayName": { "text": id }, "formattedAddress": "Paris", "location": { "latitude": lat, "longitude": lng },
-			"addressComponents": [{ "shortText": "FR", "types": ["country", "political"] }] }),
-		)
-		.into_response()
+		let mut place = json!({ "id": id, "displayName": { "text": id }, "formattedAddress": "Paris", "location": { "latitude": lat, "longitude": lng },
+			"addressComponents": [{ "shortText": "FR", "types": ["country", "political"] }] });
+		if profile {
+			place["displayName"] = json!({ "text": format!("{id} on Google") });
+			place["formattedAddress"] = json!("13 Rue de l'Ancienne Comédie, 75006 Paris");
+			place["internationalPhoneNumber"] = json!(if id == PROCOPE { "+33 1 40 46 79 00" } else { "+33 1 45 48 55 26" });
+			place["websiteUri"] = json!("https://procope.example");
+			place["regularOpeningHours"] = json!({ "weekdayDescriptions": ["Monday: 9:00 AM – 5:00 PM", "Tuesday: Closed"] });
+			place["primaryType"] = json!("plumber");
+			place["photos"] = json!([
+				{ "name": format!("places/{id}/photos/front"), "authorAttributions": [{ "displayName": "Ann" }] },
+				{ "name": format!("places/{id}/photos/back") }
+			]);
+		}
+		Json(place).into_response()
+	}
+	async fn media(State(asked): State<Arc<Mutex<Vec<String>>>>, Path((_, photo)): Path<(String, String)>, headers: axum::http::HeaderMap) -> Json<Value> {
+		asked.lock().unwrap().push(format!("photo {photo}"));
+		let host = headers["host"].to_str().unwrap();
+		Json(json!({ "name": photo, "photoUri": format!("http://{host}/img/{photo}") }))
 	}
 	async fn autocomplete(State(asked): State<Arc<Mutex<Vec<String>>>>, Json(body): Json<Value>) -> Json<Value> {
 		asked.lock().unwrap().push(format!("autocomplete {}", body["input"]));
@@ -63,6 +85,8 @@ async fn places() -> (Arc<Mutex<Vec<String>>>, String) {
 	let asked = Arc::<Mutex<Vec<String>>>::default();
 	let app = Router::new()
 		.route("/v1/places/{id}", get(details))
+		.route("/v1/places/{id}/photos/{photo}/media", get(media))
+		.route("/img/{photo}", get(|| async { PHOTO }))
 		.route("/v1/places:autocomplete", axum::routing::post(autocomplete))
 		.with_state(asked.clone());
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -159,30 +183,114 @@ async fn a_gmb_is_located_when_added_and_its_place_asked_once() {
 }
 
 #[tokio::test]
-async fn locate_fills_only_the_missing_points_and_pays_for_each_once() {
+async fn a_sync_overwrites_a_verified_gbp_with_googles_profile_asked_afresh() {
 	let (asked, base) = places().await;
 	let db = TestDb::create().await;
 	let keyless = panel(&db, None).await;
 	opened(&keyless).await;
 	let owner = seen(&keyless, "dev@localhost").await;
 	let gmail = keyless.add_gmail(owner, "a@gmail.com", jiff::Timestamp::now()).await.unwrap().unwrap();
-	for place in [PROCOPE, FLORE] {
-		let gmb = add(&keyless, owner, gmail.id, place).await;
-		assert_eq!(gmb.location, None, "no key, no point");
-	}
+	let gbp = add(&keyless, owner, gmail.id, PROCOPE).await;
+	assert_eq!((gbp.location, gbp.country.map(|c| c.by_hand)), (None, Some(true)), "no key, no point, a country by hand");
 
 	let keyed = panel(&db, Some(&base)).await;
 	let app = app(keyed.clone(), admin());
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
-	assert_eq!(locate(&mut b, &app).await, located(2, &[], &[]));
-	let gbps = keyed.gmails(owner).await.unwrap().1;
-	assert!(
-		gbps.iter().all(|b| b.location.is_some() && b.country.is_some_and(|c| !c.by_hand)),
-		"Google's country over one by hand"
+	let (status, _) = call(&mut b, &app, Method::PUT, &format!("/api/v1/gmbs/{}/location", gbp.id), Some(json!({ "lat": 1.0, "lng": 1.0 }))).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	let synced = sync(&mut b, &app, gbp.id).await;
+	let fields = ["name", "address", "phone", "website", "hours", "google_primary", "country", "location"].map(|f| synced[f].clone());
+	assert_eq!(
+		fields,
+		[
+			json!(format!("{PROCOPE} on Google")),
+			json!("13 Rue de l'Ancienne Comédie, 75006 Paris"),
+			json!("+33140467900"),
+			json!("https://procope.example"),
+			json!(["Monday: 9:00 AM – 5:00 PM", "Tuesday: Closed"]),
+			json!("gcid:plumber"),
+			json!({ "code": "FR", "by_hand": false }),
+			json!({ "lat": 48.853, "lng": 2.3389, "placed": false }),
+		],
+		"Google's over the name, the country and the point by hand"
 	);
-	assert_eq!(locate(&mut b, &app).await, located(0, &[], &[]));
-	assert_eq!(asked.lock().unwrap().len(), 2, "a second run asks nothing");
+	let photos = synced["photos"].as_array().unwrap();
+	assert_eq!(photos.iter().map(|p| p["author"].clone()).collect::<Vec<_>>(), [json!("Ann"), Value::Null]);
+	let (status, _, bytes) = b
+		.send_body(&app, Method::GET, &format!("/api/v1/gmbs/{}/photos/{}", gbp.id, photos[0]["id"]), &[], true, Body::empty())
+		.await;
+	assert_eq!((status, &bytes[..]), (StatusCode::OK, PHOTO));
+
+	let again = sync(&mut b, &app, gbp.id).await;
+	assert_ne!(again["photos"][0]["id"], photos[0]["id"], "a photo synced again is another, its address served immutable");
+	let profiles = asked.lock().unwrap().iter().filter(|a| a.starts_with("profile")).count();
+	assert_eq!(profiles, 2, "each Sync asks Google afresh");
+}
+
+#[tokio::test]
+async fn a_sync_is_refused_off_verified_over_another_gbps_phone_and_for_a_place_google_renamed() {
+	let (_asked, base) = places().await;
+	let db = TestDb::create().await;
+	let keyless = panel(&db, None).await;
+	opened(&keyless).await;
+	let owner = seen(&keyless, "dev@localhost").await;
+	let gmail = keyless.add_gmail(owner, "a@gmail.com", jiff::Timestamp::now()).await.unwrap().unwrap();
+	let merged = add(&keyless, owner, gmail.id, MERGED).await;
+	let procope = add(&keyless, owner, gmail.id, PROCOPE).await;
+	let flore = add(&keyless, owner, gmail.id, FLORE).await;
+	let keyed = panel(&db, Some(&base)).await;
+	let app = app(keyed.clone(), admin());
+	let mut b = Browser::default();
+	b.sign_in(&app).await;
+	let (status, _) = call(&mut b, &app, Method::PATCH, &format!("/api/v1/gmbs/{}", flore.id), Some(json!({ "phone": "+33140467900" }))).await;
+	assert_eq!(status, StatusCode::OK);
+	let (status, _) = call(&mut b, &app, Method::PUT, &format!("/api/v1/gmbs/{}/state", flore.id), Some(json!({ "state": "suspended" }))).await;
+	assert_eq!(status, StatusCode::OK);
+
+	for (gbp, why) in [(flore.id, "suspended"), (procope.id, "Flore has its phone"), (merged.id, "Google names it Procope now")] {
+		let (status, body) = call(&mut b, &app, Method::POST, &format!("/api/v1/gmbs/{gbp}/sync"), None).await;
+		assert_eq!(status, StatusCode::CONFLICT, "{why}: {body}");
+	}
+}
+
+#[tokio::test]
+async fn a_sync_keeps_the_point_placed_by_hand_where_google_has_none() {
+	let (_asked, base) = places().await;
+	let db = TestDb::create().await;
+	let keyless = panel(&db, None).await;
+	opened(&keyless).await;
+	let owner = seen(&keyless, "dev@localhost").await;
+	let gmail = keyless.add_gmail(owner, "a@gmail.com", jiff::Timestamp::now()).await.unwrap().unwrap();
+	let assist = add(&keyless, owner, gmail.id, ASSIST).await;
+	let keyed = panel(&db, Some(&base)).await;
+	let app = app(keyed.clone(), admin());
+	let mut b = Browser::default();
+	b.sign_in(&app).await;
+	let (status, _) = call(
+		&mut b,
+		&app,
+		Method::PUT,
+		&format!("/api/v1/gmbs/{}/location", assist.id),
+		Some(json!({ "lat": 43.6, "lng": -79.65 })),
+	)
+	.await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	let synced = sync(&mut b, &app, assist.id).await;
+	assert_eq!(
+		(&synced["name"], &synced["location"], &synced["country"]),
+		(
+			&json!("Mold Assist"),
+			&json!({ "lat": 43.6, "lng": -79.65, "placed": true }),
+			&json!({ "code": "FR", "by_hand": true })
+		),
+	);
+}
+
+async fn sync(b: &mut Browser, app: &Router, gbp: i64) -> Value {
+	let (status, synced) = call(b, app, Method::POST, &format!("/api/v1/gmbs/{gbp}/sync"), None).await;
+	assert_eq!(status, StatusCode::OK, "{synced}");
+	synced
 }
 
 /// On Google already, named and put in France by hand: what Places, keyless, cannot say. Of the
@@ -201,16 +309,6 @@ async fn add(p: &Panel, owner: uuid::Uuid, gmail_id: i64, place: &str) -> Gmb {
 		trade: Some(trade),
 	};
 	p.add_gmb(Some(Spender::new(owner)), existing, jiff::Timestamp::now()).await.unwrap().unwrap()
-}
-
-fn located(n: usize, no_point: &[&str], no_country: &[&str]) -> Value {
-	json!({ "located": n, "no_point": no_point, "no_country": no_country, "refused": [] })
-}
-
-async fn locate(b: &mut Browser, app: &Router) -> Value {
-	let (status, done) = call(b, app, Method::POST, "/api/v1/admin/gmbs/locate", None).await;
-	assert_eq!(status, StatusCode::OK, "{done}");
-	done
 }
 
 async fn seen(p: &Panel, email: &str) -> uuid::Uuid {
@@ -247,7 +345,6 @@ async fn a_service_area_gmb_has_no_point_until_placed_on_the_map() {
 	)
 	.await;
 	assert_eq!((status, &assist["location"]), (StatusCode::CREATED, &Value::Null), "{assist}");
-	assert_eq!(locate(&mut b, &app).await, located(1, &[ASSIST], &[ASSIST]), "listed, and the run goes on to the next place");
 
 	let location = format!("/api/v1/gmbs/{}/location", assist["id"]);
 	let point = |gmails: &Value| gmails["gmbs"].as_array().unwrap().iter().find(|g| g["id"] == assist["id"]).unwrap()["location"].clone();
@@ -263,8 +360,7 @@ async fn a_service_area_gmb_has_no_point_until_placed_on_the_map() {
 	assert_eq!(point(&listed), Value::Null, "a point placed by hand is taken back");
 	let (status, _) = call(&mut b, &app, Method::PUT, &location, Some(json!({ "lat": 43.6, "lng": -79.65 }))).await;
 	assert_eq!(status, StatusCode::NO_CONTENT);
-	assert_eq!(locate(&mut b, &app).await, located(0, &[], &[ASSIST]), "placed, still without a country");
-	assert_eq!(*asked.lock().unwrap(), [ASSIST, FLORE], "a place is not paid for again");
+	assert_eq!(*asked.lock().unwrap(), [ASSIST], "a place is not paid for again");
 }
 
 #[tokio::test]

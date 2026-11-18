@@ -527,175 +527,6 @@
         "x-permission": "sa:admin:tokens:grant"
       }
     },
-    "/api/v1/admin/gmbs/locate": {
-      "post": {
-        "tags": [
-          "admin"
-        ],
-        "summary": "Locates every GBP on Google that has no point or no country of Google's yet, through Places.",
-        "description": "Each place is asked of its gmail's keys first, then the shared ones, which the house pays for.\nRun after a deploy that brings points or countries, and after a copy of prod. 503 when no Google\naccount has a Places key.",
-        "operationId": "locate",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Located"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`bad_request`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthenticated`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "`unaffordable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`csrf`, `forbidden`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`conflict`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "`too_large`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "`too_many`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`internal`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "`bad_gateway`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "`browsers_not_connected`, `unavailable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "x-errors": {
-          "another_country": 422,
-          "bad_gateway": 502,
-          "bad_request": 400,
-          "browsers_not_connected": 503,
-          "conflict": 409,
-          "csrf": 403,
-          "forbidden": 403,
-          "internal": 500,
-          "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
-          "not_found": 404,
-          "too_large": 413,
-          "too_many": 429,
-          "unaffordable": 402,
-          "unauthenticated": 401,
-          "unavailable": 503,
-          "unstudied": 422
-        },
-        "x-permission": "sa:admin:sources:manage",
-        "x-spends": [
-          "places.details",
-          "places.search",
-          "places.autocomplete",
-          "places.geocode"
-        ]
-      }
-    },
     "/api/v1/admin/imports/queries-cache": {
       "post": {
         "tags": [
@@ -4146,7 +3977,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -9395,7 +9228,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -10968,7 +10803,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -11162,7 +10999,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -12212,7 +12051,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -12578,6 +12419,185 @@
         "responses": {
           "204": {
             "description": "no content"
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      }
+    },
+    "/api/v1/gmbs/{id}/photos/{photo}": {
+      "get": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "A photo a GBP's last Sync took, never another under its id.",
+        "operationId": "gmb_photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "photo",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A JPEG.",
+            "content": {
+              "image/jpeg": {}
+            }
           },
           "400": {
             "description": "`bad_request`",
@@ -13090,7 +13110,191 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
+        ]
+      }
+    },
+    "/api/v1/gmbs/{id}/sync": {
+      "post": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Overwrites a verified GBP with its profile on Google, asked afresh, paid by the caller: name, address, phone, website, hours, primary category, country, point (none on Google: one placed by hand kept), photos. With no trade, it takes the caller's one trade set up there with that category.",
+        "description": "409 for a GBP not verified, a name or phone another live GBP has, or a place Google now names\notherwise.",
+        "operationId": "sync_gmb",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A GBP of the caller's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gmb"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        },
+        "x-spends": [
+          "places.details",
+          "places.search",
+          "places.autocomplete",
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -13615,7 +13819,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -13793,7 +13999,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -13982,7 +14190,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -35928,12 +36138,26 @@
             ],
             "format": "int64"
           },
+          "google_primary": {
+            "description": "`gcid:plumber`, when the catalog knows Google's.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "hidden_address": {
             "description": "Where its verification film is shot.",
             "type": [
               "string",
               "null"
             ]
+          },
+          "hours": {
+            "description": "A line a weekday, Monday first.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "id": {
             "type": "integer",
@@ -35966,6 +36190,13 @@
               "string",
               "null"
             ]
+          },
+          "photos": {
+            "description": "In Google's order, each at `GET /gmbs/{id}/photos/{photo}`.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GmbPhoto"
+            }
           },
           "place_id": {
             "description": "Google's place id; `null` while a draft, and maybe while verifying or suspended: off Maps.",
@@ -36009,6 +36240,13 @@
               "null"
             ],
             "format": "int64"
+          },
+          "website": {
+            "description": "Google's, from its last Sync, as `hours`, `google_primary` and `photos`.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -36030,6 +36268,10 @@
           "enabled",
           "location",
           "spots",
+          "website",
+          "hours",
+          "google_primary",
+          "photos",
           "tabs",
           "readiness"
         ]
@@ -36149,6 +36391,28 @@
           "page",
           "drafts",
           "funnel"
+        ]
+      },
+      "GmbPhoto": {
+        "description": "A photo a Sync took of a GBP's profile on Google.",
+        "type": "object",
+        "properties": {
+          "author": {
+            "description": "Google's attribution.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "Never another photo's.",
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "id",
+          "author"
         ]
       },
       "GoogleCategories": {
@@ -36766,44 +37030,6 @@
           "location",
           "viewport",
           "country"
-        ]
-      },
-      "Located": {
-        "type": "object",
-        "properties": {
-          "located": {
-            "description": "Places given a point or a country.",
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0
-          },
-          "no_country": {
-            "description": "For a person to set the country of.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "no_point": {
-            "description": "Service-area places not placed yet: for the map to place.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "refused": {
-            "description": "Places Places refused, or put in a country not served.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RefusedPlace"
-            }
-          }
-        },
-        "required": [
-          "located",
-          "no_point",
-          "no_country",
-          "refused"
         ]
       },
       "MapConfig": {
@@ -37774,6 +38000,8 @@
           "places.search",
           "places.autocomplete",
           "places.geocode",
+          "places.profile",
+          "places.photo",
           "street_view.panorama",
           "map.map",
           "walk.open",
@@ -38065,21 +38293,6 @@
         "required": [
           "missing",
           "unknown"
-        ]
-      },
-      "RefusedPlace": {
-        "type": "object",
-        "properties": {
-          "place_id": {
-            "type": "string"
-          },
-          "why": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "place_id",
-          "why"
         ]
       },
       "ReportSources": {
@@ -38428,6 +38641,14 @@
                 "type": "number",
                 "format": "double"
               },
+              "places.photo": {
+                "type": "number",
+                "format": "double"
+              },
+              "places.profile": {
+                "type": "number",
+                "format": "double"
+              },
               "places.search": {
                 "type": "number",
                 "format": "double"
@@ -38527,6 +38748,14 @@
                 "format": "double"
               },
               "places.geocode": {
+                "type": "number",
+                "format": "double"
+              },
+              "places.photo": {
+                "type": "number",
+                "format": "double"
+              },
+              "places.profile": {
                 "type": "number",
                 "format": "double"
               },
@@ -39404,6 +39633,14 @@
                 "format": "int64"
               },
               "places.geocode": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "places.photo": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "places.profile": {
                 "type": "integer",
                 "format": "int64"
               },

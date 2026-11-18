@@ -1,11 +1,12 @@
 "use client";
 
-import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn, useBinding } from "@evinvest/uikit";
-import { ChevronDown, CircleMinus, CirclePlus, Link2, Pencil, QrCode, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
+import { toast, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn, useBinding } from "@evinvest/uikit";
+import { ChevronDown, CircleMinus, CirclePlus, Link2, Pencil, QrCode, RefreshCw, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
-import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, openOrFocus, openKit, openTrash, readyCount, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, kit as kitKeys, trades as tradesKeys } from "@/entities/gmb";
+import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, openOrFocus, openKit, openTrash, readyCount, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, syncGmb, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, kit as kitKeys, trades as tradesKeys } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
+import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { AddGmbButton } from "@/features/add-gmb";
 import { EditGbp } from "@/features/edit-gbp";
 import { LinkPlace } from "@/features/link-gmb-place";
@@ -375,7 +376,25 @@ function GmbRow({
   const kept = useKept();
   const hovered = useOnMap((s) => s.hovered === gmb.id);
   const [dialog, setDialog] = useState<"edit" | "link" | "remove" | null>(null);
+  const held = useTokens();
+  const spend = useSpendConfirm();
   const name = gmb.name;
+  const hint = gmb.state === "verified" && gmb.location === null ? "\nHINT: run Sync" : "";
+  const prices = held.status === "ok" ? held.data.prices : null;
+  const [profilePrice, photoPrice] = [prices?.["places.profile"], prices?.["places.photo"]];
+  // up to 10 photos: Google says how many only once asked
+  const syncCost = profilePrice === undefined || photoPrice === undefined ? undefined : profilePrice + 10 * photoPrice;
+  const sync = () =>
+    void spend.ask(syncCost, async () => {
+      try {
+        const synced = await syncGmb(gmb);
+        if (synced.location === null) toast.info(t(gmbsKeys.sync.noPoint, "Google shows {name} at no point: set its location on the map", { name: synced.name }));
+        else toast(t(gmbsKeys.sync.done, "{name} synced from Google", { name: synced.name }));
+      } catch (e) {
+        notifyFailure(e, t);
+      }
+      onChanged();
+    });
   const first = gmb.tabs[0];
   const move = (selected ? t(gmbsKeys.deselect, "Leave out") : t(gmbsKeys.select, "Select"));
   const issue = issueOf(gmb, tags);
@@ -432,6 +451,12 @@ function GmbRow({
               {t(gmbsKeys.edit, "Edit…")}
             </DropdownMenuItem>
           )}
+          {gmb.state === "verified" && (
+            <DropdownMenuItem disabled={held.status !== "ok"} onClick={sync}>
+              <RefreshCw aria-hidden />
+              {t(gmbsKeys.sync, "Sync from Google")}
+            </DropdownMenuItem>
+          )}
           <PlaceButton gmb={gmb} item {...(onNavigate && { onNavigate })} />
           {linked && (
             <DropdownMenuItem onClick={() => setDialog("link")}>
@@ -446,15 +471,16 @@ function GmbRow({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {spend.dialog}
       {dialog === "edit" && <EditGbp gmb={gmb} onClose={() => setDialog(null)} onChanged={onChanged} />}
       {dialog === "link" && linked && <LinkPlace gmbId={gmb.id} linked={linked} onClose={() => setDialog(null)} onDone={onChanged} />}
       {dialog === "remove" && <RemoveDialog title={t(gmbsKeys.gmb.remove.title, "Remove {name}?", { name })} body={t(gmbsKeys.gmb.remove.body, "It goes to the trash{kept}: every service stops working on it until then; its history stays.", { kept })} remove={() => ok(api.DELETE("/gmbs/{id}", { params: { path: { id: gmb.id } } }))} onRemoved={onChanged} onClose={() => setDialog(null)} />}
       {onMap ? (
-        <button type="button" className={body} title={gmb.address ? `${name}\n${gmb.address}` : name} onClick={() => openOrFocus(gmb, peeked)}>
+        <button type="button" className={body} title={(gmb.address ? `${name}\n${gmb.address}` : name) + hint} onClick={() => openOrFocus(gmb, peeked)}>
           {label}
         </button>
       ) : first !== undefined ? (
-        <ViewLink to={{ view: "home", params: { gmb: gmb.id, tab: first } }} onClick={() => onNavigate?.()} className={body} title={name}>
+        <ViewLink to={{ view: "home", params: { gmb: gmb.id, tab: first } }} onClick={() => onNavigate?.()} className={body} title={name + hint}>
           {label}
         </ViewLink>
       ) : (
@@ -463,7 +489,7 @@ function GmbRow({
           onClick={() => onNavigate?.()}
           aria-current={current ? "page" : undefined}
           className={body}
-          title={gmb.address ? `${name}\n${gmb.address}` : name}
+          title={(gmb.address ? `${name}\n${gmb.address}` : name) + hint}
         >
           {label}
         </ViewLink>
