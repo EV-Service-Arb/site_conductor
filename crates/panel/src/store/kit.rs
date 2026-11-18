@@ -13,6 +13,8 @@ use super::{
 };
 use crate::kit::Target;
 
+const KIT: &str = "SELECT k.id, k.slug, k.name, k.area, (SELECT COUNT(*) FROM kit_members m WHERE m.kit_id = k.id) FROM kits k";
+
 /// A draft of a category, not removed, with what the offer ranks it by.
 #[derive(Clone, Debug)]
 pub struct DraftRow {
@@ -365,8 +367,6 @@ pub struct KitRow {
 	pub area: Option<String>,
 	pub members: i64,
 }
-
-const KIT: &str = "SELECT k.id, k.slug, k.name, k.area, (SELECT COUNT(*) FROM kit_members m WHERE m.kit_id = k.id) FROM kits k";
 
 pub async fn kits(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<KitRow>> {
 	let rows: Vec<(i64, String, String, Option<String>, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("{KIT} WHERE k.owner = $1 AND k.removed_at IS NULL ORDER BY k.name, k.slug")))

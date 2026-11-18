@@ -513,7 +513,8 @@ async fn what_a_brands_photo_shows_rides_to_the_landing() {
 		.filter(|p| p["id"] == k.photos[0])
 		.map(|p| &p["shows"])
 		.collect();
-	assert!(!shown.is_empty() && shown.iter().all(|s| *s == "The new tap"), "{o}");
+	assert!(!shown.is_empty(), "{o}");
+	assert!(shown.iter().all(|s| *s == "The new tap"), "{o}");
 }
 
 #[tokio::test]
