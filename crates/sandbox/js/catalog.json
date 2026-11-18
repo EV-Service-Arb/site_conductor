@@ -22939,17 +22939,6 @@
         ],
         "summary": "The archive's tag on each of the member's GMBs, for the conductor's page.",
         "operationId": "review_archive.my_gmbs",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "x-member",
-            "description": "The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own.",
-            "schema": {
-              "type": "integer"
-            },
-            "style": "simple"
-          }
-        ],
         "responses": {
           "200": {
             "description": "`GET /me/gmbs`: the archive's tag on each of the member's GMBs, for the conductor's page.",
@@ -23088,15 +23077,6 @@
         "description": "Asking again while one is open answers the open one.",
         "operationId": "review_archive.reinstate",
         "parameters": [
-          {
-            "in": "header",
-            "name": "x-member",
-            "description": "The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own.",
-            "schema": {
-              "type": "integer"
-            },
-            "style": "simple"
-          },
           {
             "in": "path",
             "name": "gmb",
@@ -23258,15 +23238,6 @@
         "operationId": "review_archive.withdraw_reinstatement",
         "parameters": [
           {
-            "in": "header",
-            "name": "x-member",
-            "description": "The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own.",
-            "schema": {
-              "type": "integer"
-            },
-            "style": "simple"
-          },
-          {
             "in": "path",
             "name": "gmb",
             "description": "The conductor's id of the member's GMB.",
@@ -23421,15 +23392,6 @@
         "summary": "Switches the GMB's track of a place on or off, or marks it a favorite; the place's target stays as it is.",
         "operationId": "review_archive.patch_track",
         "parameters": [
-          {
-            "in": "header",
-            "name": "x-member",
-            "description": "The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own.",
-            "schema": {
-              "type": "integer"
-            },
-            "style": "simple"
-          },
           {
             "in": "path",
             "name": "gmb",
@@ -23608,15 +23570,6 @@
         "operationId": "review_archive.track_board",
         "parameters": [
           {
-            "in": "header",
-            "name": "x-member",
-            "description": "The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own.",
-            "schema": {
-              "type": "integer"
-            },
-            "style": "simple"
-          },
-          {
             "in": "path",
             "name": "gmb",
             "description": "The conductor's id of the member's GMB.",
@@ -23779,15 +23732,6 @@
         "operationId": "review_archive.relink_track",
         "parameters": [
           {
-            "in": "header",
-            "name": "x-member",
-            "description": "The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own.",
-            "schema": {
-              "type": "integer"
-            },
-            "style": "simple"
-          },
-          {
             "in": "path",
             "name": "gmb",
             "description": "The conductor's id of the member's GMB.",
@@ -23949,15 +23893,6 @@
         "summary": "A tracked place's runs, newest first.",
         "operationId": "review_archive.track_runs",
         "parameters": [
-          {
-            "in": "header",
-            "name": "x-member",
-            "description": "The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own.",
-            "schema": {
-              "type": "integer"
-            },
-            "style": "simple"
-          },
           {
             "in": "path",
             "name": "gmb",
@@ -24140,15 +24075,6 @@
         "operationId": "review_archive.scan_track",
         "parameters": [
           {
-            "in": "header",
-            "name": "x-member",
-            "description": "The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own.",
-            "schema": {
-              "type": "integer"
-            },
-            "style": "simple"
-          },
-          {
             "in": "path",
             "name": "gmb",
             "description": "The conductor's id of the member's GMB.",
@@ -24316,17 +24242,6 @@
         ],
         "summary": "The member's gmails, each with its GMBs and their places as tracked, by screenshots over the last 7 days.",
         "operationId": "review_archive.my_overview",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "x-member",
-            "description": "The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own.",
-            "schema": {
-              "type": "integer"
-            },
-            "style": "simple"
-          }
-        ],
         "responses": {
           "200": {
             "description": "",
@@ -24466,17 +24381,6 @@
         ],
         "summary": "What the member chose, each beside its default.",
         "operationId": "review_archive.my_settings",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "x-member",
-            "description": "The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own.",
-            "schema": {
-              "type": "integer"
-            },
-            "style": "simple"
-          }
-        ],
         "responses": {
           "200": {
             "description": "`GET /me/settings`: what the member chose, each beside what they get without choosing.",
@@ -24611,17 +24515,6 @@
         ],
         "summary": "Every setting back to its default.",
         "operationId": "review_archive.reset_my_settings",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "x-member",
-            "description": "The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own.",
-            "schema": {
-              "type": "integer"
-            },
-            "style": "simple"
-          }
-        ],
         "responses": {
           "200": {
             "description": "`GET /me/settings`: what the member chose, each beside what they get without choosing.",
@@ -24756,17 +24649,6 @@
         ],
         "summary": "Chooses what the patch names; the rest stays.",
         "operationId": "review_archive.patch_my_settings",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "x-member",
-            "description": "The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own.",
-            "schema": {
-              "type": "integer"
-            },
-            "style": "simple"
-          }
-        ],
         "requestBody": {
           "description": "`PATCH /me/settings`: absent fields stay; `DELETE /me/settings` resets them all.",
           "content": {
@@ -24916,146 +24798,6 @@
           "unavailable": 503,
           "unclaimable": 403
         }
-      }
-    },
-    "/api/review_archive/members": {
-      "get": {
-        "tags": [
-          "review_archive"
-        ],
-        "summary": "Everyone who signed in here, and the addresses from before people had ids, with what they hold.",
-        "operationId": "review_archive.list_members",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/review_archive.MemberDto"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`invalid`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/review_archive.Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthenticated`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/review_archive.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`forbidden`, `unclaimable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/review_archive.Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/review_archive.Error"
-                }
-              }
-            }
-          },
-          "408": {
-            "description": "`timed_out`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/review_archive.Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`conflict`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/review_archive.Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "`busy`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/review_archive.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`internal`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/review_archive.Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "`bad_gateway`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/review_archive.Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "`unavailable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/review_archive.Error"
-                }
-              }
-            }
-          }
-        },
-        "x-errors": {
-          "bad_gateway": 502,
-          "bad_request": 400,
-          "busy": 429,
-          "conflict": 409,
-          "csrf": 403,
-          "forbidden": 403,
-          "internal": 500,
-          "invalid": 400,
-          "not_found": 404,
-          "timed_out": 408,
-          "unauthenticated": 401,
-          "unavailable": 503,
-          "unclaimable": 403
-        },
-        "x-permission": "sa:review_archive:members:act_as"
       }
     },
     "/api/review_archive/reviews/{id}": {
@@ -41257,7 +40999,7 @@
             "type": "string"
           },
           "id": {
-            "description": "Their person id, what `X-Member` and `/members/{id}` name.",
+            "description": "Their person id.",
             "type": "integer",
             "format": "int64"
           },
@@ -41278,41 +41020,6 @@
           "email",
           "name",
           "permissions"
-        ]
-      },
-      "review_archive.MemberDto": {
-        "description": "`GET /members`: someone who signed in here, or an address from before people had ids.",
-        "type": "object",
-        "properties": {
-          "balance": {
-            "description": "The tokens they hold, as the archive reckons them: the conductor's last word on their\nbalance less the walks charged since.",
-            "type": "integer",
-            "format": "int64"
-          },
-          "claimed": {
-            "description": "`false`: nobody signed in with this address since people got ids.",
-            "type": "boolean"
-          },
-          "email": {
-            "description": "Their concierge email, as of their last sign-in.",
-            "type": "string"
-          },
-          "id": {
-            "description": "Their person id.",
-            "type": "integer",
-            "format": "int64"
-          },
-          "name": {
-            "description": "Empty until they sign in.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "email",
-          "name",
-          "claimed",
-          "balance"
         ]
       },
       "review_archive.MyGmbs": {

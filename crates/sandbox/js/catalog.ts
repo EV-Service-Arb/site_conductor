@@ -2281,23 +2281,6 @@ export interface paths {
         patch: operations["review_archive.patch_my_settings"];
         trace?: never;
     };
-    "/api/review_archive/members": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Everyone who signed in here, and the addresses from before people had ids, with what they hold. */
-        get: operations["review_archive.list_members"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/review_archive/reviews/{id}": {
         parameters: {
             query?: never;
@@ -5468,33 +5451,13 @@ export interface components {
             email: string;
             /**
              * Format: int64
-             * @description Their person id, what `X-Member` and `/members/{id}` name.
+             * @description Their person id.
              */
             id: number;
             /** @description Their concierge name. */
             name: string;
             /** @description What they may do here: `sa:review_archive:*` permissions. */
             permissions: string[];
-        };
-        /** @description `GET /members`: someone who signed in here, or an address from before people had ids. */
-        "review_archive.MemberDto": {
-            /**
-             * Format: int64
-             * @description The tokens they hold, as the archive reckons them: the conductor's last word on their
-             *     balance less the walks charged since.
-             */
-            balance: number;
-            /** @description `false`: nobody signed in with this address since people got ids. */
-            claimed: boolean;
-            /** @description Their concierge email, as of their last sign-in. */
-            email: string;
-            /**
-             * Format: int64
-             * @description Their person id.
-             */
-            id: number;
-            /** @description Empty until they sign in. */
-            name: string;
         };
         /** @description `GET /me/gmbs`: the archive's tag on each of the member's GMBs, for the conductor's page. */
         "review_archive.MyGmbs": {
@@ -7195,7 +7158,6 @@ export type ReviewArchiveJobStatus = components['schemas']['review_archive.JobSt
 export type ReviewArchiveLayoutDto = components['schemas']['review_archive.LayoutDto'];
 export type ReviewArchiveLocationSummary = components['schemas']['review_archive.LocationSummary'];
 export type ReviewArchiveMe = components['schemas']['review_archive.Me'];
-export type ReviewArchiveMemberDto = components['schemas']['review_archive.MemberDto'];
 export type ReviewArchiveMyGmbs = components['schemas']['review_archive.MyGmbs'];
 export type ReviewArchiveNewLayout = components['schemas']['review_archive.NewLayout'];
 export type ReviewArchiveNewTarget = components['schemas']['review_archive.NewTarget'];
@@ -24553,10 +24515,7 @@ export interface operations {
     "review_archive.my_gmbs": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own. */
-                "x-member"?: number;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -24666,10 +24625,7 @@ export interface operations {
     "review_archive.reinstate": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own. */
-                "x-member"?: number;
-            };
+            header?: never;
             path: {
                 /** @description The conductor's id of the member's GMB. */
                 gmb: number;
@@ -24784,10 +24740,7 @@ export interface operations {
     "review_archive.withdraw_reinstatement": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own. */
-                "x-member"?: number;
-            };
+            header?: never;
             path: {
                 /** @description The conductor's id of the member's GMB. */
                 gmb: number;
@@ -24900,10 +24853,7 @@ export interface operations {
     "review_archive.patch_track": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own. */
-                "x-member"?: number;
-            };
+            header?: never;
             path: {
                 /** @description The conductor's id of the member's GMB. */
                 gmb: number;
@@ -25030,10 +24980,7 @@ export interface operations {
     "review_archive.track_board": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own. */
-                "x-member"?: number;
-            };
+            header?: never;
             path: {
                 /** @description The conductor's id of the member's GMB. */
                 gmb: number;
@@ -25148,10 +25095,7 @@ export interface operations {
     "review_archive.relink_track": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own. */
-                "x-member"?: number;
-            };
+            header?: never;
             path: {
                 /** @description The conductor's id of the member's GMB. */
                 gmb: number;
@@ -25269,10 +25213,7 @@ export interface operations {
                 /** @description At most this many, newest first (default 20, at most 500). */
                 limit?: number | null;
             };
-            header?: {
-                /** @description The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own. */
-                "x-member"?: number;
-            };
+            header?: never;
             path: {
                 /** @description The conductor's id of the member's GMB. */
                 gmb: number;
@@ -25386,10 +25327,7 @@ export interface operations {
     "review_archive.scan_track": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own. */
-                "x-member"?: number;
-            };
+            header?: never;
             path: {
                 /** @description The conductor's id of the member's GMB. */
                 gmb: number;
@@ -25504,10 +25442,7 @@ export interface operations {
     "review_archive.my_overview": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own. */
-                "x-member"?: number;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -25616,10 +25551,7 @@ export interface operations {
     "review_archive.my_settings": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own. */
-                "x-member"?: number;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -25729,10 +25661,7 @@ export interface operations {
     "review_archive.reset_my_settings": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own. */
-                "x-member"?: number;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -25842,10 +25771,7 @@ export interface operations {
     "review_archive.patch_my_settings": {
         parameters: {
             query?: never;
-            header?: {
-                /** @description The person id of the member to act as; needs sa:review_archive:members:act_as unless it is the caller's own. */
-                "x-member"?: number;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -25921,115 +25847,6 @@ export interface operations {
             };
             /** @description `too_large` */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["review_archive.Error"];
-                };
-            };
-            /** @description `busy` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["review_archive.Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["review_archive.Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["review_archive.Error"];
-                };
-            };
-            /** @description `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["review_archive.Error"];
-                };
-            };
-        };
-    };
-    "review_archive.list_members": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["review_archive.MemberDto"][];
-                };
-            };
-            /** @description `invalid` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["review_archive.Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["review_archive.Error"];
-                };
-            };
-            /** @description `forbidden`, `unclaimable` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["review_archive.Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["review_archive.Error"];
-                };
-            };
-            /** @description `timed_out` */
-            408: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["review_archive.Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
