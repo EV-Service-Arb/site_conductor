@@ -72,21 +72,24 @@ pub(crate) fn routes(mcp: Mcp) -> Router {
 }
 
 /// The caller, else the answer refusing them.
-async fn caller(m: &Mcp, headers: &HeaderMap) -> Result<Caller, Response> {
+async fn caller(m: &Mcp, headers: &HeaderMap) -> Result<Caller, Box<Response>> {
 	match signin::bearer(&m.sign_in, headers, Freshness::Cached).await {
 		Ok(c) => Ok(c),
 		Err(r) if r.code() == Code::Unauthenticated => {
 			let challenge = HeaderValue::from_str(&oauth::challenge(&m.sign_in)).expect("the origin is visible ASCII");
-			Err((StatusCode::UNAUTHORIZED, [(header::WWW_AUTHENTICATE, challenge)]).into_response())
+			Err(Box::new((StatusCode::UNAUTHORIZED, [(header::WWW_AUTHENTICATE, challenge)]).into_response()))
 		}
-		Err(r) => Err(signin::refused(&m.sign_in, r)),
+		Err(r) => Err(Box::new(signin::refused(&m.sign_in, r))),
 	}
 }
 
 impl Sessions {
 	/// The session the request names, the caller's; else the answer refusing it.
-	fn of(&self, headers: &HeaderMap, caller: &Caller) -> Result<Arc<Session>, Response> {
-		let id = headers.get(SESSION).and_then(|v| v.to_str().ok()).ok_or_else(|| (StatusCode::BAD_REQUEST, "Mcp-Session-Id: initialize first").into_response())?;
+	fn of(&self, headers: &HeaderMap, caller: &Caller) -> Result<Arc<Session>, Box<Response>> {
+		let id = headers
+			.get(SESSION)
+			.and_then(|v| v.to_str().ok())
+			.ok_or_else(|| Box::new((StatusCode::BAD_REQUEST, "Mcp-Session-Id: initialize first").into_response()))?;
 		let s = self.0.lock().expect("never held across a panic").get(id).cloned();
 		match s {
 			Some(s) if s.user == caller.user_id => {
@@ -94,7 +97,7 @@ impl Sessions {
 				Ok(s)
 			}
 			// unknown, ended, or another's: the client initializes anew (Streamable HTTP's 404)
-			_ => Err((StatusCode::NOT_FOUND, "no such MCP session: initialize anew").into_response()),
+			_ => Err(Box::new((StatusCode::NOT_FOUND, "no such MCP session: initialize anew").into_response())),
 		}
 	}
 
@@ -137,11 +140,11 @@ impl Sessions {
 async fn end(State(m): State<Mcp>, headers: HeaderMap) -> Response {
 	let caller = match caller(&m, &headers).await {
 		Ok(c) => c,
-		Err(res) => return res,
+		Err(res) => return *res,
 	};
 	let s = match m.sessions.of(&headers, &caller) {
 		Ok(s) => s,
-		Err(res) => return res,
+		Err(res) => return *res,
 	};
 	m.sessions.0.lock().expect("never held across a panic").remove(&s.id);
 	if let Some(sandbox) = m.tools.sandbox() {
@@ -153,7 +156,7 @@ async fn end(State(m): State<Mcp>, headers: HeaderMap) -> Response {
 async fn endpoint(State(m): State<Mcp>, headers: HeaderMap, body: Result<Json<Value>, axum::extract::rejection::JsonRejection>) -> Response {
 	let caller = match caller(&m, &headers).await {
 		Ok(c) => c,
-		Err(res) => return res,
+		Err(res) => return *res,
 	};
 	let Ok(Json(msg)) = body else {
 		return Json(failure(Value::Null, -32700, "not JSON")).into_response();
@@ -164,7 +167,7 @@ async fn endpoint(State(m): State<Mcp>, headers: HeaderMap, body: Result<Json<Va
 			// the client's answer to what it was asked
 			let s = match m.sessions.of(&headers, &caller) {
 				Ok(s) => s,
-				Err(res) => return res,
+				Err(res) => return *res,
 			};
 			let asked = id.as_str().and_then(|id| s.asked.lock().expect("never held across a panic").remove(id));
 			let agreed = msg["result"]["action"] == "accept" && msg["result"]["content"]["approve"] == true;
@@ -196,7 +199,7 @@ async fn endpoint(State(m): State<Mcp>, headers: HeaderMap, body: Result<Json<Va
 	}
 	let s = match m.sessions.of(&headers, &caller) {
 		Ok(s) => s,
-		Err(res) => return res,
+		Err(res) => return *res,
 	};
 	let Some(id) = id else {
 		return StatusCode::ACCEPTED.into_response();
@@ -389,13 +392,7 @@ async fn converse(m: &Mcp, s: &Session, headers: &HeaderMap, work: Work, mut out
 					Ok(t) => t,
 					Err(e) => return text(&json!({ "error": e }), true),
 				};
-				so_far = Told {
-					stdout: so_far.stdout + &next.stdout,
-					stderr: so_far.stderr + &next.stderr,
-					truncated: so_far.truncated || next.truncated,
-					ran_on_its_own: [so_far.ran_on_its_own, next.ran_on_its_own].concat(),
-					..next
-				};
+				so_far = so_far.then(next);
 			}
 			cell(&m.tools, &so_far)
 		}

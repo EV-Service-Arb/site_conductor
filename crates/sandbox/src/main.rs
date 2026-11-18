@@ -479,7 +479,7 @@ async fn supervise(runner: Runner, s: Arc<Session>, mut child: Child, marker: St
 	let (mut out_buf, mut err_buf) = ([0u8; 8192], [0u8; 8192]);
 	let (mut out_open, mut err_open) = (true, true);
 	let mut pending: Vec<u8> = Vec::new();
-	let killed = loop {
+	let ended = loop {
 		let changed = s.changed.notified();
 		tokio::pin!(changed);
 		changed.as_mut().enable(); // before the deadline is read: a cell started after it wakes this
@@ -503,27 +503,26 @@ async fn supervise(runner: Runner, s: Arc<Session>, mut child: Child, marker: St
 					s.changed.notify_waiters();
 				}
 			},
-			() = async { tokio::time::sleep_until(deadline.expect("guarded")).await }, if deadline.is_some() => break Some(Ended::Killed),
-			() = s.kill.notified() => break Some(Ended::Killed),
+			() = async { tokio::time::sleep_until(deadline.expect("guarded")).await }, if deadline.is_some() => break Ended::Killed,
+			() = s.kill.notified() => break Ended::Killed,
 			() = changed, if out_open || err_open => {}
 			status = child.wait(), if !out_open && !err_open => break match status {
-				Ok(status) => Some(match status.code() {
+				Ok(status) => match status.code() {
 					Some(code) => Ended::Exited(code),
 					None => Ended::Signalled(status.signal().expect("no exit code: ended by a signal")),
-				}),
+				},
 				Err(e) => {
 					tracing::error!("a session's process: {e}");
-					Some(Ended::Signalled(0))
+					Ended::Signalled(0)
 				}
 			},
 		}
 	};
-	if killed == Some(Ended::Killed) {
-		if let Err(e) = child.kill().await {
-			tracing::error!("killing a session: {e}");
-		}
+	if ended == Ended::Killed
+		&& let Err(e) = child.kill().await
+	{
+		tracing::error!("killing a session: {e}");
 	}
-	let ended = killed.expect("the loop breaks with why");
 	if let Some(c) = s.state.lock().expect("never held across a panic").cells.last_mut() {
 		c.stdout.add(&pending);
 	}

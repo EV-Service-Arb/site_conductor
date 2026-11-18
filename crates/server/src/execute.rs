@@ -104,6 +104,19 @@ pub struct Told {
 	pub ran_on_its_own: Vec<Call>,
 }
 
+impl Told {
+	/// What was told, then `next`: one telling of both.
+	pub(crate) fn then(self, next: Told) -> Told {
+		Told {
+			stdout: self.stdout + &next.stdout,
+			stderr: self.stderr + &next.stderr,
+			truncated: self.truncated || next.truncated,
+			ran_on_its_own: [self.ran_on_its_own, next.ran_on_its_own].concat(),
+			..next
+		}
+	}
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CellState {
@@ -305,14 +318,7 @@ impl Sandbox {
 				() = paused => self.send(reqwest::Method::GET, &path, Some(&now), None).await,
 			}
 		};
-		let told = self.told(live, self.read(key, live, answer?)?);
-		Ok(Told {
-			stdout: so_far.stdout + &told.stdout,
-			stderr: so_far.stderr + &told.stderr,
-			truncated: so_far.truncated || told.truncated,
-			ran_on_its_own: [so_far.ran_on_its_own, told.ran_on_its_own].concat(),
-			..told
-		})
+		Ok(so_far.then(self.told(live, self.read(key, live, answer?)?)))
 	}
 
 	/// What `ran` tells, the cell's record moved past it.
@@ -480,7 +486,7 @@ async fn relay(State(tools): State<Tools>, req: Request) -> Response {
 				Ok(Ok(true)) => {}
 				Ok(Ok(false)) => return refused(format!("the person declined {id}: it did not run")),
 				Ok(Err(_)) => return gone(),
-				Err(_) => return refused(format!("no one agreed to {id} within {} min: it did not run", PAUSE.as_secs() / 60)),
+				Err(_) => return refused(format!("no one agreed to {id} within {} s: it did not run", PAUSE.as_secs())),
 			}
 		}
 		else if let Some(c) = live.state.lock().expect("never held across a panic").cell.as_mut().filter(|c| Some(&c.token) == token.as_ref()) {

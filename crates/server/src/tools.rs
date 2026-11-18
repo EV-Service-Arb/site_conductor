@@ -345,11 +345,11 @@ impl Tools {
 `api` is the catalog's client (`api.GET(path, {{ params: {{ path, query }} }})`, `api.POST(path, {{ params, body }})`, …), every answer `{{ data }}` or `{{ error: {{ code, error }} }}`; the paths are absolute, as `search` names them. \
 Each run is a cell of one session, kept between runs: a later cell reads what earlier ones declared at their top level (declare a name again to change it), so fetch once and keep it. \
 The code is type-checked against the catalog and those declarations first: a type error runs nothing, and says what is wrong. What it `console.log`s comes back, {} KiB of each stream a cell at most. \
-A cell is answered after {} s at most: one still running is told by its number, and `poll` follows it; it is stopped after {} min, its session with it, and after {} calls. \
+A cell is answered after {} s at most: one still running is told by its number, and `poll` follows it; it is stopped after {} s, its session with it, and after {} calls. \
 {held} When the person agrees, the call goes on in the code; when they decline, it throws there.",
 					sa_sandbox::OUTPUT >> 10,
 					sa_sandbox::WAIT.as_secs(),
-					sa_sandbox::LIMIT.as_secs() / 60,
+					sa_sandbox::LIMIT.as_secs(),
 					sa_sandbox::CALLS
 				),
 				input: schema(ev_lib::api::schemars::schema_for!(Execute)),
