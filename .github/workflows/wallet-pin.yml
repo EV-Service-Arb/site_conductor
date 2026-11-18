@@ -1,6 +1,6 @@
 # Hand-written; v_flakes leaves it alone. Keeps WALLET_SCRIPT_INTEGRITY on the wallet.js of banking's
-# latest release and main, built here from banking's source (banking#601). evinvest.ltd's bytes may
-# keep a pin main already has, never add one.
+# latest release and main, built here from banking's source (banking#601), committed to main and
+# released as the next patch tag. evinvest.ltd's bytes may keep a pin main already has, never add one.
 name: wallet-pin
 on:
   schedule:
@@ -62,13 +62,11 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-      pull-requests: write
+      actions: write
     env:
       FILE: frontend/src/shared/config/wallet-bundle.ts
-      BRANCH: bot/wallet-pin
       GH_TOKEN: ${{ github.token }}
       EVENT: ${{ github.event_name }}
-      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       RELEASE: ${{ needs.pins.outputs.release }}
       RELEASE_PIN: ${{ needs.pins.outputs.release_pin }}
       MAIN_SHA: ${{ needs.pins.outputs.main_sha }}
@@ -77,6 +75,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: main
+          fetch-depth: 0
       - shell: bash
         run: |
           set -euo pipefail
@@ -112,32 +111,23 @@ jobs:
           echo "wanted:    $next ($RELEASE, main ${MAIN_SHA::8}; $url serves $prod)"
           sed -i -E "s|$line|export const WALLET_SCRIPT_INTEGRITY = \"$next\";|" "$FILE"
 
-          pr="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
-          if git diff --quiet; then
-            if [ -n "$pr" ] && [ "$EVENT" != pull_request ]; then
-              gh pr close "$pr" --delete-branch --comment "main already pins what [this run]($RUN_URL) wants."
-            fi
+          if git diff --quiet; then :
           elif [ "$EVENT" = pull_request ]; then
             git diff
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            title="fix(wallet): pin wallet.js of banking $RELEASE and main ${MAIN_SHA::8}"
-            git switch -q -c "$BRANCH"
-            git commit -qam "$title"
-            git push -qf origin "$BRANCH"
-            body="$(printf '%s\n' \
-              "WALLET_SCRIPT_INTEGRITY from banking's source, built by [this run]($RUN_URL):" \
-              "" \
-              "- [$RELEASE](https://github.com/EV-Main/banking/tree/$RELEASE) (what Flux deploys): \`$release_sri\`" \
-              "- main [${MAIN_SHA::8}](https://github.com/EV-Main/banking/commit/$MAIN_SHA): \`$main_sri\`" \
-              "" \
-              "$url serves \`$prod\` now; it stays pinned only if main pins it already." \
-              "Merge and release before banking tags the new bundle, and SA's wallet and Pay never go unavailable.")"
-            if [ -n "$pr" ]; then gh pr edit "$pr" --title "$title" --body "$body"; else gh pr create --base main --head "$BRANCH" --title "$title" --body "$body"; fi
+            git commit -qam "fix(wallet): pin wallet.js of banking $RELEASE and main ${MAIN_SHA::8}"
+            git push -q origin HEAD:main
+            # a tag pushed with GITHUB_TOKEN starts no workflow, a dispatch does: release-container.yml publishes on a tag ref
+            last="$(git tag -l 'v*' --sort=-v:refname | head -1)"
+            tag="v${last#v}"; tag="${tag%.*}.$(( ${tag##*.} + 1 ))"
+            git tag -a "$tag" -m "$tag: wallet.js pins of banking $RELEASE and main ${MAIN_SHA::8}"
+            git push -q origin "$tag"
+            gh workflow run release-container.yml --ref "$tag"
           fi
 
           case " $current " in
             *" $prod "*) ;;
-            *) echo "::error::$url serves $prod, which main does not pin ($current): SA's wallet and Pay are unavailable until the repin PR is released"; exit 1 ;;
+            *) echo "::error::$url serves $prod, which main does not pin ($current): SA's wallet and Pay are unavailable until the repin release is out"; exit 1 ;;
           esac
