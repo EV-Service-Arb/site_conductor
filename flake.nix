@@ -81,6 +81,7 @@
                 entry = "bash -c 'npm --prefix frontend run --silent i18n && npm --prefix frontend run --silent i18n:translate && git add -A frontend/messages'";
                 pass_filenames = false;
                 require_serial = true;
+                files = "^frontend/(src|messages)/"; # the code the catalogues are read from, and the catalogues
               };
             };
           }
