@@ -191,6 +191,7 @@ pub struct Google {
 impl Google {
 	/// With no keys, a place id still resolves, unnamed and unlocated.
 	pub fn try_new(keys: Keys, rank: Arc<dyn Rank>, cache: Arc<dyn QueriesCache>) -> Result<Self, Error> {
+		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		let http = reqwest::Client::builder().connect_timeout(Duration::from_secs(5)).timeout(Duration::from_secs(10)).build()?;
 		Ok(Self {
 			http,
@@ -821,6 +822,7 @@ async fn parsed(input: &str) -> Result<Parsed, Error> {
 
 /// One hop: following further can land on consent.google.com instead of the place.
 async fn expand_short_link(url: &str) -> Result<String, Error> {
+	let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 	let client = reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build()?;
 	let resp = client.get(url).send().await?;
 	let location = resp

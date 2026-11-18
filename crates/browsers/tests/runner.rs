@@ -92,6 +92,7 @@ impl Runner {
 			.kill_on_drop(true)
 			.spawn()
 			.unwrap();
+		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		let r = Self {
 			base: format!("http://127.0.0.1:{port}"),
 			max,

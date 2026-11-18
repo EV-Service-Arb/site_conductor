@@ -58,6 +58,7 @@ pub struct Model {
 }
 impl Model {
 	pub fn new(base: String, oauth: String, owner: Option<Zeroizing<String>>) -> Self {
+		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		let http = reqwest::Client::builder().timeout(Duration::from_secs(300)).build().expect("the TLS backend initialises at boot");
 		Self {
 			http,

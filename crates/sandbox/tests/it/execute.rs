@@ -159,6 +159,7 @@ async fn code_runs_as_the_asker_and_stops_at_what_destroys() {
 	assert_eq!(seen, "404 true", "only an operation is reached: {escaped}");
 	let (status, ..) = b.send(&app, Method::GET, "/api/v1/me", &[], false).await;
 	assert_eq!(status, 200, "the asker's session outlived the run's try at /auth/logout");
+	let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 	let after = reqwest::Client::new().get(format!("{conductor}/api/run/api/v1/me")).bearer_auth(token).send().await.unwrap();
 	assert_eq!(after.status(), 401, "the token died with its run");
 

@@ -25,6 +25,7 @@ const SITES_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The client the landings are asked with: their answer as it comes, never a redirect's.
 pub(crate) fn probe_client() -> reqwest::Client {
+	let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 	reqwest::Client::builder()
 		.connect_timeout(Duration::from_secs(3))
 		.timeout(PROBE_TIMEOUT)

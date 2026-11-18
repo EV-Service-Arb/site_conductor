@@ -108,6 +108,7 @@ async fn main() -> eyre::Result<()> {
 	eyre::ensure!(max > 0, "BROWSERS_MAX is at least 1");
 	std::fs::create_dir_all(&dir).wrap_err_with(|| format!("creating {}", dir.display()))?;
 	let (starts, mut started) = mpsc::channel(16);
+	let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 	let http = reqwest::Client::builder().timeout(Duration::from_secs(30)).build().wrap_err("the runner's client")?;
 	let runner = Runner(Arc::new(Inner {
 		usage: usage::Usage::open(&dir)?,
