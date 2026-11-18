@@ -23,7 +23,7 @@ const gmb = (id: number, name: string, address: string | null, located: boolean,
   location: located ? { lat: 45.76, lng: 4.83, placed: false } : null,
   spots: [],
   readiness: null,
-  tabs: ["kit"],
+  tabs: [],
 });
 
 const gmails: Gmails = {

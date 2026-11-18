@@ -5,7 +5,7 @@ import { Button, Skeleton, cn } from "@evinvest/uikit";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { type Listed, type Tags, issueOf, narrowed, openAccount, openOrFocus, openTrade, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useAddWindow, move, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useKitWindow, useTradeWindow, useTrades } from "@/entities/gmb";
+import { type Listed, type Tags, issueOf, narrowed, openAccount, openOrFocus, openTrade, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useAddWindow, move, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useTradeWindow, useTrades } from "@/entities/gmb";
 import { AddPanel } from "@/features/add-gmb";
 import { PlacingBar } from "@/features/place-gmb";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
@@ -18,11 +18,11 @@ import { Locate, StreetView, pin, useTheMap } from "@/shared/map";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { useButtonSize } from "@/shared/ui/touch";
 import { ErrorState } from "@/shared/ui/error-state";
+import { KitFloat } from "@/views/kit";
 
 import { AccountWindow } from "./account-window";
 import { Peek } from "./peek";
 import { CategoriesWindow, TradeWindow } from "./trade-window";
-import { KitWindow } from "./kit-window";
 import { TrashWindow } from "./trash-window";
 import { LocationWindow } from "./window";
 
@@ -48,6 +48,7 @@ export function Home() {
       {/* not found: the conductor has no browser key, so there is no map */}
       {config.status === "error" && config.failure.code === "not_found" && <EmptyState className="m-6" title={t(home.noMap, "No map here")} description={t(home.noMap.why, "No Google account in the conductor's config has a browser key. Your GMBs are in the list beside.")} />}
       {config.status === "ok" && <GmbMap config={config.data} />}
+      {config.status === "error" && <KitFloat map={null} />}
       <Floats />
     </div>
   );
@@ -211,7 +212,6 @@ function GmbMap({ config }: { config: MapConfig }) {
     if (gone) openTrade(null);
   }, [gone]);
   const accountWindow = useAccountWindow();
-  const kitWindow = useKitWindow();
   const account = accountWindow !== null && gmails.status === "ok" ? gmails.data.gmails.find((g) => g.id === accountWindow.gmail) : undefined;
   // a gmail removed, here or in another tab: its window closes
   const accountGone = accountWindow !== null && gmails.status === "ok" && account === undefined;
@@ -304,7 +304,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       {peekedListed && windows && windowed && <LocationWindow listed={peekedListed} tab={tab} />}
       {opened && tradeWindow && gmails.status === "ok" && windows && <TradeWindow trade={opened} country={tradeWindow.country} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
       {account && accountWindow && gmails.status === "ok" && windows && <AccountWindow gmail={account} tab={accountWindow.tab} gbps={under(gmails.data, account.id).length} />}
-      {kitWindow !== null && map.status === "ok" && windows && <KitWindow map={map.map} area={kitWindow} />}
+      {windows && <KitFloat map={map.status === "ok" ? map.map : null} />}
       {map.status === "ok" && windows && <StudyAreaWindow map={map.map} />}
       {add && placed === undefined && <AddPanel key={JSON.stringify(add)} {...add} />}
       {picking !== null && (

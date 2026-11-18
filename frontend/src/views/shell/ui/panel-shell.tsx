@@ -28,7 +28,7 @@ export function PanelShell({ bare = false, children }: { bare?: boolean; childre
   );
 }
 
-/** `bare`: the gate alone, without the frame: a page of its own (the kit's `/<area>/`). */
+/** `bare`: the gate alone, without the frame: a page of its own (a kit's QR, full screen). */
 function PanelBody({ bare, children }: { bare: boolean; children: ReactNode }) {
   const me = useResource(api, "/me");
   const [accessLost, setAccessLost] = useState(false);

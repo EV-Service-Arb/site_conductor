@@ -8,7 +8,7 @@ export type { ArchiveTag, SiteTag } from "./model/gmb";
 export { ISSUES, ISSUE_NAME, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
 export { type Listed, byView, narrowed, under } from "./model/narrow";
 export { readyCount } from "./model/readiness";
-export { type Adding, type OnMap, open, openAccount, openAdd, openCategories, openKit, openTrade, openTrash, openOrFocus, peek, setOnMap, useAccountWindow, useAddWindow, useCategoriesWindow, useKitWindow, useOnMap, usePeeked, useTab, useTradeWindow, useTrashWindow } from "./model/on-map";
+export { type Adding, type KitAt, type OnMap, open, openAccount, openAdd, openCategories, floatKit, openTrade, openTrash, openOrFocus, peek, setOnMap, useAccountWindow, useAddWindow, useCategoriesWindow, useKitFloat, useOnMap, usePeeked, useTab, useTradeWindow, useTrashWindow } from "./model/on-map";
 export { type Pattern, type Scope, chooseCategoryScope, chooseGmailScope, covers, inCategories, inScope, useScope } from "./model/scope";
 export { PublishSelection, type Selection, select, setFilter, setOnly, useSelection } from "./model/selection";
 export { TradeSelect } from "./ui/trade-select";
