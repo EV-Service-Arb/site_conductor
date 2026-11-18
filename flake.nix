@@ -91,6 +91,31 @@
           };
         };
         js = v_flakes.js { inherit pkgs; packages = [ "frontend" ]; };
+        # A job of its own, so the run's graph shows each one's time; the rest of the errors share one `Particles` job.
+        own = p: p // {
+          ci = {
+            job = {
+              name = p.name;
+              runs-on = "ubuntu-latest";
+              timeout-minutes = 45;
+              steps = [{ uses = "actions/checkout@v5"; }]
+                ++ lib.optionals (p ? ciCache && p.ciCache != null) (
+                let
+                  cacheWith = {
+                    path = lib.concatStringsSep "\n" p.ciCache.paths;
+                    key = "particle-${p.name}-\${{ runner.os }}-\${{ hashFiles(${lib.concatMapStringsSep ", " (f: "'${f}'") p.ciCache.hashFiles}) }}";
+                    restore-keys = "particle-${p.name}-\${{ runner.os }}-";
+                  };
+                in
+                [
+                  { "if" = "github.ref_name != github.event.repository.default_branch"; uses = "actions/cache/restore@v5"; "with" = cacheWith; }
+                  { "if" = "github.ref_name == github.event.repository.default_branch"; uses = "actions/cache@v5"; "with" = cacheWith; }
+                ]
+              );
+            };
+            work = [{ run = "nix run .#test -- --severity errors --serial ${p.name}"; }];
+          };
+        };
         github = v_flakes.github {
           inherit pkgs pname rs js;
           enable = true;
@@ -99,7 +124,8 @@
           figma = { };
           jobs.default = true;
           jobs.errors.install.packages = [ "ffmpeg" "deno" ]; # crates/browsers/tests/runner.rs cuts its films with ffmpeg; crates/sandbox's tests run Deno
-          jobs.errors.augment = [ e2e { name = "checks"; builds = checks; } ];
+          jobs.errors.exclude = [ "frontend-typecheck" "frontend-test" ];
+          jobs.errors.augment = map own [ (js.script "frontend" "typecheck") (js.script "frontend" "test") e2e { name = "checks"; builds = checks; } ];
           jobs.warnings.exclude = [ "code-duplication" ];
           jobs.warnings.augment = [{ name = "code-duplication"; args.excludePatterns = [ "frontend/src/shared/api/schema.ts" "frontend/src/shared/api/services/**" "frontend/src/shared/api/views.ts" "crates/sandbox/js/catalog.ts" ]; }]; # generated
           lfs = false;

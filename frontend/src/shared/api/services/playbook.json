@@ -44,16 +44,16 @@
   "paths": {
     "/guide": {
       "get": {
-        "description": "Lines ending `// inferred` are drafted, not yet vetted. The guides:\n- conversion: calls, VA, site\n- experts: who to refer someone to, and when not to\n- fulfilment: contractors, splits, getting paid\n- infra: gmails, devices, proxies, numbers, cards\n- market: which trade, which city, whether to enter\n- profile-creation: getting a listing to exist\n- ranking: name, categories, site, what to measure\n- reviews: rate, sourcing, deletion\n- suspension: what links profiles, what to do once one goes down\n- verification: video, live, instant",
+        "description": "Each step or decision in the order it is met, and the evidence under it, every citation given as who, how they know, when, and what that is worth today. `people`: who has run what, and how to reach them. The pages:\n- calls/closing: closing\n- calls/phones: phones\n- calls/resale: resale\n- contractors/contracts: contracts\n- contractors/payments: payments\n- contractors/pricing: pricing\n- contractors/sourcing: sourcing\n- contractors/splits: splits\n- infra: infra\n- market/city: city\n- market/niche: niche\n- market/niches/cleaning/profile/categories: cleaning categories\n- market/niches/cleaning: cleaning\n- market/niches/concrete: concrete\n- market/niches/drain_cleaning: drain cleaning\n- market/niches/fencing: fencing\n- market/niches/plumbing: plumbing\n- market/niches/retaining_wall: retaining wall\n- market/niches/tree_trimming: tree trimming\n- market: market\n- profile/categories: categories\n- profile/creation: creation\n- profile/naming: naming\n- profile/suspension/registration: registration\n- profile/suspension: suspension\n- profile/verification/instant: instant\n- profile/verification/live: live\n- profile/verification/missing_place: missing place\n- profile/verification/sab_to_pab: SAB to PAB\n- profile/verification/video: video\n- profile/verification: verification\n- ranking: ranking\n- regions/canada: canada\n- regions/france/profile/suspension/registration: registration, france\n- regions/france/profile/verification/live: live, france\n- reviews/deletion: deletion\n- reviews/local_guide: local guide\n- reviews/rate_limits: rate limits\n- reviews/replies: replies\n- reviews/sourcing/hired: hired\n- reviews/sourcing/online: online\n- reviews/sourcing/remote: remote\n- reviews/sourcing/stand: stand\n- reviews: reviews\n- site/conversion: conversion\n- site/seo: seo\n- staff/va: va",
         "operationId": "guide",
         "parameters": [
           {
-            "description": "one of the guides listed",
+            "description": "one of the pages listed, or `people`",
             "in": "query",
             "name": "area",
             "required": true,
             "schema": {
-              "description": "one of the guides listed",
+              "description": "one of the pages listed, or `people`",
               "type": "string"
             },
             "style": "form"
@@ -147,7 +147,7 @@
             "description": "`unavailable`"
           }
         },
-        "summary": "One guide, whole: how to decide in one area, as what matters, how to decide, and what to do when it goes wrong.",
+        "summary": "One page of the manual, whole: what we do in an area.",
         "tags": [
           "tools"
         ],
@@ -172,12 +172,12 @@
         "operationId": "read",
         "parameters": [
           {
-            "description": "part of the header line of the chapter or section to read, e.g. `Selling calls` or `## facts`",
+            "description": "part of the header line of the chapter or section to read, e.g. `Selling calls`",
             "in": "query",
             "name": "header",
             "required": true,
             "schema": {
-              "description": "part of the header line of the chapter or section to read, e.g. `Selling calls` or `## facts`",
+              "description": "part of the header line of the chapter or section to read, e.g. `Selling calls`",
               "type": "string"
             },
             "style": "form"
@@ -297,7 +297,7 @@
             "description": "`unavailable`"
           }
         },
-        "summary": "One chapter of a capture (a `###` under `## transcript` or `## summary`) or one section of a note, whole, with every line numbered.",
+        "summary": "One chapter of a capture or a digest (a `###`), or one section of a manual page, whole, with every line numbered.",
         "tags": [
           "tools"
         ],
@@ -318,7 +318,7 @@
     },
     "/search": {
       "get": {
-        "description": "Each kind of source has its own slots, so none crowds out another: knowledge/structured/approved and knowledge/structured/suggested notes, the course (lessons and the recordings they link), calls, videos, texts. Within a kind, a passage holding the rarer of the pattern's alternatives ranks first. Each hit gives path:line, its header, its label, the source URL and the lines around it; the files past the slots follow as path:line, for `read`. A pattern hitting most of the scope is refused, with the sub-scopes it hits.\n\nA label is who said it, their base reliability, the date, and the effective reliability: base plus age, lower is better, 10 at most and as good as nothing. A call's base is its speaker's, so its label gives the age term to add to it instead.\n\nBase by role: 0 tested myself · 1 skool course material or in knowledge/structured/approved/ · 3 a gmbpp member tested it · 4 a gmbpp member claimed it or in knowledge/structured/suggested · 5 a gmbpp member heard or thought of it; a cheap group member tested it · 6 a cheap group member claimed it · 7 a cheap group member heard or thought of it.\nBase by person, whatever their role: 2 Eric · 2 Zach Peterson (youtube `@zachpeters0n`) · 3 Gabe Jacobs (skool `gabe-jacobs-9502`) · 3 Marcus Milan (youtube `@marcusmilxn`) · 3 Matt Gazda (youtube `@Matt_Gazda`).",
+        "description": "Each kind of source has its own slots, so none crowds out another: the manual (knowledge/structured), the course (lessons and the recordings they link), calls, videos, texts. Within a kind, a passage holding the rarer of the pattern's alternatives ranks first. Each hit gives path:line, its header, its label, the source URL and the lines around it; the files past the slots follow as path:line, for `read`. A pattern hitting most of the scope is refused, with the sub-scopes it hits.\n\nA label is who backs the passage, how they know (ran it, says so, heard it), when the information is from, and `effective`: what that is worth today, 0 to 1, higher is better. `unvetted`: nobody of ours has checked the claim. `unscored`: nothing says who speaks.",
         "operationId": "search",
         "parameters": [
           {
@@ -333,11 +333,11 @@
             "style": "form"
           },
           {
-            "description": "a path prefix to search under, e.g. `knowledge/references/loom` or `knowledge/structured/approved/profile`",
+            "description": "a path prefix to search under, e.g. `knowledge/references/loom` or `knowledge/structured/profile`",
             "in": "query",
             "name": "scope",
             "schema": {
-              "description": "a path prefix to search under, e.g. `knowledge/references/loom` or `knowledge/structured/approved/profile`",
+              "description": "a path prefix to search under, e.g. `knowledge/references/loom` or `knowledge/structured/profile`",
               "type": [
                 "string",
                 "null"

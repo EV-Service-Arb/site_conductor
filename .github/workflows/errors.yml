@@ -5,6 +5,218 @@ env:
   RUSTUP_MAX_RETRIES: "10"
   RUST_BACKTRACE: short
 jobs:
+  checks:
+    name: checks
+    needs: load_nix
+    outputs:
+      seconds: ${{ steps.particle.outputs.seconds }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Lean cache setup
+        run: |
+          mkdir -p /tmp/nix-lean-cache
+          chmod 0777 /tmp/nix-lean-cache
+          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
+          chmod 0755 /tmp/nix-lean-pbh.sh
+        shell: bash
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            lazy-trees = true
+            post-build-hook = /tmp/nix-lean-pbh.sh
+            extra-substituters = file:///tmp/nix-lean-cache
+            extra-trusted-substituters = file:///tmp/nix-lean-cache
+            require-sigs = false
+      - if: github.ref_name != github.event.repository.default_branch
+        name: Restore lean nix cache
+        uses: actions/cache/restore@v5
+        with:
+          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          path: /tmp/nix-lean-cache
+          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+      - if: github.ref_name == github.event.repository.default_branch
+        name: Lean nix cache (built-only paths)
+        uses: actions/cache@v5
+        with:
+          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          path: /tmp/nix-lean-cache
+          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+      - run: echo "T_PARTICLE=$(date +%s)" >> "$GITHUB_ENV"
+      - run: nix run .#test -- --severity errors --serial checks
+      - id: particle
+        if: always()
+        run: 'echo "seconds=$((T_PARTICLE ? $(date +%s) - T_PARTICLE : 0))" >> "$GITHUB_OUTPUT"'
+    timeout-minutes: 45
+  e2e:
+    name: e2e
+    needs: load_nix
+    outputs:
+      seconds: ${{ steps.particle.outputs.seconds }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Lean cache setup
+        run: |
+          mkdir -p /tmp/nix-lean-cache
+          chmod 0777 /tmp/nix-lean-cache
+          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
+          chmod 0755 /tmp/nix-lean-pbh.sh
+        shell: bash
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            lazy-trees = true
+            post-build-hook = /tmp/nix-lean-pbh.sh
+            extra-substituters = file:///tmp/nix-lean-cache
+            extra-trusted-substituters = file:///tmp/nix-lean-cache
+            require-sigs = false
+      - if: github.ref_name != github.event.repository.default_branch
+        name: Restore lean nix cache
+        uses: actions/cache/restore@v5
+        with:
+          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          path: /tmp/nix-lean-cache
+          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+      - if: github.ref_name == github.event.repository.default_branch
+        name: Lean nix cache (built-only paths)
+        uses: actions/cache@v5
+        with:
+          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          path: /tmp/nix-lean-cache
+          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+      - if: github.ref_name != github.event.repository.default_branch
+        uses: actions/cache/restore@v5
+        with:
+          key: particle-e2e-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          path: ~/.npm
+          restore-keys: particle-e2e-${{ runner.os }}-
+      - if: github.ref_name == github.event.repository.default_branch
+        uses: actions/cache@v5
+        with:
+          key: particle-e2e-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          path: ~/.npm
+          restore-keys: particle-e2e-${{ runner.os }}-
+      - run: echo "T_PARTICLE=$(date +%s)" >> "$GITHUB_ENV"
+      - run: nix run .#test -- --severity errors --serial e2e
+      - id: particle
+        if: always()
+        run: 'echo "seconds=$((T_PARTICLE ? $(date +%s) - T_PARTICLE : 0))" >> "$GITHUB_OUTPUT"'
+    timeout-minutes: 45
+  frontend-test:
+    name: frontend-test
+    needs: load_nix
+    outputs:
+      seconds: ${{ steps.particle.outputs.seconds }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Lean cache setup
+        run: |
+          mkdir -p /tmp/nix-lean-cache
+          chmod 0777 /tmp/nix-lean-cache
+          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
+          chmod 0755 /tmp/nix-lean-pbh.sh
+        shell: bash
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            lazy-trees = true
+            post-build-hook = /tmp/nix-lean-pbh.sh
+            extra-substituters = file:///tmp/nix-lean-cache
+            extra-trusted-substituters = file:///tmp/nix-lean-cache
+            require-sigs = false
+      - if: github.ref_name != github.event.repository.default_branch
+        name: Restore lean nix cache
+        uses: actions/cache/restore@v5
+        with:
+          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          path: /tmp/nix-lean-cache
+          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+      - if: github.ref_name == github.event.repository.default_branch
+        name: Lean nix cache (built-only paths)
+        uses: actions/cache@v5
+        with:
+          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          path: /tmp/nix-lean-cache
+          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+      - if: github.ref_name != github.event.repository.default_branch
+        uses: actions/cache/restore@v5
+        with:
+          key: particle-frontend-test-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          path: ~/.npm
+          restore-keys: particle-frontend-test-${{ runner.os }}-
+      - if: github.ref_name == github.event.repository.default_branch
+        uses: actions/cache@v5
+        with:
+          key: particle-frontend-test-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          path: ~/.npm
+          restore-keys: particle-frontend-test-${{ runner.os }}-
+      - run: echo "T_PARTICLE=$(date +%s)" >> "$GITHUB_ENV"
+      - run: nix run .#test -- --severity errors --serial frontend-test
+      - id: particle
+        if: always()
+        run: 'echo "seconds=$((T_PARTICLE ? $(date +%s) - T_PARTICLE : 0))" >> "$GITHUB_OUTPUT"'
+    timeout-minutes: 45
+  frontend-typecheck:
+    name: frontend-typecheck
+    needs: load_nix
+    outputs:
+      seconds: ${{ steps.particle.outputs.seconds }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Lean cache setup
+        run: |
+          mkdir -p /tmp/nix-lean-cache
+          chmod 0777 /tmp/nix-lean-cache
+          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
+          chmod 0755 /tmp/nix-lean-pbh.sh
+        shell: bash
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            lazy-trees = true
+            post-build-hook = /tmp/nix-lean-pbh.sh
+            extra-substituters = file:///tmp/nix-lean-cache
+            extra-trusted-substituters = file:///tmp/nix-lean-cache
+            require-sigs = false
+      - if: github.ref_name != github.event.repository.default_branch
+        name: Restore lean nix cache
+        uses: actions/cache/restore@v5
+        with:
+          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          path: /tmp/nix-lean-cache
+          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+      - if: github.ref_name == github.event.repository.default_branch
+        name: Lean nix cache (built-only paths)
+        uses: actions/cache@v5
+        with:
+          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          path: /tmp/nix-lean-cache
+          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+      - if: github.ref_name != github.event.repository.default_branch
+        uses: actions/cache/restore@v5
+        with:
+          key: particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          path: ~/.npm
+          restore-keys: particle-frontend-typecheck-${{ runner.os }}-
+      - if: github.ref_name == github.event.repository.default_branch
+        uses: actions/cache@v5
+        with:
+          key: particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          path: ~/.npm
+          restore-keys: particle-frontend-typecheck-${{ runner.os }}-
+      - run: echo "T_PARTICLE=$(date +%s)" >> "$GITHUB_ENV"
+      - run: nix run .#test -- --severity errors --serial frontend-typecheck
+      - id: particle
+        if: always()
+        run: 'echo "seconds=$((T_PARTICLE ? $(date +%s) - T_PARTICLE : 0))" >> "$GITHUB_OUTPUT"'
+    timeout-minutes: 45
   load_nix:
     runs-on: ubuntu-latest
     steps:
@@ -43,80 +255,22 @@ jobs:
           # Pre-fetch packages into nix store so they're cached for dependent jobs
           # Use nix-shell which properly sets up env vars like PKG_CONFIG_PATH
           nix-shell -p ffmpeg deno pkg-config openssl.out openssl.dev git --run "echo packages cached"
-  particles:
-    name: Particles
-    outputs:
-      checks_seconds: ${{ steps.run.outputs['checks_seconds'] }}
-      checks_status: ${{ steps.run.outputs['checks_status'] }}
-      e2e_seconds: ${{ steps.run.outputs['e2e_seconds'] }}
-      e2e_status: ${{ steps.run.outputs['e2e_status'] }}
-      frontend-test_seconds: ${{ steps.run.outputs['frontend-test_seconds'] }}
-      frontend-test_status: ${{ steps.run.outputs['frontend-test_status'] }}
-      frontend-typecheck_seconds: ${{ steps.run.outputs['frontend-typecheck_seconds'] }}
-      frontend-typecheck_status: ${{ steps.run.outputs['frontend-typecheck_status'] }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Lean cache setup
-        run: |
-          mkdir -p /tmp/nix-lean-cache
-          chmod 0777 /tmp/nix-lean-cache
-          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
-          chmod 0755 /tmp/nix-lean-pbh.sh
-        shell: bash
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
-        with:
-          extra-conf: |
-            lazy-trees = true
-            post-build-hook = /tmp/nix-lean-pbh.sh
-            extra-substituters = file:///tmp/nix-lean-cache
-            extra-trusted-substituters = file:///tmp/nix-lean-cache
-            require-sigs = false
-      - if: github.ref_name != github.event.repository.default_branch
-        name: Restore lean nix cache
-        uses: actions/cache/restore@v5
-        with:
-          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
-          path: /tmp/nix-lean-cache
-          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-      - if: github.ref_name == github.event.repository.default_branch
-        name: Lean nix cache (built-only paths)
-        uses: actions/cache@v5
-        with:
-          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
-          path: /tmp/nix-lean-cache
-          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-      - if: github.ref_name != github.event.repository.default_branch
-        name: Restore particles' cache
-        uses: actions/cache/restore@v5
-        with:
-          key: particles-errors-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-          path: ~/.npm
-          restore-keys: particles-errors-${{ runner.os }}-
-      - if: github.ref_name == github.event.repository.default_branch
-        name: Particles' cache
-        uses: actions/cache@v5
-        with:
-          key: particles-errors-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-          path: ~/.npm
-          restore-keys: particles-errors-${{ runner.os }}-
-      - id: run
-        run: nix run .#test -- --severity errors --serial frontend-typecheck frontend-test e2e checks
-    timeout-minutes: 90
   pre_ci:
     uses: valeratrades/.github/.github/workflows/pre_ci.yml@main
   report:
     if: always() && github.ref_name == github.event.repository.default_branch
     name: Report
     needs:
-      - particles
+      - checks
+      - e2e
+      - frontend-test
+      - frontend-typecheck
       - rust-tests
     runs-on: ubuntu-latest
     steps:
       - env:
           NEEDS: ${{ toJSON(needs) }}
-          PARTICLES: '[{"generic":false,"name":"rust-tests"},{"generic":true,"name":"frontend-typecheck"},{"generic":true,"name":"frontend-test"},{"generic":true,"name":"e2e"},{"generic":true,"name":"checks"}]'
+          PARTICLES: '[{"generic":false,"name":"rust-tests"},{"generic":false,"name":"frontend-typecheck"},{"generic":false,"name":"frontend-test"},{"generic":false,"name":"e2e"},{"generic":false,"name":"checks"}]'
         name: Tally the particles
         run: |
           read -r failed total seconds incomplete < <(jq -rn --argjson needs "$NEEDS" --argjson spec "$PARTICLES" '
