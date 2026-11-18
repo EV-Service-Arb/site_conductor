@@ -1,9 +1,10 @@
 //! `execute` end to end: the in-page assistant asks a scripted Claude, whose code runs in the
-//! runner over the generated client (crates/sandbox/js, its node_modules installed) and comes
+//! runner over the generated client (crates/sandbox/js) and comes
 //! back through the conductor's `/api/run` as the asker. What reads runs; what destroys stops the
 //! run and is proposed; nothing but an operation is reached; the token dies with its run.
 
 use std::{
+	path::Path,
 	process::Stdio,
 	sync::{Arc, Mutex},
 	time::Duration,
@@ -69,12 +70,18 @@ async fn runner(conductor: &str) -> (String, tokio::process::Child) {
 		.map(|d| d.join("deno"))
 		.find(|p| p.is_file())
 		.expect("deno on PATH: the dev shell has it");
+	let js = concat!(env!("CARGO_MANIFEST_DIR"), "/js");
+	if !Path::new(js).join("node_modules").exists() {
+		// a fresh checkout's, CI's: an installed one may be js-local's links, never replaced
+		let installed = std::process::Command::new(&deno).args(["install", "--no-lock"]).current_dir(js).status().unwrap();
+		assert!(installed.success(), "deno install in {js}: {installed}");
+	}
 	let child = tokio::process::Command::new(env!("CARGO_BIN_EXE_sa_sandbox"))
 		.arg("serve")
 		.env("SANDBOX_BIND", format!("127.0.0.1:{port}"))
 		.env("SANDBOX_MAX", "2")
 		.env("SANDBOX_DENO", deno)
-		.env("SANDBOX_JS", concat!(env!("CARGO_MANIFEST_DIR"), "/js"))
+		.env("SANDBOX_JS", js)
 		.env("SANDBOX_CONDUCTOR_URL", format!("{conductor}/api/run"))
 		.env("PANEL_ASSERTION_KEYS", SEED.parse::<sa_auth::Signer>().unwrap().public())
 		.stdout(Stdio::null())
