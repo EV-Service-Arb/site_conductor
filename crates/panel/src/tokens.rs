@@ -97,6 +97,11 @@ impl Panel {
 		users::seen(&mut conn, user, now, now).await
 	}
 
+	pub async fn user(&self, user: Uuid) -> eyre::Result<Option<User>> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection to read a user")?;
+		users::get(&mut conn, user).await
+	}
+
 	/// The one user last seen with `email`.
 	pub async fn user_by_email(&self, email: &str) -> eyre::Result<Result<Uuid, Refused>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection to find a user")?;

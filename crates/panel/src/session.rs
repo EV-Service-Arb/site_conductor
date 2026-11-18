@@ -144,6 +144,8 @@ pub struct Session {
 	pub user_id: Uuid,
 	/// The MCP client it was granted to; `None`: a browser's.
 	pub client_id: Option<String>,
+	/// Whose account it acts in, lending its user's permissions.
+	pub acting_as: Option<Uuid>,
 	pub access: Zeroizing<String>,
 	pub access_expires_at: Timestamp,
 }
@@ -400,6 +402,7 @@ impl Panel {
 					key,
 					user_id: row.user_id,
 					client_id: row.client_id,
+					acting_as: row.acting_as,
 					access: tokens.access,
 					access_expires_at: tokens.access_expires_at,
 				})
@@ -450,6 +453,12 @@ impl Panel {
 		sessions::touch(&mut conn, key.as_bytes(), now).await
 	}
 
+	/// Has the session act in `subject`'s account, or its own on `None`.
+	pub async fn act(&self, key: &SessionKey, subject: Option<Uuid>) -> eyre::Result<()> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a session")?;
+		sessions::act(&mut conn, key.as_bytes(), subject).await
+	}
+
 	/// Closes a session; `false` when there was none.
 	pub async fn close_session(&self, key: &SessionKey) -> eyre::Result<bool> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a session")?;
@@ -465,6 +474,7 @@ impl Panel {
 			key,
 			user_id: row.user_id,
 			client_id: row.client_id.clone(),
+			acting_as: row.acting_as,
 			access: self.open_token(Which::Access, &key, row)?,
 			access_expires_at: row.access_expires_at,
 		})

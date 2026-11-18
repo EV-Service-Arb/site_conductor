@@ -464,6 +464,7 @@ pub(crate) fn user(caller: Caller, service: Service) -> User {
 		email_verified: caller.email_verified,
 		name: caller.preferred_name,
 		permissions: caller.permissions.iter().filter(|p| p.starts_with(service.prefix())).collect(),
+		actor: caller.actor,
 	}
 }
 

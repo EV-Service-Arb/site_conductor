@@ -109,10 +109,19 @@ pub enum Trash {
 	Keep,
 }
 
+/// `ActAs`: sign into another's account, lending them one's own permissions but a bound one.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Permission)]
-#[permission("sa:review_archive:members")]
+#[permission("sa:members")]
 pub enum Members {
 	ActAs,
+}
+
+/// What only its subject's own sign-in holds: never lent to whoever acts in their account.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Permission)]
+#[permission("sa:own", bound)]
+pub enum Own {
+	Payments,
+	Credentials,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Permission)]
@@ -131,7 +140,7 @@ pub enum Study {
 
 alias!(pub SA_OPERATOR = "sa:operator", [Work::Read, Leads::Edit, Pii::See, Analysis::Read, Study::Read]);
 // Held by every member of the `sa` scope, without a grant (concierge's `<namespace>:everyone`).
-alias!(pub SA_EVERYONE = "sa:everyone", [Mcp::Use]);
+alias!(pub SA_EVERYONE = "sa:everyone", [Mcp::Use, Own::Payments, Own::Credentials]);
 alias!(
 	pub SA_ADMIN = "sa:admin",
 	[
@@ -231,6 +240,14 @@ pub struct User {
 	pub name: String,
 	/// The caller's permissions under [`Service::prefix`] of `aud`, and no others.
 	pub permissions: PermissionSet,
+	/// Who is acting in `sub`'s account, lending their own permissions.
+	pub actor: Option<Actor>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+pub struct Actor {
+	pub sub: String,
+	pub email: String,
 }
 
 /// A signing key whose MAC the panel checked over the request's body: the service decides what
@@ -503,6 +520,7 @@ mod tests {
 				email_verified: true,
 				name: "A".into(),
 				permissions: [Archive::Operate.as_str()].into_iter().collect(),
+				actor: None,
 			}),
 			method: "POST".into(),
 			path: "/targets".into(),
@@ -607,7 +625,12 @@ mod tests {
 	#[test]
 	fn admin_holds_every_permission_and_delegates_operator() {
 		let catalog = concierge_iam::Catalog::collect("sa", 1);
-		assert_eq!(catalog.aliases["sa:admin"], catalog.permissions, "sa:admin holds every sa permission");
+		let bound: BTreeSet<String> = [Own::Payments, Own::Credentials].map(|p| p.as_str().to_owned()).into();
+		assert_eq!(
+			catalog.aliases["sa:admin"],
+			&catalog.permissions - &bound,
+			"sa:admin holds every sa permission but the bound ones"
+		);
 		assert_eq!(catalog.delegations["sa:admin"], ["sa:operator".to_owned()].into());
 	}
 }

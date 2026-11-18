@@ -37,13 +37,14 @@ use std::{
 };
 
 use axum::{
+	Extension,
 	extract::{FromRequestParts, Query, State},
 	http::{HeaderMap, HeaderValue, Method, StatusCode, header, request::Parts},
-	response::{Html, IntoResponse, Response},
+	response::{Html, IntoResponse, NoContent, Response},
 };
-use ev_lib::api::{JsonSchema, OperationInput, Refusal};
+use ev_lib::api::{Body, JsonSchema, OperationInput, Refusal};
 use jiff::Timestamp;
-use sa_auth::{PermissionSet, Principal, Vouch};
+use sa_auth::{Members, PermissionSet, Principal, Vouch};
 use sa_panel::{
 	Panel,
 	oauth::Grant,
@@ -54,7 +55,7 @@ use uuid::Uuid;
 
 use crate::{
 	access::PermissionName,
-	api::Code,
+	api::{ApiResult, Code},
 	concierge::{CLIENT_ID, CodeExchange, Concierge, ConciergeError, DEV_CODE, DevIdentity, Me},
 	cookies::{self, Cookies},
 	grafana::Loopback,
@@ -158,6 +159,9 @@ pub struct Caller {
 	pub permissions: PermissionSet,
 	/// Signed in by `PANEL_DEV_SIGN_IN`, not concierge: `/me` says so, for the UI to show.
 	pub dev_sign_in: bool,
+	/// Who acts in this account, lending their permissions; `None`: its own user.
+	#[serde(rename = "acting")]
+	pub actor: Option<sa_auth::Actor>,
 }
 
 impl<S: Send + Sync> FromRequestParts<S> for Caller {
@@ -581,6 +585,7 @@ impl Vouch<Flags> for ApiState {
 			email_verified: caller.email_verified,
 			name: caller.preferred_name.clone(),
 			permissions: caller.permissions.clone(),
+			actor: caller.actor.clone(),
 		};
 		parts.extensions.insert(caller);
 		Ok(Principal::User(user))
@@ -699,14 +704,83 @@ async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Res
 			return Err(e.wrap_err("recording a user seen").into());
 		}
 	}
-	Ok(Caller {
+	let own = Caller {
 		user_id: me.user_id,
 		email: me.email,
 		email_verified: me.email_verified,
 		preferred_name: me.preferred_name,
 		permissions: me.permissions,
 		dev_sign_in: s.concierge.is_dev(),
+		actor: None,
+	};
+	let Some(subject) = session.acting_as else { return Ok(own) };
+	assert!(!bearer, "PUT /me/acting refuses a bearer");
+	if !own.permissions.may(Members::ActAs) {
+		tracing::info!(actor = %own.user_id, %subject, "act_as revoked; acting stopped");
+		s.panel.act(&session.key, None).await.map_err(|e| e.wrap_err("stopping acting"))?;
+		return Ok(own);
+	}
+	let x = s.panel.user(subject).await?.ok_or_else(|| eyre::eyre!("acting_as references users"))?;
+	Ok(Caller {
+		user_id: x.user_id,
+		email: x.email,
+		email_verified: false, // this session never saw concierge vouch for the subject's email
+		preferred_name: x.name,
+		permissions: own.permissions.lent(),
+		dev_sign_in: own.dev_sign_in,
+		actor: Some(sa_auth::Actor {
+			sub: own.user_id.to_string(),
+			email: own.email,
+		}),
 	})
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Acting {
+	user_id: Uuid,
+}
+
+/// Signs this browser's session into `user_id`'s account, lending it the caller's permissions
+/// but the bound ones, until `DELETE /me/acting`.
+///
+/// 400 for oneself or an MCP client's session, 404 for nobody the conductor knows, 409 while acting.
+pub(crate) async fn start_acting(State(s): State<ApiState>, Extension(caller): Extension<Caller>, headers: HeaderMap, Body(b): Body<Acting>) -> ApiResult<NoContent> {
+	if headers.contains_key(header::AUTHORIZATION) {
+		return Err(Refusal::new(Code::BadRequest, "an MCP client's session acts as its own user only"));
+	}
+	if caller.actor.is_some() {
+		return Err(Refusal::new(Code::Conflict, "already acting: stop first"));
+	}
+	if b.user_id == caller.user_id {
+		return Err(Refusal::new(Code::BadRequest, "this is your own account"));
+	}
+	if s.sign_in.panel.user(b.user_id).await?.is_none() {
+		return Err(Refusal::new(Code::NotFound, "no such user"));
+	}
+	let key = session_key(&s.sign_in, &headers);
+	s.sign_in.panel.act(&key, Some(b.user_id)).await?;
+	tracing::info!(actor = %caller.user_id, subject = %b.user_id, "acting as");
+	Ok(NoContent)
+}
+
+/// Back to one's own account.
+pub(crate) async fn stop_acting(State(s): State<ApiState>, Extension(caller): Extension<Caller>, headers: HeaderMap) -> ApiResult<NoContent> {
+	if headers.contains_key(header::AUTHORIZATION) {
+		return Ok(NoContent); // a bearer's session never acts
+	}
+	if let Some(actor) = &caller.actor {
+		tracing::info!(actor = actor.sub, subject = %caller.user_id, "acting stopped");
+	}
+	s.sign_in.panel.act(&session_key(&s.sign_in, &headers), None).await?;
+	Ok(NoContent)
+}
+
+fn session_key(s: &SignIn, headers: &HeaderMap) -> SessionKey {
+	s.cookies
+		.get(headers, cookies::SESSION)
+		.and_then(SessionKey::of_cookie)
+		.expect("the gate read this cookie's session")
 }
 
 #[cfg(test)]

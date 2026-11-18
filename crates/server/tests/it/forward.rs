@@ -28,13 +28,7 @@ async fn a_signed_in_call_reaches_the_service_with_an_assertion_and_without_the_
 
 	b.sign_in(&app).await;
 	let (status, headers) = b
-		.send(
-			&app,
-			Method::GET,
-			"/api/review_archive/me/overview?x=1",
-			&[("x-sa-assertion", "forged"), ("x-member", "3")],
-			false,
-		)
+		.send(&app, Method::GET, "/api/review_archive/me/overview?x=1", &[("x-sa-assertion", "forged"), ("x-trace", "3")], false)
 		.await;
 	assert_eq!(status, StatusCode::OK);
 	assert_eq!(headers["x-upstream"], "yes");
@@ -44,7 +38,7 @@ async fn a_signed_in_call_reaches_the_service_with_an_assertion_and_without_the_
 	let got = seen.lock().unwrap().pop().unwrap();
 	assert_eq!(got.path_and_query, "/me/overview?x=1", "the prefix is the panel's");
 	assert!(got.headers.get(header::COOKIE).is_none(), "the session never leaves the panel");
-	assert_eq!(got.headers["x-member"], "3", "the service's own headers pass");
+	assert_eq!(got.headers["x-trace"], "3", "the service's own headers pass");
 	let keys: Keys = SEED.parse::<Signer>().unwrap().public().parse().unwrap();
 	let token = got.headers["x-sa-assertion"].to_str().unwrap();
 	let now = jiff::Timestamp::now().as_second();
@@ -63,7 +57,7 @@ async fn a_signed_in_call_reaches_the_service_with_an_assertion_and_without_the_
 	let Principal::User(a) = a.principal else { panic!("a session's call is a user's") };
 	assert_eq!(a.email, "dev-admin@localhost");
 	assert!(a.permissions.iter().all(|p| p.starts_with("sa:review_archive:")), "{:?}", a.permissions);
-	assert!(a.permissions.iter().count() == 2, "{:?}", a.permissions);
+	assert!(a.permissions.iter().count() == 1, "{:?}", a.permissions);
 }
 
 #[tokio::test]

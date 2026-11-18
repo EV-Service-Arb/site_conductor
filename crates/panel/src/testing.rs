@@ -204,12 +204,12 @@ pub fn sign_get(key: SourceKey<'_>, path: &str, at: Timestamp) -> Signed {
 
 /// What `sa:operator` holds.
 pub fn operator() -> sa_auth::PermissionSet {
-	sa_auth::SA_OPERATOR.members.iter().copied().collect()
+	sa_auth::SA_OPERATOR.members.iter().chain(sa_auth::SA_EVERYONE.members).copied().collect()
 }
 
 /// What `sa:admin` holds.
 pub fn admin() -> sa_auth::PermissionSet {
-	sa_auth::SA_ADMIN.members.iter().copied().collect()
+	sa_auth::SA_ADMIN.members.iter().chain(sa_auth::SA_EVERYONE.members).copied().collect()
 }
 
 /// A vendor that counts `units` of every one of its meters on `account`, each `net` after credits

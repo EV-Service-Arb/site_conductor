@@ -171,6 +171,8 @@ POST /auth/logout    CSRF; every session of the user is closed
   exactly what its gate checks (`sa_auth::Gate`, the conductor's `Vouch` the session):
   `sa:admin:sources:manage` for the source keys, `sa:admin:tokens:grant` for everyone's tokens,
   `sa:placement:study:read` / `:spend` for placement's studies and pulls,
+  `sa:own:payments` / `:credentials` for what only the caller's own sign-in does (claiming,
+  spending settings and the wallet; their Claude, linking Telegram, authorizing an MCP client),
   none for the rest (the caller's own gmails, GMBs, trades, tokens, alerts, chats and review kit). Each fresh
   `GetMe` upserts the user (`users`: id, email, name), whom tokens and gmails belong to.
 - **The catalog.** `serve` publishes `Catalog::collect("sa", PANEL_BUILD_EPOCH)` — the whole `sa`
@@ -178,6 +180,14 @@ POST /auth/logout    CSRF; every session of the user is closed
   sets `PANEL_BUILD_EPOCH` to the commit's unix seconds, so an older replica never supersedes a
   newer one); concierge refusing it fails the boot. Not under dev sign-in. Its `sa:everyone`
   alias is held by every member of the `sa` scope with no grant.
+- **Acting as another** (`sa:members:act_as`): `PUT /me/acting {user_id}` (fresh; never oneself,
+  while acting, or on an MCP client's session) has the browser's session act in that user's
+  account (`sessions.acting_as`) until `DELETE /me/acting`. The gate then answers the subject
+  (id, email and name from `users`) holding the actor's permissions `lent`: all but those
+  `sa_auth` derives `bound` (`sa:own:*`, held through `sa:everyone` only). `/me`'s `acting` and
+  the assertion's `actor` name the actor; every service, Grafana viewer and live socket follows
+  the subject, who pays for what is done in their account. `GetMe` stays the actor's; one without
+  `act_as` ends acting.
 - **`return_to`** is a path on this origin: it starts with `/`, the next character is not `/`,
   it has no `\`, only visible ASCII, ≤ 512 bytes. Anything else is the 400 sign-in page.
 - **Revocation.** concierge refusing a refresh or `GetMe` closes the session here; concierge
@@ -246,14 +256,13 @@ second block below to it.
 - **The assertion** (`sa_auth`, header `x-sa-assertion`) is signed for one request: Ed25519
   (`PANEL_ASSERTION_KEY`), `aud` the service, the method and the upstream path (without its
   query), alive 60 s, and a principal: a **User** (`sub`, email, `email_verified`, name, and
-  their `sa:<service>:*` permissions only), a **Source** (a key the conductor authenticated:
+  their `sa:<service>:*` permissions only, and the `actor` acting in `sub`'s account), a **Source** (a key the conductor authenticated:
   `key_id`, kind, brands, and the SHA-256 of the body its MAC covered), or the **Conductor**
   itself (its hubs). The services verify it with the public half (`PANEL_ASSERTION_KEYS`,
   several while a key rotates) and trust nothing else.
 - **Hygiene:** the browser's `Cookie`, any inbound `x-sa-assertion` and `x-sa-csrf`, an MCP
   client's bearer, and hop-by-hop headers (`Upgrade` included: nothing is upgraded through the
-  forward) never go up; `Set-Cookie` never comes down. Everything else passes (`Idempotency-Key`,
-  `X-Member`).
+  forward) never go up; `Set-Cookie` never comes down. Everything else passes (`Idempotency-Key`).
 - **Gates:** a gated read takes the cached `GetMe`, a gated write asks concierge afresh. A write
   under a service's API needs the conductor's CSRF header, or an MCP client's bearer.
 - **A path stays under its upstream prefix:** a `.` or `..` segment, `%2e`, `%2f`, `%5c` and `\`
@@ -485,10 +494,13 @@ not authority — each service still authorizes the call, which goes through the
 
 ```text
 GET    /me
-GET    /me/claude
-POST   /me/claude/connect
-PUT    /me/claude
-DELETE /me/claude
+PUT    /me/acting                           members:act_as, fresh
+DELETE /me/acting
+GET    /members                             members:act_as
+GET    /me/claude                           own:credentials
+POST   /me/claude/connect                   own:credentials
+PUT    /me/claude                           own:credentials
+DELETE /me/claude                           own:credentials
 GET    /openapi.json
 GET    /live                                socket
 GET    /sources                             sources:manage
@@ -499,7 +511,7 @@ PUT    /sources/{key_id}/origin             sources:manage, fresh
 POST   /access/requests
 GET    /access/requests/mine
 GET    /alerts
-POST   /alerts/telegram/{link,chats}        fresh
+POST   /alerts/telegram/{link,chats}        own:credentials, fresh
 PUT    /alerts/destinations/{id}/{rules,gmail}
 POST   /alerts/destinations/{id}/test
 DELETE /alerts/destinations/{id}
@@ -563,8 +575,8 @@ PUT    /trash/settings
 GET    /tokens
 GET    /tokens/ledger
 GET    /tokens/usage
-POST   /tokens/claim
-PUT    /tokens/settings
+POST   /tokens/claim                        own:payments
+PUT    /tokens/settings                     own:payments
 GET    /admin/tokens                        tokens:grant
 POST   /admin/tokens/{user_id}              tokens:grant, fresh
 GET    /admin/tokens/prices                 tokens:grant
@@ -1069,6 +1081,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 
 ## Invariants
 
+- **Acting as another lends the actor's permissions into the subject's account, never a bound
+  one; a bound permission is held only by its subject's own session.**
 - **A service trusts the conductor's assertion and nothing else**, and one assertion opens one
   request: its audience, its method, its path, 60 s; a User's permissions only of that service;
   a Source's over the body its MAC covered. The conductor never forwards a cookie, nor an

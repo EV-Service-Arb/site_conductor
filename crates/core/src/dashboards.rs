@@ -1,5 +1,5 @@
 //! A service's Grafana dashboards, built over its own document: a panel's or a variable's query
-//! names an operation, so its URL is that operation's path, the parameters and headers it binds are
+//! names an operation, so its URL is that operation's path, the parameters it binds are
 //! the operation's, and every field its JSONata reads is in the operation's answer. A dashboard
 //! that drifted from its API fails where it is built.
 
@@ -23,8 +23,6 @@ pub struct Query<'a> {
 	pub path: &'a [(&'a str, &'a str)],
 	/// Its query string: each a query parameter the operation takes.
 	pub params: &'a [(&'a str, &'a str)],
-	/// Each a header parameter the operation takes (`x-member`).
-	pub headers: &'a [(&'a str, &'a str)],
 	/// `None`: the panel takes the answer whole.
 	pub select: Option<Select<'a>>,
 }
@@ -164,7 +162,7 @@ impl<'a> Board<'a> {
 			.unwrap_or_else(|| panic!("{title}: no operation {} in the document", query.operation));
 		let op = serde_json::to_value(op).expect("an operation serializes");
 		let components = serde_json::to_value(&self.doc.components).expect("components serialize")["schemas"].take();
-		for (place, given) in [("path", query.path), ("query", query.params), ("header", query.headers)] {
+		for (place, given) in [("path", query.path), ("query", query.params), ("header", &[])] {
 			let taken: Vec<&Value> = op["parameters"].as_array().into_iter().flatten().filter(|p| p["in"] == place).collect();
 			for (name, _) in given {
 				assert!(
@@ -184,10 +182,7 @@ impl<'a> Board<'a> {
 		}
 		let url = query.path.iter().fold(path.to_owned(), |url, (name, value)| url.replace(&format!("{{{name}}}"), value));
 		let pairs = |given: &[(&str, &str)]| given.iter().map(|(k, v)| json!({ "key": k, "value": v })).collect::<Vec<_>>();
-		let mut options = json!({ "method": "GET", "params": pairs(query.params) });
-		if !query.headers.is_empty() {
-			options["headers"] = Value::Array(pairs(query.headers));
-		}
+		let options = json!({ "method": "GET", "params": pairs(query.params) });
 		let mut target = json!({
 			"datasource": self.datasource(),
 			"type": "json",

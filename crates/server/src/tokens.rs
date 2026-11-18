@@ -14,7 +14,7 @@ use axum::{
 };
 use ev_lib::api::{Body, Ids, JsonSchema, Params, Refusal};
 use jiff::Timestamp;
-use sa_auth::{Principal, Service, Tokens};
+use sa_auth::{Own, Principal, Service, Tokens};
 use sa_core::{
 	prices::{Item, Scope, TOKEN_USD_MICROS},
 	tokens::ChargePage,
@@ -321,8 +321,8 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/tokens", USER, tokens),
 		ApiRoute::new(M::GET, "/tokens/ledger", USER, ledger),
 		ApiRoute::new(M::GET, "/tokens/usage", USER, token_usage),
-		ApiRoute::new(M::POST, "/tokens/claim", USER, claim_tokens),
-		ApiRoute::new(M::PUT, "/tokens/settings", USER, set_spending),
+		ApiRoute::new(M::POST, "/tokens/claim", USER.needs(Own::Payments), claim_tokens),
+		ApiRoute::new(M::PUT, "/tokens/settings", USER.needs(Own::Payments), set_spending),
 		ApiRoute::new(M::GET, "/admin/tokens", admin, token_holders),
 		// Tokens must not be handed out on a permission revoked a moment ago.
 		ApiRoute::new(M::POST, "/admin/tokens/{user_id}", FRESH.needs(Tokens::Grant), change_balance),
@@ -459,7 +459,7 @@ async fn token_usage(State(panel): State<Panel>, Extension(caller): Extension<Ca
 }
 
 /// Every user's balance, renewed.
-async fn token_holders(State(panel): State<Panel>) -> ApiResult<Json<TokenHoldersDto>> {
+pub(crate) async fn token_holders(State(panel): State<Panel>) -> ApiResult<Json<TokenHoldersDto>> {
 	let holders = panel.holders(Timestamp::now()).await??;
 	Ok(Json(TokenHoldersDto {
 		users: holders

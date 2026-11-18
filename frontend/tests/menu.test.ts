@@ -7,7 +7,7 @@ import type { T } from "@/shared/i18n";
 
 const t: T = (...args) => args[1];
 
-const holding = (...permissions: Permission[]): Caller => ({ user_id: "u", email: "e", preferred_name: "", permissions, dev_sign_in: false });
+const holding = (...permissions: Permission[]): Caller => ({ user_id: "u", email: "e", preferred_name: "", permissions, dev_sign_in: false, acting: null });
 const alias = (name: Need): Caller => holding(...grants(name));
 
 /** What the top bar offers a caller: Sites, the chip's entries past the profile. */

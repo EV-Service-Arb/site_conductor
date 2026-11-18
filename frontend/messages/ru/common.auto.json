@@ -223,6 +223,10 @@
     "en": "set {at}",
     "t": "задан {at}"
   },
+  "account.stopActing": {
+    "en": "Stop viewing as {name}",
+    "t": "Прекратить просмотр от имени {name}"
+  },
   "account.test": {
     "en": "Test",
     "t": "Проверить"
@@ -2215,6 +2219,10 @@
     "en": "Language",
     "t": "Язык"
   },
+  "nav.members": {
+    "en": "View as member",
+    "t": "Просмотр в качестве участника"
+  },
   "nav.menu": {
     "en": "Menu",
     "t": "Меню"
@@ -2643,6 +2651,14 @@
     "en": "{n} GBPs have no trade → the outline's No category chip",
     "t": "{n} GBP без ниши → чип «Без категории» в outline"
   },
+  "session.acting": {
+    "en": "acting as",
+    "t": "действуете как"
+  },
+  "session.acting.hint": {
+    "en": "Signed in as {email}, viewing this account with your permissions. Press to stop.",
+    "t": "Вы вошли как {email} и просматриваете этот аккаунт с вашими правами. Нажмите, чтобы прекратить."
+  },
   "session.devSignIn": {
     "en": "dev sign-in",
     "t": "dev-вход"
@@ -2650,6 +2666,30 @@
   "session.devSignIn.hint": {
     "en": "This backend signs people in without concierge. It is for local work only.",
     "t": "Этот бэкенд пускает без concierge. Только для локальной работы."
+  },
+  "session.members.acting": {
+    "en": "You are viewing {name}'s account as {email}.",
+    "t": "Вы просматриваете аккаунт пользователя {name} как {email}."
+  },
+  "session.members.description": {
+    "en": "Their account, as they see it, with your permissions. Their payments and sign-ins stay theirs.",
+    "t": "Их аккаунт в том виде, в котором его видят они, но с вашими правами. Их платежи и входы остаются за ними."
+  },
+  "session.members.search": {
+    "en": "Name or email",
+    "t": "Имя или электронная почта"
+  },
+  "session.members.stop": {
+    "en": "Stop viewing as {name}",
+    "t": "Прекратить просмотр аккаунта пользователя {name}"
+  },
+  "session.members.title": {
+    "en": "View as member",
+    "t": "Просмотр от имени участника"
+  },
+  "session.members.view": {
+    "en": "View as",
+    "t": "Просмотреть как"
   },
   "signin.expired.action": {
     "en": "Sign in",

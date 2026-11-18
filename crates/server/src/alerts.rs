@@ -14,7 +14,7 @@ use axum::{
 use ev_lib::api::{Body, Created, Ids, JsonSchema, Refusal};
 use jiff::Timestamp;
 use sa_alerts::{Call, NotePage, Rule};
-use sa_auth::{Service, User};
+use sa_auth::{Own, Service, User};
 use sa_core::feeds;
 use sa_panel::{
 	Panel, Refused,
@@ -110,8 +110,8 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 	vec![
 		ApiRoute::new(M::GET, "/alerts", USER, alerts),
 		// What a link token or a chat carries is concierge's answer of this moment.
-		ApiRoute::new(M::POST, "/alerts/telegram/link", FRESH, telegram_link),
-		ApiRoute::new(M::POST, "/alerts/telegram/chats", FRESH, add_chat),
+		ApiRoute::new(M::POST, "/alerts/telegram/link", FRESH.needs(Own::Credentials), telegram_link),
+		ApiRoute::new(M::POST, "/alerts/telegram/chats", FRESH.needs(Own::Credentials), add_chat),
 		ApiRoute::new(M::PUT, "/alerts/destinations/{id}/rules", USER, set_destination_rules),
 		ApiRoute::new(M::PUT, "/alerts/destinations/{id}/gmail", USER, set_destination_gmail),
 		ApiRoute::new(M::POST, "/alerts/destinations/{id}/test", USER, test_destination),
@@ -349,6 +349,7 @@ impl Feeds for Forward {
 			email_verified: who.email_verified,
 			name: who.preferred_name.clone(),
 			permissions: who.permissions.iter().filter(|p| p.starts_with(service.prefix())).collect(),
+			actor: None, // a press in the user's own chat
 		};
 		let sent = self.as_user(req.body(body).expect("a request from parts that parsed"), user);
 		let res = tokio::time::timeout(SITES_TIMEOUT, sent)

@@ -10,6 +10,7 @@ import { AlertsView } from "@/views/alerts";
 import { AssistantView } from "@/views/assistant";
 import { Home } from "@/views/home";
 import { KitView } from "@/views/kit";
+import { MembersView } from "@/views/members";
 import { ReviewArchiveView } from "@/views/review-archive";
 import { PanelShell } from "@/views/shell";
 import { SitesView } from "@/views/sites";
@@ -55,6 +56,8 @@ function framed(at: Exclude<At, { view: "access" | "area" }>): ReactNode {
       return <UsageView />;
     case "wallet":
       return <WalletView />;
+    case "members":
+      return <MembersView />;
     case "alerts":
       return <AlertsView />;
     default:

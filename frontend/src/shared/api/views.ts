@@ -399,6 +399,22 @@ export const VIEWS = {
       },
       "key": "h"
     },
+    "members": {
+      "path": "/members",
+      "description": "Everyone, to act as; and the way back while acting.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "needs": "sa:members:act_as",
+      "key": "m"
+    },
     "review_archive": {
       "path": "/review_archive",
       "description": "The review archive's dashboard.",
@@ -1007,6 +1023,7 @@ export const VIEWS = {
         "required": [],
         "type": "object"
       },
+      "needs": "sa:own:payments",
       "key": "w"
     }
   }

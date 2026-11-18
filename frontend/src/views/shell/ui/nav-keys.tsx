@@ -21,6 +21,7 @@ const LABEL: Record<Keyed, (t: T) => string> = {
   tokens: (t) => t(nav.tokens, "Tokens"),
   usage: (t) => t(usage.title, "Usage"),
   wallet: (t) => t(nav.wallet, "Wallet"),
+  members: (t) => t(nav.members, "View as member"),
   alerts: (t) => t(nav.alerts, "Alerts"),
   account: (t) => t(nav.account, "Profile"),
 };

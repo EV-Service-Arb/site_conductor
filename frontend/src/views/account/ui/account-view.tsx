@@ -5,9 +5,10 @@ import { ACCOUNT_SECTIONS } from "@evinvest/concierge";
 import { AccountPage } from "@evinvest/concierge/react";
 import { useEffect, useState } from "react";
 
+import { may, useMe } from "@/entities/session";
 import { panelRouteFor } from "@/features/account-chip";
 import { useSignOut } from "@/features/sign-out";
-import { platformMfe } from "@/shared/api";
+import { api, platformMfe } from "@/shared/api";
 import { go, useAt } from "@/shared/lib/location";
 import { useLocale, useT, nav, account } from "@/shared/i18n";
 import { EmptyState } from "@/shared/ui/empty-state";
@@ -24,6 +25,7 @@ export function AccountView() {
   const t = useT();
   const locale = useLocale();
   const signOut = useSignOut();
+  const me = useMe();
   const at = useAt();
   if (at.view !== "account") throw new Error(`the account's page on ${at.view}`);
   const section = ACCOUNT_SECTIONS.find((s) => s === at.params.section);
@@ -47,7 +49,8 @@ export function AccountView() {
   };
   return (
     <PageFrame breakpoint="md" title={t(nav.account, "Profile")} width="content">
-      {scriptUrl === undefined ? (
+      {/* the platform session is whoever acts, never the account acted in */}
+      {!may(me, "sa:own:credentials") ? null : scriptUrl === undefined ? (
         loading
       ) : scriptUrl === null ? (
         <EmptyState title={t(account.unavailable, "Your account could not be loaded.")} />
@@ -65,7 +68,7 @@ export function AccountView() {
           fallback={loading}
         />
       )}
-      <SpendingCard />
+      {api.mayCall("put", "/tokens/settings", me.permissions) && <SpendingCard />}
     </PageFrame>
   );
 }

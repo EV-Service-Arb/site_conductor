@@ -261,7 +261,7 @@ fn profile(user_id: &str, who: &str, permissions: &[&str]) -> pb::UserProfile {
 		email: format!("{who}@example.com"),
 		email_verified: true,
 		preferred_name: "Ann".to_owned(),
-		permissions: permissions.iter().map(|p| (*p).to_owned()).collect(),
+		permissions: permissions.iter().chain(sa_auth::SA_EVERYONE.members).map(|p| (*p).to_owned()).collect(),
 		..Default::default()
 	}
 }
@@ -396,7 +396,7 @@ async fn an_operator_signs_in_and_signs_out() {
 	assert_eq!(me.status, StatusCode::OK, "{}", me.body);
 	assert_eq!(
 		me.body,
-		json!({"user_id": OPERATOR, "email": "investor@example.com", "preferred_name": "Ann", "permissions": operator(), "dev_sign_in": false})
+		json!({"user_id": OPERATOR, "email": "investor@example.com", "preferred_name": "Ann", "permissions": operator(), "dev_sign_in": false, "acting": null})
 	);
 	assert_eq!(me.headers[header::CACHE_CONTROL], "no-store");
 
@@ -443,7 +443,13 @@ async fn every_account_signs_in_and_its_permissions_open_the_sections() {
 
 	// An account holding nothing here signs in, and is shown nothing.
 	fake.with(|f| {
-		f.profiles.insert("seed-outsider".into(), Ok(profile(OUTSIDER, "investor", &[])));
+		f.profiles.insert(
+			"seed-outsider".into(),
+			Ok(pb::UserProfile {
+				permissions: vec![], // no member of the scope: not even sa:everyone
+				..profile(OUTSIDER, "investor", &[])
+			}),
+		);
 		f.next_user = Some((OUTSIDER.into(), SignedDuration::from_mins(15)));
 	});
 	let mut outsider = Browser::default();
@@ -458,10 +464,7 @@ async fn every_account_signs_in_and_its_permissions_open_the_sections() {
 	});
 	let mut admin = Browser::default();
 	admin.sign_in(&app, &fake, None).await;
-	assert_eq!(
-		admin.get(&app, "/api/v1/me").await.body["permissions"],
-		json!(SA_ADMIN.members.iter().copied().collect::<PermissionSet>())
-	);
+	assert_eq!(admin.get(&app, "/api/v1/me").await.body["permissions"], json!(sa_panel::testing::admin()));
 	let added = admin
 		.post(
 			&app,
@@ -685,6 +688,34 @@ async fn key_changes_ask_concierge_afresh() {
 }
 
 #[tokio::test]
+async fn revoking_act_as_ends_acting_by_the_next_getme() {
+	let db = TestDb::create().await;
+	let (app, fake, _) = setup(&db).await;
+	user(&fake, OPERATOR, "derek", SA_OPERATOR.members);
+	let mut derek = Browser::default();
+	derek.sign_in(&app, &fake, None).await;
+	derek.get(&app, "/api/v1/me").await;
+	user(&fake, ADMIN, "investor", SA_ADMIN.members);
+	let mut b = Browser::default();
+	b.sign_in(&app, &fake, None).await;
+	let started = b.send(&app, Method::PUT, "/api/v1/me/acting", Some(json!({"user_id": OPERATOR})), true).await;
+	assert_eq!(started.status, StatusCode::NO_CONTENT, "{}", started.body);
+	assert_eq!(b.get(&app, "/api/v1/me").await.body["user_id"], OPERATOR);
+
+	fake.with(|f| {
+		for p in f.profiles.values_mut().flatten() {
+			if p.user_id == ADMIN {
+				*p = profile(ADMIN, "investor", SA_OPERATOR.members);
+			}
+		}
+	});
+	let write = b.post(&app, "/api/v1/sources", json!({"key_id": "hand", "kind": "site", "brands": ["aquafix"]})).await;
+	assert_eq!(write.status, StatusCode::FORBIDDEN, "a write asks concierge afresh, and is the actor's own again: {}", write.body);
+	let me = b.get(&app, "/api/v1/me").await.body;
+	assert_eq!((&me["user_id"], &me["acting"]), (&json!(ADMIN), &json!(null)));
+}
+
+#[tokio::test]
 async fn signing_in_again_and_out_closes_the_old_sessions() {
 	let db = TestDb::create().await;
 	let (app, fake, _) = setup(&db).await;
@@ -875,14 +906,11 @@ async fn no_permission_opens_no_section() {
 		open,
 		std::collections::BTreeSet::from([
 			"/me",
-			"/me/claude",
-			"/me/claude/connect",
+			"/me/acting",
 			"/openapi.json",
 			"/access/requests",
 			"/access/requests/mine",
 			"/alerts",
-			"/alerts/telegram/link",
-			"/alerts/telegram/chats",
 			"/alerts/destinations/{id}/rules",
 			"/alerts/destinations/{id}/gmail",
 			"/alerts/destinations/{id}/test",
@@ -930,8 +958,6 @@ async fn no_permission_opens_no_section() {
 			"/tokens",
 			"/tokens/ledger",
 			"/tokens/usage",
-			"/tokens/claim",
-			"/tokens/settings",
 			"/trash",
 			"/trash/gmails/{id}/restore",
 			"/trash/gmbs/{id}/restore",

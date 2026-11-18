@@ -54,7 +54,7 @@ async fn tool(app: &Router, bearer: &str, name: &str, arguments: Value) -> (Valu
 
 /// A client registered and authorized through the whole OAuth dance: its bearer, the browser of the
 /// user who consented, and that browser's own session.
-async fn signed_in_client(app: &Router) -> (String, Browser, String) {
+pub(crate) async fn signed_in_client(app: &Router) -> (String, Browser, String) {
 	let app = app.clone();
 	let mut client = Browser::default();
 	let (status, _, body) = client.send_body(&app, Method::GET, "/.well-known/oauth-protected-resource/mcp", &[], false, Body::empty()).await;

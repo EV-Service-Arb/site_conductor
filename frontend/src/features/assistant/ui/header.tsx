@@ -5,6 +5,7 @@ import { BookOpen, ChevronDown, ChevronsRight, Ellipsis, FileText, KeyRound, Map
 import { useState } from "react";
 
 import { assistant } from "@/entities/assistant";
+import { useMe } from "@/entities/session";
 import { ConnectClaudeDialog, useClaude } from "@/features/connect-claude";
 import { api, ok } from "@/shared/api";
 import type { ChatSummary, Mention, Source, Turn } from "@/shared/api/schema";
@@ -43,7 +44,7 @@ export function Header({
   const { display, onChanged } = useControls();
   const [renaming, setRenaming] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const mine = useClaude();
+  const me = useMe();
   const full = display === "full";
   const interacts = chat !== null && chat.role !== "viewer";
   const title = chat?.title ?? t(assistant.newChat, "New chat");
@@ -153,11 +154,7 @@ export function Header({
         <DropdownMenuContent align="end" className="w-52">
           {chat !== null && <ChatActions chat={chat} onRename={() => setRenaming(true)} pinOutside={full} />}
           {chat !== null && <DropdownMenuSeparator />}
-          <DropdownMenuItem onSelect={() => setConnecting(true)}>
-            <KeyRound />
-            <span className="flex-1">{t(assistant.claude, "Your Claude")}</span>
-            <span className="text-caption text-ink-soft">{mine.status === "ok" ? (mine.data === null ? t(assistant.claude.none, "not connected") : mine.data.checked.error === null ? t(assistant.claude.on, "connected") : t(assistant.claude.refused, "refused")) : null}</span>
-          </DropdownMenuItem>
+          {api.mayCall("get", "/me/claude", me.permissions) && <ClaudeItem onSelect={() => setConnecting(true)} />}
         </DropdownMenuContent>
       </DropdownMenu>
       <ConnectClaudeDialog open={connecting} onOpenChange={setConnecting} />
@@ -184,6 +181,18 @@ export function Header({
 }
 
 /** The locations named in a chat and what its answers read. */
+function ClaudeItem({ onSelect }: { onSelect: () => void }) {
+  const t = useT();
+  const mine = useClaude();
+  return (
+    <DropdownMenuItem onSelect={onSelect}>
+      <KeyRound />
+      <span className="flex-1">{t(assistant.claude, "Your Claude")}</span>
+      <span className="text-caption text-ink-soft">{mine.status === "ok" ? (mine.data === null ? t(assistant.claude.none, "not connected") : mine.data.checked.error === null ? t(assistant.claude.on, "connected") : t(assistant.claude.refused, "refused")) : null}</span>
+    </DropdownMenuItem>
+  );
+}
+
 function touched(turns: readonly Turn[]) {
   const locations = new Map<number, Mention>();
   const read = new Map<string, Source>();

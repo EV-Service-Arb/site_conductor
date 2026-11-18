@@ -83,7 +83,6 @@ fn flows<'a>(selector: &'a str, params: &'a [(&'a str, &'a str)]) -> Query<'a> {
 		operation: op_id(token_flows),
 		path: &[],
 		params,
-		headers: &[],
 		select: Some(Select {
 			root_selector: selector,
 			columns: &[("kind", Column::String), ("tokens", Column::Number)],
@@ -98,7 +97,6 @@ fn panels_query_their_operations_and_read_one_another() {
 		operation: op_id(board_of),
 		path: &[("gmb", "${gmb}")],
 		params: &[],
-		headers: &[],
 		select: None,
 	};
 	let built = Board::new(&doc, "conductor")
@@ -164,25 +162,6 @@ fn a_field_the_answer_lacks_fails_the_build() {
 			grid: [0, 0, 24, 8],
 		},
 		flows("flows.amount", &[("from", "x")]),
-		json!({}),
-	);
-}
-
-#[test]
-#[should_panic(expected = "token_flows takes no header parameter \"x-member\"")]
-fn a_header_the_operation_does_not_take_fails_the_build() {
-	let query = Query {
-		headers: &[("x-member", "${member}")],
-		..flows("flows", &[("from", "x")])
-	};
-	Board::new(&doc(), "conductor").panel(
-		Panel {
-			id: 1,
-			kind: "table",
-			title: "Flows",
-			grid: [0, 0, 24, 8],
-		},
-		query,
 		json!({}),
 	);
 }

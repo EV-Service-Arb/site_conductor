@@ -19,6 +19,7 @@ pub struct SessionRow {
 	pub expires_at: Timestamp,
 	/// The MCP client it was granted to; `None`: a browser's.
 	pub client_id: Option<String>,
+	pub acting_as: Option<Uuid>,
 }
 
 /// The sealed tokens of a session, as written.
@@ -52,7 +53,7 @@ pub async fn insert(conn: &mut SqliteConnection, id_hash: &[u8], user_id: Uuid, 
 
 macro_rules! columns {
 	() => {
-		"user_id, access_sealed, access_expires_at, refresh_sealed, data_key_fp, expires_at, client_id"
+		"user_id, access_sealed, access_expires_at, refresh_sealed, data_key_fp, expires_at, client_id, acting_as"
 	};
 }
 
@@ -184,6 +185,16 @@ pub async fn newest_of_user(conn: &mut SqliteConnection, user_id: Uuid, now: Tim
 	.wrap_err("finding a user's session")
 }
 
+pub async fn act(conn: &mut SqliteConnection, id_hash: &[u8], subject: Option<Uuid>) -> eyre::Result<()> {
+	sqlx::query("UPDATE sessions SET acting_as = $2 WHERE id_hash = $1")
+		.bind(id_hash)
+		.bind(subject)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("setting whom a session acts as")?;
+	Ok(())
+}
+
 /// Marks a session used at `now`; written at most once a minute.
 pub async fn touch(conn: &mut SqliteConnection, id_hash: &[u8], now: Timestamp) -> eyre::Result<()> {
 	sqlx::query("UPDATE sessions SET last_seen_at = $2 WHERE id_hash = $1 AND (last_seen_at IS NULL OR last_seen_at < $3)")
@@ -215,6 +226,7 @@ struct Row {
 	data_key_fp: Vec<u8>,
 	expires_at: i64,
 	client_id: Option<String>,
+	acting_as: Option<Uuid>,
 }
 
 impl TryFrom<Row> for SessionRow {
@@ -229,6 +241,7 @@ impl TryFrom<Row> for SessionRow {
 			data_key_fp: r.data_key_fp,
 			expires_at: from_db(r.expires_at)?,
 			client_id: r.client_id,
+			acting_as: r.acting_as,
 		})
 	}
 }

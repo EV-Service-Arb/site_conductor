@@ -30,13 +30,16 @@ import { ArrowUpRight, Bell, Globe, MapPin, Menu, PanelLeftClose, PanelLeftOpen,
 import { useEffect, useState } from "react";
 
 import { unreached, useAlerts, alerts as alertsKeys } from "@/entities/alerts";
-import { DevSignInBadge, useMe } from "@/entities/session";
+import { ActingAsBadge, DevSignInBadge, useMe } from "@/entities/session";
 import { useTokens, tokens as tokensKeys } from "@/entities/tokens";
 import { AccountChip } from "@/features/account-chip";
 import { AssistantToggle } from "@/features/assistant";
 import { useSignOut } from "@/features/sign-out";
 
 import { PANEL } from "@config";
+import { mayOpen } from "@evinvest/views";
+
+import { VIEWS } from "@/shared/api/views";
 
 import { safeLocalPath } from "@/shared/api";
 import { ViewLink, go, linkTo, useAt, usePath } from "@/shared/lib/location";
@@ -92,6 +95,7 @@ export function PanelTopBar() {
               <SheetHeader className="flex-row items-center gap-2 p-0">
                 <SheetTitle>{t(appKeys.name, "Service-Arb")}</SheetTitle>
                 <DevSignInBadge />
+                <ActingAsBadge />
               </SheetHeader>
               <NavMenuList groups={switcher} pathname={pathname} linkComponent={ViewLink} onNavigate={() => setOpen(false)} className="w-auto" />
               <div className="border-t border-border pt-2">
@@ -118,6 +122,7 @@ export function PanelTopBar() {
           {PANEL.assistant && at.view !== "assistant" && <AssistantToggle />}
           <AlertsLink />
           <LanguageMenu />
+          <ActingAsBadge className="ml-1" />
           <AccountChip me={me} onSignOut={signOut} className="ml-1" />
           <ScreensMenu />
         </div>
@@ -285,6 +290,7 @@ function ScreensMenu() {
 /** The caller's own screens; Tokens is labelled with the count, never called a balance: evinvest.ltd's wallet is another ledger. */
 function OwnScreens({ bar = false, className, onNavigate }: { bar?: boolean; className?: string; onNavigate?: () => void }) {
   const t = useT();
+  const me = useMe();
   const tokens = useTokens();
   const at = useAt();
   const label = {
@@ -295,7 +301,7 @@ function OwnScreens({ bar = false, className, onNavigate }: { bar?: boolean; cla
   return (
     <div className={cn("flex items-center gap-1", className)}>
       {OWN
-        .filter((id) => !(bar && inMenu(id)))
+        .filter((id) => !(bar && inMenu(id)) && mayOpen(VIEWS, id, me.permissions))
         .map((id) => {
         const here = at.view === id;
         return (

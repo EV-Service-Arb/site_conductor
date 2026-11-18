@@ -3464,7 +3464,8 @@
           "unauthenticated": 401,
           "unavailable": 503,
           "unstudied": 422
-        }
+        },
+        "x-permission": "sa:own:credentials"
       }
     },
     "/alerts/telegram/link": {
@@ -3626,7 +3627,8 @@
           "unauthenticated": 401,
           "unavailable": 503,
           "unstudied": 422
-        }
+        },
+        "x-permission": "sa:own:credentials"
       }
     },
     "/areas": {
@@ -14764,6 +14766,324 @@
         }
       }
     },
+    "/me/acting": {
+      "put": {
+        "tags": [
+          "signin"
+        ],
+        "summary": "Signs this browser's session into `user_id`'s account, lending it the caller's permissions but the bound ones, until `DELETE /me/acting`.",
+        "description": "400 for oneself or an MCP client's session, 404 for nobody the conductor knows, 409 while acting.",
+        "operationId": "start_acting",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Acting"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        },
+        "x-permission": "sa:members:act_as"
+      },
+      "delete": {
+        "tags": [
+          "signin"
+        ],
+        "summary": "Back to one's own account.",
+        "operationId": "stop_acting",
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      }
+    },
     "/me/claude": {
       "get": {
         "summary": "The caller's own Claude, which their assistant's answers run on; `null`, they run on the panel's.",
@@ -14926,7 +15246,8 @@
           "unauthenticated": 401,
           "unavailable": 503,
           "unstudied": 422
-        }
+        },
+        "x-permission": "sa:own:credentials"
       },
       "put": {
         "tags": [
@@ -15096,7 +15417,8 @@
           "unauthenticated": 401,
           "unavailable": 503,
           "unstudied": 422
-        }
+        },
+        "x-permission": "sa:own:credentials"
       },
       "delete": {
         "tags": [
@@ -15248,7 +15570,8 @@
           "unauthenticated": 401,
           "unavailable": 503,
           "unstudied": 422
-        }
+        },
+        "x-permission": "sa:own:credentials"
       }
     },
     "/me/claude/connect": {
@@ -15409,7 +15732,170 @@
           "unauthenticated": 401,
           "unavailable": 503,
           "unstudied": 422
-        }
+        },
+        "x-permission": "sa:own:credentials"
+      }
+    },
+    "/members": {
+      "get": {
+        "tags": [
+          "api"
+        ],
+        "summary": "Everyone the conductor knows, to act as.",
+        "operationId": "members",
+        "responses": {
+          "200": {
+            "description": "`GET /admin/tokens`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenHolders"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        },
+        "x-permission": "sa:members:act_as"
       }
     },
     "/openapi.json": {
@@ -17187,7 +17673,8 @@
           "unauthenticated": 401,
           "unavailable": 503,
           "unstudied": 422
-        }
+        },
+        "x-permission": "sa:own:payments"
       }
     },
     "/tokens/ledger": {
@@ -17541,7 +18028,8 @@
           "unauthenticated": 401,
           "unavailable": 503,
           "unstudied": 422
-        }
+        },
+        "x-permission": "sa:own:payments"
       }
     },
     "/tokens/usage": {
@@ -21183,6 +21671,19 @@
           "action"
         ]
       },
+      "Acting": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "user_id"
+        ]
+      },
       "Action": {
         "type": "object",
         "properties": {
@@ -21221,6 +21722,21 @@
         "enum": [
           "proposed",
           "done"
+        ]
+      },
+      "Actor": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "sub": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sub",
+          "email"
         ]
       },
       "AddChat": {
@@ -21704,6 +22220,17 @@
         "description": "The signed-in user of an `/api/v1` request, put in its extensions by the gate; `GET /me`.",
         "type": "object",
         "properties": {
+          "acting": {
+            "description": "Who acts in this account, lending their permissions; `None`: its own user.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Actor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "dev_sign_in": {
             "description": "Signed in by `PANEL_DEV_SIGN_IN`, not concierge: `/me` says so, for the UI to show.",
             "type": "boolean"
@@ -21731,7 +22258,8 @@
           "email",
           "preferred_name",
           "permissions",
-          "dev_sign_in"
+          "dev_sign_in",
+          "acting"
         ]
       },
       "Candidates": {
@@ -24155,11 +24683,13 @@
           "sa:admin:sources:manage",
           "sa:admin:tokens:grant",
           "sa:admin:trash:keep",
+          "sa:members:act_as",
+          "sa:own:credentials",
+          "sa:own:payments",
           "sa:placement:study:read",
           "sa:placement:study:spend",
           "sa:playbook:mcp:use",
           "sa:review_archive:archive:operate",
-          "sa:review_archive:members:act_as",
           "sa:sites:analysis:experiments:edit",
           "sa:sites:analysis:read",
           "sa:sites:work:invoices:create",
@@ -24177,11 +24707,11 @@
             "sa:admin:sources:manage",
             "sa:admin:tokens:grant",
             "sa:admin:trash:keep",
+            "sa:members:act_as",
             "sa:placement:study:read",
             "sa:placement:study:spend",
             "sa:playbook:mcp:use",
             "sa:review_archive:archive:operate",
-            "sa:review_archive:members:act_as",
             "sa:sites:analysis:experiments:edit",
             "sa:sites:analysis:read",
             "sa:sites:work:invoices:create",
@@ -24192,6 +24722,8 @@
             "sa:sites:work:read"
           ],
           "sa:everyone": [
+            "sa:own:credentials",
+            "sa:own:payments",
             "sa:playbook:mcp:use"
           ],
           "sa:operator": [
@@ -24477,11 +25009,13 @@
           "sa:admin:sources:manage",
           "sa:admin:tokens:grant",
           "sa:admin:trash:keep",
+          "sa:members:act_as",
+          "sa:own:credentials",
+          "sa:own:payments",
           "sa:placement:study:read",
           "sa:placement:study:spend",
           "sa:playbook:mcp:use",
           "sa:review_archive:archive:operate",
-          "sa:review_archive:members:act_as",
           "sa:sites:analysis:experiments:edit",
           "sa:sites:analysis:read",
           "sa:sites:work:invoices:create",
@@ -27886,6 +28420,22 @@
           "type": "object"
         }
       },
+      "members": {
+        "description": "Everyone, to act as; and the way back while acting.",
+        "key": "m",
+        "needs": "sa:members:act_as",
+        "params": {
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "path": "/members",
+        "query": {
+          "properties": {},
+          "required": [],
+          "type": "object"
+        }
+      },
       "review_archive": {
         "description": "The review archive's dashboard.",
         "key": "r",
@@ -27980,6 +28530,7 @@
       "wallet": {
         "description": "The caller's wallet.",
         "key": "w",
+        "needs": "sa:own:payments",
         "params": {
           "properties": {},
           "required": [],

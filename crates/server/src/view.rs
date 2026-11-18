@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use ev_lib::{api::JsonSchema, views::Views};
-use sa_auth::{Sources, Tokens};
+use sa_auth::{Members, Own, Sources, Tokens};
 use sa_core::gbp::Country;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -76,8 +76,11 @@ pub enum View {
 	/// What the caller's actions cost.
 	#[view("/usage", key = 'u')]
 	Usage,
+	/// Everyone, to act as; and the way back while acting.
+	#[view("/members", needs = Members::ActAs, key = 'm')]
+	Members,
 	/// The caller's wallet.
-	#[view("/wallet", key = 'w')]
+	#[view("/wallet", needs = Own::Payments, key = 'w')]
 	Wallet,
 	/// Where the caller's alerts go, and which.
 	#[view("/alerts", key = 'e')]

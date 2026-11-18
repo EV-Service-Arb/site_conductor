@@ -48,6 +48,15 @@ pub async fn all(conn: &mut SqliteConnection) -> eyre::Result<Vec<(User, Timesta
 		.collect()
 }
 
+pub async fn get(conn: &mut SqliteConnection, user: Uuid) -> eyre::Result<Option<User>> {
+	let row: Option<(String, String)> = sqlx::query_as("SELECT email, name FROM users WHERE user_id = $1")
+		.bind(user)
+		.fetch_optional(&mut *conn)
+		.await
+		.wrap_err("reading a user")?;
+	Ok(row.map(|(email, name)| User { user_id: user, email, name }))
+}
+
 pub async fn exists(conn: &mut SqliteConnection, user: Uuid) -> eyre::Result<bool> {
 	sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM users WHERE user_id = $1)")
 		.bind(user)

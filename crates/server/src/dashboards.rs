@@ -440,7 +440,6 @@ fn meters(doc: &OpenApi) -> Value {
 					operation: op_id(crate::meters::meters),
 					path: &[],
 					params: &[],
-					headers: &[],
 					select: Some(Select {
 					root_selector: r##"$map(meters, function($m) { $map($m.accounts, function($a) { {"meter": $m.name, "account": $a.account, "used": $a.used, "free": $m.free, "left": $a.left, "stops": $m.stop = "at_free" ? "at free" : "never", "google's count": $a.baseline, "as of": $a.since, "ours since": $a.delta, "synced": $a.reading = null ? "never" : $a.reading.synced_at, "vendor's cost": $a.reading = null ? null : $a.reading.cost, "net": $a.reading = null ? null : $a.reading.net, "currency": $a.reading = null ? null : $a.reading.currency} }) })"##,
 					columns: &[("meter", Column::String), ("account", Column::String), ("used", Column::Number), ("free", Column::Number), ("left", Column::Number), ("stops", Column::String), ("google's count", Column::Number), ("as of", Column::Timestamp), ("ours since", Column::Number), ("synced", Column::String), ("vendor's cost", Column::Number), ("net", Column::Number), ("currency", Column::String)],
@@ -504,7 +503,6 @@ fn meters(doc: &OpenApi) -> Value {
 				operation: op_id(crate::meters::meters),
 				path: &[],
 				params: &[],
-				headers: &[],
 				select: Some(Select {
 					root_selector: r##"$map(meters, function($m) { {"meter": $m.name, "used": $m.total.used / $m.total.free * 100} })"##,
 					columns: &[("meter", Column::String), ("used", Column::Number)],
@@ -640,7 +638,6 @@ fn in_range<'a>(operation: &'a str, select: Select<'a>) -> Query<'a> {
 		operation,
 		path: &[],
 		params: RANGE,
-		headers: &[],
 		select: Some(select),
 	}
 }

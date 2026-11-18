@@ -22,6 +22,7 @@ use axum::{
 	routing::{get, post},
 };
 use jiff::Timestamp;
+use sa_auth::Own;
 use sa_panel::oauth::{Client, Grant, TokenRequest};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -157,6 +158,16 @@ async fn authorize(State(s): State<SignIn>, uri: Uri, headers: HeaderMap, q: Res
 		Err(r) if r.code() == Code::Unauthenticated => return private(Redirect::to(&format!("/auth/login?return_to={}", signin::encode(here))).into_response()),
 		Err(r) => return signin::refused(&s, r),
 	};
+	if !caller.permissions.may(Own::Credentials) {
+		return private(
+			Page {
+				status: StatusCode::FORBIDDEN,
+				title: "Not while viewing as a member",
+				message: "Connecting a client is the account's own: stop viewing as them first.",
+			}
+			.into_response(),
+		);
+	}
 	let Some(csrf) = s.cookies().get(&headers, cookies::CSRF) else {
 		return bad_link();
 	};
@@ -219,6 +230,16 @@ async fn consent(State(s): State<SignIn>, mut headers: HeaderMap, Form(f): Form<
 		Ok(c) => c,
 		Err(r) => return signin::refused(&s, r),
 	};
+	if !caller.permissions.may(Own::Credentials) {
+		return private(
+			Page {
+				status: StatusCode::FORBIDDEN,
+				title: "Not while viewing as a member",
+				message: "Connecting a client is the account's own: stop viewing as them first.",
+			}
+			.into_response(),
+		);
+	}
 	let grant = Grant {
 		user_id: caller.user_id,
 		client_id: f.link.client_id,

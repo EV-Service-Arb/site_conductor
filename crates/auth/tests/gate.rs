@@ -68,6 +68,7 @@ fn user(permissions: &[&str]) -> Principal {
 		email_verified: true,
 		name: "A".into(),
 		permissions: permissions.iter().copied().collect(),
+		actor: None,
 	})
 }
 

@@ -432,15 +432,16 @@ fn dev_permissions(raw: &str) -> eyre::Result<PermissionSet> {
 		return Ok(PermissionSet::from_iter(Vec::<String>::new()));
 	}
 	let catalog = Catalog::collect("sa", 0);
+	let everyone = catalog.aliases.get("sa:everyone").expect("sa_auth declares it"); // concierge's: every member of the scope holds it
 	if let Some(members) = catalog.aliases.get(raw) {
-		return Ok(members.iter().cloned().collect());
+		return Ok(members.iter().chain(everyone).cloned().collect());
 	}
 	let listed: Vec<&str> = raw.split(',').map(str::trim).collect();
 	if let Some(unknown) = listed.iter().find(|p| !catalog.permissions.contains(**p)) {
 		let aliases: Vec<&str> = catalog.aliases.keys().map(String::as_str).collect();
 		eyre::bail!("PANEL_DEV_SIGN_IN: `{unknown}` is neither `none`, an alias ({}), nor an sa permission", aliases.join(", "));
 	}
-	Ok(listed.into_iter().collect())
+	Ok(listed.into_iter().chain(everyone.iter().map(String::as_str)).collect())
 }
 
 /// `http://localhost[:port]` or `http://127.0.0.1[:port]`, nothing after it: an origin only
@@ -682,11 +683,17 @@ mod tests {
 		.unwrap()
 		.unwrap();
 		assert_eq!(op.email, "ann@example.com");
-		assert_eq!(op.permissions, sa_auth::SA_OPERATOR.members.iter().copied().collect());
+		assert_eq!(op.permissions, sa_panel::testing::operator());
 		let listed = dev(&[("PANEL_DEV_SIGN_IN", "sa:sites:work:read, sa:sites:work:leads:edit"), ("PANEL_PUBLIC_ORIGIN", "http://localhost")])
 			.unwrap()
 			.unwrap();
-		assert_eq!(listed.permissions, ["sa:sites:work:leads:edit", "sa:sites:work:read"].into_iter().collect());
+		assert_eq!(
+			listed.permissions,
+			["sa:sites:work:leads:edit", "sa:sites:work:read"]
+				.into_iter()
+				.chain(sa_auth::SA_EVERYONE.members.iter().copied())
+				.collect()
+		);
 		assert!(dev(&[("PANEL_DEV_SIGN_IN", "sa:admin"), ("PANEL_PUBLIC_ORIGIN", "http://localhost")]).is_ok(), "port optional");
 		let e = format!(
 			"{}",

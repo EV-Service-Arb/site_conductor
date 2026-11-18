@@ -22,6 +22,7 @@ import {
 import { useId, useState } from "react";
 
 import { useAlerts, alerts as alertsKeys } from "@/entities/alerts";
+import { useMe } from "@/entities/session";
 import { api, ok } from "@/shared/api";
 import { type Alerts, type Destination, type Gmail, type Rule, ruleValues } from "@/shared/api/schema";
 import { type T, useT } from "@/shared/i18n";
@@ -89,6 +90,8 @@ function Page({ alerts, gmails, busy, act }: { alerts: Alerts; gmails: Gmail[]; 
   const t = useT();
   const own = alerts.destinations.find((d) => d.kind === "private");
   const chats = alerts.destinations.filter((d) => d.kind !== "private");
+  const me = useMe();
+  const linking = api.mayCall("post", "/alerts/telegram/link", me.permissions);
   // Opened within the click, or a popup blocker takes it: the link only exists after the POST.
   const connect = () => {
     const tab = window.open("about:blank", "_blank");
@@ -108,14 +111,14 @@ function Page({ alerts, gmails, busy, act }: { alerts: Alerts; gmails: Gmail[]; 
     <>
       <Section title={t(alertsKeys.own, "Your Telegram")}>
         {own === undefined ? (
-          <div className="space-y-1">
+          linking && <div className="space-y-1">
             <Button type="button" size="sm" disabled={busy} onClick={connect}>
               {t(alertsKeys.connect, "Connect Telegram")}
             </Button>
             <p className="text-xs text-ink-soft">{t(alertsKeys.connect.hint, "Opens the bot: press Start there.")}</p>
           </div>
         ) : (
-          <DestinationCard destination={own} alerts={alerts} gmails={gmails} busy={busy} act={act} onReconnect={connect} />
+          <DestinationCard destination={own} alerts={alerts} gmails={gmails} busy={busy} act={act} {...(linking ? { onReconnect: connect } : {})} />
         )}
       </Section>
       <Section title={t(alertsKeys.chats, "Channels and groups")}>
@@ -125,7 +128,7 @@ function Page({ alerts, gmails, busy, act }: { alerts: Alerts; gmails: Gmail[]; 
         {own === undefined ? (
           <p className="text-sm text-ink-soft">{t(alertsKeys.chats.linkFirst, "Connect your own Telegram first: the bot checks with it that you run the channel.")}</p>
         ) : (
-          <AddChat bot={alerts.bot} gmails={gmails} busy={busy} act={act} />
+          api.mayCall("post", "/alerts/telegram/chats", me.permissions) && <AddChat bot={alerts.bot} gmails={gmails} busy={busy} act={act} />
         )}
       </Section>
     </>

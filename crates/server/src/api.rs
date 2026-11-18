@@ -14,7 +14,7 @@ use ev_lib::api::{
 	Body, Created, ErrorCode, Ids, JsonSchema, OpenApi, Refusal, Refuses,
 	schemars::{Schema, SchemaGenerator, json_schema},
 };
-use sa_auth::{SourceKind, Sources};
+use sa_auth::{Members, SourceKind, Sources};
 use sa_core::{
 	Invalid,
 	ids::{BrandId, SiteOrigin},
@@ -139,6 +139,9 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 	let admin = USER.needs(Sources::Manage);
 	vec![
 		ApiRoute::new(M::GET, "/me", USER, me),
+		ApiRoute::new(M::GET, "/members", USER.needs(Members::ActAs), members),
+		ApiRoute::new(M::PUT, "/me/acting", FRESH.needs(Members::ActAs), crate::signin::start_acting),
+		ApiRoute::new(M::DELETE, "/me/acting", USER, crate::signin::stop_acting),
 		ApiRoute::new(M::GET, "/openapi.json", USER, openapi),
 		ApiRoute::new(M::GET, "/sources", admin, list_sources),
 		ApiRoute::new(M::GET, "/sources/sites", admin, connected::sites),
@@ -157,6 +160,11 @@ pub(crate) struct Id<T> {
 /// The caller: who they are and every `sa` permission they hold, every service's.
 async fn me(Extension(caller): Extension<Caller>) -> Json<Caller> {
 	Json(caller)
+}
+
+/// Everyone the conductor knows, to act as.
+async fn members(panel: State<Panel>) -> ApiResult<Json<crate::tokens::TokenHoldersDto>> {
+	crate::tokens::token_holders(panel).await
 }
 
 /// The operations the caller's permissions open, as an OpenAPI document.

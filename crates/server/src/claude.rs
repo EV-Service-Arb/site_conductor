@@ -16,6 +16,7 @@ use std::{
 use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
 use ev_lib::api::{Body, JsonSchema, Refusal};
 use jiff::{SignedDuration, Timestamp};
+use sa_auth::Own;
 use sa_panel::{
 	claude::Claude,
 	session::{pkce_challenge, random_token},
@@ -214,10 +215,10 @@ pub(crate) struct Pasted {
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
 	vec![
-		ApiRoute::new(M::GET, "/me/claude", USER, claude),
-		ApiRoute::new(M::POST, "/me/claude/connect", USER, connect),
-		ApiRoute::new(M::PUT, "/me/claude", USER, set_claude),
-		ApiRoute::new(M::DELETE, "/me/claude", USER, remove_claude),
+		ApiRoute::new(M::GET, "/me/claude", USER.needs(Own::Credentials), claude),
+		ApiRoute::new(M::POST, "/me/claude/connect", USER.needs(Own::Credentials), connect),
+		ApiRoute::new(M::PUT, "/me/claude", USER.needs(Own::Credentials), set_claude),
+		ApiRoute::new(M::DELETE, "/me/claude", USER.needs(Own::Credentials), remove_claude),
 	]
 }
 

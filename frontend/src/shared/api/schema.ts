@@ -1317,6 +1317,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/acting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Signs this browser's session into `user_id`'s account, lending it the caller's permissions but the bound ones, until `DELETE /me/acting`.
+         * @description 400 for oneself or an MCP client's session, 404 for nobody the conductor knows, 409 while acting.
+         */
+        put: operations["start_acting"];
+        post?: never;
+        /** Back to one's own account. */
+        delete: operations["stop_acting"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/claude": {
         parameters: {
             query?: never;
@@ -1350,6 +1371,23 @@ export interface paths {
         put?: never;
         /** Starts connecting the caller's own Claude: open `url`, authorize, and paste the code it shows into `PUT /me/claude` within 10 minutes. */
         post: operations["connect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everyone the conductor knows, to act as. */
+        get: operations["members"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1902,6 +1940,10 @@ export interface components {
             /** @description The answer's turn id. */
             turn: string;
         };
+        Acting: {
+            /** Format: uuid */
+            user_id: string;
+        };
         Action: {
             detail: string;
             /** @description Said once it is done: "Appealed 4 reviews". */
@@ -1913,6 +1955,10 @@ export interface components {
         };
         /** @enum {string} */
         ActionState: "proposed" | "done";
+        Actor: {
+            email: string;
+            sub: string;
+        };
         AddChat: {
             /** @description `@channel`, `-100<id>`, or `<group>/<topic>` for a forum topic. */
             chat: string;
@@ -2068,6 +2114,8 @@ export interface components {
         };
         /** @description The signed-in user of an `/api/v1` request, put in its extensions by the gate; `GET /me`. */
         Caller: {
+            /** @description Who acts in this account, lending their permissions; `None`: its own user. */
+            acting: components["schemas"]["Actor"] | null;
             /** @description Signed in by `PANEL_DEV_SIGN_IN`, not concierge: `/me` says so, for the UI to show. */
             dev_sign_in: boolean;
             email: string;
@@ -2885,7 +2933,7 @@ export interface components {
          */
         MustHave: "name" | "areas" | "phone" | "film" | "gmail" | "category" | "site" | "hidden_address" | "profile";
         /** @enum {string} */
-        Need: "sa:admin:sources:manage" | "sa:admin:tokens:grant" | "sa:admin:trash:keep" | "sa:placement:study:read" | "sa:placement:study:spend" | "sa:playbook:mcp:use" | "sa:review_archive:archive:operate" | "sa:review_archive:members:act_as" | "sa:sites:analysis:experiments:edit" | "sa:sites:analysis:read" | "sa:sites:work:invoices:create" | "sa:sites:work:leads:edit" | "sa:sites:work:pii:see" | "sa:sites:work:places:edit" | "sa:sites:work:pricing:edit" | "sa:sites:work:read" | "sa:admin" | "sa:everyone" | "sa:operator";
+        Need: "sa:admin:sources:manage" | "sa:admin:tokens:grant" | "sa:admin:trash:keep" | "sa:members:act_as" | "sa:own:credentials" | "sa:own:payments" | "sa:placement:study:read" | "sa:placement:study:spend" | "sa:playbook:mcp:use" | "sa:review_archive:archive:operate" | "sa:sites:analysis:experiments:edit" | "sa:sites:analysis:read" | "sa:sites:work:invoices:create" | "sa:sites:work:leads:edit" | "sa:sites:work:pii:see" | "sa:sites:work:places:edit" | "sa:sites:work:pricing:edit" | "sa:sites:work:read" | "sa:admin" | "sa:everyone" | "sa:operator";
         NewChat: {
             /**
              * Format: uuid
@@ -2973,7 +3021,7 @@ export interface components {
             people: components["schemas"]["Person"][];
         };
         /** @enum {string} */
-        Permission: "sa:admin:sources:manage" | "sa:admin:tokens:grant" | "sa:admin:trash:keep" | "sa:placement:study:read" | "sa:placement:study:spend" | "sa:playbook:mcp:use" | "sa:review_archive:archive:operate" | "sa:review_archive:members:act_as" | "sa:sites:analysis:experiments:edit" | "sa:sites:analysis:read" | "sa:sites:work:invoices:create" | "sa:sites:work:leads:edit" | "sa:sites:work:pii:see" | "sa:sites:work:places:edit" | "sa:sites:work:pricing:edit" | "sa:sites:work:read";
+        Permission: "sa:admin:sources:manage" | "sa:admin:tokens:grant" | "sa:admin:trash:keep" | "sa:members:act_as" | "sa:own:credentials" | "sa:own:payments" | "sa:placement:study:read" | "sa:placement:study:spend" | "sa:playbook:mcp:use" | "sa:review_archive:archive:operate" | "sa:sites:analysis:experiments:edit" | "sa:sites:analysis:read" | "sa:sites:work:invoices:create" | "sa:sites:work:leads:edit" | "sa:sites:work:pii:see" | "sa:sites:work:places:edit" | "sa:sites:work:pricing:edit" | "sa:sites:work:read";
         /** @description Someone a chat names: its owner, a member, one to invite. */
         Person: {
             email: string;
@@ -3923,8 +3971,10 @@ export type AccessRequest = components['schemas']['AccessRequest'];
 export type AccessRequests = components['schemas']['AccessRequests'];
 export type AccountSpend = components['schemas']['AccountSpend'];
 export type Act = components['schemas']['Act'];
+export type Acting = components['schemas']['Acting'];
 export type Action = components['schemas']['Action'];
 export type ActionState = components['schemas']['ActionState'];
+export type Actor = components['schemas']['Actor'];
 export type AddChat = components['schemas']['AddChat'];
 export type AddSource = components['schemas']['AddSource'];
 export type Advance = components['schemas']['Advance'];
@@ -15191,6 +15241,262 @@ export interface operations {
             };
         };
     };
+    start_acting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Acting"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    stop_acting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     claude: {
         parameters: {
             query?: never;
@@ -15592,6 +15898,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClaudeConnect"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    members: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /admin/tokens`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenHolders"];
                 };
             };
             /** @description `bad_request` */
@@ -19980,9 +20414,9 @@ export const kitTargetValues: ReadonlyArray<FlattenedDeepRequired<components>["s
 export const ledgerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["LedgerKind"]> = ["add", "set", "charge", "accrual", "kickback"];
 export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MentionKind"]> = ["location"];
 export const mustHaveValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MustHave"]> = ["name", "areas", "phone", "film", "gmail", "category", "site", "hidden_address", "profile"];
-export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
+export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:members:act_as", "sa:own:credentials", "sa:own:payments", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
 export const onGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OnGoogle"]> = ["verifying", "verified", "suspended"];
-export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Permission"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:review_archive:members:act_as", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
+export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Permission"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:members:act_as", "sa:own:credentials", "sa:own:payments", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
 export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "placement.search", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic", "claude.input", "claude.cache_write", "claude.cache_read", "claude.output"];
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];

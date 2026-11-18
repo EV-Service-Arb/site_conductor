@@ -131,7 +131,7 @@ async fn grafanas_queries_reach_the_services_as_the_viewer_who_asked() {
 	let infinity = json!({
 		"datasource": {"type": "yesoreyeram-infinity-datasource", "uid": "review_archive"},
 		"url": "/me/overview",
-		"url_options": {"method": "GET", "headers": [{"key": "x-member", "value": "3"}, {"key": VIEWER_HEADER.to_uppercase(), "value": "forged"}]},
+		"url_options": {"method": "GET", "headers": [{"key": "x-trace", "value": "3"}, {"key": VIEWER_HEADER.to_uppercase(), "value": "forged"}]},
 	});
 	let bare = json!({"datasource": {"type": "yesoreyeram-infinity-datasource", "uid": "sites"}, "url": "/leads"});
 	let own = json!({"datasource": {"type": "yesoreyeram-infinity-datasource", "uid": "conductor"}, "url": "/admin/tokens/prices"});
@@ -156,7 +156,7 @@ async fn grafanas_queries_reach_the_services_as_the_viewer_who_asked() {
 			"one token in every service's query and the conductor's, the browser's overwritten"
 		);
 	}
-	assert_eq!(query_headers(&queries[0], "x-member"), ["3"], "the dashboard's own headers stay");
+	assert_eq!(query_headers(&queries[0], "x-trace"), ["3"], "the dashboard's own headers stay");
 	assert_eq!(queries[3], elsewhere, "what does not query a service is not touched");
 
 	let fetch = |method: Method, path: &str, token: Option<&str>| {

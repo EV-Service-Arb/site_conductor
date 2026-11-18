@@ -40,10 +40,11 @@ function clip(value: string): string {
   return chars.length > MAX_TEXT ? chars.slice(0, MAX_TEXT).join("") : chars.join("");
 }
 
-/** The chip is the account's: past the profile it holds only acting as a member, for whoever may. */
+/** The chip is the account's: past the profile it holds only acting as a member, for whoever may, and the way back. */
 export function panelGroups(me: Caller, t: T): ChipGroup[] {
-  if (!mayOpen(VIEWS, "review_archive.pick", me.permissions)) return [];
-  return [{ id: "sa", items: [{ id: "act-as", href: href(VIEWS, { view: "review_archive.pick", params: {} }), label: t(account.actAs, "View as member…"), external: true }] }];
+  if (!mayOpen(VIEWS, "members", me.permissions)) return [];
+  const label = me.acting ? t(account.stopActing, "Stop viewing as {name}", { name: me.preferred_name || me.email }) : t(account.actAs, "View as member…");
+  return [{ id: "sa", items: [{ id: "act-as", href: href(VIEWS, { view: "members", params: {} }), label }] }];
 }
 
 /** The element's attributes for `me` on `pathname`; an absent value is an absent attribute. */

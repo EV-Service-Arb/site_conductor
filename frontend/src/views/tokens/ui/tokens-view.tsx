@@ -71,7 +71,7 @@ export function TokensView() {
           </>
         )}
       </Section>
-      {tokens.status === "ok" && tokens.data.kickbacks.length > 0 && (
+      {tokens.status === "ok" && tokens.data.kickbacks.length > 0 && api.mayCall("post", "/tokens/claim", me.permissions) && (
         <Section title={t(tokensKeys.kickbacks, "Owed back")}>
           <ul className="flex flex-col gap-1 text-sm">
             {tokens.data.kickbacks.map((k) => (

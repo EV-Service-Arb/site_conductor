@@ -10,6 +10,8 @@ import { type T, useLocale, useT } from "@/shared/i18n";
 
 import { type AssistantTurn, type UserTurn } from "@/entities/assistant";
 import { ConnectClaudeDialog } from "@/features/connect-claude";
+import { useMe } from "@/entities/session";
+import { api } from "@/shared/api";
 
 import { LocationToken, RichText } from "./rich-text";
 import { assistant } from "@/entities/assistant";
@@ -220,6 +222,7 @@ function CostChip({ cost }: { cost: Cost }) {
   const n = new Intl.NumberFormat(locale, { notation: "compact" });
   const used = { input: n.format(cost.tokens.input + cost.tokens.cache_write + cost.tokens.cache_read), output: n.format(cost.tokens.output) };
   const ours = cost.bill === "ours";
+  const connectable = api.mayCall("post", "/me/claude/connect", useMe().permissions);
   return (
     <>
       <HoverCard>
@@ -234,10 +237,14 @@ function CostChip({ cost }: { cost: Cost }) {
               <p className="text-ink-mid">
                 {t(assistant.cost.ours, "Ran on the panel's Claude: {input} in, {output} out model tokens, {n} of your tokens.", { ...used, n: cost.charged })}
               </p>
-              <p className="text-ink-mid">{t(assistant.cost.free, "Connect your own Claude and it costs nothing here.")}</p>
-              <Button size="sm" className="self-start" onClick={() => setConnecting(true)}>
-                {t(assistant.cost.connect, "Connect your Claude")}
-              </Button>
+              {connectable && (
+                <>
+                  <p className="text-ink-mid">{t(assistant.cost.free, "Connect your own Claude and it costs nothing here.")}</p>
+                  <Button size="sm" className="self-start" onClick={() => setConnecting(true)}>
+                    {t(assistant.cost.connect, "Connect your Claude")}
+                  </Button>
+                </>
+              )}
             </>
           ) : (
             <p className="text-ink-mid">{t(assistant.cost.onTheirs, "Ran on your Claude: {input} in, {output} out model tokens, nothing charged here.", used)}</p>
