@@ -26,24 +26,6 @@ use crate::{
 	view::Tab,
 };
 
-/// Locates every GBP on Google still without a point or a country of Google's, every
-/// `LOCATE_EVERY` until `shutdown`: an imported or verified place shows on the map unasked. Idle
-/// while no Google account has a Places key.
-pub async fn locate(panel: Panel, shutdown: tokio::sync::watch::Receiver<bool>) {
-	const LOCATE_EVERY: std::time::Duration = std::time::Duration::from_secs(600); // a place asked once is kept in the queries cache: a pass after is free
-	crate::every(LOCATE_EVERY, shutdown, "locating GBPs", || async {
-		if !panel.accounts().iter().any(|a| a.provides.places.is_some()) {
-			return Ok(());
-		}
-		let done = panel.locate().await?;
-		if done.located > 0 {
-			tracing::info!(located = done.located, no_point = ?done.no_point, refused = ?done.refused, "GBPs located");
-		}
-		Ok(())
-	})
-	.await;
-}
-
 /// `GET /map`: the Maps JS key this page loads on, referrer-restricted, and its account, which the
 /// page's map loads and panoramas name.
 #[derive(Clone, Debug, JsonSchema, Serialize)]

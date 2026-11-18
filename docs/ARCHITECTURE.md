@@ -936,10 +936,9 @@ push (a change, a page, 60 s)
 - **A GBP's point** is on its row: Google's, else one the operator places on the map (a
   service-area place has none on Google, a GBP without a place none at all). Google's replaces a placed one, a
   placed one never replaces Google's. Google's is written with the GBP from the answer that named
-  it; a GBP added without a key, or imported, gets it from `serve`'s locating pass (every 10 min,
-  `sa_server::gmbs::locate`), which asks for the missing ones; Places answers are cached for good,
-  so a place without a point on Google costs once. `POST /admin/gmbs/locate` runs a pass now and
-  lists those Google gives no point.
+  it; a GBP added without a key, or imported, has none until `POST /admin/gmbs/locate` asks for the
+  missing ones and lists those Google gives no point: an operation, so the spend is explicit and
+  an agent proposes it; run after a deploy that brings points, and after `local-stack --from-prod`.
 - **The review kit** is below.
 - **A GBP's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
   language table) follows the point's rule: Google's (its address), else set by hand
