@@ -597,7 +597,7 @@ pub(crate) struct NewGmb {
 	name: Option<String>,
 	/// Fills what Google lacks.
 	country: Option<Country>,
-	trade: i64,
+	trade: Option<i64>,
 }
 
 /// Adds a GBP on Google already, by its place, to the gmail.

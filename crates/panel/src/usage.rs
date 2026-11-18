@@ -66,9 +66,7 @@ impl Panel {
 			return Ok(Err(Refused::Closed));
 		}
 		let item = Item::from(MapLoad::Map);
-		let Some(rate) = ledger::rate(&mut tx, item).await? else {
-			return Ok(Err(Refused::Conflict("the map is not priced yet: ask an admin to price it".to_owned())));
-		};
+		let rate = ledger::rate(&mut tx, item).await?;
 		let price = rate.price();
 		let balance = ledger::renewed(&mut tx, user, now, &self.renewal).await?;
 		if balance < price {
@@ -118,10 +116,7 @@ impl Panel {
 		}
 		let mut rates = BTreeMap::new();
 		for &tokens in ModelTokens::VARIANTS {
-			let Some(rate) = ledger::rate(&mut tx, tokens.into()).await? else {
-				return Ok(Err("the panel's Claude is not priced yet: connect your own Claude, or ask an admin to price it".to_owned()));
-			};
-			rates.insert(tokens, rate);
+			rates.insert(tokens, ledger::rate(&mut tx, tokens.into()).await?);
 		}
 		let balance = ledger::renewed(&mut tx, by.user(), now, &self.renewal).await?;
 		tx.commit().await.wrap_err("committing a renewal")?;
@@ -241,13 +236,7 @@ impl Panel {
 			};
 			db::record(&mut tx, &used).await?;
 			let Some(user) = u.user else { continue };
-			let Some(rate) = ledger::rate(&mut tx, u.item).await? else {
-				eyre::bail!(
-					"{service}'s use {} of {} for {user} is unpriced: an admin took its price off after it was let start; price it again",
-					u.id,
-					u.item
-				);
-			};
+			let rate = ledger::rate(&mut tx, u.item).await?;
 			let per = u.item.per();
 			let due = (u.units * rate.price() + per - 1).div_euclid(per);
 			let balance = ledger::renewed(&mut tx, user, Timestamp::now(), &self.renewal).await?;

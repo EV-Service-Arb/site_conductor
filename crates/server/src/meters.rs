@@ -232,9 +232,9 @@ pub(crate) async fn meters(State(panel): State<Panel>) -> ApiResult<Json<MetersD
 		.zip(panel.meters(now).await?)
 		.map(|(meter, gauges): (&'static Meter, Vec<Gauge>)| {
 			let items: Vec<Item> = meter.items().collect();
-			let costs: Vec<Option<i64>> = items
+			let costs: Vec<i64> = items
 				.iter()
-				.map(|i| prices.iter().find(|p| p.item == *i).expect("the catalog prices every item").cost.as_ref().map(|c| c.usd_micros))
+				.map(|i| prices.iter().find(|p| p.item == *i).expect("the catalog prices every item").cost.usd_micros)
 				.collect();
 			let sum = |f: fn(&Gauge) -> i64| gauges.iter().map(f).sum::<i64>();
 			let total = TotalDto {
@@ -245,7 +245,7 @@ pub(crate) async fn meters(State(panel): State<Panel>) -> ApiResult<Json<MetersD
 				left: sum(Gauge::left),
 			};
 			let delta_usd = match costs.as_slice() {
-				[Some(c), rest @ ..] if rest.iter().all(|r| *r == Some(*c)) => Some((total.delta * c) as f64 / 1e6),
+				[c, rest @ ..] if rest.iter().all(|r| r == c) => Some((total.delta * c) as f64 / 1e6),
 				_ => None,
 			};
 			let (start, end) = meter.vendor.period(now);

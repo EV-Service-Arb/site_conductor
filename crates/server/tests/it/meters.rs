@@ -92,7 +92,7 @@ impl World {
 		self.panel.sync_meters(&Told { account, units, net, through }, now).await.unwrap();
 	}
 
-	async fn price(&self, tokens: Option<i64>) {
+	async fn price(&self, tokens: i64) {
 		sa_panel::testing::priced(&self.panel, &[(Item::from(StreetViewLoad::Panorama), tokens)]).await;
 	}
 
@@ -160,21 +160,18 @@ fn both(name: &str, allow: f64) -> Account {
 }
 
 #[tokio::test]
-async fn a_panorama_is_charged_at_its_price_and_refused_unpriced_or_on_credit() {
+async fn a_panorama_is_charged_at_its_price_and_refused_on_credit() {
 	let mut w = World::new().await;
 	let now = Timestamp::now();
 	w.read(0, now, now).await;
-	let (status, refused) = w.open().await;
-	assert_eq!(status, StatusCode::CONFLICT, "unpriced, not sold: {refused}");
-
 	let start = w.balance().await;
-	w.price(Some(7)).await;
+	w.price(7).await;
 	let (status, bought) = w.open().await;
 	assert_eq!(status, StatusCode::OK, "{bought}");
 	assert_eq!(bought["balance"], start - 7);
 	assert_eq!(w.balance().await, start - 7);
 
-	w.price(Some(start)).await;
+	w.price(start).await;
 	let (status, refused) = w.open().await;
 	assert_eq!(status, StatusCode::CONFLICT, "the balance below the price: {refused}");
 	assert_eq!(w.balance().await, start - 7, "nothing charged when refused");
@@ -186,7 +183,7 @@ async fn a_panorama_is_charged_at_its_price_and_refused_unpriced_or_on_credit() 
 #[tokio::test]
 async fn the_free_ones_are_googles_count_plus_ours_after_it() {
 	let mut w = World::new().await;
-	w.price(Some(0)).await;
+	w.price(0).await;
 	let now = Timestamp::now();
 	let through = now - SignedDuration::from_hours(5);
 	w.opened(3, through - SignedDuration::from_hours(1)).await; // in Google's count already
@@ -212,7 +209,7 @@ async fn the_free_ones_are_googles_count_plus_ours_after_it() {
 #[tokio::test]
 async fn a_reading_of_last_month_counts_for_nothing_this_month() {
 	let mut w = World::new().await;
-	w.price(Some(0)).await;
+	w.price(0).await;
 	let now = Timestamp::now();
 	let (start, _) = sa_core::meters::Vendor::Google.period(now);
 	let last_month = start - SignedDuration::from_hours(24);
@@ -230,10 +227,10 @@ async fn a_reading_of_last_month_counts_for_nothing_this_month() {
 #[tokio::test]
 async fn nothing_is_bought_on_a_stopping_meter_without_a_reading() {
 	let mut w = World::new().await;
-	w.price(Some(0)).await;
+	w.price(0).await;
 	let (status, refused) = w.open().await;
 	assert_eq!(status, StatusCode::CONFLICT, "{refused}");
-	sa_panel::testing::priced(&w.panel, &[(Item::from(MapLoad::Map), Some(0))]).await;
+	sa_panel::testing::priced(&w.panel, &[(Item::from(MapLoad::Map), 0)]).await;
 	let (status, _) = w.call(Method::POST, "/api/v1/map/load", Some(json!({ "account": "a" }))).await;
 	assert_eq!(status, StatusCode::OK, "a map load is only watched");
 
@@ -248,7 +245,7 @@ async fn nothing_is_bought_on_a_stopping_meter_without_a_reading() {
 #[tokio::test]
 async fn a_page_loads_on_the_account_with_free_panoramas_and_a_reload_moves_on() {
 	let mut w = World::on(vec![both("a", 0.0), both("b", 0.0)]).await;
-	w.price(Some(0)).await;
+	w.price(0).await;
 	let now = Timestamp::now();
 	w.read_on("a", 4999, 0, now, now).await;
 	w.read_on("b", 0, 0, now, now).await;
@@ -275,7 +272,7 @@ async fn a_page_loads_on_the_account_with_free_panoramas_and_a_reload_moves_on()
 #[tokio::test]
 async fn an_account_without_its_reading_refuses_its_own_panoramas_only() {
 	let mut w = World::on(vec![both("a", 0.0), both("b", 0.0)]).await;
-	w.price(Some(0)).await;
+	w.price(0).await;
 	let now = Timestamp::now();
 	w.read_on("b", 0, 0, now, now).await;
 	let (status, refused) = w.open_on("a").await;

@@ -452,7 +452,7 @@ impl Setup {
 			state: OnGoogle::Verified,
 			name: Some(place.to_owned()),
 			country: Some(Country::FR),
-			trade,
+			trade: Some(trade),
 		};
 		let gmb = self.panel.add_gmb(Some(Spender::new(user)), existing, t0()).await.unwrap().unwrap();
 		(gmail.id, gmb.id)

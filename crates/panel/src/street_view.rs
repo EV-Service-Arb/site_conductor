@@ -44,9 +44,7 @@ impl Panel {
 		if let Some(why) = meters::gauge(&mut tx, account, meter, now).await?.refuses(1) {
 			return Ok(Err(Refused::Conflict(why)));
 		}
-		let Some(rate) = ledger::rate(&mut tx, item).await? else {
-			return Ok(Err(Refused::Conflict("Street View is not priced yet: ask an admin to price it".to_owned())));
-		};
+		let rate = ledger::rate(&mut tx, item).await?;
 		let price = rate.price();
 		let balance = ledger::renewed(&mut tx, user, now, &self.renewal).await?;
 		if balance < price {

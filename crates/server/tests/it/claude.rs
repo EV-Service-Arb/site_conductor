@@ -207,14 +207,10 @@ async fn a_person_connects_their_claude_from_the_pasted_code() {
 #[tokio::test]
 async fn an_answer_runs_on_whose_claude_and_says_what_it_cost() {
 	let mut w = World::new().await;
-	let unpriced = w.ask().await;
 	let start = w.balance().await;
-	assert_eq!(unpriced["state"], "stopped", "{unpriced}");
-	assert!(unpriced["text"].as_str().unwrap().contains("not priced"), "{unpriced}");
-	assert!(w.bearers().is_empty(), "nothing asked on the panel's Claude unpriced");
 
 	let per_million = [(ModelTokens::Input, 10), (ModelTokens::CacheWrite, 12), (ModelTokens::CacheRead, 1), (ModelTokens::Output, 50)];
-	let prices: Vec<(Item, Option<i64>)> = per_million.iter().map(|&(t, p)| (Item::from(t), Some(p))).collect();
+	let prices: Vec<(Item, i64)> = per_million.iter().map(|&(t, p)| (Item::from(t), p)).collect();
 	sa_panel::testing::priced(&w.panel, &prices).await;
 	let ours = w.ask().await;
 	assert_eq!(w.bearers(), ["owner"]);

@@ -99,7 +99,7 @@ pub(crate) async fn move_cursor(conn: &mut SqliteConnection, source: &str, moved
 	Ok(true)
 }
 
-/// Each item's cost in effect now; an item last set back to unknown has none.
+/// Each item's cost in effect now.
 pub(crate) async fn costs(conn: &mut SqliteConnection) -> eyre::Result<BTreeMap<Item, Cost>> {
 	let rows: Vec<(String, i64, String, i64)> = sqlx::query_as(
 		"SELECT item, usd_micros, set_by, set_at FROM unit_costs c \
@@ -122,8 +122,8 @@ pub(crate) async fn costs(conn: &mut SqliteConnection) -> eyre::Result<BTreeMap<
 		.collect()
 }
 
-/// `item`'s unit costs `usd_micros` from `now` on, 0 or more; `None`, unknown from now on.
-pub(crate) async fn set_cost(conn: &mut SqliteConnection, item: Item, usd_micros: Option<i64>, by: &str, now: Timestamp) -> eyre::Result<()> {
+/// `item`'s unit costs `usd_micros` from `now` on, 0 or more.
+pub(crate) async fn set_cost(conn: &mut SqliteConnection, item: Item, usd_micros: i64, by: &str, now: Timestamp) -> eyre::Result<()> {
 	sqlx::query("INSERT INTO unit_costs (item, usd_micros, set_by, set_at) VALUES ($1, $2, $3, $4)")
 		.bind(item.to_string())
 		.bind(usd_micros)

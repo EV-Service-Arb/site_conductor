@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * One page of the manual, whole: what we do in an area.
-         * @description Each step or decision in the order it is met, and the evidence under it, every citation given as who, how they know, when, and what that is worth today. `people`: who has run what, and how to reach them. The pages:
+         * @description Each step or decision in the order it is met, and the evidence under it, every citation given as who, how they know, how sure, how long ago, and what that was worth when said (`init`) and is worth today (`norm`). `people`: who has run what, and how to reach them. The pages:
          *     - calls/closing: closing
          *     - calls/phones: phones
          *     - calls/resale: resale
@@ -102,7 +102,7 @@ export interface paths {
          * Case-insensitive regex over the service-arb playbook.
          * @description Each kind of source has its own slots, so none crowds out another: the manual (knowledge/structured), the course (lessons and the recordings they link), calls, videos, texts. Within a kind, a passage holding the rarer of the pattern's alternatives ranks first. Each hit gives path:line, its header, its label, the source URL and the lines around it; the files past the slots follow as path:line, for `read`. A pattern hitting most of the scope is refused, with the sub-scopes it hits.
          *
-         *     A label is who backs the passage, how they know (ran it, says so, heard it), when the information is from, and `effective`: what that is worth today, 0 to 1, higher is better. `unvetted`: nobody of ours has checked the claim. `unscored`: nothing says who speaks.
+         *     A label is who backs the passage, how they know (ran it, says so, heard it), how sure they were in σ, the information's age, `init`: what it was worth when said, and `norm`: what it is worth today, 0 to 1, higher is better. `unvetted`: nobody of ours has checked the claim. `unscored`: nothing says who speaks.
          */
         get: operations["search"];
         put?: never;

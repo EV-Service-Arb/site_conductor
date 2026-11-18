@@ -138,9 +138,7 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
-		let Some(rate) = ledger::rate(&mut tx, PlacementRequest::Search.into()).await? else {
-			return Ok(Err(Refused::Conflict("a study's pull is not priced yet: ask an admin to price it".to_owned())));
-		};
+		let rate = ledger::rate(&mut tx, PlacementRequest::Search.into()).await?;
 		let balance = ledger::renewed(&mut tx, user, Timestamp::now(), &self.renewal).await?;
 		tx.commit().await.wrap_err("committing a renewal")?;
 		Ok(Ok(Pull {

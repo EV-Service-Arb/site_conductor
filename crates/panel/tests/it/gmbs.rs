@@ -46,7 +46,8 @@ async fn a_gmb_is_switched_by_its_owner_and_review_archive_is_told() {
 		kickbacks: vec![],
 	})
 	.await
-	.unwrap().unwrap();
+	.unwrap()
+	.unwrap();
 	let owner = person(&p, "owner@localhost").await;
 	let other = person(&p, "other@localhost").await;
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
@@ -57,7 +58,7 @@ async fn a_gmb_is_switched_by_its_owner_and_review_archive_is_told() {
 		state: sa_core::gbp::OnGoogle::Verified,
 		name: Some(name.to_owned()),
 		country: Some(Country::FR),
-		trade,
+		trade: Some(trade),
 	};
 	let one = p
 		.add_gmb(Some(Spender::new(owner)), existing("ChIJLU7jZClu5kcR4PcOOO6p3I0", "One"), now())

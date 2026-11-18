@@ -25,10 +25,10 @@ use crate::{
 	store::{self, Store},
 };
 
-/// Each item sold at that many tokens, at cost (×1); `None` takes it off sale.
-pub async fn priced(panel: &Panel, items: &[(sa_core::prices::Item, Option<i64>)]) {
-	let multipliers: Vec<_> = items.iter().map(|&(i, t)| (i, t.map(|_| 1000))).collect();
-	let costs: Vec<_> = items.iter().filter_map(|&(i, t)| Some((i, Some(t? * sa_core::prices::TOKEN_USD_MICROS)))).collect();
+/// Each item sold at that many tokens, at cost (×1).
+pub async fn priced(panel: &Panel, items: &[(sa_core::prices::Item, i64)]) {
+	let multipliers: Vec<_> = items.iter().map(|&(i, _)| (i, 1000)).collect();
+	let costs: Vec<_> = items.iter().map(|&(i, t)| (i, t * sa_core::prices::TOKEN_USD_MICROS)).collect();
 	panel.set_prices(&multipliers, &costs, "admin@localhost", Timestamp::now()).await.unwrap().unwrap();
 }
 

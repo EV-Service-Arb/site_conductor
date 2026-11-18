@@ -52,7 +52,7 @@ pub struct Existing {
 	pub name: Option<String>,
 	pub country: Option<Country>,
 	/// The owner's.
-	pub trade: i64,
+	pub trade: Option<i64>,
 }
 
 /// A GBP no place is known of yet: a draft, or one on Google not on Maps.
@@ -414,7 +414,7 @@ impl Panel {
 			Some(o) if owner.is_none_or(|owner| owner == o) => o,
 			_ => return Ok(Err(Refused::NotFound)),
 		};
-		if !trade_is(&mut tx, gmail_owner, Some(e.trade)).await? {
+		if !trade_is(&mut tx, gmail_owner, e.trade).await? {
 			return Ok(Err(Refused::NotFound));
 		}
 		if let Some(why) = db::taken(
@@ -441,7 +441,7 @@ impl Panel {
 			country_by_hand: by_hand,
 			at: place.as_ref().and_then(|p| p.location),
 			at_by_hand: false,
-			trade_id: Some(e.trade),
+			trade_id: e.trade,
 		};
 		let added = db::add_gmb(&mut tx, None, &new, now).await?;
 		tx.commit().await.wrap_err("committing a GMB")?;

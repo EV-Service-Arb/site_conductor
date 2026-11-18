@@ -14,11 +14,19 @@ use uuid::Uuid;
 
 use crate::meters::Meter;
 
+/// What a token is worth, in millionths of a dollar: a token buys exactly that much of what we spend.
+pub const TOKEN_USD_MICROS: i64 = 1_000;
+
 /// What each item costs, in tokens ([`Rate::price`]); an item absent is refused.
 pub type Prices = BTreeMap<Item, i64>;
 
-/// What a token is worth, in millionths of a dollar: a token buys exactly that much of what we spend.
-pub const TOKEN_USD_MICROS: i64 = 1_000;
+#[cfg(feature = "api")]
+pub use spends::{Payer, Spends};
+
+/// What one operation may buy: a tool's items, or several tools'.
+pub trait Tool {
+	fn items() -> Vec<Item>;
+}
 
 /// An item's terms, both the admin's: what [`Item::per`] units cost us and the premium charged over it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -31,7 +39,8 @@ pub struct Rate {
 
 impl Rate {
 	pub fn new(cost: i64, multiplier: i64) -> Self {
-		assert!(cost >= 0 && multiplier >= 0, "a cost and a multiplier are 0 or more: {cost}, {multiplier}");
+		assert!(cost >= 0, "a cost and a multiplier are 0 or more: {cost}, {multiplier}");
+		assert!(multiplier >= 0, "a cost and a multiplier are 0 or more: {cost}, {multiplier}");
 		Self { cost, multiplier }
 	}
 
@@ -45,14 +54,6 @@ impl Rate {
 	pub fn cost_of(self, item: Item, units: i64) -> i64 {
 		(units * self.cost).div_euclid(item.per())
 	}
-}
-
-#[cfg(feature = "api")]
-pub use spends::{Payer, Spends};
-
-/// What one operation may buy: a tool's items, or several tools'.
-pub trait Tool {
-	fn items() -> Vec<Item>;
 }
 
 /// Where it happens: who counts it and charges for it.

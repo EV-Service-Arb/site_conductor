@@ -209,8 +209,7 @@ pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<boo
 	tokio::join!(follow, push);
 }
 
-/// A catalog item: what `per` units cost us (`null`: unknown), the multiplier charged over it
-/// (`null`: refused) and the price they make, while it has both.
+/// A catalog item: what `per` units cost us, the multiplier charged over it and the price they make.
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Price")]
 pub struct PriceDto {
@@ -225,9 +224,9 @@ pub struct PriceDto {
 	pub title: &'static str,
 	pub description: &'static str,
 	/// Tokens for `per` units: the cost in tokens × the multiplier, rounded up.
-	pub price: Option<i64>,
-	pub multiplier: Option<MultiplierDto>,
-	pub cost: Option<UnitCostDto>,
+	pub price: i64,
+	pub multiplier: MultiplierDto,
+	pub cost: UnitCostDto,
 }
 
 #[derive(Clone, Debug, JsonSchema, Serialize)]
@@ -261,15 +260,14 @@ pub struct PricesDto {
 	pub token_usd: f64,
 }
 
-/// The items given, each multiplied at 0 or more (to three decimals) or `null` refused, each
-/// costed at 0 tokens or more per `per` units (to three decimals) or `null` unknown; the others
-/// stay.
+/// The items given, each multiplied at 0 or more and costed at 0 tokens or more per `per` units,
+/// both to three decimals; the others stay.
 #[derive(Deserialize, JsonSchema)]
 #[schemars(rename = "SetPrices")]
 #[serde(deny_unknown_fields)]
 pub struct SetPricesDto {
-	pub multipliers: BTreeMap<Item, Option<f64>>,
-	pub costs: BTreeMap<Item, Option<f64>>,
+	pub multipliers: BTreeMap<Item, f64>,
+	pub costs: BTreeMap<Item, f64>,
 }
 
 /// What moved a balance, as Grafana reads it.
@@ -500,22 +498,22 @@ impl From<Priced> for PriceDto {
 			title: item.title(),
 			description: item.description(),
 			price,
-			multiplier: multiplier.map(|m| MultiplierDto {
-				multiplier: m.permille as f64 / 1e3,
-				set_by: m.set_by,
-				set_at: m.set_at.to_string(),
-			}),
-			cost: cost.map(|c| UnitCostDto {
-				tokens: c.usd_micros as f64 / TOKEN_USD_MICROS as f64,
-				set_by: c.set_by,
-				set_at: c.set_at.to_string(),
-			}),
+			multiplier: MultiplierDto {
+				multiplier: multiplier.permille as f64 / 1e3,
+				set_by: multiplier.set_by,
+				set_at: multiplier.set_at.to_string(),
+			},
+			cost: UnitCostDto {
+				tokens: cost.usd_micros as f64 / TOKEN_USD_MICROS as f64,
+				set_by: cost.set_by,
+				set_at: cost.set_at.to_string(),
+			},
 		}
 	}
 }
 
 /// Every item of the price catalog (`sa_core::prices`): its cost in tokens, the multiplier over it
-/// and the price they make, or refused.
+/// and the price they make.
 async fn token_prices(State(panel): State<Panel>) -> ApiResult<Json<PricesDto>> {
 	Ok(Json(PricesDto {
 		prices: panel.prices().await?.into_iter().map(PriceDto::from).collect(),
@@ -523,16 +521,16 @@ async fn token_prices(State(panel): State<Panel>) -> ApiResult<Json<PricesDto>> 
 	}))
 }
 
-/// Multiplies the items given, 0 or more or `null` refused, and costs them, 0 tokens or more per
-/// `per` units or `null` unknown, both to three decimals; the others stay.
+/// Multiplies the items given, 0 or more, and costs them, 0 tokens or more per `per` units, both
+/// to three decimals; the others stay.
 ///
 /// 400 an item not in the catalog, or a number that is not finite.
 async fn set_token_prices(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<SetPricesDto>) -> ApiResult<Json<PricesDto>> {
-	let scaled = |by: f64, of: BTreeMap<Item, Option<f64>>| -> ApiResult<Vec<(Item, Option<i64>)>> {
+	let scaled = |by: f64, of: BTreeMap<Item, f64>| -> ApiResult<Vec<(Item, i64)>> {
 		of.into_iter()
-			.map(|(item, n)| match n {
-				Some(n) if !n.is_finite() => Err(Refusal::new(Code::BadRequest, format!("{item}: {n} is no number"))),
-				n => Ok((item, n.map(|n| (n * by).round() as i64))),
+			.map(|(item, n)| match n.is_finite() {
+				false => Err(Refusal::new(Code::BadRequest, format!("{item}: {n} is no number"))),
+				true => Ok((item, (n * by).round() as i64)),
 			})
 			.collect()
 	};

@@ -146,9 +146,9 @@ impl World {
 		sa_panel::testing::priced(
 			&self.panel,
 			&[
-				(Item::Places(PlacesRequest::Details), Some(details)),
-				(Item::Places(PlacesRequest::Search), Some(2 * details)),
-				(Item::Places(PlacesRequest::Autocomplete), Some(details)),
+				(Item::Places(PlacesRequest::Details), details),
+				(Item::Places(PlacesRequest::Search), 2 * details),
+				(Item::Places(PlacesRequest::Autocomplete), details),
 			],
 		)
 		.await;
@@ -170,7 +170,7 @@ impl World {
 	}
 
 	/// The keys the billed requests went out with since asked last.
-	async fn price_map(&self, tokens: Option<i64>) {
+	async fn price_map(&self, tokens: i64) {
 		sa_panel::testing::priced(&self.panel, &[(Item::Map(MapLoad::Map), tokens)]).await;
 	}
 
@@ -223,12 +223,9 @@ async fn the_gmails_key_goes_first_then_the_owners_others_then_the_shared_ones_p
 }
 
 #[tokio::test]
-async fn below_the_price_or_unpriced_nothing_is_bought() {
+async fn below_the_price_nothing_is_bought() {
 	let mut w = World::new().await;
 	let gmail = w.gmail("a@gmail.com").await;
-	let (status, refused) = w.add_gbp(gmail, PROCOPE).await;
-	assert_eq!(status, StatusCode::CONFLICT, "not priced: {refused}");
-
 	let balance = w.balance().await;
 	w.price(balance + 1).await;
 	let (status, refused) = w.add_gbp(gmail, PROCOPE).await;
@@ -246,16 +243,16 @@ async fn below_the_price_or_unpriced_nothing_is_bought() {
 #[tokio::test]
 async fn a_map_is_bought_before_it_is_built() {
 	let mut w = World::new().await;
-	let (status, refused) = w.load_map().await;
-	assert_eq!(status, StatusCode::CONFLICT, "not priced: {refused}");
-
 	let balance = w.balance().await;
-	w.price_map(Some(balance + 1)).await;
+	let (status, free) = w.load_map().await;
+	assert_eq!((status, &free["balance"]), (StatusCode::OK, &json!(balance)), "never priced: free, not refused: {free}");
+
+	w.price_map(balance + 1).await;
 	let (status, refused) = w.load_map().await;
 	assert_eq!(status, StatusCode::CONFLICT, "{refused}");
 	assert_eq!(w.balance().await, balance);
 
-	w.price_map(Some(3)).await;
+	w.price_map(3).await;
 	let (status, bought) = w.load_map().await;
 	assert_eq!((status, &bought["balance"]), (StatusCode::OK, &json!(balance - 3)), "{bought}");
 	let (_, ledger) = w.call(Method::GET, "/api/v1/tokens/ledger?limit=1", None).await;
@@ -321,20 +318,20 @@ async fn every_priced_item_is_the_admins_to_price_and_the_archive_is_told() {
 		.call(
 			Method::PUT,
 			"/api/v1/admin/tokens/prices",
-			Some(json!({ "multipliers": { "places.details": 1.5, "walk.step": null }, "costs": { "places.details": 2, "map.map": 7 } })),
+			Some(json!({ "multipliers": { "places.details": 1.5, "walk.step": 0 }, "costs": { "places.details": 2, "map.map": 7 } })),
 		)
 		.await;
 	assert_eq!(status, StatusCode::OK, "{set}");
 	assert_eq!(
 		(of(&set, "places.details"), of(&set, "walk.step"), of(&set, "walk.open")),
-		(json!(3), Value::Null, json!(7)),
+		(json!(3), json!(0), json!(7)),
 		"2 tokens × 1.5; only those given change"
 	);
 	let map = row(&set, "map.map");
-	assert_eq!((&map["price"], &map["cost"]["tokens"]), (&Value::Null, &json!(7.0)), "a cost, no multiplier, not sold: {map}");
+	assert_eq!((&map["price"], &map["cost"]["tokens"]), (&json!(7), &json!(7.0)), "a cost at the first multiplier, ×1: {map}");
 	let told = w.panel.snapshot(jiff::Timestamp::now()).await.unwrap().unwrap().prices;
 	assert_eq!(told.get(&"walk.open".parse().unwrap()), Some(&7));
-	assert_eq!(told.get(&"walk.step".parse().unwrap()), None, "unpriced: not walked");
+	assert_eq!(told.get(&"walk.step".parse().unwrap()), Some(&0), "×0: free");
 
 	for refused in [
 		json!({ "multipliers": { "walk.fly": 1 }, "costs": {} }),
@@ -365,7 +362,7 @@ async fn every_paid_answer_and_map_is_counted_once_on_whose_bill() {
 	assert_eq!(status, StatusCode::CREATED, "{gbp}");
 	let (status, kept) = w.call(Method::GET, &format!("/api/v1/gmbs/resolve?place={FLORE}&gmail={gmail}"), None).await;
 	assert_eq!(status, StatusCode::OK, "{kept}");
-	w.price_map(Some(0)).await;
+	w.price_map(0).await;
 	for _ in 0..2 {
 		assert_eq!(w.load_map().await.0, StatusCode::OK);
 	}
@@ -399,7 +396,11 @@ async fn a_use_is_costed_at_the_cost_it_had_when_done() {
 	let load = async |w: &mut World| w.load_map().await.0;
 	let cost = async |w: &mut World, tokens: Value| {
 		let (status, set) = w
-			.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(json!({ "multipliers": { "map.map": 0 }, "costs": { "map.map": tokens } })))
+			.call(
+				Method::PUT,
+				"/api/v1/admin/tokens/prices",
+				Some(json!({ "multipliers": { "map.map": 0 }, "costs": { "map.map": tokens } })),
+			)
 			.await;
 		assert_eq!(status, StatusCode::OK, "{set}");
 	};
@@ -424,7 +425,11 @@ async fn a_use_is_costed_at_the_cost_it_had_when_done() {
 async fn a_spend_is_its_cost_times_the_multiplier_and_keeps_what_it_cost_us() {
 	let mut w = World::holding(admin()).await;
 	let (status, set) = w
-		.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(json!({ "multipliers": { "map.map": 2.5 }, "costs": { "map.map": 7 } })))
+		.call(
+			Method::PUT,
+			"/api/v1/admin/tokens/prices",
+			Some(json!({ "multipliers": { "map.map": 2.5 }, "costs": { "map.map": 7 } })),
+		)
 		.await;
 	assert_eq!(status, StatusCode::OK, "{set}");
 	let (_, before) = w.call(Method::GET, "/api/v1/tokens", None).await;
@@ -434,8 +439,16 @@ async fn a_spend_is_its_cost_times_the_multiplier_and_keeps_what_it_cost_us() {
 	assert_eq!(before["balance"].as_i64().unwrap() - after["balance"].as_i64().unwrap(), 18);
 
 	let now = jiff::Timestamp::now().as_millisecond();
-	let (status, flows) = w.call(Method::GET, &format!("/api/v1/admin/tokens/flows?from={}&to={}", now - 3_600_000, now + 60_000), None).await;
+	let (status, flows) = w
+		.call(Method::GET, &format!("/api/v1/admin/tokens/flows?from={}&to={}", now - 3_600_000, now + 60_000), None)
+		.await;
 	assert_eq!(status, StatusCode::OK, "{flows}");
-	let spent: Vec<_> = flows["flows"].as_array().unwrap().iter().filter(|f| f["kind"] == "spend").map(|f| (f["tokens"].clone(), f["at_cost"].clone())).collect();
+	let spent: Vec<_> = flows["flows"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.filter(|f| f["kind"] == "spend")
+		.map(|f| (f["tokens"].clone(), f["at_cost"].clone()))
+		.collect();
 	assert_eq!(spent, [(json!(-18), json!(-7.0))], "charged, and at cost: {flows}");
 }

@@ -65,7 +65,8 @@ export function AddPanel({ gmail: scopedGmail, trade: scopedTrade }: Adding) {
   const googles = verified ? (picked?.country ?? null) : first === undefined ? null : (google.get(spotKey(first)) ?? null);
   const where = googles ?? country;
   const named = verified ? (picked?.name ?? name) : name;
-  const ready = trade !== null && named.trim() !== "" && (draft || gmail !== null) && (verified ? picked !== null : !draft || spots.length > 0) && (draft || where !== null);
+  // a GBP on Google takes a trade later; one made here needs it now
+  const ready = (verified || trade !== null) && named.trim() !== "" && (draft || gmail !== null) && (verified ? picked !== null : !draft || spots.length > 0) && (draft || where !== null);
   const countryAsked = verified ? picked !== null && picked.country === null : !draft && googles === null;
 
   useEffect(() => {
@@ -78,11 +79,11 @@ export function AddPanel({ gmail: scopedGmail, trade: scopedTrade }: Adding) {
     setBusy(true);
     try {
       const added = verified
-        ? await ok(api.POST("/gmails/{id}/gmbs", { params: { path: { id: gmail! } }, body: { place_id: picked!.place_id, state, trade, ...(picked!.name === null && { name: name.trim() }), ...(picked!.country === null && country !== null && { country }) } }))
+        ? await ok(api.POST("/gmails/{id}/gmbs", { params: { path: { id: gmail! } }, body: { place_id: picked!.place_id, state, ...(trade !== null && { trade }), ...(picked!.name === null && { name: name.trim() }), ...(picked!.country === null && country !== null && { country }) } }))
         : await ok(api.POST("/gmbs", {
             body: {
               name: name.trim(),
-              trade,
+              trade: trade!, // ready holds one for a GBP made here
               state,
               ...(gmail !== null && { gmail_id: gmail }),
               ...(where !== null && { country: where }),

@@ -33,7 +33,8 @@ async fn opened(db: &TestDb) -> Panel {
 		kickbacks: vec![],
 	})
 	.await
-	.unwrap().unwrap();
+	.unwrap()
+	.unwrap();
 	p
 }
 
@@ -63,7 +64,7 @@ async fn add(p: &Panel, owner: Uuid, gmail_id: i64, place: &str, name: &str, cou
 		state: OnGoogle::Verified,
 		name: Some(name.to_owned()),
 		country,
-		trade: trade(p, owner).await,
+		trade: Some(trade(p, owner).await),
 	};
 	p.add_gmb(Some(Spender::new(owner)), existing, now()).await.unwrap()
 }

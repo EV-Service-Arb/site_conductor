@@ -1737,7 +1737,7 @@
         "tags": [
           "tokens"
         ],
-        "summary": "Every item of the price catalog (`sa_core::prices`): its cost in tokens, the multiplier over it and the price they make, or refused.",
+        "summary": "Every item of the price catalog (`sa_core::prices`): its cost in tokens, the multiplier over it and the price they make.",
         "operationId": "token_prices",
         "responses": {
           "200": {
@@ -1897,11 +1897,11 @@
         "tags": [
           "tokens"
         ],
-        "summary": "Multiplies the items given, 0 or more or `null` refused, and costs them, 0 tokens or more per `per` units or `null` unknown, both to three decimals; the others stay.",
+        "summary": "Multiplies the items given, 0 or more, and costs them, 0 tokens or more per `per` units, both to three decimals; the others stay.",
         "description": "400 an item not in the catalog, or a number that is not finite.",
         "operationId": "set_token_prices",
         "requestBody": {
-          "description": "The items given, each multiplied at 0 or more (to three decimals) or `null` refused, each\ncosted at 0 tokens or more per `per` units (to three decimals) or `null` unknown; the others\nstay.",
+          "description": "The items given, each multiplied at 0 or more and costed at 0 tokens or more per `per` units,\nboth to three decimals; the others stay.",
           "content": {
             "application/json": {
               "schema": {
@@ -24802,15 +24802,17 @@
             "$ref": "#/components/schemas/OnGoogle"
           },
           "trade": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           }
         },
         "additionalProperties": false,
         "required": [
           "place_id",
-          "state",
-          "trade"
+          "state"
         ]
       },
       "NewKitDraft": {
@@ -25146,18 +25148,11 @@
         ]
       },
       "Price": {
-        "description": "A catalog item: what `per` units cost us (`null`: unknown), the multiplier charged over it\n(`null`: refused) and the price they make, while it has both.",
+        "description": "A catalog item: what `per` units cost us, the multiplier charged over it and the price they make.",
         "type": "object",
         "properties": {
           "cost": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/UnitCost"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/UnitCost"
           },
           "description": {
             "type": "string"
@@ -25166,14 +25161,7 @@
             "$ref": "#/components/schemas/PricedItem"
           },
           "multiplier": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Multiplier"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/Multiplier"
           },
           "per": {
             "description": "How many units the price and the cost are for.",
@@ -25182,10 +25170,7 @@
           },
           "price": {
             "description": "Tokens for `per` units: the cost in tokens × the multiplier, rounded up.",
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": "integer",
             "format": "int64"
           },
           "scope": {
@@ -25806,178 +25791,106 @@
         ]
       },
       "SetPrices": {
-        "description": "The items given, each multiplied at 0 or more (to three decimals) or `null` refused, each\ncosted at 0 tokens or more per `per` units (to three decimals) or `null` unknown; the others\nstay.",
+        "description": "The items given, each multiplied at 0 or more and costed at 0 tokens or more per `per` units,\nboth to three decimals; the others stay.",
         "type": "object",
         "properties": {
           "costs": {
             "type": "object",
             "properties": {
               "ads.historical_metrics": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "ads.keyword_ideas": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "ads.location": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "browser.gologin": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "browser.mimic": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "claude.cache_read": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "claude.cache_write": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "claude.input": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "claude.output": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "dataforseo.keywords_for_keywords": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "dataforseo.search_volume": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "map.map": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "phone.running": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "placement.search": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "places.autocomplete": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "places.details": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "places.geocode": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "places.search": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "street_view.panorama": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "walk.open": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "walk.reviews": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "walk.sort": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "walk.sort_retry": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "walk.step": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               }
             },
@@ -25987,171 +25900,99 @@
             "type": "object",
             "properties": {
               "ads.historical_metrics": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "ads.keyword_ideas": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "ads.location": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "browser.gologin": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "browser.mimic": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "claude.cache_read": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "claude.cache_write": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "claude.input": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "claude.output": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "dataforseo.keywords_for_keywords": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "dataforseo.search_volume": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "map.map": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "phone.running": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "placement.search": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "places.autocomplete": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "places.details": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "places.geocode": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "places.search": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "street_view.panorama": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "walk.open": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "walk.reviews": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "walk.sort": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "walk.sort_retry": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               },
               "walk.step": {
-                "type": [
-                  "number",
-                  "null"
-                ],
+                "type": "number",
                 "format": "double"
               }
             },

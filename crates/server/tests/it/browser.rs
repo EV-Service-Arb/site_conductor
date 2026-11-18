@@ -191,11 +191,7 @@ impl World {
 			kickbacks: vec![],
 		};
 		panel.import_review_archive(empty).await.unwrap().unwrap();
-		let prices = [
-			(Item::from(PhoneTime::Running), Some(4)),
-			(BrowserStart::Gologin.into(), Some(1)),
-			(BrowserStart::Mimic.into(), Some(1)),
-		];
+		let prices = [(Item::from(PhoneTime::Running), 4), (BrowserStart::Gologin.into(), 1), (BrowserStart::Mimic.into(), 1)];
 		sa_panel::testing::priced(&panel, &prices).await;
 		let who = DevIdentity {
 			user_id: DevIdentity::named("dev@localhost"),
@@ -353,21 +349,19 @@ async fn a_proxy_is_kept_only_once_it_goes_through_out_in_the_gmails_country_and
 }
 
 #[tokio::test]
-async fn a_start_unpriced_or_past_the_balance_is_refused_before_the_runner_hears_of_it() {
+async fn a_start_past_the_balance_is_refused_before_the_runner_hears_of_it() {
 	let mut w = World::new().await;
 	let a = w.gmail("a@gmail.com").await;
 	let (status, set) = w.set(a, "pixel_7", &w.proxy("fr")).await;
 	assert_eq!(status, StatusCode::OK, "{set}");
-	let start = async |w: &mut World, tokens: Option<i64>| {
+	let start = async |w: &mut World, tokens: i64| {
 		sa_panel::testing::priced(&w.panel, &[(BrowserStart::Gologin.into(), tokens)]).await;
 		w.call(Method::POST, &format!("/api/v1/gmails/{a}/browser/start"), Some(json!({ "gmb": null }))).await
 	};
-	for tokens in [None, Some(501)] {
-		let (status, refused) = start(&mut w, tokens).await;
-		assert_eq!(status, StatusCode::CONFLICT, "{tokens:?}: {refused}");
-	}
+	let (status, refused) = start(&mut w, 501).await;
+	assert_eq!(status, StatusCode::CONFLICT, "{refused}");
 	assert!(w.launches().is_empty(), "the runner never asked");
-	let (status, body) = start(&mut w, Some(500)).await;
+	let (status, body) = start(&mut w, 500).await;
 	assert_eq!(status, StatusCode::NO_CONTENT, "the whole balance is enough: {body}");
 }
 

@@ -30,11 +30,7 @@ async fn opened(db: &TestDb) -> Panel {
 	.await
 	.unwrap()
 	.unwrap();
-	let prices = [
-		(Item::from(PhoneTime::Running), Some(4)),
-		(BrowserStart::Gologin.into(), Some(1)),
-		(WalkStep::Open.into(), Some(1)),
-	];
+	let prices = [(Item::from(PhoneTime::Running), 4), (BrowserStart::Gologin.into(), 1), (WalkStep::Open.into(), 1)];
 	sa_panel::testing::priced(&p, &prices).await;
 	p
 }
@@ -116,7 +112,7 @@ async fn a_page_breaking_the_feeds_rules_is_refused_whole() {
 async fn a_walks_charge_keeps_what_its_steps_cost_us_split_as_it_is_paid() {
 	let db = TestDb::create().await;
 	let p = opened(&db).await;
-	sa_panel::testing::priced(&p, &[(WalkStep::Step.into(), Some(2))]).await;
+	sa_panel::testing::priced(&p, &[(WalkStep::Step.into(), 2)]).await;
 	let (a, b) = (person(&p).await, person(&p).await);
 	let charge = Charge {
 		id: 1,

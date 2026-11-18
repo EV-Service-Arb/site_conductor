@@ -199,10 +199,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every item of the price catalog (`sa_core::prices`): its cost in tokens, the multiplier over it and the price they make, or refused. */
+        /** Every item of the price catalog (`sa_core::prices`): its cost in tokens, the multiplier over it and the price they make. */
         get: operations["token_prices"];
         /**
-         * Multiplies the items given, 0 or more or `null` refused, and costs them, 0 tokens or more per `per` units or `null` unknown, both to three decimals; the others stay.
+         * Multiplies the items given, 0 or more, and costs them, 0 tokens or more per `per` units, both to three decimals; the others stay.
          * @description 400 an item not in the catalog, or a number that is not finite.
          */
         put: operations["set_token_prices"];
@@ -1907,7 +1907,7 @@ export interface paths {
         };
         /**
          * One page of the manual, whole: what we do in an area.
-         * @description Each step or decision in the order it is met, and the evidence under it, every citation given as who, how they know, when, and what that is worth today. `people`: who has run what, and how to reach them. The pages:
+         * @description Each step or decision in the order it is met, and the evidence under it, every citation given as who, how they know, how sure, how long ago, and what that was worth when said (`init`) and is worth today (`norm`). `people`: who has run what, and how to reach them. The pages:
          *     - calls/closing: closing
          *     - calls/phones: phones
          *     - calls/resale: resale
@@ -1996,7 +1996,7 @@ export interface paths {
          * Case-insensitive regex over the service-arb playbook.
          * @description Each kind of source has its own slots, so none crowds out another: the manual (knowledge/structured), the course (lessons and the recordings they link), calls, videos, texts. Within a kind, a passage holding the rarer of the pattern's alternatives ranks first. Each hit gives path:line, its header, its label, the source URL and the lines around it; the files past the slots follow as path:line, for `read`. A pattern hitting most of the scope is refused, with the sub-scopes it hits.
          *
-         *     A label is who backs the passage, how they know (ran it, says so, heard it), when the information is from, and `effective`: what that is worth today, 0 to 1, higher is better. `unvetted`: nobody of ours has checked the claim. `unscored`: nothing says who speaks.
+         *     A label is who backs the passage, how they know (ran it, says so, heard it), how sure they were in σ, the information's age, `init`: what it was worth when said, and `norm`: what it is worth today, 0 to 1, higher is better. `unvetted`: nobody of ours has checked the claim. `unscored`: nothing says who speaks.
          */
         get: operations["playbook.search"];
         put?: never;
@@ -4173,7 +4173,7 @@ export interface components {
             place_id: string;
             state: components["schemas"]["OnGoogle"];
             /** Format: int64 */
-            trade: number;
+            trade?: number | null;
         };
         NewKitDraft: {
             photos: number[];
@@ -4275,15 +4275,12 @@ export interface components {
             /** Format: uint32 */
             width: number;
         };
-        /**
-         * @description A catalog item: what `per` units cost us (`null`: unknown), the multiplier charged over it
-         *     (`null`: refused) and the price they make, while it has both.
-         */
+        /** @description A catalog item: what `per` units cost us, the multiplier charged over it and the price they make. */
         Price: {
-            cost: components["schemas"]["UnitCost"] | null;
+            cost: components["schemas"]["UnitCost"];
             description: string;
             item: components["schemas"]["PricedItem"];
-            multiplier: components["schemas"]["Multiplier"] | null;
+            multiplier: components["schemas"]["Multiplier"];
             /**
              * Format: int64
              * @description How many units the price and the cost are for.
@@ -4293,7 +4290,7 @@ export interface components {
              * Format: int64
              * @description Tokens for `per` units: the cost in tokens × the multiplier, rounded up.
              */
-            price: number | null;
+            price: number;
             scope: components["schemas"]["Scope"];
             title: string;
             tool: string;
@@ -4473,110 +4470,109 @@ export interface components {
             key: string;
         };
         /**
-         * @description The items given, each multiplied at 0 or more (to three decimals) or `null` refused, each
-         *     costed at 0 tokens or more per `per` units (to three decimals) or `null` unknown; the others
-         *     stay.
+         * @description The items given, each multiplied at 0 or more and costed at 0 tokens or more per `per` units,
+         *     both to three decimals; the others stay.
          */
         SetPrices: {
             costs: {
                 /** Format: double */
-                "ads.historical_metrics"?: number | null;
+                "ads.historical_metrics"?: number;
                 /** Format: double */
-                "ads.keyword_ideas"?: number | null;
+                "ads.keyword_ideas"?: number;
                 /** Format: double */
-                "ads.location"?: number | null;
+                "ads.location"?: number;
                 /** Format: double */
-                "browser.gologin"?: number | null;
+                "browser.gologin"?: number;
                 /** Format: double */
-                "browser.mimic"?: number | null;
+                "browser.mimic"?: number;
                 /** Format: double */
-                "claude.cache_read"?: number | null;
+                "claude.cache_read"?: number;
                 /** Format: double */
-                "claude.cache_write"?: number | null;
+                "claude.cache_write"?: number;
                 /** Format: double */
-                "claude.input"?: number | null;
+                "claude.input"?: number;
                 /** Format: double */
-                "claude.output"?: number | null;
+                "claude.output"?: number;
                 /** Format: double */
-                "dataforseo.keywords_for_keywords"?: number | null;
+                "dataforseo.keywords_for_keywords"?: number;
                 /** Format: double */
-                "dataforseo.search_volume"?: number | null;
+                "dataforseo.search_volume"?: number;
                 /** Format: double */
-                "map.map"?: number | null;
+                "map.map"?: number;
                 /** Format: double */
-                "phone.running"?: number | null;
+                "phone.running"?: number;
                 /** Format: double */
-                "placement.search"?: number | null;
+                "placement.search"?: number;
                 /** Format: double */
-                "places.autocomplete"?: number | null;
+                "places.autocomplete"?: number;
                 /** Format: double */
-                "places.details"?: number | null;
+                "places.details"?: number;
                 /** Format: double */
-                "places.geocode"?: number | null;
+                "places.geocode"?: number;
                 /** Format: double */
-                "places.search"?: number | null;
+                "places.search"?: number;
                 /** Format: double */
-                "street_view.panorama"?: number | null;
+                "street_view.panorama"?: number;
                 /** Format: double */
-                "walk.open"?: number | null;
+                "walk.open"?: number;
                 /** Format: double */
-                "walk.reviews"?: number | null;
+                "walk.reviews"?: number;
                 /** Format: double */
-                "walk.sort"?: number | null;
+                "walk.sort"?: number;
                 /** Format: double */
-                "walk.sort_retry"?: number | null;
+                "walk.sort_retry"?: number;
                 /** Format: double */
-                "walk.step"?: number | null;
+                "walk.step"?: number;
             };
             multipliers: {
                 /** Format: double */
-                "ads.historical_metrics"?: number | null;
+                "ads.historical_metrics"?: number;
                 /** Format: double */
-                "ads.keyword_ideas"?: number | null;
+                "ads.keyword_ideas"?: number;
                 /** Format: double */
-                "ads.location"?: number | null;
+                "ads.location"?: number;
                 /** Format: double */
-                "browser.gologin"?: number | null;
+                "browser.gologin"?: number;
                 /** Format: double */
-                "browser.mimic"?: number | null;
+                "browser.mimic"?: number;
                 /** Format: double */
-                "claude.cache_read"?: number | null;
+                "claude.cache_read"?: number;
                 /** Format: double */
-                "claude.cache_write"?: number | null;
+                "claude.cache_write"?: number;
                 /** Format: double */
-                "claude.input"?: number | null;
+                "claude.input"?: number;
                 /** Format: double */
-                "claude.output"?: number | null;
+                "claude.output"?: number;
                 /** Format: double */
-                "dataforseo.keywords_for_keywords"?: number | null;
+                "dataforseo.keywords_for_keywords"?: number;
                 /** Format: double */
-                "dataforseo.search_volume"?: number | null;
+                "dataforseo.search_volume"?: number;
                 /** Format: double */
-                "map.map"?: number | null;
+                "map.map"?: number;
                 /** Format: double */
-                "phone.running"?: number | null;
+                "phone.running"?: number;
                 /** Format: double */
-                "placement.search"?: number | null;
+                "placement.search"?: number;
                 /** Format: double */
-                "places.autocomplete"?: number | null;
+                "places.autocomplete"?: number;
                 /** Format: double */
-                "places.details"?: number | null;
+                "places.details"?: number;
                 /** Format: double */
-                "places.geocode"?: number | null;
+                "places.geocode"?: number;
                 /** Format: double */
-                "places.search"?: number | null;
+                "places.search"?: number;
                 /** Format: double */
-                "street_view.panorama"?: number | null;
+                "street_view.panorama"?: number;
                 /** Format: double */
-                "walk.open"?: number | null;
+                "walk.open"?: number;
                 /** Format: double */
-                "walk.reviews"?: number | null;
+                "walk.reviews"?: number;
                 /** Format: double */
-                "walk.sort"?: number | null;
+                "walk.sort"?: number;
                 /** Format: double */
-                "walk.sort_retry"?: number | null;
+                "walk.sort_retry"?: number;
                 /** Format: double */
-                "walk.step"?: number | null;
+                "walk.step"?: number;
             };
         };
         SetRole: {
@@ -8736,9 +8732,8 @@ export interface operations {
             cookie?: never;
         };
         /**
-         * @description The items given, each multiplied at 0 or more (to three decimals) or `null` refused, each
-         *     costed at 0 tokens or more per `per` units (to three decimals) or `null` unknown; the others
-         *     stay.
+         * @description The items given, each multiplied at 0 or more and costed at 0 tokens or more per `per` units,
+         *     both to three decimals; the others stay.
          */
         requestBody: {
             content: {

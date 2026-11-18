@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, NavDot, cn, useKeymap as usePageKeymap } from "@evinvest/uikit";
-import { Sparkles } from "lucide-react";
+import { Bot } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { useChats, assistant } from "@/entities/assistant";
@@ -91,7 +91,7 @@ export function AssistantToggle() {
       aria-label={t(keysKeys.assistant, "Assistant: show or hide")}
       title={keys === undefined ? t(keysKeys.assistant, "Assistant: show or hide") : `${t(keysKeys.assistant, "Assistant: show or hide")} · ${keys}`}
     >
-      <Sparkles aria-hidden className={cn(running && "animate-pulse")} />
+      <Bot aria-hidden className={cn(running && "animate-pulse")} />
       {running && <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary [animation-duration:1.4s]" />}
       {s.unread && !running && <NavDot corner label={t(assistant.unread, "New answer")} />}
     </Button>

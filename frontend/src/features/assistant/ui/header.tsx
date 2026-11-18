@@ -1,7 +1,7 @@
 "use client";
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, IconButton, Input, Kbd, KbdGroup, Popover, PopoverContent, PopoverTrigger, cn } from "@evinvest/uikit";
-import { BookOpen, ChevronDown, ChevronsRight, Ellipsis, FileText, KeyRound, MapPin, MessageCirclePlus, Minus, PanelRight, Pin, PinOff, Share as ShareIcon, Sparkles } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronsRight, Ellipsis, FileText, KeyRound, MapPin, MessageCirclePlus, Minus, PanelRight, Pin, PinOff, Share as ShareIcon, Bot } from "lucide-react";
 import { useState } from "react";
 
 import { assistant } from "@/entities/assistant";
@@ -64,7 +64,7 @@ export function Header({
     <header className={cn("flex h-11 shrink-0 items-center gap-0.5 px-2", full && "h-12 px-3")}>
       {!full && (
         <span className="mr-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-hover">
-          <Sparkles aria-hidden className="size-3.5 text-ink-mid" />
+          <Bot aria-hidden className="size-3.5 text-ink-mid" />
         </span>
       )}
       {full && <span className="mr-1.5 text-body-s text-ink-soft">{t(assistant, "Assistant")} /</span>}

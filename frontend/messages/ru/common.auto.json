@@ -2491,10 +2491,6 @@
     "en": "{item}: cost in tokens {per}",
     "t": "{item}: стоимость в токенах {per}"
   },
-  "prices.cost.unknown": {
-    "en": "unknown",
-    "t": "неизвестно"
-  },
   "prices.multiplier.label": {
     "en": "{item}: multiplier",
     "t": "{item}: множитель"
@@ -2547,21 +2543,9 @@
     "en": "tokens",
     "t": "токенов"
   },
-  "prices.uncosted.count": {
-    "en": "{n} without a cost",
-    "t": "Без стоимости: {n}"
-  },
-  "prices.unsold": {
-    "en": "not sold",
-    "t": "не продаётся"
-  },
-  "prices.unsold.count": {
-    "en": "{n} not sold",
-    "t": "Не продаётся: {n}"
-  },
   "prices.why": {
-    "en": "Cost: what it costs us, in tokens ({rate}). ×: what a person is charged over it, 1 at cost, 0 for free. Either empty is not sold, so it is refused: a Places request, a map, a browser's start, a walk step. Cached answers and a person's own Maps keys cost nothing.",
-    "t": "Стоимость: сколько это стоит нам в токенах ({rate}). ×: сколько дополнительно взимается с пользователя: 1 — по себестоимости, 0 — бесплатно. Если какое-либо поле не заполнено, услуга не предоставляется, поэтому запрос Places, карта, старт браузера или шаг маршрута отклоняются. Кэшированные ответы и собственные ключи пользователя для Maps ничего не стоят."
+    "en": "Cost: what it costs us, in tokens ({rate}). ×: what a person is charged over it, 1 at cost, 0 for free. Cached answers and a person's own Maps keys cost nothing.",
+    "t": "Стоимость: сколько это стоит нам, в токенах ({rate}). ×: сколько с человека берут сверх этого; 1 — по себестоимости, 0 — бесплатно. Ответы из кэша и собственные ключи Maps пользователя ничего не стоят."
   },
   "reviewArchive.loading": {
     "en": "Loading the review archive…",

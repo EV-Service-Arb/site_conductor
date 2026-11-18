@@ -330,7 +330,7 @@ pub async fn multipliers(conn: &mut SqliteConnection) -> eyre::Result<BTreeMap<I
 		.collect()
 }
 
-/// Every item sold: with a multiplier and a cost now.
+/// Every item's terms now.
 pub async fn rates(conn: &mut SqliteConnection) -> eyre::Result<BTreeMap<Item, Rate>> {
 	let rows: Vec<(String, i64, i64)> = sqlx::query_as(
 		"SELECT m.item, c.usd_micros, m.permille FROM token_multipliers m \
@@ -344,25 +344,45 @@ pub async fn rates(conn: &mut SqliteConnection) -> eyre::Result<BTreeMap<Item, R
 		.collect()
 }
 
-/// `item`'s terms now; `None`, not sold.
-pub async fn rate(conn: &mut SqliteConnection, item: Item) -> eyre::Result<Option<Rate>> {
-	Ok(rates(conn).await?.remove(&item))
+pub async fn rate(conn: &mut SqliteConnection, item: Item) -> eyre::Result<Rate> {
+	Ok(rates(conn).await?.remove(&item).expect("init_rates terms every item on open"))
 }
 
-/// `item` charged at `permille` thousandths of its cost, 0 or more; `None` takes it off sale.
-pub async fn set_multiplier(conn: &mut SqliteConnection, item: Item, permille: Option<i64>, by: &str, now: Timestamp) -> eyre::Result<()> {
-	let q = match permille {
-		Some(permille) => sqlx::query(
-			"INSERT INTO token_multipliers (item, permille, set_by, set_at) VALUES ($1, $2, $3, $4) \
-			 ON CONFLICT (item) DO UPDATE SET permille = excluded.permille, set_by = excluded.set_by, set_at = excluded.set_at",
+/// Every catalog item without terms costs 0 and charges ×1: free until an admin prices it, never refused.
+pub async fn init_rates(conn: &mut SqliteConnection, now: Timestamp) -> eyre::Result<()> {
+	for item in Item::all() {
+		sqlx::query("INSERT INTO token_multipliers (item, permille, set_by, set_at) VALUES ($1, 1000, 'init', $2) ON CONFLICT (item) DO NOTHING")
+			.bind(item.to_string())
+			.bind(to_db(now))
+			.execute(&mut *conn)
+			.await
+			.wrap_err_with(|| format!("multiplying {item} at first"))?;
+		sqlx::query(
+			"INSERT INTO unit_costs (item, usd_micros, set_by, set_at) SELECT $1, 0, 'init', $2 \
+			 WHERE (SELECT usd_micros FROM unit_costs WHERE item = $1 ORDER BY id DESC LIMIT 1) IS NULL",
 		)
 		.bind(item.to_string())
-		.bind(permille)
-		.bind(by)
-		.bind(to_db(now)),
-		None => sqlx::query("DELETE FROM token_multipliers WHERE item = $1").bind(item.to_string()),
-	};
-	q.execute(&mut *conn).await.wrap_err_with(|| format!("multiplying {item}"))?;
+		.bind(to_db(now))
+		.execute(&mut *conn)
+		.await
+		.wrap_err_with(|| format!("costing {item} at first"))?;
+	}
+	Ok(())
+}
+
+/// `item` charged at `permille` thousandths of its cost, 0 or more.
+pub async fn set_multiplier(conn: &mut SqliteConnection, item: Item, permille: i64, by: &str, now: Timestamp) -> eyre::Result<()> {
+	sqlx::query(
+		"INSERT INTO token_multipliers (item, permille, set_by, set_at) VALUES ($1, $2, $3, $4) \
+		 ON CONFLICT (item) DO UPDATE SET permille = excluded.permille, set_by = excluded.set_by, set_at = excluded.set_at",
+	)
+	.bind(item.to_string())
+	.bind(permille)
+	.bind(by)
+	.bind(to_db(now))
+	.execute(&mut *conn)
+	.await
+	.wrap_err_with(|| format!("multiplying {item}"))?;
 	Ok(())
 }
 

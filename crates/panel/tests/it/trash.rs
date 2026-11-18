@@ -37,7 +37,8 @@ async fn opened(db: &TestDb) -> (Panel, Uuid) {
 		kickbacks: vec![],
 	})
 	.await
-	.unwrap().unwrap();
+	.unwrap()
+	.unwrap();
 	let owner = Uuid::now_v7();
 	p.user_seen(
 		&User {
@@ -59,7 +60,7 @@ fn existing(trade: i64, gmail_id: i64, place: &str, name: &str) -> Existing {
 		state: OnGoogle::Verified,
 		name: Some(name.to_owned()),
 		country: Some(Country::FR),
-		trade,
+		trade: Some(trade),
 	}
 }
 

@@ -363,13 +363,7 @@ impl Panel {
 		assert_eq!(item.per(), 1, "a start and a phone's minute are priced one by one");
 		let (price, balance) = {
 			let mut tx = self.store.begin_write().await?;
-			let Some(price) = ledger::rate(&mut tx, item).await?.map(|r| r.price()) else {
-				return Ok(Err(Refused::Conflict(format!(
-					"{} ({}) is not priced yet: ask an admin to price it",
-					item.title(),
-					item.tool_title()
-				))));
-			};
+			let price = ledger::rate(&mut tx, item).await?.price();
 			let balance = ledger::renewed(&mut tx, owner, now, &self.renewal).await?;
 			tx.commit().await.wrap_err("committing a renewal")?;
 			(price, balance)

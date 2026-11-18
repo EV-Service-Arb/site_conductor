@@ -157,7 +157,7 @@ async fn kit(db: &TestDb) -> Kit {
 		.await
 		.unwrap()
 		.unwrap();
-	sa_panel::testing::priced(&panel, &[PlacesRequest::Details].map(|r| (Item::Places(r), Some(0)))).await;
+	sa_panel::testing::priced(&panel, &[PlacesRequest::Details].map(|r| (Item::Places(r), 0))).await;
 	let owner = DevIdentity::named("dev@localhost");
 	panel
 		.user_seen(
@@ -199,7 +199,7 @@ async fn kit(db: &TestDb) -> Kit {
 			state: OnGoogle::Verified,
 			name: Some(name.to_owned()),
 			country: Some(Country::FR),
-			trade,
+			trade: Some(trade),
 		};
 		panel.add_gmb(Some(Spender::new(owner)), e, now).await.unwrap().unwrap().id
 	};

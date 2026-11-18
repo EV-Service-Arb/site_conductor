@@ -115,7 +115,7 @@ struct Conductor {
 
 impl Conductor {
 	/// Placement and Places up, Lyon drawn, a pull's search priced as given, the caller holding `balance`.
-	async fn new(permissions: PermissionSet, price: Option<i64>, balance: i64) -> Self {
+	async fn new(permissions: PermissionSet, price: i64, balance: i64) -> Self {
 		let db = TestDb::create().await;
 		let searched = Arc::<AtomicUsize>::default();
 		let counted = searched.clone();
@@ -245,7 +245,7 @@ fn plumbing() -> Value {
 
 #[tokio::test]
 async fn a_study_is_built_from_the_conductors_rows_and_its_payload_streamed_through() {
-	let mut c = Conductor::new(operator(), Some(8), 1000).await;
+	let mut c = Conductor::new(operator(), 8, 1000).await;
 	let plumbing = c.trade("Plumbing", "FR", plumbing()).await;
 
 	let (status, body) = c.send(Method::GET, &format!("/api/v1/placement/study?area=lyon&category={plumbing}"), Value::Null).await;
@@ -270,7 +270,7 @@ async fn a_study_is_built_from_the_conductors_rows_and_its_payload_streamed_thro
 
 #[tokio::test]
 async fn a_category_not_set_up_to_be_studied_is_refused_by_why() {
-	let mut c = Conductor::new(operator(), Some(8), 1000).await;
+	let mut c = Conductor::new(operator(), 8, 1000).await;
 	for (name, country, set_up, code) in [
 		("Roofing", "FR", set_up(None, Some("gcid:roofing_contractor"), &["couvreur"]), "no_study"),
 		("Painting", "FR", set_up(Some("painting"), None, &["peintre"]), "no_google_category"),
@@ -300,7 +300,7 @@ async fn a_category_not_set_up_to_be_studied_is_refused_by_why() {
 
 #[tokio::test]
 async fn a_pull_buys_what_placement_says_the_study_lacks_and_is_charged_for_it() {
-	let mut c = Conductor::new(admin(), Some(8), 1000).await;
+	let mut c = Conductor::new(admin(), 8, 1000).await;
 	let plumbing = c.trade("Plumbing", "FR", plumbing()).await;
 
 	let (status, body) = c.send(Method::POST, &format!("/api/v1/placement/study/pull?area=lyon&category={plumbing}"), Value::Null).await;
@@ -325,7 +325,7 @@ async fn a_pull_buys_what_placement_says_the_study_lacks_and_is_charged_for_it()
 
 #[tokio::test]
 async fn a_balance_below_the_first_round_buys_nothing_and_is_told_the_need() {
-	let mut c = Conductor::new(admin(), Some(8), 100).await;
+	let mut c = Conductor::new(admin(), 8, 100).await;
 	let plumbing = c.trade("Plumbing", "FR", plumbing()).await;
 
 	let (status, body) = c.call(Method::POST, &format!("/api/v1/placement/study/pull?area=lyon&category={plumbing}"), Value::Null).await;
@@ -343,7 +343,7 @@ async fn a_balance_below_the_first_round_buys_nothing_and_is_told_the_need() {
 /// back, and its retry buys only what the stopped one did not.
 #[tokio::test]
 async fn a_pull_past_its_budget_is_stopped_owed_back_and_its_retry_buys_only_the_rest() {
-	let mut c = Conductor::new(admin(), Some(8), 38 * 8).await;
+	let mut c = Conductor::new(admin(), 8, 38 * 8).await;
 	let plumbing = c.trade("Plumbing", "FR", plumbing()).await;
 	let uri = format!("/api/v1/placement/study/pull?area=lyon&category={plumbing}");
 
@@ -365,7 +365,7 @@ async fn a_pull_past_its_budget_is_stopped_owed_back_and_its_retry_buys_only_the
 
 #[tokio::test]
 async fn a_failed_pull_is_charged_what_it_bought_and_owes_it_all_back() {
-	let mut c = Conductor::new(admin(), Some(8), 1000).await;
+	let mut c = Conductor::new(admin(), 8, 1000).await;
 	let fails = c.trade("Plumbing", "FR", set_up(Some("fails"), Some("gcid:plumber"), &["plombier"])).await;
 
 	let (status, _) = c.send(Method::POST, &format!("/api/v1/placement/study/pull?area=lyon&category={fails}"), Value::Null).await;
@@ -382,19 +382,8 @@ async fn a_failed_pull_is_charged_what_it_bought_and_owes_it_all_back() {
 }
 
 #[tokio::test]
-async fn an_unpriced_pull_is_refused_before_placement_is_asked() {
-	let mut c = Conductor::new(admin(), None, 1000).await;
-	let plumbing = c.trade("Plumbing", "FR", plumbing()).await;
-
-	let (status, _) = c.send(Method::POST, &format!("/api/v1/placement/study/pull?area=lyon&category={plumbing}"), Value::Null).await;
-	assert_eq!(status, StatusCode::CONFLICT);
-	assert!(c.asked().is_empty());
-	assert_eq!(c.balance().await, 1000);
-}
-
-#[tokio::test]
 async fn reading_studies_is_not_pulling_them() {
-	let mut c = Conductor::new(operator(), Some(8), 1000).await;
+	let mut c = Conductor::new(operator(), 8, 1000).await;
 	let plumbing = c.trade("Plumbing", "FR", plumbing()).await;
 
 	let (status, _) = c.send(Method::POST, &format!("/api/v1/placement/study/pull?area=lyon&category={plumbing}"), Value::Null).await;
@@ -404,11 +393,10 @@ async fn reading_studies_is_not_pulling_them() {
 
 #[tokio::test]
 async fn a_person_reads_the_prices_and_sets_above_what_they_are_asked() {
-	let mut c = Conductor::new(admin(), Some(8), 1000).await;
+	let mut c = Conductor::new(admin(), 8, 1000).await;
 
 	let (_, tokens) = c.call(Method::GET, "/api/v1/tokens", Value::Null).await;
 	assert_eq!((&tokens["prices"]["placement.search"], &tokens["confirm_above"]), (&json!(8), &json!(100)), "{tokens}");
-	assert!(tokens["prices"].get("map.map").is_none(), "an unpriced item is not read");
 
 	assert_eq!(c.send(Method::PUT, "/api/v1/tokens/settings", json!({ "confirm_above": 250 })).await.0, StatusCode::NO_CONTENT);
 	assert_eq!(c.send(Method::PUT, "/api/v1/tokens/settings", json!({ "confirm_above": -1 })).await.0, StatusCode::BAD_REQUEST);

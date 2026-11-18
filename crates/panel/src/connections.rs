@@ -249,12 +249,7 @@ impl Purse for Tokens {
 			if !is_open(&mut tx).await.map_err(unpaid)? {
 				return Err(sa_places::Error::Unpaid(Refused::Closed.to_string()));
 			}
-			let Some(rate) = ledger::rate(&mut tx, sku.into()).await.map_err(unpaid)? else {
-				return Err(sa_places::Error::Unpaid(format!(
-					"Places {} on the shared keys is not priced yet: add a Maps key to one of your gmails, or ask an admin to price it",
-					Item::from(sku).title()
-				)));
-			};
+			let rate = ledger::rate(&mut tx, sku.into()).await.map_err(unpaid)?;
 			let balance = ledger::renewed(&mut tx, self.user, Timestamp::now(), &self.panel.renewal).await.map_err(unpaid)?;
 			tx.commit().await.map_err(|e| unpaid(eyre::eyre!(e)))?;
 			let price = rate.price();

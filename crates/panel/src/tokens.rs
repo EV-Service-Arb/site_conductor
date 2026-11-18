@@ -45,14 +45,14 @@ pub const USAGE_DAYS: i64 = 30;
 #[derive(Clone, Debug)]
 pub struct Priced {
 	pub item: Item,
-	pub multiplier: Option<Multiplier>,
-	pub cost: Option<Cost>,
+	pub multiplier: Multiplier,
+	pub cost: Cost,
 }
 
 impl Priced {
-	/// Tokens for [`Item::per`] units; `None`, not sold.
-	pub fn price(&self) -> Option<i64> {
-		Some(Rate::new(self.cost.as_ref()?.usd_micros, self.multiplier.as_ref()?.permille).price())
+	/// Tokens for [`Item::per`] units.
+	pub fn price(&self) -> i64 {
+		Rate::new(self.cost.usd_micros, self.multiplier.permille).price()
 	}
 }
 
@@ -246,8 +246,8 @@ impl Panel {
 		Ok(Item::all()
 			.map(|item| Priced {
 				item,
-				multiplier: multipliers.remove(&item),
-				cost: costs.remove(&item),
+				multiplier: multipliers.remove(&item).expect("init_rates multiplies every item on open"),
+				cost: costs.remove(&item).expect("init_rates costs every item on open"),
 			})
 			.collect())
 	}
@@ -271,8 +271,8 @@ impl Panel {
 	/// An admin (`by`, their email) multiplies each item given at 0 thousandths or more, `None`
 	/// refusing it, and costs each at 0 µ$ or more, `None` unknown: every one, or none. An item is
 	/// sold while it has both.
-	pub async fn set_prices(&self, multipliers: &[(Item, Option<i64>)], costs: &[(Item, Option<i64>)], by: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
-		if multipliers.iter().chain(costs).any(|(_, n)| n.is_some_and(|n| n < 0)) {
+	pub async fn set_prices(&self, multipliers: &[(Item, i64)], costs: &[(Item, i64)], by: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+		if multipliers.iter().chain(costs).any(|(_, n)| *n < 0) {
 			return Ok(Err(Refused::Invalid("a multiplier and a cost are 0 or more".to_owned())));
 		}
 		let mut tx = self.store.begin_write().await?;

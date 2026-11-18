@@ -26,7 +26,7 @@ async fn main() {
 		kickbacks: vec![],
 	};
 	p.import_review_archive(empty).await.unwrap().expect("an empty import opens tokens");
-	let prices: Vec<_> = sa_core::prices::Item::all().filter(|i| i.tool() == "claude").map(|i| (i, Some(1))).collect();
+	let prices: Vec<_> = sa_core::prices::Item::all().filter(|i| i.tool() == "claude").map(|i| (i, 1)).collect();
 	p.set_prices(&prices, &[], "admin@localhost", jiff::Timestamp::now())
 		.await
 		.expect("the store answers")

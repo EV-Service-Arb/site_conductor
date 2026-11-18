@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Card, CardContent, Input, toast } from "@evinvest/uikit";
+import { Button, Card, CardContent, Input, toast } from "@evinvest/uikit";
 import { type ChangeEvent, useState } from "react";
 
 import { api, ok } from "@/shared/api";
@@ -27,16 +27,15 @@ function grouped<K>(prices: Price[], by: (p: Price) => K): [K, Price[]][] {
   return [...groups];
 }
 
-/** What is typed, to three decimals as stored: empty is none, `undefined` not a number this field takes. */
-const thousandths = (raw: string): number | null | undefined => {
-  if (raw.trim() === "") return null;
-  const n = Number(raw);
+/** What is typed, to three decimals as stored; `undefined` not a number this field takes. */
+const thousandths = (raw: string): number | undefined => {
+  const n = raw.trim() === "" ? NaN : Number(raw);
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 1e3) / 1e3 : undefined;
 };
 
 /** The server's `Rate::price`: the cost in tokens × the multiplier, rounded up. */
-const priceOf = (cost: number | null | undefined, multiplier: number | null | undefined) =>
-  cost == null || multiplier == null ? null : Math.ceil((Math.round(cost * 1e3) * Math.round(multiplier * 1e3)) / 1e6);
+const priceOf = (cost: number | undefined, multiplier: number | undefined) =>
+  cost === undefined || multiplier === undefined ? undefined : Math.ceil((Math.round(cost * 1e3) * Math.round(multiplier * 1e3)) / 1e6);
 
 type Field = "multiplier" | "cost";
 const draftKey = (item: PricedItem, field: Field) => `${item}:${field}`;
@@ -51,15 +50,13 @@ export function PricesCard({ prices, tokenUsd, onSaved }: { prices: Price[]; tok
   const size = useControlSize();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const shownMultiplier = (p: Price) => drafts[draftKey(p.item, "multiplier")] ?? p.multiplier?.multiplier.toString() ?? "";
-  const shownCost = (p: Price) => drafts[draftKey(p.item, "cost")] ?? p.cost?.tokens.toString() ?? "";
-  const multiplierChanged = prices.filter((p) => thousandths(shownMultiplier(p)) !== (p.multiplier?.multiplier ?? null));
-  const costChanged = prices.filter((p) => thousandths(shownCost(p)) !== (p.cost?.tokens ?? null));
+  const shownMultiplier = (p: Price) => drafts[draftKey(p.item, "multiplier")] ?? p.multiplier.multiplier.toString();
+  const shownCost = (p: Price) => drafts[draftKey(p.item, "cost")] ?? p.cost.tokens.toString();
+  const multiplierChanged = prices.filter((p) => thousandths(shownMultiplier(p)) !== p.multiplier.multiplier);
+  const costChanged = prices.filter((p) => thousandths(shownCost(p)) !== p.cost.tokens);
   const invalid = multiplierChanged.some((p) => thousandths(shownMultiplier(p)) === undefined) || costChanged.some((p) => thousandths(shownCost(p)) === undefined);
   const changes = multiplierChanged.length + costChanged.length;
-  const unsold = prices.filter((p) => p.price === null).length;
   const usd = (tokens: number) => (tokens * tokenUsd).toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 6 });
-  const uncosted = prices.filter((p) => p.cost === null).length;
 
   const save = () => {
     setBusy(true);
@@ -86,12 +83,10 @@ export function PricesCard({ prices, tokenUsd, onSaved }: { prices: Price[]; tok
       <CardContent className="flex flex-col gap-4 px-4">
         <header className="flex flex-wrap items-baseline gap-2">
           <h2 className="text-sm font-semibold text-ink">{t(pricesKeys.title, "Prices")}</h2>
-          {unsold > 0 && <Badge tone="warn">{t(pricesKeys.unsold.count, "{n} not sold", { n: unsold })}</Badge>}
-          {uncosted > 0 && <Badge>{t(pricesKeys.uncosted.count, "{n} without a cost", { n: uncosted })}</Badge>}
           <p className="basis-full text-xs text-ink-soft">
             {t(
               pricesKeys.why,
-              "Cost: what it costs us, in tokens ({rate}). ×: what a person is charged over it, 1 at cost, 0 for free. Either empty is not sold, so it is refused: a Places request, a map, a browser's start, a walk step. Cached answers and a person's own Maps keys cost nothing.",
+              "Cost: what it costs us, in tokens ({rate}). ×: what a person is charged over it, 1 at cost, 0 for free. Cached answers and a person's own Maps keys cost nothing.",
               { rate: t(pricesKeys.rate, "1 token = {usd}", { usd: usd(1) }) },
             )}
           </p>
@@ -120,12 +115,11 @@ export function PricesCard({ prices, tokenUsd, onSaved }: { prices: Price[]; tok
                           aria-label={t(pricesKeys.cost.label, "{item}: cost in tokens {per}", { item: p.title, per: perUnit(t, p) })}
                           aria-invalid={thousandths(shownCost(p)) === undefined || undefined}
                           value={shownCost(p)}
-                          placeholder={t(pricesKeys.cost.unknown, "unknown")}
                           onChange={edit(p.item, "cost")}
                         />
                         <span className="w-24">
                           {t(pricesKeys.tokens, "tokens")} {perUnit(t, p)}
-                          {thousandths(shownCost(p)) != null && <span className="block tabular-nums">{usd(thousandths(shownCost(p))!)}</span>}
+                          {thousandths(shownCost(p)) !== undefined && <span className="block tabular-nums">{usd(thousandths(shownCost(p))!)}</span>}
                         </span>
                       </label>
                       <label className="flex items-center gap-1.5 text-xs text-ink-soft">
@@ -140,12 +134,11 @@ export function PricesCard({ prices, tokenUsd, onSaved }: { prices: Price[]; tok
                           aria-label={t(pricesKeys.multiplier.label, "{item}: multiplier", { item: p.title })}
                           aria-invalid={thousandths(shownMultiplier(p)) === undefined || undefined}
                           value={shownMultiplier(p)}
-                          placeholder={t(pricesKeys.unsold, "not sold")}
                           onChange={edit(p.item, "multiplier")}
                         />
                       </label>
                       <span className="w-24 text-sm tabular-nums text-ink">
-                        {priceOf(thousandths(shownCost(p)), thousandths(shownMultiplier(p))) ?? t(pricesKeys.unsold, "not sold")}
+                        {priceOf(thousandths(shownCost(p)), thousandths(shownMultiplier(p))) ?? "—"}
                         <span className="text-xs text-ink-soft"> {t(pricesKeys.tokens, "tokens")}</span>
                       </span>
                     </li>

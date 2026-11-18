@@ -63,7 +63,7 @@ async fn an_area_has_the_country_its_place_or_its_centre_lies_in() {
 		.await
 		.unwrap()
 		.unwrap();
-	sa_panel::testing::priced(&panel, &[PlacesRequest::Details, PlacesRequest::Geocode].map(|r| (Item::Places(r), Some(0)))).await;
+	sa_panel::testing::priced(&panel, &[PlacesRequest::Details, PlacesRequest::Geocode].map(|r| (Item::Places(r), 0))).await;
 	let who = DevIdentity {
 		user_id: DevIdentity::named("dev@localhost"),
 		permissions: operator(),

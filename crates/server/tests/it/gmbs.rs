@@ -84,7 +84,7 @@ async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
 	let accounts = base.map(|_| vec![sa_panel::testing::account("house", Some("k"), None)]).unwrap_or_default();
 	let p = panel_on(store, key, google, sa_places::Accounts::new(accounts));
 	// what a point costs is tests/connections.rs's
-	sa_panel::testing::priced(&p, &[PlacesRequest::Details, PlacesRequest::Search, PlacesRequest::Autocomplete].map(|r| (Item::Places(r), Some(0)))).await;
+	sa_panel::testing::priced(&p, &[PlacesRequest::Details, PlacesRequest::Search, PlacesRequest::Autocomplete].map(|r| (Item::Places(r), 0))).await;
 	p
 }
 
@@ -198,7 +198,7 @@ async fn add(p: &Panel, owner: uuid::Uuid, gmail_id: i64, place: &str) -> Gmb {
 		state: OnGoogle::Verified,
 		name: Some(place.to_owned()),
 		country: Some(Country::FR),
-		trade,
+		trade: Some(trade),
 	};
 	p.add_gmb(Some(Spender::new(owner)), existing, jiff::Timestamp::now()).await.unwrap().unwrap()
 }

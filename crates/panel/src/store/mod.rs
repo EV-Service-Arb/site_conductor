@@ -79,6 +79,9 @@ impl Store {
 		// answers 500 quickly instead of stacking every request behind it.
 		let pool = ev_lib::sqlite::pool("conductor", options, 8, Duration::from_secs(3), move |topic| told.changed(topic));
 		migrator().run(&pool).await.wrap_err("applying migrations")?;
+		let mut tx = pool.begin_with("BEGIN IMMEDIATE").await.wrap_err("beginning a write")?;
+		tokens::init_rates(&mut tx, jiff::Timestamp::now()).await?;
+		tx.commit().await.wrap_err("committing the first terms")?;
 		Ok(Self { pool, bus })
 	}
 

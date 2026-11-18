@@ -1,7 +1,7 @@
 "use client";
 
 import { ChatPanel, ConfirmDialog, Kbd, Spinner, toast, useKeymap as usePageKeymap } from "@evinvest/uikit";
-import { CornerDownRight, Eye, Lock, Sparkles, Upload } from "lucide-react";
+import { CornerDownRight, Eye, Lock, Bot, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { type AssistantTurn, useChat, assistant } from "@/entities/assistant";
@@ -312,7 +312,7 @@ function Empty({ subject, onAsk }: { subject: Listed | null; onAsk: (text: strin
     <div className="mt-auto flex flex-col gap-3 pb-2">
       <div className="flex flex-col gap-2 px-2">
         <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-ink">
-          <Sparkles aria-hidden className="size-5" />
+          <Bot aria-hidden className="size-5" />
         </span>
         <h2 className="text-body-l font-semibold text-ink">{name ? t(assistant.empty.about, "What about {name}?", { name }) : t(assistant.empty, "What do you want to know?")}</h2>
         <p className="text-body-s text-ink-soft">

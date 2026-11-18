@@ -2,6 +2,8 @@
 //! review_archive serves (`GET /api/conductor/charges`). Balances are a ledger's sum; this is the
 //! arithmetic, the ledger is the engine's.
 
+use std::collections::BTreeMap;
+
 use jiff::{SignedDuration, Timestamp};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -82,7 +84,7 @@ pub struct Charge {
 	/// Tokens; more than 0.
 	pub spent: i64,
 	/// What the run did, in each item's units: what it cost us.
-	pub used: std::collections::BTreeMap<crate::prices::Item, i64>,
+	pub used: BTreeMap<crate::prices::Item, i64>,
 	/// The run failed or met a failure: what each paid is owed back.
 	pub kick_back: bool,
 	/// The place, as the ledger names it.
