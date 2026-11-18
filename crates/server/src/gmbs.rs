@@ -378,7 +378,7 @@ fn tabs(state: GbpState) -> &'static [Tab] {
 	match state {
 		GbpState::Draft => &[Tab::Launch, Tab::Browser],
 		GbpState::Verifying => &[Tab::Browser],
-		GbpState::Verified => &[Tab::Kit],
+		GbpState::Verified => &[],
 		GbpState::Suspended => &[],
 	}
 }
