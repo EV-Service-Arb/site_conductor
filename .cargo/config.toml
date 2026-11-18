@@ -1,5 +1,6 @@
-[build]
-rustc-wrapper = "kache"
+[[include]]
+optional = true
+path = "local.toml"
 
 [profile.rust]
 codegen-backend = "cranelift"
@@ -9,6 +10,3 @@ split-debuginfo = "unpacked"
 
 [target.'cfg(all(target_arch = "x86_64", target_os = "linux", target_env = "gnu"))']
 rustflags = "-C link-arg=-fuse-ld=mold --cfg tokio_unstable -Z threads=8 -Z track-diagnostics"
-
-[env]
-KACHE_CACHE_EXECUTABLES = "false"

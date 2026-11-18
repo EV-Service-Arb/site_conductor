@@ -132,7 +132,7 @@
           enable = true;
           lastSupportedVersion = "nightly-2026-09-24";
           containerRelease = { registry = "ghcr.io/ev-service-arb"; };
-          figma = { };
+          figma = { on = "publish"; }; # the render needs prod's data and the peers, which only a developer's machine has
           jobs.default = true;
           jobs.errors.install.packages = [ "ffmpeg" "deno" ]; # crates/browsers/tests/runner.rs cuts its films with ffmpeg; crates/sandbox's tests run Deno
           jobs.errors.exclude = [ "frontend-typecheck" "frontend-test" ];
@@ -568,7 +568,7 @@
             about = "  cargo test                      every test; the database ones on throwaway SQLite files\n"
               + "  panel --help                    the CLI itself";
           };
-          publish = v_flakes.utils.publish pkgs;
+          publish = github.publish;
           gen = { type = "app"; program = lib.getExe gen; meta.description = "the OpenAPI document and the front end's client types from it (pre-commit runs it too)"; };
           dev = { type = "app"; program = lib.getExe dev; meta.description = "the conductor and its peers under watch: a conductor already serving is replaced, a peer used (docs/LOCAL.md)"; };
           e2e = { type = "app"; program = lib.getExe e2e.program; meta.description = "the front end's behaviour over a stack of its own (frontend/tests/e2e, the renders aside); args go to `playwright test`"; };
