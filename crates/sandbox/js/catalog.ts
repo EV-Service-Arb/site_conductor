@@ -485,7 +485,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Does an answer's proposed operation, as the caller and through the same gate as their own request; the action is marked done in the chat.
+         * Does an answer's proposed operation, as the caller and through the same gate as their own request; the action is marked done in the chat. One a cell of the chat's session waits on goes on there, and the answer resumes: a new one, the model told what the code did next.
          * @description 409 the action is not a proposed operation; the operation's own refusal answers with its code, or
          *     `bad_gateway` for a service's word the conductor has none of.
          */
@@ -523,7 +523,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done. It runs on the asker's own Claude if they connected one, else on the panel's, each round charged to them at its prices.
+         * Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done. It runs on the asker's own Claude if they connected one, else on the panel's, each round charged to them at its prices. A call a cell of the chat's session waits on is declined: the person moved on.
          * @description 503 without either Claude, or when the model does not answer.
          */
         post: operations["ask"];
@@ -3362,6 +3362,16 @@ export interface components {
         };
         /** @enum {string} */
         AnswerState: "working" | "writing" | "done" | "stopped";
+        /**
+         * @description What an agent does without asking its person first; each level runs what the one before it does.
+         *     What neither destroys nor spends always runs.
+         *
+         *     - `ask`: Everything that destroys or spends is proposed.
+         *     - `spend`: What spends runs; what destroys is proposed.
+         *     - `act`: What spends and what destroys run.
+         * @enum {string}
+         */
+        Approval: "ask" | "spend" | "act";
         Area: {
             center: components["schemas"]["LatLng"];
             /** @description The locality's place it was drawn from: an outline to see it by, not its edge. */
@@ -4688,6 +4698,8 @@ export interface components {
             scheme: string;
         };
         Question: {
+            /** @description What the assistant does without asking first. */
+            approval: components["schemas"]["Approval"];
             bindings: components["schemas"]["Bound"][];
             files: components["schemas"]["AttachmentInput"][];
             /**
@@ -7369,6 +7381,7 @@ export type AddSource = components['schemas']['AddSource'];
 export type Advance = components['schemas']['Advance'];
 export type Alerts = components['schemas']['Alerts'];
 export type AnswerState = components['schemas']['AnswerState'];
+export type Approval = components['schemas']['Approval'];
 export type Area = components['schemas']['Area'];
 export type AreaGmb = components['schemas']['AreaGmb'];
 export type AreaGmbs = components['schemas']['AreaGmbs'];
@@ -34374,6 +34387,7 @@ type ReadonlyArray<T> = [
 ] ? Readonly<Exclude<T, undefined>> : Readonly<Exclude<T, undefined>[]>;
 export const actionStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ActionState"]> = ["proposed", "done"];
 export const answerStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["AnswerState"]> = ["working", "writing", "done", "stopped"];
+export const approvalValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Approval"]> = ["ask", "spend", "act"];
 export const billValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Bill"]> = ["ours", "theirs"];
 export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Country"]> = ["FR", "US", "CA", "GB"];
 export const destinationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DestinationKind"]> = ["channel", "private", "group"];
