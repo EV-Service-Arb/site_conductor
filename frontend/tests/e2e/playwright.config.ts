@@ -10,6 +10,7 @@ const WEB = port("FIGMA_WEB_PORT");
 if (WEB !== STACK + 1) throw new Error(`FIGMA_WEB_PORT ${WEB}: \`dev --port ${STACK}\` serves its next dev on ${STACK + 1}`);
 
 export const SESSION = new URL("../../tmp/playwright/session.json", import.meta.url).pathname;
+const STACK_TIMELINE = new URL(`../../../.local-port-${STACK}/timeline.tsv`, import.meta.url).pathname; // local-stack's state dir for `--port`
 
 // The real stack on ports of its own (`dev --port`: its conductor, dev sign-in as an admin, and its
 // `next dev`), never a running one's servers: those may face the real backend, as an operator. Run
@@ -17,7 +18,7 @@ export const SESSION = new URL("../../tmp/playwright/session.json", import.meta.
 export default defineConfig({
   testDir: ".",
   outputDir: "../../tmp/playwright",
-  reporter: "list",
+  reporter: [["list"], ["./timeline.ts", { stack: STACK_TIMELINE, out: new URL("../../tmp/playwright/timeline.txt", import.meta.url).pathname }]],
   globalSetup: "./sign-in.ts",
   use: {
     baseURL: `http://localhost:${WEB}`, // `next dev` refuses its dev resources to any other host, so the page never hydrates
@@ -29,7 +30,7 @@ export default defineConfig({
     { name: "mobile", use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 } } },
   ],
   webServer: {
-    command: `dev --port ${STACK} --role admin`,
+    command: `dev --port ${STACK} --role admin --no-peers`, // the specs touch the conductor's own screens alone
     cwd: "../../..",
     url: `http://localhost:${WEB}/`,
     reuseExistingServer: false,

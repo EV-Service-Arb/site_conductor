@@ -48,6 +48,7 @@ watch=0
 # Google answers the caches lack are bought only with it: tests and agents never pass it
 spend_flag=""
 dev=0
+no_peers=0
 own_port=""
 from_prod=0
 role="admin"
@@ -59,6 +60,7 @@ while [ $# -gt 0 ]; do
 	--spend-real-quota-i-am-certain) spend_flag="--spend-real-quota-i-am-certain" ;;
 	--from-prod) from_prod=1 ;;
 	--dev) dev=1 ;;
+	--no-peers) no_peers=1 ;;
 	--port)
 		own_port="${2:-}"
 		[[ "$own_port" =~ ^[0-9]+$ ]] || {
@@ -82,7 +84,7 @@ while [ $# -gt 0 ]; do
 	-h | --help)
 		cat <<'EOF'
 local-stack [--reset] [--no-sites] [--watch] [--role admin|operator] [--port-offset <n>] [--from-prod] [--spend-real-quota-i-am-certain]
-dev [--port <n>] [--reset] [--role admin|operator] [--from-prod]
+dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers]
 
   The conductor (dev sign-in, its Grafana at /grafana/), sites_panel, review_archive, aquafix,
   vifnet and debouchage, wired together, each on the port its dev shell sets. State in .local/
@@ -98,6 +100,7 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod]
   stopped, with the run that started it, and replaced; sites_panel and review_archive are started
   unless they already answer on their ports, a peer without a checkout skipped with a warning.
   --port <n>: the conductor on n and its next dev on n+1, in SA_PORT_RANGE, with a state of its own.
+  --no-peers: neither built nor started: sites_panel, review_archive, gmaps_optimal_placement, playbook; the conductor answers 502 for them.
 EOF
 		exit 0
 		;;
@@ -160,6 +163,7 @@ if [ "$reset" = 1 ] && [ -d "$state" ]; then
 	rm -rf "$state"
 fi
 mkdir -p "$state/logs" "$state/secrets"
+: >"$state/timeline.tsv"
 # Ignored by its own .gitignore: the repo's is generated, and this is nobody else's business.
 printf '*\n' >"$state/.gitignore"
 
@@ -295,6 +299,7 @@ fi
 	warn "skipping playbook: no checkout at $PLAYBOOK_DIR (_.siblings-local.json names it); /mcp lists no playbook tools"
 	run_playbook=0
 }
+[ "$no_peers" = 0 ] || { run_sites=0; run_review_archive=0; run_placement=0; run_playbook=0; }
 ports=()
 [ "$run_panel" = 1 ] && ports+=("$PANEL_PORT")
 [ "$run_sites" = 1 ] && ports+=("$SITES_PORT")
@@ -357,6 +362,22 @@ REVIEW_ARCHIVE_WEB_BUILD="nix run .#build-mfe -- '$state/watch/review_archive-mf
 own_cargo="env CARGO_BUILD_BUILD_DIR='$root/target' CARGO_TARGET_DIR='$state/target' cargo"
 # once more on a failure: other sessions sweep target dirs, mid-build too
 retried() { "$@" || { warn "retrying: $*"; "$@"; }; }
+# `timed <name> <command…>`: one row of $state/timeline.tsv (name, start, end in epoch ms), which
+# the e2e's timeline reporter draws beside the tests
+timed() {
+	local name="$1" start rc=0
+	shift
+	start="$(date +%s%3N)"
+	"$@" || rc=$?
+	printf '%s\t%s\t%s\n' "$name" "$start" "$(date +%s%3N)" >>"$state/timeline.tsv"
+	return "$rc"
+}
+# Each line prefixed with whose it is, and kept in .local/logs/<name>.log.
+prefixed() {
+	local name="$1"
+	shift
+	"$@" 2>&1 | tee -a "$state/logs/$name.log" | awk -v p="[$name] " '{ print p $0; fflush() }'
+}
 # `unbuilt <peer> <checkout>`: dev goes on without it, the conductor answering 502 for it; the
 # stack needs every part
 unbuilt() {
@@ -373,19 +394,59 @@ late() {
 	[ "$dev" = 1 ] || die "$1 did not start"
 	warn "$1 is not up yet: the conductor answers 502 for it until it is"
 }
+# What does not wait on the conductor's build starts beside it, and is waited for where it is first needed.
+grafana_build=""
+if [ "$run_panel" = 1 ] && [ -z "${PANEL_GRAFANA_SERVER:-}" ]; then
+	say "building Grafana (nix build .#grafana-server)"
+	PANEL_GRAFANA_SERVER="$state/build/grafana-server"
+	timed grafana nix build "$root#grafana-server" --out-link "$PANEL_GRAFANA_SERVER" &
+	grafana_build=$!
+fi
+# The front end's packages and the map's overlay, for the next dev started below.
+web_prep() {
+	# in the dev shell, whose js-local lays our packages' checkouts over the install (frontend/_.js-local.json);
+	# npm ci stamps node_modules/.package-lock.json: a lockfile pulled since is newer
+	prefixed web in_shell "$root" bash -c \
+		'cd frontend && if [ node_modules/.package-lock.json -nt package-lock.json ]; then js-local; else npm ci; fi'
+	prefixed placement-overlay in_shell "$root" placement-overlay
+}
+web_prep_build=""
+if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
+	timed web-prep web_prep &
+	web_prep_build=$!
+fi
+build_sites() {
+	retried in_shell "$SITES_DIR" cargo b -q -p panel_server &&
+		(cd "$SITES_DIR/frontend" && { [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; } && npm run -s build)
+}
+build_review_archive() {
+	retried in_shell "$REVIEW_ARCHIVE_DIR" cargo b -q -p review_archive_server &&
+		(cd "$REVIEW_ARCHIVE_DIR" && retried nix run .#build-mfe -- "$state/watch/review_archive-mfe")
+}
 if [ "$watch" = 1 ]; then
 	for v in PANEL_BIN PANEL_WEB_DIR SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR; do
 		[ -z "${!v:-}" ] || die "--watch builds every part from its checkout: unset $v"
 	done
+	say "building the conductor, sites_panel and review_archive from their checkouts, at once"
 	# also when another conductor serves: `panel gen-data-key` makes the state's key
-	say "building the conductor from $root"
-	retried in_shell "$root" bash -c "$own_cargo b -q -p sa_server"
-	PANEL_BIN="$state/target/debug/panel"
+	timed conductor retried in_shell "$root" bash -c "$own_cargo b -q -p sa_server" &
+	conductor_build=$!
+	sites_build=""
 	if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
 		[ -f "$SITES_DIR/flake.nix" ] || die "no sites_panel checkout at $SITES_DIR: _.siblings-local.json names it"
-		say "building sites_panel and its bundle from $SITES_DIR"
-		if retried in_shell "$SITES_DIR" cargo b -q -p panel_server &&
-			(cd "$SITES_DIR/frontend" && { [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; } && npm run -s build); then
+		timed sites_panel build_sites &
+		sites_build=$!
+	fi
+	review_archive_build=""
+	if [ "$run_review_archive" = 1 ] && [ -z "${DEV_COMMAND_review_archive:-}" ]; then
+		[ -f "$REVIEW_ARCHIVE_DIR/flake.nix" ] || die "no review_archive checkout at $REVIEW_ARCHIVE_DIR: _.siblings-local.json names it"
+		timed review_archive build_review_archive &
+		review_archive_build=$!
+	fi
+	wait "$conductor_build" || die "the conductor did not build"
+	PANEL_BIN="$state/target/debug/panel"
+	if [ -n "$sites_build" ]; then
+		if wait "$sites_build"; then
 			SITES_BIN="$SITES_DIR/target/debug/sites_panel"
 			SITES_MFE_DIR="$SITES_DIR/frontend/dist"
 		else
@@ -393,11 +454,8 @@ if [ "$watch" = 1 ]; then
 			run_sites=0
 		fi
 	fi
-	if [ "$run_review_archive" = 1 ] && [ -z "${DEV_COMMAND_review_archive:-}" ]; then
-		[ -f "$REVIEW_ARCHIVE_DIR/flake.nix" ] || die "no review_archive checkout at $REVIEW_ARCHIVE_DIR: _.siblings-local.json names it"
-		say "building review_archive and its bundle from $REVIEW_ARCHIVE_DIR"
-		if retried in_shell "$REVIEW_ARCHIVE_DIR" cargo b -q -p review_archive_server &&
-			(cd "$REVIEW_ARCHIVE_DIR" && retried nix run .#build-mfe -- "$state/watch/review_archive-mfe"); then
+	if [ -n "$review_archive_build" ]; then
+		if wait "$review_archive_build"; then
 			REVIEW_ARCHIVE_BIN="$REVIEW_ARCHIVE_DIR/target/debug/review_archive"
 			REVIEW_ARCHIVE_MFE_DIR="$state/watch/review_archive-mfe"
 		else
@@ -431,11 +489,7 @@ if [ "$run_sites" = 1 ] && [ "$watch" = 0 ] && [ -z "${SITES_MFE_DIR:-}" ]; then
 	SITES_MFE_DIR="$state/build/sites-mfe"
 fi
 [ "$run_sites" = 0 ] || [ -n "${DEV_COMMAND_sites_panel:-}" ] || [ -x "$SITES_BIN" ] || die "SITES_BIN $SITES_BIN is not an executable"
-if [ "$run_panel" = 1 ] && [ -z "${PANEL_GRAFANA_SERVER:-}" ]; then
-	say "building Grafana (nix build .#grafana-server)"
-	nix build "$root#grafana-server" --out-link "$state/build/grafana-server"
-	PANEL_GRAFANA_SERVER="$state/build/grafana-server"
-fi
+[ -z "$grafana_build" ] || wait "$grafana_build" || die "Grafana did not build"
 if [ "$run_review_archive" = 1 ] && [ "$watch" = 0 ] && { [ -z "${REVIEW_ARCHIVE_BIN:-}" ] || [ -z "${REVIEW_ARCHIVE_MFE_DIR:-}" ]; }; then
 	if [ -f "$REVIEW_ARCHIVE_DIR/flake.nix" ]; then
 		if [ -z "${REVIEW_ARCHIVE_BIN:-}" ]; then
@@ -611,13 +665,6 @@ stop_all() {
 trap stop_all EXIT
 trap 'stop_all; exit 130' INT TERM
 
-# Each line prefixed with whose it is, and kept in .local/logs/<name>.log.
-prefixed() {
-	local name="$1"
-	shift
-	"$@" 2>&1 | tee -a "$state/logs/$name.log" | awk -v p="[$name] " '{ print p $0; fflush() }'
-}
-
 # Polls `url` while `pid` lives, at most `tries` seconds.
 wait_for() {
 	local name="$1" url="$2" tries="$3" pid="$4"
@@ -772,7 +819,7 @@ if [ "$run_panel" = 1 ]; then
 	say "starting the conductor on $origin (dev sign-in: $role)"
 	serving panel "$root" "$own_cargo b -q -p sa_server" "panel serve --bind 127.0.0.1:$PANEL_PORT" -i 'crates/gen/**' -e rs,toml,sql,lock &
 	essential+=("$!")
-	wait_for panel "$origin/health" 900 "$!" || die "the conductor did not start"
+	timed conductor-ready wait_for panel "$origin/health" 900 "$!" || die "the conductor did not start"
 	# Dev sign-in's session, as the admin: the seeds are the conductor's own operations.
 	if [ "$role" = admin ]; then
 		say "seeding $state/panel.db over HTTP"
@@ -846,22 +893,18 @@ if [ "$run_panel" = 1 ]; then
 fi
 
 if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
+	wait "$web_prep_build" || die "the front end's packages or the map's overlay did not build"
 	say "starting the front end's next dev on $public_origin"
 	(
 		cd "$root/frontend"
-		# npm ci stamps node_modules/.package-lock.json: a lockfile pulled since is newer. In the dev
-		# shell, whose js-local lays our packages' checkouts over the install (frontend/_.js-local.json)
-		prefixed web in_shell "$root" bash -c \
-			'cd frontend && if [ node_modules/.package-lock.json -nt package-lock.json ]; then js-local; else npm ci; fi'
-		# the map's overlay (crates/placement_overlay), and again whenever it or the placement core it links changes
-		prefixed placement-overlay in_shell "$root" placement-overlay
+		# the map's overlay (crates/placement_overlay) again whenever it or the placement core it links changes
 		prefixed placement-overlay watched "$root" --postpone -w crates/placement_overlay -w Cargo.lock -w .cargo/config.toml \
 			${PLACEMENT_DIR:+-w "$PLACEMENT_DIR/gmaps_optimal_placement_core"} -- placement-overlay &
 		PANEL_DEV_BACKEND="$origin" PANEL_DEV_DIST=".next${own_port:+/port-$own_port}" \
 			prefixed web npx next dev --port "$WEB_DEV_PORT"
 	) &
 	web_pid=$!
-	wait_for web "$public_origin/" 300 "$web_pid" || die "next dev did not start"
+	timed web-ready wait_for web "$public_origin/" 300 "$web_pid" || die "next dev did not start"
 fi
 
 if [ "$run_placement" = 1 ]; then
