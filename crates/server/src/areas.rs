@@ -136,19 +136,16 @@ async fn areas(State(panel): State<Panel>) -> ApiResult<Json<AreasDto>> {
 	}))
 }
 
-/// The area at `/<slug>/`.
+/// The area `slug`.
 async fn area(State(panel): State<Panel>, Ids(SlugIn { slug }): Ids<SlugIn>) -> ApiResult<Json<AreaDto>> {
 	Ok(Json(panel.area(&slug).await?.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?.into()))
 }
 
-/// Draws the area at `/<slug>/`, a circle; its country its city's, else its centre's (Places, paid
-/// by the caller); over what it was if the caller drew it.
+/// Draws the area `slug`, a circle; its country its city's, else its centre's (Places, paid by the
+/// caller); over what it was if the caller drew it.
 ///
-/// 400 a link the conductor's own pages hold, or a centre in no country; 409 someone else's area.
+/// 400 a centre in no country; 409 someone else's area.
 async fn put_area(State(s): State<ApiState>, Spends(caller, by): Spends<PlacesRequest, Caller>, Ids(SlugIn { slug }): Ids<SlugIn>, Body(b): Body<PutAreaDto>) -> ApiResult<Json<AreaDto>> {
-	if crate::web::taken(&slug, s.web.as_ref()) {
-		return Err(Refusal::new(Code::BadRequest, format!("/{slug}/ is one of the conductor's own pages")));
-	}
 	let new = NewArea {
 		name: b.name,
 		center: b.center,

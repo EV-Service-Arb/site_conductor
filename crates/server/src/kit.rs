@@ -25,7 +25,7 @@ use axum::{
 	routing::{get, post},
 };
 use ev_lib::api::{
-	Body, Created, GenContext, Ids, JsonSchema, Malformed, OperationInput, OperationOutput, Refusal,
+	Body, Created, GenContext, Ids, JsonSchema, Malformed, OperationInput, OperationOutput, Params, Refusal,
 	openapi::{MediaType, Operation, ReferenceOr, RequestBody, Response as Answer, SchemaObject, StatusCode as Status},
 	schemars::json_schema,
 };
@@ -40,8 +40,8 @@ use sa_core::{
 use sa_panel::{
 	Grant, Panel, SignedBatch,
 	gmbs::TradeId,
-	kit::{Event, Kit, Nearby, Offer, PHOTO_MAX, Pool, Ranked, Target},
-	store::kit::Removable,
+	kit::{Event, Funnel, Kit, Nearby, Offer, PHOTO_MAX, Pool, PutKit, Ranked, Scope, Target},
+	store::kit::{Happening, Removable},
 };
 use sa_places::LatLng;
 use serde::{Deserialize, Serialize};
@@ -77,6 +77,12 @@ pub(crate) struct DraftDto {
 	pub id: i64,
 	pub text: String,
 	pub photos: Vec<i64>,
+	/// Areas it is offered in; none: everywhere.
+	pub places: Vec<String>,
+	/// The category's keywords its text carries.
+	pub keywords: Vec<String>,
+	/// Areas its text names that `places` lacks: it is offered outside them.
+	pub names: Vec<String>,
 	/// Copies, every GBP.
 	pub uses: i64,
 	pub created_at: String,
@@ -86,6 +92,11 @@ pub(crate) struct DraftDto {
 #[schemars(rename = "KitPhoto")]
 pub(crate) struct PhotoDto {
 	pub id: i64,
+	/// What it shows, for the reviewer; `null`: not labelled yet.
+	pub shows: Option<String>,
+	pub places: Vec<String>,
+	/// The drafts it rides with: in none, it is never offered.
+	pub drafts: Vec<i64>,
 	pub width: i64,
 	pub height: i64,
 	/// Saved, every GBP.
@@ -100,6 +111,8 @@ pub(crate) struct PoolDto {
 	pub drafts: Vec<DraftDto>,
 	/// Newest first.
 	pub photos: Vec<PhotoDto>,
+	/// The category's keywords no draft carries.
+	pub unmentioned: Vec<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -108,6 +121,8 @@ pub(crate) struct PoolDto {
 pub(crate) struct NewDraftDto {
 	pub text: String,
 	pub photos: Vec<i64>,
+	/// Area slugs; none: everywhere.
+	pub places: Vec<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -116,12 +131,23 @@ pub(crate) struct NewDraftDto {
 pub(crate) struct EditDraftDto {
 	pub text: Option<String>,
 	pub photos: Option<Vec<i64>>,
+	pub places: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "EditKitPhoto")]
+#[serde(deny_unknown_fields)]
+pub(crate) struct EditPhotoDto {
+	/// What it shows, ≤ 60 characters; empty clears it.
+	pub shows: Option<String>,
+	pub places: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitRankedPhoto")]
 pub(crate) struct RankedPhotoDto {
 	pub id: i64,
+	pub shows: Option<String>,
 	pub width: i64,
 	pub height: i64,
 	pub uses: i64,
@@ -145,15 +171,39 @@ pub(crate) struct RankedDto {
 	pub photos: Vec<RankedPhotoDto>,
 }
 
-/// The last 30 days.
+/// What was collected since the period's start.
 #[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "KitFunnel")]
-pub(crate) struct FunnelDto {
+#[schemars(rename = "KitTally")]
+pub(crate) struct TallyDto {
+	/// QRs shown.
 	pub shown: i64,
+	/// Pages opened from the QR.
 	pub scanned: i64,
+	/// Pages opened, from anywhere.
 	pub opened: i64,
 	pub copied: i64,
 	pub photos_saved: i64,
+	/// Reviews from a copy on Google.
+	pub on_google: i64,
+	/// Of those, gone off it.
+	pub gone: i64,
+	/// Reviews from no copy.
+	pub other_reviews: i64,
+}
+
+impl From<Funnel> for TallyDto {
+	fn from(f: Funnel) -> Self {
+		Self {
+			shown: f.shown,
+			scanned: f.scanned,
+			opened: f.opened,
+			copied: f.copied,
+			photos_saved: f.photos_saved,
+			on_google: f.on_google,
+			gone: f.gone,
+			other_reviews: f.other_reviews,
+		}
+	}
 }
 
 /// A GBP's kit.
@@ -166,9 +216,9 @@ pub(crate) struct GmbKitDto {
 	pub url: Option<String>,
 	/// Its page on its landing: `null` without one, and then only `google` is open to it.
 	pub page: Option<String>,
-	/// Its category's drafts in the offer's order.
+	/// Its category's drafts in its places, in the offer's order.
 	pub drafts: Vec<RankedDto>,
-	pub funnel: FunnelDto,
+	pub tally: TallyDto,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -178,9 +228,9 @@ pub(crate) struct SetKitDto {
 	pub target: Option<Target>,
 }
 
-/// One of the caller's GBPs by an area.
+/// One of the caller's GBPs in or next to an area.
 #[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "KitNearby")]
+#[schemars(rename = "AreaGmb")]
 pub(crate) struct NearbyDto {
 	pub id: i64,
 	pub name: String,
@@ -188,15 +238,173 @@ pub(crate) struct NearbyDto {
 	pub address: Option<String>,
 	pub location: LatLng,
 	pub distance_m: f64,
-	pub target: Option<Target>,
-	pub last_shown: Option<String>,
+	/// Within its radius; else within twice it.
+	pub inside: bool,
 }
 
 #[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "KitAreaGmbs")]
+#[schemars(rename = "AreaGmbs")]
 pub(crate) struct AreaGmbsDto {
 	pub area: AreaDto,
 	pub gmbs: Vec<NearbyDto>,
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "KitRow")]
+pub(crate) struct KitRowDto {
+	pub slug: String,
+	pub name: String,
+	pub area: Option<String>,
+	pub members: i64,
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Kits")]
+pub(crate) struct KitsDto {
+	pub kits: Vec<KitRowDto>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "PutKit")]
+#[serde(deny_unknown_fields)]
+pub(crate) struct PutKitDto {
+	pub name: String,
+	/// An area slug, a reference only: membership is `gmbs`.
+	pub area: Option<String>,
+	pub gmbs: Vec<i64>,
+}
+
+/// Why a member collects nothing, or only through Google's form.
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[schemars(rename = "KitBlock")]
+pub(crate) enum KitBlock {
+	/// Not on Google yet.
+	Draft,
+	/// Google is verifying it: it waits.
+	Verifying,
+	Suspended,
+	/// Its kit is off.
+	Off,
+	/// No landing page of its: Google's form only.
+	NoPage,
+}
+
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "KitCategory")]
+pub(crate) struct CategoryDto {
+	pub trade: i64,
+	pub country: Country,
+}
+
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "KitLeft")]
+pub(crate) struct LeftDto {
+	pub drafts: i64,
+	pub photos: i64,
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "KitMember")]
+pub(crate) struct MemberDto {
+	pub id: i64,
+	pub name: String,
+	pub state: GbpState,
+	pub address: Option<String>,
+	pub location: Option<LatLng>,
+	pub category: Option<CategoryDto>,
+	pub target: Option<Target>,
+	/// Its landing page; `null` without one.
+	pub page: Option<String>,
+	/// What its QR encodes; `null` while off.
+	pub url: Option<String>,
+	/// Since the period's start or its joining, the later.
+	pub tally: TallyDto,
+	/// What the offer still has for it.
+	pub left: LeftDto,
+	pub blocked: Option<KitBlock>,
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "KitPoolSummary")]
+pub(crate) struct PoolSummaryDto {
+	pub trade: i64,
+	pub country: Country,
+	pub name: String,
+	pub drafts: i64,
+	pub photos: i64,
+	pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[schemars(rename = "KitHappening")]
+pub(crate) enum HappeningDto {
+	Shown,
+	Scanned,
+	Opened,
+	Copied,
+	Saved,
+	/// A review from a copy.
+	Posted,
+	/// A review from no copy.
+	Reviewed,
+	/// A review from a copy, gone.
+	Gone,
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "KitEvent")]
+pub(crate) struct EventOutDto {
+	pub at: String,
+	pub gmb: i64,
+	pub kind: HappeningDto,
+	/// The draft, the photo, or the review's rating.
+	pub detail: Option<i64>,
+}
+
+/// A named selection of the caller's GBPs, over a period.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Kit")]
+pub(crate) struct KitDto {
+	pub slug: String,
+	pub name: String,
+	pub area: Option<String>,
+	/// The members' summed: a GBP in two kits counts in both.
+	pub tally: TallyDto,
+	/// In the order they joined.
+	pub gmbs: Vec<MemberDto>,
+	pub pools: Vec<PoolSummaryDto>,
+	/// Newest first, at most 20.
+	pub latest: Vec<EventOutDto>,
+}
+
+impl From<Happening> for HappeningDto {
+	fn from(h: Happening) -> Self {
+		match h {
+			Happening::Shown => Self::Shown,
+			Happening::Scanned => Self::Scanned,
+			Happening::Opened => Self::Opened,
+			Happening::Copied => Self::Copied,
+			Happening::Saved => Self::Saved,
+			Happening::Posted => Self::Posted,
+			Happening::Reviewed => Self::Reviewed,
+			Happening::Gone => Self::Gone,
+		}
+	}
+}
+
+/// The period's start: unix seconds (the client's local midnight for "today").
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Since {
+	since: i64,
+}
+
+impl Since {
+	fn at(&self) -> ApiResult<Timestamp> {
+		Timestamp::from_second(self.since).map_err(|e| Refusal::new(Code::BadRequest, format!("since: {e}")))
+	}
 }
 
 /// What a reviewer's page shows (`/api/kit/v1/offer`).
@@ -222,6 +430,8 @@ pub(crate) struct OfferedDto {
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct OfferedPhotoDto {
 	pub id: i64,
+	/// What it shows: its alt and caption.
+	pub shows: Option<String>,
 	pub width: i64,
 	pub height: i64,
 }
@@ -279,6 +489,9 @@ impl From<Pool> for PoolDto {
 					id: d.id,
 					text: d.text,
 					photos: d.photos,
+					places: d.places,
+					keywords: d.keywords,
+					names: d.names,
 					uses: d.uses,
 					created_at: d.created_at.to_string(),
 				})
@@ -288,12 +501,16 @@ impl From<Pool> for PoolDto {
 				.into_iter()
 				.map(|p| PhotoDto {
 					id: p.id,
+					shows: p.shows,
+					places: p.places,
+					drafts: p.drafts,
 					width: p.width,
 					height: p.height,
 					uses: p.uses,
 					created_at: p.created_at.to_string(),
 				})
 				.collect(),
+			unmentioned: p.unmentioned,
 		}
 	}
 }
@@ -307,8 +524,7 @@ impl From<Nearby> for NearbyDto {
 			address: n.gmb.address,
 			location: n.gmb.location.expect("only a GBP with a point is by an area").at,
 			distance_m: n.distance_m.round(),
-			target: n.target,
-			last_shown: n.last_shown.map(|t| t.to_string()),
+			inside: n.inside,
 		}
 	}
 }
@@ -337,6 +553,7 @@ fn ranked(drafts: Vec<Ranked>, target: Option<Target>) -> Vec<RankedDto> {
 					.into_iter()
 					.map(|p| RankedPhotoDto {
 						id: p.id,
+						shows: p.shows,
 						width: p.width,
 						height: p.height,
 						uses: p.uses,
@@ -357,11 +574,16 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/drafts/{draft}", USER, remove_kit_draft),
 		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/photos", SLOW, add_kit_photo).layer(|h| h.layer(DefaultBodyLimit::max(PHOTO_MAX))),
 		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit/photos/{file}", USER, kit_photo),
+		ApiRoute::new(M::PATCH, "/trades/{id}/{country}/kit/photos/{file}", USER, edit_kit_photo),
 		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/photos/{file}", USER, remove_kit_photo),
 		ApiRoute::new(M::GET, "/gmbs/{id}/kit", USER, gmb_kit),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/kit", USER, set_gmb_kit),
 		ApiRoute::new(M::POST, "/gmbs/{id}/kit/shown", USER, kit_shown),
-		ApiRoute::new(M::GET, "/kit/areas/{slug}/gmbs", USER, kit_area_gmbs),
+		ApiRoute::new(M::GET, "/areas/{slug}/gmbs", USER, area_gmbs),
+		ApiRoute::new(M::GET, "/kits", USER, kits),
+		ApiRoute::new(M::GET, "/kits/{slug}", USER, kit),
+		ApiRoute::new(M::PUT, "/kits/{slug}", USER, put_kit),
+		ApiRoute::new(M::DELETE, "/kits/{slug}", USER, delete_kit),
 	]
 }
 
@@ -474,7 +696,7 @@ async fn add_kit_draft(
 	Ids(TradeIn { id: trade, country }): Ids<TradeIn>,
 	Body(b): Body<NewDraftDto>,
 ) -> ApiResult<Created<PoolDto>> {
-	let draft = panel.add_draft(caller.user_id, trade, country, &b.text, &b.photos, Timestamp::now()).await??;
+	let draft = panel.add_draft(caller.user_id, trade, country, &b.text, &b.photos, &b.places, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, trade_id = trade, %country, draft, "kit draft added");
 	Ok(Created(panel.kit_pool(caller.user_id, trade, country).await??.into()))
 }
@@ -489,7 +711,7 @@ async fn edit_kit_draft(
 	Body(b): Body<EditDraftDto>,
 ) -> ApiResult<Json<PoolDto>> {
 	panel
-		.edit_draft(caller.user_id, TradeId { v: trade }, country, draft, b.text.as_deref(), b.photos.as_deref())
+		.edit_draft(caller.user_id, TradeId { v: trade }, country, draft, b.text.as_deref(), b.photos.as_deref(), b.places.as_deref())
 		.await??;
 	Ok(Json(panel.kit_pool(caller.user_id, trade, country).await??.into()))
 }
@@ -519,6 +741,19 @@ async fn add_kit_photo(
 /// A photo of the category, `{file}` being `<photo>.jpg`.
 async fn kit_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(JpgIn { id: trade, country, file }): Ids<JpgIn>) -> ApiResult<Jpeg> {
 	Ok(Jpeg(panel.kit_photo(caller.user_id, TradeId { v: trade }, country, jpg(&file)?).await??))
+}
+
+/// Labels a photo with what it shows, or tags its places; answers the category's drafts and photos.
+async fn edit_kit_photo(
+	State(panel): State<Panel>,
+	Extension(caller): Extension<Caller>,
+	Ids(PhotoIn { id: trade, country, file }): Ids<PhotoIn>,
+	Body(b): Body<EditPhotoDto>,
+) -> ApiResult<Json<PoolDto>> {
+	panel
+		.edit_photo(caller.user_id, TradeId { v: trade }, country, file, b.shows.as_deref().map(Some), b.places.as_deref())
+		.await??;
+	Ok(Json(panel.kit_pool(caller.user_id, trade, country).await??.into()))
 }
 
 /// Removes a photo, as a draft is: out of every offer, its uses kept.
@@ -558,33 +793,31 @@ async fn page_of(s: &ApiState, gmb: i64) -> ApiResult<Option<String>> {
 	}
 }
 
-async fn kit_dto(s: &ApiState, caller: &Caller, gmb: i64) -> ApiResult<GmbKitDto> {
-	let Kit { target, review_uri, drafts, funnel } = s.sign_in.panel.kit(caller.user_id, gmb, Timestamp::now()).await??;
-	let page = page_of(s, gmb).await?;
-	let url = match (&page, target) {
+/// What the QR of a GBP whose page is `page` encodes.
+fn qr_url(page: Option<&String>, target: Option<Target>, review_uri: Option<String>) -> Option<String> {
+	match (page, target) {
 		(_, None) => None,
 		(Some(page), Some(_)) => Some(format!("{page}?qr")),
 		(None, Some(_)) => review_uri,
-	};
+	}
+}
+
+async fn kit_dto(s: &ApiState, caller: &Caller, gmb: i64, since: Timestamp) -> ApiResult<GmbKitDto> {
+	let Kit { target, review_uri, drafts, funnel } = s.sign_in.panel.kit(caller.user_id, gmb, since, Timestamp::now()).await??;
+	let page = page_of(s, gmb).await?;
 	Ok(GmbKitDto {
 		target,
-		url,
+		url: qr_url(page.as_ref(), target, review_uri),
 		page,
 		drafts: ranked(drafts, target),
-		funnel: FunnelDto {
-			shown: funnel.shown,
-			scanned: funnel.scanned,
-			opened: funnel.opened,
-			copied: funnel.copied,
-			photos_saved: funnel.photos_saved,
-		},
+		tally: funnel.into(),
 	})
 }
 
-/// The GBP's kit: where its QR leads, its category's drafts as its offer weighs them, and the
-/// last 30 days' funnel.
-async fn gmb_kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>) -> ApiResult<Json<GmbKitDto>> {
-	Ok(Json(kit_dto(&s, &caller, gmb).await?))
+/// The GBP's kit: where its QR leads, its category's drafts as its offer weighs them, and what it
+/// collected since `since`.
+async fn gmb_kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>, Params(q): Params<Since>) -> ApiResult<Json<GmbKitDto>> {
+	Ok(Json(kit_dto(&s, &caller, gmb, q.at()?).await?))
 }
 
 /// Points the GBP's QR at `target`, `null` turning the kit off. On, its review link is asked of
@@ -602,7 +835,7 @@ async fn set_gmb_kit(
 	}
 	s.sign_in.panel.set_kit_target(by, gmb, target, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, ?target, "kit target set");
-	Ok(Json(kit_dto(&s, &caller, gmb).await?))
+	Ok(Json(kit_dto(&s, &caller, gmb, Timestamp::now()).await?))
 }
 
 /// The operator showed the GBP's QR: the funnel's `shown`.
@@ -611,15 +844,125 @@ async fn kit_shown(State(panel): State<Panel>, Extension(caller): Extension<Call
 	Ok(NoContent)
 }
 
-/// The area and the caller's GBPs with a point in it or within its margin, nearest its centre
-/// first.
-async fn kit_area_gmbs(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>) -> ApiResult<Json<AreaGmbsDto>> {
+/// The area and the caller's GBPs with a point in it or within twice its radius, nearest its
+/// centre first.
+async fn area_gmbs(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>) -> ApiResult<Json<AreaGmbsDto>> {
 	let gmbs = panel.area_gmbs(caller.user_id, &slug).await??;
 	let area = panel.area(&slug).await?.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
 	Ok(Json(AreaGmbsDto {
 		area: area.into(),
 		gmbs: gmbs.into_iter().map(Into::into).collect(),
 	}))
+}
+
+/// The caller's kits.
+async fn kits(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<KitsDto>> {
+	Ok(Json(KitsDto {
+		kits: panel
+			.kits(caller.user_id)
+			.await?
+			.into_iter()
+			.map(|k| KitRowDto {
+				slug: k.slug,
+				name: k.name,
+				area: k.area,
+				members: k.members,
+			})
+			.collect(),
+	}))
+}
+
+/// The caller's kit over the period from `since`: what its GBPs collected, each GBP's QR and what
+/// is left to offer it, its categories' pools and the latest of what happened.
+async fn kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>, Params(q): Params<Since>) -> ApiResult<Json<KitDto>> {
+	let Scope {
+		slug,
+		name,
+		area,
+		members,
+		pools,
+		latest,
+	} = s.sign_in.panel.kit_scope(caller.user_id, &slug, q.at()?, Timestamp::now()).await??;
+	let mut tally = Funnel::default();
+	let mut gmbs = Vec::with_capacity(members.len());
+	for m in members {
+		tally += m.tally;
+		let page = page_of(&s, m.gmb.id).await?;
+		let blocked = match (m.gmb.state, m.target, &page) {
+			(GbpState::Draft, ..) => Some(KitBlock::Draft),
+			(GbpState::Verifying, ..) => Some(KitBlock::Verifying),
+			(GbpState::Suspended, ..) => Some(KitBlock::Suspended),
+			(GbpState::Verified, None, _) => Some(KitBlock::Off),
+			(GbpState::Verified, Some(_), None) => Some(KitBlock::NoPage),
+			(GbpState::Verified, Some(_), Some(_)) => None,
+		};
+		gmbs.push(MemberDto {
+			id: m.gmb.id,
+			url: qr_url(page.as_ref(), m.target, m.review_uri),
+			page,
+			blocked,
+			name: m.gmb.name,
+			state: m.gmb.state,
+			address: m.gmb.address,
+			location: m.gmb.location.map(|p| p.at),
+			category: m.gmb.trade_id.zip(m.gmb.country).map(|(trade, c)| CategoryDto { trade, country: c.code }),
+			target: m.target,
+			tally: m.tally.into(),
+			left: LeftDto {
+				drafts: m.left.drafts,
+				photos: m.left.photos,
+			},
+		});
+	}
+	Ok(Json(KitDto {
+		slug,
+		name,
+		area,
+		tally: tally.into(),
+		gmbs,
+		pools: pools
+			.into_iter()
+			.map(|p| PoolSummaryDto {
+				trade: p.trade,
+				country: p.country,
+				name: p.name,
+				drafts: p.drafts,
+				photos: p.photos,
+				warnings: p.warnings,
+			})
+			.collect(),
+		latest: latest
+			.into_iter()
+			.map(|e| EventOutDto {
+				at: e.at.to_string(),
+				gmb: e.gmb,
+				kind: e.kind.into(),
+				detail: e.detail,
+			})
+			.collect(),
+	}))
+}
+
+/// Makes the caller's kit `slug`, or sets it over what it was: a GBP that stays keeps when it
+/// joined. `new` is no kit's.
+///
+/// 400 a bad slug or name, or no such area; 409 a GBP not the caller's.
+async fn put_kit(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>, Body(b): Body<PutKitDto>) -> ApiResult<NoContent> {
+	let kit = PutKit {
+		name: b.name,
+		area: b.area,
+		gmbs: b.gmbs,
+	};
+	panel.put_kit(caller.user_id, &slug, kit, Timestamp::now()).await??;
+	tracing::info!(user_id = %caller.user_id, slug, "kit set");
+	Ok(NoContent)
+}
+
+/// Deletes the caller's kit: only the selection goes, no draft, photo or use.
+async fn delete_kit(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>) -> ApiResult<NoContent> {
+	panel.delete_kit(caller.user_id, &slug).await??;
+	tracing::info!(user_id = %caller.user_id, slug, "kit deleted");
+	Ok(NoContent)
 }
 
 /// What the landings' routes are served on.
@@ -786,6 +1129,7 @@ impl From<Offer> for OfferDto {
 						.into_iter()
 						.map(|p| OfferedPhotoDto {
 							id: p.id,
+							shows: p.shows,
 							width: p.width,
 							height: p.height,
 						})

@@ -112,7 +112,6 @@ impl World {
 			Default::default(),
 			None,
 			None,
-			None,
 			Some(model),
 			None,
 		);

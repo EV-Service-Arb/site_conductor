@@ -4,7 +4,7 @@
 //! ```text
 //! /api, /auth, /health, /grafana,  never the front end: a route of theirs, else a JSON 404
 //! /cabinet, the forward's prefixes
-//! a view (`View::parse` takes it) the one page, index.html; a kit area only if it was drawn
+//! a view (`View::parse` takes it) the one page, index.html
 //! a file                           itself
 //! anything else                    404.html, status 404
 //! ```
@@ -15,10 +15,7 @@
 //! Headers: `/_next/static/*` is content-hashed, so `immutable` for a year; everything else
 //! `no-cache`, and every HTML page a CSP.
 
-use std::{
-	io,
-	path::{Path, PathBuf},
-};
+use std::{io, path::Path};
 
 use axum::{
 	Router,
@@ -28,7 +25,6 @@ use axum::{
 	response::{IntoResponse, Response},
 };
 use ev_lib::{api::Refusal, views::Views};
-use sa_panel::Panel;
 use tower_http::{
 	services::{ServeDir, ServeFile},
 	set_status::SetStatus,
@@ -48,7 +44,6 @@ const HASHED: &str = "/_next/static/";
 #[derive(Clone, Debug)]
 pub struct Files {
 	dir: ServeDir<SetStatus<ServeFile>>,
-	root: PathBuf,
 }
 
 impl Files {
@@ -59,16 +54,14 @@ impl Files {
 			let path = dir.join(page);
 			eyre::ensure!(path.is_file(), "PANEL_WEB_DIR {} has no {page}: not a build of frontend/", dir.display());
 		}
-		let root = dir.to_owned();
 		let dir = ServeDir::new(dir).append_index_html_on_directories(true).not_found_service(ServeFile::new(dir.join("404.html")));
-		Ok(Self { dir, root })
+		Ok(Self { dir })
 	}
 }
 
-/// `app`, with the front end answering whatever none of its routes does; a kit area of `panel`'s
-/// by its slug.
-pub fn serve(app: Router, files: Files, panel: Panel) -> Router {
-	app.fallback(move |req: Request| page(files.clone(), panel.clone(), req))
+/// `app`, with the front end answering whatever none of its routes does.
+pub fn serve(app: Router, files: Files) -> Router {
+	app.fallback(move |req: Request| page(files.clone(), req))
 }
 
 /// The origin's prefixes are the API side's, whether or not a route of theirs is mounted: an
@@ -77,33 +70,13 @@ fn reserved(path: &str) -> bool {
 	crate::forward::paths().any(|p| p.covers(path))
 }
 
-/// Whether `/<slug>` is one of the conductor's own paths or pages, which no kit area may take.
-pub(crate) fn taken(slug: &str, files: Option<&Files>) -> bool {
-	let path = format!("/{slug}");
-	reserved(&path) || View::parse(&path).is_ok_and(|v| !matches!(v, View::Area { .. })) || files.is_some_and(|f| f.root.join(slug).exists())
-}
-
-/// Whether `path_and_query` is a view the page shows: any `View` but an area nobody drew.
-async fn shown(panel: &Panel, path_and_query: &str) -> eyre::Result<bool> {
-	Ok(match View::parse(path_and_query) {
-		Ok(View::Area { area }) => panel.area(&area).await?.is_some(),
-		Ok(_) => true,
-		Err(_) => false, // not a view: a file of the export, or none
-	})
-}
-
-async fn page(mut files: Files, panel: Panel, mut req: Request) -> Response {
+async fn page(mut files: Files, mut req: Request) -> Response {
 	if reserved(req.uri().path()) {
 		return dressed(Refusal::new(Code::NotFound, "not found").into_response(), false);
 	}
-	let asked = req.uri().path_and_query().map_or(req.uri().path(), |pq| pq.as_str()).to_owned();
-	match shown(&panel, &asked).await {
-		Ok(true) => *req.uri_mut() = Uri::from_static("/"),
-		Ok(false) => {}
-		Err(e) => {
-			crate::report(&e, "looking a kit area up");
-			return dressed(StatusCode::INTERNAL_SERVER_ERROR.into_response(), false);
-		}
+	let asked = req.uri().path_and_query().map_or(req.uri().path(), |pq| pq.as_str());
+	if View::parse(asked).is_ok() {
+		*req.uri_mut() = Uri::from_static("/");
 	}
 	let hashed = req.uri().path().starts_with(HASHED);
 	// Every file in the image has the Nix store's mtime, 1970: answering If-Modified-Since

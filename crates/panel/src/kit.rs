@@ -1,7 +1,7 @@
-//! The review kit: a category's drafts and photos, offered to a reviewer of one of its GBPs, and
-//! a way to list the caller's GBPs by an area. What goes where is the offer's rule
-//! (docs/ARCHITECTURE.md, Review kit): no draft and no photo goes twice to one GBP, nor is offered
-//! while another view holds it; the less used go first.
+//! The review kit: a category's drafts and photos, offered to a reviewer of one of its GBPs; an
+//! owner's kits, named selections of their GBPs, and what each collected. What goes where is the
+//! offer's rule (docs/ARCHITECTURE.md, Review kit): no draft and no photo goes twice to one GBP, nor
+//! to one outside its places, nor is offered while another view holds it; the less used go first.
 
 use std::{
 	collections::{BTreeMap, BTreeSet},
@@ -21,10 +21,11 @@ use uuid::Uuid;
 
 use crate::{
 	Panel, Refused,
+	areas::Area,
 	store::{
 		areas as areas_db,
-		gmbs::{self as gmbs_db, GmbId, TradeId},
-		kit::{self as db, Removable},
+		gmbs::{self as gmbs_db, Gmb, GmbId, TradeId},
+		kit::{self as db, Happening, Removable},
 	},
 	tokens::is_open,
 };
@@ -39,6 +40,12 @@ pub const PHOTO_MAX: usize = 10 * 1024 * 1024;
 const PHOTO_SIDE: u32 = 2048;
 /// Photos a draft selects.
 const PHOTOS_PER_DRAFT: usize = 10;
+/// How long after a copy a review on its GBP may be of it.
+const POSTED_WITHIN: SignedDuration = SignedDuration::from_hours(24 * 14);
+/// The share of a draft's words a review carries to be of it.
+const POSTED_OVERLAP: f64 = 0.5;
+/// What a kit's latest lists.
+const LATEST: i64 = 20;
 
 /// Where a GBP's QR leads.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema, serde::Serialize)]
@@ -60,6 +67,12 @@ pub struct Draft {
 	pub text: String,
 	/// Its photos, in its order.
 	pub photos: Vec<i64>,
+	/// Areas it is offered in; none: everywhere.
+	pub places: Vec<String>,
+	/// The category's keywords its text carries.
+	pub keywords: Vec<String>,
+	/// Areas of the category's country its text names and `places` lacks.
+	pub names: Vec<String>,
 	/// Copies, every GBP.
 	pub uses: i64,
 	pub created_at: Timestamp,
@@ -68,6 +81,11 @@ pub struct Draft {
 #[derive(Clone, Debug)]
 pub struct Photo {
 	pub id: i64,
+	/// What it shows, for the reviewer; `None`: not labelled yet.
+	pub shows: Option<String>,
+	pub places: Vec<String>,
+	/// The drafts it rides with: a photo in none is never offered.
+	pub drafts: Vec<i64>,
 	pub width: i64,
 	pub height: i64,
 	/// Saved, every GBP.
@@ -80,6 +98,8 @@ pub struct Photo {
 pub struct Pool {
 	pub drafts: Vec<Draft>,
 	pub photos: Vec<Photo>,
+	/// The category's keywords no draft carries.
+	pub unmentioned: Vec<String>,
 }
 
 /// A draft as the offer weighs it for one GBP.
@@ -99,6 +119,7 @@ pub struct Ranked {
 #[derive(Clone, Debug)]
 pub struct RankedPhoto {
 	pub id: i64,
+	pub shows: Option<String>,
 	pub width: i64,
 	pub height: i64,
 	pub uses: i64,
@@ -131,14 +152,116 @@ pub struct Kit {
 	pub funnel: Funnel,
 }
 
-/// The last 30 days.
-#[derive(Clone, Copy, Debug)]
+/// What a GBP collected over a period; zero over none.
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Funnel {
 	pub shown: i64,
 	pub scanned: i64,
 	pub opened: i64,
 	pub copied: i64,
 	pub photos_saved: i64,
+	/// Reviews from a copy on Google.
+	pub on_google: i64,
+	/// Of those, gone off it.
+	pub gone: i64,
+	/// Reviews from no copy.
+	pub other_reviews: i64,
+}
+
+impl From<[i64; 8]> for Funnel {
+	fn from([shown, scanned, opened, copied, photos_saved, on_google, gone, other_reviews]: [i64; 8]) -> Self {
+		Self {
+			shown,
+			scanned,
+			opened,
+			copied,
+			photos_saved,
+			on_google,
+			gone,
+			other_reviews,
+		}
+	}
+}
+
+impl std::ops::AddAssign for Funnel {
+	fn add_assign(&mut self, o: Self) {
+		self.shown += o.shown;
+		self.scanned += o.scanned;
+		self.opened += o.opened;
+		self.copied += o.copied;
+		self.photos_saved += o.photos_saved;
+		self.on_google += o.on_google;
+		self.gone += o.gone;
+		self.other_reviews += o.other_reviews;
+	}
+}
+
+/// An owner's kit as listed.
+#[derive(Clone, Debug)]
+pub struct KitSummary {
+	pub slug: String,
+	pub name: String,
+	pub area: Option<String>,
+	pub members: i64,
+}
+
+/// An owner's kit, over a period.
+#[derive(Clone, Debug)]
+pub struct Scope {
+	pub slug: String,
+	pub name: String,
+	pub area: Option<String>,
+	/// In the order they joined.
+	pub members: Vec<Member>,
+	/// The members' categories.
+	pub pools: Vec<PoolSummary>,
+	/// Newest first.
+	pub latest: Vec<Happened>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Member {
+	pub gmb: Gmb,
+	pub target: Option<Target>,
+	pub review_uri: Option<String>,
+	/// Since the period's start or its joining, the later.
+	pub tally: Funnel,
+	pub left: Left,
+}
+
+/// What the offer still has for a GBP: not gone there, in its places.
+#[derive(Clone, Copy, Debug)]
+pub struct Left {
+	pub drafts: i64,
+	pub photos: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct PoolSummary {
+	pub trade: i64,
+	pub country: Country,
+	pub name: String,
+	pub drafts: i64,
+	pub photos: i64,
+	/// What keeps part of it from being offered as one may expect.
+	pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Happened {
+	pub at: Timestamp,
+	pub gmb: i64,
+	pub kind: Happening,
+	/// The draft, the photo, or the review's rating.
+	pub detail: Option<i64>,
+}
+
+/// What a kit's editor sets.
+#[derive(Clone, Debug)]
+pub struct PutKit {
+	pub name: String,
+	pub area: Option<String>,
+	pub gmbs: Vec<i64>,
 }
 
 /// What a reviewer's page did.
@@ -148,14 +271,14 @@ pub enum Event {
 	Saved(Vec<i64>),
 }
 
-/// One of the caller's GBPs by an area.
+/// One of the caller's GBPs in or next to an area.
 #[derive(Clone, Debug)]
 pub struct Nearby {
-	pub gmb: crate::store::gmbs::Gmb,
+	pub gmb: Gmb,
 	/// From the area's centre.
 	pub distance_m: f64,
-	pub target: Option<Target>,
-	pub last_shown: Option<Timestamp>,
+	/// Within its radius; else within twice it.
+	pub inside: bool,
 }
 
 impl Panel {
@@ -168,42 +291,28 @@ impl Panel {
 				.any(|t| t.id == trade && t.categories.iter().any(|c| c.country == country)))
 	}
 
+	/// The owner's category's keywords; `None`: not theirs, or not set up.
+	async fn keywords_of(&self, conn: &mut sqlx::SqliteConnection, owner: Uuid, trade: i64, country: Country) -> eyre::Result<Option<Vec<String>>> {
+		Ok(gmbs_db::trades(conn, owner)
+			.await?
+			.into_iter()
+			.filter(|t| t.id == trade)
+			.flat_map(|t| t.categories)
+			.find(|c| c.country == country)
+			.map(|c| c.keywords))
+	}
+
 	pub async fn kit_pool(&self, owner: Uuid, trade: i64, country: Country) -> eyre::Result<Result<Pool, Refused>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a kit")?;
-		if !self.category_is(&mut conn, owner, trade, country).await? {
+		let Some(keywords) = self.keywords_of(&mut conn, owner, trade, country).await? else {
 			return Ok(Err(Refused::NotFound));
-		}
-		let mut photos_of: BTreeMap<i64, Vec<i64>> = BTreeMap::new();
-		for p in db::draft_photos(&mut conn, trade, country, None).await? {
-			photos_of.entry(p.draft_id).or_default().push(p.photo_id);
-		}
-		let drafts = db::drafts(&mut conn, trade, country, None, Timestamp::now())
-			.await?
-			.into_iter()
-			.map(|d| Draft {
-				photos: photos_of.remove(&d.id).unwrap_or_default(),
-				id: d.id,
-				text: d.text,
-				uses: d.uses,
-				created_at: d.created_at,
-			})
-			.collect();
-		let photos = db::photos(&mut conn, trade, country)
-			.await?
-			.into_iter()
-			.map(|p| Photo {
-				id: p.id,
-				width: p.width,
-				height: p.height,
-				uses: p.uses,
-				created_at: p.created_at,
-			})
-			.collect();
-		Ok(Ok(Pool { drafts, photos }))
+		};
+		let areas = areas_db::areas(&mut conn).await?;
+		Ok(Ok(pool(&mut conn, trade, country, &keywords, &areas).await?))
 	}
 
 	/// A draft of the category, selecting `photos` of it.
-	pub async fn add_draft(&self, owner: Uuid, trade: i64, country: Country, text: &str, photos: &[i64], now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
+	pub async fn add_draft(&self, owner: Uuid, trade: i64, country: Country, text: &str, photos: &[i64], places: &[String], now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
 		let text = match draft_text(text) {
 			Ok(t) => t,
 			Err(e) => return Ok(Err(e)),
@@ -218,15 +327,28 @@ impl Panel {
 		if let Err(e) = selection(&mut tx, trade, country, photos).await? {
 			return Ok(Err(e));
 		}
+		if let Err(e) = known_areas(&mut tx, places).await? {
+			return Ok(Err(e));
+		}
 		let id = db::add_draft(&mut tx, trade, country, &text, now).await?;
 		db::select(&mut tx, id, photos).await?;
+		db::set_places(&mut tx, Removable::Draft, id, places).await?;
 		tx.commit().await.wrap_err("committing a draft")?;
 		Ok(Ok(id))
 	}
 
-	/// Draft `id`'s text (only while no copy of it was made: a use is of the text it had) and its
-	/// photos, each as given.
-	pub async fn edit_draft(&self, owner: Uuid, trade: TradeId, country: Country, id: i64, text: Option<&str>, photos: Option<&[i64]>) -> eyre::Result<Result<(), Refused>> {
+	/// Draft `id`'s text (only while no copy of it was made: a use is of the text it had), its
+	/// photos and its places, each as given.
+	pub async fn edit_draft(
+		&self,
+		owner: Uuid,
+		trade: TradeId,
+		country: Country,
+		id: i64,
+		text: Option<&str>,
+		photos: Option<&[i64]>,
+		places: Option<&[String]>,
+	) -> eyre::Result<Result<(), Refused>> {
 		let text = match text.map(draft_text).transpose() {
 			Ok(t) => t,
 			Err(e) => return Ok(Err(e)),
@@ -249,6 +371,12 @@ impl Panel {
 				return Ok(Err(e));
 			}
 			db::select(&mut tx, id, photos).await?;
+		}
+		if let Some(places) = places {
+			if let Err(e) = known_areas(&mut tx, places).await? {
+				return Ok(Err(e));
+			}
+			db::set_places(&mut tx, Removable::Draft, id, places).await?;
 		}
 		tx.commit().await.wrap_err("committing a draft's edit")?;
 		Ok(Ok(()))
@@ -297,29 +425,47 @@ impl Panel {
 		Ok(db::photo_bytes(&mut conn, trade, country, id).await?.ok_or(Refused::NotFound))
 	}
 
-	/// The owner's GBP `gmb`'s kit as of `now`.
-	pub async fn kit(&self, owner: Uuid, gmb: i64, now: Timestamp) -> eyre::Result<Result<Kit, Refused>> {
+	/// Photo `id`'s label (`Some(None)` clears it) and places, each as given.
+	pub async fn edit_photo(&self, owner: Uuid, trade: TradeId, country: Country, id: i64, shows: Option<Option<&str>>, places: Option<&[String]>) -> eyre::Result<Result<(), Refused>> {
+		let shows = match shows {
+			Some(Some(s)) => match s.trim() {
+				"" => Some(None),
+				t if t.chars().count() > 60 => return Ok(Err(Refused::Invalid("what a photo shows is at most 60 characters".to_owned()))),
+				t => Some(Some(t)),
+			},
+			other => other,
+		};
+		let mut tx = self.store.begin_write().await?;
+		if !self.category_is(&mut tx, owner, trade.v, country).await? || db::photo_bytes(&mut tx, trade, country, id).await?.is_none() {
+			return Ok(Err(Refused::NotFound));
+		}
+		if let Some(shows) = shows {
+			db::set_shows(&mut tx, id, shows).await?;
+		}
+		if let Some(places) = places {
+			if let Err(e) = known_areas(&mut tx, places).await? {
+				return Ok(Err(e));
+			}
+			db::set_places(&mut tx, Removable::Photo, id, places).await?;
+		}
+		tx.commit().await.wrap_err("committing a photo's edit")?;
+		Ok(Ok(()))
+	}
+
+	/// The owner's GBP `gmb`'s kit as of `now`, its funnel since `since`.
+	pub async fn kit(&self, owner: Uuid, gmb: i64, since: Timestamp, now: Timestamp) -> eyre::Result<Result<Kit, Refused>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a kit")?;
 		let Some(g) = gmbs_db::gmb_of(&mut conn, Some(owner), gmb).await? else {
 			return Ok(Err(Refused::NotFound));
 		};
 		let target = db::target(&mut conn, gmb).await?;
-		let drafts = match (g.trade_id, g.country) {
-			(Some(trade), Some(c)) => ranked(&mut conn, TradeId { v: trade }, c.code, GmbId { v: gmb }, now).await?,
-			_ => Vec::new(),
-		};
-		let [shown, scanned, opened, copied, photos_saved] = db::funnel(&mut conn, gmb, now - SignedDuration::from_hours(24 * 30)).await?;
+		let areas = areas_db::areas(&mut conn).await?;
+		let drafts = ranked(&mut conn, &g, &areas, now).await?;
 		Ok(Ok(Kit {
 			target: target.as_ref().map(|t| t.0),
 			review_uri: target.map(|t| t.1),
 			drafts,
-			funnel: Funnel {
-				shown,
-				scanned,
-				opened,
-				copied,
-				photos_saved,
-			},
+			funnel: db::funnel(&mut conn, gmb, since).await?.into(),
 		}))
 	}
 
@@ -375,9 +521,10 @@ impl Panel {
 		};
 		let place_id = g.place_id.clone().expect("a kit is on only for a GBP with a place");
 		let country = g.country.ok_or_else(|| eyre::eyre!("GBP {gmb} has a place and no country"))?.code;
-		let drafts = match (target, g.trade_id) {
-			(Target::Google, _) | (_, None) => Vec::new(),
-			(Target::Drafts | Target::OneTap, Some(trade)) => ranked(&mut tx, TradeId { v: trade }, country, GmbId { v: gmb }, now)
+		let areas = areas_db::areas(&mut tx).await?;
+		let drafts = match target {
+			Target::Google => Vec::new(),
+			Target::Drafts | Target::OneTap => ranked(&mut tx, &g, &areas, now)
 				.await?
 				.into_iter()
 				.filter(|d| !d.went_here && !d.held)
@@ -444,52 +591,241 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
-	/// The owner's GBPs with a point in area `slug`, nearest its centre first.
+	/// The owner's GBPs with a point in area `slug` or within twice its radius, nearest its centre first.
 	pub async fn area_gmbs(&self, owner: Uuid, slug: &str) -> eyre::Result<Result<Vec<Nearby>, Refused>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for an area")?;
 		let Some(area) = areas_db::area(&mut conn, slug).await? else {
 			return Ok(Err(Refused::NotFound));
 		};
-		let mut near = Vec::new();
-		for g in gmbs_db::gmbs(&mut conn, owner).await? {
-			let Some(at) = g.location.map(|p| p.at) else { continue };
-			let distance_m = metres(at, area.center);
-			if distance_m > area.radius_m as f64 {
-				continue;
-			}
-			let target = db::target(&mut conn, g.id).await?.map(|t| t.0);
-			let last_shown = db::last_shown(&mut conn, g.id).await?;
-			near.push(Nearby {
-				distance_m,
-				target,
-				last_shown,
-				gmb: g,
-			});
-		}
+		let r = area.radius_m as f64;
+		let mut near: Vec<Nearby> = gmbs_db::gmbs(&mut conn, owner)
+			.await?
+			.into_iter()
+			.filter_map(|g| {
+				let distance_m = metres(g.location.as_ref()?.at, area.center);
+				(distance_m <= 2. * r).then_some(Nearby {
+					distance_m,
+					inside: distance_m <= r,
+					gmb: g,
+				})
+			})
+			.collect();
 		near.sort_by(|a, b| a.distance_m.total_cmp(&b.distance_m));
 		Ok(Ok(near))
 	}
+
+	pub async fn kits(&self, owner: Uuid) -> eyre::Result<Vec<KitSummary>> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for kits")?;
+		Ok(db::kits(&mut conn, owner)
+			.await?
+			.into_iter()
+			.map(|k| KitSummary {
+				slug: k.slug,
+				name: k.name,
+				area: k.area,
+				members: k.members,
+			})
+			.collect())
+	}
+
+	/// The owner's kit `slug`, made or over what it was. `Conflict`: a GBP not theirs.
+	pub async fn put_kit(&self, owner: Uuid, slug: &str, kit: PutKit, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+		if !sa_core::ids::is_slug(slug) || slug.contains('_') || slug == "new" {
+			return Ok(Err(Refused::Invalid(format!("{slug:?}: a kit's link is 1–64 of a-z, 0-9 and -, not \"new\""))));
+		}
+		let name = kit.name.trim();
+		if name.is_empty() || name.chars().count() > 80 {
+			return Ok(Err(Refused::Invalid("a kit's name is 1–80 characters".to_owned())));
+		}
+		let mut tx = self.store.begin_write().await?;
+		if let Some(area) = &kit.area
+			&& areas_db::area(&mut tx, area).await?.is_none()
+		{
+			return Ok(Err(Refused::Invalid(format!("no area {area}"))));
+		}
+		for g in &kit.gmbs {
+			if gmbs_db::gmb_of(&mut tx, Some(owner), *g).await?.is_none() {
+				return Ok(Err(Refused::Conflict(format!("GBP {g} is not yours"))));
+			}
+		}
+		let id = db::put_kit(&mut tx, owner, slug, name, kit.area.as_deref(), now).await?;
+		db::set_members(&mut tx, id, &kit.gmbs, now).await?;
+		tx.commit().await.wrap_err("committing a kit")?;
+		Ok(Ok(()))
+	}
+
+	/// Gone with its selection; no draft, photo or use goes with it.
+	pub async fn delete_kit(&self, owner: Uuid, slug: &str) -> eyre::Result<Result<(), Refused>> {
+		let mut tx = self.store.begin_write().await?;
+		if !db::delete_kit(&mut tx, owner, slug).await? {
+			return Ok(Err(Refused::NotFound));
+		}
+		tx.commit().await.wrap_err("committing a kit's deletion")?;
+		Ok(Ok(()))
+	}
+
+	/// The owner's kit `slug` as of `now`, over the period from `since`.
+	pub async fn kit_scope(&self, owner: Uuid, slug: &str, since: Timestamp, now: Timestamp) -> eyre::Result<Result<Scope, Refused>> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a kit")?;
+		let Some(k) = db::kit(&mut conn, owner, slug).await? else {
+			return Ok(Err(Refused::NotFound));
+		};
+		let areas = areas_db::areas(&mut conn).await?;
+		let trades = gmbs_db::trades(&mut conn, owner).await?;
+		let mut members = Vec::new();
+		let mut categories: Vec<(i64, Country)> = Vec::new();
+		for (gmb, added_at) in db::members(&mut conn, k.id).await? {
+			let g = gmbs_db::gmb_of(&mut conn, Some(owner), gmb)
+				.await?
+				.ok_or_else(|| eyre::eyre!("kit {slug}'s GBP {gmb} is not its owner's"))?;
+			if let (Some(t), Some(c)) = (g.trade_id, &g.country) {
+				if !categories.contains(&(t, c.code)) {
+					categories.push((t, c.code));
+				}
+			}
+			let target = db::target(&mut conn, gmb).await?;
+			let ranked = ranked(&mut conn, &g, &areas, now).await?;
+			let photos: BTreeSet<i64> = ranked
+				.iter()
+				.filter(|d| !d.went_here)
+				.flat_map(|d| d.photos.iter().filter(|p| !p.went_here).map(|p| p.id))
+				.collect();
+			members.push(Member {
+				left: Left {
+					drafts: ranked.iter().filter(|d| !d.went_here).count() as i64,
+					photos: photos.len() as i64,
+				},
+				tally: db::funnel(&mut conn, gmb, since.max(added_at)).await?.into(),
+				target: target.as_ref().map(|t| t.0),
+				review_uri: target.map(|t| t.1),
+				gmb: g,
+			});
+		}
+		let mut pools = Vec::new();
+		for (trade, country) in categories {
+			let t = trades.iter().find(|t| t.id == trade).ok_or_else(|| eyre::eyre!("trade {trade} of a member is not its owner's"))?;
+			let Some(c) = t.categories.iter().find(|c| c.country == country) else { continue }; // a GBP's category not set up: nothing to offer
+			let pool = pool(&mut conn, trade, country, &c.keywords, &areas).await?;
+			let mut warnings = Vec::new();
+			let silent = pool.photos.iter().filter(|p| p.shows.is_none()).count();
+			if silent > 0 {
+				warnings.push(format!("{silent} photos say nothing"));
+			}
+			let lone = pool.photos.iter().filter(|p| p.drafts.is_empty()).count();
+			if lone > 0 {
+				warnings.push(format!("{lone} photos in no draft: never offered"));
+			}
+			let named: BTreeSet<&str> = pool.drafts.iter().flat_map(|d| d.names.iter().map(String::as_str)).collect();
+			for n in named {
+				warnings.push(format!("names {n}: offered everywhere"));
+			}
+			if !pool.unmentioned.is_empty() {
+				warnings.push(format!("no draft mentions: {}", pool.unmentioned.join(", ")));
+			}
+			pools.push(PoolSummary {
+				trade,
+				country,
+				name: t.name.clone(),
+				drafts: pool.drafts.len() as i64,
+				photos: pool.photos.len() as i64,
+				warnings,
+			});
+		}
+		let latest = db::latest(&mut conn, k.id, since, LATEST)
+			.await?
+			.into_iter()
+			.map(|(at, gmb, kind, detail)| Happened { at, gmb, kind, detail })
+			.collect();
+		Ok(Ok(Scope {
+			slug: k.slug,
+			name: k.name,
+			area: k.area,
+			members,
+			pools,
+			latest,
+		}))
+	}
+
+	/// Where review_archive's next page of reviews starts.
+	pub async fn reviews_after(&self) -> eyre::Result<i64> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the reviews' cursor")?;
+		db::posted_cursor(&mut conn).await
+	}
+
+	/// A page of review_archive's reviews, asked for after `after`, and the cursor moved to its
+	/// `next`, in one write transaction. A review first seen is matched once, greedily by time, to
+	/// the oldest copy on its GBP within [`POSTED_WITHIN`] before it whose words it carries; after
+	/// that only its `gone_at` follows. How many were taken.
+	pub async fn take_reviews(&self, page: sa_core::feeds::ReviewPage, after: i64) -> eyre::Result<usize> {
+		let last = page.reviews.last().map_or(after, |r| r.seq);
+		eyre::ensure!(page.next == last, "review_archive answered next {} for a page ending at {last}", page.next);
+		let mut prev = after;
+		for r in &page.reviews {
+			eyre::ensure!(r.seq > prev, "review {} after {prev}: seqs ascend past the cursor", r.seq);
+			eyre::ensure!((1..=5).contains(&r.rating), "review {} rated {}", r.seq, r.rating);
+			prev = r.seq;
+		}
+		if page.reviews.is_empty() {
+			return Ok(0);
+		}
+		let mut tx = self.store.begin_write().await?;
+		eyre::ensure!(db::move_posted_cursor(&mut tx, after..last).await?, "a page of reviews after {after}, the cursor elsewhere");
+		for r in &page.reviews {
+			if !db::post(&mut tx, r).await? {
+				continue;
+			}
+			let review = words(&r.text);
+			let copies = db::unmatched_uses(&mut tx, r.gmb_id, (r.first_seen - POSTED_WITHIN)..=r.first_seen).await?;
+			if let Some((draft, _)) = copies.into_iter().find(|(_, text)| overlap(&words(text), &review) >= POSTED_OVERLAP) {
+				db::match_posted(&mut tx, &r.review_id, draft).await?;
+			}
+		}
+		tx.commit().await.wrap_err("committing a page of reviews")?;
+		Ok(page.reviews.len())
+	}
 }
 
-/// The category's drafts for GBP `gmb` in the offer's order: fewest copies first, then the fewest
-/// saves of its photos still offerable here, then the oldest.
-async fn ranked(conn: &mut sqlx::SqliteConnection, trade: TradeId, country: Country, gmb: GmbId, now: Timestamp) -> eyre::Result<Vec<Ranked>> {
+/// `places` let a GBP at `at` have it: none, or one whose circle holds `at`.
+fn allowed(places: &[String], at: Option<LatLng>, areas: &[Area]) -> bool {
+	places.is_empty() || at.is_some_and(|at| areas.iter().any(|a| places.contains(&a.slug) && metres(at, a.center) <= a.radius_m as f64))
+}
+
+/// GBP `g`'s category's drafts in its places, in the offer's order: fewest copies first, then the
+/// fewest saves of its photos still offerable here, then the oldest. None without a category.
+async fn ranked(conn: &mut sqlx::SqliteConnection, g: &Gmb, areas: &[Area], now: Timestamp) -> eyre::Result<Vec<Ranked>> {
+	let (Some(trade), Some(country)) = (g.trade_id, g.country.as_ref().map(|c| c.code)) else {
+		return Ok(Vec::new());
+	};
+	let at = g.location.as_ref().map(|p| p.at);
+	let mut draft_places: BTreeMap<i64, Vec<String>> = BTreeMap::new();
+	for (d, a) in db::draft_places(conn, trade, country).await? {
+		draft_places.entry(d).or_default().push(a);
+	}
+	let mut photo_places: BTreeMap<i64, Vec<String>> = BTreeMap::new();
+	for (p, a) in db::photo_places(conn, trade, country).await? {
+		photo_places.entry(p).or_default().push(a);
+	}
 	let mut photos_of: BTreeMap<i64, Vec<RankedPhoto>> = BTreeMap::new();
-	for p in db::draft_photos(conn, trade.v, country, Some(gmb.v)).await? {
+	for p in db::draft_photos(conn, trade, country, Some(g.id)).await? {
+		if !allowed(photo_places.get(&p.photo_id).map_or(&[], Vec::as_slice), at, areas) {
+			continue;
+		}
 		photos_of.entry(p.draft_id).or_default().push(RankedPhoto {
 			id: p.photo_id,
+			shows: p.shows,
 			width: p.width,
 			height: p.height,
 			uses: p.uses,
 			went_here: p.went_here,
 		});
 	}
-	let mut drafts: Vec<Ranked> = db::drafts(conn, trade.v, country, Some(gmb.v), now)
+	let mut drafts: Vec<Ranked> = db::drafts(conn, trade, country, Some(g.id), now)
 		.await?
 		.into_iter()
+		.filter(|d| allowed(draft_places.get(&d.id).map_or(&[], Vec::as_slice), at, areas))
 		.map(|d| {
-			let mut photos = photos_of.remove(&d.id).unwrap_or_default();
-			photos.sort_by_key(|p| (p.went_here, p.uses));
+			// a draft's photos ride in its own order; the ones gone here are left out of an offer
+			let photos = photos_of.remove(&d.id).unwrap_or_default();
 			Ranked {
 				id: d.id,
 				text: d.text,
@@ -505,6 +841,123 @@ async fn ranked(conn: &mut sqlx::SqliteConnection, trade: TradeId, country: Coun
 		(d.went_here || d.held, d.uses, photo_uses, d.id)
 	});
 	Ok(drafts)
+}
+
+/// The category's drafts and photos, not removed, with what tags them.
+async fn pool(conn: &mut sqlx::SqliteConnection, trade: i64, country: Country, keywords: &[String], areas: &[Area]) -> eyre::Result<Pool> {
+	let mut photos_of: BTreeMap<i64, Vec<i64>> = BTreeMap::new();
+	let mut drafts_of: BTreeMap<i64, Vec<i64>> = BTreeMap::new();
+	for p in db::draft_photos(conn, trade, country, None).await? {
+		photos_of.entry(p.draft_id).or_default().push(p.photo_id);
+		drafts_of.entry(p.photo_id).or_default().push(p.draft_id);
+	}
+	let mut draft_places: BTreeMap<i64, Vec<String>> = BTreeMap::new();
+	for (d, a) in db::draft_places(conn, trade, country).await? {
+		draft_places.entry(d).or_default().push(a);
+	}
+	let mut photo_places: BTreeMap<i64, Vec<String>> = BTreeMap::new();
+	for (p, a) in db::photo_places(conn, trade, country).await? {
+		photo_places.entry(p).or_default().push(a);
+	}
+	let local: Vec<&Area> = areas.iter().filter(|a| a.country == country.as_str()).collect();
+	let drafts: Vec<Draft> = db::drafts(conn, trade, country, None, Timestamp::now())
+		.await?
+		.into_iter()
+		.map(|d| {
+			let text = fold(&d.text);
+			let places = draft_places.remove(&d.id).unwrap_or_default();
+			Draft {
+				photos: photos_of.remove(&d.id).unwrap_or_default(),
+				keywords: keywords.iter().filter(|k| mentions(&text, &fold(k))).cloned().collect(),
+				names: local
+					.iter()
+					.filter(|a| !places.contains(&a.slug) && mentions(&text, &fold(&a.name)))
+					.map(|a| a.name.clone())
+					.collect(),
+				places,
+				id: d.id,
+				text: d.text,
+				uses: d.uses,
+				created_at: d.created_at,
+			}
+		})
+		.collect();
+	let unmentioned = keywords.iter().filter(|k| !drafts.iter().any(|d| d.keywords.contains(k))).cloned().collect();
+	let photos = db::photos(conn, trade, country)
+		.await?
+		.into_iter()
+		.map(|p| Photo {
+			places: photo_places.remove(&p.id).unwrap_or_default(),
+			drafts: drafts_of.remove(&p.id).unwrap_or_default(),
+			id: p.id,
+			shows: p.shows,
+			width: p.width,
+			height: p.height,
+			uses: p.uses,
+			created_at: p.created_at,
+		})
+		.collect();
+	Ok(Pool { drafts, photos, unmentioned })
+}
+
+/// `Invalid`: one of `slugs` is no area.
+async fn known_areas(conn: &mut sqlx::SqliteConnection, slugs: &[String]) -> eyre::Result<Result<(), Refused>> {
+	for s in slugs {
+		if areas_db::area(conn, s).await?.is_none() {
+			return Ok(Err(Refused::Invalid(format!("no area {s}"))));
+		}
+	}
+	Ok(Ok(()))
+}
+
+/// Lowercase, the Latin accents off, every run of non-alphanumerics one space, padded by one.
+// shortcut: Latin-1 and œ/æ only, enough for the countries served; unicode-normalization once another script is.
+fn fold(s: &str) -> String {
+	let mut out = String::from(" ");
+	for c in s.chars().flat_map(char::to_lowercase) {
+		let c = match c {
+			'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' => "a",
+			'ç' => "c",
+			'è' | 'é' | 'ê' | 'ë' => "e",
+			'ì' | 'í' | 'î' | 'ï' => "i",
+			'ñ' => "n",
+			'ò' | 'ó' | 'ô' | 'õ' | 'ö' => "o",
+			'ù' | 'ú' | 'û' | 'ü' => "u",
+			'ý' | 'ÿ' => "y",
+			'œ' => "oe",
+			'æ' => "ae",
+			c if c.is_alphanumeric() => {
+				out.push(c);
+				continue;
+			}
+			_ => " ",
+		};
+		if !(c == " " && out.ends_with(' ')) {
+			out.push_str(c);
+		}
+	}
+	if !out.ends_with(' ') {
+		out.push(' ');
+	}
+	out
+}
+
+/// Folded `text` carries folded `phrase` as whole words.
+fn mentions(text: &str, phrase: &str) -> bool {
+	phrase.trim() != "" && text.contains(phrase)
+}
+
+/// The folded words of at least 3 letters.
+fn words(text: &str) -> BTreeSet<String> {
+	fold(text).split(' ').filter(|w| w.chars().count() >= 3).map(str::to_owned).collect()
+}
+
+/// The share of `draft`'s words `review` carries.
+fn overlap(draft: &BTreeSet<String>, review: &BTreeSet<String>) -> f64 {
+	if draft.is_empty() {
+		return 0.;
+	}
+	draft.intersection(review).count() as f64 / draft.len() as f64
 }
 
 fn draft_text(raw: &str) -> Result<String, Refused> {

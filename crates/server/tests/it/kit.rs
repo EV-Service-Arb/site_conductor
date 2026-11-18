@@ -1,5 +1,6 @@
 //! The review kit's offer, through the landings' signed routes: no draft and no photo goes twice
-//! to one GBP, none is offered while another view holds it, the less used come first.
+//! to one GBP, nor outside its places, none is offered while another view holds it, the less used
+//! come first. A kit tallies its GBPs since each joined; a review posted from a copy is matched to it.
 
 use std::{
 	io::Cursor,
@@ -65,6 +66,7 @@ async fn stand_ins(gmbs: Arc<Mutex<Vec<(i64, &'static str)>>>) -> String {
 
 struct Kit {
 	app: Router,
+	browser: Browser,
 	panel: Panel,
 	secret: String,
 	/// Lyon 7, the GBP the checks are about; Lyon 3 shares its category.
@@ -113,6 +115,11 @@ impl Kit {
 			.header("x-sa-timestamp", &s.timestamp)
 			.header("x-sa-signature", &s.signature);
 		self.send(req.body(Body::from(body)).unwrap()).await.0
+	}
+
+	async fn call(&mut self, method: Method, path: &str, body: Option<Value>) -> (StatusCode, Value) {
+		let app = self.app.clone();
+		self.browser.call(&app, method, path, body).await
 	}
 
 	/// Draft numbers (1-based) of `offered`.
@@ -214,7 +221,7 @@ async fn kit(db: &TestDb) -> Kit {
 		let selects = if n == 4 { photos.clone() } else { vec![] };
 		drafts.push(
 			panel
-				.add_draft(owner, trade, Country::FR, &format!("Draft {n}: quick and clean."), &selects, now)
+				.add_draft(owner, trade, Country::FR, &format!("Draft {n}: quick and clean."), &selects, &[], now)
 				.await
 				.unwrap()
 				.unwrap(),
@@ -238,6 +245,7 @@ async fn kit(db: &TestDb) -> Kit {
 	}
 	Kit {
 		app,
+		browser,
 		panel,
 		secret,
 		seven,
@@ -306,13 +314,13 @@ async fn a_photo_saved_on_a_gbp_drops_out_there_and_its_draft_stays() {
 	let again = k.panel.kit_offer(k.seven, true, later).await.unwrap().unwrap();
 	let fourth = again.drafts.iter().find(|d| d.id == fourth).expect("its draft is still offered");
 	assert_eq!(fourth.photos.iter().map(|p| p.id).collect::<Vec<_>>(), [k.photos[1]], "the saved photo dropped out there");
-	let three = k.panel.kit(DevIdentity::named("dev@localhost"), k.three, later).await.unwrap().unwrap();
+	let three = k.panel.kit(DevIdentity::named("dev@localhost"), k.three, Timestamp::UNIX_EPOCH, later).await.unwrap().unwrap();
 	let order: Vec<i64> = three.drafts.iter().map(|d| d.id).collect();
 	assert_eq!(order, [1, 2, 3, 5, 6, 7, 8, 4].map(|n| k.drafts[n - 1]), "elsewhere, a draft whose photos were saved ranks lower");
 	assert_eq!(
 		three.drafts[7].photos.iter().map(|p| p.id).collect::<Vec<_>>(),
-		[k.photos[1], k.photos[0]],
-		"and the more used photo last"
+		[k.photos[0], k.photos[1]],
+		"its photos ride in its own order"
 	);
 }
 
@@ -334,4 +342,143 @@ async fn the_kit_off_and_another_brands_key_find_nothing() {
 		.unwrap();
 	let (_, offered) = k.offer("lyon-7").await;
 	assert_eq!(k.numbers(&offered), [1], "one tap: the top draft");
+}
+
+/// Areas by Lyon 7 and Lyon 3 (both at 45.75, 4.84): `lyon` holds them, `bron` does not.
+async fn areas(db: &TestDb) {
+	let pool = db.pool().await;
+	for (slug, name, lat, lng, r) in [("lyon", "Lyon", 45.75, 4.84, 5000), ("bron", "Bron", 45.73, 4.91, 2000)] {
+		sqlx::query("INSERT INTO areas (slug, name, country, lat, lng, radius_m, created_by, created_at) VALUES ($1, $2, 'FR', $3, $4, $5, $6, 0)")
+			.bind(slug)
+			.bind(name)
+			.bind(lat)
+			.bind(lng)
+			.bind(r)
+			.bind(DevIdentity::named("dev@localhost"))
+			.execute(&pool)
+			.await
+			.unwrap();
+	}
+}
+
+#[tokio::test]
+async fn a_draft_or_photo_tagged_with_a_place_goes_only_to_a_gbp_in_it() {
+	let db = TestDb::create().await;
+	let mut k = kit(&db).await;
+	areas(&db).await;
+	let (d1, d2, d4) = (k.drafts[0], k.drafts[1], k.drafts[3]);
+	let (status, _) = k.call(Method::PATCH, &format!("/api/v1/trades/1/FR/kit/drafts/{d1}"), Some(json!({ "places": ["bron"] }))).await;
+	assert_eq!(status, StatusCode::OK);
+	let (status, _) = k.call(Method::PATCH, &format!("/api/v1/trades/1/FR/kit/drafts/{d2}"), Some(json!({ "places": ["lyon"] }))).await;
+	assert_eq!(status, StatusCode::OK);
+	let (status, pool) = k
+		.call(
+			Method::PATCH,
+			&format!("/api/v1/trades/1/FR/kit/photos/{}", k.photos[0]),
+			Some(json!({ "places": ["bron"], "shows": "  The new tap  " })),
+		)
+		.await;
+	assert_eq!(status, StatusCode::OK, "{pool}");
+	assert_eq!(pool["photos"].as_array().unwrap().iter().find(|p| p["id"] == k.photos[0]).unwrap()["shows"], "The new tap");
+
+	let (_, offered) = k.offer("lyon-7").await;
+	assert_eq!(k.numbers(&offered), [2, 3, 4, 5, 6, 7], "Bron's draft never; Lyon's as any");
+	let photos = &offered.iter().find(|(id, _)| *id == d4).unwrap().1;
+	assert_eq!(photos, &[k.photos[1]], "Bron's photo drops out of its draft");
+	let (status, _) = k
+		.call(Method::PATCH, &format!("/api/v1/trades/1/FR/kit/drafts/{d1}"), Some(json!({ "places": ["nowhere"] })))
+		.await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "a place is an area");
+}
+
+#[tokio::test]
+async fn a_kit_tallies_its_gbps_since_each_joined_and_holds_only_the_callers() {
+	let db = TestDb::create().await;
+	let mut k = kit(&db).await;
+	let (before, _) = k.offer("lyon-3").await;
+	assert_eq!(k.event(json!({ "view": before, "copied": k.drafts[0] })).await, StatusCode::NO_CONTENT);
+
+	let (status, body) = k
+		.call(
+			Method::PUT,
+			"/api/v1/kits/lyon-east",
+			Some(json!({ "name": "Lyon east", "area": null, "gmbs": [k.seven, k.three] })),
+		)
+		.await;
+	assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+	let (status, _) = k.call(Method::PUT, "/api/v1/kits/new", Some(json!({ "name": "New", "area": null, "gmbs": [] }))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "new is the editor's");
+	let (status, _) = k
+		.call(Method::PUT, "/api/v1/kits/other", Some(json!({ "name": "Other", "area": null, "gmbs": [k.seven, 9999] })))
+		.await;
+	assert_eq!(status, StatusCode::CONFLICT, "a GBP not the caller's");
+
+	let (after, offered) = k.offer("lyon-7").await;
+	assert_eq!(k.event(json!({ "view": after, "copied": offered[0].0 })).await, StatusCode::NO_CONTENT);
+
+	let (status, kits) = k.call(Method::GET, "/api/v1/kits", None).await;
+	assert_eq!(status, StatusCode::OK);
+	assert_eq!(kits["kits"], json!([{ "slug": "lyon-east", "name": "Lyon east", "area": null, "members": 2 }]));
+	let (status, kit) = k.call(Method::GET, "/api/v1/kits/lyon-east?since=0", None).await;
+	assert_eq!(status, StatusCode::OK, "{kit}");
+	assert_eq!(
+		(kit["tally"]["opened"].as_i64(), kit["tally"]["copied"].as_i64()),
+		(Some(1), Some(1)),
+		"the copy before it joined is not the kit's: {kit}"
+	);
+	assert_eq!(
+		kit["gmbs"].as_array().unwrap().iter().map(|g| g["blocked"].clone()).collect::<Vec<_>>(),
+		[Value::Null, Value::Null]
+	);
+	let later = Timestamp::now().as_second() + 60;
+	let (_, kit) = k.call(Method::GET, &format!("/api/v1/kits/lyon-east?since={later}"), None).await;
+	assert_eq!(kit["tally"]["copied"], 0, "within the period only");
+
+	let (status, _) = k.call(Method::DELETE, "/api/v1/kits/lyon-east", None).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	let (status, _) = k.call(Method::GET, "/api/v1/kits/lyon-east?since=0", None).await;
+	assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn a_review_carrying_a_copys_words_is_of_it_and_its_going_is_followed() {
+	let db = TestDb::create().await;
+	let mut k = kit(&db).await;
+	let (status, _) = k
+		.call(Method::PUT, "/api/v1/kits/lyon-east", Some(json!({ "name": "Lyon east", "area": null, "gmbs": [k.seven] })))
+		.await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	let (view, offered) = k.offer("lyon-7").await;
+	assert_eq!(k.event(json!({ "view": view, "copied": offered[0].0 })).await, StatusCode::NO_CONTENT);
+
+	let seen = Timestamp::now() + SignedDuration::from_mins(5);
+	let review = |seq: i64, id: &str, text: &str, gone_at: Option<Timestamp>| sa_core::feeds::Review {
+		seq,
+		review_id: id.to_owned(),
+		gmb_id: k.seven,
+		rating: 5,
+		text: text.to_owned(),
+		first_seen: seen,
+		gone_at,
+	};
+	let page = sa_core::feeds::ReviewPage {
+		reviews: vec![
+			review(1, "r-copy", "Quick and CLEAN work, the draft was right!", None),
+			review(2, "r-other", "Terrible service", None),
+		],
+		next: 2,
+	};
+	assert_eq!(k.panel.take_reviews(page.clone(), 0).await.unwrap(), 2);
+	assert!(k.panel.take_reviews(page, 0).await.is_err(), "a page is taken from where the cursor stands");
+	let gone = sa_core::feeds::ReviewPage {
+		reviews: vec![review(3, "r-copy", "Quick and CLEAN work, the draft was right!", Some(seen + SignedDuration::from_mins(1)))],
+		next: 3,
+	};
+	k.panel.take_reviews(gone, 2).await.unwrap();
+
+	let (_, kit) = k.call(Method::GET, "/api/v1/kits/lyon-east?since=0", None).await;
+	let t = &kit["tally"];
+	assert_eq!((t["on_google"].as_i64(), t["gone"].as_i64(), t["other_reviews"].as_i64()), (Some(1), Some(1), Some(1)), "{kit}");
+	let kinds: Vec<&str> = kit["latest"].as_array().unwrap().iter().map(|e| e["kind"].as_str().unwrap()).take(3).collect();
+	assert_eq!(kinds, ["gone", "posted", "reviewed"], "{kit}");
 }

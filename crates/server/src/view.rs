@@ -32,8 +32,14 @@ pub enum View {
 		trash: bool,
 		/// The Add a GBP panel, with what it starts from.
 		add: Option<Add>,
-		/// The review kit's area: empty, one being drawn.
+		/// The review kit floating over the map: its slug; empty, the list (or, with `kit_edit`, a new one).
 		kit: Option<String>,
+		/// The kit's GBP open.
+		kit_gmb: Option<i64>,
+		/// The kit's pool open: `<trade id>.<country>`.
+		kit_pool: Option<String>,
+		/// The kit's editor, its area drawn on the map.
+		kit_edit: bool,
 		/// Where the map looks: latitude, longitude, zoom.
 		at: Option<(f64, f64, f64)>,
 		/// The schematic base map, not the satellite.
@@ -71,7 +77,7 @@ pub enum View {
 	#[view("/tokens", key = 't')]
 	Tokens,
 	/// Everyone's tokens, prices and flows.
-	#[view("/admin/tokens", needs = Tokens::Grant, key = 'k')]
+	#[view("/admin/tokens", needs = Tokens::Grant, key = 'a')]
 	AdminTokens,
 	/// What the caller's actions cost.
 	#[view("/usage", key = 'u')]
@@ -92,9 +98,21 @@ pub enum View {
 		/// A path on this origin.
 		r#continue: String,
 	},
-	/// The review kit on the operator's phone: an area's GBPs and their QRs.
-	#[view("/{area}")]
-	Area { area: String },
+	/// The caller's review kits.
+	#[view("/kit", key = 'k')]
+	Kits,
+	/// A review kit: what it collected, its GBPs, its pools; on a phone, its GBPs nearest first.
+	#[view("/kit/{slug}")]
+	Kit { slug: String },
+	/// A kit's GBP: its QR's target, drafts, photos and tally.
+	#[view("/kit/{slug}/{gmb}")]
+	KitGmb { slug: String, gmb: i64 },
+	/// A kit's GBP's QR, full screen, for the reviewer; a swipe goes through the kit.
+	#[view("/kit/{slug}/{gmb}/qr")]
+	KitQr { slug: String, gmb: i64 },
+	/// A category's drafts and photos, from a kit.
+	#[view("/kit/{slug}/pool/{trade}/{country}")]
+	KitPool { slug: String, trade: i64, country: Country },
 	/// sites' pages, its element's to route.
 	#[view("/sites", nest = "sites", key = 's', scope = 'v')]
 	Sites { below: String },
@@ -127,8 +145,6 @@ pub enum Tab {
 	Launch,
 	/// The gmail's browser.
 	Browser,
-	/// A verified GBP's review kit.
-	Kit,
 	/// A gmail's inbox and Maps key.
 	Connections,
 }

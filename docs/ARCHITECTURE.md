@@ -553,14 +553,19 @@ PATCH  /trades/{id}/{country}/kit/drafts/{draft}
 DELETE /trades/{id}/{country}/kit/drafts/{draft}
 POST   /trades/{id}/{country}/kit/photos    slow
 GET    /trades/{id}/{country}/kit/photos/{file}
+PATCH  /trades/{id}/{country}/kit/photos/{file}
 DELETE /trades/{id}/{country}/kit/photos/{file}
 GET    /gmbs/{id}/kit
 PUT    /gmbs/{id}/kit
 POST   /gmbs/{id}/kit/shown
-GET    /kit/areas/{slug}/gmbs
+GET    /kits
+GET    /kits/{slug}
+PUT    /kits/{slug}
+DELETE /kits/{slug}
 GET    /areas
 GET    /areas/{slug}
 PUT    /areas/{slug}
+GET    /areas/{slug}/gmbs
 GET    /placement/catalog                   study:read
 GET    /placement/study                     study:read, slow
 POST   /placement/study/pull                study:spend, fresh, slow

@@ -13,6 +13,8 @@ use super::{
 };
 use crate::kit::Target;
 
+const KIT: &str = "SELECT k.id, k.slug, k.name, k.area, (SELECT COUNT(*) FROM kit_members m WHERE m.kit_id = k.id) FROM kits k";
+
 /// A draft of a category, not removed, with what the offer ranks it by.
 #[derive(Clone, Debug)]
 pub struct DraftRow {
@@ -32,6 +34,7 @@ pub struct DraftRow {
 pub struct DraftPhotoRow {
 	pub draft_id: i64,
 	pub photo_id: i64,
+	pub shows: Option<String>,
 	pub width: i64,
 	pub height: i64,
 	pub uses: i64,
@@ -41,6 +44,7 @@ pub struct DraftPhotoRow {
 #[derive(Clone, Debug)]
 pub struct PhotoRow {
 	pub id: i64,
+	pub shows: Option<String>,
 	pub width: i64,
 	pub height: i64,
 	pub uses: i64,
@@ -79,8 +83,8 @@ pub async fn drafts(conn: &mut SqliteConnection, trade: i64, country: Country, g
 
 /// The photos each of the category's drafts selects, in its order, not removed.
 pub async fn draft_photos(conn: &mut SqliteConnection, trade: i64, country: Country, gmb: Option<i64>) -> eyre::Result<Vec<DraftPhotoRow>> {
-	let rows: Vec<(i64, i64, i64, i64, i64, bool)> = sqlx::query_as(
-		"SELECT dp.draft_id, p.id, p.width, p.height, \
+	let rows: Vec<(i64, i64, Option<String>, i64, i64, i64, bool)> = sqlx::query_as(
+		"SELECT dp.draft_id, p.id, p.shows, p.width, p.height, \
 		 (SELECT COUNT(*) FROM kit_photo_uses u WHERE u.photo_id = p.id), \
 		 EXISTS (SELECT 1 FROM kit_photo_uses u WHERE u.photo_id = p.id AND u.gmb_id = $3) \
 		 FROM kit_draft_photos dp JOIN kit_drafts d ON d.id = dp.draft_id JOIN kit_photos p ON p.id = dp.photo_id \
@@ -94,9 +98,10 @@ pub async fn draft_photos(conn: &mut SqliteConnection, trade: i64, country: Coun
 	.wrap_err("listing drafts' photos")?;
 	Ok(rows
 		.into_iter()
-		.map(|(draft_id, photo_id, width, height, uses, went_here)| DraftPhotoRow {
+		.map(|(draft_id, photo_id, shows, width, height, uses, went_here)| DraftPhotoRow {
 			draft_id,
 			photo_id,
+			shows,
 			width,
 			height,
 			uses,
@@ -107,8 +112,8 @@ pub async fn draft_photos(conn: &mut SqliteConnection, trade: i64, country: Coun
 
 /// The category's photos not removed, newest first.
 pub async fn photos(conn: &mut SqliteConnection, trade: i64, country: Country) -> eyre::Result<Vec<PhotoRow>> {
-	let rows: Vec<(i64, i64, i64, i64, i64)> = sqlx::query_as(
-		"SELECT p.id, p.width, p.height, (SELECT COUNT(*) FROM kit_photo_uses u WHERE u.photo_id = p.id), p.created_at \
+	let rows: Vec<(i64, Option<String>, i64, i64, i64, i64)> = sqlx::query_as(
+		"SELECT p.id, p.shows, p.width, p.height, (SELECT COUNT(*) FROM kit_photo_uses u WHERE u.photo_id = p.id), p.created_at \
 		 FROM kit_photos p WHERE p.trade_id = $1 AND p.country = $2 AND p.removed_at IS NULL ORDER BY p.id DESC",
 	)
 	.bind(trade)
@@ -117,9 +122,10 @@ pub async fn photos(conn: &mut SqliteConnection, trade: i64, country: Country) -
 	.await
 	.wrap_err("listing a category's photos")?;
 	rows.into_iter()
-		.map(|(id, width, height, uses, created_at)| {
+		.map(|(id, shows, width, height, uses, created_at)| {
 			Ok(PhotoRow {
 				id,
+				shows,
 				width,
 				height,
 				uses,
@@ -381,29 +387,274 @@ pub async fn shown(conn: &mut SqliteConnection, gmb: i64, now: Timestamp) -> eyr
 	Ok(())
 }
 
-/// Since `since`: QRs shown, views from a scan, views in all, copies, photos saved.
-pub async fn funnel(conn: &mut SqliteConnection, gmb: i64, since: Timestamp) -> eyre::Result<[i64; 5]> {
-	let (shown, scanned, opened, copied, photos): (i64, i64, i64, i64, i64) = sqlx::query_as(
+/// Since `since`: QRs shown, views from a scan, views in all, copies, photos saved, reviews from a
+/// copy posted, those gone, reviews from no copy.
+pub async fn funnel(conn: &mut SqliteConnection, gmb: i64, since: Timestamp) -> eyre::Result<[i64; 8]> {
+	let row: (i64, i64, i64, i64, i64, i64, i64, i64) = sqlx::query_as(
 		"SELECT (SELECT COUNT(*) FROM kit_shown WHERE gmb_id = $1 AND at >= $2), \
 		 (SELECT COUNT(*) FROM kit_views WHERE gmb_id = $1 AND at >= $2 AND qr = 1), \
 		 (SELECT COUNT(*) FROM kit_views WHERE gmb_id = $1 AND at >= $2), \
 		 (SELECT COUNT(*) FROM kit_uses WHERE gmb_id = $1 AND at >= $2), \
-		 (SELECT COUNT(*) FROM kit_photo_uses WHERE gmb_id = $1 AND at >= $2)",
+		 (SELECT COUNT(*) FROM kit_photo_uses WHERE gmb_id = $1 AND at >= $2), \
+		 (SELECT COUNT(*) FROM kit_posted WHERE gmb_id = $1 AND first_seen >= $2 AND draft_id IS NOT NULL), \
+		 (SELECT COUNT(*) FROM kit_posted WHERE gmb_id = $1 AND gone_at >= $2 AND draft_id IS NOT NULL), \
+		 (SELECT COUNT(*) FROM kit_posted WHERE gmb_id = $1 AND first_seen >= $2 AND draft_id IS NULL)",
 	)
 	.bind(gmb)
 	.bind(to_db(since))
 	.fetch_one(&mut *conn)
 	.await
 	.wrap_err("counting a kit's funnel")?;
-	Ok([shown, scanned, opened, copied, photos])
+	Ok([row.0, row.1, row.2, row.3, row.4, row.5, row.6, row.7])
 }
 
-/// When the GBP's QR was last shown.
-pub async fn last_shown(conn: &mut SqliteConnection, gmb: i64) -> eyre::Result<Option<Timestamp>> {
-	let at: Option<i64> = sqlx::query_scalar("SELECT MAX(at) FROM kit_shown WHERE gmb_id = $1")
-		.bind(gmb)
+/// What a reviewer's page or the archive saw on a GBP, newest first.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::EnumString, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum Happening {
+	/// The operator showed the QR.
+	Shown,
+	/// A page opened from the QR.
+	Scanned,
+	/// A page opened from elsewhere.
+	Opened,
+	/// A draft copied: `detail` the draft.
+	Copied,
+	/// A photo saved: `detail` the photo.
+	Saved,
+	/// A review on Google from a copy: `detail` its rating.
+	Posted,
+	/// A review on Google from no copy: `detail` its rating.
+	Reviewed,
+	/// A review from a copy gone off Google: `detail` its rating.
+	Gone,
+}
+
+#[derive(Clone, Debug)]
+pub struct KitRow {
+	pub id: i64,
+	pub slug: String,
+	pub name: String,
+	pub area: Option<String>,
+	pub members: i64,
+}
+
+pub async fn kits(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<KitRow>> {
+	let rows: Vec<(i64, String, String, Option<String>, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("{KIT} WHERE k.owner = $1 ORDER BY k.name, k.slug")))
+		.bind(owner)
+		.fetch_all(&mut *conn)
+		.await
+		.wrap_err("listing kits")?;
+	Ok(rows.into_iter().map(|(id, slug, name, area, members)| KitRow { id, slug, name, area, members }).collect())
+}
+
+pub async fn kit(conn: &mut SqliteConnection, owner: Uuid, slug: &str) -> eyre::Result<Option<KitRow>> {
+	let row: Option<(i64, String, String, Option<String>, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("{KIT} WHERE k.owner = $1 AND k.slug = $2")))
+		.bind(owner)
+		.bind(slug)
+		.fetch_optional(&mut *conn)
+		.await
+		.wrap_err("loading a kit")?;
+	Ok(row.map(|(id, slug, name, area, members)| KitRow { id, slug, name, area, members }))
+}
+
+/// Over what the owner's slug held; its id.
+pub async fn put_kit(conn: &mut SqliteConnection, owner: Uuid, slug: &str, name: &str, area: Option<&str>, now: Timestamp) -> eyre::Result<i64> {
+	sqlx::query_scalar(
+		"INSERT INTO kits (owner, slug, name, area, created_at) VALUES ($1, $2, $3, $4, $5) \
+		 ON CONFLICT (owner, slug) DO UPDATE SET name = excluded.name, area = excluded.area RETURNING id",
+	)
+	.bind(owner)
+	.bind(slug)
+	.bind(name)
+	.bind(area)
+	.bind(to_db(now))
+	.fetch_one(&mut *conn)
+	.await
+	.wrap_err("writing a kit")
+}
+
+/// The kit holds `gmbs` and nothing else; one it held keeps when it joined.
+pub async fn set_members(conn: &mut SqliteConnection, kit: i64, gmbs: &[i64], now: Timestamp) -> eyre::Result<()> {
+	let ids = serde_json::to_string(gmbs).expect("ids serialize");
+	sqlx::query("DELETE FROM kit_members WHERE kit_id = $1 AND gmb_id NOT IN (SELECT value FROM json_each($2))")
+		.bind(kit)
+		.bind(&ids)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("dropping a kit's members")?;
+	sqlx::query("INSERT INTO kit_members (kit_id, gmb_id, added_at) SELECT $1, value, $3 FROM json_each($2) WHERE true ON CONFLICT DO NOTHING")
+		.bind(kit)
+		.bind(&ids)
+		.bind(to_db(now))
+		.execute(&mut *conn)
+		.await
+		.wrap_err("adding a kit's members")?;
+	Ok(())
+}
+
+/// `false`: the owner has no such kit.
+pub async fn delete_kit(conn: &mut SqliteConnection, owner: Uuid, slug: &str) -> eyre::Result<bool> {
+	let done = sqlx::query("DELETE FROM kits WHERE owner = $1 AND slug = $2")
+		.bind(owner)
+		.bind(slug)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("deleting a kit")?;
+	Ok(done.rows_affected() == 1)
+}
+
+/// The kit's GBPs and when each joined, in that order.
+pub async fn members(conn: &mut SqliteConnection, kit: i64) -> eyre::Result<Vec<(i64, Timestamp)>> {
+	let rows: Vec<(i64, i64)> = sqlx::query_as("SELECT gmb_id, added_at FROM kit_members WHERE kit_id = $1 ORDER BY added_at, gmb_id")
+		.bind(kit)
+		.fetch_all(&mut *conn)
+		.await
+		.wrap_err("listing a kit's members")?;
+	rows.into_iter().map(|(g, at)| Ok((g, from_db(at)?))).collect()
+}
+
+/// The newest `limit` of what happened on the kit's GBPs, each since `since` and since it joined.
+pub async fn latest(conn: &mut SqliteConnection, kit: i64, since: Timestamp, limit: i64) -> eyre::Result<Vec<(Timestamp, i64, Happening, Option<i64>)>> {
+	let rows: Vec<(i64, i64, String, Option<i64>)> = sqlx::query_as(
+		"SELECT e.at, e.gmb_id, e.kind, e.detail FROM ( \
+		 SELECT at, gmb_id, 'shown' AS kind, NULL AS detail FROM kit_shown \
+		 UNION ALL SELECT at, gmb_id, CASE qr WHEN 1 THEN 'scanned' ELSE 'opened' END, NULL FROM kit_views \
+		 UNION ALL SELECT at, gmb_id, 'copied', draft_id FROM kit_uses \
+		 UNION ALL SELECT at, gmb_id, 'saved', photo_id FROM kit_photo_uses \
+		 UNION ALL SELECT first_seen, gmb_id, CASE WHEN draft_id IS NULL THEN 'reviewed' ELSE 'posted' END, rating FROM kit_posted \
+		 UNION ALL SELECT gone_at, gmb_id, 'gone', rating FROM kit_posted WHERE gone_at IS NOT NULL AND draft_id IS NOT NULL \
+		 ) e JOIN kit_members m ON m.gmb_id = e.gmb_id AND m.kit_id = $1 WHERE e.at >= max($2, m.added_at) ORDER BY e.at DESC LIMIT $3",
+	)
+	.bind(kit)
+	.bind(to_db(since))
+	.bind(limit)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing a kit's latest")?;
+	rows.into_iter()
+		.map(|(at, gmb, kind, detail)| Ok((from_db(at)?, gmb, kind.parse().wrap_err_with(|| format!("a kit event {kind:?}"))?, detail)))
+		.collect()
+}
+
+/// `(draft, area)` of the category's drafts tagged with a place.
+pub async fn draft_places(conn: &mut SqliteConnection, trade: i64, country: Country) -> eyre::Result<Vec<(i64, String)>> {
+	sqlx::query_as("SELECT p.draft_id, p.area FROM kit_draft_places p JOIN kit_drafts d ON d.id = p.draft_id WHERE d.trade_id = $1 AND d.country = $2 ORDER BY p.area")
+		.bind(trade)
+		.bind(country.as_str())
+		.fetch_all(&mut *conn)
+		.await
+		.wrap_err("listing drafts' places")
+}
+
+pub async fn photo_places(conn: &mut SqliteConnection, trade: i64, country: Country) -> eyre::Result<Vec<(i64, String)>> {
+	sqlx::query_as("SELECT p.photo_id, p.area FROM kit_photo_places p JOIN kit_photos f ON f.id = p.photo_id WHERE f.trade_id = $1 AND f.country = $2 ORDER BY p.area")
+		.bind(trade)
+		.bind(country.as_str())
+		.fetch_all(&mut *conn)
+		.await
+		.wrap_err("listing photos' places")
+}
+
+/// Over the places it had.
+pub async fn set_places(conn: &mut SqliteConnection, of: Removable, id: i64, areas: &[String]) -> eyre::Result<()> {
+	let (clear, add) = match of {
+		Removable::Draft => (
+			"DELETE FROM kit_draft_places WHERE draft_id = $1",
+			"INSERT INTO kit_draft_places (draft_id, area) SELECT $1, value FROM json_each($2)",
+		),
+		Removable::Photo => (
+			"DELETE FROM kit_photo_places WHERE photo_id = $1",
+			"INSERT INTO kit_photo_places (photo_id, area) SELECT $1, value FROM json_each($2)",
+		),
+	};
+	sqlx::query(clear).bind(id).execute(&mut *conn).await.wrap_err("clearing places")?;
+	sqlx::query(add)
+		.bind(id)
+		.bind(serde_json::to_string(areas).expect("slugs serialize"))
+		.execute(&mut *conn)
+		.await
+		.wrap_err("tagging places")?;
+	Ok(())
+}
+
+pub async fn set_shows(conn: &mut SqliteConnection, photo: i64, shows: Option<&str>) -> eyre::Result<()> {
+	sqlx::query("UPDATE kit_photos SET shows = $2 WHERE id = $1")
+		.bind(photo)
+		.bind(shows)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("labelling a photo")?;
+	Ok(())
+}
+
+/// Where review_archive's next page of reviews starts.
+pub async fn posted_cursor(conn: &mut SqliteConnection) -> eyre::Result<i64> {
+	sqlx::query_scalar("SELECT after FROM kit_posted_cursor WHERE id = 1")
 		.fetch_one(&mut *conn)
 		.await
-		.wrap_err("loading a QR's last showing")?;
-	at.map(from_db).transpose()
+		.wrap_err("reading the reviews' cursor")
+}
+
+/// `moved.start` → `moved.end`; `false` when the cursor is not at the start.
+pub async fn move_posted_cursor(conn: &mut SqliteConnection, moved: std::ops::Range<i64>) -> eyre::Result<bool> {
+	let done = sqlx::query("UPDATE kit_posted_cursor SET after = $2 WHERE id = 1 AND after = $1")
+		.bind(moved.start)
+		.bind(moved.end)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("moving the reviews' cursor")?;
+	Ok(done.rows_affected() == 1)
+}
+
+/// `false`: a review already known; only its `gone_at` follows.
+pub async fn post(conn: &mut SqliteConnection, r: &sa_core::feeds::Review) -> eyre::Result<bool> {
+	let known: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM kit_posted WHERE review_id = $1)")
+		.bind(&r.review_id)
+		.fetch_one(&mut *conn)
+		.await
+		.wrap_err("looking a review up")?;
+	if known {
+		sqlx::query("UPDATE kit_posted SET gone_at = $2 WHERE review_id = $1")
+			.bind(&r.review_id)
+			.bind(r.gone_at.map(to_db))
+			.execute(&mut *conn)
+			.await
+			.wrap_err("following a review")?;
+		return Ok(false);
+	}
+	sqlx::query("INSERT INTO kit_posted (review_id, gmb_id, rating, first_seen, gone_at) VALUES ($1, $2, $3, $4, $5)")
+		.bind(&r.review_id)
+		.bind(r.gmb_id)
+		.bind(i64::from(r.rating))
+		.bind(to_db(r.first_seen))
+		.bind(r.gone_at.map(to_db))
+		.execute(&mut *conn)
+		.await
+		.wrap_err_with(|| format!("taking review {} of GBP {}", r.review_id, r.gmb_id))?;
+	Ok(true)
+}
+
+/// Copies on `gmb` made in `window` that no review matched yet, oldest first: draft and its text.
+pub async fn unmatched_uses(conn: &mut SqliteConnection, gmb: i64, window: std::ops::RangeInclusive<Timestamp>) -> eyre::Result<Vec<(i64, String)>> {
+	sqlx::query_as(
+		"SELECT u.draft_id, d.text FROM kit_uses u JOIN kit_drafts d ON d.id = u.draft_id WHERE u.gmb_id = $1 AND u.at BETWEEN $2 AND $3 \
+		 AND NOT EXISTS (SELECT 1 FROM kit_posted p WHERE p.gmb_id = u.gmb_id AND p.draft_id = u.draft_id) ORDER BY u.at, u.draft_id",
+	)
+	.bind(gmb)
+	.bind(to_db(*window.start()))
+	.bind(to_db(*window.end()))
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing unmatched copies")
+}
+
+pub async fn match_posted(conn: &mut SqliteConnection, review: &str, draft: i64) -> eyre::Result<()> {
+	sqlx::query("UPDATE kit_posted SET draft_id = $2 WHERE review_id = $1 AND draft_id IS NULL")
+		.bind(review)
+		.bind(draft)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("matching a review to its copy")?;
+	Ok(())
 }
