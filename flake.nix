@@ -73,6 +73,15 @@
                 require_serial = true;
                 files = "^(crates/.*\\.(rs|toml)|Cargo\\.(toml|lock)|contracts/.*)$"; # what the document is built from: a front-end-only commit skips the build
               };
+              # A conductor release ships against its peers' vendored documents: each must already be released.
+              peers-released = {
+                enable = true;
+                name = "peers' vendored documents are released";
+                entry = "bash -c 'case \"$PRE_COMMIT_REMOTE_BRANCH\" in refs/tags/v*) ${gen}/bin/gen --released;; esac'";
+                pass_filenames = false;
+                always_run = true;
+                stages = [ "pre-push" ];
+              };
               # English from the code, stale and orphaned translations dropped, the untranslated asked of ask_llm:
               # nothing in messages/ is edited but ru overrides.
               i18n = {
