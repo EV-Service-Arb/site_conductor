@@ -1,4 +1,5 @@
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 import type { FullResult, Reporter, TestCase, TestResult } from "@playwright/test/reporter";
 
@@ -39,6 +40,7 @@ export default class Timeline implements Reporter {
       return `${s.name.slice(0, 48).padEnd(48)} |${bar}| ${((s.end - s.start) / 1000).toFixed(1)}s`;
     });
     const text = [`total ${(total / 1000).toFixed(1)}s from the stack's first build`, ...lines].join("\n");
+    mkdirSync(dirname(this.options.out), { recursive: true });
     writeFileSync(this.options.out, text + "\n");
     // GitHub renders a mermaid block in a job's summary; mermaid takes no ":" or ";" inside a task's name
     const task = (s: Span) => `${s.name.replace(/[:;#]/g, " ")} :${s.start - t0}, ${s.end - t0}`;

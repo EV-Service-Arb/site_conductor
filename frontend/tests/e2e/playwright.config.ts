@@ -35,6 +35,7 @@ export default defineConfig({
     cwd: "../../..",
     url: `http://localhost:${WEB}/`,
     reuseExistingServer: false,
+    env: { SA_CONDUCTOR_CONFIG: new URL("./conductor.nix", import.meta.url).pathname }, // no Google accounts: the e2e never spends on, nor reads, a person's
     timeout: 30 * 60_000, // the conductor's and its peers' builds
   },
 });
