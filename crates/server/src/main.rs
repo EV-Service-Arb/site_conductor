@@ -278,6 +278,7 @@ async fn serve(
 	let engine = panel.clone();
 	let metered = panel.clone();
 	let purger = panel.clone();
+	let locator = panel.clone();
 	let grafana_root = format!("{}/grafana/", config.panel_origin.trim_end_matches('/'));
 	let sign_in = SignIn::new(panel, concierge, config);
 	let forward = match &services {
@@ -388,13 +389,14 @@ async fn serve(
 			}
 		};
 		let purge = trash::run(purger, keep_by_default, stopped.clone());
+		let locate = sa_server::gmbs::locate(locator, stopped.clone());
 		let catalog = async {
 			if let (Some(catalog), Some(services)) = (&catalog, &services) {
 				catalog.follow(services.clone(), stopped.clone()).await;
 			}
 		};
 		let meters = sa_server::meters::run(metered, readers, stopped.clone());
-		tokio::join!(bot, feed, usage, tokens, grafana, purge, meters, catalog);
+		tokio::join!(bot, feed, usage, tokens, grafana, purge, locate, meters, catalog);
 	};
 	let (served, ()) = tokio::join!(server, hubs);
 	served
