@@ -1,7 +1,7 @@
 //! Every costly action, as it was done or told ([`sa_core::prices::Item`]), only ever added; where
 //! each service's feed of them is read up to; and what a unit of each costs us.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Range};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
@@ -84,14 +84,15 @@ pub(crate) async fn cursor(conn: &mut SqliteConnection, source: &str) -> eyre::R
 	Ok(at.unwrap_or(0))
 }
 
-/// The cursor moved from `from` to `to`, in a write transaction; false when it no longer stood at `from`.
-pub(crate) async fn move_cursor(conn: &mut SqliteConnection, source: &str, from: i64, to: i64) -> eyre::Result<bool> {
-	if cursor(conn, source).await? != from {
+/// The cursor moved from `moved.start` to `moved.end`, in a write transaction; false when it no
+/// longer stood at the start.
+pub(crate) async fn move_cursor(conn: &mut SqliteConnection, source: &str, moved: Range<i64>) -> eyre::Result<bool> {
+	if cursor(conn, source).await? != moved.start {
 		return Ok(false);
 	}
 	sqlx::query("INSERT INTO usage_cursors (source, after) VALUES ($1, $2) ON CONFLICT (source) DO UPDATE SET after = excluded.after")
 		.bind(source)
-		.bind(to)
+		.bind(moved.end)
 		.execute(conn)
 		.await
 		.wrap_err_with(|| format!("moving {source}'s usage cursor"))?;

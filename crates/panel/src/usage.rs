@@ -260,7 +260,7 @@ impl Panel {
 				charged = true;
 			}
 		}
-		eyre::ensure!(db::move_cursor(&mut tx, service, after, page.next).await?, "{service}'s usage cursor moved meanwhile");
+		eyre::ensure!(db::move_cursor(&mut tx, service, after..page.next).await?, "{service}'s usage cursor moved meanwhile");
 		tx.commit().await.wrap_err("committing a page of usage")?;
 		if charged {
 			self.snapshot_due.notify_one();

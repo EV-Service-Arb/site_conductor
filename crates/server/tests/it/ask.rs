@@ -8,7 +8,7 @@ use axum::{Json, Router, body::Body, http::Method, routing::post};
 use jiff::Timestamp;
 use sa_panel::testing::{TestDb, operator, panel};
 use sa_server::{
-	claude::Model,
+	claude::{Model, Origins},
 	concierge::{Concierge, DevIdentity},
 	http,
 	signin::{SignIn, SignInConfig},
@@ -72,7 +72,7 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: ORIGIN.to_owned(),
 	};
-	let model = Model::new(base.clone(), base, Some("owner".to_owned().into()));
+	let model = Model::new(Origins { api: base.clone(), oauth: base }, Some("owner".to_owned().into()));
 	let app = http::app(
 		SignIn::new(p.clone(), Concierge::dev(who), config),
 		None,

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gmaps_optimal_placement_core::{
-	Model, PoiOut,
+	Model, Poi, PoiOut,
 	model::{Field, HAZE, colorise, field},
 };
 use js_sys::Function;
@@ -96,9 +96,9 @@ impl Scene {
 		self.view = Some(west_south_east_north);
 	}
 
-	/// Whether a point is in the view the map last settled on; never before it has.
-	pub fn sees(&self, lat: f64, lng: f64) -> bool {
-		self.view.is_some_and(|[w, s, e, n]| lat >= s && lat <= n && lng >= w && lng <= e)
+	/// Whether a POI is in the view the map last settled on; never before it has.
+	pub fn sees(&self, poi: &Poi) -> bool {
+		self.view.is_some_and(|[w, s, e, n]| poi.lat >= s && poi.lat <= n && poi.lng >= w && poi.lng <= e)
 	}
 
 	pub fn hide_imputed(&mut self, on: bool) {

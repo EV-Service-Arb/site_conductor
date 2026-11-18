@@ -12,6 +12,7 @@ use sa_core::{
 	prices::{Item, Spender, StreetViewLoad},
 	usage::Bill,
 };
+use sa_places::LatLng;
 
 use crate::{
 	Panel, Refused, meters,
@@ -23,9 +24,10 @@ use crate::{
 };
 
 impl Panel {
-	/// The user opens a panorama at `lat, lng` on `account`'s browser key: bought, or refused before
+	/// The user opens a panorama at `at` on `account`'s browser key: bought, or refused before
 	/// anything loads. Their balance then.
-	pub async fn open_street_view(&self, by: Spender<StreetViewLoad>, account: &str, lat: f64, lng: f64, now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
+	pub async fn open_street_view(&self, by: Spender<StreetViewLoad>, account: &str, at: LatLng, now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
+		let LatLng { lat, lng } = at;
 		let user = by.user();
 		if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lng) {
 			return Ok(Err(Refused::Invalid(format!("{lat}, {lng} is no point on Earth"))));

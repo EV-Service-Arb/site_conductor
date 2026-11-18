@@ -62,7 +62,7 @@ fn fake_grafana(dir: &Path) -> tokio::sync::mpsc::UnboundedReceiver<AtGrafana> {
 
 async fn setup(db: &TestDb, dir: &Path, routes: Router) -> (Router, Router, sa_server::grafana::Grafana, Log) {
 	let (base, seen) = upstream(routes).await;
-	let (app, loopback, grafana) = app_with_grafana(panel(db).await, admin(), "dev-admin@localhost", &base, dir);
+	let (app, loopback, grafana) = app_with_grafana(panel(db).await, admin(), "dev-admin@localhost", &base.parse().unwrap(), dir);
 	(app, loopback, grafana, seen)
 }
 

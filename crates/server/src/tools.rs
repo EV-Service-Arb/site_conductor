@@ -99,7 +99,28 @@ impl Tools {
 				)
 				.to_lowercase();
 				let score = words.iter().filter(|w| hay.contains(w.as_str())).count();
-				(score > 0).then(|| (score, found(path, method, op)))
+				(score > 0).then(|| {
+					let body = op.request_body.as_ref().map(|b| match b {
+						ReferenceOr::Item(b) => b.content.get("application/json").and_then(|m| m.schema.as_ref()).map_or_else(
+							|| Value::String(b.content.keys().cloned().collect::<Vec<_>>().join(", ")),
+							|s| serde_json::to_value(&s.json_schema).expect("a schema serializes"),
+						),
+						ReferenceOr::Reference { .. } => unreachable!("the document inlines request bodies"),
+					});
+					(
+						score,
+						Found {
+							id: op.operation_id.clone().expect("every operation has an id"),
+							method: method.to_uppercase(),
+							path: path.to_owned(),
+							summary: op.summary.clone(),
+							description: op.description.clone(),
+							hints: hints(method, op),
+							parameters: serde_json::to_value(&op.parameters).expect("parameters serialize"),
+							body,
+						},
+					)
+				})
 			})
 			.collect();
 		scored.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
@@ -494,26 +515,6 @@ pub(crate) fn hints(method: &str, op: &Operation) -> Hints {
 			.extensions
 			.get("x-spends")
 			.map_or_else(Vec::new, |v| serde_json::from_value(v.clone()).expect("x-spends names priced items")),
-	}
-}
-
-fn found(path: &str, method: &str, op: &Operation) -> Found {
-	let body = op.request_body.as_ref().map(|b| match b {
-		ReferenceOr::Item(b) => b.content.get("application/json").and_then(|m| m.schema.as_ref()).map_or_else(
-			|| Value::String(b.content.keys().cloned().collect::<Vec<_>>().join(", ")),
-			|s| serde_json::to_value(&s.json_schema).expect("a schema serializes"),
-		),
-		ReferenceOr::Reference { .. } => unreachable!("the document inlines request bodies"),
-	});
-	Found {
-		id: op.operation_id.clone().expect("every operation has an id"),
-		method: method.to_uppercase(),
-		path: path.to_owned(),
-		summary: op.summary.clone(),
-		description: op.description.clone(),
-		hints: hints(method, op),
-		parameters: serde_json::to_value(&op.parameters).expect("parameters serialize"),
-		body,
 	}
 }
 

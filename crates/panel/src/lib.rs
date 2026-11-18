@@ -203,13 +203,18 @@ impl Panel {
 		// Free checks first, before the database: the window, and whether the key id could
 		// be one at all. A key id that could not is not logged — it is the caller's string.
 		signature::check_window(request.timestamp, now).map_err(refuse)?;
+		let delivery = signature::Delivery {
+			timestamp: request.timestamp,
+			signature: request.signature,
+			body: request.body,
+		};
 		if !sa_core::ids::is_slug(request.key_id) {
 			return Err(IngestError::Unauthorized("unknown key"));
 		}
 		let Some(source) = self.store.active_source(request.key_id).await? else {
 			// The MAC is computed anyway, against a key nobody holds, so an unknown key takes
 			// as long to refuse as a bad signature and key ids cannot be told apart by timing.
-			let _refused = signature::verify(&[0u8; 32], request.timestamp, request.signature, request.body, now);
+			let _refused = signature::verify(&[0u8; 32], delivery, now);
 			tracing::warn!(key_id = request.key_id, "ingest: unknown or revoked key");
 			return Err(IngestError::Unauthorized("unknown key"));
 		};
@@ -220,7 +225,7 @@ impl Panel {
 			.key
 			.open(&source_secret_aad(request.key_id), &source.secret_sealed)
 			.wrap_err_with(|| format!("opening the secret of source {}", request.key_id))?;
-		signature::verify(&secret, request.timestamp, request.signature, request.body, now).map_err(|e| {
+		signature::verify(&secret, delivery, now).map_err(|e| {
 			tracing::warn!(key_id = request.key_id, error = %e, "ingest: signature refused");
 			refuse(e)
 		})?;

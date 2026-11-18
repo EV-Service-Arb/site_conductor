@@ -76,7 +76,7 @@ async fn sites() -> (String, broadcast::Sender<Option<String>>) {
 /// The conductor signing everyone in as holding `permissions`, served on a port of its own,
 /// every service at `base`.
 async fn serve(panel: Panel, permissions: PermissionSet, limits: Limits, base: &str) -> (Router, SocketAddr) {
-	let app = app_with(panel, permissions.clone(), &email(&permissions), base, limits);
+	let app = app_with(panel, permissions.clone(), &email(&permissions), &base.parse().unwrap(), limits);
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let addr = listener.local_addr().unwrap();
 	let served = app.clone();

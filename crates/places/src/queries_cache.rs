@@ -55,7 +55,7 @@ impl Remote {
 		Ok((status, text))
 	}
 
-	fn refused(&self, under: &str, status: reqwest::StatusCode, text: &str) -> Error {
+	fn refused(&self, under: &str, (status, text): (reqwest::StatusCode, String)) -> Error {
 		Error::QueriesCache(format!("{}{under}: {status}: {text}", self.url))
 	}
 }
@@ -80,7 +80,7 @@ impl Request<'_> {
 		match self.scheme {
 			Scheme::Places => format!("{}\n{}\n{}\n{}", self.method, self.url, self.mask, self.body),
 			// keyed by Google's URL, whichever this one is: a stub's stands in for it
-			Scheme::Gop => sa_core::queries_cache::gop(sa_core::placement::SEARCH_TEXT, self.body),
+			Scheme::Gop => sa_core::queries_cache::gop(self.body),
 		}
 	}
 
@@ -96,7 +96,7 @@ impl QueriesCache for Remote {
 			match self.send(reqwest::Method::GET, &path, Vec::new()).await? {
 				(reqwest::StatusCode::OK, text) => Ok(Some(serde_json::from_str(&text)?)),
 				(reqwest::StatusCode::NOT_FOUND, _) => Ok(None),
-				(status, text) => Err(self.refused(&path, status, &text)),
+				answer => Err(self.refused(&path, answer)),
 			}
 		})
 	}
@@ -107,7 +107,7 @@ impl QueriesCache for Remote {
 			let body = serde_json::to_vec(&ClaimBody { fresh_since })?;
 			match self.send(reqwest::Method::POST, &path, body).await? {
 				(reqwest::StatusCode::OK, text) => Ok(serde_json::from_str(&text)?),
-				(status, text) => Err(self.refused(&path, status, &text)),
+				answer => Err(self.refused(&path, answer)),
 			}
 		})
 	}
@@ -117,7 +117,7 @@ impl QueriesCache for Remote {
 			let path = under(scheme, key);
 			match self.send(reqwest::Method::PUT, &path, serde_json::to_vec(&put)?).await? {
 				(reqwest::StatusCode::NO_CONTENT, _) => Ok(()),
-				(status, text) => Err(self.refused(&path, status, &text)),
+				answer => Err(self.refused(&path, answer)),
 			}
 		})
 	}
@@ -127,7 +127,7 @@ impl QueriesCache for Remote {
 			let path = format!("{}/claim", under(scheme, key));
 			match self.send(reqwest::Method::DELETE, &path, Vec::new()).await? {
 				(reqwest::StatusCode::NO_CONTENT, _) => Ok(()),
-				(status, text) => Err(self.refused(&path, status, &text)),
+				answer => Err(self.refused(&path, answer)),
 			}
 		})
 	}

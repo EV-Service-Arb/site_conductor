@@ -6,10 +6,11 @@ use sqlx::SqliteConnection;
 
 use super::{from_db, to_db};
 
-pub async fn insert_client(conn: &mut SqliteConnection, client_id: &str, redirect_uris: &str, name: Option<&str>, now: Timestamp) -> eyre::Result<()> {
+pub async fn insert_client(conn: &mut SqliteConnection, client_id: &str, redirect_uris: &[String], name: Option<&str>, now: Timestamp) -> eyre::Result<()> {
+	let redirect_uris = serde_json::to_string(redirect_uris).wrap_err("serializing redirect URIs")?;
 	sqlx::query("INSERT INTO oauth_clients (client_id, redirect_uris, name, created_at) VALUES ($1, $2, $3, $4)")
 		.bind(client_id)
-		.bind(redirect_uris)
+		.bind(&redirect_uris)
 		.bind(name)
 		.bind(to_db(now))
 		.execute(&mut *conn)

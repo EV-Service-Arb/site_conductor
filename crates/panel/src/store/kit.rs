@@ -6,7 +6,11 @@ use sa_core::gbp::Country;
 use sqlx::SqliteConnection;
 use uuid::Uuid;
 
-use super::{from_db, to_db};
+use super::{
+	from_db,
+	gmbs::{GmbId, TradeId},
+	to_db,
+};
 use crate::kit::Target;
 
 /// A draft of a category, not removed, with what the offer ranks it by.
@@ -150,13 +154,13 @@ pub async fn add_draft(conn: &mut SqliteConnection, trade: i64, country: Country
 }
 
 /// Draft `id` of the category, not removed: its copies so far.
-pub async fn draft_uses(conn: &mut SqliteConnection, trade: i64, country: Country, id: i64) -> eyre::Result<Option<i64>> {
+pub async fn draft_uses(conn: &mut SqliteConnection, trade: TradeId, country: Country, id: i64) -> eyre::Result<Option<i64>> {
 	sqlx::query_scalar(
 		"SELECT (SELECT COUNT(*) FROM kit_uses u WHERE u.draft_id = d.id) FROM kit_drafts d \
 		 WHERE d.id = $1 AND d.trade_id = $2 AND d.country = $3 AND d.removed_at IS NULL",
 	)
 	.bind(id)
-	.bind(trade)
+	.bind(trade.v)
 	.bind(country.as_str())
 	.fetch_optional(&mut *conn)
 	.await
@@ -210,14 +214,14 @@ pub async fn live_photos(conn: &mut SqliteConnection, trade: i64, country: Count
 }
 
 /// `false`: no such draft or photo of the category, not removed.
-pub async fn remove(conn: &mut SqliteConnection, table: Removable, trade: i64, country: Country, id: i64, now: Timestamp) -> eyre::Result<bool> {
+pub async fn remove(conn: &mut SqliteConnection, table: Removable, trade: TradeId, country: Country, id: i64, now: Timestamp) -> eyre::Result<bool> {
 	let sql = match table {
 		Removable::Draft => "UPDATE kit_drafts SET removed_at = $4 WHERE id = $1 AND trade_id = $2 AND country = $3 AND removed_at IS NULL",
 		Removable::Photo => "UPDATE kit_photos SET removed_at = $4 WHERE id = $1 AND trade_id = $2 AND country = $3 AND removed_at IS NULL",
 	};
 	let done = sqlx::query(sql)
 		.bind(id)
-		.bind(trade)
+		.bind(trade.v)
 		.bind(country.as_str())
 		.bind(to_db(now))
 		.execute(&mut *conn)
@@ -251,10 +255,10 @@ pub async fn add_photo(conn: &mut SqliteConnection, trade: i64, country: Country
 }
 
 /// Photo `id`'s JPEG, of the category, not removed.
-pub async fn photo_bytes(conn: &mut SqliteConnection, trade: i64, country: Country, id: i64) -> eyre::Result<Option<Vec<u8>>> {
+pub async fn photo_bytes(conn: &mut SqliteConnection, trade: TradeId, country: Country, id: i64) -> eyre::Result<Option<Vec<u8>>> {
 	sqlx::query_scalar("SELECT bytes FROM kit_photos WHERE id = $1 AND trade_id = $2 AND country = $3 AND removed_at IS NULL")
 		.bind(id)
-		.bind(trade)
+		.bind(trade.v)
 		.bind(country.as_str())
 		.fetch_optional(&mut *conn)
 		.await
@@ -343,10 +347,10 @@ pub async fn offered_photo(conn: &mut SqliteConnection, view: Uuid, photo: i64) 
 }
 
 /// `false`: that draft or photo went to that GBP already.
-pub async fn use_draft(conn: &mut SqliteConnection, view: Uuid, gmb: i64, draft: i64, now: Timestamp) -> eyre::Result<bool> {
+pub async fn use_draft(conn: &mut SqliteConnection, view: Uuid, gmb: GmbId, draft: i64, now: Timestamp) -> eyre::Result<bool> {
 	let done = sqlx::query("INSERT INTO kit_uses (draft_id, gmb_id, view_id, at) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING")
 		.bind(draft)
-		.bind(gmb)
+		.bind(gmb.v)
 		.bind(view)
 		.bind(to_db(now))
 		.execute(&mut *conn)
@@ -355,10 +359,10 @@ pub async fn use_draft(conn: &mut SqliteConnection, view: Uuid, gmb: i64, draft:
 	Ok(done.rows_affected() == 1)
 }
 
-pub async fn use_photo(conn: &mut SqliteConnection, view: Uuid, gmb: i64, photo: i64, now: Timestamp) -> eyre::Result<bool> {
+pub async fn use_photo(conn: &mut SqliteConnection, view: Uuid, gmb: GmbId, photo: i64, now: Timestamp) -> eyre::Result<bool> {
 	let done = sqlx::query("INSERT INTO kit_photo_uses (photo_id, gmb_id, view_id, at) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING")
 		.bind(photo)
-		.bind(gmb)
+		.bind(gmb.v)
 		.bind(view)
 		.bind(to_db(now))
 		.execute(&mut *conn)

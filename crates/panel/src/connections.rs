@@ -23,7 +23,7 @@ use crate::{
 	seal::{gmail_imap_aad, gmail_maps_key_aad},
 	store::{
 		browsers as browsers_db,
-		connections::{self as db, Sealed},
+		connections::{self as db, Inbox, Sealed},
 		gmbs as gmbs_db,
 		tokens::{self as ledger, Charged, Entry, Kind},
 	},
@@ -86,7 +86,11 @@ impl Panel {
 		if let Err(r) = self.gmail_of(owner, id).await? {
 			return Ok(Err(r));
 		}
-		if let Err(why) = imap::login(&host, new.username.trim(), &new.password).await? {
+		let inbox = Inbox {
+			host: &host,
+			username: new.username.trim(),
+		};
+		if let Err(why) = imap::login(inbox, &new.password).await? {
 			return Ok(Err(Refused::Invalid(why)));
 		}
 		let sealed = self.seal(&gmail_imap_aad(id), &new.password)?;
@@ -94,7 +98,7 @@ impl Panel {
 		if gmbs_db::gmail_owner(&mut tx, id).await? != Some(owner) {
 			return Ok(Err(Refused::NotFound));
 		}
-		db::set_imap(&mut tx, id, &host, new.username.trim(), &sealed, now).await?;
+		db::set_imap(&mut tx, id, inbox, &sealed, now).await?;
 		tx.commit().await.wrap_err("committing a gmail's IMAP")?;
 		self.connections(owner, id).await
 	}
@@ -136,7 +140,11 @@ impl Panel {
 				};
 				drop(conn);
 				let password = self.unseal(&gmail_imap_aad(id), &sealed)?;
-				imap::login(&imap.host, &imap.username, &password).await?.err()
+				let inbox = Inbox {
+					host: &imap.host,
+					username: &imap.username,
+				};
+				imap::login(inbox, &password).await?.err()
 			}
 			Connection::MapsKey => {
 				let Some((_, sealed)) = db::maps_key(&mut conn, id).await? else {

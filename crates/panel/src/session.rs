@@ -187,6 +187,13 @@ pub struct PreLogin {
 	pub grant: Option<Grant>,
 }
 
+/// What the browser comes back to the callback with: its pre-login cookie, and the `state`
+/// concierge hands back.
+pub struct Returned<'a> {
+	pub cookie: &'a str,
+	pub state: &'a str,
+}
+
 /// 256 random bits as 64 hex characters: states, verifiers, session ids, CSRF tokens.
 pub fn random_token() -> eyre::Result<String> {
 	let mut raw = Zeroizing::new([0u8; 32]);
@@ -255,7 +262,8 @@ impl Panel {
 	/// Opens a pre-login cookie and checks that it is this panel's, younger than
 	/// [`PRELOGIN_TTL`], and made for `state` — compared in constant time. `None` for
 	/// anything else: the callback then presents no code.
-	pub fn finish_sign_in(&self, cookie: &str, state: &str, now: Timestamp) -> Option<PreLogin> {
+	pub fn finish_sign_in(&self, returned: Returned<'_>, now: Timestamp) -> Option<PreLogin> {
+		let Returned { cookie, state } = returned;
 		let blob = URL_SAFE_NO_PAD.decode(cookie).ok()?;
 		let plain = self.key.open(PRELOGIN_AAD, &blob).ok()?;
 		let pre: PreLoginPlain = serde_json::from_slice(&plain).ok()?;

@@ -22,7 +22,7 @@ use axum::{
 	routing::{get, post},
 };
 use jiff::Timestamp;
-use sa_panel::oauth::{Client, Grant};
+use sa_panel::oauth::{Client, Grant, TokenRequest};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -30,7 +30,7 @@ use crate::{
 	api::Code,
 	concierge::Issued,
 	cookies::{self, CSRF_HEADER},
-	signin::{self, Freshness, SignIn, page, private},
+	signin::{self, Freshness, Page, SignIn, private},
 };
 
 /// Where the MCP endpoint is: the resource, and the issuer under it.
@@ -88,13 +88,13 @@ struct Registration {
 
 async fn register(State(s): State<SignIn>, Json(reg): Json<Registration>) -> Response {
 	if reg.redirect_uris.is_empty() || reg.redirect_uris.len() > MAX_REDIRECT_URIS {
-		return oauth_error("invalid_redirect_uri", &format!("1 to {MAX_REDIRECT_URIS} redirect_uris"));
+		return oauth_error(OauthError::InvalidRedirectUri, &format!("1 to {MAX_REDIRECT_URIS} redirect_uris"));
 	}
 	if let Some(bad) = reg.redirect_uris.iter().find(|u| !redirect_allowed(u)) {
-		return oauth_error("invalid_redirect_uri", &format!("{bad}: https, or http on loopback, ≤ {MAX_URI} bytes"));
+		return oauth_error(OauthError::InvalidRedirectUri, &format!("{bad}: https, or http on loopback, ≤ {MAX_URI} bytes"));
 	}
 	if reg.client_name.as_ref().is_some_and(|n| n.chars().count() > MAX_NAME) {
-		return oauth_error("invalid_client_metadata", &format!("client_name: ≤ {MAX_NAME} characters"));
+		return oauth_error(OauthError::InvalidClientMetadata, &format!("client_name: ≤ {MAX_NAME} characters"));
 	}
 	let now = Timestamp::now();
 	let id = match s.panel.register_client(&reg.redirect_uris, reg.client_name.as_deref(), now).await {
@@ -120,9 +120,8 @@ fn redirect_allowed(uri: &str) -> bool {
 #[derive(Deserialize)]
 struct AuthorizeQuery {
 	response_type: String,
-	client_id: String,
-	redirect_uri: String,
-	code_challenge: String,
+	#[serde(flatten)]
+	link: Link,
 	code_challenge_method: String,
 	state: Option<String>,
 	resource: Option<String>,
@@ -145,12 +144,12 @@ async fn authorize(State(s): State<SignIn>, uri: Uri, headers: HeaderMap, q: Res
 	if q.response_type != "code" || q.code_challenge_method != "S256" || q.resource.as_ref().is_some_and(|r| r.trim_end_matches('/') != format!("{}{PATH}", s.panel_origin())) {
 		return bad_link();
 	}
-	let client = match registered(&s, &q.client_id, &q.redirect_uri, &q.code_challenge).await {
+	let client = match registered(&s, &q.link).await {
 		Ok(c) => c,
 		Err(res) => return *res,
 	};
 	if let Some(Decision::Deny) = q.decision {
-		return back(&q.redirect_uri, &[("error", "access_denied")], q.state.as_deref());
+		return back(&q.link.redirect_uri, &[("error", "access_denied")], q.state.as_deref());
 	}
 	let here = uri.path_and_query().expect("a request line has a path").as_str();
 	let caller = match signin::check(&s, &headers, Freshness::Cached).await {
@@ -163,9 +162,9 @@ async fn authorize(State(s): State<SignIn>, uri: Uri, headers: HeaderMap, q: Res
 	};
 	let field = |name: &str, value: &str| format!("<input type=\"hidden\" name=\"{name}\" value=\"{}\">", escape(value));
 	let fields = [
-		field("client_id", &q.client_id),
-		field("redirect_uri", &q.redirect_uri),
-		field("code_challenge", &q.code_challenge),
+		field("client_id", &q.link.client_id),
+		field("redirect_uri", &q.link.redirect_uri),
+		field("code_challenge", &q.link.code_challenge),
 		q.state.as_deref().map(|st| field("state", st)).unwrap_or_default(),
 		field("csrf", csrf),
 	]
@@ -180,7 +179,7 @@ async fn authorize(State(s): State<SignIn>, uri: Uri, headers: HeaderMap, q: Res
 		 <form method=\"post\" action=\"{PATH}/authorize\">{fields}<button>Allow</button> <a href=\"{cancel}\">Cancel</a></form>\
 		 </main></body></html>",
 		email = escape(&caller.email),
-		redirect = escape(&q.redirect_uri),
+		redirect = escape(&q.link.redirect_uri),
 		cancel = escape(&format!("{here}&decision=deny")),
 	);
 	let mut res = private((StatusCode::OK, Html(body)).into_response());
@@ -188,11 +187,18 @@ async fn authorize(State(s): State<SignIn>, uri: Uri, headers: HeaderMap, q: Res
 	res
 }
 
+/// What an MCP client's link to authorize names, carried on through the consent page.
 #[derive(Deserialize)]
-struct ConsentForm {
+struct Link {
 	client_id: String,
 	redirect_uri: String,
 	code_challenge: String,
+}
+
+#[derive(Deserialize)]
+struct ConsentForm {
+	#[serde(flatten)]
+	link: Link,
 	state: Option<String>,
 	csrf: String,
 }
@@ -206,7 +212,7 @@ async fn consent(State(s): State<SignIn>, mut headers: HeaderMap, Form(f): Form<
 	if !s.cookies().csrf_ok(&headers) {
 		return bad_link();
 	}
-	if let Err(res) = registered(&s, &f.client_id, &f.redirect_uri, &f.code_challenge).await {
+	if let Err(res) = registered(&s, &f.link).await {
 		return *res;
 	}
 	let caller = match signin::check(&s, &headers, Freshness::Cached).await {
@@ -215,9 +221,9 @@ async fn consent(State(s): State<SignIn>, mut headers: HeaderMap, Form(f): Form<
 	};
 	let grant = Grant {
 		user_id: caller.user_id,
-		client_id: f.client_id,
-		redirect_uri: f.redirect_uri,
-		challenge: f.code_challenge,
+		client_id: f.link.client_id,
+		redirect_uri: f.link.redirect_uri,
+		challenge: f.link.code_challenge,
 		state: f.state,
 	};
 	// Dev sign-in signs in whoever its configuration names: this user, by name.
@@ -228,11 +234,12 @@ async fn consent(State(s): State<SignIn>, mut headers: HeaderMap, Form(f): Form<
 /// The callback's end of a consent: concierge signed the user in again, for the client.
 pub(crate) async fn granted(s: &SignIn, grant: &Grant, issued: Issued) -> Response {
 	if issued.user_id != grant.user_id {
-		return page(
-			StatusCode::FORBIDDEN,
-			"Another account",
-			"evinvest.ltd is signed in as another account than this panel. Sign in as one account, then connect again.",
-		);
+		return Page {
+			status: StatusCode::FORBIDDEN,
+			title: "Another account",
+			message: "evinvest.ltd is signed in as another account than this panel. Sign in as one account, then connect again.",
+		}
+		.into_response();
 	}
 	match s.panel.grant(grant, &issued.tokens, Timestamp::now()).await {
 		Ok(code) => {
@@ -241,7 +248,12 @@ pub(crate) async fn granted(s: &SignIn, grant: &Grant, issued: Issued) -> Respon
 		}
 		Err(e) => {
 			crate::report(&e, "granting an MCP client");
-			page(StatusCode::INTERNAL_SERVER_ERROR, "Connecting failed", "Something went wrong on our side. Try again.")
+			Page {
+				status: StatusCode::INTERNAL_SERVER_ERROR,
+				title: "Connecting failed",
+				message: "Something went wrong on our side. Try again.",
+			}
+			.into_response()
 		}
 	}
 }
@@ -257,21 +269,34 @@ struct TokenForm {
 
 async fn token(State(s): State<SignIn>, Form(f): Form<TokenForm>) -> Response {
 	if f.grant_type.as_deref() != Some("authorization_code") {
-		return oauth_error("unsupported_grant_type", "authorization_code");
+		return oauth_error(OauthError::UnsupportedGrantType, "authorization_code");
 	}
 	let (Some(client_id), Some(code), Some(verifier), Some(redirect_uri)) = (f.client_id, f.code, f.code_verifier, f.redirect_uri) else {
-		return oauth_error("invalid_request", "client_id, code, code_verifier and redirect_uri");
+		return oauth_error(OauthError::InvalidRequest, "client_id, code, code_verifier and redirect_uri");
 	};
-	match s.panel.redeem(&code, &client_id, &redirect_uri, &verifier, Timestamp::now()).await {
+	let request = TokenRequest {
+		code: &code,
+		client_id: &client_id,
+		redirect_uri: &redirect_uri,
+		verifier: &verifier,
+	};
+	match s.panel.redeem(request, Timestamp::now()).await {
 		Ok(Some(bearer)) => private(Json(json!({ "access_token": bearer.as_str(), "token_type": "Bearer" })).into_response()),
-		Ok(None) => oauth_error("invalid_grant", "the code is spent, expired, or not this client's"),
+		Ok(None) => oauth_error(OauthError::InvalidGrant, "the code is spent, expired, or not this client's"),
 		Err(e) => internal(&e, "redeeming an MCP code"),
 	}
 }
 
 /// The client, when `redirect_uri` is one of its own (a loopback one on any port, RFC 8252 §7.3)
 /// and the challenge an S256 one.
-async fn registered(s: &SignIn, client_id: &str, redirect_uri: &str, challenge: &str) -> Result<Client, Box<Response>> {
+async fn registered(
+	s: &SignIn,
+	Link {
+		client_id,
+		redirect_uri,
+		code_challenge: challenge,
+	}: &Link,
+) -> Result<Client, Box<Response>> {
 	if challenge.len() != 43 || !challenge.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') || !redirect_allowed(redirect_uri) {
 		return Err(Box::new(bad_link()));
 	}
@@ -280,11 +305,14 @@ async fn registered(s: &SignIn, client_id: &str, redirect_uri: &str, challenge: 
 		Ok(None) => return Err(Box::new(bad_link())),
 		Err(e) => {
 			crate::report(&e, "reading an MCP client");
-			return Err(Box::new(private(page(
-				StatusCode::INTERNAL_SERVER_ERROR,
-				"Connecting failed",
-				"Something went wrong on our side. Try again.",
-			))));
+			return Err(Box::new(private(
+				Page {
+					status: StatusCode::INTERNAL_SERVER_ERROR,
+					title: "Connecting failed",
+					message: "Something went wrong on our side. Try again.",
+				}
+				.into_response(),
+			)));
 		}
 	};
 	let loopback = |u: &str| {
@@ -308,14 +336,28 @@ fn back(redirect_uri: &str, pairs: &[(&str, &str)], state: Option<&str>) -> Resp
 }
 
 fn bad_link() -> Response {
-	private(page(
-		StatusCode::BAD_REQUEST,
-		"Connecting failed",
-		"This link is not one your MCP client would open, or it expired. Connect again from the client.",
-	))
+	private(
+		Page {
+			status: StatusCode::BAD_REQUEST,
+			title: "Connecting failed",
+			message: "This link is not one your MCP client would open, or it expired. Connect again from the client.",
+		}
+		.into_response(),
+	)
 }
 
-fn oauth_error(error: &str, description: &str) -> Response {
+/// RFC 6749 §5.2's and RFC 7591 §3.2.2's.
+#[derive(Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum OauthError {
+	InvalidRedirectUri,
+	InvalidClientMetadata,
+	UnsupportedGrantType,
+	InvalidRequest,
+	InvalidGrant,
+}
+
+fn oauth_error(error: OauthError, description: &str) -> Response {
 	private((StatusCode::BAD_REQUEST, Json(json!({ "error": error, "error_description": description }))).into_response())
 }
 

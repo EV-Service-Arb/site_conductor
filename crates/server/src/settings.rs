@@ -137,15 +137,22 @@ impl Settings {
 
 	pub fn renewal(&self) -> eyre::Result<Renewal> {
 		let multiple = self.tokens_start_cap_multiple.ok_or_else(|| eyre::eyre!("TOKENS_START_CAP_MULTIPLE must be set"))?;
-		Ok(Renewal::try_new(self.tokens_daily, self.tokens_cap, multiple)?)
+		Ok(Renewal {
+			daily: self.tokens_daily,
+			cap: self.tokens_cap,
+			start_cap_multiple: multiple,
+		}
+		.validate()?)
 	}
 
 	/// The assistant's Claude.
 	pub fn model(&self) -> sa_server::claude::Model {
 		let owner = self.claude_code_oauth_token.as_deref().map(str::trim).filter(|s| !s.is_empty());
 		sa_server::claude::Model::new(
-			self.anthropic_base_url.clone(),
-			self.claude_oauth_base.clone(),
+			sa_server::claude::Origins {
+				api: self.anthropic_base_url.clone(),
+				oauth: self.claude_oauth_base.clone(),
+			},
 			owner.map(|t| zeroize::Zeroizing::new(t.to_owned())),
 		)
 	}
@@ -192,8 +199,14 @@ impl Settings {
 			.ok_or_else(|| eyre::eyre!("signing in needs PANEL_BUILD_EPOCH too: the unix seconds of the build's commit, the version of the catalog published to concierge"))?;
 		let get = |v: &Option<String>| set(v).unwrap_or_default();
 		if self.app_env == "production" {
-			bare_https_origin("PANEL_PUBLIC_ORIGIN", &get(&self.panel_public_origin))?;
-			bare_https_origin("CONCIERGE_PUBLIC_ORIGIN", &get(&self.concierge_public_origin))?;
+			bare_https_origin(Var {
+				name: "PANEL_PUBLIC_ORIGIN",
+				raw: &get(&self.panel_public_origin),
+			})?;
+			bare_https_origin(Var {
+				name: "CONCIERGE_PUBLIC_ORIGIN",
+				raw: &get(&self.concierge_public_origin),
+			})?;
 		}
 		Ok(Some(SignInSettings {
 			panel_origin: get(&self.panel_public_origin),
@@ -221,12 +234,17 @@ impl Settings {
 			return Ok(None);
 		}
 		eyre::ensure!(missing.is_empty(), "the forward needs {} too", missing.join(", "));
-		let uri = |name: &str, v: &Option<String>| bare_http_origin(name, v.as_deref().expect("checked above"));
+		let uri = |name: &str, v: &Option<String>| {
+			bare_http_origin(Var {
+				name,
+				raw: v.as_deref().expect("checked above"),
+			})
+		};
 		Ok(Some(sa_server::forward::Upstreams {
 			review_archive: uri(review_archive, &self.panel_review_archive_url)?,
 			playbook: uri(playbook, &self.panel_playbook_url)?,
 			sites: uri(sites, &self.panel_sites_url)?,
-			placement: placement.map(|v| bare_http_origin(placement_url, v)).transpose()?,
+			placement: placement.map(|raw| bare_http_origin(Var { name: placement_url, raw })).transpose()?,
 			signer: self
 				.panel_assertion_key
 				.as_deref()
@@ -252,7 +270,11 @@ impl Settings {
 			.ok_or_else(|| eyre::eyre!("PANEL_BROWSERS_URL needs PANEL_ASSERTION_KEY: the runner trusts the conductor's assertion alone"))?
 			.parse()
 			.map_err(|e| eyre::eyre!("PANEL_ASSERTION_KEY: {e}"))?;
-		let url = bare_http_origin("PANEL_BROWSERS_URL", &url)?.to_string();
+		let url = bare_http_origin(Var {
+			name: "PANEL_BROWSERS_URL",
+			raw: &url,
+		})?
+		.to_string();
 		let browsers = sa_panel::browsers::Browsers::try_new(gologin.map(zeroize::Zeroizing::new), multilogin.map(zeroize::Zeroizing::new))?;
 		Ok(Some(sa_server::browser::Connected::try_new(browsers, &url, signer)?))
 	}
@@ -271,7 +293,7 @@ impl Settings {
 			.ok_or_else(|| eyre::eyre!("{name} needs PANEL_ASSERTION_KEY: the runner trusts the conductor's assertion alone"))?
 			.parse()
 			.map_err(|e| eyre::eyre!("PANEL_ASSERTION_KEY: {e}"))?;
-		let url = bare_http_origin(name, url)?.to_string();
+		let url = bare_http_origin(Var { name, raw: url })?.to_string();
 		Ok(Some(sa_server::execute::Sandbox::try_new(&url, signer)?))
 	}
 
@@ -387,8 +409,14 @@ pub fn print_required_vars_for() -> Option<String> {
 	}
 }
 
+/// A variable's name, and its value as set.
+struct Var<'a> {
+	name: &'a str,
+	raw: &'a str,
+}
+
 /// An in-cluster peer's address: `http://host[:port]`, nothing after it.
-fn bare_http_origin(name: &str, raw: &str) -> eyre::Result<axum::http::Uri> {
+fn bare_http_origin(Var { name, raw }: Var<'_>) -> eyre::Result<axum::http::Uri> {
 	let raw = raw.trim();
 	let uri: axum::http::Uri = raw.parse().map_err(|e| eyre::eyre!("{name} is not a URL: {e}"))?;
 	eyre::ensure!(
@@ -429,7 +457,7 @@ fn loopback_http_origin(raw: &str) -> eyre::Result<()> {
 /// In production an origin the browser is sent to or told about is `https://host[:port]`,
 /// nothing after it: plain http would drop the `__Host-`/`Secure` cookies, and a path would
 /// end up inside the redirect URI concierge compares byte for byte.
-fn bare_https_origin(var: &str, raw: &str) -> eyre::Result<()> {
+fn bare_https_origin(Var { name: var, raw }: Var<'_>) -> eyre::Result<()> {
 	let url = url::Url::parse(raw).map_err(|e| eyre::eyre!("{var} is not a URL: {e}"))?;
 	eyre::ensure!(url.scheme() == "https", "{var} must be https in production");
 	eyre::ensure!(url.host_str().is_some_and(|h| !h.is_empty()), "{var} has no host");

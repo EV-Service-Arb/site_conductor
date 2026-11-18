@@ -19,7 +19,7 @@ use axum::{
 use jiff::Timestamp;
 use sa_auth::{PermissionSet, Principal, Service};
 use sa_core::{
-	placement::{Ask, Asks, Definition, SEARCH_TEXT},
+	placement::{Ask, Asks, Definition},
 	prices::{Item, PlacementRequest},
 	queries_cache::{Key, Scheme, gop},
 };
@@ -91,7 +91,7 @@ async fn asks(State(p): State<Pulled>, Json(_): Json<Definition>) -> Json<Asks> 
 }
 
 async fn held(store: &Store, a: &Ask, since: Timestamp) -> bool {
-	let key = Key(Sha256::digest(gop(SEARCH_TEXT, &a.body)).into());
+	let key = Key(Sha256::digest(gop(&a.body)).into());
 	store.cached_query(Scheme::Gop, key).await.unwrap().is_some_and(|kept| kept.fetched_at >= since)
 }
 
@@ -160,7 +160,7 @@ impl Conductor {
 			.route("/studies/pull", post(pull))
 			.with_state(pulled);
 		let (base, seen) = upstream(placement).await;
-		let app = app_with(p.clone(), permissions, EMAIL, &base, Default::default());
+		let app = app_with(p.clone(), permissions, EMAIL, &base.parse().unwrap(), Default::default());
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		let mut c = Self {
@@ -421,7 +421,7 @@ async fn a_person_reads_the_prices_and_sets_above_what_they_are_asked() {
 #[tokio::test]
 async fn without_placement_its_studies_are_not_connected() {
 	let db = TestDb::create().await;
-	let (sign_in, _) = sa_server::testing::conductor(panel(&db).await, operator(), EMAIL, "http://127.0.0.1:9");
+	let (sign_in, _) = sa_server::testing::conductor(panel(&db).await, operator(), EMAIL, &"http://127.0.0.1:9".parse().unwrap());
 	let app = sa_server::http::app(sign_in, None, None, Default::default(), None, None, None, None, None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;

@@ -36,7 +36,7 @@ pub fn parse(input: &str) -> eyre::Result<Parsed> {
 		})
 		.transpose()?;
 	if let Some(cid) = cid {
-		return Ok(Parsed::Alias(place_id_of_feature(0, cid)));
+		return Ok(Parsed::Alias(place_id_of_feature(Feature { cell: 0, cid })));
 	}
 	for (k, v) in url.query_pairs() {
 		let candidate = match k.as_ref() {
@@ -51,11 +51,11 @@ pub fn parse(input: &str) -> eyre::Result<Parsed> {
 
 	// /maps/place/<Name>/@<lat>,<lng>,<zoom>z/data=...!1s0x<hex>:0x<hex>!...
 	let segments: Vec<String> = url.path_segments().map(|s| s.map(percent_decode).collect()).unwrap_or_default();
-	let mut features: Vec<(u64, u64)> = segments.iter().filter_map(|s| s.strip_prefix("data=")).flat_map(feature_ids).collect();
+	let mut features: Vec<Feature> = segments.iter().filter_map(|s| s.strip_prefix("data=")).flat_map(feature_ids).collect();
 	features.dedup();
 	match features[..] {
 		[] => {}
-		[(cell, cid)] => return Ok(Parsed::PlaceId(place_id_of_feature(cell, cid))),
+		[feature] => return Ok(Parsed::PlaceId(place_id_of_feature(feature))),
 		_ => eyre::bail!("{input:?} names more than one place: {features:x?}"),
 	}
 	let name = segments
@@ -82,11 +82,21 @@ pub fn looks_like_place_id(s: &str) -> bool {
 	s.len() >= 16 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
+/// A Maps feature id, `0x<cell>:0x<cid>`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Feature {
+	cell: u64,
+	cid: u64,
+}
+
 /// The `!1s0x<hex>:0x<hex>` entries of a Maps URL's `data=` segment.
-fn feature_ids(data: &str) -> impl Iterator<Item = (u64, u64)> + '_ {
+fn feature_ids(data: &str) -> impl Iterator<Item = Feature> + '_ {
 	data.split('!').filter_map(|e| {
 		let (cell, cid) = e.strip_prefix("1s0x")?.split_once(":0x")?;
-		Some((u64::from_str_radix(cell, 16).ok()?, u64::from_str_radix(cid, 16).ok()?))
+		Some(Feature {
+			cell: u64::from_str_radix(cell, 16).ok()?,
+			cid: u64::from_str_radix(cid, 16).ok()?,
+		})
 	})
 }
 
@@ -136,11 +146,11 @@ fn svid_cid(svid: &str) -> Option<u64> {
 }
 
 /// A `ChIJ…` place id is the feature id itself: `{1: {1: fixed64 cell, 2: fixed64 cid}}`, base64url.
-fn place_id_of_feature(cell: u64, cid: u64) -> String {
+fn place_id_of_feature(feature: Feature) -> String {
 	let mut bytes = vec![0x0a, 0x12, 0x09];
-	bytes.extend(cell.to_le_bytes());
+	bytes.extend(feature.cell.to_le_bytes());
 	bytes.push(0x11);
-	bytes.extend(cid.to_le_bytes());
+	bytes.extend(feature.cid.to_le_bytes());
 	URL_SAFE_NO_PAD.encode(bytes)
 }
 

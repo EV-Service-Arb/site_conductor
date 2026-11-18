@@ -10,14 +10,19 @@ use serde_json::Value;
 
 use crate::{
 	Runner,
-	profile::{Ends, IDLE, Up, up},
+	profile::{Ends, IDLE, Token, Up, up},
 };
 
 /// Its first start downloads Mimic itself.
 const UP_WITHIN: Duration = Duration::from_secs(180);
 const ALIVE_EVERY: Duration = Duration::from_secs(15);
 
-pub(crate) async fn life(runner: &Runner, gmail: i64, user: uuid::Uuid, token: &str, folder: &str, profile: &str, ends: &mut Ends<'_>) -> eyre::Result<()> {
+pub(crate) struct Ids<'a> {
+	pub(crate) folder: &'a str,
+	pub(crate) profile: &'a str,
+}
+
+pub(crate) async fn life(runner: &Runner, gmail: i64, user: uuid::Uuid, token: &Token, Ids { folder, profile }: Ids<'_>, ends: &mut Ends<'_>) -> eyre::Result<()> {
 	let started = tokio::time::timeout(UP_WITHIN, async {
 		//LOOP: until the launcher has Mimic and starts it; UP_WITHIN bounds it
 		loop {
@@ -90,8 +95,8 @@ impl std::fmt::Display for Launcher {
 	}
 }
 
-async fn call(runner: &Runner, token: &str, path: &str) -> Result<Value, Launcher> {
-	let res = runner.0.http.get(format!("{}{path}", runner.0.launcher)).bearer_auth(token).send().await;
+async fn call(runner: &Runner, token: &Token, path: &str) -> Result<Value, Launcher> {
+	let res = runner.0.http.get(format!("{}{path}", runner.0.launcher)).bearer_auth(&token.v).send().await;
 	let res = match res {
 		Ok(r) => r,
 		Err(e) if e.is_connect() => return Err(Launcher::NotYet(format!("the launcher: {e}"))),

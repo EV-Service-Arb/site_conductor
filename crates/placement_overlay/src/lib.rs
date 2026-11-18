@@ -389,11 +389,7 @@ impl Inner {
 		let competitors = (self.dots && traded).then(|| {
 			let shown = self.tiers(&m);
 			let t = m.payload.trade.as_ref().expect("traded");
-			let in_view = t
-				.pois
-				.iter()
-				.filter(|p| shown.iter().any(|s| s.show && s.name == p.poi.tier) && self.scene.sees(p.poi.lat, p.poi.lng))
-				.count();
+			let in_view = t.pois.iter().filter(|p| shown.iter().any(|s| s.show && s.name == p.poi.tier) && self.scene.sees(&p.poi)).count();
 			Competitors { in_view }
 		});
 		self.say(Legend { heat, pressure, competitors })

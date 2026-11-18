@@ -11,7 +11,7 @@ use axum::{
 	Router,
 	body::{Body, Bytes, to_bytes},
 	extract::Request,
-	http::{HeaderMap, Method, StatusCode, header},
+	http::{HeaderMap, Method, StatusCode, Uri, header},
 	middleware::{self, Next},
 	response::IntoResponse,
 };
@@ -48,12 +48,24 @@ impl Seen {
 		let keys: Keys = SEED.parse::<Signer>().unwrap().public().parse().unwrap();
 		let token = self.headers[sa_auth::HEADER].to_str().unwrap();
 		let path = self.path_and_query.split('?').next().unwrap();
-		sa_auth::verify(&keys, token, service, self.method.as_str(), path, body, jiff::Timestamp::now().as_second()).expect("the conductor's assertion")
+		sa_auth::verify(
+			&keys,
+			token,
+			service,
+			sa_auth::Request {
+				method: self.method.as_str(),
+				path,
+				body,
+			},
+			jiff::Timestamp::now().as_second(),
+		)
+		.expect("the conductor's assertion")
 	}
 }
 
 /// A service at a loopback address: `routes`, and anything else answered with a cookie of its
 /// own and a compressed, cacheable body. Every request is logged first.
+//@codestyle::skip(no-tokio-spawn)
 pub async fn upstream(routes: Router) -> (String, Log) {
 	let seen: Log = Arc::default();
 	let log = seen.clone();
@@ -86,31 +98,32 @@ pub async fn upstream(routes: Router) -> (String, Log) {
 		}));
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let addr = listener.local_addr().unwrap();
+	//@codestyle::skip(no-tokio-spawn)
 	tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
 	(format!("http://{addr}"), seen)
 }
 
 /// The services, all at `base`.
-pub fn services(base: &str) -> Services {
+pub fn services(base: &Uri) -> Services {
 	Services::new(Upstreams {
-		review_archive: base.parse().unwrap(),
-		playbook: base.parse().unwrap(),
-		sites: base.parse().unwrap(),
-		placement: Some(base.parse().unwrap()),
+		review_archive: base.clone(),
+		playbook: base.clone(),
+		sites: base.clone(),
+		placement: Some(base.clone()),
 		signer: SEED.parse().unwrap(),
 	})
 }
 
 /// The conductor on `panel`, signing in whoever asks as `email` holding `permissions`, with every
 /// service at `base`.
-pub fn app_with(panel: Panel, permissions: PermissionSet, email: &str, base: &str, limits: http::Limits) -> Router {
+pub fn app_with(panel: Panel, permissions: PermissionSet, email: &str, base: &Uri, limits: http::Limits) -> Router {
 	let (sign_in, forward) = conductor(panel, permissions, email, base);
 	http::app(sign_in, Some(forward), None, limits, None, None, None, None, None)
 }
 
 /// What a viewer's browser and Grafana reach: the conductor of [`app_with`] with Grafana on `dir`,
 /// Grafana's loopback listener, and Grafana itself, to run.
-pub fn app_with_grafana(panel: Panel, permissions: PermissionSet, email: &str, base: &str, dir: &Path) -> (Router, Router, Grafana) {
+pub fn app_with_grafana(panel: Panel, permissions: PermissionSet, email: &str, base: &Uri, dir: &Path) -> (Router, Router, Grafana) {
 	let (sign_in, forward) = conductor(panel, permissions, email, base);
 	let grafana = Grafana::new(forward.clone(), dir.to_owned());
 	let app = http::app(sign_in, Some(forward), Some(&grafana), http::Limits::default(), None, None, None, None, None);
@@ -118,7 +131,13 @@ pub fn app_with_grafana(panel: Panel, permissions: PermissionSet, email: &str, b
 }
 
 pub fn app(panel: Panel, permissions: PermissionSet, base: &str) -> Router {
-	app_with(panel, permissions, "dev@localhost", base, http::Limits::default())
+	app_with(
+		panel,
+		permissions,
+		"dev@localhost",
+		&base.parse().expect("a test's services are at a URL"),
+		http::Limits::default(),
+	)
 }
 
 #[derive(Default)]
@@ -184,7 +203,7 @@ impl Browser {
 	}
 }
 
-pub fn conductor(panel: Panel, permissions: PermissionSet, email: &str, base: &str) -> (SignIn, Forward) {
+pub fn conductor(panel: Panel, permissions: PermissionSet, email: &str, base: &Uri) -> (SignIn, Forward) {
 	let who = DevIdentity {
 		user_id: DevIdentity::named(email),
 		permissions,

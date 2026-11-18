@@ -23,7 +23,7 @@ use crate::{
 };
 pub use crate::{
 	google_categories::GoogleCategory,
-	store::gmbs::{Category, GbpCountry, Gmail, Gmb, Point, Spot, Trade},
+	store::gmbs::{Category, GbpCountry, Gmail, Gmb, GmbId, Point, Spot, Trade, TradeId},
 };
 
 const MAX_SPOTS: usize = 20;
@@ -483,7 +483,7 @@ impl Panel {
 			if db::gmail_owner(&mut tx, gmail).await? != Some(owner) {
 				return Ok(Err(Refused::NotFound));
 			}
-			db::move_to(&mut tx, id, gmail).await?;
+			db::move_to(&mut tx, GmbId { v: id }, gmail).await?;
 		}
 		db::set_fields(&mut tx, id, &edit).await?;
 		let edited = db::gmb_of(&mut tx, Some(owner), id).await?.expect("read in this transaction");

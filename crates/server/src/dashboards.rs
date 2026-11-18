@@ -1,7 +1,7 @@
 //! The conductor's own Grafana dashboards, over its `/api/v1` (`sa_core::dashboards`).
 
 use ev_lib::api::{OpenApi, op_id};
-use sa_core::dashboards::{Board, Column, Query, Select};
+use sa_core::dashboards::{Board, Column, Panel, Query, Select};
 use serde_json::{Value, json};
 
 use crate::grafana::CONDUCTOR;
@@ -18,10 +18,12 @@ pub(crate) fn own(doc: &OpenApi) -> [(&'static str, Value); 2] {
 fn tokens(doc: &OpenApi) -> Value {
 	Board::new(doc, CONDUCTOR)
 		.panel(
-			1,
-			"stat",
-			"In the range",
-			[0, 0, 24, 5],
+			Panel {
+				id: 1,
+				kind: "stat",
+				title: "In the range",
+				grid: [0, 0, 24, 5],
+			},
 			in_range(
 				op_id(crate::tokens::token_flows),
 				Select {
@@ -36,9 +38,9 @@ fn tokens(doc: &OpenApi) -> Value {
 				},
 			),
 			stat(
-				"lastNotNull",
+				Calc::LastNotNull,
 				true,
-				"value_and_name",
+				TextMode::ValueAndName,
 				json!({
 					"unit": "none",
 					"decimals": 0,
@@ -47,43 +49,56 @@ fn tokens(doc: &OpenApi) -> Value {
 			),
 		)
 		.panel(
-			2,
-			"timeseries",
-			"Spent per day, by service",
-			[0, 5, 12, 9],
+			Panel {
+				id: 2,
+				kind: "timeseries",
+				title: "Spent per day, by service",
+				grid: [0, 5, 12, 9],
+			},
 			in_range(
 				op_id(crate::tokens::token_flows),
 				Select {
-					root_selector: &per_day(r#"flows[kind in ["spend"]]"#, "$substring(at, 0, 10)", "service", r#""tokens": -$sum($r.tokens)"#),
+					root_selector: &PerDay {
+						rows: r#"flows[kind in ["spend"]]"#,
+						day: "$substring(at, 0, 10)",
+						series: "service",
+						value: r#""tokens": -$sum($r.tokens)"#,
+					}
+					.to_string(),
 					columns: &[("day", Column::Timestamp), ("series", Column::String), ("tokens", Column::Number)],
 				},
 			),
-			bars_per_day("tokens", "none", 0),
+			bars_per_day("tokens", Unit::Plain, 0),
 		)
 		.panel(
-			3,
-			"timeseries",
-			"Given per day: bought, granted, renewed, refunded",
-			[12, 5, 12, 9],
+			Panel {
+				id: 3,
+				kind: "timeseries",
+				title: "Given per day: bought, granted, renewed, refunded",
+				grid: [12, 5, 12, 9],
+			},
 			in_range(
 				op_id(crate::tokens::token_flows),
 				Select {
-					root_selector: &per_day(
-						r#"flows[kind in ["purchase", "granted", "renewal", "refund"]]"#,
-						"$substring(at, 0, 10)",
-						"kind",
-						r#""tokens": $sum($r.tokens)"#,
-					),
+					root_selector: &PerDay {
+						rows: r#"flows[kind in ["purchase", "granted", "renewal", "refund"]]"#,
+						day: "$substring(at, 0, 10)",
+						series: "kind",
+						value: r#""tokens": $sum($r.tokens)"#,
+					}
+					.to_string(),
 					columns: &[("day", Column::Timestamp), ("series", Column::String), ("tokens", Column::Number)],
 				},
 			),
-			bars_per_day("tokens", "none", 0),
+			bars_per_day("tokens", Unit::Plain, 0),
 		)
 		.panel(
-			4,
-			"bargauge",
-			"Spent by person",
-			[0, 14, 12, 10],
+			Panel {
+				id: 4,
+				kind: "bargauge",
+				title: "Spent by person",
+				grid: [0, 14, 12, 10],
+			},
 			in_range(
 				op_id(crate::tokens::token_flows),
 				Select {
@@ -135,10 +150,12 @@ fn tokens(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
-			5,
-			"table",
-			"Spent on",
-			[12, 14, 12, 10],
+			Panel {
+				id: 5,
+				kind: "table",
+				title: "Spent on",
+				grid: [12, 14, 12, 10],
+			},
 			in_range(
 				op_id(crate::tokens::token_flows),
 				Select {
@@ -179,10 +196,12 @@ fn tokens(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
-			6,
-			"table",
-			"Purchases, grants and balances set",
-			[0, 24, 24, 9],
+			Panel {
+				id: 6,
+				kind: "table",
+				title: "Purchases, grants and balances set",
+				grid: [0, 24, 24, 9],
+			},
 			in_range(
 				op_id(crate::tokens::token_flows),
 				Select {
@@ -226,21 +245,29 @@ fn tokens(doc: &OpenApi) -> Value {
 		)
 		.row(7, "What it costs us", [0, 33, 24, 1])
 		.panel(
-			8,
-			"stat",
-			"Our bill in the range",
-			[0, 34, 24, 4],
+			Panel {
+				id: 8,
+				kind: "stat",
+				title: "Our bill in the range",
+				grid: [0, 34, 24, 4],
+			},
 			in_range(
 				op_id(crate::usage::spend),
 				Select {
-					root_selector: &per_day(OUR_BILL, "day", "tool_title", r#""value": $sum($r.usd)"#),
+					root_selector: &PerDay {
+						rows: OUR_BILL,
+						day: "day",
+						series: "tool_title",
+						value: r#""value": $sum($r.usd)"#,
+					}
+					.to_string(),
 					columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
 				},
 			),
 			stat(
-				"sum",
+				Calc::Sum,
 				false,
-				"value",
+				TextMode::Value,
 				json!({
 					"unit": "currencyUSD",
 					"decimals": 2,
@@ -249,38 +276,56 @@ fn tokens(doc: &OpenApi) -> Value {
 			),
 		)
 		.panel(
-			9,
-			"timeseries",
-			"$ per day, by tool (our keys and accounts)",
-			[0, 38, 12, 9],
+			Panel {
+				id: 9,
+				kind: "timeseries",
+				title: "$ per day, by tool (our keys and accounts)",
+				grid: [0, 38, 12, 9],
+			},
 			in_range(
 				op_id(crate::usage::spend),
 				Select {
-					root_selector: &per_day(OUR_BILL, "day", "tool_title", r#""value": $sum($r.usd)"#),
+					root_selector: &PerDay {
+						rows: OUR_BILL,
+						day: "day",
+						series: "tool_title",
+						value: r#""value": $sum($r.usd)"#,
+					}
+					.to_string(),
 					columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
 				},
 			),
-			bars_per_day("$", "currencyUSD", 2),
+			bars_per_day("$", Unit::Usd, 2),
 		)
 		.panel(
-			10,
-			"timeseries",
-			"Actions per day, by tool (in its unit)",
-			[12, 38, 12, 9],
+			Panel {
+				id: 10,
+				kind: "timeseries",
+				title: "Actions per day, by tool (in its unit)",
+				grid: [12, 38, 12, 9],
+			},
 			in_range(
 				op_id(crate::usage::spend),
 				Select {
-					root_selector: &per_day("days[true]", "day", r#"(tool_title & " · " & unit & "s")"#, r#""value": $sum($r.units)"#),
+					root_selector: &PerDay {
+						rows: "days[true]",
+						day: "day",
+						series: r#"(tool_title & " · " & unit & "s")"#,
+						value: r#""value": $sum($r.units)"#,
+					}
+					.to_string(),
 					columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
 				},
 			),
-			bars_per_day("units", "none", 0),
+			bars_per_day("units", Unit::Plain, 0),
 		)
 		.panel(
-			11,
-			"table",
-			"Every costly action in the range",
-			[0, 47, 24, 10],
+			Panel {
+				id: 11,
+				kind: "table",
+				title: "Every costly action in the range",
+				grid: [0, 47, 24, 10],
+			},
 			in_range(
 				op_id(crate::usage::spend),
 				Select {
@@ -363,16 +408,20 @@ fn tokens(doc: &OpenApi) -> Value {
 					}
 			}),
 		)
-		.build(dashboard("sa-tokens", "Tokens and costs · everyone", "now-30d"))
+		.build(
+			Dashboard {
+				uid: "sa-tokens",
+				title: "Tokens and costs · everyone",
+				from: "now-30d",
+			}
+			.into(),
+		)
 }
 
 fn meters(doc: &OpenApi) -> Value {
 	Board::new(doc, CONDUCTOR)
 		.panel(
-			1,
-			"table",
-			"This period, every meter on each account",
-			[0, 0, 24, 10],
+			Panel { id: 1, kind: "table", title: "This period, every meter on each account", grid: [0, 0, 24, 10] },
 			Query {
 					operation: op_id(crate::meters::meters),
 					path: &[],
@@ -436,10 +485,7 @@ fn meters(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
-			2,
-			"bargauge",
-			"Used of the free ones, every account",
-			[0, 10, 12, 9],
+			Panel { id: 2, kind: "bargauge", title: "Used of the free ones, every account", grid: [0, 10, 12, 9] },
 			Query {
 				operation: op_id(crate::meters::meters),
 				path: &[],
@@ -494,10 +540,7 @@ fn meters(doc: &OpenApi) -> Value {
 			}),
 		)
 		.panel(
-			3,
-			"timeseries",
-			"Google's count on each account, at each reading",
-			[12, 10, 12, 9],
+			Panel { id: 3, kind: "timeseries", title: "Google's count on each account, at each reading", grid: [12, 10, 12, 9] },
 			in_range(
 				op_id(crate::meters::meter_readings),
 				Select {
@@ -542,13 +585,30 @@ fn meters(doc: &OpenApi) -> Value {
 				}
 			}),
 		)
-		.build(dashboard("sa-meters", "Vendors' meters · everyone", "now-90d"))
+		.build(
+			Dashboard {
+				uid: "sa-meters",
+				title: "Vendors' meters · everyone",
+				from: "now-90d",
+			}
+			.into(),
+		)
 }
 
 /// `rows` grouped by `day` and `series`, each group `$r` given the `day`, the `series` and `value` (a JSONata `"key": …` pair).
-fn per_day(rows: &str, day: &str, series: &str, value: &str) -> String {
-	format!(
-		r#"(
+struct PerDay<'a> {
+	rows: &'a str,
+	day: &'a str,
+	series: &'a str,
+	value: &'a str,
+}
+
+impl std::fmt::Display for PerDay<'_> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let Self { rows, day, series, value } = self;
+		write!(
+			f,
+			r#"(
   $rows := {rows};
   [$distinct($rows.({day} & "|" & {series})).(
     $k := $;
@@ -556,7 +616,8 @@ fn per_day(rows: &str, day: &str, series: &str, value: &str) -> String {
     {{"day": $substringBefore($k, "|") & "T00:00:00Z", "series": $substringAfter($k, "|"), {value}}}
   )]
 )"#
-	)
+		)
+	}
 }
 
 fn in_range<'a>(operation: &'a str, select: Select<'a>) -> Query<'a> {
@@ -569,8 +630,22 @@ fn in_range<'a>(operation: &'a str, select: Select<'a>) -> Query<'a> {
 	}
 }
 
+#[derive(Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+enum Calc {
+	LastNotNull,
+	Sum,
+}
+
+#[derive(Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum TextMode {
+	ValueAndName,
+	Value,
+}
+
 /// Each row's figure, the range reduced by `calc`.
-fn stat(calc: &str, values: bool, text_mode: &str, defaults: Value) -> Value {
+fn stat(calc: Calc, values: bool, text_mode: TextMode, defaults: Value) -> Value {
 	json!({
 		"options": {
 			"reduceOptions": { "calcs": [calc], "fields": "", "values": values },
@@ -585,23 +660,39 @@ fn stat(calc: &str, values: bool, text_mode: &str, defaults: Value) -> Value {
 	})
 }
 
-fn dashboard(uid: &str, title: &str, from: &str) -> Value {
-	json!({
-		"uid": uid,
-		"title": title,
-		"tags": ["conductor"],
-		"timezone": "utc",
-		"editable": false,
-		"graphTooltip": 1,
-		"time": { "from": from, "to": "now" },
-		"refresh": "",
-		"schemaVersion": 39,
-		"templating": { "list": [] }
-	})
+struct Dashboard<'a> {
+	uid: &'a str,
+	title: &'a str,
+	from: &'a str,
+}
+
+impl From<Dashboard<'_>> for Value {
+	fn from(Dashboard { uid, title, from }: Dashboard<'_>) -> Self {
+		json!({
+			"uid": uid,
+			"title": title,
+			"tags": ["conductor"],
+			"timezone": "utc",
+			"editable": false,
+			"graphTooltip": 1,
+			"time": { "from": from, "to": "now" },
+			"refresh": "",
+			"schemaVersion": 39,
+			"templating": { "list": [] }
+		})
+	}
+}
+
+#[derive(Clone, Copy, serde::Serialize)]
+enum Unit {
+	#[serde(rename = "none")]
+	Plain,
+	#[serde(rename = "currencyUSD")]
+	Usd,
 }
 
 /// A day's bars, one per `series`, stacked.
-fn bars_per_day(axis: &str, unit: &str, decimals: u8) -> Value {
+fn bars_per_day(axis: &str, unit: Unit, decimals: u8) -> Value {
 	json!({
 		"transformations": [{ "id": "prepareTimeSeries", "options": { "format": "multi" } }],
 		"options": {

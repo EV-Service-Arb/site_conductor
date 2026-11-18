@@ -27,7 +27,7 @@ use sa_panel::{
 	kit::Target,
 	seal::DataKey,
 	store::users::User,
-	testing::{TestDb, operator, panel_on, sign, sign_get},
+	testing::{SourceKey, TestDb, operator, panel_on, sign, sign_get},
 };
 use sa_places::{Google, Keys};
 use sa_server::{
@@ -81,7 +81,7 @@ impl Kit {
 	}
 
 	async fn get(&self, path: &str) -> (StatusCode, Vec<u8>) {
-		let s = sign_get(KEY, &self.secret, path, Timestamp::now());
+		let s = sign_get(SourceKey { id: KEY, secret: &self.secret }, path, Timestamp::now());
 		let req = Request::get(path)
 			.header("x-sa-key-id", &s.key_id)
 			.header("x-sa-timestamp", &s.timestamp)
@@ -106,7 +106,7 @@ impl Kit {
 
 	async fn event(&self, body: Value) -> StatusCode {
 		let body = body.to_string().into_bytes();
-		let s = sign(KEY, &self.secret, &body, Timestamp::now());
+		let s = sign(SourceKey { id: KEY, secret: &self.secret }, &body, Timestamp::now());
 		let req = Request::post("/api/kit/v1/events")
 			.header("content-type", "application/json")
 			.header("x-sa-key-id", &s.key_id)
@@ -155,7 +155,8 @@ async fn kit(db: &TestDb) -> Kit {
 			kickbacks: vec![],
 		})
 		.await
-		.unwrap().unwrap();
+		.unwrap()
+		.unwrap();
 	panel
 		.set_prices(&[PlacesRequest::Details].map(|r| (Item::Places(r), Some(0))), &[], "admin@localhost", now)
 		.await
@@ -223,7 +224,7 @@ async fn kit(db: &TestDb) -> Kit {
 				.unwrap(),
 		);
 	}
-	let app = app_with(panel.clone(), operator(), "dev@localhost", &base, http::Limits::default());
+	let app = app_with(panel.clone(), operator(), "dev@localhost", &base.parse().unwrap(), http::Limits::default());
 	let mut browser = Browser::default();
 	browser.sign_in(&app).await;
 	for g in [seven, three] {

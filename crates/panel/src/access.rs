@@ -12,9 +12,17 @@ use crate::{Panel, store::access as db};
 /// A request stands this long: asked again within it, nothing changes and nobody is told again.
 pub const ASK_AGAIN_AFTER: SignedDuration = SignedDuration::from_hours(24);
 
+/// Who asks.
+pub struct Asker<'a> {
+	pub user: Uuid,
+	pub email: &'a str,
+	pub name: &'a str,
+}
+
 impl Panel {
 	/// The user's request for `need`: the standing one (`false`), or a new one made at `now` (`true`).
-	pub async fn request_access(&self, user: Uuid, email: &str, name: &str, need: &str, now: Timestamp) -> eyre::Result<(AccessRequest, bool)> {
+	pub async fn request_access(&self, asker: Asker<'_>, need: &str, now: Timestamp) -> eyre::Result<(AccessRequest, bool)> {
+		let Asker { user, email, name } = asker;
 		let now = crate::store::from_db(crate::store::to_db(now))?; // as it will read back
 		let mut tx = self.store.begin_write().await?;
 		if let Some(standing) = db::of_user(&mut tx, user).await?.into_iter().find(|r| r.need == need && now < r.requested_at + ASK_AGAIN_AFTER) {

@@ -57,17 +57,29 @@ impl FromStr for Locale {
 	}
 }
 
+/// A Telegram chat, by its id.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ChatId {
+	pub v: i64,
+}
+
+/// A message of the outbox, by its id.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct OutboxId {
+	pub v: i64,
+}
+
 /// A button's `callback_data`: `<button>.<outbox message id>.<mac>`. The message id is all it
 /// names; the MAC, under a key derived from `PANEL_DATA_KEY` and bound to the chat, is what
 /// makes it the panel's — Telegram hands the data back verbatim, and anyone who can talk to
 /// the bot can send any data they like.
-pub fn callback_data(key: &[u8; 32], chat_id: i64, message: i64, button: &str) -> String {
+pub fn callback_data(key: &[u8; 32], chat_id: ChatId, message: OutboxId, button: &str) -> String {
 	assert!(is_button_id(button), "button ids are checked when a note is taken");
-	format!("{button}.{message}.{}", hex::encode(callback_mac(key, chat_id, message, button)))
+	format!("{button}.{}.{}", message.v, hex::encode(callback_mac(key, chat_id, message, button)))
 }
 
 /// The message and button id a callback names, if its data is the panel's for this chat.
-pub fn parse_callback(key: &[u8; 32], chat_id: i64, data: &str) -> Option<(i64, String)> {
+pub fn parse_callback(key: &[u8; 32], chat_id: ChatId, data: &str) -> Option<(OutboxId, String)> {
 	let mut parts = data.splitn(3, '.');
 	let (button, message, mac) = (parts.next()?, parts.next()?, parts.next()?);
 	// Messages sent before the buttons came from sites name theirs by one letter.
@@ -79,7 +91,7 @@ pub fn parse_callback(key: &[u8; 32], chat_id: i64, data: &str) -> Option<(i64, 
 	if legacy.is_none() && !is_button_id(button) {
 		return None;
 	}
-	let message: i64 = message.parse().ok()?;
+	let message = OutboxId { v: message.parse().ok()? };
 	let mac = hex::decode(mac).ok()?;
 	let want = callback_mac(key, chat_id, message, button);
 	if mac.len() != want.len() || !bool::from(mac.as_slice().ct_eq(&want)) {
@@ -344,12 +356,12 @@ pub fn after_failure(attempts: i32, failure: &Failure, now: Timestamp) -> Next {
 	}
 }
 
-fn callback_mac(key: &[u8; 32], chat_id: i64, message: i64, button: &str) -> [u8; CALLBACK_MAC_LEN] {
+fn callback_mac(key: &[u8; 32], chat_id: ChatId, message: OutboxId, button: &str) -> [u8; CALLBACK_MAC_LEN] {
 	// HMAC takes a key of any length, so this cannot fail.
 	let mut mac = <Hmac<Sha256> as KeyInit>::new_from_slice(key).expect("HMAC accepts any key length");
 	mac.update(b"sa-panel/tg-callback/v1/");
-	mac.update(&chat_id.to_be_bytes());
-	mac.update(&message.to_be_bytes());
+	mac.update(&chat_id.v.to_be_bytes());
+	mac.update(&message.v.to_be_bytes());
 	mac.update(button.as_bytes());
 	let full = mac.finalize().into_bytes();
 	let mut out = [0u8; CALLBACK_MAC_LEN];
@@ -421,19 +433,25 @@ mod tests {
 
 	#[test]
 	fn callbacks_are_bound_to_chat_message_and_button() {
-		let data = callback_data(&KEY, 42, 1001, "take");
-		assert_eq!(parse_callback(&KEY, 42, &data), Some((1001, "take".to_owned())));
-		assert_eq!(parse_callback(&KEY, 43, &data), None, "another chat");
-		assert_eq!(parse_callback(&[8; 32], 42, &data), None, "another key");
-		assert_eq!(parse_callback(&KEY, 42, &data.replacen("take.1001", "take.1002", 1)), None, "another message");
-		assert_eq!(parse_callback(&KEY, 42, &data.replacen("take.", "no_answer.", 1)), None, "another button");
-		assert_eq!(parse_callback(&KEY, 42, "take.1001"), None);
-		assert_eq!(parse_callback(&KEY, 42, "take.1001.zz"), None);
-		assert_eq!(parse_callback(&KEY, 42, ""), None);
-		let big = callback_data(&KEY, i64::MIN, i64::MAX, "abcdefghijklmnop");
+		let (chat, other_chat) = (ChatId { v: 42 }, ChatId { v: 43 });
+		let message = OutboxId { v: 1001 };
+		let data = callback_data(&KEY, chat, message, "take");
+		assert_eq!(parse_callback(&KEY, chat, &data), Some((message, "take".to_owned())));
+		assert_eq!(parse_callback(&KEY, other_chat, &data), None, "another chat");
+		assert_eq!(parse_callback(&[8; 32], chat, &data), None, "another key");
+		assert_eq!(parse_callback(&KEY, chat, &data.replacen("take.1001", "take.1002", 1)), None, "another message");
+		assert_eq!(parse_callback(&KEY, chat, &data.replacen("take.", "no_answer.", 1)), None, "another button");
+		assert_eq!(parse_callback(&KEY, chat, "take.1001"), None);
+		assert_eq!(parse_callback(&KEY, chat, "take.1001.zz"), None);
+		assert_eq!(parse_callback(&KEY, chat, ""), None);
+		let big = callback_data(&KEY, ChatId { v: i64::MIN }, OutboxId { v: i64::MAX }, "abcdefghijklmnop");
 		assert!(big.len() <= 64, "{big}");
-		let one_letter = format!("t.1001.{}", hex::encode(callback_mac(&KEY, 42, 1001, "t")));
-		assert_eq!(parse_callback(&KEY, 42, &one_letter), Some((1001, "take".to_owned())), "a message sent with one-letter buttons");
+		let one_letter = format!("t.1001.{}", hex::encode(callback_mac(&KEY, chat, message, "t")));
+		assert_eq!(
+			parse_callback(&KEY, chat, &one_letter),
+			Some((message, "take".to_owned())),
+			"a message sent with one-letter buttons"
+		);
 		assert!(!is_button_id("t"));
 		assert!(!is_button_id("Take"));
 		assert!(is_button_id("no_answer"));

@@ -541,7 +541,7 @@ async fn map_key(State(s): State<ApiState>) -> ApiResult<Json<MapDto>> {
 /// stopped (with the account a reload would load on, when another has room).
 async fn street_view(State(s): State<ApiState>, Spends(_, by): Spends<StreetViewLoad, Caller>, Body(at): Body<PanoramaAt>) -> ApiResult<Json<BalanceDto>> {
 	let now = Timestamp::now();
-	match s.sign_in.panel.open_street_view(by, &at.account, at.lat, at.lng, now).await? {
+	match s.sign_in.panel.open_street_view(by, &at.account, sa_places::LatLng { lat: at.lat, lng: at.lng }, now).await? {
 		Ok(balance) => Ok(Json(BalanceDto { balance })),
 		Err(Refused::Conflict(why)) => match s.sign_in.panel.map_account(now).await? {
 			Some(other) if other.name != at.account => Err(Refusal::new(Code::Conflict, format!("{why}; reload the page: it then loads on {}, which has room", other.name))),

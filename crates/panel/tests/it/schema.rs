@@ -9,15 +9,16 @@ use sa_alerts::{Call, NotePage, Rule};
 use sa_auth::{PermissionSet, SA_OPERATOR, Service, SourceKind};
 use sa_core::{
 	ids::{BrandId, SiteOrigin},
-	notify::{Failure, Locale, Rendered},
+	notify::{ChatId, Failure, Locale, Rendered},
 };
 use sa_panel::{
+	access::Asker,
 	alerts::{Directory, DirectoryError, Feeds, Hub, Identity},
 	seal::DataKey,
 	session::{RefreshError, Refresher, SessionKey, Tokens},
 	store::Store,
-	telegram::{Account, Bot, Chat, ChatInfo, InlineButton, Target, Update},
-	testing::{TestDb, panel_with, sign},
+	telegram::{Account, Bot, CallbackId, Chat, ChatInfo, InlineButton, Target, Update},
+	testing::{SourceKey, TestDb, panel_with, sign},
 };
 use serde_json::json;
 use zeroize::Zeroizing;
@@ -61,11 +62,11 @@ impl Bot for FakeBot {
 		if self.blocked { Err(Failure::Blocked) } else { Ok(1) }
 	}
 
-	async fn edit(&self, _: i64, _: i64, _: &Rendered, _: &[InlineButton]) -> Result<(), Failure> {
+	async fn edit(&self, _: ChatId, _: i64, _: &Rendered, _: &[InlineButton]) -> Result<(), Failure> {
 		Ok(())
 	}
 
-	async fn answer(&self, _: &str, _: &str) -> Result<(), Failure> {
+	async fn answer(&self, _: &CallbackId, _: &str) -> Result<(), Failure> {
 		Ok(())
 	}
 
@@ -73,7 +74,7 @@ impl Bot for FakeBot {
 		unreachable!("no chat is added here")
 	}
 
-	async fn is_admin(&self, _: i64, _: i64) -> Result<bool, Failure> {
+	async fn is_admin(&self, _: ChatId, _: i64) -> Result<bool, Failure> {
 		unreachable!("no chat is added here")
 	}
 }
@@ -142,11 +143,42 @@ async fn the_runtime_does_its_work_on_a_fresh_database() {
 			.unwrap()
 			.secret
 			.to_string();
-		let grant = panel.authenticate(sign("aquafix-site", &secret, b"{}", now).batch(), now).await.unwrap();
+		let grant = panel
+			.authenticate(
+				sign(
+					SourceKey {
+						id: "aquafix-site",
+						secret: &secret,
+					},
+					b"{}",
+					now,
+				)
+				.batch(),
+				now,
+			)
+			.await
+			.unwrap();
 		assert_eq!((grant.key_id.as_str(), grant.kind), ("aquafix-site", SourceKind::Site));
 		assert_eq!(panel.store().sources().await.unwrap().len(), 1);
 		assert!(panel.revoke_source("aquafix-site").await.unwrap());
-		assert!(panel.authenticate(sign("aquafix-site", &secret, b"{}", now).batch(), now).await.is_err(), "revoked");
+		assert!(
+			panel
+				.authenticate(
+					sign(
+						SourceKey {
+							id: "aquafix-site",
+							secret: &secret
+						},
+						b"{}",
+						now
+					)
+					.batch(),
+					now
+				)
+				.await
+				.is_err(),
+			"revoked"
+		);
 
 		// Signed-in users: a session, a rotation (its lease, its guarded write), a redeemed state,
 		// a sign-out everywhere.
@@ -170,7 +202,18 @@ async fn the_runtime_does_its_work_on_a_fresh_database() {
 
 		// Access requests, and alerts: a link, rules, sites' notes and the conductor's own into
 		// the outbox, a delivery, a dead chat, the access checks with their pruning, the poller.
-		let (asked, made) = panel.request_access(user, "o@x.io", "Olga", "sa:operator", now).await.unwrap();
+		let (asked, made) = panel
+			.request_access(
+				Asker {
+					user,
+					email: "o@x.io",
+					name: "Olga",
+				},
+				"sa:operator",
+				now,
+			)
+			.await
+			.unwrap();
 		assert!(made);
 		assert!(asked.need == "sa:operator");
 		let hub = |blocked| Hub {

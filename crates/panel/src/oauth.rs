@@ -35,6 +35,14 @@ pub struct Client {
 	pub name: Option<String>,
 }
 
+/// A client's token request (RFC 6749 §4.1.3), with its PKCE verifier.
+pub struct TokenRequest<'a> {
+	pub code: &'a str,
+	pub client_id: &'a str,
+	pub redirect_uri: &'a str,
+	pub verifier: &'a str,
+}
+
 fn code_hash(code: &str) -> [u8; 32] {
 	Sha256::new().chain_update(b"sa-panel/oauth-code/v1/").chain_update(code.as_bytes()).finalize().into()
 }
@@ -47,9 +55,8 @@ impl Panel {
 	/// Its client id.
 	pub async fn register_client(&self, redirect_uris: &[String], name: Option<&str>, now: Timestamp) -> eyre::Result<String> {
 		let id = random_token()?;
-		let uris = serde_json::to_string(redirect_uris).wrap_err("serializing redirect URIs")?;
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for an MCP client")?;
-		oauth::insert_client(&mut conn, &id, &uris, name, now).await?;
+		oauth::insert_client(&mut conn, &id, redirect_uris, name, now).await?;
 		Ok(id)
 	}
 
@@ -86,7 +93,13 @@ impl Panel {
 	/// The bearer `code` hands `client_id`, when its redirect URI and verifier are the code's and
 	/// its minute has not passed. The code is spent whatever the answer; a code presented wrong
 	/// closes its session.
-	pub async fn redeem(&self, code: &str, client_id: &str, redirect_uri: &str, verifier: &str, now: Timestamp) -> eyre::Result<Option<Zeroizing<String>>> {
+	pub async fn redeem(&self, request: TokenRequest<'_>, now: Timestamp) -> eyre::Result<Option<Zeroizing<String>>> {
+		let TokenRequest {
+			code,
+			client_id,
+			redirect_uri,
+			verifier,
+		} = request;
 		let hash = code_hash(code);
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for an MCP code")?;
 		let Some(row) = oauth::take_code(&mut conn, &hash).await? else {

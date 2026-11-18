@@ -258,7 +258,7 @@ impl Google {
 	/// with its newer one.
 	pub async fn details(&self, place_id: &str, ask: Ask, payer: &Payer<'_>) -> Result<Place, Error> {
 		let url = format!("{}/{place_id}", self.base);
-		let (json, _) = match self.ask(&Request::details(&url, place_id), None, ask, payer).await {
+		let (json, _) = match self.ask(&Request::details(&url), None, ask, payer).await {
 			Err(Error::Api { status: 400 | 404, .. }) => return Err(Error::Invalid(format!("Places knows no place {place_id:?}"))),
 			r => r?,
 		};
@@ -280,7 +280,7 @@ impl Google {
 		let url = format!("{}/{place_id}", self.base);
 		let req = Request {
 			mask: LOCALITY_MASK,
-			..Request::details(&url, place_id)
+			..Request::details(&url)
 		};
 		let (json, _) = match self.ask(&req, None, Ask::Cached, payer).await {
 			Err(Error::Api { status: 400 | 404, .. }) => return Err(Error::Invalid(format!("Places knows no place {place_id:?}"))),
@@ -417,7 +417,7 @@ impl Google {
 		let url = format!("{}/{place_id}", self.base);
 		let req = Request {
 			mask: REVIEW_LINK_MASK,
-			..Request::details(&url, place_id)
+			..Request::details(&url)
 		};
 		let (json, _) = match self.ask(&req, None, Ask::Cached, payer).await {
 			Err(Error::Api { status: 400 | 404, .. }) => return Err(Error::Invalid(format!("Places knows no place {place_id:?}"))),
@@ -513,7 +513,7 @@ impl Google {
 			let place = Place::from(serde_json::from_value::<Hit>(raw.clone())?);
 			if paid {
 				let details = format!("{}/{}", self.base, place.place_id);
-				let req = Request::details(&details, &place.place_id);
+				let req = Request::details(&details);
 				self.cache
 					.put(
 						Scheme::Places,
@@ -728,7 +728,8 @@ fn said(text: &str) -> String {
 }
 
 impl<'a> Request<'a> {
-	fn details(url: &'a str, place_id: &'a str) -> Self {
+	/// `url` ends in the place id.
+	fn details(url: &'a str) -> Self {
 		Self {
 			method: "GET",
 			url,
@@ -736,7 +737,7 @@ impl<'a> Request<'a> {
 			body: "",
 			scheme: Scheme::Places,
 			sku: PlacesRequest::Details,
-			subject: place_id,
+			subject: url.rsplit_once('/').expect("a details URL ends in its place id").1,
 		}
 	}
 }

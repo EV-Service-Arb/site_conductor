@@ -348,7 +348,7 @@ async fn setup_with(db: &TestDb, limits: http::Limits) -> (Router, FakeConcierge
 	let fake = FakeConcierge::default();
 	let addr = serve_fake(fake.clone()).await;
 	let panel = panel(db).await;
-	let concierge = Concierge::try_new(&addr, SECRET).unwrap();
+	let concierge = Concierge::try_new(&addr, SECRET.to_owned().into()).unwrap();
 	let app = http::app(
 		SignIn::new(
 			panel.clone(),
@@ -527,7 +527,7 @@ async fn concierge_down_is_a_503_not_a_sign_out() {
 	let db = TestDb::create().await;
 	let panel = panel(&db).await;
 	// Nothing listens there.
-	let concierge = Concierge::try_new("http://127.0.0.1:9", SECRET).unwrap();
+	let concierge = Concierge::try_new("http://127.0.0.1:9", SECRET.to_owned().into()).unwrap();
 	let app = http::app(
 		SignIn::new(
 			panel.clone(),
@@ -730,7 +730,7 @@ async fn the_alerts_page_links_telegram_and_chooses_rules() {
 	let fake = FakeConcierge::default();
 	let addr = serve_fake(fake.clone()).await;
 	let panel = panel(&db).await;
-	let concierge = Concierge::try_new(&addr, SECRET).unwrap();
+	let concierge = Concierge::try_new(&addr, SECRET.to_owned().into()).unwrap();
 	let sign_in = SignIn::new(
 		panel.clone(),
 		concierge.clone(),
@@ -742,9 +742,9 @@ async fn the_alerts_page_links_telegram_and_chooses_rules() {
 	let telegram = Telegram {
 		hub: Hub {
 			panel: panel.clone(),
-			bot: BotApi::try_new("http://127.0.0.1:9", "1:unused").unwrap(),
+			bot: BotApi::try_new("http://127.0.0.1:9", "1:unused".to_owned().into()).unwrap(),
 			concierge,
-			feeds: sa_server::forward::Forward::new(sign_in.clone(), sa_server::testing::services("http://127.0.0.1:9")),
+			feeds: sa_server::forward::Forward::new(sign_in.clone(), sa_server::testing::services(&"http://127.0.0.1:9".parse().unwrap())),
 			locale: Locale::Ru,
 			cabinet: "http://concierge.test".parse().unwrap(),
 		},

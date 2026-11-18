@@ -23,7 +23,7 @@ use futures::{StreamExt, TryStreamExt};
 use jiff::{SignedDuration, Timestamp};
 use sa_alerts::{Button, Rule};
 use sa_auth::PermissionSet;
-use sa_core::notify::{self, Failure, MAX_NAME, Next, Note, Rendered, Reply};
+use sa_core::notify::{self, ChatId, Failure, MAX_NAME, Next, Note, OutboxId, Rendered, Reply};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -68,13 +68,13 @@ pub trait Bot: Sync {
 	/// Telegram gave it.
 	fn send(&self, to: Target, message: &Rendered, buttons: &[InlineButton], photo: Option<Vec<u8>>) -> impl Future<Output = Result<i64, Failure>> + Send;
 	/// Replaces a message's text and buttons (none: the keyboard is removed).
-	fn edit(&self, chat_id: i64, message_id: i64, message: &Rendered, buttons: &[InlineButton]) -> impl Future<Output = Result<(), Failure>> + Send;
+	fn edit(&self, chat: ChatId, message_id: i64, message: &Rendered, buttons: &[InlineButton]) -> impl Future<Output = Result<(), Failure>> + Send;
 	/// Answers a button press, with a short notice the user sees.
-	fn answer(&self, callback_id: &str, text: &str) -> impl Future<Output = Result<(), Failure>> + Send;
+	fn answer(&self, callback: &CallbackId, text: &str) -> impl Future<Output = Result<(), Failure>> + Send;
 	/// `getChat`: `chat` is `@name` or a numeric id.
 	fn chat(&self, chat: &str) -> impl Future<Output = Result<ChatInfo, Failure>> + Send;
 	/// Whether `user` administers `chat` (`getChatMember`).
-	fn is_admin(&self, chat_id: i64, user_id: i64) -> impl Future<Output = Result<bool, Failure>> + Send;
+	fn is_admin(&self, chat: ChatId, user_id: i64) -> impl Future<Output = Result<bool, Failure>> + Send;
 }
 
 /// A button under a message.
@@ -112,6 +112,12 @@ pub struct Chat {
 	pub private: bool,
 }
 
+/// A button press, by the id Telegram gave it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CallbackId {
+	pub v: String,
+}
+
 /// What the bot received, as far as the conductor cares.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Update {
@@ -131,7 +137,7 @@ pub enum Update {
 	},
 	/// A button pressed under one of the bot's messages.
 	Callback {
-		id: String,
+		id: CallbackId,
 		chat_id: i64,
 		message_id: i64,
 		data: String,
@@ -242,7 +248,7 @@ impl Panel {
 }
 
 impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
-	fn buttons<'a>(&self, chat_id: i64, message: i64, buttons: impl IntoIterator<Item = &'a Button>) -> Vec<InlineButton> {
+	fn buttons<'a>(&self, chat_id: ChatId, message: OutboxId, buttons: impl IntoIterator<Item = &'a Button>) -> Vec<InlineButton> {
 		let key = self.panel.key.telegram_callback_key();
 		buttons
 			.into_iter()
@@ -253,15 +259,19 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 			.collect()
 	}
 
-	/// Adds a channel, a group or a forum topic, as `paste` names it, as a destination of the
+	/// Adds a channel, a group or a forum topic, as `named`, as a destination of the
 	/// user's: only once the bot sees it, the user administers it (asked with their private chat's
 	/// id — they link that first) and a test went out there. Nothing is stored otherwise.
-	pub async fn add_chat(&self, user: Uuid, permissions: &PermissionSet, display: &str, paste: &str, gmail: Option<i64>, now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
+	pub async fn add_chat(
+		&self,
+		user: Uuid,
+		permissions: &PermissionSet,
+		display: &str,
+		named: tg_types::TelegramDestination,
+		gmail: Option<i64>,
+		now: Timestamp,
+	) -> eyre::Result<Result<i64, Refused>> {
 		let refuse = |why: String| Ok(Err(Refused::Invalid(why)));
-		let named: tg_types::TelegramDestination = match paste.trim().parse() {
-			Ok(named) => named,
-			Err(e) => return refuse(format!("not a channel, group or topic: {e}")),
-		};
 		let (chat, topic) = match &named {
 			tg_types::TelegramDestination::Channel(id) | tg_types::TelegramDestination::Group(id) => (id.chat_id_param(), None),
 			tg_types::TelegramDestination::GroupTopic { group, topic_id } => (group.chat_id_param(), Some(i64::try_from(*topic_id)?)),
@@ -288,7 +298,7 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 		if topic.is_some() && !info.forum {
 			return refuse(format!("{chat} has no topics"));
 		}
-		match self.bot.is_admin(info.id, own_chat).await {
+		match self.bot.is_admin(ChatId { v: info.id }, own_chat).await {
 			Ok(true) => {}
 			Ok(false) => return refuse(format!("your linked Telegram account does not administer {chat}")),
 			Err(f) => return refuse(format!("Telegram did not say whether you administer {chat} ({})", failure_text(&f))),
@@ -311,7 +321,7 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 			return Ok(Err(Refused::Conflict(format!("{chat} is a destination already"))));
 		}
 		let destination = hub_db::add(&mut tx, user, gmail, now).await?;
-		db::insert(&mut tx, destination, kind, info.id, topic, info.title.as_deref()).await?;
+		db::insert(&mut tx, destination, kind, ChatId { v: info.id }, topic, info.title.as_deref()).await?;
 		hub_db::access_seen(&mut tx, user, permissions, display, now).await?;
 		tx.commit().await.wrap_err("committing a chat")?;
 		tracing::info!(user_id = %user, destination, "telegram: a chat added");
@@ -424,7 +434,7 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 				return Ok(Outcome::Dead);
 			}
 		};
-		let mut buttons = self.buttons(d.chat_id, d.id, &d.buttons);
+		let mut buttons = self.buttons(ChatId { v: d.chat_id }, OutboxId { v: d.id }, &d.buttons);
 		buttons.extend(links.into_iter().map(|(label, url)| InlineButton::Url { label, url }));
 		// No pool connection is held while a service or Telegram is asked.
 		drop(conn);
@@ -443,7 +453,7 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 		let mut conn = self.panel.store.pool().acquire().await.wrap_err("a connection to deliver")?;
 		let failure = match answer {
 			Ok(message_id) => {
-				db::sent(&mut conn, d.id, message_id, now).await?;
+				db::sent(&mut conn, OutboxId { v: d.id }, message_id, now).await?;
 				return Ok(Outcome::Sent);
 			}
 			Err(f) => f,
@@ -528,8 +538,8 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 					let mut edited = message;
 					edited.push("\n\n");
 					edited.push(&line);
-					let buttons = self.buttons(chat_id, outbox, &left);
-					if let Err(f) = self.bot.edit(chat_id, message_id, &edited, &buttons).await {
+					let buttons = self.buttons(ChatId { v: chat_id }, OutboxId { v: outbox }, &left);
+					if let Err(f) = self.bot.edit(ChatId { v: chat_id }, message_id, &edited, &buttons).await {
 						tracing::warn!(failure = ?f, "telegram: a pressed message was not updated");
 					}
 				}
@@ -571,7 +581,7 @@ impl<B: Bot, C: Refresher + Directory, F: Feeds> Hub<B, C, F> {
 	/// it names must be this chat's, the chat must be the private chat of the message's user, and
 	/// that user's access is asked of concierge now; sites then judges the call as that user's.
 	async fn press(&self, chat_id: i64, data: &str, now: Timestamp) -> eyre::Result<(Reply, Option<Pressed>)> {
-		let Some((outbox, id)) = notify::parse_callback(&self.panel.key.telegram_callback_key(), chat_id, data) else {
+		let Some((notify::OutboxId { v: outbox }, id)) = notify::parse_callback(&self.panel.key.telegram_callback_key(), notify::ChatId { v: chat_id }, data) else {
 			tracing::warn!("telegram: a button with data the panel did not sign");
 			return Ok((Reply::BadButton, None));
 		};

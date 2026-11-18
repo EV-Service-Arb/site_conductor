@@ -18,14 +18,15 @@ pub struct Renewal {
 }
 
 impl Renewal {
-	pub fn try_new(daily: i64, cap: i64, start_cap_multiple: f64) -> Result<Self, crate::Invalid> {
+	pub fn validate(self) -> Result<Self, crate::Invalid> {
+		let Self { daily, cap, start_cap_multiple } = self;
 		if daily < 0 || cap < 0 {
 			return Err(crate::Invalid::new(format!("TOKENS_DAILY ({daily}) and TOKENS_CAP ({cap}) are 0 or more")));
 		}
 		if !start_cap_multiple.is_finite() || start_cap_multiple < 0. {
 			return Err(crate::Invalid::new(format!("TOKENS_START_CAP_MULTIPLE ({start_cap_multiple}) is a finite multiple, 0 or more")));
 		}
-		Ok(Self { daily, cap, start_cap_multiple })
+		Ok(self)
 	}
 
 	/// A person's first balance.
@@ -34,9 +35,10 @@ impl Renewal {
 	}
 }
 
-/// What renewal adds to `balance` at `now`, renewed last at `last`, and the time it is renewed
+/// What `renewal` adds to `balance` at `now`, renewed last at `last`, and the time it is renewed
 /// up to: whole days only, so asking twice in a day adds once.
-pub fn accrue(balance: i64, last: Timestamp, now: Timestamp, daily: i64, cap: i64) -> (i64, Timestamp) {
+pub fn accrue(balance: i64, last: Timestamp, now: Timestamp, renewal: &Renewal) -> (i64, Timestamp) {
+	let Renewal { daily, cap, .. } = *renewal;
 	let days = now.duration_since(last).as_secs().div_euclid(86_400);
 	if days <= 0 {
 		return (0, last);
@@ -107,10 +109,15 @@ mod tests {
 
 	#[test]
 	fn renewal_is_by_whole_days_up_to_the_cap() {
-		assert_eq!(accrue(0, day(0), day(1) - SignedDuration::from_secs(1), 15, 300), (0, day(0)));
-		assert_eq!(accrue(0, day(0), day(3) + SignedDuration::from_hours(5), 15, 300), (45, day(3)));
-		assert_eq!(accrue(290, day(0), day(30), 15, 300), (10, day(30)));
-		assert_eq!(accrue(500, day(0), day(2), 15, 300), (0, day(2)), "bought tokens above the cap stay");
+		let r = Renewal {
+			daily: 15,
+			cap: 300,
+			start_cap_multiple: 1.,
+		};
+		assert_eq!(accrue(0, day(0), day(1) - SignedDuration::from_secs(1), &r), (0, day(0)));
+		assert_eq!(accrue(0, day(0), day(3) + SignedDuration::from_hours(5), &r), (45, day(3)));
+		assert_eq!(accrue(290, day(0), day(30), &r), (10, day(30)));
+		assert_eq!(accrue(500, day(0), day(2), &r), (0, day(2)), "bought tokens above the cap stay");
 	}
 
 	#[test]

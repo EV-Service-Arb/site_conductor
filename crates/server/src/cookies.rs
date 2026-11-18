@@ -6,12 +6,18 @@ use axum::http::{HeaderMap, HeaderValue, header};
 use subtle::ConstantTimeEq;
 
 /// The pre-login: state and PKCE verifier, sealed, for the ten minutes of a sign-in.
-pub const PRELOGIN: &str = "sa_prelogin";
+pub const PRELOGIN: Name = Name { v: "sa_prelogin" };
+
 /// The session id. HttpOnly: no script ever reads it.
-pub const SESSION: &str = "sa_session";
+pub const SESSION: Name = Name { v: "sa_session" };
 /// The double-submit CSRF token: readable by the page, which echoes it in [`CSRF_HEADER`].
-pub const CSRF: &str = "sa_csrf";
+pub const CSRF: Name = Name { v: "sa_csrf" };
 pub const CSRF_HEADER: &str = "x-sa-csrf";
+/// A cookie's name, before the `__Host-` prefix.
+#[derive(Clone, Copy, Debug)]
+pub struct Name {
+	v: &'static str,
+}
 
 #[derive(Clone, Debug)]
 pub struct Cookies {
@@ -23,12 +29,12 @@ impl Cookies {
 		Self { secure }
 	}
 
-	pub fn name(&self, base: &str) -> String {
-		if self.secure { format!("__Host-{base}") } else { base.to_owned() }
+	pub fn name(&self, base: Name) -> String {
+		if self.secure { format!("__Host-{}", base.v) } else { base.v.to_owned() }
 	}
 
 	/// A cookie's value from the request; the first one of that name.
-	pub fn get<'a>(&self, headers: &'a HeaderMap, base: &str) -> Option<&'a str> {
+	pub fn get<'a>(&self, headers: &'a HeaderMap, base: Name) -> Option<&'a str> {
 		let name = self.name(base);
 		headers
 			.get_all(header::COOKIE)
@@ -44,7 +50,7 @@ impl Cookies {
 	/// `Set-Cookie` for a value living `max_age` seconds. Every cookie here is `Path=/` and
 	/// `SameSite=Lax`: the sign-in comes back by a top-level navigation from concierge,
 	/// which `Strict` would strip them from.
-	pub fn set(&self, base: &str, value: &str, max_age: i64, http_only: bool) -> HeaderValue {
+	pub fn set(&self, base: Name, value: &str, max_age: i64, http_only: bool) -> HeaderValue {
 		let mut c = format!("{}={value}; Path=/; Max-Age={}; SameSite=Lax", self.name(base), max_age.max(0));
 		if http_only {
 			c.push_str("; HttpOnly");
@@ -56,7 +62,7 @@ impl Cookies {
 		HeaderValue::from_str(&c).unwrap_or_else(|_| HeaderValue::from_static(""))
 	}
 
-	pub fn clear(&self, base: &str) -> HeaderValue {
+	pub fn clear(&self, base: Name) -> HeaderValue {
 		self.set(base, "", 0, true)
 	}
 

@@ -19,10 +19,10 @@ use std::{
 };
 
 use jiff::{SignedDuration, Timestamp};
-use sa_core::notify::{Failure, Rendered};
+use sa_core::notify::{ChatId, Failure, Rendered};
 use sa_panel::{
 	alerts::{Feeds, Hub},
-	telegram::{Account, Bot, Chat, ChatInfo, InlineButton, Target, Update},
+	telegram::{Account, Bot, CallbackId, Chat, ChatInfo, InlineButton, Target, Update},
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -53,7 +53,7 @@ pub struct BotApi {
 }
 impl BotApi {
 	/// `base`: [`API_BASE`], or a test's mock.
-	pub fn try_new(base: &str, token: &str) -> eyre::Result<Self> {
+	pub fn try_new(base: &str, token: Zeroizing<String>) -> eyre::Result<Self> {
 		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		let http = reqwest::Client::builder()
 			.connect_timeout(Duration::from_secs(5))
@@ -63,7 +63,7 @@ impl BotApi {
 		Ok(Self {
 			http,
 			base: base.trim_end_matches('/').to_owned(),
-			token: Arc::new(Zeroizing::new(token.to_owned())),
+			token: Arc::new(token),
 		})
 	}
 
@@ -132,7 +132,9 @@ pub fn parse_update(raw: &Value) -> Option<Update> {
 			})
 			.unwrap_or_default();
 		return Some(Update::Callback {
-			id: q.get("id")?.as_str()?.to_owned(),
+			id: CallbackId {
+				v: q.get("id")?.as_str()?.to_owned(),
+			},
 			chat_id: chat_of(message)?.id,
 			message_id: message.get("message_id")?.as_i64()?,
 			data: q.get("data").and_then(Value::as_str).unwrap_or_default().to_owned(),
@@ -346,10 +348,10 @@ impl Bot for BotApi {
 			.ok_or_else(|| Failure::Refused(format!("{method}: no message_id")))
 	}
 
-	async fn edit(&self, chat_id: i64, message_id: i64, message: &Rendered, buttons: &[InlineButton]) -> Result<(), Failure> {
+	async fn edit(&self, chat: ChatId, message_id: i64, message: &Rendered, buttons: &[InlineButton]) -> Result<(), Failure> {
 		// An empty keyboard, not none: that is what removes the buttons.
 		let body = json!({
-			"chat_id": chat_id,
+			"chat_id": chat.v,
 			"message_id": message_id,
 			"text": message.text,
 			"entities": message.entities,
@@ -359,8 +361,8 @@ impl Bot for BotApi {
 		self.call("editMessageText", &body, None).await.map(drop)
 	}
 
-	async fn answer(&self, callback_id: &str, text: &str) -> Result<(), Failure> {
-		self.call("answerCallbackQuery", &json!({"callback_query_id": callback_id, "text": text}), None).await.map(drop)
+	async fn answer(&self, callback: &CallbackId, text: &str) -> Result<(), Failure> {
+		self.call("answerCallbackQuery", &json!({"callback_query_id": callback.v, "text": text}), None).await.map(drop)
 	}
 
 	async fn chat(&self, chat: &str) -> Result<ChatInfo, Failure> {
@@ -374,8 +376,8 @@ impl Bot for BotApi {
 		})
 	}
 
-	async fn is_admin(&self, chat_id: i64, user_id: i64) -> Result<bool, Failure> {
-		let member = self.call("getChatMember", &json!({"chat_id": chat_id, "user_id": user_id}), None).await?;
+	async fn is_admin(&self, chat: ChatId, user_id: i64) -> Result<bool, Failure> {
+		let member = self.call("getChatMember", &json!({"chat_id": chat.v, "user_id": user_id}), None).await?;
 		let status = member.get("status").and_then(Value::as_str).ok_or_else(|| Failure::Refused("getChatMember: no status".into()))?;
 		Ok(matches!(status, "creator" | "administrator"))
 	}
@@ -430,7 +432,7 @@ mod tests {
 		assert_eq!(
 			parse_update(&cb),
 			Some(Update::Callback {
-				id: "cb1".into(),
+				id: CallbackId { v: "cb1".into() },
 				chat_id: 42,
 				message_id: 9,
 				data: "t.1.aa".into(),

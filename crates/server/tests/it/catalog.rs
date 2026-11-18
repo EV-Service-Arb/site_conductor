@@ -47,13 +47,13 @@ async fn a_services_operations_join_the_catalog_under_its_prefix() {
 		.route("/api/v1/leads/{id}", get(|| async { Json(json!({ "id": 7 })) }));
 	let (base, seen) = upstream(routes).await;
 	let operator_holds: sa_auth::PermissionSet = ["sa:sites:work:read"].into_iter().collect();
-	let (sign_in, forward) = conductor(p.clone(), operator_holds, "op@localhost", &base);
+	let (sign_in, forward) = conductor(p.clone(), operator_holds, "op@localhost", &base.parse().unwrap());
 	let catalog = forward.catalog().clone();
 	let app = http::app(sign_in, Some(forward), None, Default::default(), None, None, None, None, None);
 	let (stop, stopped) = watch::channel(false);
 	let following = tokio::spawn({
 		let catalog = catalog.clone();
-		let services = sa_server::testing::services(&base);
+		let services = sa_server::testing::services(&base.parse().unwrap());
 		async move { catalog.follow(services, stopped).await }
 	});
 	tokio::time::timeout(Duration::from_secs(5), async {

@@ -13,7 +13,7 @@ use axum::{Json, Router, body::Body, http::Method, routing::post};
 use jiff::Timestamp;
 use sa_panel::testing::{TestDb, operator, panel};
 use sa_server::{
-	claude::Model,
+	claude::{Model, Origins},
 	concierge::{Concierge, DevIdentity},
 	execute::Sandbox,
 	http,
@@ -122,7 +122,7 @@ async fn code_runs_as_the_asker_and_stops_at_what_destroys() {
 		None,
 		None,
 		None,
-		Some(Model::new(model.clone(), model, Some("owner".to_owned().into()))),
+		Some(Model::new(Origins { api: model.clone(), oauth: model }, Some("owner".to_owned().into()))),
 		Some(Sandbox::try_new(&sandbox, SEED.parse().unwrap()).unwrap()),
 	);
 	let served = app.clone();

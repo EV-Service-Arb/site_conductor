@@ -387,7 +387,7 @@ impl Panel {
 			let gmbs = (note.rule.audience() == Audience::GmbOwners).then_some(note.gmbs.as_slice());
 			queued += self.fan_out_one(&mut tx, note.rule, note.event_id, note.skip_user, gmbs, outgoing, note.created_at, now).await?;
 		}
-		if !db::move_feed(&mut tx, service, after, page.next).await? {
+		if !db::move_feed(&mut tx, service, after..page.next).await? {
 			tracing::info!(%service, after, "alerts: the page was taken meanwhile");
 			return Ok(0);
 		}

@@ -45,6 +45,13 @@ impl Connection {
 	}
 }
 
+/// Where an inbox is, and whose.
+#[derive(Clone, Copy)]
+pub(crate) struct Inbox<'a> {
+	pub host: &'a str,
+	pub username: &'a str,
+}
+
 /// A secret as it sits in the database.
 pub(crate) struct Sealed {
 	pub blob: Vec<u8>,
@@ -89,15 +96,15 @@ pub(crate) async fn maps_key(conn: &mut SqliteConnection, gmail_id: i64) -> eyre
 }
 
 /// Checked when set: a refused one is never stored.
-pub(crate) async fn set_imap(conn: &mut SqliteConnection, gmail_id: i64, host: &str, username: &str, password: &Sealed, now: Timestamp) -> eyre::Result<()> {
+pub(crate) async fn set_imap(conn: &mut SqliteConnection, gmail_id: i64, inbox: Inbox<'_>, password: &Sealed, now: Timestamp) -> eyre::Result<()> {
 	sqlx::query(
 		"INSERT INTO gmail_imap (gmail_id, host, username, password_sealed, data_key_fp, set_at, checked_at, check_error) VALUES ($1, $2, $3, $4, $5, $6, $6, NULL) \
 		 ON CONFLICT (gmail_id) DO UPDATE SET host = excluded.host, username = excluded.username, password_sealed = excluded.password_sealed, \
 		 data_key_fp = excluded.data_key_fp, set_at = excluded.set_at, checked_at = excluded.checked_at, check_error = NULL",
 	)
 	.bind(gmail_id)
-	.bind(host)
-	.bind(username)
+	.bind(inbox.host)
+	.bind(inbox.username)
 	.bind(&password.blob)
 	.bind(&password.data_key_fp)
 	.bind(to_db(now))

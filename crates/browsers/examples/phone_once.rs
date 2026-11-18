@@ -14,6 +14,7 @@ use std::{
 };
 
 use eyre::{bail, ensure, eyre};
+use reqwest::Method;
 use serde_json::{Value, json};
 use tokio::process::Command;
 
@@ -34,14 +35,14 @@ async fn main() -> eyre::Result<()> {
 		.collect::<Vec<_>>()
 		.try_into()
 		.map_err(|_| eyre!("<phone id> <out dir> <phone-tools dir> <chromium>"))?;
-	let (out, tools) = (PathBuf::from(out), PathBuf::from(tools));
+	let (out, tools, chromium) = (PathBuf::from(out), PathBuf::from(tools), PathBuf::from(chromium));
 	std::fs::create_dir_all(&out)?;
 	let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 	let api = Api {
 		http: reqwest::Client::builder().timeout(Duration::from_secs(20)).build()?,
 		token: std::env::var("MULTILOGIN_TOKEN").map_err(|_| eyre!("MULTILOGIN_TOKEN"))?,
 	};
-	println!("minutes before: {}", api.call("GET", "/mobile_profiles/limit", None).await?);
+	println!("minutes before: {}", api.call(Method::GET, "/mobile_profiles/limit", None).await?);
 	ensure!(api.status(&phone).await? == 2, "{phone} is not stopped: nothing started here");
 
 	let started = Instant::now();
@@ -56,7 +57,7 @@ async fn main() -> eyre::Result<()> {
 	}
 	let stopped = stop(&api, &phone).await;
 	println!("ran {} s from phone/start to the stop read back", started.elapsed().as_secs());
-	println!("minutes after: {:?}", api.call("GET", "/mobile_profiles/limit", None).await);
+	println!("minutes after: {:?}", api.call(Method::GET, "/mobile_profiles/limit", None).await);
 	stopped.map_err(|e| eyre!("THE PHONE MAY STILL RUN: stop it in the Multilogin app: {e:#}"))
 }
 
@@ -86,18 +87,18 @@ async fn until<T, F: Future<Output = eyre::Result<Option<T>>>>(what: &str, expec
 	.await
 }
 
-async fn measure(api: &Api, phone: &str, out: &Path, tools: &Path, chromium: &str, at: Instant) -> eyre::Result<()> {
+async fn measure(api: &Api, phone: &str, out: &Path, tools: &Path, chromium: &Path, at: Instant) -> eyre::Result<()> {
 	let start = within(
 		"phone/start",
 		Duration::from_secs(20),
-		api.call("POST", "/mobile_profiles/phone/start", Some(json!({ "ids": [phone] }))),
+		api.call(Method::POST, "/mobile_profiles/phone/start", Some(json!({ "ids": [phone] }))),
 	)
 	.await?;
 	std::fs::write(out.join("start.json"), serde_json::to_vec_pretty(&start)?)?;
 	println!("[{:>3}s] phone/start answered: {start}", at.elapsed().as_secs());
 	// 44 s at M1
 	let statuses = until("started", Duration::from_secs(90), || async {
-		let v = api.call("POST", "/mobile_profiles/phone/statuses", Some(json!({ "ids": [phone] }))).await?;
+		let v = api.call(Method::POST, "/mobile_profiles/phone/statuses", Some(json!({ "ids": [phone] }))).await?;
 		match v["success_details"][0]["status"].as_u64() {
 			Some(0) => Ok(Some(v)),
 			Some(3) => bail!("{phone} is expired"),
@@ -112,7 +113,7 @@ async fn measure(api: &Api, phone: &str, out: &Path, tools: &Path, chromium: &st
 
 /// The stream URL: its headers (whether a frame may embed it), and what headless Chromium shows of
 /// it alone and inside an iframe, and its DOM, each cut at 12 s of loading.
-async fn look_at_stream(url: &str, out: &Path, chromium: &str) -> eyre::Result<()> {
+async fn look_at_stream(url: &str, out: &Path, chromium: &Path) -> eyre::Result<()> {
 	std::fs::write(out.join("stream_url.txt"), url)?;
 	let r = within("stream GET", Duration::from_secs(15), async { Ok(reqwest::get(url).await?) }).await?;
 	let headers: Vec<String> = r.headers().iter().map(|(k, v)| format!("{k}: {}", v.to_str().unwrap_or("?"))).collect();
@@ -162,12 +163,12 @@ async fn look_at_stream(url: &str, out: &Path, chromium: &str) -> eyre::Result<(
 async fn drive(api: &Api, phone: &str, out: &Path, tools: &Path, at: Instant) -> eyre::Result<()> {
 	println!(
 		"adb/info before adb/set: {}",
-		api.call("POST", "/mobile_profiles/phone/adb/info", Some(json!({ "ids": [phone] }))).await?
+		api.call(Method::POST, "/mobile_profiles/phone/adb/info", Some(json!({ "ids": [phone] }))).await?
 	);
-	api.call("POST", "/mobile_profiles/phone/adb/set", Some(json!({ "ids": [phone], "enabled": true }))).await?;
+	api.call(Method::POST, "/mobile_profiles/phone/adb/set", Some(json!({ "ids": [phone], "enabled": true }))).await?;
 	// adb left on by the run before reads active at once with a password adb/set replaces (M1)
 	let p = until("adb active and glogin taking its password", Duration::from_secs(60), || async {
-		let v = api.call("POST", "/mobile_profiles/phone/adb/info", Some(json!({ "ids": [phone] }))).await?;
+		let v = api.call(Method::POST, "/mobile_profiles/phone/adb/info", Some(json!({ "ids": [phone] }))).await?;
 		let i = &v["items"][0];
 		if i["status"] != "active" {
 			return Ok(None);
@@ -200,7 +201,7 @@ async fn drive(api: &Api, phone: &str, out: &Path, tools: &Path, at: Instant) ->
 		("packages", "pm list packages | grep -iE 'chrome|gms|vending|adbkeyboard|geelark|multilogin|magisk'"),
 		("resolver", "ls -l /etc/resolv.conf 2>&1; cat /etc/resolv.conf 2>&1; getprop net.dns1"),
 	] {
-		p.step(name, line, |_| true).await?;
+		p.step(name, Line { v: line }, |_| true).await?;
 	}
 	for i in 0..3 {
 		let png = within(&format!("screencap {i}"), COMMAND, p.exec_out(&["screencap", "-p"])).await?;
@@ -210,25 +211,35 @@ async fn drive(api: &Api, phone: &str, out: &Path, tools: &Path, at: Instant) ->
 			std::fs::write(out.join("screen.png"), png)?;
 		}
 	}
-	p.step("tap", "input tap 540 1200", |_| true).await?;
+	p.step("tap", Line { v: "input tap 540 1200" }, |_| true).await?;
 
 	p.step(
 		"mock appops",
-		"appops set com.android.shell android:mock_location allow && appops get com.android.shell android:mock_location",
+		Line {
+			v: "appops set com.android.shell android:mock_location allow && appops get com.android.shell android:mock_location",
+		},
 		|s| s.contains("allow"),
 	)
 	.await?;
 	p.step(
 		"mock providers",
-		"for p in gps network fused; do cmd location providers add-test-provider $p && cmd location providers set-test-provider-enabled $p true && cmd location providers set-test-provider-location $p --location 45.764,4.8357 || exit 1; done; echo done",
+		Line { v: "for p in gps network fused; do cmd location providers add-test-provider $p && cmd location providers set-test-provider-enabled $p true && cmd location providers set-test-provider-location $p --location 45.764,4.8357 || exit 1; done; echo done" },
 		|s| s.ends_with("done"),
 	)
 	.await?;
-	p.step("location read back", "dumpsys location | grep -iE 'last location|mock' | head -8", |s| s.contains("45.76"))
-		.await?;
+	p.step(
+		"location read back",
+		Line {
+			v: "dumpsys location | grep -iE 'last location|mock' | head -8",
+		},
+		|s| s.contains("45.76"),
+	)
+	.await?;
 	p.step(
 		"zone",
-		"settings put global auto_time_zone 0; cmd alarm set-timezone Europe/Paris; getprop persist.sys.timezone",
+		Line {
+			v: "settings put global auto_time_zone 0; cmd alarm set-timezone Europe/Paris; getprop persist.sys.timezone",
+		},
 		|s| s.ends_with("Europe/Paris"),
 	)
 	.await?;
@@ -241,7 +252,9 @@ async fn drive(api: &Api, phone: &str, out: &Path, tools: &Path, at: Instant) ->
 	.await?;
 	p.step(
 		"exit from inside",
-		&format!("chmod 755 {BUSYBOX}; {BUSYBOX} wget -qO- 'http://ip-api.com/json/?fields=countryCode,city,isp,mobile,proxy,hosting,query,timezone'"),
+		Line {
+			v: &format!("chmod 755 {BUSYBOX}; {BUSYBOX} wget -qO- 'http://ip-api.com/json/?fields=countryCode,city,isp,mobile,proxy,hosting,query,timezone'"),
+		},
 		|s| s.contains("\"countryCode\":\"FR\""),
 	)
 	.await?;
@@ -255,33 +268,49 @@ async fn drive(api: &Api, phone: &str, out: &Path, tools: &Path, at: Instant) ->
 	ensure!(said.contains("Success"), "ADBKeyBoard install: {said}");
 	p.step(
 		"ime set",
-		&format!("ime enable {ADB_KEYBOARD}; ime set {ADB_KEYBOARD}; settings put secure show_ime_with_hard_keyboard 1; settings get secure default_input_method"),
+		Line {
+			v: &format!("ime enable {ADB_KEYBOARD}; ime set {ADB_KEYBOARD}; settings put secure show_ime_with_hard_keyboard 1; settings get secure default_input_method"),
+		},
 		|s| s.ends_with(ADB_KEYBOARD),
 	)
 	.await?;
 	p.step(
 		"chrome",
-		"am start -a android.intent.action.VIEW -d 'https://www.google.com/search?q=plombier' com.android.chrome",
+		Line {
+			v: "am start -a android.intent.action.VIEW -d 'https://www.google.com/search?q=plombier' com.android.chrome",
+		},
 		|s| s.contains("Starting"),
 	)
 	.await?;
 	tokio::time::sleep(Duration::from_secs(6)).await;
 	save(&p, out, "chrome").await?;
 	let ui = p
-		.step("ui dump", "uiautomator dump /sdcard/ui.xml >/dev/null && cat /sdcard/ui.xml", |s| s.contains("<hierarchy"))
+		.step(
+			"ui dump",
+			Line {
+				v: "uiautomator dump /sdcard/ui.xml >/dev/null && cat /sdcard/ui.xml",
+			},
+			|s| s.contains("<hierarchy"),
+		)
 		.await?;
 	std::fs::write(out.join("ui.xml"), &ui)?;
 	let (x, y) = edit_text_center(&ui).ok_or_else(|| eyre!("no text field on Chrome's screen to type into: see chrome.png, ui.xml"))?;
-	p.step("tap the field", &format!("input tap {x} {y}"), |_| true).await?;
+	p.step("tap the field", Line { v: &format!("input tap {x} {y}") }, |_| true).await?;
 	tokio::time::sleep(Duration::from_secs(2)).await;
 	let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, "Électricien à Besançon");
-	p.step("type", &format!("am broadcast -a ADB_INPUT_B64 --es msg {b64}"), |s| s.contains("Broadcast completed"))
-		.await?;
+	p.step(
+		"type",
+		Line {
+			v: &format!("am broadcast -a ADB_INPUT_B64 --es msg {b64}"),
+		},
+		|s| s.contains("Broadcast completed"),
+	)
+	.await?;
 	tokio::time::sleep(Duration::from_secs(2)).await;
 	save(&p, out, "typed").await?;
 	println!(
 		"statuses at the end: {}",
-		api.call("POST", "/mobile_profiles/phone/statuses", Some(json!({ "ids": [phone] }))).await?
+		api.call(Method::POST, "/mobile_profiles/phone/statuses", Some(json!({ "ids": [phone] }))).await?
 	);
 	Ok(())
 }
@@ -304,6 +333,10 @@ fn edit_text_center(ui: &str) -> Option<(i64, i64)> {
 	}
 }
 
+struct Line<'a> {
+	v: &'a str,
+}
+
 struct Phone {
 	adb: PathBuf,
 	serial: String,
@@ -320,8 +353,13 @@ impl Phone {
 
 	/// `line` in the phone's shell, logged in on the same connection first; within [`COMMAND`], its
 	/// answer what `expect` takes, else the run aborts.
-	async fn step(&self, name: &str, line: &str, expect: impl Fn(&str) -> bool) -> eyre::Result<String> {
-		let said = within(name, COMMAND, self.adb(&["-s", &self.serial, "shell", &format!("glogin '{}' >/dev/null 2>&1; {line}", self.pwd)])).await?;
+	async fn step(&self, name: &str, line: Line<'_>, expect: impl Fn(&str) -> bool) -> eyre::Result<String> {
+		let said = within(
+			name,
+			COMMAND,
+			self.adb(&["-s", &self.serial, "shell", &format!("glogin '{}' >/dev/null 2>&1; {}", self.pwd, line.v)]),
+		)
+		.await?;
 		println!("{}", said.chars().take(4000).collect::<String>());
 		ensure!(!said.contains("run glogin to login first"), "{name}: not logged in");
 		ensure!(expect(&said), "{name}: not what was expected");
@@ -343,7 +381,7 @@ async fn stop(api: &Api, phone: &str) -> eyre::Result<()> {
 		println!("already stopped");
 		return Ok(());
 	}
-	api.call("POST", "/mobile_profiles/phone/stop", Some(json!({ "ids": [phone] }))).await?;
+	api.call(Method::POST, "/mobile_profiles/phone/stop", Some(json!({ "ids": [phone] }))).await?;
 	for _ in 0..60 {
 		if api.status(phone).await? == 2 {
 			println!("stopped, read back");
@@ -368,8 +406,8 @@ struct Api {
 }
 
 impl Api {
-	async fn call(&self, method: &str, path: &str, body: Option<Value>) -> eyre::Result<Value> {
-		let mut req = self.http.request(method.parse()?, format!("{API}{path}")).bearer_auth(&self.token);
+	async fn call(&self, method: Method, path: &str, body: Option<Value>) -> eyre::Result<Value> {
+		let mut req = self.http.request(method.clone(), format!("{API}{path}")).bearer_auth(&self.token);
 		if let Some(b) = body {
 			req = req.json(&b);
 		}
@@ -382,7 +420,7 @@ impl Api {
 	}
 
 	async fn status(&self, phone: &str) -> eyre::Result<u64> {
-		let v = self.call("POST", "/mobile_profiles/phone/statuses", Some(json!({ "ids": [phone] }))).await?;
+		let v = self.call(Method::POST, "/mobile_profiles/phone/statuses", Some(json!({ "ids": [phone] }))).await?;
 		v["success_details"][0]["status"].as_u64().ok_or_else(|| eyre!("no status for {phone}: {v}"))
 	}
 }

@@ -11,7 +11,7 @@ use axum::{
 use jiff::Timestamp;
 use sa_auth::{Principal, Service, SourceKind};
 use sa_core::ids::BrandId;
-use sa_panel::testing::{Signed, TestDb, admin, panel, sign, sign_get};
+use sa_panel::testing::{Signed, SourceKey, TestDb, admin, panel, sign, sign_get};
 use sa_server::{
 	http::Limits,
 	testing::{Log, app, app_with, upstream},
@@ -78,7 +78,20 @@ async fn a_signed_batch_reaches_sites_with_its_grant_and_comes_back_as_sites_ans
 	let now = Timestamp::now();
 	let body = br#"{"events":[{"id":"x"}]}"#;
 
-	let (status, _, answer) = send(&app, EVENTS, &sign("aquafix-site", &secret, body, now), true).await;
+	let (status, _, answer) = send(
+		&app,
+		EVENTS,
+		&sign(
+			SourceKey {
+				id: "aquafix-site",
+				secret: &secret,
+			},
+			body,
+			now,
+		),
+		true,
+	)
+	.await;
 	assert_eq!((status, answer["results"][0]["status"].as_str()), (StatusCode::MULTI_STATUS, Some("accepted")));
 	let got = seen.lock().unwrap().pop().unwrap();
 	assert_eq!((got.path_and_query.as_str(), got.body.as_ref()), (EVENTS, body.as_slice()), "the body as it came");
@@ -89,7 +102,14 @@ async fn a_signed_batch_reaches_sites_with_its_grant_and_comes_back_as_sites_ans
 	assert_eq!((source.key_id.as_str(), source.kind), ("aquafix-site", SourceKind::Site));
 	assert_eq!(source.brands, ["aquafix".to_owned(), "vifnet".to_owned()].into());
 
-	let deferred = sign("aquafix-site", &secret, br#"{"events":[{"id":"defer"}]}"#, now);
+	let deferred = sign(
+		SourceKey {
+			id: "aquafix-site",
+			secret: &secret,
+		},
+		br#"{"events":[{"id":"defer"}]}"#,
+		now,
+	);
 	let (status, retry, answer) = send(&app, EVENTS, &deferred, true).await;
 	assert_eq!((status, retry.as_ref().map(|r| r.to_str().unwrap())), (StatusCode::CONFLICT, Some("30")), "{answer}");
 }
@@ -103,25 +123,90 @@ async fn a_refused_signature_never_reaches_sites() {
 	let now = Timestamp::now();
 	let body = br#"{"events":[]}"#;
 
-	let (status, _, _) = send(&app, EVENTS, &sign("aquafix-site", &secret, body, now), false).await;
+	let (status, _, _) = send(
+		&app,
+		EVENTS,
+		&sign(
+			SourceKey {
+				id: "aquafix-site",
+				secret: &secret,
+			},
+			body,
+			now,
+		),
+		false,
+	)
+	.await;
 	assert_eq!(status, StatusCode::UNAUTHORIZED, "no signature");
-	let (s1, _, b1) = send(&app, EVENTS, &sign("aquafix-site", &"f".repeat(64), body, now), true).await;
-	let (s2, _, b2) = send(&app, EVENTS, &sign("nobody", &secret, body, now), true).await;
+	let (s1, _, b1) = send(
+		&app,
+		EVENTS,
+		&sign(
+			SourceKey {
+				id: "aquafix-site",
+				secret: &"f".repeat(64),
+			},
+			body,
+			now,
+		),
+		true,
+	)
+	.await;
+	let (s2, _, b2) = send(&app, EVENTS, &sign(SourceKey { id: "nobody", secret: &secret }, body, now), true).await;
 	assert_eq!((s1, s2), (StatusCode::UNAUTHORIZED, StatusCode::UNAUTHORIZED));
 	assert_eq!(b1, b2, "an unknown key and a bad signature read the same");
 	let tampered = Signed {
 		body: br#"{"events":[{}]}"#.to_vec(),
-		..sign("aquafix-site", &secret, body, now)
+		..sign(
+			SourceKey {
+				id: "aquafix-site",
+				secret: &secret,
+			},
+			body,
+			now,
+		)
 	};
 	assert_eq!(send(&app, EVENTS, &tampered, true).await.0, StatusCode::UNAUTHORIZED, "another body");
-	let stale = sign("aquafix-site", &secret, body, now - jiff::SignedDuration::from_mins(10));
+	let stale = sign(
+		SourceKey {
+			id: "aquafix-site",
+			secret: &secret,
+		},
+		body,
+		now - jiff::SignedDuration::from_mins(10),
+	);
 	let (status, _, answer) = send(&app, EVENTS, &stale, true).await;
 	assert_eq!((status, answer["error"].as_str()), (StatusCode::UNAUTHORIZED, Some("timestamp outside the replay window")));
 	assert!(panel.revoke_source("aquafix-site").await.unwrap());
-	assert_eq!(send(&app, EVENTS, &sign("aquafix-site", &secret, body, now), true).await.0, StatusCode::UNAUTHORIZED, "revoked");
+	assert_eq!(
+		send(
+			&app,
+			EVENTS,
+			&sign(
+				SourceKey {
+					id: "aquafix-site",
+					secret: &secret
+				},
+				body,
+				now
+			),
+			true
+		)
+		.await
+		.0,
+		StatusCode::UNAUTHORIZED,
+		"revoked"
+	);
 	let huge = Signed {
 		body: vec![b' '; 4 * 1024 * 1024 + 1],
-		..sign("aquafix-site", &secret, body, now)
+		..sign(
+			SourceKey {
+				id: "aquafix-site",
+				secret: &secret,
+			},
+			body,
+			now,
+		)
 	};
 	assert_eq!(send(&app, EVENTS, &huge, true).await.0, StatusCode::PAYLOAD_TOO_LARGE);
 	assert!(seen.lock().unwrap().is_empty(), "nothing reached sites");
@@ -156,7 +241,7 @@ async fn a_bots_lookup_reaches_sites_as_its_source_over_no_body() {
 		}
 	};
 	let now = Timestamp::now();
-	let (status, body) = look(sign_get("aquafix-bot", &secret, path, now)).await;
+	let (status, body) = look(sign_get(SourceKey { id: "aquafix-bot", secret: &secret }, path, now)).await;
 	assert_eq!((status, body.as_ref()), (StatusCode::OK, br#"{"lead_id":"L-1"}"#.as_slice()));
 	let got = seen.lock().unwrap().pop().unwrap();
 	assert_eq!(got.path_and_query, path);
@@ -165,7 +250,7 @@ async fn a_bots_lookup_reaches_sites_as_its_source_over_no_body() {
 	};
 	assert_eq!((source.key_id.as_str(), source.kind), ("aquafix-bot", SourceKind::Bot));
 
-	let other_path = sign_get("aquafix-bot", &secret, "/api/ingest/v1/leads/by-ref/aquafix/AQ-0000", now);
+	let other_path = sign_get(SourceKey { id: "aquafix-bot", secret: &secret }, "/api/ingest/v1/leads/by-ref/aquafix/AQ-0000", now);
 	assert_eq!(look(other_path).await.0, StatusCode::UNAUTHORIZED, "a signature opens its one lookup");
 	assert!(seen.lock().unwrap().is_empty());
 }
@@ -209,7 +294,7 @@ async fn costly_requests_are_refused_before_the_body_is_read() {
 		request_timeout: std::time::Duration::from_secs(5),
 		..Default::default()
 	};
-	let app = app_with(panel, admin(), "dev@localhost", &sites, limits);
+	let app = app_with(panel, admin(), "dev@localhost", &sites.parse().unwrap(), limits);
 	let res = tokio::time::timeout(quick, app.clone().oneshot(request("aquafix-site", &now, stalled()))).await.unwrap().unwrap();
 	assert_eq!(res.status(), StatusCode::REQUEST_TIMEOUT, "a body too slow to arrive");
 

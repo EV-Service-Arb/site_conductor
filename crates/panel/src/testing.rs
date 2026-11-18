@@ -120,7 +120,13 @@ pub fn panel_with(store: Store, key: DataKey) -> Panel {
 
 /// A panel on `store` asking `google` on `accounts`, tokens as [`panel_with`].
 pub fn panel_on(store: Store, key: DataKey, google: sa_places::Google, accounts: sa_places::Accounts) -> Panel {
-	let renewal = sa_core::tokens::Renewal::try_new(15, 500, 1.).expect("a valid renewal");
+	let renewal = sa_core::tokens::Renewal {
+		daily: 15,
+		cap: 500,
+		start_cap_multiple: 1.,
+	}
+	.validate()
+	.expect("a valid renewal");
 	Panel::new(store, key, renewal, google, Arc::new(accounts))
 }
 
@@ -159,12 +165,19 @@ impl Signed {
 	}
 }
 
-/// `body`, signed at `at` with `secret`, as a source sends a batch.
-pub fn sign(key_id: &str, secret: &str, body: &[u8], at: Timestamp) -> Signed {
+/// A source's key, as the source holds it.
+#[derive(Clone, Copy)]
+pub struct SourceKey<'a> {
+	pub id: &'a str,
+	pub secret: &'a str,
+}
+
+/// `body`, signed at `at` with `key`, as a source sends a batch.
+pub fn sign(key: SourceKey<'_>, body: &[u8], at: Timestamp) -> Signed {
 	let timestamp = at.as_second().to_string();
 	Signed {
-		key_id: key_id.to_owned(),
-		signature: signature::sign(secret.as_bytes(), &timestamp, body),
+		key_id: key.id.to_owned(),
+		signature: signature::sign(key.secret.as_bytes(), &timestamp, body),
 		timestamp,
 		body: body.to_vec(),
 	}
@@ -172,11 +185,11 @@ pub fn sign(key_id: &str, secret: &str, body: &[u8], at: Timestamp) -> Signed {
 
 /// A `GET` signed as a source signs a batch: what a bot sends to look a lead up by its ref
 /// (`GET /api/ingest/v1/leads/by-ref/…`), the MAC over `GET <path>` in place of a body.
-pub fn sign_get(key_id: &str, secret: &str, path: &str, at: Timestamp) -> Signed {
+pub fn sign_get(key: SourceKey<'_>, path: &str, at: Timestamp) -> Signed {
 	let timestamp = at.as_second().to_string();
 	Signed {
-		key_id: key_id.to_owned(),
-		signature: signature::sign(secret.as_bytes(), &timestamp, format!("GET {path}").as_bytes()),
+		key_id: key.id.to_owned(),
+		signature: signature::sign(key.secret.as_bytes(), &timestamp, format!("GET {path}").as_bytes()),
 		timestamp,
 		body: Vec::new(),
 	}

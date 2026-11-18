@@ -81,10 +81,10 @@ impl Usage {
 		Ok(())
 	}
 
-	/// After `after`, at most `limit`.
-	pub(crate) fn page(&self, after: usize, limit: usize) -> Vec<Used> {
+	/// Those whose position is in `window`.
+	pub(crate) fn page(&self, window: std::ops::Range<usize>) -> Vec<Used> {
 		let inner = self.inner.lock().expect("never held across a panic");
-		inner.used.iter().skip(after).take(limit).cloned().collect()
+		inner.used.iter().skip(window.start).take(window.len()).cloned().collect()
 	}
 }
 

@@ -22,6 +22,18 @@ const BROWSER: &str = "EXISTS (SELECT 1 FROM gmail_browsers w WHERE w.gmail_id =
 
 type GmailRow = (i64, Uuid, String, Option<String>, i64, bool);
 
+/// A GBP, by its id.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GmbId {
+	pub v: i64,
+}
+
+/// A trade, by its id.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TradeId {
+	pub v: i64,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Gmail {
 	pub id: i64,
@@ -270,9 +282,9 @@ pub async fn rename(conn: &mut SqliteConnection, id: i64, name: &str) -> eyre::R
 }
 
 /// To another gmail of its owner's: the schema refuses anyone else's.
-pub async fn move_to(conn: &mut SqliteConnection, id: i64, gmail_id: i64) -> eyre::Result<()> {
+pub async fn move_to(conn: &mut SqliteConnection, id: GmbId, gmail_id: i64) -> eyre::Result<()> {
 	sqlx::query("UPDATE gmbs SET gmail_id = $2 WHERE id = $1")
-		.bind(id)
+		.bind(id.v)
 		.bind(gmail_id)
 		.execute(&mut *conn)
 		.await

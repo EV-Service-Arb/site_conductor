@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use crate::{
 	Runner, adb,
-	profile::{Ends, Up, up},
+	profile::{Ends, Token, Up, up},
 };
 
 /// Without a viewer.
@@ -52,7 +52,7 @@ impl MobileMinutes {
 
 pub(crate) struct Run {
 	pub(crate) user: Uuid,
-	pub(crate) token: String,
+	pub(crate) token: Token,
 	pub(crate) phone: String,
 	pub(crate) geo: Option<(f64, f64)>,
 	pub(crate) zone: String,
@@ -65,7 +65,7 @@ pub(crate) struct Run {
 struct Record {
 	phone: String,
 	/// What stops it: a run token, 3 h.
-	token: String,
+	token: Token,
 	/// Just before `phone/start`: its minutes are counted from here.
 	since: Timestamp,
 	/// Whom its minutes are charged to.
@@ -139,7 +139,7 @@ async fn started(runner: &Runner, gmail: i64, run: &Run, start: &Value, ends: &m
 		let (Some(ip), Some(port), Some(pwd)) = (i["ip"].as_str(), i["port"].as_str(), i["pwd"].as_str()) else {
 			eyre::bail!("adb/info is active for {} without its ip, port or pwd", run.phone);
 		};
-		match adb::Phone::connect(runner.0.adb.clone(), runner.0.ffmpeg.clone(), format!("{ip}:{port}"), pwd.to_owned()).await {
+		match adb::Phone::connect(runner.0.adb.clone(), runner.0.ffmpeg.clone(), format!("{ip}:{port}"), adb::Pwd { v: pwd.to_owned() }).await {
 			Ok(p) => Ok(Some(p)),
 			Err(e) if format!("{e:#}").contains("password error") => {
 				tracing::info!(phone = run.phone, "glogin refused adb/info's password: asked again");
@@ -310,21 +310,21 @@ pub(crate) struct Api {
 
 impl Api {
 	/// The one call that bills.
-	async fn start(&self, token: &str, phone: &str, _minutes: &MobileMinutes) -> eyre::Result<Value> {
+	async fn start(&self, token: &Token, phone: &str, _minutes: &MobileMinutes) -> eyre::Result<Value> {
 		self.send(token, reqwest::Method::POST, START, json!({ "ids": [phone] })).await
 	}
 
-	async fn call(&self, token: &str, method: reqwest::Method, path: &str, body: Value) -> eyre::Result<Value> {
+	async fn call(&self, token: &Token, method: reqwest::Method, path: &str, body: Value) -> eyre::Result<Value> {
 		assert_ne!(path, START, "a start takes MobileMinutes");
 		self.send(token, method, path, body).await
 	}
 
 	/// `data` of a call that succeeded whole: a batch answers 200 with its failures in `fail_amount`.
-	async fn send(&self, token: &str, method: reqwest::Method, path: &str, body: Value) -> eyre::Result<Value> {
+	async fn send(&self, token: &Token, method: reqwest::Method, path: &str, body: Value) -> eyre::Result<Value> {
 		let res = self
 			.http
 			.request(method.clone(), format!("{}{path}", self.base))
-			.bearer_auth(token)
+			.bearer_auth(&token.v)
 			.json(&body)
 			.send()
 			.await
@@ -338,7 +338,7 @@ impl Api {
 		Ok(v["data"].clone())
 	}
 
-	async fn status(&self, token: &str, phone: &str) -> eyre::Result<u64> {
+	async fn status(&self, token: &Token, phone: &str) -> eyre::Result<u64> {
 		let v = self.call(token, reqwest::Method::POST, "/mobile_profiles/phone/statuses", json!({ "ids": [phone] })).await?;
 		v["success_details"][0]["status"]
 			.as_u64()

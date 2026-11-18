@@ -102,7 +102,7 @@ pub struct Concierge {
 }
 impl Concierge {
 	/// Connects on first use, so the panel starts (and serves ingest) while concierge is down.
-	pub fn try_new(grpc_addr: &str, client_secret: &str) -> eyre::Result<Self> {
+	pub fn try_new(grpc_addr: &str, client_secret: Zeroizing<String>) -> eyre::Result<Self> {
 		let channel = Endpoint::from_shared(grpc_addr.to_owned())
 			.map_err(|e| eyre::eyre!("CONCIERGE_GRPC_ADDR {grpc_addr:?}: {e}"))?
 			.connect_timeout(CALL_TIMEOUT)
@@ -112,7 +112,7 @@ impl Concierge {
 			backend: Backend::Grpc(Arc::new(Grpc {
 				auth: AuthServiceClient::new(channel.clone()),
 				directory: UserDirectoryClient::new(channel),
-				secret: Zeroizing::new(client_secret.to_owned()),
+				secret: client_secret,
 			})),
 		})
 	}
@@ -143,9 +143,7 @@ impl Concierge {
 		matches!(self.backend, Backend::Dev(_))
 	}
 
-	/// Redeems the code the browser brought back, with the verifier of the challenge sent to
-	/// authorize.
-	pub async fn exchange_code(&self, code: &str, redirect_uri: &str, verifier: &str) -> Result<Issued, ConciergeError> {
+	pub async fn exchange_code(&self, CodeExchange { code, redirect_uri, verifier }: CodeExchange<'_>) -> Result<Issued, ConciergeError> {
 		let (auth, secret) = match &self.backend {
 			Backend::Grpc(g) => (&g.auth, &g.secret),
 			Backend::Dev(who) => {
@@ -213,6 +211,13 @@ impl Concierge {
 		req.metadata_mut().insert("authorization", bearer);
 		directory.clone().get_me(req).await?.into_inner().try_into()
 	}
+}
+
+/// The code the browser brought back, with the verifier of the challenge sent to authorize.
+pub struct CodeExchange<'a> {
+	pub code: &'a str,
+	pub redirect_uri: &'a str,
+	pub verifier: &'a str,
 }
 
 /// Whom [`Concierge::dev`] signs in.

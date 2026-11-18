@@ -6,7 +6,7 @@ use eyre::WrapErr;
 use jiff::{SignedDuration, Timestamp};
 use sa_alerts::{Button, Rule};
 use sa_auth::PermissionSet;
-use sa_core::notify::{GLOBAL_PER_SECOND, PER_CHAT_GAP, PER_GROUP_GAP};
+use sa_core::notify::{ChatId, GLOBAL_PER_SECOND, OutboxId, PER_CHAT_GAP, PER_GROUP_GAP};
 use sqlx::{SqliteConnection, types::Json};
 use uuid::Uuid;
 
@@ -148,18 +148,18 @@ pub async fn link(conn: &mut SqliteConnection, t: &Redeemed, chat: i64, account:
 		}
 		None => {
 			let destination = alerts::add(conn, t.user_id, None, now).await?;
-			insert(conn, destination, Kind::Private, chat, None, title.as_deref()).await?;
+			insert(conn, destination, Kind::Private, ChatId { v: chat }, None, title.as_deref()).await?;
 		}
 	}
 	alerts::access_seen(conn, t.user_id, &t.permissions, &t.display_name, t.issued_at).await
 }
 
 /// A destination's chat.
-pub async fn insert(conn: &mut SqliteConnection, destination: i64, kind: Kind, chat: i64, topic: Option<i64>, title: Option<&str>) -> eyre::Result<()> {
+pub async fn insert(conn: &mut SqliteConnection, destination: i64, kind: Kind, chat: ChatId, topic: Option<i64>, title: Option<&str>) -> eyre::Result<()> {
 	sqlx::query("INSERT INTO telegram_destinations (destination_id, kind, chat_id, topic_id, title) VALUES ($1, $2, $3, $4, $5)")
 		.bind(destination)
 		.bind(kind.as_ref())
-		.bind(chat)
+		.bind(chat.v)
 		.bind(topic)
 		.bind(title)
 		.execute(&mut *conn)
@@ -384,12 +384,12 @@ pub async fn claim_due(conn: &mut SqliteConnection, now: Timestamp, lease_until:
 	Ok(due)
 }
 
-pub async fn sent(conn: &mut SqliteConnection, id: i64, tg_message_id: i64, now: Timestamp) -> eyre::Result<()> {
+pub async fn sent(conn: &mut SqliteConnection, id: OutboxId, tg_message_id: i64, now: Timestamp) -> eyre::Result<()> {
 	sqlx::query(
 		"UPDATE telegram_outbox SET state = 'sent', sent_at = $3, tg_message_id = $2, text_sealed = NULL, data_key_fp = NULL, leased_until = NULL, last_error = NULL \
 		 WHERE id = $1",
 	)
-	.bind(id)
+	.bind(id.v)
 	.bind(tg_message_id)
 	.bind(to_db(now))
 	.execute(&mut *conn)

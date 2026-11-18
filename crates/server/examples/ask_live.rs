@@ -3,7 +3,7 @@
 use axum::{body::Body, http::Method};
 use sa_panel::testing::{TestDb, operator, panel};
 use sa_server::{
-	claude::Model,
+	claude::{Model, Origins},
 	concierge::{Concierge, DevIdentity},
 	http,
 	signin::{SignIn, SignInConfig},
@@ -41,7 +41,13 @@ async fn main() {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: ORIGIN.to_owned(),
 	};
-	let model = Model::new("https://api.anthropic.com".into(), "https://platform.claude.com".into(), Some(token.into()));
+	let model = Model::new(
+		Origins {
+			api: "https://api.anthropic.com".into(),
+			oauth: "https://platform.claude.com".into(),
+		},
+		Some(token.into()),
+	);
 	let app = http::app(SignIn::new(p, Concierge::dev(who), config), None, None, Default::default(), None, None, None, Some(model), None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;

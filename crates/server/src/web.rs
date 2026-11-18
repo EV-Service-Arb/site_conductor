@@ -74,7 +74,7 @@ pub fn serve(app: Router, files: Files, panel: Panel) -> Router {
 /// The origin's prefixes are the API side's, whether or not a route of theirs is mounted: an
 /// unknown path below one is a JSON 404, never the front end's page.
 fn reserved(path: &str) -> bool {
-	crate::forward::paths().any(|p| crate::forward::under(path, p.prefix))
+	crate::forward::paths().any(|p| p.covers(path))
 }
 
 /// Whether `/<slug>` is one of the conductor's own paths or pages, which no kit area may take.

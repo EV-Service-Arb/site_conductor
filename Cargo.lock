@@ -4521,6 +4521,7 @@ dependencies = [
  "strum",
  "subtle",
  "tempfile",
+ "tg_types",
  "thiserror 2.0.21",
  "tokio",
  "tokio-tungstenite",

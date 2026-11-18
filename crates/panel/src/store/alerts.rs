@@ -2,6 +2,8 @@
 //! the fan-out marks and the services' feed cursors. A destination's method keeps the rest
 //! (`telegram`). Every timestamp is the caller's `now`.
 
+use std::ops::Range;
+
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_alerts::Rule;
@@ -301,13 +303,13 @@ pub async fn feed_after(conn: &mut SqliteConnection, service: Service) -> eyre::
 		.wrap_err_with(|| format!("reading {service}'s feed cursor"))
 }
 
-/// Moves a service's cursor from `after` to `next`; `false` when it no longer stood at `after`
-/// (another replica took the page).
-pub async fn move_feed(conn: &mut SqliteConnection, service: Service, after: i64, next: i64) -> eyre::Result<bool> {
+/// Moves a service's cursor from `moved.start` to `moved.end`; `false` when it no longer stood at
+/// the start (another replica took the page).
+pub async fn move_feed(conn: &mut SqliteConnection, service: Service, moved: Range<i64>) -> eyre::Result<bool> {
 	let moved = sqlx::query("UPDATE alert_feeds SET after = $3 WHERE service = $1 AND after = $2")
 		.bind(service.as_str())
-		.bind(after)
-		.bind(next)
+		.bind(moved.start)
+		.bind(moved.end)
 		.execute(&mut *conn)
 		.await
 		.wrap_err_with(|| format!("moving {service}'s feed cursor"))?

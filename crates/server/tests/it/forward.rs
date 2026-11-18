@@ -11,7 +11,10 @@ use sa_server::testing::{Browser, Log, SEED, upstream};
 
 async fn setup(db: &TestDb) -> (Router, Log) {
 	let (base, seen) = upstream(Router::new()).await;
-	(sa_server::testing::app_with(panel(db).await, admin(), "dev-admin@localhost", &base, Default::default()), seen)
+	(
+		sa_server::testing::app_with(panel(db).await, admin(), "dev-admin@localhost", &base.parse().unwrap(), Default::default()),
+		seen,
+	)
 }
 
 #[tokio::test]
@@ -45,7 +48,18 @@ async fn a_signed_in_call_reaches_the_service_with_an_assertion_and_without_the_
 	let keys: Keys = SEED.parse::<Signer>().unwrap().public().parse().unwrap();
 	let token = got.headers["x-sa-assertion"].to_str().unwrap();
 	let now = jiff::Timestamp::now().as_second();
-	let a = sa_auth::verify(&keys, token, Service::ReviewArchive, "GET", "/me/overview", None, now).expect("the panel's assertion, not the forged one");
+	let a = sa_auth::verify(
+		&keys,
+		token,
+		Service::ReviewArchive,
+		sa_auth::Request {
+			method: "GET",
+			path: "/me/overview",
+			body: None,
+		},
+		now,
+	)
+	.expect("the panel's assertion, not the forged one");
 	let Principal::User(a) = a.principal else { panic!("a session's call is a user's") };
 	assert_eq!(a.email, "dev-admin@localhost");
 	assert!(a.permissions.iter().all(|p| p.starts_with("sa:review_archive:")), "{:?}", a.permissions);

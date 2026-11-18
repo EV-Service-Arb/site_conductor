@@ -216,7 +216,19 @@ fn routes(runner: Runner) -> Router {
 async fn conductor_only(State(runner): State<Runner>, req: Request, next: Next) -> Response {
 	let token = req.headers().get(sa_auth::HEADER).and_then(|v| v.to_str().ok());
 	let now = jiff::Timestamp::now().as_second();
-	let verified = token.map(|t| sa_auth::verify(&runner.0.keys, t, Service::Browsers, req.method().as_str(), req.uri().path(), None, now));
+	let verified = token.map(|t| {
+		sa_auth::verify(
+			&runner.0.keys,
+			t,
+			Service::Browsers,
+			sa_auth::Request {
+				method: req.method().as_str(),
+				path: req.uri().path(),
+				body: None,
+			},
+			now,
+		)
+	});
 	match verified {
 		Some(Ok(a)) if a.principal == Principal::Conductor => next.run(req).await,
 		refused => {
@@ -236,7 +248,7 @@ async fn used(State(runner): State<Runner>, Query(After { after, limit }): Query
 	let Ok(from) = usize::try_from(after) else {
 		return (StatusCode::BAD_REQUEST, "after is an id: 0 or more").into_response();
 	};
-	let used = runner.0.usage.page(from, limit);
+	let used = runner.0.usage.page(from..from.saturating_add(limit));
 	let next = used.last().map_or(after, |u| u.id);
 	Json(sa_core::usage::UsagePage { used, next }).into_response()
 }

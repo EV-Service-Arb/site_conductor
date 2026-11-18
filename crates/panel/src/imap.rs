@@ -14,25 +14,29 @@ use tokio_rustls::{
 	rustls::{ClientConfig, pki_types::ServerName},
 };
 
+use crate::store::connections::Inbox;
+
 /// IMAP over TLS from the first byte; nothing else is dialled, so a host cannot point the probe
 /// at another service.
 const PORT: u16 = 993;
 const TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Why the inbox did not log in, as its owner reads it; `Err` is ours.
-pub(crate) async fn login(host: &str, username: &str, password: &str) -> eyre::Result<Result<(), String>> {
+pub(crate) async fn login(inbox: Inbox<'_>, password: &str) -> eyre::Result<Result<(), String>> {
+	let Inbox { host, username } = inbox;
 	for (what, v) in [("username", username), ("password", password)] {
 		if v.is_empty() || !v.chars().all(|c| c.is_ascii() && !c.is_ascii_control()) {
 			return Ok(Err(format!("the {what} is printable ASCII, not empty")));
 		}
 	}
-	match tokio::time::timeout(TIMEOUT, exchange(host, username, password)).await {
+	match tokio::time::timeout(TIMEOUT, exchange(inbox, password)).await {
 		Ok(r) => r,
 		Err(_) => Ok(Err(format!("{host}:{PORT} did not answer within {}s", TIMEOUT.as_secs()))),
 	}
 }
 
-async fn exchange(host: &str, username: &str, password: &str) -> eyre::Result<Result<(), String>> {
+async fn exchange(inbox: Inbox<'_>, password: &str) -> eyre::Result<Result<(), String>> {
+	let Inbox { host, username } = inbox;
 	let addrs: Vec<SocketAddr> = match tokio::net::lookup_host((host, PORT)).await {
 		Ok(a) => a.collect(),
 		Err(e) => return Ok(Err(format!("{host} does not resolve: {e}"))),

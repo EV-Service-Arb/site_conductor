@@ -44,6 +44,15 @@ pub enum Column {
 	Boolean,
 }
 
+/// A panel's own parts: `id` (layouts outside the board name it), `kind`, `title`, and `grid`
+/// (`x, y, w, h`).
+pub struct Panel<'a> {
+	pub id: u32,
+	pub kind: &'a str,
+	pub title: &'a str,
+	pub grid: [u32; 4],
+}
+
 /// The panels of one dashboard, over `doc` as the datasource `datasource` (the service's name).
 pub struct Board<'a> {
 	doc: &'a OpenApi,
@@ -62,43 +71,42 @@ impl<'a> Board<'a> {
 		}
 	}
 
-	/// Panel `id` (layouts outside the board name it) of `kind` at `grid` (`x, y, w, h`); `display`
-	/// (its `options`, `fieldConfig`, `transformations`) is Grafana's, taken as it is.
+	/// `panel`, asking `query`; `display` (its `options`, `fieldConfig`, `transformations`) is
+	/// Grafana's, taken as it is.
 	///
 	/// Panics on an operation the document lacks, a parameter it does not take or one it needs
 	/// left out, or a field the selector reads that its answer has not.
-	pub fn panel(self, id: u32, kind: &str, title: &str, grid: [u32; 4], query: Query, display: Value) -> Self {
-		let target = self.target(title, "A", &query);
+	pub fn panel(self, panel: Panel, query: Query, display: Value) -> Self {
+		let mut target = self.target(panel.title, &query);
+		target["refId"] = json!("A");
 		let datasource = self.datasource();
-		self.place(id, kind, title, grid, datasource, target, display)
+		self.place(panel, datasource, target, display)
 	}
 
-	/// Panel `id` over panel `from`'s results, as that panel transformed them.
-	pub fn of_panel(self, id: u32, kind: &str, title: &str, grid: [u32; 4], from: u32, display: Value) -> Self {
-		assert!(self.panels.iter().any(|p| p["id"] == from), "{title}: no panel {from} before it");
+	/// `panel` over panel `from`'s results, as that panel transformed them.
+	pub fn of_panel(self, panel: Panel, from: u32, display: Value) -> Self {
+		assert!(self.panels.iter().any(|p| p["id"] == from), "{}: no panel {from} before it", panel.title);
 		let datasource = json!({ "type": "datasource", "uid": "-- Dashboard --" });
 		let target = json!({ "refId": "A", "datasource": datasource, "panelId": from, "withTransforms": true });
-		self.place(id, kind, title, grid, datasource, target, display)
+		self.place(panel, datasource, target, display)
 	}
 
 	/// Row `id`'s heading across the board at `grid`, above the panels after it.
 	pub fn row(self, id: u32, title: &str, grid: [u32; 4]) -> Self {
-		self.place(id, "row", title, grid, Value::Null, Value::Null, json!({ "collapsed": false, "panels": [] }))
+		self.place(Panel { id, kind: "row", title, grid }, Value::Null, Value::Null, json!({ "collapsed": false, "panels": [] }))
 	}
 
 	/// A variable `name` whose options an operation answers (its rows' `__value` and `__text`);
 	/// `rest` (`label`, `refresh`, `multi`, `includeAll`, …) is Grafana's.
 	pub fn variable(mut self, name: &str, query: Query, rest: Value) -> Self {
-		let mut infinity = self.target(name, "variable", &query);
-		let target = infinity.as_object_mut().expect("a target is an object");
-		target.remove("datasource");
-		let ref_id = target.remove("refId").expect("a target has its refId");
+		let mut infinity = self.target(name, &query);
+		infinity.as_object_mut().expect("a target is an object").remove("datasource");
 		let Value::Object(mut variable) = rest else { panic!("{name}: its rest is an object") };
 		for (k, v) in [
 			("name", json!(name)),
 			("type", json!("query")),
 			("datasource", self.datasource()),
-			("query", json!({ "refId": ref_id, "queryType": "infinity", "infinityQuery": infinity })),
+			("query", json!({ "refId": "variable", "queryType": "infinity", "infinityQuery": infinity })),
 		] {
 			assert!(variable.insert(k.to_owned(), v).is_none(), "{name}: {k} is the board's to write");
 		}
@@ -128,8 +136,8 @@ impl<'a> Board<'a> {
 		json!({ "type": INFINITY, "uid": self.datasource })
 	}
 
-	#[expect(clippy::too_many_arguments, reason = "each is one of a panel's own parts")]
-	fn place(mut self, id: u32, kind: &str, title: &str, grid: [u32; 4], datasource: Value, target: Value, display: Value) -> Self {
+	fn place(mut self, panel: Panel, datasource: Value, target: Value, display: Value) -> Self {
+		let Panel { id, kind, title, grid } = panel;
 		assert!(!self.panels.iter().any(|p| p["id"] == id), "{title}: panel {id} is another's");
 		let Value::Object(mut panel) = display else { panic!("{title}: its display is an object") };
 		let [x, y, w, h] = grid;
@@ -148,7 +156,7 @@ impl<'a> Board<'a> {
 	}
 
 	/// The Infinity query of `query`, held to its operation in the document.
-	fn target(&self, title: &str, ref_id: &str, query: &Query) -> Value {
+	fn target(&self, title: &str, query: &Query) -> Value {
 		let (path, _, op) = self
 			.doc
 			.operations()
@@ -181,7 +189,6 @@ impl<'a> Board<'a> {
 			options["headers"] = Value::Array(pairs(query.headers));
 		}
 		let mut target = json!({
-			"refId": ref_id,
 			"datasource": self.datasource(),
 			"type": "json",
 			"source": "url",

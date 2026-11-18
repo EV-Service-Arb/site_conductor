@@ -114,8 +114,8 @@ pub struct Put {
 }
 
 /// What a [`Scheme::Gop`] key is the digest of.
-pub fn gop(url: &str, body: &str) -> String {
-	format!("{url}\n{body}")
+pub fn gop(body: &str) -> String {
+	format!("{}\n{body}", crate::placement::SEARCH_TEXT)
 }
 
 /// A query's path under the cache's URL (`<origin>/api/queries_cache`, what a client is given).

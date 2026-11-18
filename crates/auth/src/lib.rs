@@ -387,10 +387,18 @@ impl Signer {
 #[derive(Clone, Debug)]
 pub struct Keys(BTreeMap<String, VerifyingKey>);
 
+/// The request an assertion is checked against.
+pub struct Request<'a> {
+	pub method: &'a str,
+	pub path: &'a str,
+	/// What a source's assertion was signed over; a user's ignores it (bodies stream past the panel).
+	pub body: Option<&'a [u8]>,
+}
+
 /// The assertion on one request, if the panel signed it for `aud` and for exactly this
-/// `method` and `path`, and it is alive at `now` (unix seconds). A source's assertion also
-/// needs the `body` it was signed over; a user's ignores it (bodies stream past the panel).
-pub fn verify(keys: &Keys, token: &str, aud: Service, method: &str, path: &str, body: Option<&[u8]>, now: i64) -> Result<Assertion, Refused> {
+/// request's method and path (and a source's, its body), and it is alive at `now` (unix seconds).
+pub fn verify(keys: &Keys, token: &str, aud: Service, request: Request, now: i64) -> Result<Assertion, Refused> {
+	let Request { method, path, body } = request;
 	let mut parts = token.split('.');
 	let (Some(header), Some(claims), Some(signature), None) = (parts.next(), parts.next(), parts.next(), parts.next()) else {
 		return Err(Refused::Malformed);
@@ -508,7 +516,7 @@ mod tests {
 		let keys: Keys = format!("{}, {}", panel.public(), other.public()).parse().unwrap();
 		let now = 1_000;
 		let token = panel.sign(&assertion(now));
-		let check = |aud, method, path, now| verify(&keys, &token, aud, method, path, None, now);
+		let check = |aud, method, path, now| verify(&keys, &token, aud, Request { method, path, body: None }, now);
 		assert_eq!(check(Service::ReviewArchive, "POST", "/targets", now), Ok(assertion(now)));
 		assert_eq!(check(Service::Playbook, "POST", "/targets", now), Err(Refused::Audience));
 		assert_eq!(check(Service::ReviewArchive, "GET", "/targets", now), Err(Refused::Request));
@@ -516,12 +524,51 @@ mod tests {
 		assert_eq!(check(Service::ReviewArchive, "POST", "/targets", now + TTL), Err(Refused::Expiry));
 
 		let only_other: Keys = other.public().parse().unwrap();
-		assert_eq!(verify(&only_other, &token, Service::ReviewArchive, "POST", "/targets", None, now), Err(Refused::UnknownKey));
+		assert_eq!(
+			verify(
+				&only_other,
+				&token,
+				Service::ReviewArchive,
+				Request {
+					method: "POST",
+					path: "/targets",
+					body: None
+				},
+				now
+			),
+			Err(Refused::UnknownKey)
+		);
 		let impostor = signer("k1").sign(&assertion(now));
-		assert_eq!(verify(&keys, &impostor, Service::ReviewArchive, "POST", "/targets", None, now), Err(Refused::Signature));
+		assert_eq!(
+			verify(
+				&keys,
+				&impostor,
+				Service::ReviewArchive,
+				Request {
+					method: "POST",
+					path: "/targets",
+					body: None
+				},
+				now
+			),
+			Err(Refused::Signature)
+		);
 		let mut forever = assertion(now);
 		forever.exp = now + 3600;
-		assert_eq!(verify(&keys, &panel.sign(&forever), Service::ReviewArchive, "POST", "/targets", None, now), Err(Refused::Expiry));
+		assert_eq!(
+			verify(
+				&keys,
+				&panel.sign(&forever),
+				Service::ReviewArchive,
+				Request {
+					method: "POST",
+					path: "/targets",
+					body: None
+				},
+				now
+			),
+			Err(Refused::Expiry)
+		);
 	}
 
 	#[test]
@@ -538,7 +585,19 @@ mod tests {
 			exp: now + TTL,
 		};
 		let token = panel.sign(&source);
-		let check = |aud, body: Option<&[u8]>| verify(&keys, &token, aud, "POST", "/ingest", body, now);
+		let check = |aud, body: Option<&[u8]>| {
+			verify(
+				&keys,
+				&token,
+				aud,
+				Request {
+					method: "POST",
+					path: "/ingest",
+					body,
+				},
+				now,
+			)
+		};
 		assert_eq!(check(Service::Sites, Some(body)), Ok(source.clone()));
 		assert_eq!(check(Service::ReviewArchive, Some(body)), Err(Refused::Audience));
 		assert_eq!(check(Service::Sites, Some(br#"{"events":[{}]}"#)), Err(Refused::Body));

@@ -90,25 +90,85 @@ const ROUTES: [Route; 6] = [
 
 /// The conductor's own prefixes: never a page's, nor a kit area's.
 const OWN: [Path; 15] = [
-	Path::new("/api", false, true),
-	Path::new("/api/v1", false, true),
+	Path {
+		prefix: "/api",
+		rate_limited: false,
+		published: true,
+	},
+	Path {
+		prefix: "/api/v1",
+		rate_limited: false,
+		published: true,
+	},
 	// open to everyone: the edge's limit is its only guard
-	Path::new("/api/queries_cache", true, true),
+	Path {
+		prefix: "/api/queries_cache",
+		rate_limited: true,
+		published: true,
+	},
 	// in-cluster only: the landings' and bots' ingest, the landings' review kit, the sandbox's runs
-	Path::new("/api/ingest", false, false),
-	Path::new("/api/kit", false, false),
-	Path::new(crate::execute::PREFIX, false, false),
-	Path::new("/auth", true, true),
-	Path::new("/mcp", false, true),
+	Path {
+		prefix: "/api/ingest",
+		rate_limited: false,
+		published: false,
+	},
+	Path {
+		prefix: "/api/kit",
+		rate_limited: false,
+		published: false,
+	},
+	Path {
+		prefix: crate::execute::PREFIX,
+		rate_limited: false,
+		published: false,
+	},
+	Path {
+		prefix: "/auth",
+		rate_limited: true,
+		published: true,
+	},
+	Path {
+		prefix: "/mcp",
+		rate_limited: false,
+		published: true,
+	},
 	// open (RFC 7591), or a sign-in's every step
-	Path::new("/mcp/register", true, true),
-	Path::new("/mcp/authorize", true, true),
-	Path::new("/mcp/token", true, true),
-	Path::new("/grafana", false, true),
-	Path::new("/mfe", false, true),
-	Path::new("/health", false, true),
+	Path {
+		prefix: "/mcp/register",
+		rate_limited: true,
+		published: true,
+	},
+	Path {
+		prefix: "/mcp/authorize",
+		rate_limited: true,
+		published: true,
+	},
+	Path {
+		prefix: "/mcp/token",
+		rate_limited: true,
+		published: true,
+	},
+	Path {
+		prefix: "/grafana",
+		rate_limited: false,
+		published: true,
+	},
+	Path {
+		prefix: "/mfe",
+		rate_limited: false,
+		published: true,
+	},
+	Path {
+		prefix: "/health",
+		rate_limited: false,
+		published: true,
+	},
 	// once the cabinet's account chip: a tab on an earlier build may still ask for its script
-	Path::new("/cabinet", false, true),
+	Path {
+		prefix: "/cabinet",
+		rate_limited: false,
+		published: true,
+	},
 ];
 
 /// Hop-by-hop headers (RFC 9110 §7.6.1) and what only the panel may say: never passed on.
@@ -144,19 +204,25 @@ pub struct Path {
 }
 
 impl Path {
-	const fn new(prefix: &'static str, rate_limited: bool, published: bool) -> Self {
-		Self { prefix, rate_limited, published }
+	/// Whether `path` is this prefix or below it, by whole segments.
+	pub fn covers(&self, path: &str) -> bool {
+		path.strip_prefix(self.prefix).is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+	}
+}
+
+impl From<&Route> for Path {
+	fn from(r: &Route) -> Self {
+		Self {
+			prefix: r.prefix,
+			rate_limited: r.rate_limited,
+			published: r.published,
+		}
 	}
 }
 
 /// Every prefix of the origin: the services' and the conductor's own.
 pub fn paths() -> impl Iterator<Item = Path> {
-	ROUTES.iter().map(|r| Path::new(r.prefix, r.rate_limited, r.published)).chain(OWN)
-}
-
-/// Whether `path` is `prefix` or below it, by whole segments.
-pub fn under(path: &str, prefix: &str) -> bool {
-	path.strip_prefix(prefix).is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+	ROUTES.iter().map(Path::from).chain(OWN)
 }
 
 /// Where each service is, and the key the conductor vouches with.
@@ -298,11 +364,8 @@ impl Forward {
 	/// A GET Grafana makes for `viewer` to a service's API: the forward's, as that viewer.
 	/// `req`, to a service's API under its prefix on this origin, as `user` tells that service of them.
 	pub(crate) async fn as_user(&self, req: Request, user: impl FnOnce(Service) -> User) -> Response {
-		match apis().find(|(_, prefix)| under(req.uri().path(), prefix)) {
-			Some((service, prefix)) => {
-				let route = ROUTES.iter().find(|r| r.prefix == prefix).expect("apis() are ROUTES");
-				self.pass(route, req, Some(Principal::User(user(service)))).await
-			}
+		match ROUTES.iter().find(|r| r.prefix == api_prefix(r.service) && Path::from(*r).covers(req.uri().path())) {
+			Some(route) => self.pass(route, req, Some(Principal::User(user(route.service)))).await,
 			None => Refusal::new(Code::NotFound, "not found").into_response(),
 		}
 	}
@@ -368,7 +431,7 @@ pub(crate) fn prefix(service: Service, upstream: &str) -> Option<&'static str> {
 }
 
 async fn forward(State(f): State<Forward>, mut req: Request) -> Response {
-	let route = ROUTES.iter().find(|r| under(req.uri().path(), r.prefix)).expect("mounted under one of ROUTES");
+	let route = ROUTES.iter().find(|r| Path::from(*r).covers(req.uri().path())).expect("mounted under one of ROUTES");
 	let principal = match route.gate {
 		Gate::Open => None,
 		Gate::Session => {
@@ -419,7 +482,7 @@ mod tests {
 
 	#[test]
 	fn the_first_route_matching_by_whole_segments_wins() {
-		let route = |p: &str| ROUTES.iter().find(|r| under(p, r.prefix)).map(|r| (r.prefix, r.gate));
+		let route = |p: &str| ROUTES.iter().find(|r| Path::from(*r).covers(p)).map(|r| (r.prefix, r.gate));
 		assert_eq!(route("/api/playbook/search"), Some(("/api/playbook", Gate::Session)));
 		assert_eq!(route("/playbook_mcp/token"), None, "playbook is reached at /mcp, not through a forward of its own");
 		assert_eq!(route("/api/review_archive/me"), Some(("/api/review_archive", Gate::Session)));

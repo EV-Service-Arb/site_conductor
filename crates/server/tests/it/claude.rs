@@ -23,7 +23,7 @@ use sa_panel::{
 	testing::{TestDb, operator, panel},
 };
 use sa_server::{
-	claude::Model,
+	claude::{Model, Origins},
 	concierge::{Concierge, DevIdentity},
 	http,
 	signin::{SignIn, SignInConfig},
@@ -104,7 +104,7 @@ impl World {
 			panel_origin: ORIGIN.to_owned(),
 			concierge_origin: ORIGIN.to_owned(),
 		};
-		let model = Model::new(base.clone(), base, Some("owner".to_owned().into()));
+		let model = Model::new(Origins { api: base.clone(), oauth: base }, Some("owner".to_owned().into()));
 		let app = http::app(
 			SignIn::new(panel.clone(), Concierge::dev(who), config),
 			None,

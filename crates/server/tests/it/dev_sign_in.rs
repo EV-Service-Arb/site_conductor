@@ -287,7 +287,7 @@ async fn as_is_refused_without_dev_sign_in() {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: "https://evinvest.ltd".to_owned(),
 	};
-	let concierge = Concierge::try_new("http://127.0.0.1:1", "secret").unwrap(); // never asked: `/auth/login` refuses first
+	let concierge = Concierge::try_new("http://127.0.0.1:1", "secret".to_owned().into()).unwrap(); // never asked: `/auth/login` refuses first
 	let app = http::app(SignIn::new(panel(&db).await, concierge, config), None, None, Default::default(), None, None, None, None, None);
 	assert_eq!(Browser::default().send(&app, Method::GET, "/auth/login").await.0, StatusCode::FOUND, "to concierge");
 	let (status, location, _) = Browser::default().send(&app, Method::GET, "/auth/login?as=dev-b%40localhost").await;

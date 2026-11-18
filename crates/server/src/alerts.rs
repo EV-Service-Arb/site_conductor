@@ -192,8 +192,9 @@ pub(crate) struct AddChat {
 /// 400 refused (nothing stored), 409 a destination already.
 async fn add_chat(State(t): State<Option<Telegram>>, Extension(caller): Extension<Caller>, Body(b): Body<AddChat>) -> ApiResult<Created<AlertsDto>> {
 	let t = bot(t)?;
+	let named = b.chat.trim().parse().map_err(|e| Refused::Invalid(format!("not a channel, group or topic: {e}")))?;
 	t.hub
-		.add_chat(caller.user_id, &caller.permissions, display(&caller), &b.chat, b.gmail_id, Timestamp::now())
+		.add_chat(caller.user_id, &caller.permissions, display(&caller), named, b.gmail_id, Timestamp::now())
 		.await??;
 	let alerts = t.hub.panel.alerts(caller.user_id, &caller.permissions).await?;
 	Ok(Created(dto(Some(&t), alerts)))

@@ -334,7 +334,7 @@ impl Panel {
 				}
 			}
 		}
-		eyre::ensure!(db::move_cursor(&mut tx, after, page.next).await?, "the charges' cursor moved meanwhile");
+		eyre::ensure!(db::move_cursor(&mut tx, after..page.next).await?, "the charges' cursor moved meanwhile");
 		tx.commit().await.wrap_err("committing a page of charges")?;
 		self.snapshot_due.notify_one();
 		Ok(page.charges.len())

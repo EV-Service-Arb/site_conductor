@@ -11,6 +11,7 @@ use std::{path::Path, sync::Arc, time::Duration};
 use eyre::WrapErr;
 use sa_browsers::{Browser, Launch};
 use sa_core::prices::{BrowserStart, Item};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::{Notify, oneshot, watch};
 
@@ -20,6 +21,13 @@ use crate::{Runner, film, mimic, phone};
 pub(crate) const IDLE: Duration = Duration::from_secs(10 * 60);
 const UP_WITHIN: Duration = Duration::from_secs(60);
 const STOP_WITHIN: Duration = Duration::from_secs(15);
+
+/// A Multilogin run token.
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(transparent)]
+pub(crate) struct Token {
+	pub(crate) v: String,
+}
 
 /// A browser in the runner's table, from its launch until it is gone.
 pub(crate) struct Slot {
@@ -153,7 +161,8 @@ pub(crate) async fn run(runner: Runner, start: Start, mut stopping: watch::Recei
 				&mut ends,
 			)
 			.await,
-		Browser::MultiloginBrowser { token, folder, profile } => mimic::life(&runner, gmail, launch.user, &token, &folder, &profile, &mut ends).await,
+		Browser::MultiloginBrowser { token, folder, profile } =>
+			mimic::life(&runner, gmail, launch.user, &Token { v: token }, mimic::Ids { folder: &folder, profile: &profile }, &mut ends).await,
 		Browser::MultiloginPhone {
 			token,
 			phone,
@@ -167,7 +176,7 @@ pub(crate) async fn run(runner: Runner, start: Start, mut stopping: watch::Recei
 				gmail,
 				phone::Run {
 					user: launch.user,
-					token,
+					token: Token { v: token },
 					phone,
 					geo,
 					zone,

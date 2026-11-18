@@ -682,11 +682,11 @@ impl View {
 	}
 
 	/// On the shown tab, if any.
-	async fn on_active(&mut self, method: &str, params: Value, what: &'static str) -> Result<(), (Close, &'static str)> {
+	async fn on_active(&mut self, method: &str, params: Value, asked: Asked) -> Result<(), (Close, &'static str)> {
 		let Some((_, session)) = self.active.clone() else {
 			return Ok(());
 		};
-		self.cdp(Some(&session), method, params, Asked::Done(what)).await
+		self.cdp(Some(&session), method, params, asked).await
 	}
 
 	async fn say(&mut self, out: &ViewerOut) -> Result<(), (Close, &'static str)> {
@@ -712,19 +712,25 @@ impl View {
 					TouchPhase::Move => ("touchMove", json!([{ "x": x, "y": y }])),
 					TouchPhase::End => ("touchEnd", json!([])),
 				};
-				self.on_active("Input.dispatchTouchEvent", json!({ "type": kind, "touchPoints": points }), "a touch").await
+				self.on_active("Input.dispatchTouchEvent", json!({ "type": kind, "touchPoints": points }), Asked::Done("a touch"))
+					.await
 			}
 			ViewerIn::Wheel { x, y, dx, dy } => {
 				// a phone scrolls under a finger: the wheel's turn as a swipe the other way
-				self.on_active("Input.dispatchTouchEvent", json!({ "type": "touchStart", "touchPoints": [{ "x": x, "y": y }] }), "a swipe")
-					.await?;
+				self.on_active(
+					"Input.dispatchTouchEvent",
+					json!({ "type": "touchStart", "touchPoints": [{ "x": x, "y": y }] }),
+					Asked::Done("a swipe"),
+				)
+				.await?;
 				self.on_active(
 					"Input.dispatchTouchEvent",
 					json!({ "type": "touchMove", "touchPoints": [{ "x": x - dx, "y": y - dy }] }),
-					"a swipe",
+					Asked::Done("a swipe"),
 				)
 				.await?;
-				self.on_active("Input.dispatchTouchEvent", json!({ "type": "touchEnd", "touchPoints": [] }), "a swipe").await
+				self.on_active("Input.dispatchTouchEvent", json!({ "type": "touchEnd", "touchPoints": [] }), Asked::Done("a swipe"))
+					.await
 			}
 			ViewerIn::Key { key, ctrl } => {
 				let Some(k) = key_of(&key, ctrl) else {
@@ -734,12 +740,12 @@ impl View {
 						})
 						.await;
 				};
-				self.on_active("Input.dispatchKeyEvent", k.down, "a key").await?;
-				self.on_active("Input.dispatchKeyEvent", k.up, "a key").await
+				self.on_active("Input.dispatchKeyEvent", k.down, Asked::Done("a key")).await?;
+				self.on_active("Input.dispatchKeyEvent", k.up, Asked::Done("a key")).await
 			}
-			ViewerIn::Text { text } => self.on_active("Input.insertText", json!({ "text": text }), "typing").await,
+			ViewerIn::Text { text } => self.on_active("Input.insertText", json!({ "text": text }), Asked::Done("typing")).await,
 			ViewerIn::Navigate { url } => match web_url(&url) {
-				Some(url) => self.on_active("Page.navigate", json!({ "url": url }), "navigating").await,
+				Some(url) => self.on_active("Page.navigate", json!({ "url": url }), Asked::Done("navigating")).await,
 				None =>
 					self.say(&ViewerOut::Error {
 						message: format!("{url:?} is not a web address"),
@@ -758,7 +764,7 @@ impl View {
 				if let Some(t) = text {
 					p["promptText"] = t.into();
 				}
-				self.on_active("Page.handleJavaScriptDialog", p, "answering the dialog").await
+				self.on_active("Page.handleJavaScriptDialog", p, Asked::Done("answering the dialog")).await
 			}
 		}
 	}
@@ -829,7 +835,9 @@ impl View {
 				Asked::History(delta) => {
 					let at = r["currentIndex"].as_i64().unwrap_or(-1) + i64::from(delta);
 					match usize::try_from(at).ok().and_then(|i| r["entries"].get(i)).and_then(|e| e["id"].as_i64()) {
-						Some(entry) => self.on_active("Page.navigateToHistoryEntry", json!({ "entryId": entry }), "going back or forward").await,
+						Some(entry) =>
+							self.on_active("Page.navigateToHistoryEntry", json!({ "entryId": entry }), Asked::Done("going back or forward"))
+								.await,
 						None => Ok(()),
 					}
 				}
@@ -884,7 +892,7 @@ impl View {
 				self.say(&frame).await?;
 				// acked once it went out: a viewer behind gets fewer frames, never a backlog
 				let number = p["sessionId"].clone();
-				self.on_active("Page.screencastFrameAck", json!({ "sessionId": number }), "acking a frame").await
+				self.on_active("Page.screencastFrameAck", json!({ "sessionId": number }), Asked::Done("acking a frame")).await
 			}
 			"Page.javascriptDialogOpening" if from_active => {
 				let d = ViewerOut::Dialog {

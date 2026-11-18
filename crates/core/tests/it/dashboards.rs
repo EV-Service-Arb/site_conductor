@@ -7,7 +7,7 @@ use axum::{
 	http::{Method, request::Parts},
 };
 use ev_lib::api::{Guard, JsonSchema, Malformed, OpenApi, Params, Refusal, Route, document, op_id};
-use sa_core::dashboards::{Board, Column, Query, Select};
+use sa_core::dashboards::{Board, Column, Panel, Query, Select};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -104,18 +104,38 @@ fn panels_query_their_operations_and_read_one_another() {
 	let built = Board::new(&doc, "conductor")
 		.variable("kind", flows(r#"flows.{"__value": kind, "__text": kind}"#, &[("from", "${__from}")]), json!({ "refresh": 1 }))
 		.panel(
-			10,
-			"table",
-			"Flows",
-			[0, 0, 24, 8],
+			Panel {
+				id: 10,
+				kind: "table",
+				title: "Flows",
+				grid: [0, 0, 24, 8],
+			},
 			flows(
 				r#"($r := flows[kind in ["spend", "it's"]].{"kind": kind, "spent": $abs(tokens) * 1e3}; $r.{"kind": kind, "tokens": spent})"#,
 				&[("from", "${__from}")],
 			),
 			json!({ "options": {} }),
 		)
-		.panel(2, "text", "Board", [0, 8, 12, 4], board, json!({}))
-		.of_panel(3, "table", "Flows again", [12, 8, 12, 4], 10, json!({}))
+		.panel(
+			Panel {
+				id: 2,
+				kind: "text",
+				title: "Board",
+				grid: [0, 8, 12, 4],
+			},
+			board,
+			json!({}),
+		)
+		.of_panel(
+			Panel {
+				id: 3,
+				kind: "table",
+				title: "Flows again",
+				grid: [12, 8, 12, 4],
+			},
+			10,
+			json!({}),
+		)
 		.build(json!({ "uid": "t-flows", "templating": { "list": [{ "name": "gmb", "type": "textbox" }] } }));
 	let panels = built["panels"].as_array().unwrap();
 	assert_eq!(panels.iter().map(|p| p["id"].as_u64().unwrap()).collect::<Vec<_>>(), [10, 2, 3]);
@@ -136,7 +156,16 @@ fn panels_query_their_operations_and_read_one_another() {
 #[test]
 #[should_panic(expected = "its selector reads \"amount\", which token_flows's answer has not")]
 fn a_field_the_answer_lacks_fails_the_build() {
-	Board::new(&doc(), "conductor").panel(1, "table", "Flows", [0, 0, 24, 8], flows("flows.amount", &[("from", "x")]), json!({}));
+	Board::new(&doc(), "conductor").panel(
+		Panel {
+			id: 1,
+			kind: "table",
+			title: "Flows",
+			grid: [0, 0, 24, 8],
+		},
+		flows("flows.amount", &[("from", "x")]),
+		json!({}),
+	);
 }
 
 #[test]
@@ -146,11 +175,29 @@ fn a_header_the_operation_does_not_take_fails_the_build() {
 		headers: &[("x-member", "${member}")],
 		..flows("flows", &[("from", "x")])
 	};
-	Board::new(&doc(), "conductor").panel(1, "table", "Flows", [0, 0, 24, 8], query, json!({}));
+	Board::new(&doc(), "conductor").panel(
+		Panel {
+			id: 1,
+			kind: "table",
+			title: "Flows",
+			grid: [0, 0, 24, 8],
+		},
+		query,
+		json!({}),
+	);
 }
 
 #[test]
 #[should_panic(expected = "token_flows needs its query parameter \"from\"")]
 fn a_parameter_the_operation_needs_left_out_fails_the_build() {
-	Board::new(&doc(), "conductor").panel(1, "table", "Flows", [0, 0, 24, 8], flows("flows", &[]), json!({}));
+	Board::new(&doc(), "conductor").panel(
+		Panel {
+			id: 1,
+			kind: "table",
+			title: "Flows",
+			grid: [0, 0, 24, 8],
+		},
+		flows("flows", &[]),
+		json!({}),
+	);
 }

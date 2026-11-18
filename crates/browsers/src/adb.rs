@@ -32,19 +32,23 @@ pub(crate) const ADB_KEYBOARD: &str = "com.android.adbkeyboard/.AdbIME";
 type Finger = ((f64, f64), (f64, f64), Instant);
 
 /// A started phone's adb.
+pub(crate) struct Pwd {
+	pub(crate) v: String,
+}
+
 pub(crate) struct Phone {
 	pub(crate) adb: PathBuf,
 	pub(crate) ffmpeg: PathBuf,
 	/// ip:port.
 	pub(crate) serial: String,
-	pwd: String,
+	pwd: Pwd,
 	logged_in: Mutex<Option<Instant>>,
 	/// Its screen, px: the frames' space.
 	pub(crate) screen: (u32, u32),
 }
 
 impl Phone {
-	pub(crate) async fn connect(adb: PathBuf, ffmpeg: PathBuf, serial: String, pwd: String) -> eyre::Result<Self> {
+	pub(crate) async fn connect(adb: PathBuf, ffmpeg: PathBuf, serial: String, pwd: Pwd) -> eyre::Result<Self> {
 		let mut p = Self {
 			adb,
 			ffmpeg,
@@ -79,7 +83,7 @@ impl Phone {
 		let out = self.adb(&["connect", &self.serial]).await?;
 		let said = String::from_utf8_lossy(&out.stdout);
 		eyre::ensure!(said.contains("connected to"), "adb connect {}: {said}", self.serial);
-		let out = self.adb(&["-s", &self.serial, "shell", "glogin", &quote(&self.pwd)]).await?;
+		let out = self.adb(&["-s", &self.serial, "shell", "glogin", &quote(&self.pwd.v)]).await?;
 		let said = String::from_utf8_lossy(&out.stdout);
 		eyre::ensure!(said.contains("glogin success") || said.contains("already logged"), "glogin on {}: {said}", self.serial);
 		*self.logged_in.lock().expect("never held across a panic") = Some(Instant::now());

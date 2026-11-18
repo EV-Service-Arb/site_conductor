@@ -22,7 +22,8 @@ use uuid::Uuid;
 use crate::{
 	Panel, Refused,
 	store::{
-		areas as areas_db, gmbs as gmbs_db,
+		areas as areas_db,
+		gmbs::{self as gmbs_db, GmbId, TradeId},
 		kit::{self as db, Removable},
 	},
 	tokens::is_open,
@@ -225,13 +226,13 @@ impl Panel {
 
 	/// Draft `id`'s text (only while no copy of it was made: a use is of the text it had) and its
 	/// photos, each as given.
-	pub async fn edit_draft(&self, owner: Uuid, trade: i64, country: Country, id: i64, text: Option<&str>, photos: Option<&[i64]>) -> eyre::Result<Result<(), Refused>> {
+	pub async fn edit_draft(&self, owner: Uuid, trade: TradeId, country: Country, id: i64, text: Option<&str>, photos: Option<&[i64]>) -> eyre::Result<Result<(), Refused>> {
 		let text = match text.map(draft_text).transpose() {
 			Ok(t) => t,
 			Err(e) => return Ok(Err(e)),
 		};
 		let mut tx = self.store.begin_write().await?;
-		if !self.category_is(&mut tx, owner, trade, country).await? {
+		if !self.category_is(&mut tx, owner, trade.v, country).await? {
 			return Ok(Err(Refused::NotFound));
 		}
 		let Some(uses) = db::draft_uses(&mut tx, trade, country, id).await? else {
@@ -244,7 +245,7 @@ impl Panel {
 			db::set_text(&mut tx, id, &text).await?;
 		}
 		if let Some(photos) = photos {
-			if let Err(e) = selection(&mut tx, trade, country, photos).await? {
+			if let Err(e) = selection(&mut tx, trade.v, country, photos).await? {
 				return Ok(Err(e));
 			}
 			db::select(&mut tx, id, photos).await?;
@@ -254,9 +255,9 @@ impl Panel {
 	}
 
 	/// A draft or photo of the category out of every offer; its uses stay.
-	pub async fn remove_from_kit(&self, owner: Uuid, trade: i64, country: Country, what: Removable, id: i64, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+	pub async fn remove_from_kit(&self, owner: Uuid, trade: TradeId, country: Country, what: Removable, id: i64, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
 		let mut tx = self.store.begin_write().await?;
-		if !self.category_is(&mut tx, owner, trade, country).await? || !db::remove(&mut tx, what, trade, country, id, now).await? {
+		if !self.category_is(&mut tx, owner, trade.v, country).await? || !db::remove(&mut tx, what, trade, country, id, now).await? {
 			return Ok(Err(Refused::NotFound));
 		}
 		tx.commit().await.wrap_err("committing a removal from a kit")?;
@@ -288,9 +289,9 @@ impl Panel {
 		Ok(Ok(id))
 	}
 
-	pub async fn kit_photo(&self, owner: Uuid, trade: i64, country: Country, id: i64) -> eyre::Result<Result<Vec<u8>, Refused>> {
+	pub async fn kit_photo(&self, owner: Uuid, trade: TradeId, country: Country, id: i64) -> eyre::Result<Result<Vec<u8>, Refused>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a photo")?;
-		if !self.category_is(&mut conn, owner, trade, country).await? {
+		if !self.category_is(&mut conn, owner, trade.v, country).await? {
 			return Ok(Err(Refused::NotFound));
 		}
 		Ok(db::photo_bytes(&mut conn, trade, country, id).await?.ok_or(Refused::NotFound))
@@ -304,7 +305,7 @@ impl Panel {
 		};
 		let target = db::target(&mut conn, gmb).await?;
 		let drafts = match (g.trade_id, g.country) {
-			(Some(trade), Some(c)) => ranked(&mut conn, trade, c.code, gmb, now).await?,
+			(Some(trade), Some(c)) => ranked(&mut conn, TradeId { v: trade }, c.code, GmbId { v: gmb }, now).await?,
 			_ => Vec::new(),
 		};
 		let [shown, scanned, opened, copied, photos_saved] = db::funnel(&mut conn, gmb, now - SignedDuration::from_hours(24 * 30)).await?;
@@ -376,7 +377,7 @@ impl Panel {
 		let country = g.country.ok_or_else(|| eyre::eyre!("GBP {gmb} has a place and no country"))?.code;
 		let drafts = match (target, g.trade_id) {
 			(Target::Google, _) | (_, None) => Vec::new(),
-			(Target::Drafts | Target::OneTap, Some(trade)) => ranked(&mut tx, trade, country, gmb, now)
+			(Target::Drafts | Target::OneTap, Some(trade)) => ranked(&mut tx, TradeId { v: trade }, country, GmbId { v: gmb }, now)
 				.await?
 				.into_iter()
 				.filter(|d| !d.went_here && !d.held)
@@ -421,7 +422,7 @@ impl Panel {
 				if !db::offered(&mut tx, view, draft).await? {
 					return Ok(Err(Refused::NotFound));
 				}
-				if !db::use_draft(&mut tx, view, gmb, draft, now).await? {
+				if !db::use_draft(&mut tx, view, GmbId { v: gmb }, draft, now).await? {
 					return Ok(Err(Refused::Conflict(format!("draft {draft} went to this place already"))));
 				}
 			}
@@ -433,7 +434,7 @@ impl Panel {
 					if db::offered_photo(&mut tx, view, p).await?.is_none() {
 						return Ok(Err(Refused::NotFound));
 					}
-					if !db::use_photo(&mut tx, view, gmb, p, now).await? {
+					if !db::use_photo(&mut tx, view, GmbId { v: gmb }, p, now).await? {
 						return Ok(Err(Refused::Conflict(format!("photo {p} went to this place already"))));
 					}
 				}
@@ -472,9 +473,9 @@ impl Panel {
 
 /// The category's drafts for GBP `gmb` in the offer's order: fewest copies first, then the fewest
 /// saves of its photos still offerable here, then the oldest.
-async fn ranked(conn: &mut sqlx::SqliteConnection, trade: i64, country: Country, gmb: i64, now: Timestamp) -> eyre::Result<Vec<Ranked>> {
+async fn ranked(conn: &mut sqlx::SqliteConnection, trade: TradeId, country: Country, gmb: GmbId, now: Timestamp) -> eyre::Result<Vec<Ranked>> {
 	let mut photos_of: BTreeMap<i64, Vec<RankedPhoto>> = BTreeMap::new();
-	for p in db::draft_photos(conn, trade, country, Some(gmb)).await? {
+	for p in db::draft_photos(conn, trade.v, country, Some(gmb.v)).await? {
 		photos_of.entry(p.draft_id).or_default().push(RankedPhoto {
 			id: p.photo_id,
 			width: p.width,
@@ -483,7 +484,7 @@ async fn ranked(conn: &mut sqlx::SqliteConnection, trade: i64, country: Country,
 			went_here: p.went_here,
 		});
 	}
-	let mut drafts: Vec<Ranked> = db::drafts(conn, trade, country, Some(gmb), now)
+	let mut drafts: Vec<Ranked> = db::drafts(conn, trade.v, country, Some(gmb.v), now)
 		.await?
 		.into_iter()
 		.map(|d| {

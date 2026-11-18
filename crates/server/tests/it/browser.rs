@@ -20,7 +20,7 @@ use sa_auth::{Principal, Service};
 use sa_core::prices::{BrowserStart, Item, PhoneTime};
 use sa_panel::{
 	Panel,
-	browsers::Browsers,
+	browsers::{Browsers, Stubs},
 	import::Export,
 	testing::{TestDb, operator, panel},
 };
@@ -206,7 +206,11 @@ impl World {
 			panel_origin: ORIGIN.to_owned(),
 			concierge_origin: ORIGIN.to_owned(),
 		};
-		let browsers = Browsers::stubbed(&gologin_base, &multilogin_base, "http://ip-api.test/json/");
+		let browsers = Browsers::stubbed(Stubs {
+			gologin: &gologin_base,
+			multilogin: &multilogin_base,
+			ip_api: "http://ip-api.test/json/",
+		});
 		let connected = Connected::try_new(browsers, &runner_base, SEED.parse().unwrap()).unwrap();
 		let app = http::app(
 			SignIn::new(panel.clone(), Concierge::dev(who), config),

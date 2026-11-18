@@ -34,10 +34,12 @@ use sa_auth::SourceKind;
 use sa_core::{
 	feeds::{self, Place, Places},
 	gbp::{Country, State as GbpState},
+	ids::BrandId,
 	prices::{PlacesRequest, Spends},
 };
 use sa_panel::{
 	Grant, Panel, SignedBatch,
+	gmbs::TradeId,
 	kit::{Event, Kit, Nearby, Offer, PHOTO_MAX, Pool, Ranked, Target},
 	store::kit::Removable,
 };
@@ -254,8 +256,8 @@ impl Pages {
 		Ok(self.all().await?.iter().find(|p| p.gmb_id == gmb).cloned())
 	}
 
-	async fn gmb_at(&self, brand: &str, slug: &str) -> Result<Option<i64>, Refusal<Code>> {
-		Ok(self.all().await?.iter().find(|p| p.brand == brand && p.slug == slug).map(|p| p.gmb_id))
+	async fn gmb_at(&self, brand: &BrandId, slug: &str) -> Result<Option<i64>, Refusal<Code>> {
+		Ok(self.all().await?.iter().find(|p| p.brand == brand.as_str() && p.slug == slug).map(|p| p.gmb_id))
 	}
 }
 
@@ -486,13 +488,17 @@ async fn edit_kit_draft(
 	Ids(DraftIn { id: trade, country, draft }): Ids<DraftIn>,
 	Body(b): Body<EditDraftDto>,
 ) -> ApiResult<Json<PoolDto>> {
-	panel.edit_draft(caller.user_id, trade, country, draft, b.text.as_deref(), b.photos.as_deref()).await??;
+	panel
+		.edit_draft(caller.user_id, TradeId { v: trade }, country, draft, b.text.as_deref(), b.photos.as_deref())
+		.await??;
 	Ok(Json(panel.kit_pool(caller.user_id, trade, country).await??.into()))
 }
 
 /// Removes a draft: out of every offer, its uses kept.
 async fn remove_kit_draft(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(DraftIn { id: trade, country, draft }): Ids<DraftIn>) -> ApiResult<NoContent> {
-	panel.remove_from_kit(caller.user_id, trade, country, Removable::Draft, draft, Timestamp::now()).await??;
+	panel
+		.remove_from_kit(caller.user_id, TradeId { v: trade }, country, Removable::Draft, draft, Timestamp::now())
+		.await??;
 	Ok(NoContent)
 }
 
@@ -512,12 +518,14 @@ async fn add_kit_photo(
 
 /// A photo of the category, `{file}` being `<photo>.jpg`.
 async fn kit_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(JpgIn { id: trade, country, file }): Ids<JpgIn>) -> ApiResult<Jpeg> {
-	Ok(Jpeg(panel.kit_photo(caller.user_id, trade, country, jpg(&file)?).await??))
+	Ok(Jpeg(panel.kit_photo(caller.user_id, TradeId { v: trade }, country, jpg(&file)?).await??))
 }
 
 /// Removes a photo, as a draft is: out of every offer, its uses kept.
 async fn remove_kit_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PhotoIn { id: trade, country, file }): Ids<PhotoIn>) -> ApiResult<NoContent> {
-	panel.remove_from_kit(caller.user_id, trade, country, Removable::Photo, file, Timestamp::now()).await??;
+	panel
+		.remove_from_kit(caller.user_id, TradeId { v: trade }, country, Removable::Photo, file, Timestamp::now())
+		.await??;
 	Ok(NoContent)
 }
 
@@ -672,7 +680,7 @@ async fn view_of(l: &Landing, key: &Grant, view: Uuid) -> Result<(), Box<Respons
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct OfferQuery {
-	brand: String,
+	brand: BrandId,
 	slug: String,
 	qr: Option<u8>,
 }
@@ -686,7 +694,7 @@ async fn offer(State(l): State<Landing>, OriginalUri(uri): OriginalUri, headers:
 	let Ok(Query(q)) = q else {
 		return Refusal::new(Code::BadRequest, "brand, slug and qr=1 if it came from the QR").into_response();
 	};
-	if !key.brands.iter().any(|b| b.as_str() == q.brand) {
+	if !key.brands.iter().any(|b| b.as_str() == q.brand.as_str()) {
 		return Refusal::new(Code::NotFound, "not found").into_response();
 	}
 	let gmb = match l.pages.gmb_at(&q.brand, &q.slug).await {

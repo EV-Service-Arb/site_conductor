@@ -47,7 +47,7 @@ use sa_auth::{PermissionSet, Principal, Vouch};
 use sa_panel::{
 	Panel,
 	oauth::Grant,
-	session::{PRELOGIN_TTL, SessionError, SessionKey},
+	session::{PRELOGIN_TTL, Returned, SessionError, SessionKey},
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -55,7 +55,7 @@ use uuid::Uuid;
 use crate::{
 	access::PermissionName,
 	api::Code,
-	concierge::{CLIENT_ID, Concierge, ConciergeError, DEV_CODE, DevIdentity, Me},
+	concierge::{CLIENT_ID, CodeExchange, Concierge, ConciergeError, DEV_CODE, DevIdentity, Me},
 	cookies::{self, Cookies},
 	grafana::Loopback,
 	http::{ApiState, Flags, Gate},
@@ -189,10 +189,24 @@ pub struct Login {
 /// `GET /auth/login`.
 pub async fn login(State(s): State<SignIn>, Query(q): Query<Login>) -> Response {
 	if q.return_to.as_deref().is_some_and(|p| !same_origin_path(p)) {
-		return private(page(StatusCode::BAD_REQUEST, "Sign-in failed", "This sign-in link is not valid here. Start again."));
+		return private(
+			Page {
+				status: StatusCode::BAD_REQUEST,
+				title: "Sign-in failed",
+				message: "This sign-in link is not valid here. Start again.",
+			}
+			.into_response(),
+		);
 	}
 	if q.dev_as.as_deref().is_some_and(|e| !s.concierge.is_dev() || !dev_email(e)) {
-		return private(page(StatusCode::BAD_REQUEST, "Sign-in failed", "This sign-in link is not valid here. Start again."));
+		return private(
+			Page {
+				status: StatusCode::BAD_REQUEST,
+				title: "Sign-in failed",
+				message: "This sign-in link is not valid here. Start again.",
+			}
+			.into_response(),
+		);
 	}
 	to_concierge(&s, q.return_to.as_deref(), q.dev_as.as_deref(), None, q.prompt)
 }
@@ -216,27 +230,41 @@ pub async fn callback(State(s): State<SignIn>, headers: HeaderMap, Query(q): Que
 	if let Some(error) = q.error.as_deref() {
 		// Fixed pages: concierge's error word picks one, and is not shown.
 		return with_clear(match error {
-			"access_denied" => page(StatusCode::FORBIDDEN, "No access", "Your account has no access to the Service-Arb panel. Ask its admin for one."),
-			"temporarily_unavailable" => page(
-				StatusCode::SERVICE_UNAVAILABLE,
-				"Sign-in unavailable",
-				"Signing in is unavailable right now. Try again in a minute.",
-			),
-			_ => page(StatusCode::BAD_REQUEST, "Sign-in failed", "The sign-in could not be completed. Try again."),
+			"access_denied" => Page {
+				status: StatusCode::FORBIDDEN,
+				title: "No access",
+				message: "Your account has no access to the Service-Arb panel. Ask its admin for one.",
+			}
+			.into_response(),
+			"temporarily_unavailable" => Page {
+				status: StatusCode::SERVICE_UNAVAILABLE,
+				title: "Sign-in unavailable",
+				message: "Signing in is unavailable right now. Try again in a minute.",
+			}
+			.into_response(),
+			_ => Page {
+				status: StatusCode::BAD_REQUEST,
+				title: "Sign-in failed",
+				message: "The sign-in could not be completed. Try again.",
+			}
+			.into_response(),
 		});
 	}
 	let now = Timestamp::now();
 	let pre = match (s.cookies.get(&headers, cookies::PRELOGIN), q.state.as_deref()) {
-		(Some(cookie), Some(state)) => s.panel.finish_sign_in(cookie, state, now),
+		(Some(cookie), Some(state)) => s.panel.finish_sign_in(Returned { cookie, state }, now),
 		_ => None,
 	};
 	let (Some(pre), Some(code)) = (pre, q.code.as_deref().filter(|c| !c.is_empty())) else {
 		tracing::info!("sign-in callback without a matching pre-login; the code is not presented");
-		return with_clear(page(
-			StatusCode::BAD_REQUEST,
-			"Sign-in failed",
-			"This sign-in link is not valid here, or has expired. Start again.",
-		));
+		return with_clear(
+			Page {
+				status: StatusCode::BAD_REQUEST,
+				title: "Sign-in failed",
+				message: "This sign-in link is not valid here, or has expired. Start again.",
+			}
+			.into_response(),
+		);
 	};
 	// A replayed callback (a leaked URL with the pre-login cookie still in the jar) stops
 	// here: a state is redeemed once, across replicas.
@@ -244,11 +272,25 @@ pub async fn callback(State(s): State<SignIn>, headers: HeaderMap, Query(q): Que
 		Ok(true) => {}
 		Ok(false) => {
 			tracing::info!("sign-in callback with a state redeemed before; the code is not presented");
-			return with_clear(page(StatusCode::BAD_REQUEST, "Sign-in failed", "This sign-in was already used. Start again."));
+			return with_clear(
+				Page {
+					status: StatusCode::BAD_REQUEST,
+					title: "Sign-in failed",
+					message: "This sign-in was already used. Start again.",
+				}
+				.into_response(),
+			);
 		}
 		Err(e) => {
 			crate::report(&e, "redeeming a sign-in state");
-			return with_clear(page(StatusCode::INTERNAL_SERVER_ERROR, "Sign-in failed", "Something went wrong on our side. Try again."));
+			return with_clear(
+				Page {
+					status: StatusCode::INTERNAL_SERVER_ERROR,
+					title: "Sign-in failed",
+					message: "Something went wrong on our side. Try again.",
+				}
+				.into_response(),
+			);
 		}
 	}
 	let concierge = match pre.dev_as {
@@ -257,30 +299,65 @@ pub async fn callback(State(s): State<SignIn>, headers: HeaderMap, Query(q): Que
 			Ok(user_id) => s.concierge.dev_as(user_id, email),
 			Err(e) => {
 				crate::report(&e, "finding the dev sign-in's user");
-				return with_clear(page(StatusCode::INTERNAL_SERVER_ERROR, "Sign-in failed", "Something went wrong on our side. Try again."));
+				return with_clear(
+					Page {
+						status: StatusCode::INTERNAL_SERVER_ERROR,
+						title: "Sign-in failed",
+						message: "Something went wrong on our side. Try again.",
+					}
+					.into_response(),
+				);
 			}
 		},
 	};
-	let issued = match concierge.exchange_code(code, &s.redirect_uri(), &pre.verifier).await {
+	let issued = match concierge
+		.exchange_code(CodeExchange {
+			code,
+			redirect_uri: &s.redirect_uri(),
+			verifier: &pre.verifier,
+		})
+		.await
+	{
 		Ok(i) => i,
 		Err(ConciergeError::Refused(tonic::Code::PermissionDenied)) =>
-			return with_clear(page(
-				StatusCode::FORBIDDEN,
-				"No access",
-				"Your account has no access to the Service-Arb panel. Ask its admin for one.",
-			)),
-		Err(ConciergeError::Refused(_)) => return with_clear(page(StatusCode::BAD_REQUEST, "Sign-in failed", "This sign-in has expired or was already used. Start again.")),
+			return with_clear(
+				Page {
+					status: StatusCode::FORBIDDEN,
+					title: "No access",
+					message: "Your account has no access to the Service-Arb panel. Ask its admin for one.",
+				}
+				.into_response(),
+			),
+		Err(ConciergeError::Refused(_)) =>
+			return with_clear(
+				Page {
+					status: StatusCode::BAD_REQUEST,
+					title: "Sign-in failed",
+					message: "This sign-in has expired or was already used. Start again.",
+				}
+				.into_response(),
+			),
 		Err(ConciergeError::Unavailable(why)) => {
 			tracing::warn!(why, "concierge unavailable at the sign-in callback");
-			return with_clear(page(
-				StatusCode::SERVICE_UNAVAILABLE,
-				"Sign-in unavailable",
-				"Signing in is unavailable right now. Try again in a minute.",
-			));
+			return with_clear(
+				Page {
+					status: StatusCode::SERVICE_UNAVAILABLE,
+					title: "Sign-in unavailable",
+					message: "Signing in is unavailable right now. Try again in a minute.",
+				}
+				.into_response(),
+			);
 		}
 		Err(e @ ConciergeError::Failed(_)) => {
 			crate::report(&eyre::eyre!(e), "redeeming a sign-in code");
-			return with_clear(page(StatusCode::BAD_GATEWAY, "Sign-in failed", "Something went wrong. Try again."));
+			return with_clear(
+				Page {
+					status: StatusCode::BAD_GATEWAY,
+					title: "Sign-in failed",
+					message: "Something went wrong. Try again.",
+				}
+				.into_response(),
+			);
 		}
 	};
 	if let Some(grant) = pre.grant {
@@ -291,21 +368,42 @@ pub async fn callback(State(s): State<SignIn>, headers: HeaderMap, Query(q): Que
 		s.forget_me(&old);
 		if let Err(e) = s.panel.close_session(&old).await {
 			crate::report(&e, "closing the session a new sign-in replaces");
-			return with_clear(page(StatusCode::INTERNAL_SERVER_ERROR, "Sign-in failed", "Something went wrong on our side. Try again."));
+			return with_clear(
+				Page {
+					status: StatusCode::INTERNAL_SERVER_ERROR,
+					title: "Sign-in failed",
+					message: "Something went wrong on our side. Try again.",
+				}
+				.into_response(),
+			);
 		}
 	}
 	let opened = match s.panel.open_session(issued.user_id, &issued.tokens, now).await {
 		Ok(o) => o,
 		Err(e) => {
 			crate::report(&e, "opening a session");
-			return with_clear(page(StatusCode::INTERNAL_SERVER_ERROR, "Sign-in failed", "Something went wrong on our side. Try again."));
+			return with_clear(
+				Page {
+					status: StatusCode::INTERNAL_SERVER_ERROR,
+					title: "Sign-in failed",
+					message: "Something went wrong on our side. Try again.",
+				}
+				.into_response(),
+			);
 		}
 	};
 	let csrf = match sa_panel::session::random_token() {
 		Ok(t) => t,
 		Err(e) => {
 			crate::report(&e, "making a CSRF token");
-			return with_clear(page(StatusCode::INTERNAL_SERVER_ERROR, "Sign-in failed", "Something went wrong on our side. Try again."));
+			return with_clear(
+				Page {
+					status: StatusCode::INTERNAL_SERVER_ERROR,
+					title: "Sign-in failed",
+					message: "Something went wrong on our side. Try again.",
+				}
+				.into_response(),
+			);
 		}
 	};
 	let max_age = opened.expires_at.duration_since(now).as_secs();
@@ -347,7 +445,14 @@ pub(crate) fn to_concierge(s: &SignIn, return_to: Option<&str>, dev_as: Option<&
 		Ok(b) => b,
 		Err(e) => {
 			crate::report(&e, "starting a sign-in");
-			return private(page(StatusCode::INTERNAL_SERVER_ERROR, "Sign-in failed", "Something went wrong on our side. Try again."));
+			return private(
+				Page {
+					status: StatusCode::INTERNAL_SERVER_ERROR,
+					title: "Sign-in failed",
+					message: "Something went wrong on our side. Try again.",
+				}
+				.into_response(),
+			);
 		}
 	};
 	let location = if s.concierge.is_dev() {
@@ -368,21 +473,37 @@ pub(crate) fn to_concierge(s: &SignIn, return_to: Option<&str>, dev_as: Option<&
 		)
 	};
 	let Ok(location) = HeaderValue::from_str(&location) else {
-		return private(page(StatusCode::INTERNAL_SERVER_ERROR, "Sign-in failed", "The sign-in is misconfigured."));
+		return private(
+			Page {
+				status: StatusCode::INTERNAL_SERVER_ERROR,
+				title: "Sign-in failed",
+				message: "The sign-in is misconfigured.",
+			}
+			.into_response(),
+		);
 	};
 	let prelogin = s.cookies.set(cookies::PRELOGIN, &begun.cookie, PRELOGIN_TTL.as_secs(), true);
 	private((StatusCode::FOUND, [(header::LOCATION, location), (header::SET_COOKIE, prelogin)]).into_response())
 }
 
 /// A page on this origin with fixed text: nothing from the request is echoed.
-pub(crate) fn page(status: StatusCode, title: &str, message: &str) -> Response {
-	let body = format!(
-		"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
-		 <title>{title}</title></head><body><main><h1>{title}</h1><p>{message}</p><p><a href=\"/auth/login\">Sign in again</a></p></main></body></html>"
-	);
-	let mut res = (status, Html(body)).into_response();
-	res.headers_mut().insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(PAGE_CSP));
-	res
+pub(crate) struct Page {
+	pub(crate) status: StatusCode,
+	pub(crate) title: &'static str,
+	pub(crate) message: &'static str,
+}
+
+impl IntoResponse for Page {
+	fn into_response(self) -> Response {
+		let Self { status, title, message } = self;
+		let body = format!(
+			"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
+			 <title>{title}</title></head><body><main><h1>{title}</h1><p>{message}</p><p><a href=\"/auth/login\">Sign in again</a></p></main></body></html>"
+		);
+		let mut res = (status, Html(body)).into_response();
+		res.headers_mut().insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(PAGE_CSP));
+		res
+	}
 }
 
 /// The sign-in's answers carry a code or a token in their URLs: kept out of caches and out

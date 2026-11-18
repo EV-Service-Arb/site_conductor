@@ -29,12 +29,13 @@ use sa_core::{
 };
 use sa_panel::{
 	Panel, Refused,
+	access::Asker,
 	alerts::{Access, Directory, DirectoryError, Hub, Identity},
 	gmbs::Existing,
 	import::Export,
 	seal::DataKey,
 	session::{RefreshError, Refresher, Tokens},
-	telegram::{Account, Chat, Update},
+	telegram::{Account, CallbackId, Chat, Update},
 	testing::{self as aliases, TestDb, settled, told, topics},
 	tokens::User,
 };
@@ -473,13 +474,13 @@ async fn setup() -> Setup {
 		placement: None,
 		signer: SEED.parse().unwrap(),
 	});
-	let (sign_in, _) = sa_server::testing::conductor(panel.clone(), std::iter::empty::<&str>().collect(), "hub@test", &sites_base);
+	let (sign_in, _) = sa_server::testing::conductor(panel.clone(), std::iter::empty::<&str>().collect(), "hub@test", &sites_base.parse().unwrap());
 	let forward = Forward::new(sign_in, services.clone());
 	// one pull: a button resolves against sites' document
 	forward.catalog().follow(services, tokio::sync::watch::channel(true).1).await;
 	let n = Hub {
 		panel: panel.clone(),
-		bot: BotApi::try_new(&base, TOKEN).unwrap(),
+		bot: BotApi::try_new(&base, TOKEN.to_owned().into()).unwrap(),
 		concierge: concierge.clone(),
 		feeds: forward,
 		locale: Locale::Ru,
@@ -928,11 +929,10 @@ async fn a_channel_is_added_by_its_admin_and_gets_no_pii() {
 	let s = setup().await;
 	let user = Uuid::now_v7();
 	let operator = aliases::operator();
-	let add = |chat: &'static str| s.n.add_chat(user, &operator, "Olga", chat, None, t0());
+	let add = |chat: &'static str| s.n.add_chat(user, &operator, "Olga", chat.parse().unwrap(), None, t0());
 
 	assert!(matches!(add("@leads").await.unwrap(), Err(Refused::Invalid(m)) if m.contains("link your own Telegram first")));
 	s.link(user, operator.clone(), 77, t0()).await;
-	assert!(matches!(add("not a chat!").await.unwrap(), Err(Refused::Invalid(_))));
 	assert!(
 		matches!(add("@leads").await.unwrap(), Err(Refused::Invalid(m)) if m.contains("cannot see")),
 		"the bot is not there"
@@ -989,7 +989,7 @@ async fn a_test_revives_a_dead_chat() {
 	let user = Uuid::now_v7();
 	s.link(user, aliases::operator(), 77, t0()).await;
 	s.mock.chat("@leads", -1001, "channel", false, 77);
-	let channel = s.n.add_chat(user, &aliases::operator(), "Olga", "@leads", None, t0()).await.unwrap().unwrap();
+	let channel = s.n.add_chat(user, &aliases::operator(), "Olga", "@leads".parse().unwrap(), None, t0()).await.unwrap().unwrap();
 	s.set_rules(user, &aliases::operator(), &[(Rule::NewLead, false)]).await.unwrap();
 	s.lead("L-1", t0());
 	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 1, "the channel only");
@@ -1292,7 +1292,7 @@ fn as_sent(sent: &Value) -> Rendered {
 
 fn press(id: &str, chat: i64, message_id: i64, data: &str, message: &Rendered) -> Update {
 	Update::Callback {
-		id: id.into(),
+		id: CallbackId { v: id.into() },
 		chat_id: chat,
 		message_id,
 		data: data.into(),
@@ -1557,7 +1557,13 @@ async fn entities_go_as_given_and_an_edit_makes_no_link() {
 /// The conductor, everyone signed in as `email` holding `permissions`, and a browser signed in
 /// to it.
 async fn requester(panel: &Panel, email: &str, permissions: &[&str]) -> (axum::Router, Browser) {
-	let app = sa_server::testing::app_with(panel.clone(), permissions.iter().copied().collect(), email, "http://127.0.0.1:9", Default::default());
+	let app = sa_server::testing::app_with(
+		panel.clone(),
+		permissions.iter().copied().collect(),
+		email,
+		&"http://127.0.0.1:9".parse().unwrap(),
+		Default::default(),
+	);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	(app, b)
@@ -1588,7 +1594,7 @@ async fn an_access_request_reaches_the_admins_with_the_grant_link() {
 	s.link(Uuid::now_v7(), aliases::operator(), 2, now).await;
 	// The admin's channel: told of the request too, but not who asked.
 	s.mock.chat("@admins", -1009, "channel", false, 1);
-	s.n.add_chat(admin, &aliases::admin(), "Ann", "@admins", None, now).await.unwrap().unwrap();
+	s.n.add_chat(admin, &aliases::admin(), "Ann", "@admins".parse().unwrap(), None, now).await.unwrap().unwrap();
 	s.mock.clear();
 	let (app, mut b) = requester(&s.panel, "ann@example.com", &["sa:sites:work:read"]).await;
 	let n = Hub { locale: Locale::En, ..s.n.clone() };
@@ -1637,7 +1643,17 @@ async fn an_access_request_is_told_again_after_a_day_and_dropped_once_held() {
 	s.link(admin, aliases::admin(), 1, t0()).await;
 	s.mock.clear();
 	let bob = Uuid::now_v7();
-	let ask = |at| s.panel.request_access(bob, "bob@example.com", "Bob", "sa:operator", at);
+	let ask = |at| {
+		s.panel.request_access(
+			Asker {
+				user: bob,
+				email: "bob@example.com",
+				name: "Bob",
+			},
+			"sa:operator",
+			at,
+		)
+	};
 	let day = SignedDuration::from_hours(24);
 
 	assert_eq!(ask(t0()).await.unwrap(), (s.panel.pending_access(bob, |_| false).await.unwrap()[0].clone(), true));

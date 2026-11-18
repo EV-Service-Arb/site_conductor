@@ -45,6 +45,14 @@ const ANDROID: u32 = 14;
 /// Where the gmails' Mimic profiles sit in Multilogin.
 const FOLDER: &str = "site_conductor";
 
+/// The base URLs [`Browsers::stubbed`] asks.
+#[cfg(feature = "testing")]
+pub struct Stubs<'a> {
+	pub gologin: &'a str,
+	pub multilogin: &'a str,
+	pub ip_api: &'a str,
+}
+
 /// What a browser needs beyond the database: the providers connected, and the exit's lookup.
 pub struct Browsers {
 	gologin: Option<GoLogin>,
@@ -65,7 +73,8 @@ impl Browsers {
 
 	/// The providers' APIs and ip-api at stubs', a proxy on loopback let through.
 	#[cfg(feature = "testing")]
-	pub fn stubbed(gologin: &str, multilogin: &str, ip_api: &str) -> Self {
+	pub fn stubbed(stubs: Stubs<'_>) -> Self {
+		let Stubs { gologin, multilogin, ip_api } = stubs;
 		Self {
 			gologin: Some(GoLogin::try_new(gologin, Zeroizing::new("stub".to_owned())).expect("a client")),
 			multilogin: Some(Multilogin::try_new(multilogin, Zeroizing::new("stub".to_owned())).expect("a client")),

@@ -17,7 +17,7 @@ use axum::{
 use ev_lib::{
 	api::{
 		OpenApi,
-		openapi::{Info, Operation, Paths, ReferenceOr, Server},
+		openapi::{Components, Info, Operation, Paths, ReferenceOr, Server},
 	},
 	views::{Table, Views},
 };
@@ -263,15 +263,19 @@ fn prefixed(name: &str, service: Service, mut doc: Value) -> eyre::Result<OpenAp
 			op.insert("tags".into(), Value::Array(vec![Value::String(name.to_owned())]));
 		}
 	}
-	// aide borrows the document's version string, which one read at runtime cannot lend: what the
-	// catalog takes of it is read part by part.
-	fn part<T: serde::de::DeserializeOwned>(doc: &mut Value, name: &str, key: &str) -> eyre::Result<T> {
-		serde_json::from_value(doc[key].take()).wrap_err_with(|| format!("{name}'s document: its {key}"))
+	// aide borrows the document's version string, which one read at runtime cannot lend: the
+	// catalog reads only the parts it takes.
+	#[derive(serde::Deserialize)]
+	struct Parts {
+		info: Info,
+		paths: Option<Paths>,
+		components: Option<Components>,
 	}
+	let Parts { info, paths, components } = serde_json::from_value(doc).wrap_err_with(|| format!("{name}'s document"))?;
 	Ok(OpenApi {
-		info: part(&mut doc, name, "info")?,
-		paths: part(&mut doc, name, "paths")?,
-		components: part(&mut doc, name, "components")?,
+		info,
+		paths,
+		components,
 		..OpenApi::default()
 	})
 }

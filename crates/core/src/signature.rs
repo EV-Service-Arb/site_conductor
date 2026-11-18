@@ -54,11 +54,20 @@ pub fn check_window(timestamp: &str, now: Timestamp) -> Result<(), SignatureErro
 	Ok(())
 }
 
+/// What a source sends: its `x-sa-timestamp` and `x-sa-signature`, and the raw body.
+#[derive(Clone, Copy, Debug)]
+pub struct Delivery<'a> {
+	pub timestamp: &'a str,
+	pub signature: &'a str,
+	pub body: &'a [u8],
+}
+
 /// Checks a delivery: the window, then the signature.
 ///
 /// The comparison is constant-time over the decoded digest, and a signature that is not 64
 /// hex characters is a plain mismatch.
-pub fn verify(secret: &[u8], timestamp: &str, signature: &str, body: &[u8], now: Timestamp) -> Result<(), SignatureError> {
+pub fn verify(secret: &[u8], delivery: Delivery, now: Timestamp) -> Result<(), SignatureError> {
+	let Delivery { timestamp, signature, body } = delivery;
 	check_window(timestamp, now)?;
 	let expected = mac(secret, timestamp, body).finalize().into_bytes();
 	let presented = hex::decode(signature.trim()).map_err(|_| SignatureError::Mismatch)?;
@@ -92,34 +101,143 @@ mod tests {
 	#[test]
 	fn a_good_signature_passes() {
 		let ts = "1790762400";
-		assert_eq!(verify(SECRET, ts, &sign(SECRET, ts, BODY), BODY, now()), Ok(()));
-		assert_eq!(verify(SECRET, ts, &sign(SECRET, ts, BODY).to_uppercase(), BODY, now()), Ok(()), "hex case is not the secret");
+		assert_eq!(
+			verify(
+				SECRET,
+				Delivery {
+					timestamp: ts,
+					signature: &sign(SECRET, ts, BODY),
+					body: BODY
+				},
+				now()
+			),
+			Ok(())
+		);
+		assert_eq!(
+			verify(
+				SECRET,
+				Delivery {
+					timestamp: ts,
+					signature: &sign(SECRET, ts, BODY).to_uppercase(),
+					body: BODY
+				},
+				now()
+			),
+			Ok(()),
+			"hex case is not the secret"
+		);
 	}
 
 	#[test]
 	fn anything_else_is_a_mismatch() {
 		let ts = "1790762400";
 		let sig = sign(SECRET, ts, BODY);
-		assert_eq!(verify(b"another secret", ts, &sig, BODY, now()), Err(SignatureError::Mismatch));
-		assert_eq!(verify(SECRET, ts, &sig, br#"{"events":[{}]}"#, now()), Err(SignatureError::Mismatch));
-		assert_eq!(verify(SECRET, "1790762401", &sig, BODY, now()), Err(SignatureError::Mismatch), "re-stamping breaks it");
-		assert_eq!(verify(SECRET, ts, &sig[..62], BODY, now()), Err(SignatureError::Mismatch));
-		assert_eq!(verify(SECRET, ts, "zz", BODY, now()), Err(SignatureError::Mismatch));
-		assert_eq!(verify(SECRET, ts, "", BODY, now()), Err(SignatureError::Mismatch));
+		assert_eq!(
+			verify(
+				b"another secret",
+				Delivery {
+					timestamp: ts,
+					signature: &sig,
+					body: BODY
+				},
+				now()
+			),
+			Err(SignatureError::Mismatch)
+		);
+		assert_eq!(
+			verify(
+				SECRET,
+				Delivery {
+					timestamp: ts,
+					signature: &sig,
+					body: br#"{"events":[{}]}"#
+				},
+				now()
+			),
+			Err(SignatureError::Mismatch)
+		);
+		assert_eq!(
+			verify(
+				SECRET,
+				Delivery {
+					timestamp: "1790762401",
+					signature: &sig,
+					body: BODY
+				},
+				now()
+			),
+			Err(SignatureError::Mismatch),
+			"re-stamping breaks it"
+		);
+		assert_eq!(
+			verify(
+				SECRET,
+				Delivery {
+					timestamp: ts,
+					signature: &sig[..62],
+					body: BODY
+				},
+				now()
+			),
+			Err(SignatureError::Mismatch)
+		);
+		assert_eq!(
+			verify(
+				SECRET,
+				Delivery {
+					timestamp: ts,
+					signature: "zz",
+					body: BODY
+				},
+				now()
+			),
+			Err(SignatureError::Mismatch)
+		);
+		assert_eq!(
+			verify(
+				SECRET,
+				Delivery {
+					timestamp: ts,
+					signature: "",
+					body: BODY
+				},
+				now()
+			),
+			Err(SignatureError::Mismatch)
+		);
 	}
 
 	#[test]
 	fn the_window_is_five_minutes_either_way() {
 		for (offset, ok) in [(-300, true), (300, true), (-301, false), (301, false)] {
 			let ts = (1_790_762_400 + offset).to_string();
-			let got = verify(SECRET, &ts, &sign(SECRET, &ts, BODY), BODY, now());
+			let got = verify(
+				SECRET,
+				Delivery {
+					timestamp: &ts,
+					signature: &sign(SECRET, &ts, BODY),
+					body: BODY,
+				},
+				now(),
+			);
 			assert_eq!(got.is_ok(), ok, "offset {offset}: {got:?}");
 			if !ok {
 				assert_eq!(got, Err(SignatureError::Stale));
 			}
 		}
 		let ts = "yesterday";
-		assert_eq!(verify(SECRET, ts, &sign(SECRET, ts, BODY), BODY, now()), Err(SignatureError::MalformedTimestamp));
+		assert_eq!(
+			verify(
+				SECRET,
+				Delivery {
+					timestamp: ts,
+					signature: &sign(SECRET, ts, BODY),
+					body: BODY
+				},
+				now()
+			),
+			Err(SignatureError::MalformedTimestamp)
+		);
 		assert_eq!(check_window("1790762400", now()), Ok(()));
 		assert_eq!(check_window("99999999999999999999", now()), Err(SignatureError::MalformedTimestamp));
 	}
@@ -132,7 +250,19 @@ mod tests {
 		bare.update(b"1790762400.");
 		bare.update(BODY);
 		let bare = hex::encode(bare.finalize().into_bytes());
-		assert_eq!(verify(SECRET, "1790762400", &bare, BODY, now()), Err(SignatureError::Mismatch), "a MAC without the prefix");
+		assert_eq!(
+			verify(
+				SECRET,
+				Delivery {
+					timestamp: "1790762400",
+					signature: &bare,
+					body: BODY
+				},
+				now()
+			),
+			Err(SignatureError::Mismatch),
+			"a MAC without the prefix"
+		);
 		assert_eq!(sign(SECRET, "1790762400", BODY), "8201ce64bf37d5332c8782bf19dba21d02573a6bf0f424dac260a9db83419b4f");
 	}
 }

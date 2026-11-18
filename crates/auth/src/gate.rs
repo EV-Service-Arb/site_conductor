@@ -175,7 +175,18 @@ impl Verifier {
 		let path = parts.extensions.get::<OriginalUri>().expect("the router records the URI it was asked").path();
 		let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("the clock is past 1970").as_secs();
 		let now = i64::try_from(now).expect("seconds since 1970 fit an i64");
-		crate::verify(&self.keys, token, self.aud, parts.method.as_str(), path, body, now).map_err(|e| {
+		crate::verify(
+			&self.keys,
+			token,
+			self.aud,
+			crate::Request {
+				method: parts.method.as_str(),
+				path,
+				body,
+			},
+			now,
+		)
+		.map_err(|e| {
 			tracing::warn!(method = %parts.method, path, reason = %e, "an assertion refused");
 			unauthenticated(format!("the assertion is refused: {e}"))
 		})

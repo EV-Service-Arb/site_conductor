@@ -48,16 +48,14 @@ const PENDING: SignedDuration = SignedDuration::from_mins(10);
 #[derive(Clone)]
 pub struct Model {
 	http: reqwest::Client,
-	/// `https://api.anthropic.com`.
 	base: String,
-	/// `https://platform.claude.com`: where a code is exchanged.
 	oauth: String,
 	owner: Option<Arc<Zeroizing<String>>>,
 	/// Each person's Connect, until its code is pasted. A restart loses them: Connect again.
 	pending: Arc<Mutex<HashMap<Uuid, Pending>>>,
 }
 impl Model {
-	pub fn new(base: String, oauth: String, owner: Option<Zeroizing<String>>) -> Self {
+	pub fn new(Origins { api: base, oauth }: Origins, owner: Option<Zeroizing<String>>) -> Self {
 		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		let http = reqwest::Client::builder().timeout(Duration::from_secs(300)).build().expect("the TLS backend initialises at boot");
 		Self {
@@ -161,6 +159,14 @@ impl Model {
 		let lasts = body["expires_in"].as_i64().ok_or_else(|| eyre::eyre!("Claude's sign-in answered no expires_in"))?;
 		Ok((Zeroizing::new(token.to_owned()), now + SignedDuration::from_secs(lasts)))
 	}
+}
+
+/// Where [`Model`] reaches Claude.
+pub struct Origins {
+	/// `https://api.anthropic.com`.
+	pub api: String,
+	/// `https://platform.claude.com`: where a code is exchanged.
+	pub oauth: String,
 }
 
 /// A person's Claude: never its token.

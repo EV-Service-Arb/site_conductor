@@ -13,7 +13,10 @@ use ev_lib::api::{
 };
 use jiff::Timestamp;
 use sa_auth::{Catalog, PermissionSet};
-use sa_panel::{Panel, access::AccessRequest};
+use sa_panel::{
+	Panel,
+	access::{AccessRequest, Asker},
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -111,7 +114,17 @@ async fn request_access(State(panel): State<Panel>, Extension(caller): Extension
 	if held {
 		return Err(Refusal::new(Code::Conflict, format!("you hold {need} already")));
 	}
-	let (r, made) = panel.request_access(caller.user_id, &caller.email, &caller.preferred_name, &need, Timestamp::now()).await?;
+	let (r, made) = panel
+		.request_access(
+			Asker {
+				user: caller.user_id,
+				email: &caller.email,
+				name: &caller.preferred_name,
+			},
+			&need,
+			Timestamp::now(),
+		)
+		.await?;
 	let r = AccessRequestDto::from(r);
 	Ok(if made { Upserted::Created(r) } else { Upserted::Existed(r) })
 }

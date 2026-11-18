@@ -1,7 +1,7 @@
 //! The token ledger, whose rows are only ever added: a balance is its user's sum. What a user is
 //! owed until they claim it, the cursor of review_archive's charges, and the prices.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Range};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
@@ -129,7 +129,7 @@ pub async fn renewed(conn: &mut SqliteConnection, user: Uuid, now: Timestamp, r:
 		None => (r.start(), now),
 		Some(last) => {
 			let last = from_db(last)?;
-			match accrue(balance, last, now, r.daily, r.cap) {
+			match accrue(balance, last, now, r) {
 				(_, at) if at == last => return Ok(balance),
 				renewal => renewal,
 			}
@@ -270,12 +270,12 @@ pub async fn open(conn: &mut SqliteConnection) -> eyre::Result<()> {
 	Ok(())
 }
 
-/// `from` → `to`; `false` when the cursor is not at `from`.
-pub async fn move_cursor(conn: &mut SqliteConnection, from: i64, to: i64) -> eyre::Result<bool> {
+/// `moved.start` → `moved.end`; `false` when the cursor is not at the start.
+pub async fn move_cursor(conn: &mut SqliteConnection, moved: Range<i64>) -> eyre::Result<bool> {
 	let done = sqlx::query("UPDATE charge_cursors SET after = $3 WHERE service = $1 AND after = $2")
 		.bind(REVIEW_ARCHIVE)
-		.bind(from)
-		.bind(to)
+		.bind(moved.start)
+		.bind(moved.end)
 		.execute(&mut *conn)
 		.await
 		.wrap_err("moving the charges' cursor")?;
