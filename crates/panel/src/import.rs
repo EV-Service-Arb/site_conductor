@@ -185,6 +185,7 @@ impl Panel {
 				delta: e.delta,
 				kind: e.kind.parse()?,
 				charged: charged(e.run_id, e.label.clone())?,
+				cost: None,
 				by: e.by_email.clone(),
 				note: e.note.clone(),
 			};

@@ -44,9 +44,10 @@ impl Panel {
 		if let Some(why) = meters::gauge(&mut tx, account, meter, now).await?.refuses(1) {
 			return Ok(Err(Refused::Conflict(why)));
 		}
-		let Some(price) = ledger::price(&mut tx, item).await? else {
+		let Some(rate) = ledger::rate(&mut tx, item).await? else {
 			return Ok(Err(Refused::Conflict("Street View is not priced yet: ask an admin to price it".to_owned())));
 		};
+		let price = rate.price();
 		let balance = ledger::renewed(&mut tx, user, now, &self.renewal).await?;
 		if balance < price {
 			return Ok(Err(Refused::Conflict(format!("Street View costs {price} tokens, and you hold {balance}"))));
@@ -73,6 +74,7 @@ impl Panel {
 					key,
 					label: Some(format!("Street View · {lat:.5}, {lng:.5}")),
 				}),
+				cost: Some(rate.cost_of(item, 1)),
 				by: None,
 				note: None,
 			};

@@ -157,11 +157,7 @@ async fn kit(db: &TestDb) -> Kit {
 		.await
 		.unwrap()
 		.unwrap();
-	panel
-		.set_prices(&[PlacesRequest::Details].map(|r| (Item::Places(r), Some(0))), &[], "admin@localhost", now)
-		.await
-		.unwrap()
-		.unwrap();
+	sa_panel::testing::priced(&panel, &[PlacesRequest::Details].map(|r| (Item::Places(r), Some(0)))).await;
 	let owner = DevIdentity::named("dev@localhost");
 	panel
 		.user_seen(

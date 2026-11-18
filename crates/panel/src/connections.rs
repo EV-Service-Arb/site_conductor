@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::prices::{Item, PlacesRequest, Spender};
+use sa_core::prices::{Item, PlacesRequest, Rate, Spender};
 use sa_places::{Bought, Hold, Payer, Pending, Purse};
 use uuid::Uuid;
 use zeroize::Zeroizing;
@@ -233,7 +233,7 @@ pub(crate) struct Tokens {
 struct Held {
 	panel: Panel,
 	user: Uuid,
-	price: i64,
+	rate: Rate,
 	/// One buy on the rotation at a time per person, from the balance read to the charge written:
 	/// two cannot both pass on the one balance.
 	turn: tokio::sync::OwnedMutexGuard<()>,
@@ -249,7 +249,7 @@ impl Purse for Tokens {
 			if !is_open(&mut tx).await.map_err(unpaid)? {
 				return Err(sa_places::Error::Unpaid(Refused::Closed.to_string()));
 			}
-			let Some(price) = ledger::price(&mut tx, sku.into()).await.map_err(unpaid)? else {
+			let Some(rate) = ledger::rate(&mut tx, sku.into()).await.map_err(unpaid)? else {
 				return Err(sa_places::Error::Unpaid(format!(
 					"Places {} on the shared keys is not priced yet: add a Maps key to one of your gmails, or ask an admin to price it",
 					Item::from(sku).title()
@@ -257,6 +257,7 @@ impl Purse for Tokens {
 			};
 			let balance = ledger::renewed(&mut tx, self.user, Timestamp::now(), &self.panel.renewal).await.map_err(unpaid)?;
 			tx.commit().await.map_err(|e| unpaid(eyre::eyre!(e)))?;
+			let price = rate.price();
 			if balance < price {
 				return Err(sa_places::Error::Unpaid(format!(
 					"Places {} on the shared keys costs {price} tokens, and you hold {balance}: add a Maps key to one of your gmails, or ask for tokens",
@@ -266,7 +267,7 @@ impl Purse for Tokens {
 			Ok(Box::new(Held {
 				panel: self.panel.clone(),
 				user: self.user,
-				price,
+				rate,
 				turn,
 			}) as Box<dyn Hold>)
 		})
@@ -275,7 +276,8 @@ impl Purse for Tokens {
 
 impl Hold for Held {
 	fn paid(self: Box<Self>, bought: Bought) -> Pending<'static, ()> {
-		let Self { panel, user, price, turn } = *self;
+		let Self { panel, user, rate, turn } = *self;
+		let price = rate.price();
 		Box::pin(async move {
 			if price == 0 {
 				drop(turn);
@@ -291,6 +293,7 @@ impl Hold for Held {
 					key: bought.key.to_string(),
 					label: Some(bought.label),
 				}),
+				cost: Some(rate.cost_of(bought.sku.into(), 1)),
 				by: None,
 				note: None,
 			};

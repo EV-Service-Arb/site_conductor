@@ -760,14 +760,24 @@ POST /api/v1/placement/study/pull ─ price set, budget = balance ÷ price ─�
 A person's front end reads the prices with their balance, and an action costing more than
 their `confirm_above` (100 unsaid) asks them first.
 
-**Prices are the admin's.** Every costly action is an item of `sa_core::prices`: each tool declares
-its items there once (an enum, a variant's message its name and its doc what it is) with where it
-happens, its unit and how many its price and cost are for (a model's tokens: a million). Every use
-of every item is charged to whom it was made for, at the admin's price; a free one is priced 0.
-The admin's page, `token_prices`, `unit_costs` and the snapshot are walked from it. An item
-without a price is not sold: a Places request, a map, a browser's start is refused, a walk step not walked. A unit's cost to
-us is the admin's too, dated (`unit_costs`, append-only): a use costs what its unit did when it was
-done, the first cost ever set for a use before it, none after one set back to unknown.
+**A price is a cost times a multiplier.** A token is worth what we spend for it
+(`sa_core::prices::TOKEN_USD_MICROS`: 1 000 tokens a dollar), so a balance reads as money. Every costly action
+is an item of `sa_core::prices`: each tool declares its items there once (an enum, a variant's message
+its name and its doc what it is) with where it happens, its unit and how many its cost is for (a
+model's tokens: a million). Both halves are the admin's:
+
+```text
+cost        what its units cost us, dated (`unit_costs`, append-only): a use costs what its unit did
+            when it was done, the first cost ever set for a use before it, none after one set back to unknown
+multiplier  the premium over it (`token_multipliers`): 1 at cost, 0 free
+price       the cost now, in tokens, × the multiplier, rounded up (`Rate::price`); never stored
+```
+
+Every use of every item is charged to whom it was made for at its price, and the charge keeps what
+it cost us (`token_ledger.cost_usd_micros`; review_archive's charge names what its run used), so a
+spend reads as charged or at cost. The admin's page, both tables and the snapshot are walked from the
+catalog. An item without both is not sold: a Places request, a map, a browser's start is refused, a
+walk step not walked.
 
 **Usage is what vendors bill us.** Each use is a row of `usage` (append-only: item, units, whose
 bill, who told), counted where it happens:
@@ -1075,8 +1085,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   texts, a gmail's IMAP password, Maps key and proxy, and a person's Claude token are sealed (XChaCha20-Poly1305, what they belong
   to as associated data) under `PANEL_DATA_KEY`, whose fingerprint is stored beside each. A
   person's are never read back out: the browser sees a key's last four.
-- **No price beside its use.** What a person is charged is an item of `sa_core::prices` at the
-  admin's price; no cost is written where it is spent.
+- **No price beside its use.** What a person is charged is an item of `sa_core::prices` at its
+  cost times its multiplier, both the admin's; no price is written where it is spent.
 - **A use is counted once, where it happens**: a Google answer bought in the write that keeps it, a
   service's through its feed, taken only from where its cursor stands.
 - **No buy on credit.** A Places request on the shared keys, a Street View panorama, a map, a

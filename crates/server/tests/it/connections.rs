@@ -143,20 +143,15 @@ impl World {
 	}
 
 	async fn price(&self, details: i64) {
-		self.panel
-			.set_prices(
-				&[
-					(Item::Places(PlacesRequest::Details), Some(details)),
-					(Item::Places(PlacesRequest::Search), Some(2 * details)),
-					(Item::Places(PlacesRequest::Autocomplete), Some(details)),
-				],
-				&[],
-				"admin@localhost",
-				jiff::Timestamp::now(),
-			)
-			.await
-			.unwrap()
-			.unwrap();
+		sa_panel::testing::priced(
+			&self.panel,
+			&[
+				(Item::Places(PlacesRequest::Details), Some(details)),
+				(Item::Places(PlacesRequest::Search), Some(2 * details)),
+				(Item::Places(PlacesRequest::Autocomplete), Some(details)),
+			],
+		)
+		.await;
 	}
 
 	/// Of the caller's trade, added the first time.
@@ -176,11 +171,7 @@ impl World {
 
 	/// The keys the billed requests went out with since asked last.
 	async fn price_map(&self, tokens: Option<i64>) {
-		self.panel
-			.set_prices(&[(Item::Map(MapLoad::Map), tokens)], &[], "admin@localhost", jiff::Timestamp::now())
-			.await
-			.unwrap()
-			.unwrap();
+		sa_panel::testing::priced(&self.panel, &[(Item::Map(MapLoad::Map), tokens)]).await;
 	}
 
 	async fn load_map(&mut self) -> (StatusCode, Value) {
@@ -318,36 +309,37 @@ async fn every_priced_item_is_the_admins_to_price_and_the_archive_is_told() {
 	assert_eq!(status, StatusCode::OK, "{read}");
 	let listed: Vec<_> = read["prices"].as_array().unwrap().iter().map(|p| p["item"].as_str().unwrap().to_owned()).collect();
 	assert_eq!(listed, Item::all().map(|i| i.to_string()).collect::<Vec<_>>(), "the catalog, whole and in order");
-	let of = |read: &Value, item: &str| read["prices"].as_array().unwrap().iter().find(|p| p["item"] == item).unwrap()["price"]["tokens"].clone();
+	let row = |read: &Value, item: &str| read["prices"].as_array().unwrap().iter().find(|p| p["item"] == item).unwrap().clone();
+	let of = |read: &Value, item: &str| row(read, item)["price"].clone();
 	assert_eq!(
-		(of(&read, "places.details"), of(&read, "walk.open")),
-		(Value::Null, json!(7)),
-		"Places unsold, a walk as the archive metered it"
+		(of(&read, "places.details"), of(&read, "walk.open"), row(&read, "walk.open")["multiplier"]["multiplier"].clone()),
+		(Value::Null, json!(7), json!(1.0)),
+		"Places unsold, a walk as the archive metered it: its price its cost, at ×1"
 	);
 
 	let (status, set) = w
 		.call(
 			Method::PUT,
 			"/api/v1/admin/tokens/prices",
-			Some(json!({ "prices": { "places.details": 3, "walk.step": null }, "costs": { "map.map": 7000 } })),
+			Some(json!({ "multipliers": { "places.details": 1.5, "walk.step": null }, "costs": { "places.details": 2, "map.map": 7 } })),
 		)
 		.await;
 	assert_eq!(status, StatusCode::OK, "{set}");
 	assert_eq!(
 		(of(&set, "places.details"), of(&set, "walk.step"), of(&set, "walk.open")),
 		(json!(3), Value::Null, json!(7)),
-		"only those given change"
+		"2 tokens × 1.5; only those given change"
 	);
-	let map = set["prices"].as_array().unwrap().iter().find(|p| p["item"] == "map.map").unwrap();
-	assert_eq!((&map["price"], &map["cost"]["usd_micros"]), (&Value::Null, &json!(7000)), "a cost, no price: {map}");
+	let map = row(&set, "map.map");
+	assert_eq!((&map["price"], &map["cost"]["tokens"]), (&Value::Null, &json!(7.0)), "a cost, no multiplier, not sold: {map}");
 	let told = w.panel.snapshot(jiff::Timestamp::now()).await.unwrap().unwrap().prices;
 	assert_eq!(told.get(&"walk.open".parse().unwrap()), Some(&7));
 	assert_eq!(told.get(&"walk.step".parse().unwrap()), None, "unpriced: not walked");
 
 	for refused in [
-		json!({ "prices": { "walk.fly": 1 }, "costs": {} }),
-		json!({ "prices": { "walk.open": -1 }, "costs": {} }),
-		json!({ "prices": {}, "costs": { "map.map": -1 } }),
+		json!({ "multipliers": { "walk.fly": 1 }, "costs": {} }),
+		json!({ "multipliers": { "walk.open": -1 }, "costs": {} }),
+		json!({ "multipliers": {}, "costs": { "map.map": -1 } }),
 	] {
 		let (status, body) = w.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(refused.clone())).await;
 		assert_eq!(status, StatusCode::BAD_REQUEST, "{refused}: {body}");
@@ -404,31 +396,46 @@ async fn every_paid_answer_and_map_is_counted_once_on_whose_bill() {
 #[tokio::test]
 async fn a_use_is_costed_at_the_cost_it_had_when_done() {
 	let mut w = World::holding(admin()).await;
-	w.price_map(Some(0)).await;
-	let load = async |w: &mut World| assert_eq!(w.load_map().await.0, StatusCode::OK);
-	let cost = async |w: &mut World, usd_micros: Value| {
+	let load = async |w: &mut World| w.load_map().await.0;
+	let cost = async |w: &mut World, tokens: Value| {
 		let (status, set) = w
-			.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(json!({ "prices": {}, "costs": { "map.map": usd_micros } })))
+			.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(json!({ "multipliers": { "map.map": 0 }, "costs": { "map.map": tokens } })))
 			.await;
 		assert_eq!(status, StatusCode::OK, "{set}");
 	};
-	load(&mut w).await;
-	cost(&mut w, json!(7_000)).await;
-	load(&mut w).await;
-	cost(&mut w, json!(14_000)).await;
-	load(&mut w).await;
+	cost(&mut w, json!(7)).await;
+	assert_eq!(load(&mut w).await, StatusCode::OK);
+	cost(&mut w, json!(14)).await;
+	assert_eq!(load(&mut w).await, StatusCode::OK);
 	cost(&mut w, Value::Null).await;
-	load(&mut w).await;
+	assert_eq!(load(&mut w).await, StatusCode::CONFLICT, "without a cost, not sold");
 
 	let now = jiff::Timestamp::now().as_millisecond();
 	let (status, usage) = w.call(Method::GET, &format!("/api/v1/admin/usage?from={}&to={}", now - 3_600_000, now + 60_000), None).await;
 	assert_eq!(status, StatusCode::OK, "{usage}");
 	let maps: Vec<&Value> = usage["days"].as_array().unwrap().iter().filter(|d| d["item"] == "map.map").collect();
 	let sum = |field: &str| maps.iter().map(|d| d[field].as_f64().unwrap_or(0.)).sum::<f64>();
-	assert_eq!(sum("units"), 4.);
-	assert!(
-		(sum("usd") - 0.028).abs() < 1e-9,
-		"the first before any cost and the second at 7000 µ$, the third at 14000, the last uncosted: {usage}"
-	);
-	assert_eq!(sum("uncosted"), 1., "{usage}");
+	assert_eq!(sum("units"), 2.);
+	assert!((sum("usd") - 0.021).abs() < 1e-9, "the first at 7 tokens, the second at 14, free to the person (×0): {usage}");
+	assert_eq!(sum("uncosted"), 0., "{usage}");
+}
+
+#[tokio::test]
+async fn a_spend_is_its_cost_times_the_multiplier_and_keeps_what_it_cost_us() {
+	let mut w = World::holding(admin()).await;
+	let (status, set) = w
+		.call(Method::PUT, "/api/v1/admin/tokens/prices", Some(json!({ "multipliers": { "map.map": 2.5 }, "costs": { "map.map": 7 } })))
+		.await;
+	assert_eq!(status, StatusCode::OK, "{set}");
+	let (_, before) = w.call(Method::GET, "/api/v1/tokens", None).await;
+	assert_eq!((&before["prices"]["map.map"], &before["token_usd"]), (&json!(18), &json!(0.001)), "17.5, rounded up: {before}");
+	assert_eq!(w.load_map().await.0, StatusCode::OK);
+	let (_, after) = w.call(Method::GET, "/api/v1/tokens", None).await;
+	assert_eq!(before["balance"].as_i64().unwrap() - after["balance"].as_i64().unwrap(), 18);
+
+	let now = jiff::Timestamp::now().as_millisecond();
+	let (status, flows) = w.call(Method::GET, &format!("/api/v1/admin/tokens/flows?from={}&to={}", now - 3_600_000, now + 60_000), None).await;
+	assert_eq!(status, StatusCode::OK, "{flows}");
+	let spent: Vec<_> = flows["flows"].as_array().unwrap().iter().filter(|f| f["kind"] == "spend").map(|f| (f["tokens"].clone(), f["at_cost"].clone())).collect();
+	assert_eq!(spent, [(json!(-18), json!(-7.0))], "charged, and at cost: {flows}");
 }

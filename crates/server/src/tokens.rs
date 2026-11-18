@@ -16,7 +16,7 @@ use ev_lib::api::{Body, Ids, JsonSchema, Params, Refusal};
 use jiff::Timestamp;
 use sa_auth::{Principal, Service, Tokens};
 use sa_core::{
-	prices::{Item, Scope},
+	prices::{Item, Scope, TOKEN_USD_MICROS},
 	tokens::ChargePage,
 };
 use sa_panel::{
@@ -33,6 +33,8 @@ use crate::{
 	http::{ApiRoute, FRESH, USER},
 	signin::Caller,
 };
+
+const TOKEN_USD: f64 = TOKEN_USD_MICROS as f64 / 1e6;
 
 /// The most entries a page of the ledger holds.
 const LEDGER_PAGE: i64 = 200;
@@ -85,6 +87,8 @@ pub struct TokensDto {
 	pub prices: BTreeMap<Item, i64>,
 	/// An action costing more asks first.
 	pub confirm_above: i64,
+	/// What a token is worth, in dollars.
+	pub token_usd: f64,
 }
 
 /// `PUT /tokens/settings`.
@@ -205,7 +209,8 @@ pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<boo
 	tokio::join!(follow, push);
 }
 
-/// A catalog item, its price (`null`: refused) and what `per` units cost us (`null`: unknown).
+/// A catalog item: what `per` units cost us (`null`: unknown), the multiplier charged over it
+/// (`null`: refused) and the price they make, while it has both.
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Price")]
 pub struct PriceDto {
@@ -219,14 +224,17 @@ pub struct PriceDto {
 	pub tool_title: &'static str,
 	pub title: &'static str,
 	pub description: &'static str,
-	pub price: Option<TokenPriceDto>,
+	/// Tokens for `per` units: the cost in tokens × the multiplier, rounded up.
+	pub price: Option<i64>,
+	pub multiplier: Option<MultiplierDto>,
 	pub cost: Option<UnitCostDto>,
 }
 
 #[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "TokenPrice")]
-pub struct TokenPriceDto {
-	pub tokens: i64,
+#[schemars(rename = "Multiplier")]
+pub struct MultiplierDto {
+	/// 1 charges at cost; to three decimals.
+	pub multiplier: f64,
 	/// The admin's email.
 	pub set_by: String,
 	/// RFC 3339.
@@ -236,8 +244,8 @@ pub struct TokenPriceDto {
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "UnitCost")]
 pub struct UnitCostDto {
-	/// Millionths of a dollar per `per` units.
-	pub usd_micros: i64,
+	/// Per `per` units, to three decimals.
+	pub tokens: f64,
 	/// The admin's email.
 	pub set_by: String,
 	/// RFC 3339.
@@ -249,16 +257,19 @@ pub struct UnitCostDto {
 #[schemars(rename = "Prices")]
 pub struct PricesDto {
 	pub prices: Vec<PriceDto>,
+	/// What a token is worth, in dollars.
+	pub token_usd: f64,
 }
 
-/// The items given, each priced at 0 tokens or more or `null` refused, each costed at 0 µ$ a unit
-/// or more or `null` unknown; the others stay.
+/// The items given, each multiplied at 0 or more (to three decimals) or `null` refused, each
+/// costed at 0 tokens or more per `per` units (to three decimals) or `null` unknown; the others
+/// stay.
 #[derive(Deserialize, JsonSchema)]
 #[schemars(rename = "SetPrices")]
 #[serde(deny_unknown_fields)]
 pub struct SetPricesDto {
-	pub prices: BTreeMap<Item, Option<i64>>,
-	pub costs: BTreeMap<Item, Option<i64>>,
+	pub multipliers: BTreeMap<Item, Option<f64>>,
+	pub costs: BTreeMap<Item, Option<f64>>,
 }
 
 /// What moved a balance, as Grafana reads it.
@@ -286,6 +297,9 @@ pub struct FlowDto {
 	pub name: String,
 	pub kind: FlowKindDto,
 	pub tokens: i64,
+	/// A spend's cost to us in tokens, signed as `tokens`; absent where unknown.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub at_cost: Option<f64>,
 	pub service: Option<String>,
 	pub label: Option<String>,
 	/// The admin's email.
@@ -383,6 +397,7 @@ async fn tokens_dto(panel: &Panel, user: Uuid, (balance, kickbacks): (i64, Vec<K
 		kickbacks: kickbacks.into_iter().map(KickbackDto::from).collect(),
 		prices,
 		confirm_above,
+		token_usd: TOKEN_USD,
 	})
 }
 
@@ -472,7 +487,9 @@ async fn change_balance(
 }
 
 impl From<Priced> for PriceDto {
-	fn from(Priced { item, price, cost }: Priced) -> Self {
+	fn from(p: Priced) -> Self {
+		let price = p.price();
+		let Priced { item, multiplier, cost } = p;
 		Self {
 			item,
 			scope: item.scope(),
@@ -482,13 +499,14 @@ impl From<Priced> for PriceDto {
 			tool_title: item.tool_title(),
 			title: item.title(),
 			description: item.description(),
-			price: price.map(|p| TokenPriceDto {
-				tokens: p.tokens,
-				set_by: p.set_by,
-				set_at: p.set_at.to_string(),
+			price,
+			multiplier: multiplier.map(|m| MultiplierDto {
+				multiplier: m.permille as f64 / 1e3,
+				set_by: m.set_by,
+				set_at: m.set_at.to_string(),
 			}),
 			cost: cost.map(|c| UnitCostDto {
-				usd_micros: c.usd_micros,
+				tokens: c.usd_micros as f64 / TOKEN_USD_MICROS as f64,
 				set_by: c.set_by,
 				set_at: c.set_at.to_string(),
 			}),
@@ -496,20 +514,30 @@ impl From<Priced> for PriceDto {
 	}
 }
 
-/// Every item of the price catalog (`sa_core::prices`), each priced in tokens or refused.
+/// Every item of the price catalog (`sa_core::prices`): its cost in tokens, the multiplier over it
+/// and the price they make, or refused.
 async fn token_prices(State(panel): State<Panel>) -> ApiResult<Json<PricesDto>> {
 	Ok(Json(PricesDto {
 		prices: panel.prices().await?.into_iter().map(PriceDto::from).collect(),
+		token_usd: TOKEN_USD,
 	}))
 }
 
-/// Prices the items given, 0 or more tokens or `null` refused, and costs them, 0 µ$ a unit or
-/// more or `null` unknown; the others stay.
+/// Multiplies the items given, 0 or more or `null` refused, and costs them, 0 tokens or more per
+/// `per` units or `null` unknown, both to three decimals; the others stay.
 ///
-/// 400 an item not in the catalog.
+/// 400 an item not in the catalog, or a number that is not finite.
 async fn set_token_prices(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<SetPricesDto>) -> ApiResult<Json<PricesDto>> {
-	let (priced, costs) = (b.prices.into_iter().collect::<Vec<_>>(), b.costs.into_iter().collect::<Vec<_>>());
-	panel.set_prices(&priced, &costs, &caller.email, Timestamp::now()).await??;
+	let scaled = |by: f64, of: BTreeMap<Item, Option<f64>>| -> ApiResult<Vec<(Item, Option<i64>)>> {
+		of.into_iter()
+			.map(|(item, n)| match n {
+				Some(n) if !n.is_finite() => Err(Refusal::new(Code::BadRequest, format!("{item}: {n} is no number"))),
+				n => Ok((item, n.map(|n| (n * by).round() as i64))),
+			})
+			.collect()
+	};
+	let (multipliers, costs) = (scaled(1e3, b.multipliers)?, scaled(TOKEN_USD_MICROS as f64, b.costs)?);
+	panel.set_prices(&multipliers, &costs, &caller.email, Timestamp::now()).await??;
 	token_prices(State(panel)).await
 }
 
@@ -530,6 +558,7 @@ impl From<Flow> for FlowDto {
 			name: f.name,
 			kind,
 			tokens: f.delta,
+			at_cost: f.cost.map(|c| -(c as f64) / TOKEN_USD_MICROS as f64),
 			service: f.service,
 			label: f.label,
 			by: f.by,

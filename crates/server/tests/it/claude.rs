@@ -215,7 +215,7 @@ async fn an_answer_runs_on_whose_claude_and_says_what_it_cost() {
 
 	let per_million = [(ModelTokens::Input, 10), (ModelTokens::CacheWrite, 12), (ModelTokens::CacheRead, 1), (ModelTokens::Output, 50)];
 	let prices: Vec<(Item, Option<i64>)> = per_million.iter().map(|&(t, p)| (Item::from(t), Some(p))).collect();
-	w.panel.set_prices(&prices, &[], "admin@localhost", Timestamp::now()).await.unwrap().unwrap();
+	sa_panel::testing::priced(&w.panel, &prices).await;
 	let ours = w.ask().await;
 	assert_eq!(w.bearers(), ["owner"]);
 	assert_eq!(

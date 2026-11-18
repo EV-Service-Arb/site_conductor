@@ -14,8 +14,38 @@ use uuid::Uuid;
 
 use crate::meters::Meter;
 
-/// What each item costs, in tokens; an item absent is refused.
+/// What each item costs, in tokens ([`Rate::price`]); an item absent is refused.
 pub type Prices = BTreeMap<Item, i64>;
+
+/// What a token is worth, in millionths of a dollar: a token buys exactly that much of what we spend.
+pub const TOKEN_USD_MICROS: i64 = 1_000;
+
+/// An item's terms, both the admin's: what [`Item::per`] units cost us and the premium charged over it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Rate {
+	/// Millionths of a dollar.
+	pub cost: i64,
+	/// Thousandths: 1000 charges at cost.
+	pub multiplier: i64,
+}
+
+impl Rate {
+	pub fn new(cost: i64, multiplier: i64) -> Self {
+		assert!(cost >= 0 && multiplier >= 0, "a cost and a multiplier are 0 or more: {cost}, {multiplier}");
+		Self { cost, multiplier }
+	}
+
+	/// Tokens charged for [`Item::per`] units, rounded up.
+	pub fn price(self) -> i64 {
+		let d = TOKEN_USD_MICROS * 1000;
+		(self.cost * self.multiplier + d - 1).div_euclid(d)
+	}
+
+	/// What `units` of `item` cost us, in millionths of a dollar.
+	pub fn cost_of(self, item: Item, units: i64) -> i64 {
+		(units * self.cost).div_euclid(item.per())
+	}
+}
 
 #[cfg(feature = "api")]
 pub use spends::{Payer, Spends};
@@ -402,6 +432,15 @@ impl<'de> Deserialize<'de> for Item {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn a_price_is_its_cost_in_tokens_times_the_multiplier_rounded_up() {
+		assert_eq!(Rate::new(17_000, 1_000).price(), 17);
+		assert_eq!(Rate::new(17_000, 1_500).price(), 26, "25.5");
+		assert_eq!(Rate::new(10_000, 1_100).price(), 11, "no float drift past a whole token");
+		assert_eq!(Rate::new(2_830, 1_000).price(), 3);
+		assert_eq!(Rate::new(0, 3_000).price(), 0);
+	}
 
 	#[test]
 	fn every_item_is_named_described_and_round_trips() {

@@ -135,6 +135,23 @@ pub(crate) async fn set_cost(conn: &mut SqliteConnection, item: Item, usd_micros
 	Ok(())
 }
 
+/// What a unit of `item` cost us at `at`, as [`by_day`] costs a use.
+pub(crate) async fn cost_at(conn: &mut SqliteConnection, item: Item, at: Timestamp) -> eyre::Result<Option<i64>> {
+	let cost: Option<Option<i64>> = sqlx::query_scalar(
+		"SELECT CASE \
+		   WHEN EXISTS (SELECT 1 FROM unit_costs c WHERE c.item = $1 AND c.set_at <= $2) \
+		   THEN (SELECT c.usd_micros FROM unit_costs c WHERE c.item = $1 AND c.set_at <= $2 ORDER BY c.id DESC LIMIT 1) \
+		   ELSE (SELECT c.usd_micros FROM unit_costs c WHERE c.item = $1 ORDER BY c.id LIMIT 1) \
+		 END",
+	)
+	.bind(item.to_string())
+	.bind(to_db(at))
+	.fetch_optional(&mut *conn)
+	.await
+	.wrap_err_with(|| format!("reading {item}'s cost at {at}"))?;
+	Ok(cost.flatten())
+}
+
 /// Every day's usage between `from` and `to`, oldest first. A use before its item's first cost
 /// takes that first one: the vendor charged it all along, nobody had typed it in yet.
 pub(crate) async fn by_day(conn: &mut SqliteConnection, from: Timestamp, to: Timestamp) -> eyre::Result<Vec<Day>> {

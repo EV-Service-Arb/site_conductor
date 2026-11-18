@@ -81,6 +81,8 @@ pub struct Charge {
 	pub payers: Vec<Uuid>,
 	/// Tokens; more than 0.
 	pub spent: i64,
+	/// What the run did, in each item's units: what it cost us.
+	pub used: std::collections::BTreeMap<crate::prices::Item, i64>,
 	/// The run failed or met a failure: what each paid is owed back.
 	pub kick_back: bool,
 	/// The place, as the ledger names it.

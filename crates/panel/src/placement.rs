@@ -34,6 +34,8 @@ pub struct Pull {
 	user: Uuid,
 	/// A search's.
 	price: i64,
+	/// A search's cost to us, in millionths of a dollar.
+	cost: i64,
 	balance: i64,
 	/// Searches bought on the rotation so far.
 	bought: Arc<AtomicU64>,
@@ -70,9 +72,10 @@ impl Pull {
 	pub async fn paid(self, sha: &str, failed: bool) -> eyre::Result<()> {
 		let bought = self.bought.load(Ordering::SeqCst);
 		let budget = self.budget();
-		let Self { panel, user, price, turn, .. } = self;
+		let Self { panel, user, price, cost, turn, .. } = self;
 		assert!(bought <= budget, "the purse holds no search past the budget");
-		let tokens = price * i64::try_from(bought).wrap_err("searches bought")?;
+		let bought = i64::try_from(bought).wrap_err("searches bought")?;
+		let tokens = price * bought;
 		if tokens == 0 {
 			drop(turn);
 			return Ok(());
@@ -87,6 +90,7 @@ impl Pull {
 				key: sha.to_owned(),
 				label: Some(format!("Study pull · {bought} × {}: {}", search.tool_title(), search.title())),
 			}),
+			cost: Some(cost * bought),
 			by: None,
 			note: None,
 		};
@@ -134,7 +138,7 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
-		let Some(price) = ledger::price(&mut tx, PlacementRequest::Search.into()).await? else {
+		let Some(rate) = ledger::rate(&mut tx, PlacementRequest::Search.into()).await? else {
 			return Ok(Err(Refused::Conflict("a study's pull is not priced yet: ask an admin to price it".to_owned())));
 		};
 		let balance = ledger::renewed(&mut tx, user, Timestamp::now(), &self.renewal).await?;
@@ -142,7 +146,8 @@ impl Panel {
 		Ok(Ok(Pull {
 			panel: self.clone(),
 			user,
-			price,
+			price: rate.price(),
+			cost: rate.cost,
 			balance,
 			bought: Arc::default(),
 			turn,

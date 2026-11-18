@@ -18,14 +18,14 @@ use eyre::WrapErr;
 use jiff::{Timestamp, civil::Date, tz::TimeZone};
 use sa_core::{
 	gbp::Snapshot,
-	prices::Item,
-	tokens::{ChargePage, Renewal, split},
+	prices::{Item, Rate},
+	tokens::{Charge, ChargePage, Renewal, split},
 };
 use sqlx::SqliteConnection;
 use uuid::Uuid;
 
 pub use crate::store::{
-	tokens::{Charged, Entry, Flow, FlowKind, Kickback, Kind, Owed, Price},
+	tokens::{Charged, Entry, Flow, FlowKind, Kickback, Kind, Multiplier, Owed},
 	usage::Cost,
 	users::User,
 };
@@ -41,12 +41,19 @@ use crate::{
 /// How many days `usage` reads, today's included.
 pub const USAGE_DAYS: i64 = 30;
 
-/// A catalog item, the admin's price of it and what a unit costs us.
+/// A catalog item, what its units cost us and the admin's multiplier over it.
 #[derive(Clone, Debug)]
 pub struct Priced {
 	pub item: Item,
-	pub price: Option<Price>,
+	pub multiplier: Option<Multiplier>,
 	pub cost: Option<Cost>,
+}
+
+impl Priced {
+	/// Tokens for [`Item::per`] units; `None`, not sold.
+	pub fn price(&self) -> Option<i64> {
+		Some(Rate::new(self.cost.as_ref()?.usd_micros, self.multiplier.as_ref()?.permille).price())
+	}
 }
 
 /// An admin's change to a balance.
@@ -216,6 +223,7 @@ impl Panel {
 			delta,
 			kind,
 			charged: None,
+			cost: None,
 			by: Some(by.to_owned()),
 			note,
 		};
@@ -226,14 +234,14 @@ impl Panel {
 		Ok(Ok(balance + delta))
 	}
 
-	/// Every priced item, in the catalog's order, and its price if it has one.
+	/// Every item, in the catalog's order, with its cost and multiplier where set.
 	pub async fn prices(&self) -> eyre::Result<Vec<Priced>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the prices")?;
-		let (mut prices, mut costs) = (db::prices(&mut conn).await?, usage::costs(&mut conn).await?);
+		let (mut multipliers, mut costs) = (db::multipliers(&mut conn).await?, usage::costs(&mut conn).await?);
 		Ok(Item::all()
 			.map(|item| Priced {
 				item,
-				price: prices.remove(&item),
+				multiplier: multipliers.remove(&item),
 				cost: costs.remove(&item),
 			})
 			.collect())
@@ -242,7 +250,7 @@ impl Panel {
 	/// What `user` reads before they spend: the prices, and above what an action asks them first.
 	pub async fn spending(&self, user: Uuid) -> eyre::Result<(BTreeMap<Item, i64>, i64)> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a person's spending")?;
-		let prices = db::prices(&mut conn).await?.into_iter().map(|(item, p)| (item, p.tokens)).collect();
+		let prices = db::rates(&mut conn).await?.into_iter().map(|(item, r)| (item, r.price())).collect();
 		Ok((prices, db::confirm_above(&mut conn, user).await?))
 	}
 
@@ -255,21 +263,22 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
-	/// An admin (`by`, their email) prices each item given at 0 tokens or more, `None` refusing
-	/// it, and costs each at 0 µ$ or more, `None` unknown: every one, or none.
-	pub async fn set_prices(&self, prices: &[(Item, Option<i64>)], costs: &[(Item, Option<i64>)], by: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
-		if prices.iter().chain(costs).any(|(_, n)| n.is_some_and(|n| n < 0)) {
-			return Ok(Err(Refused::Invalid("a price and a cost are 0 or more".to_owned())));
+	/// An admin (`by`, their email) multiplies each item given at 0 thousandths or more, `None`
+	/// refusing it, and costs each at 0 µ$ or more, `None` unknown: every one, or none. An item is
+	/// sold while it has both.
+	pub async fn set_prices(&self, multipliers: &[(Item, Option<i64>)], costs: &[(Item, Option<i64>)], by: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+		if multipliers.iter().chain(costs).any(|(_, n)| n.is_some_and(|n| n < 0)) {
+			return Ok(Err(Refused::Invalid("a multiplier and a cost are 0 or more".to_owned())));
 		}
 		let mut tx = self.store.begin_write().await?;
-		for (item, n) in prices {
-			db::set_price(&mut tx, *item, *n, by, now).await?;
+		for (item, n) in multipliers {
+			db::set_multiplier(&mut tx, *item, *n, by, now).await?;
 		}
 		for (item, n) in costs {
 			usage::set_cost(&mut tx, *item, *n, by, now).await?;
 		}
 		tx.commit().await.wrap_err("committing the prices")?;
-		tracing::info!(by, ?prices, ?costs, "prices set");
+		tracing::info!(by, ?multipliers, ?costs, "prices set");
 		self.snapshot_due.notify_one();
 		Ok(Ok(()))
 	}
@@ -291,6 +300,7 @@ impl Panel {
 		for c in &page.charges {
 			eyre::ensure!(c.id > prev, "charge {} after {prev}: ids ascend past the cursor", c.id);
 			eyre::ensure!(c.spent > 0, "charge {} spends {}", c.id, c.spent);
+			eyre::ensure!(!c.used.is_empty() && c.used.values().all(|n| *n > 0), "charge {} used {:?}", c.id, c.used);
 			let distinct: BTreeSet<_> = c.payers.iter().collect();
 			eyre::ensure!(!c.payers.is_empty() && distinct.len() == c.payers.len(), "charge {}: payers {:?}", c.id, c.payers);
 			prev = c.id;
@@ -314,6 +324,7 @@ impl Panel {
 				key: c.key.clone(),
 				label: Some(c.label.clone()),
 			};
+			let cost = charge_cost(&mut tx, c).await?;
 			let paid = split(c.spent, &balances);
 			let short = c.spent - paid.iter().map(|(_, p)| p).sum::<i64>();
 			if short > 0 {
@@ -325,6 +336,7 @@ impl Panel {
 					delta: -n,
 					kind: Kind::Charge,
 					charged: Some(charged.clone()),
+					cost: cost.map(|cost| cost * n / c.spent),
 					by: None,
 					note: None,
 				};
@@ -352,7 +364,7 @@ impl Panel {
 			balances.insert(u.user_id, db::renewed(&mut tx, u.user_id, now, &self.renewal).await?);
 		}
 		let gmbs = gmbs_db::managed(&mut tx).await?;
-		let prices = db::prices(&mut tx).await?.into_iter().map(|(i, p)| (i, p.tokens)).collect();
+		let prices = db::rates(&mut tx).await?.into_iter().map(|(i, r)| (i, r.price())).collect();
 		tx.commit().await.wrap_err("committing the snapshot's renewals")?;
 		Ok(Some(Snapshot {
 			gmbs,
@@ -361,4 +373,14 @@ impl Panel {
 			prices,
 		}))
 	}
+}
+
+/// What `c`'s run cost us, at the costs in effect when it ended; `None` while one of its items had none.
+async fn charge_cost(conn: &mut SqliteConnection, c: &Charge) -> eyre::Result<Option<i64>> {
+	let mut total = 0;
+	for (&item, &units) in &c.used {
+		let Some(cost) = usage::cost_at(conn, item, c.at).await? else { return Ok(None) };
+		total += units * cost / item.per();
+	}
+	Ok(Some(total))
 }

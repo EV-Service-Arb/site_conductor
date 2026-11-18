@@ -30,6 +30,7 @@ const KIND_NAME = {
 
 export function TokensView() {
   const t = useT();
+  const locale = useLocale();
   const me = useMe();
   const tokens = useTokens();
   const usage = useResource(api, "/tokens/usage");
@@ -60,6 +61,12 @@ export function TokensView() {
         {tokens.status === "ok" && (
           <>
             <span className="text-2xl font-semibold tabular-nums">{t(tokensKeys.count, "{n} tokens", { n: tokens.data.balance })}</span>
+            <p className="text-sm tabular-nums text-ink-soft">
+              {t(tokensKeys.worth, "Worth {usd}: a token is {rate} of what we spend for you", {
+                usd: (tokens.data.balance * tokens.data.token_usd).toLocaleString(locale, { style: "currency", currency: "USD" }),
+                rate: tokens.data.token_usd.toLocaleString(locale, { style: "currency", currency: "USD", maximumFractionDigits: 6 }),
+              })}
+            </p>
             <p className="text-sm text-ink-soft">{t(account.tokens.renewal, "+{daily} a day, up to {cap}", { daily: tokens.data.daily, cap: tokens.data.cap })}</p>
           </>
         )}

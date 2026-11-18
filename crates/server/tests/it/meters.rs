@@ -93,11 +93,7 @@ impl World {
 	}
 
 	async fn price(&self, tokens: Option<i64>) {
-		self.panel
-			.set_prices(&[(Item::from(StreetViewLoad::Panorama), tokens)], &[], "admin@localhost", jiff::Timestamp::now())
-			.await
-			.unwrap()
-			.unwrap();
+		sa_panel::testing::priced(&self.panel, &[(Item::from(StreetViewLoad::Panorama), tokens)]).await;
 	}
 
 	async fn call(&mut self, method: Method, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
@@ -237,11 +233,7 @@ async fn nothing_is_bought_on_a_stopping_meter_without_a_reading() {
 	w.price(Some(0)).await;
 	let (status, refused) = w.open().await;
 	assert_eq!(status, StatusCode::CONFLICT, "{refused}");
-	w.panel
-		.set_prices(&[(Item::from(MapLoad::Map), Some(0))], &[], "admin@localhost", Timestamp::now())
-		.await
-		.unwrap()
-		.unwrap();
+	sa_panel::testing::priced(&w.panel, &[(Item::from(MapLoad::Map), Some(0))]).await;
 	let (status, _) = w.call(Method::POST, "/api/v1/map/load", Some(json!({ "account": "a" }))).await;
 	assert_eq!(status, StatusCode::OK, "a map load is only watched");
 

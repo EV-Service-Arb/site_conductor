@@ -52,7 +52,7 @@ fn tokens(doc: &OpenApi) -> Value {
 			Panel {
 				id: 2,
 				kind: "timeseries",
-				title: "Spent per day, by service",
+				title: "Spent per day, by service, ${measure:text}",
 				grid: [0, 5, 12, 9],
 			},
 			in_range(
@@ -62,7 +62,7 @@ fn tokens(doc: &OpenApi) -> Value {
 						rows: r#"flows[kind in ["spend"]]"#,
 						day: "$substring(at, 0, 10)",
 						series: "service",
-						value: r#""tokens": -$sum($r.tokens)"#,
+						value: r#""tokens": -("${measure}" = "at_cost" ? $sum($r.at_cost) : $sum($r.tokens))"#,
 					}
 					.to_string(),
 					columns: &[("day", Column::Timestamp), ("series", Column::String), ("tokens", Column::Number)],
@@ -96,7 +96,7 @@ fn tokens(doc: &OpenApi) -> Value {
 			Panel {
 				id: 4,
 				kind: "bargauge",
-				title: "Spent by person",
+				title: "Spent by person, ${measure:text}",
 				grid: [0, 14, 12, 10],
 			},
 			in_range(
@@ -107,7 +107,7 @@ fn tokens(doc: &OpenApi) -> Value {
   [$distinct($rows.email).(
     $e := $;
     $r := $rows[email = $e];
-    {"who": $r[0].name ? $r[0].name : $e, "spent": -$sum($r.tokens)}
+    {"who": $r[0].name ? $r[0].name : $e, "spent": -("${measure}" = "at_cost" ? $sum($r.at_cost) : $sum($r.tokens))}
   )]^(>spent)
 )"##,
 					columns: &[("who", Column::String), ("spent", Column::Number)],
@@ -153,7 +153,7 @@ fn tokens(doc: &OpenApi) -> Value {
 			Panel {
 				id: 5,
 				kind: "table",
-				title: "Spent on",
+				title: "Spent on, ${measure:text}",
 				grid: [12, 14, 12, 10],
 			},
 			in_range(
@@ -164,7 +164,7 @@ fn tokens(doc: &OpenApi) -> Value {
   [$distinct($rows.(service & "|" & label)).(
     $k := $;
     $r := $rows[service & "|" & label = $k];
-    {"service": $r[0].service, "what": $r[0].label, "times": $count($r), "tokens": -$sum($r.tokens)}
+    {"service": $r[0].service, "what": $r[0].label, "times": $count($r), "tokens": -("${measure}" = "at_cost" ? $sum($r.at_cost) : $sum($r.tokens))}
   )]^(>tokens)
 )"##,
 					columns: &[("service", Column::String), ("what", Column::String), ("times", Column::Number), ("tokens", Column::Number)],
@@ -413,6 +413,20 @@ fn tokens(doc: &OpenApi) -> Value {
 				uid: "sa-tokens",
 				title: "Tokens and costs · everyone",
 				from: "now-30d",
+				variables: vec![json!({
+					"type": "custom",
+					"name": "measure",
+					"label": "Spent",
+					"query": "charged : tokens, at cost : at_cost",
+					"current": { "text": "charged", "value": "tokens" },
+					"options": [
+						{ "text": "charged", "value": "tokens", "selected": true },
+						{ "text": "at cost", "value": "at_cost", "selected": false }
+					],
+					"hide": 0,
+					"multi": false,
+					"includeAll": false
+				})],
 			}
 			.into(),
 		)
@@ -590,6 +604,7 @@ fn meters(doc: &OpenApi) -> Value {
 				uid: "sa-meters",
 				title: "Vendors' meters · everyone",
 				from: "now-90d",
+				variables: Vec::new(),
 			}
 			.into(),
 		)
@@ -664,10 +679,12 @@ struct Dashboard<'a> {
 	uid: &'a str,
 	title: &'a str,
 	from: &'a str,
+	/// The variables nothing answers.
+	variables: Vec<Value>,
 }
 
 impl From<Dashboard<'_>> for Value {
-	fn from(Dashboard { uid, title, from }: Dashboard<'_>) -> Self {
+	fn from(Dashboard { uid, title, from, variables }: Dashboard<'_>) -> Self {
 		json!({
 			"uid": uid,
 			"title": title,
@@ -678,7 +695,7 @@ impl From<Dashboard<'_>> for Value {
 			"time": { "from": from, "to": "now" },
 			"refresh": "",
 			"schemaVersion": 39,
-			"templating": { "list": [] }
+			"templating": { "list": variables }
 		})
 	}
 }

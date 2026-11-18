@@ -43,7 +43,7 @@ export function AdminTokensView() {
       {prices.status === "error" && <ErrorState failure={prices.failure} onRetry={prices.reload} />}
       {meters.status === "error" && <ErrorState failure={meters.failure} onRetry={meters.reload} />}
       {meters.status === "ok" && <MetersCard meters={meters.data} />}
-      {prices.status === "ok" && <PricesCard prices={prices.data.prices} onSaved={prices.reload} />}
+      {prices.status === "ok" && <PricesCard prices={prices.data.prices} tokenUsd={prices.data.token_usd} onSaved={prices.reload} />}
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-ink">{t(tokens.admin.spending, "Spending")}</h2>
         <iframe

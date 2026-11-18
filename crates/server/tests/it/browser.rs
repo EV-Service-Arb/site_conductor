@@ -196,7 +196,7 @@ impl World {
 			(BrowserStart::Gologin.into(), Some(1)),
 			(BrowserStart::Mimic.into(), Some(1)),
 		];
-		panel.set_prices(&prices, &[], "admin@localhost", jiff::Timestamp::now()).await.unwrap().unwrap();
+		sa_panel::testing::priced(&panel, &prices).await;
 		let who = DevIdentity {
 			user_id: DevIdentity::named("dev@localhost"),
 			permissions: operator(),
@@ -359,11 +359,7 @@ async fn a_start_unpriced_or_past_the_balance_is_refused_before_the_runner_hears
 	let (status, set) = w.set(a, "pixel_7", &w.proxy("fr")).await;
 	assert_eq!(status, StatusCode::OK, "{set}");
 	let start = async |w: &mut World, tokens: Option<i64>| {
-		w.panel
-			.set_prices(&[(BrowserStart::Gologin.into(), tokens)], &[], "admin@localhost", jiff::Timestamp::now())
-			.await
-			.unwrap()
-			.unwrap();
+		sa_panel::testing::priced(&w.panel, &[(BrowserStart::Gologin.into(), tokens)]).await;
 		w.call(Method::POST, &format!("/api/v1/gmails/{a}/browser/start"), Some(json!({ "gmb": null }))).await
 	};
 	for tokens in [None, Some(501)] {

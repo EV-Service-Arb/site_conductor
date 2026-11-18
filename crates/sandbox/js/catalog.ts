@@ -199,11 +199,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every item of the price catalog (`sa_core::prices`), each priced in tokens or refused. */
+        /** Every item of the price catalog (`sa_core::prices`): its cost in tokens, the multiplier over it and the price they make, or refused. */
         get: operations["token_prices"];
         /**
-         * Prices the items given, 0 or more tokens or `null` refused, and costs them, 0 µ$ a unit or more or `null` unknown; the others stay.
-         * @description 400 an item not in the catalog.
+         * Multiplies the items given, 0 or more or `null` refused, and costs them, 0 tokens or more per `per` units or `null` unknown, both to three decimals; the others stay.
+         * @description 400 an item not in the catalog, or a number that is not finite.
          */
         put: operations["set_token_prices"];
         post?: never;
@@ -3565,6 +3565,11 @@ export interface components {
         Flow: {
             /** @description RFC 3339. */
             at: string;
+            /**
+             * Format: double
+             * @description A spend's cost to us in tokens, signed as `tokens`; absent where unknown.
+             */
+            at_cost?: number | null;
             /** @description The admin's email. */
             by: string | null;
             email: string;
@@ -4094,6 +4099,17 @@ export interface components {
             /** Format: int64 */
             output: number;
         };
+        Multiplier: {
+            /**
+             * Format: double
+             * @description 1 charges at cost; to three decimals.
+             */
+            multiplier: number;
+            /** @description RFC 3339. */
+            set_at: string;
+            /** @description The admin's email. */
+            set_by: string;
+        };
         /**
          * @description What a draft needs before Google's form: the form's order, then what stands behind it.
          *
@@ -4228,17 +4244,25 @@ export interface components {
             /** Format: uint32 */
             width: number;
         };
-        /** @description A catalog item, its price (`null`: refused) and what `per` units cost us (`null`: unknown). */
+        /**
+         * @description A catalog item: what `per` units cost us (`null`: unknown), the multiplier charged over it
+         *     (`null`: refused) and the price they make, while it has both.
+         */
         Price: {
             cost: components["schemas"]["UnitCost"] | null;
             description: string;
             item: components["schemas"]["PricedItem"];
+            multiplier: components["schemas"]["Multiplier"] | null;
             /**
              * Format: int64
              * @description How many units the price and the cost are for.
              */
             per: number;
-            price: components["schemas"]["TokenPrice"] | null;
+            /**
+             * Format: int64
+             * @description Tokens for `per` units: the cost in tokens × the multiplier, rounded up.
+             */
+            price: number | null;
             scope: components["schemas"]["Scope"];
             title: string;
             tool: string;
@@ -4251,6 +4275,11 @@ export interface components {
         /** @description Every item, in the catalog's order. */
         Prices: {
             prices: components["schemas"]["Price"][];
+            /**
+             * Format: double
+             * @description What a token is worth, in dollars.
+             */
+            token_usd: number;
         };
         Probe: {
             /** @constant */
@@ -4413,108 +4442,109 @@ export interface components {
             key: string;
         };
         /**
-         * @description The items given, each priced at 0 tokens or more or `null` refused, each costed at 0 µ$ a unit
-         *     or more or `null` unknown; the others stay.
+         * @description The items given, each multiplied at 0 or more (to three decimals) or `null` refused, each
+         *     costed at 0 tokens or more per `per` units (to three decimals) or `null` unknown; the others
+         *     stay.
          */
         SetPrices: {
             costs: {
-                /** Format: int64 */
+                /** Format: double */
                 "ads.historical_metrics"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "ads.keyword_ideas"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "ads.location"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "browser.gologin"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "browser.mimic"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "claude.cache_read"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "claude.cache_write"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "claude.input"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "claude.output"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "dataforseo.keywords_for_keywords"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "dataforseo.search_volume"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "map.map"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "phone.running"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "placement.search"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "places.autocomplete"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "places.details"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "places.geocode"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "places.search"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "street_view.panorama"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "walk.open"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "walk.reviews"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "walk.sort"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "walk.sort_retry"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "walk.step"?: number | null;
             };
-            prices: {
-                /** Format: int64 */
+            multipliers: {
+                /** Format: double */
                 "ads.historical_metrics"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "ads.keyword_ideas"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "ads.location"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "browser.gologin"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "browser.mimic"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "claude.cache_read"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "claude.cache_write"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "claude.input"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "claude.output"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "dataforseo.keywords_for_keywords"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "dataforseo.search_volume"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "map.map"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "phone.running"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "placement.search"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "places.autocomplete"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "places.details"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "places.geocode"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "places.search"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "street_view.panorama"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "walk.open"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "walk.reviews"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "walk.sort"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "walk.sort_retry"?: number | null;
-                /** Format: int64 */
+                /** Format: double */
                 "walk.step"?: number | null;
             };
         };
@@ -4763,14 +4793,6 @@ export interface components {
         TokenHolders: {
             users: components["schemas"]["TokenHolder"][];
         };
-        TokenPrice: {
-            /** @description RFC 3339. */
-            set_at: string;
-            /** @description The admin's email. */
-            set_by: string;
-            /** Format: int64 */
-            tokens: number;
-        };
         /** @description `GET /tokens`, `POST /tokens/claim`. */
         Tokens: {
             /** Format: int64 */
@@ -4839,6 +4861,11 @@ export interface components {
                 /** Format: int64 */
                 "walk.step"?: number;
             };
+            /**
+             * Format: double
+             * @description What a token is worth, in dollars.
+             */
+            token_usd: number;
         };
         /** @description A trade of the caller's: Plumbing, set up in some countries. */
         Trade: {
@@ -4993,10 +5020,10 @@ export interface components {
             /** @description The admin's email. */
             set_by: string;
             /**
-             * Format: int64
-             * @description Millionths of a dollar per `per` units.
+             * Format: double
+             * @description Per `per` units, to three decimals.
              */
-            usd_micros: number;
+            tokens: number;
         };
         /** @description `GET /tokens/usage`. */
         Usage: {
@@ -7003,6 +7030,7 @@ export type MeterTotal = components['schemas']['MeterTotal'];
 export type MeterUse = components['schemas']['MeterUse'];
 export type Meters = components['schemas']['Meters'];
 export type ModelUsed = components['schemas']['ModelUsed'];
+export type Multiplier = components['schemas']['Multiplier'];
 export type MustHave = components['schemas']['MustHave'];
 export type Need = components['schemas']['Need'];
 export type NewChat = components['schemas']['NewChat'];
@@ -7080,7 +7108,6 @@ export type TelegramLink = components['schemas']['TelegramLink'];
 export type Title = components['schemas']['Title'];
 export type TokenHolder = components['schemas']['TokenHolder'];
 export type TokenHolders = components['schemas']['TokenHolders'];
-export type TokenPrice = components['schemas']['TokenPrice'];
 export type Tokens = components['schemas']['Tokens'];
 export type Trade = components['schemas']['Trade'];
 export type TradeName = components['schemas']['TradeName'];
@@ -8697,8 +8724,9 @@ export interface operations {
             cookie?: never;
         };
         /**
-         * @description The items given, each priced at 0 tokens or more or `null` refused, each costed at 0 µ$ a unit
-         *     or more or `null` unknown; the others stay.
+         * @description The items given, each multiplied at 0 or more (to three decimals) or `null` refused, each
+         *     costed at 0 tokens or more per `per` units (to three decimals) or `null` unknown; the others
+         *     stay.
          */
         requestBody: {
             content: {

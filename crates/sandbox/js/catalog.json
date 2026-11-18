@@ -1737,7 +1737,7 @@
         "tags": [
           "tokens"
         ],
-        "summary": "Every item of the price catalog (`sa_core::prices`), each priced in tokens or refused.",
+        "summary": "Every item of the price catalog (`sa_core::prices`): its cost in tokens, the multiplier over it and the price they make, or refused.",
         "operationId": "token_prices",
         "responses": {
           "200": {
@@ -1897,11 +1897,11 @@
         "tags": [
           "tokens"
         ],
-        "summary": "Prices the items given, 0 or more tokens or `null` refused, and costs them, 0 µ$ a unit or more or `null` unknown; the others stay.",
-        "description": "400 an item not in the catalog.",
+        "summary": "Multiplies the items given, 0 or more or `null` refused, and costs them, 0 tokens or more per `per` units or `null` unknown, both to three decimals; the others stay.",
+        "description": "400 an item not in the catalog, or a number that is not finite.",
         "operationId": "set_token_prices",
         "requestBody": {
-          "description": "The items given, each priced at 0 tokens or more or `null` refused, each costed at 0 µ$ a unit\nor more or `null` unknown; the others stay.",
+          "description": "The items given, each multiplied at 0 or more (to three decimals) or `null` refused, each\ncosted at 0 tokens or more per `per` units (to three decimals) or `null` unknown; the others\nstay.",
           "content": {
             "application/json": {
               "schema": {
@@ -35381,6 +35381,14 @@
             "description": "RFC 3339.",
             "type": "string"
           },
+          "at_cost": {
+            "description": "A spend's cost to us in tokens, signed as `tokens`; absent where unknown.",
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
           "by": {
             "description": "The admin's email.",
             "type": [
@@ -36924,6 +36932,29 @@
           "output"
         ]
       },
+      "Multiplier": {
+        "type": "object",
+        "properties": {
+          "multiplier": {
+            "description": "1 charges at cost; to three decimals.",
+            "type": "number",
+            "format": "double"
+          },
+          "set_at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
+          "set_by": {
+            "description": "The admin's email.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "multiplier",
+          "set_by",
+          "set_at"
+        ]
+      },
       "MustHave": {
         "description": "What a draft needs before Google's form: the form's order, then what stands behind it.\n\n- `category`: Its trade set up in its country, with Google's category.\n- `site`: A landing page of sites' shows it.\n- `hidden_address`: The address its film is shot at, and whether customers visit.\n- `profile`: Its gmail's browser set up.",
         "type": "string",
@@ -37402,7 +37433,7 @@
         ]
       },
       "Price": {
-        "description": "A catalog item, its price (`null`: refused) and what `per` units cost us (`null`: unknown).",
+        "description": "A catalog item: what `per` units cost us (`null`: unknown), the multiplier charged over it\n(`null`: refused) and the price they make, while it has both.",
         "type": "object",
         "properties": {
           "cost": {
@@ -37421,20 +37452,28 @@
           "item": {
             "$ref": "#/components/schemas/PricedItem"
           },
+          "multiplier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Multiplier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "per": {
             "description": "How many units the price and the cost are for.",
             "type": "integer",
             "format": "int64"
           },
           "price": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TokenPrice"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "description": "Tokens for `per` units: the cost in tokens × the multiplier, rounded up.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           },
           "scope": {
             "$ref": "#/components/schemas/Scope"
@@ -37463,6 +37502,7 @@
           "title",
           "description",
           "price",
+          "multiplier",
           "cost"
         ]
       },
@@ -37504,10 +37544,16 @@
             "items": {
               "$ref": "#/components/schemas/Price"
             }
+          },
+          "token_usd": {
+            "description": "What a token is worth, in dollars.",
+            "type": "number",
+            "format": "double"
           }
         },
         "required": [
-          "prices"
+          "prices",
+          "token_usd"
         ]
       },
       "Probe": {
@@ -38047,7 +38093,7 @@
         ]
       },
       "SetPrices": {
-        "description": "The items given, each priced at 0 tokens or more or `null` refused, each costed at 0 µ$ a unit\nor more or `null` unknown; the others stay.",
+        "description": "The items given, each multiplied at 0 or more (to three decimals) or `null` refused, each\ncosted at 0 tokens or more per `per` units (to three decimals) or `null` unknown; the others\nstay.",
         "type": "object",
         "properties": {
           "costs": {
@@ -38055,345 +38101,345 @@
             "properties": {
               "ads.historical_metrics": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "ads.keyword_ideas": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "ads.location": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "browser.gologin": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "browser.mimic": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "claude.cache_read": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "claude.cache_write": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "claude.input": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "claude.output": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "dataforseo.keywords_for_keywords": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "dataforseo.search_volume": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "map.map": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "phone.running": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "placement.search": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "places.autocomplete": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "places.details": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "places.geocode": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "places.search": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "street_view.panorama": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "walk.open": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "walk.reviews": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "walk.sort": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "walk.sort_retry": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "walk.step": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               }
             },
             "additionalProperties": false
           },
-          "prices": {
+          "multipliers": {
             "type": "object",
             "properties": {
               "ads.historical_metrics": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "ads.keyword_ideas": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "ads.location": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "browser.gologin": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "browser.mimic": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "claude.cache_read": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "claude.cache_write": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "claude.input": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "claude.output": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "dataforseo.keywords_for_keywords": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "dataforseo.search_volume": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "map.map": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "phone.running": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "placement.search": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "places.autocomplete": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "places.details": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "places.geocode": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "places.search": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "street_view.panorama": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "walk.open": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "walk.reviews": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "walk.sort": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "walk.sort_retry": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               },
               "walk.step": {
                 "type": [
-                  "integer",
+                  "number",
                   "null"
                 ],
-                "format": "int64"
+                "format": "double"
               }
             },
             "additionalProperties": false
@@ -38401,7 +38447,7 @@
         },
         "additionalProperties": false,
         "required": [
-          "prices",
+          "multipliers",
           "costs"
         ]
       },
@@ -39144,28 +39190,6 @@
           "users"
         ]
       },
-      "TokenPrice": {
-        "type": "object",
-        "properties": {
-          "set_at": {
-            "description": "RFC 3339.",
-            "type": "string"
-          },
-          "set_by": {
-            "description": "The admin's email.",
-            "type": "string"
-          },
-          "tokens": {
-            "type": "integer",
-            "format": "int64"
-          }
-        },
-        "required": [
-          "tokens",
-          "set_by",
-          "set_at"
-        ]
-      },
       "Tokens": {
         "description": "`GET /tokens`, `POST /tokens/claim`.",
         "type": "object",
@@ -39296,6 +39320,11 @@
               }
             },
             "additionalProperties": false
+          },
+          "token_usd": {
+            "description": "What a token is worth, in dollars.",
+            "type": "number",
+            "format": "double"
           }
         },
         "required": [
@@ -39304,7 +39333,8 @@
           "cap",
           "kickbacks",
           "prices",
-          "confirm_above"
+          "confirm_above",
+          "token_usd"
         ]
       },
       "Trade": {
@@ -39812,14 +39842,14 @@
             "description": "The admin's email.",
             "type": "string"
           },
-          "usd_micros": {
-            "description": "Millionths of a dollar per `per` units.",
-            "type": "integer",
-            "format": "int64"
+          "tokens": {
+            "description": "Per `per` units, to three decimals.",
+            "type": "number",
+            "format": "double"
           }
         },
         "required": [
-          "usd_micros",
+          "tokens",
           "set_by",
           "set_at"
         ]

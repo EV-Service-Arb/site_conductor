@@ -1,12 +1,12 @@
 //! The token ledger, whose rows are only ever added: a balance is its user's sum. What a user is
-//! owed until they claim it, the cursor of review_archive's charges, and the prices.
+//! owed until they claim it, the cursor of review_archive's charges, and the multipliers.
 
 use std::{collections::BTreeMap, ops::Range};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_core::{
-	prices::Item,
+	prices::{Item, Rate},
 	tokens::{Renewal, accrue},
 };
 use sqlx::SqliteConnection;
@@ -76,6 +76,9 @@ pub struct Entry {
 	pub delta: i64,
 	pub kind: Kind,
 	pub charged: Option<Charged>,
+	/// A charge's cost to us, in millionths of a dollar; `None` on anything else, or a charge whose
+	/// items had no cost when it was made.
+	pub cost: Option<i64>,
 	/// The admin's email.
 	pub by: Option<String>,
 	pub note: Option<String>,
@@ -101,7 +104,9 @@ pub struct Kickback {
 
 pub async fn append(conn: &mut SqliteConnection, user: Uuid, e: &Entry) -> eyre::Result<()> {
 	let c = e.charged.as_ref();
-	sqlx::query("INSERT INTO token_ledger (user_id, at, delta, kind, service, key, label, by_email, note) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+	assert!(e.cost.is_none() || e.kind == Kind::Charge, "only a charge has a cost: {e:?}");
+	assert!(e.cost.is_none_or(|c| c >= 0), "a cost is 0 or more: {e:?}");
+	sqlx::query("INSERT INTO token_ledger (user_id, at, delta, kind, service, key, label, by_email, note, cost_usd_micros) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
 		.bind(user)
 		.bind(to_db(e.at))
 		.bind(e.delta)
@@ -111,6 +116,7 @@ pub async fn append(conn: &mut SqliteConnection, user: Uuid, e: &Entry) -> eyre:
 		.bind(c.and_then(|c| c.label.as_ref()))
 		.bind(&e.by)
 		.bind(&e.note)
+		.bind(e.cost)
 		.execute(&mut *conn)
 		.await
 		.wrap_err("writing to the ledger")?;
@@ -141,6 +147,7 @@ pub async fn renewed(conn: &mut SqliteConnection, user: Uuid, now: Timestamp, r:
 		delta,
 		kind: Kind::Accrual,
 		charged: None,
+		cost: None,
 		by: None,
 		note: None,
 	};
@@ -212,9 +219,9 @@ pub async fn claim(conn: &mut SqliteConnection, user: Uuid, now: Timestamp) -> e
 /// Up to `limit` of the user's rows before `before`, newest first; a day renewal added nothing
 /// to is left out.
 pub async fn ledger(conn: &mut SqliteConnection, user: Uuid, before: Option<i64>, limit: i64) -> eyre::Result<Vec<(i64, Entry)>> {
-	type Row = (i64, i64, i64, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>);
+	type Row = (i64, i64, i64, String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>);
 	let rows: Vec<Row> = sqlx::query_as(
-		"SELECT id, at, delta, kind, service, key, label, by_email, note FROM token_ledger \
+		"SELECT id, at, delta, kind, service, key, label, by_email, note, cost_usd_micros FROM token_ledger \
 		 WHERE user_id = $1 AND delta != 0 AND ($2 IS NULL OR id < $2) ORDER BY id DESC LIMIT $3",
 	)
 	.bind(user)
@@ -224,12 +231,13 @@ pub async fn ledger(conn: &mut SqliteConnection, user: Uuid, before: Option<i64>
 	.await
 	.wrap_err("reading a ledger")?;
 	rows.into_iter()
-		.map(|(id, at, delta, kind, service, key, label, by, note)| {
+		.map(|(id, at, delta, kind, service, key, label, by, note, cost)| {
 			let entry = Entry {
 				at: from_db(at)?,
 				delta,
 				kind: kind.parse()?,
 				charged: charged(service, key, label),
+				cost,
 				by,
 				note,
 			};
@@ -293,26 +301,27 @@ pub async fn untouched(conn: &mut SqliteConnection) -> eyre::Result<bool> {
 	.wrap_err("looking for tokens and GMBs")
 }
 
-/// An item's price, and the admin who set it.
+/// An item's multiplier, and the admin who set it.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Price {
-	pub tokens: i64,
+pub struct Multiplier {
+	/// Thousandths.
+	pub permille: i64,
 	pub set_by: String,
 	pub set_at: Timestamp,
 }
 
-/// Every priced item's price.
-pub async fn prices(conn: &mut SqliteConnection) -> eyre::Result<BTreeMap<Item, Price>> {
-	let rows: Vec<(String, i64, String, i64)> = sqlx::query_as("SELECT item, tokens, set_by, set_at FROM token_prices")
+/// Every item's multiplier set.
+pub async fn multipliers(conn: &mut SqliteConnection) -> eyre::Result<BTreeMap<Item, Multiplier>> {
+	let rows: Vec<(String, i64, String, i64)> = sqlx::query_as("SELECT item, permille, set_by, set_at FROM token_multipliers")
 		.fetch_all(&mut *conn)
 		.await
-		.wrap_err("reading the prices")?;
+		.wrap_err("reading the multipliers")?;
 	rows.into_iter()
-		.map(|(item, tokens, set_by, set_at)| {
+		.map(|(item, permille, set_by, set_at)| {
 			Ok((
-				item.parse().wrap_err("a priced row names an item the catalog lacks: a migration drops it")?,
-				Price {
-					tokens,
+				item.parse().wrap_err("a multiplied row names an item the catalog lacks: a migration drops it")?,
+				Multiplier {
+					permille,
 					set_by,
 					set_at: from_db(set_at)?,
 				},
@@ -321,41 +330,51 @@ pub async fn prices(conn: &mut SqliteConnection) -> eyre::Result<BTreeMap<Item, 
 		.collect()
 }
 
-/// What `item` costs; `None`, not sold.
-pub async fn price(conn: &mut SqliteConnection, item: Item) -> eyre::Result<Option<i64>> {
-	sqlx::query_scalar("SELECT tokens FROM token_prices WHERE item = $1")
-		.bind(item.to_string())
-		.fetch_optional(&mut *conn)
-		.await
-		.wrap_err_with(|| format!("reading the price of {item}"))
+/// Every item sold: with a multiplier and a cost now.
+pub async fn rates(conn: &mut SqliteConnection) -> eyre::Result<BTreeMap<Item, Rate>> {
+	let rows: Vec<(String, i64, i64)> = sqlx::query_as(
+		"SELECT m.item, c.usd_micros, m.permille FROM token_multipliers m \
+		 JOIN unit_costs c ON c.id = (SELECT MAX(id) FROM unit_costs WHERE item = m.item) WHERE c.usd_micros IS NOT NULL",
+	)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("reading the rates")?;
+	rows.into_iter()
+		.map(|(item, cost, permille)| Ok((item.parse().wrap_err("a rate names an item the catalog lacks: a migration drops it")?, Rate::new(cost, permille))))
+		.collect()
 }
 
-/// `item` priced at `tokens`, 0 or more; `None` takes it off sale.
-pub async fn set_price(conn: &mut SqliteConnection, item: Item, tokens: Option<i64>, by: &str, now: Timestamp) -> eyre::Result<()> {
-	let q = match tokens {
-		Some(tokens) => sqlx::query(
-			"INSERT INTO token_prices (item, tokens, set_by, set_at) VALUES ($1, $2, $3, $4) \
-			 ON CONFLICT (item) DO UPDATE SET tokens = excluded.tokens, set_by = excluded.set_by, set_at = excluded.set_at",
+/// `item`'s terms now; `None`, not sold.
+pub async fn rate(conn: &mut SqliteConnection, item: Item) -> eyre::Result<Option<Rate>> {
+	Ok(rates(conn).await?.remove(&item))
+}
+
+/// `item` charged at `permille` thousandths of its cost, 0 or more; `None` takes it off sale.
+pub async fn set_multiplier(conn: &mut SqliteConnection, item: Item, permille: Option<i64>, by: &str, now: Timestamp) -> eyre::Result<()> {
+	let q = match permille {
+		Some(permille) => sqlx::query(
+			"INSERT INTO token_multipliers (item, permille, set_by, set_at) VALUES ($1, $2, $3, $4) \
+			 ON CONFLICT (item) DO UPDATE SET permille = excluded.permille, set_by = excluded.set_by, set_at = excluded.set_at",
 		)
 		.bind(item.to_string())
-		.bind(tokens)
+		.bind(permille)
 		.bind(by)
 		.bind(to_db(now)),
-		None => sqlx::query("DELETE FROM token_prices WHERE item = $1").bind(item.to_string()),
+		None => sqlx::query("DELETE FROM token_multipliers WHERE item = $1").bind(item.to_string()),
 	};
-	q.execute(&mut *conn).await.wrap_err_with(|| format!("pricing {item}"))?;
+	q.execute(&mut *conn).await.wrap_err_with(|| format!("multiplying {item}"))?;
 	Ok(())
 }
 
 /// Everyone's ledger rows (a renewal adding nothing left out) and the grants given, between
 /// `from` and `to`, oldest first.
 pub async fn flows(conn: &mut SqliteConnection, from: Timestamp, to: Timestamp) -> eyre::Result<Vec<Flow>> {
-	type Row = (i64, String, String, String, i64, Option<String>, Option<String>, Option<String>, Option<String>);
+	type Row = (i64, String, String, String, i64, Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>);
 	let rows: Vec<Row> = sqlx::query_as(
-		"SELECT l.at, u.email, u.name, l.kind, l.delta, l.service, l.label, l.by_email, l.note \
+		"SELECT l.at, u.email, u.name, l.kind, l.delta, l.service, l.label, l.by_email, l.note, l.cost_usd_micros \
 		 FROM token_ledger l JOIN users u USING (user_id) WHERE l.delta != 0 AND l.at >= $1 AND l.at < $2 \
 		 UNION ALL \
-		 SELECT k.at, u.email, u.name, 'grant', k.amount, NULL, NULL, k.by_email, k.note \
+		 SELECT k.at, u.email, u.name, 'grant', k.amount, NULL, NULL, k.by_email, k.note, NULL \
 		 FROM token_kickbacks k JOIN users u USING (user_id) WHERE k.by_email IS NOT NULL AND k.at >= $1 AND k.at < $2 \
 		 ORDER BY 1",
 	)
@@ -365,7 +384,7 @@ pub async fn flows(conn: &mut SqliteConnection, from: Timestamp, to: Timestamp) 
 	.await
 	.wrap_err("reading everyone's flows")?;
 	rows.into_iter()
-		.map(|(at, email, name, kind, delta, service, label, by, note)| {
+		.map(|(at, email, name, kind, delta, service, label, by, note, cost)| {
 			let kind = match kind.as_str() {
 				"grant" => FlowKind::Granted,
 				ledger => FlowKind::Ledger(ledger.parse()?),
@@ -376,6 +395,7 @@ pub async fn flows(conn: &mut SqliteConnection, from: Timestamp, to: Timestamp) 
 				name,
 				kind,
 				delta,
+				cost,
 				service,
 				label,
 				by,
@@ -400,6 +420,8 @@ pub struct Flow {
 	pub name: String,
 	pub kind: FlowKind,
 	pub delta: i64,
+	/// A charge's cost to us, in millionths of a dollar.
+	pub cost: Option<i64>,
 	pub service: Option<String>,
 	pub label: Option<String>,
 	/// The admin's email.

@@ -84,15 +84,7 @@ async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
 	let accounts = base.map(|_| vec![sa_panel::testing::account("house", Some("k"), None)]).unwrap_or_default();
 	let p = panel_on(store, key, google, sa_places::Accounts::new(accounts));
 	// what a point costs is tests/connections.rs's
-	p.set_prices(
-		&[PlacesRequest::Details, PlacesRequest::Search, PlacesRequest::Autocomplete].map(|r| (Item::Places(r), Some(0))),
-		&[],
-		"admin@localhost",
-		jiff::Timestamp::now(),
-	)
-	.await
-	.unwrap()
-	.unwrap();
+	sa_panel::testing::priced(&p, &[PlacesRequest::Details, PlacesRequest::Search, PlacesRequest::Autocomplete].map(|r| (Item::Places(r), Some(0)))).await;
 	p
 }
 

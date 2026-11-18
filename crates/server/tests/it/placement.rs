@@ -145,10 +145,7 @@ impl Conductor {
 		.unwrap()
 		.unwrap();
 		let now = jiff::Timestamp::now();
-		p.set_prices(&[(Item::Placement(PlacementRequest::Search), price)], &[], "admin@localhost", now)
-			.await
-			.unwrap()
-			.unwrap();
+		sa_panel::testing::priced(&p, &[(Item::Placement(PlacementRequest::Search), price)]).await;
 		let pulled = Pulled {
 			store: db.store().await,
 			since: Arc::default(),

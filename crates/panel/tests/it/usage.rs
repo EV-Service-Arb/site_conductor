@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 use jiff::Timestamp;
 use sa_core::{
 	prices::{BrowserStart, Item, PhoneTime, Scope, WalkStep},
+	tokens::{Charge, ChargePage},
 	usage::{UsagePage, Used},
 };
 use sa_panel::{
@@ -34,7 +35,7 @@ async fn opened(db: &TestDb) -> Panel {
 		(BrowserStart::Gologin.into(), Some(1)),
 		(WalkStep::Open.into(), Some(1)),
 	];
-	p.set_prices(&prices, &[], "admin@localhost", Timestamp::now()).await.unwrap().unwrap();
+	sa_panel::testing::priced(&p, &prices).await;
 	p
 }
 
@@ -109,4 +110,27 @@ async fn a_page_breaking_the_feeds_rules_is_refused_whole() {
 		1,
 		"a walk's, charged through its charge feed"
 	);
+}
+
+#[tokio::test]
+async fn a_walks_charge_keeps_what_its_steps_cost_us_split_as_it_is_paid() {
+	let db = TestDb::create().await;
+	let p = opened(&db).await;
+	sa_panel::testing::priced(&p, &[(WalkStep::Step.into(), Some(2))]).await;
+	let (a, b) = (person(&p).await, person(&p).await);
+	let charge = Charge {
+		id: 1,
+		key: "run:1".to_owned(),
+		payers: vec![a, b],
+		spent: 30,
+		used: [(Item::from(WalkStep::Open), 2), (WalkStep::Step.into(), 9)].into(),
+		kick_back: false,
+		label: "Somewhere".to_owned(),
+		at: Timestamp::now(),
+	};
+	assert_eq!(p.take_charges(ChargePage { charges: vec![charge], next: 1 }, 0, Timestamp::now()).await.unwrap(), 1);
+	for who in [a, b] {
+		let (_, entry) = &p.ledger(who, None, 1).await.unwrap().unwrap()[0];
+		assert_eq!((entry.delta, entry.cost), (-15, Some(10_000)), "2 opens at 1 token and 9 steps at 2: 20 tokens' worth, halved");
+	}
 }

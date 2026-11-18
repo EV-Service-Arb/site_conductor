@@ -27,38 +27,38 @@ function grouped<K>(prices: Price[], by: (p: Price) => K): [K, Price[]][] {
   return [...groups];
 }
 
-/** What is typed, as stored: empty is none, `undefined` not a number this field takes. */
-const tokens = (raw: string): number | null | undefined => {
+/** What is typed, to three decimals as stored: empty is none, `undefined` not a number this field takes. */
+const thousandths = (raw: string): number | null | undefined => {
   if (raw.trim() === "") return null;
   const n = Number(raw);
-  return Number.isSafeInteger(n) && n >= 0 ? n : undefined;
-};
-const usdMicros = (raw: string): number | null | undefined => {
-  if (raw.trim() === "") return null;
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? Math.round(n * 1e6) : undefined;
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 1e3) / 1e3 : undefined;
 };
 
-type Field = "price" | "cost";
+/** The server's `Rate::price`: the cost in tokens × the multiplier, rounded up. */
+const priceOf = (cost: number | null | undefined, multiplier: number | null | undefined) =>
+  cost == null || multiplier == null ? null : Math.ceil((Math.round(cost * 1e3) * Math.round(multiplier * 1e3)) / 1e6);
+
+type Field = "multiplier" | "cost";
 const draftKey = (item: PricedItem, field: Field) => `${item}:${field}`;
 
 /**
- * Every costly action, by where it happens and with what: its price to a person in tokens and what
- * a unit costs us in dollars, set in place; only what changed is sent.
+ * Every costly action, by where it happens and with what: what its units cost us in tokens and the
+ * multiplier a person is charged over it, set in place; only what changed is sent.
  */
-export function PricesCard({ prices, onSaved }: { prices: Price[]; onSaved: (prices: Price[]) => void }) {
+export function PricesCard({ prices, tokenUsd, onSaved }: { prices: Price[]; tokenUsd: number; onSaved: (prices: Price[]) => void }) {
   const t = useT();
   const button = useButtonSize();
   const size = useControlSize();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const shownPrice = (p: Price) => drafts[draftKey(p.item, "price")] ?? p.price?.tokens.toString() ?? "";
-  const shownCost = (p: Price) => drafts[draftKey(p.item, "cost")] ?? (p.cost === null ? "" : (p.cost.usd_micros / 1e6).toString());
-  const priceChanged = prices.filter((p) => tokens(shownPrice(p)) !== (p.price?.tokens ?? null));
-  const costChanged = prices.filter((p) => usdMicros(shownCost(p)) !== (p.cost?.usd_micros ?? null));
-  const invalid = priceChanged.some((p) => tokens(shownPrice(p)) === undefined) || costChanged.some((p) => usdMicros(shownCost(p)) === undefined);
-  const changes = priceChanged.length + costChanged.length;
+  const shownMultiplier = (p: Price) => drafts[draftKey(p.item, "multiplier")] ?? p.multiplier?.multiplier.toString() ?? "";
+  const shownCost = (p: Price) => drafts[draftKey(p.item, "cost")] ?? p.cost?.tokens.toString() ?? "";
+  const multiplierChanged = prices.filter((p) => thousandths(shownMultiplier(p)) !== (p.multiplier?.multiplier ?? null));
+  const costChanged = prices.filter((p) => thousandths(shownCost(p)) !== (p.cost?.tokens ?? null));
+  const invalid = multiplierChanged.some((p) => thousandths(shownMultiplier(p)) === undefined) || costChanged.some((p) => thousandths(shownCost(p)) === undefined);
+  const changes = multiplierChanged.length + costChanged.length;
   const unsold = prices.filter((p) => p.price === null).length;
+  const usd = (tokens: number) => (tokens * tokenUsd).toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 6 });
   const uncosted = prices.filter((p) => p.cost === null).length;
 
   const save = () => {
@@ -66,8 +66,8 @@ export function PricesCard({ prices, onSaved }: { prices: Price[]; onSaved: (pri
     ok(
       api.PUT("/admin/tokens/prices", {
         body: {
-          prices: Object.fromEntries(priceChanged.map((p) => [p.item, tokens(shownPrice(p))])),
-          costs: Object.fromEntries(costChanged.map((p) => [p.item, usdMicros(shownCost(p))])),
+          multipliers: Object.fromEntries(multiplierChanged.map((p) => [p.item, thousandths(shownMultiplier(p))])),
+          costs: Object.fromEntries(costChanged.map((p) => [p.item, thousandths(shownCost(p))])),
         },
       }),
     )
@@ -91,7 +91,8 @@ export function PricesCard({ prices, onSaved }: { prices: Price[]; onSaved: (pri
           <p className="basis-full text-xs text-ink-soft">
             {t(
               pricesKeys.why,
-              "Tokens: what each thing costs a person, 0 for free; empty is not sold, so it is refused: a Places request, a map, a browser's start, a walk step. Cached answers and a person's own Maps keys cost nothing. $: what one unit costs us, for the spending below.",
+              "Cost: what it costs us, in tokens ({rate}). ×: what a person is charged over it, 1 at cost, 0 for free. Either empty is not sold, so it is refused: a Places request, a map, a browser's start, a walk step. Cached answers and a person's own Maps keys cost nothing.",
+              { rate: t(pricesKeys.rate, "1 token = {usd}", { usd: usd(1) }) },
             )}
           </p>
         </header>
@@ -111,35 +112,42 @@ export function PricesCard({ prices, onSaved }: { prices: Price[]; onSaved: (pri
                       <label className="flex items-center gap-1.5 text-xs text-ink-soft">
                         <Input
                           type="number"
-                          inputMode="numeric"
+                          inputMode="decimal"
                           min={0}
+                          step="any"
                           size={size}
                           className="w-24 tabular-nums"
-                          aria-label={t(pricesKeys.tokens.label, "{item}: tokens {per}", { item: p.title, per: perUnit(t, p) })}
-                          aria-invalid={tokens(shownPrice(p)) === undefined || undefined}
-                          value={shownPrice(p)}
-                          placeholder={t(pricesKeys.unsold, "not sold")}
-                          onChange={edit(p.item, "price")}
+                          aria-label={t(pricesKeys.cost.label, "{item}: cost in tokens {per}", { item: p.title, per: perUnit(t, p) })}
+                          aria-invalid={thousandths(shownCost(p)) === undefined || undefined}
+                          value={shownCost(p)}
+                          placeholder={t(pricesKeys.cost.unknown, "unknown")}
+                          onChange={edit(p.item, "cost")}
                         />
-                        <span className="w-12">{t(pricesKeys.tokens, "tokens")}</span>
+                        <span className="w-24">
+                          {t(pricesKeys.tokens, "tokens")} {perUnit(t, p)}
+                          {thousandths(shownCost(p)) != null && <span className="block tabular-nums">{usd(thousandths(shownCost(p))!)}</span>}
+                        </span>
                       </label>
                       <label className="flex items-center gap-1.5 text-xs text-ink-soft">
-                        <span>$</span>
+                        <span>×</span>
                         <Input
                           type="number"
                           inputMode="decimal"
                           min={0}
                           step="any"
                           size={size}
-                          className="w-28 tabular-nums"
-                          aria-label={t(pricesKeys.cost.label, "{item}: dollars {per}", { item: p.title, per: perUnit(t, p) })}
-                          aria-invalid={usdMicros(shownCost(p)) === undefined || undefined}
-                          value={shownCost(p)}
-                          placeholder={t(pricesKeys.cost.unknown, "unknown")}
-                          onChange={edit(p.item, "cost")}
+                          className="w-20 tabular-nums"
+                          aria-label={t(pricesKeys.multiplier.label, "{item}: multiplier", { item: p.title })}
+                          aria-invalid={thousandths(shownMultiplier(p)) === undefined || undefined}
+                          value={shownMultiplier(p)}
+                          placeholder={t(pricesKeys.unsold, "not sold")}
+                          onChange={edit(p.item, "multiplier")}
                         />
-                        <span className="w-16">{perUnit(t, p)}</span>
                       </label>
+                      <span className="w-24 text-sm tabular-nums text-ink">
+                        {priceOf(thousandths(shownCost(p)), thousandths(shownMultiplier(p))) ?? t(pricesKeys.unsold, "not sold")}
+                        <span className="text-xs text-ink-soft"> {t(pricesKeys.tokens, "tokens")}</span>
+                      </span>
                     </li>
                   ))}
                 </ul>

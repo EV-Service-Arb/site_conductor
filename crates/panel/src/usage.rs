@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_core::{
-	prices::{Item, MapLoad, ModelTokens, Scope, Spender},
+	prices::{Item, MapLoad, ModelTokens, Rate, Scope, Spender},
 	usage::{Bill, UsagePage},
 };
 use strum::VariantArray;
@@ -39,9 +39,11 @@ const CLAUDE: &str = "claude";
 pub struct Tab {
 	/// The answer's turn id: its charges' key.
 	answer: String,
-	prices: BTreeMap<ModelTokens, i64>,
+	rates: BTreeMap<ModelTokens, Rate>,
 	/// Tokens × price, in [`Item::per`]ths of a token.
 	owed: i64,
+	/// What the rounds since its last charge cost us, in millionths of a dollar: on its next charge.
+	cost: i64,
 	/// `owed` rounded up, to tokens: what was charged, and let go past a spent balance.
 	billed: i64,
 	pub charged: i64,
@@ -64,9 +66,10 @@ impl Panel {
 			return Ok(Err(Refused::Closed));
 		}
 		let item = Item::from(MapLoad::Map);
-		let Some(price) = ledger::price(&mut tx, item).await? else {
+		let Some(rate) = ledger::rate(&mut tx, item).await? else {
 			return Ok(Err(Refused::Conflict("the map is not priced yet: ask an admin to price it".to_owned())));
 		};
+		let price = rate.price();
 		let balance = ledger::renewed(&mut tx, user, now, &self.renewal).await?;
 		if balance < price {
 			return Ok(Err(Refused::Conflict(format!("the map costs {price} tokens, and you hold {balance}"))));
@@ -92,6 +95,7 @@ impl Panel {
 					key: now.to_string(),
 					label: Some("The map".to_owned()),
 				}),
+				cost: Some(rate.cost_of(item, 1)),
 				by: None,
 				note: None,
 			};
@@ -112,12 +116,12 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed.to_string()));
 		}
-		let mut prices = BTreeMap::new();
+		let mut rates = BTreeMap::new();
 		for &tokens in ModelTokens::VARIANTS {
-			let Some(price) = ledger::price(&mut tx, tokens.into()).await? else {
+			let Some(rate) = ledger::rate(&mut tx, tokens.into()).await? else {
 				return Ok(Err("the panel's Claude is not priced yet: connect your own Claude, or ask an admin to price it".to_owned()));
 			};
-			prices.insert(tokens, price);
+			rates.insert(tokens, rate);
 		}
 		let balance = ledger::renewed(&mut tx, by.user(), now, &self.renewal).await?;
 		tx.commit().await.wrap_err("committing a renewal")?;
@@ -126,8 +130,9 @@ impl Panel {
 		}
 		Ok(Ok(Tab {
 			answer: answer.to_owned(),
-			prices,
+			rates,
 			owed: 0,
+			cost: 0,
 			billed: 0,
 			charged: 0,
 		}))
@@ -154,7 +159,8 @@ impl Panel {
 			tx.commit().await.wrap_err("committing a model's tokens")?;
 			return Ok(None);
 		};
-		tab.owed += used.iter().map(|(tokens, units)| tab.prices[tokens] * units).sum::<i64>();
+		tab.owed += used.iter().map(|(tokens, units)| tab.rates[tokens].price() * units).sum::<i64>();
+		tab.cost += used.iter().map(|&(tokens, units)| tab.rates[&tokens].cost_of(tokens.into(), units)).sum::<i64>();
 		let per = Item::from(ModelTokens::Input).per();
 		let due = (tab.owed + per - 1).div_euclid(per) - tab.billed;
 		let balance = ledger::renewed(&mut tx, by.user(), now, &self.renewal).await?;
@@ -170,6 +176,7 @@ impl Panel {
 					key: tab.answer.clone(),
 					label: Some("The assistant's answer".to_owned()),
 				}),
+				cost: Some(tab.cost),
 				by: None,
 				note: None,
 			};
@@ -178,6 +185,9 @@ impl Panel {
 		tx.commit().await.wrap_err("committing a model's tokens and their charge")?;
 		tab.billed += due;
 		tab.charged += charge;
+		if charge > 0 {
+			tab.cost = 0;
+		}
 		if charge > 0 {
 			tracing::info!(user_id = %by.user(), tokens = charge, "the assistant's answer charged");
 			self.snapshot_due.notify_one();
@@ -231,7 +241,7 @@ impl Panel {
 			};
 			db::record(&mut tx, &used).await?;
 			let Some(user) = u.user else { continue };
-			let Some(price) = ledger::price(&mut tx, u.item).await? else {
+			let Some(rate) = ledger::rate(&mut tx, u.item).await? else {
 				eyre::bail!(
 					"{service}'s use {} of {} for {user} is unpriced: an admin took its price off after it was let start; price it again",
 					u.id,
@@ -239,7 +249,7 @@ impl Panel {
 				);
 			};
 			let per = u.item.per();
-			let due = (u.units * price + per - 1).div_euclid(per);
+			let due = (u.units * rate.price() + per - 1).div_euclid(per);
 			let balance = ledger::renewed(&mut tx, user, Timestamp::now(), &self.renewal).await?;
 			// its cost is known only once it is done: what it costs past the balance is let go
 			let charge = due.min(balance.max(0));
@@ -253,6 +263,7 @@ impl Panel {
 						key: format!("{service}:{}", u.id),
 						label: Some(format!("{} · {} {}", u.item.title(), u.units, u.item.unit())),
 					}),
+					cost: Some(rate.cost_of(u.item, u.units)),
 					by: None,
 					note: None,
 				};
