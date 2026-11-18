@@ -1,9 +1,8 @@
 "use client";
 
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, buttonVariants, cn } from "@evinvest/uikit";
-import { X } from "lucide-react";
+import { CloseButton, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, buttonVariants, cn } from "@evinvest/uikit";
 
-import { CategoryChip, type Listed, issueOf, issueText, open, useGmbTags, gmbs } from "@/entities/gmb";
+import { CategoryChip, type Listed, gmbPhotoSrc, issueOf, issueText, open, useGmbTags, gmbs } from "@/entities/gmb";
 import { ViewLink } from "@/shared/lib/location";
 import { useT, home } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -35,11 +34,39 @@ export function Peek({ listed, onClose, className }: { listed: Listed; onClose: 
             <CategoryChip gmb={gmb} />
           </div>
         </div>
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(home.peek.close, "Close")} title={t(home.peek.close, "Close")} onClick={onClose}>
-          <X aria-hidden />
-        </Button>
+        <CloseButton size={button("sm")} label={t(home.peek.close, "Close")} onClose={onClose} />
       </CardHeader>
       <CardContent className="flex flex-col gap-3 px-4">
+        {(gmb.phone || gmb.website || gmb.hours.length > 0) && (
+          <div className="flex flex-col gap-0.5 text-xs text-ink-soft">
+            {gmb.phone && (
+              <a href={`tel:${gmb.phone}`} className="hover:text-ink">
+                {gmb.phone}
+              </a>
+            )}
+            {gmb.website && /^https?:\/\//.test(gmb.website) && (
+              <a href={gmb.website} target="_blank" rel="noreferrer" className="truncate hover:text-ink">
+                {gmb.website}
+              </a>
+            )}
+            {gmb.hours.length > 0 && (
+              <details>
+                <summary className="cursor-pointer hover:text-ink">{t(home.peek.hours, "Hours")}</summary>
+                {gmb.hours.map((h) => (
+                  <p key={h}>{h}</p>
+                ))}
+              </details>
+            )}
+          </div>
+        )}
+        {gmb.photos.length > 0 && (
+          <div className="flex gap-1 overflow-x-auto">
+            {gmb.photos.map((p) => (
+              // eslint-disable-next-line @next/next/no-img-element -- the API's own JPEG, behind the session: nothing for next/image to optimise in an export
+              <img key={p.id} src={gmbPhotoSrc(gmb.id, p.id)} alt="" loading="lazy" title={p.author ? t(home.peek.photoBy, "Photo: {author}", { author: p.author }) : undefined} className="h-16 w-auto shrink-0 rounded-sm object-cover" />
+            ))}
+          </div>
+        )}
         <div className="flex flex-col gap-0.5 text-sm">
           {numbers.length > 0 && <p className="text-ink tabular-nums">{numbers.join(" · ")}</p>}
           <p className={cn(issue === null || issue === "off" || issue === "draft" || issue === "no_category" ? "text-ink-soft" : "font-medium text-accent-error")}>

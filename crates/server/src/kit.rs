@@ -19,7 +19,7 @@ use axum::{
 	Extension, Json, Router,
 	body::{Bytes, to_bytes},
 	error_handling::HandleErrorLayer,
-	extract::{DefaultBodyLimit, FromRequest, OriginalUri, Path, Query, Request, State, rejection::QueryRejection},
+	extract::{FromRequest, OriginalUri, Path, Query, Request, State, rejection::QueryRejection},
 	http::{HeaderMap, HeaderValue, Method, StatusCode, header},
 	response::{IntoResponse, NoContent, Response},
 	routing::{get, post},
@@ -41,7 +41,7 @@ use sa_panel::{
 	Grant, Panel, SignedBatch,
 	gmbs::TradeId,
 	kit::{Event, Funnel, Kit, Nearby, Offer, PHOTO_MAX, Pool, PutKit, Ranked, Scope, Target},
-	store::kit::{Happening, Removable},
+	store::kit::Happening,
 };
 use sa_places::LatLng;
 use serde::{Deserialize, Serialize};
@@ -52,9 +52,10 @@ use uuid::Uuid;
 use crate::{
 	api::{ApiResult, Code, Id},
 	areas::{AreaDto, SlugIn},
+	brands::BrandDto,
 	forward::Services,
 	gmbs::TradeIn,
-	http::{ApiRoute, ApiState, Limits, SLOW, USER},
+	http::{ApiRoute, ApiState, Limits, USER},
 	ingest,
 	signin::Caller,
 };
@@ -76,7 +77,6 @@ type Kept = (Instant, Arc<Vec<Place>>);
 pub(crate) struct DraftDto {
 	pub id: i64,
 	pub text: String,
-	pub photos: Vec<i64>,
 	/// Areas it is offered in; none: everywhere.
 	pub places: Vec<String>,
 	/// The category's keywords its text carries.
@@ -94,9 +94,6 @@ pub(crate) struct PhotoDto {
 	pub id: i64,
 	/// What it shows, for the reviewer; `null`: not labelled yet.
 	pub shows: Option<String>,
-	pub places: Vec<String>,
-	/// The drafts it rides with: in none, it is never offered.
-	pub drafts: Vec<i64>,
 	pub width: i64,
 	pub height: i64,
 	/// Saved, every GBP.
@@ -104,13 +101,11 @@ pub(crate) struct PhotoDto {
 	pub created_at: String,
 }
 
-/// A category's drafts and photos.
+/// A category's drafts.
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitPool")]
 pub(crate) struct PoolDto {
 	pub drafts: Vec<DraftDto>,
-	/// Newest first.
-	pub photos: Vec<PhotoDto>,
 	/// The category's keywords no draft carries.
 	pub unmentioned: Vec<String>,
 }
@@ -120,7 +115,6 @@ pub(crate) struct PoolDto {
 #[serde(deny_unknown_fields)]
 pub(crate) struct NewDraftDto {
 	pub text: String,
-	pub photos: Vec<i64>,
 	/// Area slugs; none: everywhere.
 	pub places: Vec<String>,
 }
@@ -130,16 +124,6 @@ pub(crate) struct NewDraftDto {
 #[serde(deny_unknown_fields)]
 pub(crate) struct EditDraftDto {
 	pub text: Option<String>,
-	pub photos: Option<Vec<i64>>,
-	pub places: Option<Vec<String>>,
-}
-
-#[derive(Deserialize, JsonSchema)]
-#[schemars(rename = "EditKitPhoto")]
-#[serde(deny_unknown_fields)]
-pub(crate) struct EditPhotoDto {
-	/// What it shows, ≤ 60 characters; empty clears it.
-	pub shows: Option<String>,
 	pub places: Option<Vec<String>>,
 }
 
@@ -151,8 +135,6 @@ pub(crate) struct RankedPhotoDto {
 	pub width: i64,
 	pub height: i64,
 	pub uses: i64,
-	/// Saved on this GBP: never offered here again.
-	pub went_here: bool,
 }
 
 /// A draft as the offer weighs it for one GBP.
@@ -168,6 +150,7 @@ pub(crate) struct RankedDto {
 	pub held: bool,
 	/// Among what a reviewer is offered now.
 	pub offered: bool,
+	/// Its brand's photos it is offered with.
 	pub photos: Vec<RankedPhotoDto>,
 }
 
@@ -216,6 +199,8 @@ pub(crate) struct GmbKitDto {
 	pub url: Option<String>,
 	/// Its page on its landing: `null` without one, and then only `google` is open to it.
 	pub page: Option<String>,
+	/// Whose photos its drafts carry: `null`, none.
+	pub brand: Option<BrandDto>,
 	/// Its category's drafts in its places, in the offer's order.
 	pub drafts: Vec<RankedDto>,
 	pub tally: TallyDto,
@@ -332,7 +317,6 @@ pub(crate) struct PoolSummaryDto {
 	pub country: Country,
 	pub name: String,
 	pub drafts: i64,
-	pub photos: i64,
 	pub warnings: Vec<String>,
 }
 
@@ -480,15 +464,14 @@ struct EventDto {
 }
 
 impl From<Pool> for PoolDto {
-	fn from(p: Pool) -> Self {
+	fn from(Pool { drafts, unmentioned }: Pool) -> Self {
 		Self {
-			drafts: p
-				.drafts
+			unmentioned,
+			drafts: drafts
 				.into_iter()
 				.map(|d| DraftDto {
 					id: d.id,
 					text: d.text,
-					photos: d.photos,
 					places: d.places,
 					keywords: d.keywords,
 					names: d.names,
@@ -496,21 +479,6 @@ impl From<Pool> for PoolDto {
 					created_at: d.created_at.to_string(),
 				})
 				.collect(),
-			photos: p
-				.photos
-				.into_iter()
-				.map(|p| PhotoDto {
-					id: p.id,
-					shows: p.shows,
-					places: p.places,
-					drafts: p.drafts,
-					width: p.width,
-					height: p.height,
-					uses: p.uses,
-					created_at: p.created_at.to_string(),
-				})
-				.collect(),
-			unmentioned: p.unmentioned,
 		}
 	}
 }
@@ -557,7 +525,6 @@ fn ranked(drafts: Vec<Ranked>, target: Option<Target>) -> Vec<RankedDto> {
 						width: p.width,
 						height: p.height,
 						uses: p.uses,
-						went_here: p.went_here,
 					})
 					.collect(),
 			}
@@ -572,10 +539,6 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/drafts", USER, add_kit_draft),
 		ApiRoute::new(M::PATCH, "/trades/{id}/{country}/kit/drafts/{draft}", USER, edit_kit_draft),
 		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/drafts/{draft}", USER, remove_kit_draft),
-		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/photos", SLOW, add_kit_photo).layer(|h| h.layer(DefaultBodyLimit::max(PHOTO_MAX))),
-		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit/photos/{file}", USER, kit_photo),
-		ApiRoute::new(M::PATCH, "/trades/{id}/{country}/kit/photos/{file}", USER, edit_kit_photo),
-		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/photos/{file}", USER, remove_kit_photo),
 		ApiRoute::new(M::GET, "/gmbs/{id}/kit", USER, gmb_kit),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/kit", USER, set_gmb_kit),
 		ApiRoute::new(M::POST, "/gmbs/{id}/kit/shown", USER, kit_shown),
@@ -594,28 +557,13 @@ struct DraftIn {
 	draft: i64,
 }
 
-#[derive(Deserialize, JsonSchema)]
-struct PhotoIn {
-	id: i64,
-	country: Country,
-	file: i64,
-}
-
-#[derive(Deserialize, JsonSchema)]
-struct JpgIn {
-	id: i64,
-	country: Country,
-	/// `<photo>.jpg`.
-	file: String,
-}
-
 /// `<id>.jpg` → id.
-fn jpg(file: &str) -> ApiResult<i64> {
+pub(crate) fn jpg(file: &str) -> ApiResult<i64> {
 	file.strip_suffix(".jpg").and_then(|id| id.parse().ok()).ok_or_else(|| Refusal::new(Code::NotFound, "not found"))
 }
 
 /// A photo's bytes, never changed under its id.
-struct Jpeg(Vec<u8>);
+pub(crate) struct Jpeg(pub(crate) Vec<u8>);
 
 impl IntoResponse for Jpeg {
 	fn into_response(self) -> Response {
@@ -640,7 +588,7 @@ impl OperationOutput for Jpeg {
 }
 
 /// An uploaded photo: JPEG, PNG or WebP, ≤ [`PHOTO_MAX`].
-struct Image(Bytes);
+pub(crate) struct Image(pub(crate) Bytes);
 
 impl<S: Send + Sync> FromRequest<S> for Image {
 	type Rejection = Refusal<Malformed>;
@@ -683,27 +631,26 @@ impl OperationInput for Image {
 	}
 }
 
-/// The category's drafts and photos.
+/// The category's drafts.
 async fn kit_pool(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(TradeIn { id: trade, country }): Ids<TradeIn>) -> ApiResult<Json<PoolDto>> {
 	Ok(Json(panel.kit_pool(caller.user_id, trade, country).await??.into()))
 }
 
-/// Adds a draft to the category, selecting some of its photos; answers the category's drafts and
-/// photos.
+/// Adds a draft to the category; answers the category's drafts.
 async fn add_kit_draft(
 	State(panel): State<Panel>,
 	Extension(caller): Extension<Caller>,
 	Ids(TradeIn { id: trade, country }): Ids<TradeIn>,
 	Body(b): Body<NewDraftDto>,
 ) -> ApiResult<Created<PoolDto>> {
-	let draft = panel.add_draft(caller.user_id, trade, country, &b.text, &b.photos, &b.places, Timestamp::now()).await??;
+	let draft = panel.add_draft(caller.user_id, trade, country, &b.text, &b.places, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, trade_id = trade, %country, draft, "kit draft added");
 	Ok(Created(panel.kit_pool(caller.user_id, trade, country).await??.into()))
 }
 
-/// Edits a draft's text or the photos it selects; answers the category's drafts and photos.
+/// Edits a draft's text or its places; answers the category's drafts.
 ///
-/// 409 the text of one already copied: a use is of the text it had.
+/// 409 one already copied: a use is of the text it had.
 async fn edit_kit_draft(
 	State(panel): State<Panel>,
 	Extension(caller): Extension<Caller>,
@@ -711,66 +658,29 @@ async fn edit_kit_draft(
 	Body(b): Body<EditDraftDto>,
 ) -> ApiResult<Json<PoolDto>> {
 	panel
-		.edit_draft(caller.user_id, TradeId { v: trade }, country, draft, b.text.as_deref(), b.photos.as_deref(), b.places.as_deref())
+		.edit_draft(caller.user_id, TradeId { v: trade }, country, draft, b.text.as_deref(), b.places.as_deref())
 		.await??;
 	Ok(Json(panel.kit_pool(caller.user_id, trade, country).await??.into()))
 }
 
 /// Removes a draft: out of every offer, its uses kept.
 async fn remove_kit_draft(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(DraftIn { id: trade, country, draft }): Ids<DraftIn>) -> ApiResult<NoContent> {
-	panel
-		.remove_from_kit(caller.user_id, TradeId { v: trade }, country, Removable::Draft, draft, Timestamp::now())
-		.await??;
-	Ok(NoContent)
-}
-
-/// Adds a photo to the category, ≤ 10 MiB: re-encoded as a JPEG, its EXIF (GPS with it) gone,
-/// turned upright; the same bytes again are the same photo, back if removed. Answers the
-/// category's drafts and photos.
-async fn add_kit_photo(
-	State(panel): State<Panel>,
-	Extension(caller): Extension<Caller>,
-	Ids(TradeIn { id: trade, country }): Ids<TradeIn>,
-	Image(bytes): Image,
-) -> ApiResult<Created<PoolDto>> {
-	let photo = panel.add_photo(caller.user_id, trade, country, bytes.to_vec(), Timestamp::now()).await??;
-	tracing::info!(user_id = %caller.user_id, trade_id = trade, %country, photo, "kit photo added");
-	Ok(Created(panel.kit_pool(caller.user_id, trade, country).await??.into()))
-}
-
-/// A photo of the category, `{file}` being `<photo>.jpg`.
-async fn kit_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(JpgIn { id: trade, country, file }): Ids<JpgIn>) -> ApiResult<Jpeg> {
-	Ok(Jpeg(panel.kit_photo(caller.user_id, TradeId { v: trade }, country, jpg(&file)?).await??))
-}
-
-/// Labels a photo with what it shows, or tags its places; answers the category's drafts and photos.
-async fn edit_kit_photo(
-	State(panel): State<Panel>,
-	Extension(caller): Extension<Caller>,
-	Ids(PhotoIn { id: trade, country, file }): Ids<PhotoIn>,
-	Body(b): Body<EditPhotoDto>,
-) -> ApiResult<Json<PoolDto>> {
-	panel
-		.edit_photo(caller.user_id, TradeId { v: trade }, country, file, b.shows.as_deref().map(Some), b.places.as_deref())
-		.await??;
-	Ok(Json(panel.kit_pool(caller.user_id, trade, country).await??.into()))
-}
-
-/// Removes a photo, as a draft is: out of every offer, its uses kept.
-async fn remove_kit_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PhotoIn { id: trade, country, file }): Ids<PhotoIn>) -> ApiResult<NoContent> {
-	panel
-		.remove_from_kit(caller.user_id, TradeId { v: trade }, country, Removable::Photo, file, Timestamp::now())
-		.await??;
+	panel.remove_draft(caller.user_id, TradeId { v: trade }, country, draft, Timestamp::now()).await??;
 	Ok(NoContent)
 }
 
 /// The landing page of the GBP, `<origin>/avis/<slug>`: the origin of the active site key of its
-/// brand.
-async fn page_of(s: &ApiState, gmb: i64) -> ApiResult<Option<String>> {
+/// place's site. 409 when its brand is on another site: its photos would show on the wrong one.
+async fn page_of(s: &ApiState, gmb: i64, site: Option<&BrandId>) -> ApiResult<Option<String>> {
 	let pages = s.pages.as_ref().ok_or_else(|| Refusal::new(Code::Unavailable, "sites not connected: no landing page is known"))?;
 	let Some(place) = pages.of_gmb(gmb).await? else {
 		return Ok(None);
 	};
+	if let Some(site) = site
+		&& site.as_str() != place.brand
+	{
+		return Err(Refusal::new(Code::Conflict, format!("its brand is on {site}, its page on {}: move one", place.brand)));
+	}
 	let mut origins: Vec<String> = s
 		.sign_in
 		.panel
@@ -803,12 +713,19 @@ fn qr_url(page: Option<&String>, target: Option<Target>, review_uri: Option<Stri
 }
 
 async fn kit_dto(s: &ApiState, caller: &Caller, gmb: i64, since: Timestamp) -> ApiResult<GmbKitDto> {
-	let Kit { target, review_uri, drafts, funnel } = s.sign_in.panel.kit(caller.user_id, gmb, since, Timestamp::now()).await??;
-	let page = page_of(s, gmb).await?;
+	let Kit {
+		target,
+		review_uri,
+		brand,
+		drafts,
+		funnel,
+	} = s.sign_in.panel.kit(caller.user_id, gmb, since, Timestamp::now()).await??;
+	let page = page_of(s, gmb, brand.as_ref().map(|b| &b.site)).await?;
 	Ok(GmbKitDto {
 		target,
 		url: qr_url(page.as_ref(), target, review_uri),
 		page,
+		brand: brand.map(Into::into),
 		drafts: ranked(drafts, target),
 		tally: funnel.into(),
 	})
@@ -830,7 +747,8 @@ async fn set_gmb_kit(
 	Ids(Id { id: gmb }): Ids<Id<i64>>,
 	Body(SetKitDto { target }): Body<SetKitDto>,
 ) -> ApiResult<Json<GmbKitDto>> {
-	if matches!(target, Some(Target::Drafts | Target::OneTap)) && page_of(&s, gmb).await?.is_none() {
+	let site = s.sign_in.panel.kit(caller.user_id, gmb, Timestamp::now(), Timestamp::now()).await??.brand.map(|b| b.site);
+	if matches!(target, Some(Target::Drafts | Target::OneTap)) && page_of(&s, gmb, site.as_ref()).await?.is_none() {
 		return Err(Refusal::new(Code::Conflict, "no landing page of its: only Google's form"));
 	}
 	s.sign_in.panel.set_kit_target(by, gmb, target, Timestamp::now()).await??;
@@ -887,7 +805,7 @@ async fn kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Id
 	let mut gmbs = Vec::with_capacity(members.len());
 	for m in members {
 		tally += m.tally;
-		let page = page_of(&s, m.gmb.id).await?;
+		let page = page_of(&s, m.gmb.id, m.brand.as_ref().map(|b| &b.site)).await?;
 		let blocked = match (m.gmb.state, m.target, &page) {
 			(GbpState::Draft, ..) => Some(KitBlock::Draft),
 			(GbpState::Verifying, ..) => Some(KitBlock::Verifying),
@@ -927,7 +845,6 @@ async fn kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Id
 				country: p.country,
 				name: p.name,
 				drafts: p.drafts,
-				photos: p.photos,
 				warnings: p.warnings,
 			})
 			.collect(),

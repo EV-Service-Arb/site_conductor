@@ -55,6 +55,8 @@ pub struct GmbDto {
 	pub phone: Option<String>,
 	/// Its category is this trade in its country.
 	pub trade_id: Option<i64>,
+	/// Of its gmail and its category.
+	pub brand_id: Option<i64>,
 	/// Service areas, at most 20.
 	pub areas: Vec<String>,
 	/// Where its verification film is shot.
@@ -72,6 +74,14 @@ pub struct GmbDto {
 	pub location: Option<sa_panel::gmbs::Point>,
 	/// A draft's candidate spots, in order, its location the first's; none past a draft.
 	pub spots: Vec<sa_panel::gmbs::Spot>,
+	/// Google's, from its last Sync, as `hours`, `google_primary` and `photos`.
+	pub website: Option<String>,
+	/// A line a weekday, Monday first.
+	pub hours: Vec<String>,
+	/// `gcid:plumber`, when the catalog knows Google's.
+	pub google_primary: Option<String>,
+	/// In Google's order, each at `GET /gmbs/{id}/photos/{photo}`.
+	pub photos: Vec<sa_panel::gmbs::GmbPhoto>,
 	/// Its window's tabs, in order: its state's.
 	pub tabs: Vec<Tab>,
 	/// A draft's must-haves not ready; `null` past a draft.
@@ -254,6 +264,8 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::POST, "/gmails/{id}/gmbs", USER, add_gmb),
 		ApiRoute::new(M::PATCH, "/gmbs/{id}", USER, edit_gmb),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/state", USER, move_gmb),
+		ApiRoute::new(M::POST, "/gmbs/{id}/sync", USER, sync_gmb),
+		ApiRoute::new(M::GET, "/gmbs/{id}/photos/{photo}", USER, gmb_photo),
 		ApiRoute::new(M::DELETE, "/gmbs/{id}", USER, remove_gmb),
 		ApiRoute::new(M::PUT, "/gmbs/enabled", USER, switch_gmbs),
 		ApiRoute::new(M::PUT, "/gmbs/trade", USER, set_gmb_trades),
@@ -316,6 +328,7 @@ impl Around {
 			country: b.country,
 			phone: b.phone,
 			trade_id: b.trade_id,
+			brand_id: b.brand_id,
 			areas: b.areas,
 			hidden_address: b.hidden_address,
 			customers_visit: b.customers_visit,
@@ -324,6 +337,10 @@ impl Around {
 			enabled: b.enabled,
 			location: b.location,
 			spots: b.spots,
+			website: b.website,
+			hours: b.hours,
+			google_primary: b.google_primary,
+			photos: b.photos,
 		}
 	}
 
@@ -705,6 +722,30 @@ async fn move_gmb(
 	let moved = s.sign_in.panel.advance(Some(by), gmb, to, place.as_deref()).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, %to, "GBP's state moved");
 	Ok(Json(Around::read(&s, &caller, None).await?.dto(moved)))
+}
+
+/// Overwrites a verified GBP with its profile on Google, asked afresh, paid by the caller: name,
+/// address, phone, website, hours, primary category, country, point (none on Google: one placed by
+/// hand kept), photos. With no trade, it takes the caller's one trade set up there with that category.
+///
+/// 409 for a GBP not verified, a name or phone another live GBP has, or a place Google now names
+/// otherwise.
+async fn sync_gmb(State(s): State<ApiState>, Spends(caller, by): Spends<PlacesRequest, Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>) -> ApiResult<Json<GmbDto>> {
+	let synced = s.sign_in.panel.sync(by, gmb).await??;
+	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, photos = synced.photos.len(), "GBP synced from Google");
+	Ok(Json(Around::read(&s, &caller, None).await?.dto(synced)))
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct PhotoIn {
+	id: i64,
+	photo: i64,
+}
+
+/// A photo a GBP's last Sync took, never another under its id.
+async fn gmb_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PhotoIn { id, photo }): Ids<PhotoIn>) -> ApiResult<crate::kit::Jpeg> {
+	Ok(crate::kit::Jpeg(panel.gmb_photo(caller.user_id, id, photo).await??))
 }
 
 /// Removes a GBP to the trash.

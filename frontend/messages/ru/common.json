@@ -47,6 +47,10 @@
     "en": "City or town",
     "t": "Город"
   },
+  "brand.photos.order": {
+    "en": "least used first · a GBP gets each at most once",
+    "t": "сначала наименее использованные · каждый GBP получает каждый не больше раза"
+  },
   "kit.block.off": {
     "en": "kit off",
     "t": "набор выключен"
@@ -111,17 +115,13 @@
     "en": "Keywords · category · study",
     "t": "Ключевые слова · категория · исследование"
   },
-  "kit.pane.kit": {
-    "en": "Drafts · Photos",
-    "t": "Черновики · Фото"
-  },
-  "kit.pane.kitCounted": {
-    "en": "Drafts {drafts} · Photos {photos}",
-    "t": "Черновики {drafts} · Фото {photos}"
-  },
   "kit.phone.nearest": {
     "en": "Nearest first",
     "t": "Сначала ближайшие"
+  },
+  "kit.photos": {
+    "en": "Photos",
+    "t": "Фото"
   },
   "kit.photos.remove": {
     "en": "Remove the photo",

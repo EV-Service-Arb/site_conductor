@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@evinvest/uikit";
-import { SquareDashed, X } from "lucide-react";
+import { CloseButton, Button } from "@evinvest/uikit";
+import { SquareDashed } from "lucide-react";
 
 import { AreaDraw, windowKeys } from "@/entities/gmb";
 import { useT, placement as placementKeys } from "@/shared/i18n";
@@ -21,9 +21,7 @@ export function StudyAreaWindow({ map }: { map: google.maps.Map }) {
         <header className="flex items-center gap-2 border-b border-border px-4 py-3">
           <SquareDashed aria-hidden className="size-4 text-ink-soft" />
           <h2 className="flex-1 text-sm font-semibold text-ink">{t(placementKeys.areaWindow, "A new area for the study")}</h2>
-          <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => setMapView({ area: null })}>
-            <X aria-hidden />
-          </Button>
+          <CloseButton size={button("sm")} label={t(windowKeys.close, "Close the window")} onClose={() => setMapView({ area: null })} />
         </header>
         <AreaDraw map={map} left={window.matchMedia("(min-width: 48rem)").matches ? 16 + 416 : 0} onSaved={(a) => setMapView({ area: a.slug })} />
       </section>

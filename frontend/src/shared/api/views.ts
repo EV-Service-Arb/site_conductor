@@ -249,6 +249,14 @@ export const VIEWS = {
               "null"
             ]
           },
+          "brand": {
+            "description": "The brand whose page is open, under `trade` · `country`.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "categories": {
             "description": "The categories' window.",
             "type": "boolean"

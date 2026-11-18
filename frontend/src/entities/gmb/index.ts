@@ -1,8 +1,8 @@
-export { placeGmb, setTrades, switchGmbs } from "./api/gmbs";
+export { gmbPhotoSrc, placeGmb, setTrades, switchGmbs, syncGmb } from "./api/gmbs";
 export { linkPlace } from "./api/sites";
 export { browsersUnconnected, uploadFilm } from "./api/connections";
 export { type Placed, categoryName, categoryOf } from "./model/category";
-export { GmailsProvider, useGmails, useGmbTags, useTrades, useTrash, useUndoable } from "./model/gmails-context";
+export { GmailsProvider, useBrands, useGmails, useGmbTags, useTrades, useTrash, useUndoable } from "./model/gmails-context";
 export { GMAIL_ROLE_NAME, STATE_NAME, STATE_TONE, googleName } from "./model/gmb";
 export type { ArchiveTag, SiteTag } from "./model/gmb";
 export { ISSUES, ISSUE_NAME, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
@@ -14,10 +14,10 @@ export { PublishSelection, type Selection, select, setFilter, setOnly, useSelect
 export { TradeSelect } from "./ui/trade-select";
 export { CategoryChip } from "./ui/category-chip";
 export { LiveReviews } from "./ui/live-reviews";
-export { gmbs, trades, browser, windowKeys, scopeKeys, trash, undo, move, kit, areaKeys } from "./model/i18n";
+export { gmbs, trades, browser, windowKeys, scopeKeys, trash, undo, move, kit, areaKeys, brandKeys } from "./model/i18n";
 export { AreaDraw, useOutline } from "./ui/area-draw";
 export { localityAt } from "./api/areas";
 export { isSlug, slugOf } from "./model/areas";
-export { photoMax, photoSrc, uploadPhoto } from "./api/kit";
+export { logoSrc, photoMax, photoSrc, uploadLogo, uploadPhoto } from "./api/kit";
 export { TARGET_NAME } from "./model/kit";
 export { KitTargetSegment } from "./ui/kit-target";

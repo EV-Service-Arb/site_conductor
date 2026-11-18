@@ -80,6 +80,8 @@ metered! {
 	Google "4FDA-34B1-A910" "Places API Text Search Pro", 5000 free, Never;
 	Google "4EF4-B17C-B31A" "Autocomplete Requests", 10000 free, Never;
 	Google "BAC8-4E68-E261" "Geocoding", 10000 free, Never;
+	Google "2D9A-3DE0-3766" "Places API Place Details Enterprise", 1000 free, Never;
+	Google "DCD1-FE97-8C71" "Places API Place Details Photos", 1000 free, Never;
 }
 
 impl fmt::Display for Meter {

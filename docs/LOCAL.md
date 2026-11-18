@@ -196,8 +196,8 @@ replicated, off its volume over ssh (`PROD_SSH` in the script). Everyone's data 
 sign-in is prod's `admin@evinvest.ltd`. What prod sealed under its own `PANEL_DATA_KEY` (prod's
 sessions, its sources' secrets, sites' Google tokens) does not open here: the landings sign with
 the stack's own `<brand>-local` keys. Nothing walks Maps, nothing is told to Telegram. Prod's
-GMBs come without the cache that located them: `POST /admin/gmbs/locate`, as the dev admin, asks
-for their points once.
+GMBs come without the cache that located them: a verified one's **Sync** (its ⋮ in the outline) asks
+for its point and profile.
 
 ## Google
 

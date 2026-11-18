@@ -29,6 +29,8 @@ const SEARCH_MASK: &str = "places.id,places.displayName,places.formattedAddress,
 
 const DETAILS_MASK: &str = "id,displayName,formattedAddress,location,addressComponents";
 
+const PROFILE_MASK: &str = "id,displayName,formattedAddress,location,addressComponents,internationalPhoneNumber,websiteUri,regularOpeningHours.weekdayDescriptions,primaryType,photos";
+
 const AUTOCOMPLETE_MASK: &str = "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat";
 
 const LOCALITY_MASK: &str = "id,displayName,location,viewport,addressComponents";
@@ -103,6 +105,30 @@ pub struct Place {
 	pub location: Option<LatLng>,
 	/// ISO 3166-1 alpha-2; None for a service-area business, as its point.
 	pub country: Option<String>,
+}
+
+/// A place with what its profile on Google shows, as Places (New) gives it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Profile {
+	pub place: Place,
+	/// As Google spells it, with the country's code.
+	pub phone: Option<String>,
+	pub website: Option<String>,
+	/// A line a weekday, Monday first; none when it shows no hours.
+	pub hours: Vec<String>,
+	/// Google's type, `plumber`: its primary category's id less `gcid:`, for most.
+	pub primary_type: Option<String>,
+	/// At most 10, as Places orders them.
+	pub photos: Vec<PhotoRef>,
+}
+
+/// A photo of a place's, for [`Google::photo`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct PhotoRef {
+	/// `places/{id}/photos/{ref}`.
+	pub name: String,
+	/// Its author's name, Google's attribution.
+	pub author: Option<String>,
 }
 
 /// A place an input being typed may be heading for, as Google's own search box offers it.
@@ -263,6 +289,45 @@ impl Google {
 			r => r?,
 		};
 		Ok(serde_json::from_value::<Hit>(json)?.into())
+	}
+
+	/// The place with this id and what its profile shows, under the id Google now gives it.
+	pub async fn profile(&self, place_id: &str, ask: Ask, payer: &Payer<'_>) -> Result<Profile, Error> {
+		let url = format!("{}/{place_id}", self.base);
+		let req = Request {
+			mask: PROFILE_MASK,
+			sku: PlacesRequest::Profile,
+			..Request::details(&url)
+		};
+		let (json, _) = match self.ask(&req, None, ask, payer).await {
+			Err(Error::Api { status: 400 | 404, .. }) => return Err(Error::Invalid(format!("Places knows no place {place_id:?}"))),
+			r => r?,
+		};
+		Ok(serde_json::from_value::<Hit>(json)?.into())
+	}
+
+	/// The bytes of photo `name` (a [`PhotoRef`]'s), at most 1200 px wide: its link asked of Places,
+	/// then fetched.
+	pub async fn photo(&self, name: &str, payer: &Payer<'_>) -> Result<Vec<u8>, Error> {
+		#[derive(Deserialize)]
+		#[serde(rename_all = "camelCase")]
+		struct Resp {
+			photo_uri: String,
+		}
+		let v1 = self.base.strip_suffix("/places").expect("the base is …/v1/places");
+		let url = format!("{v1}/{name}/media?maxWidthPx=1200&skipHttpRedirect=true");
+		let req = Request {
+			method: "GET",
+			url: &url,
+			mask: "",
+			body: "",
+			scheme: Scheme::Places,
+			sku: PlacesRequest::Photo,
+			subject: name,
+		};
+		let (json, _) = self.ask(&req, None, Ask::Cached, payer).await?;
+		let uri = serde_json::from_value::<Resp>(json)?.photo_uri;
+		Ok(self.http.get(&uri).send().await?.error_for_status()?.bytes().await?.to_vec())
 	}
 
 	/// The city or town `place_id` names, with its viewport.
@@ -614,6 +679,8 @@ impl Google {
 				PlacesRequest::Search => format!("Places search · {:?}", req.subject),
 				PlacesRequest::Autocomplete => format!("Places autocomplete · {:?}", req.subject),
 				PlacesRequest::Geocode => format!("Geocoding · {}", req.subject),
+				PlacesRequest::Profile => format!("Places profile · {}", req.subject),
+				PlacesRequest::Photo => format!("Places photo · {}", req.subject),
 			};
 			hold.paid(Bought { key, sku: req.sku, label }).await?;
 		}
@@ -651,7 +718,12 @@ impl Google {
 				"GET" => self.http.get(req.url),
 				other => unreachable!("Places is asked by GET and POST only, not {other}"),
 			};
-			let resp = r.header("X-Goog-Api-Key", api_key.as_str()).header("X-Goog-FieldMask", req.mask).send().await?;
+			let r = r.header("X-Goog-Api-Key", api_key.as_str());
+			let r = match req.mask {
+				"" => r, // a photo's media takes no field mask
+				mask => r.header("X-Goog-FieldMask", mask),
+			};
+			let resp = r.send().await?;
 			let status = resp.status();
 			tracing::info!(method = req.method, url = req.url, %status, ?account, "Places asked");
 			let text = resp.text().await?;
@@ -752,6 +824,33 @@ struct Hit {
 	location: Option<Location>,
 	#[serde(default)]
 	address_components: Vec<Component>,
+	international_phone_number: Option<String>,
+	website_uri: Option<String>,
+	regular_opening_hours: Option<Hours>,
+	primary_type: Option<String>,
+	#[serde(default)]
+	photos: Vec<Photo>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Hours {
+	#[serde(default)]
+	weekday_descriptions: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Photo {
+	name: String,
+	#[serde(default)]
+	author_attributions: Vec<Author>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Author {
+	display_name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -803,6 +902,25 @@ impl From<Hit> for Place {
 			address: h.formatted_address,
 			location: h.location.map(Into::into),
 			country: h.address_components.into_iter().find(|c| c.types.iter().any(|t| t == "country")).map(|c| c.short_text),
+		}
+	}
+}
+
+impl From<Hit> for Profile {
+	fn from(mut h: Hit) -> Self {
+		Self {
+			phone: h.international_phone_number.take(),
+			website: h.website_uri.take(),
+			hours: h.regular_opening_hours.take().map_or_else(Vec::new, |o| o.weekday_descriptions),
+			primary_type: h.primary_type.take(),
+			photos: std::mem::take(&mut h.photos)
+				.into_iter()
+				.map(|p| PhotoRef {
+					name: p.name,
+					author: p.author_attributions.into_iter().find_map(|a| a.display_name),
+				})
+				.collect(),
+			place: h.into(),
 		}
 	}
 }

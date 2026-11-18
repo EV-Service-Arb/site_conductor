@@ -12,6 +12,7 @@ pub mod api;
 pub mod areas;
 pub mod ask;
 pub mod assistant;
+mod brands;
 pub mod browser;
 pub mod catalog;
 pub mod claude;

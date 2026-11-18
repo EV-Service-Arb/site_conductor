@@ -22,6 +22,8 @@ pub enum View {
 		/// The trade whose window is open, on `country`'s tab.
 		trade: Option<i64>,
 		country: Option<Country>,
+		/// The brand whose page is open, under `trade` · `country`.
+		brand: Option<i64>,
 		/// The gmail whose window is open.
 		account: Option<i64>,
 		/// The open window's tab.

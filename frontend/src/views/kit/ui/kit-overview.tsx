@@ -126,7 +126,7 @@ function Desk({ kit, go }: { kit: Kit; go: (at: KitAt) => void }) {
                   </span>
                   <span className="text-xs text-ink-soft">{t(kitKeys.pools.open, "Open pool →")}</span>
                 </span>
-                <span className="text-xs text-ink-soft">{t(kitKeys.pools.counts, "{d} drafts · {p} photos", { d: p.drafts, p: p.photos })}</span>
+                <span className="text-xs text-ink-soft">{t(kitKeys.pools.drafts, "{d} drafts", { d: p.drafts })}</span>
                 {p.warnings.map((w) => (
                   <span key={w} className="text-xs text-accent-warn">
                     {w}

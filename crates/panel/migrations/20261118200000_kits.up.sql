@@ -1,5 +1,5 @@
--- A kit is a named selection of an owner's GBPs to get reviews for; it owns no content: drafts and
--- photos stay their category's. Its area is a reference only, membership is its rows.
+-- A kit is a named selection of an owner's GBPs to get reviews for; it owns no content: drafts stay
+-- their category's, photos their brand's. Its area is a reference only, membership is its rows.
 CREATE TABLE kits (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	owner BLOB NOT NULL REFERENCES users (user_id),
@@ -24,13 +24,8 @@ CREATE TABLE kit_draft_places (
 	area TEXT NOT NULL REFERENCES areas (slug),
 	PRIMARY KEY (draft_id, area)
 ) STRICT;
-CREATE TABLE kit_photo_places (
-	photo_id INTEGER NOT NULL REFERENCES kit_photos (id),
-	area TEXT NOT NULL REFERENCES areas (slug),
-	PRIMARY KEY (photo_id, area)
-) STRICT;
 
--- What the photo shows, for the reviewer; NULL: not labelled yet.
+-- What a brand's photo shows, for the reviewer; NULL: not labelled yet.
 ALTER TABLE kit_photos ADD COLUMN shows TEXT CHECK (shows = trim(shows) AND shows != '' AND length(shows) <= 60);
 
 -- review_archive's reviews of our GBPs (feeds::REVIEWS). draft_id: the copy it was matched to,

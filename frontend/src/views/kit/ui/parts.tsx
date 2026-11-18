@@ -3,7 +3,7 @@
 import { ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
 
 import { kit as kitKeys, photoSrc } from "@/entities/gmb";
-import type { Country, KitBlock, KitTally } from "@/shared/api/schema";
+import type { KitBlock, KitTally } from "@/shared/api/schema";
 import type { T } from "@/shared/i18n";
 import { useT } from "@/shared/i18n";
 
@@ -66,9 +66,9 @@ export function Tally({ tally, className }: { tally: KitTally; className?: strin
   );
 }
 
-export function Thumb({ trade, country, photo, className }: { trade: number; country: Country; photo: number; className?: string }) {
+export function Thumb({ brand, photo, className }: { brand: number; photo: number; className?: string }) {
   // eslint-disable-next-line @next/next/no-img-element -- the API's own JPEG, behind the session: nothing for next/image to optimise in an export
-  return <img src={photoSrc(trade, country, photo)} alt="" loading="lazy" className={cn("size-12 rounded-md object-cover", className)} />;
+  return <img src={photoSrc(brand, photo)} alt="" loading="lazy" className={cn("size-12 rounded-md object-cover", className)} />;
 }
 
 /** One dot per GBP of the kit, filled where it went. */

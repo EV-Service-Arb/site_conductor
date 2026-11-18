@@ -59,8 +59,8 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          use on an account, an account's standing; Google's billing export read), `import`
                          (review_archive's, once), `assistant` (the assistant's chats), `trash`
                          (what was removed, restored until purged), `oauth` (MCP clients, the
-                         sessions granted them), `kit` (the review kit: a category's drafts and
-                         photos, the offer, the caller's GBPs by an area), `areas` (geography,
+                         sessions granted them), `brands` (a gmail's in a category: name, logo,
+                         site, the kit's photos), `kit` (the review kit: a category's drafts, the offer, an owner's kits and their tally, the posted reviews matched to copies), `areas` (geography,
                          everyone's: the kit's links and studies' frames)
 crates/alerts/           no I/O: the alert rules, and the notes a service publishes to the
                          conductor and their check; sites and review_archive take it too
@@ -93,7 +93,7 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
                          PublishCatalog; its development stand-in (PANEL_DEV_SIGN_IN)
   src/cookies.rs         __Host- cookies, the double-submit CSRF check
   src/http.rs            the router; the /api/v1 route table and each row's gate
-  src/admin.rs           the admin operations: a site key's origin, a gmail for a person, locate, the imports
+  src/admin.rs           the admin operations: a site key's origin, a gmail for a person, the imports
   src/api.rs             GET /me, /sources
   src/connected.rs       GET /sources/sites: each site key's landing report beside sites' view
   src/access.rs          /api/v1/access/requests
@@ -115,6 +115,7 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
   src/config.rs          the config file (`--config`): the Google accounts
   src/assistant.rs       /api/v1/assistant; the turns' shape
   src/kit.rs             the review kit: its /api/v1 routes, the landings' /api/kit/v1
+  src/brands.rs          /api/v1/brands, /api/v1/gmbs/brand
   src/catalog.rs         every operation behind the origin: the conductor's own and the services'
                          documents, pulled and merged under their forward prefixes
   src/tools.rs           an agent's `search`, `call` and `execute` over the catalog: a call runs through
@@ -532,8 +533,10 @@ POST   /gmbs
 POST   /gmails/{id}/gmbs
 PATCH  /gmbs/{id}
 PUT    /gmbs/{id}/state
+POST   /gmbs/{id}/sync
+GET    /gmbs/{id}/photos/{photo}
 DELETE /gmbs/{id}
-PUT    /gmbs/{enabled,trade}
+PUT    /gmbs/{enabled,trade,brand}
 PUT    /gmbs/{id}/spots
 PUT    /gmbs/{id}/location
 DELETE /gmbs/{id}/location
@@ -551,10 +554,17 @@ GET    /trades/{id}/{country}/kit
 POST   /trades/{id}/{country}/kit/drafts
 PATCH  /trades/{id}/{country}/kit/drafts/{draft}
 DELETE /trades/{id}/{country}/kit/drafts/{draft}
-POST   /trades/{id}/{country}/kit/photos    slow
-GET    /trades/{id}/{country}/kit/photos/{file}
-PATCH  /trades/{id}/{country}/kit/photos/{file}
-DELETE /trades/{id}/{country}/kit/photos/{file}
+GET    /brands
+POST   /brands
+PATCH  /brands/{id}
+DELETE /brands/{id}
+PUT    /brands/{id}/logo                    slow
+GET    /brands/{id}/logo
+GET    /brands/{id}/photos
+POST   /brands/{id}/photos                  slow
+GET    /brands/{id}/photos/{file}
+PATCH  /brands/{id}/photos/{file}
+DELETE /brands/{id}/photos/{file}
 GET    /gmbs/{id}/kit
 PUT    /gmbs/{id}/kit
 POST   /gmbs/{id}/kit/shown
@@ -593,7 +603,6 @@ GET    /admin/meters/readings               tokens:grant
 POST   /admin/gmails                        tokens:grant, fresh
 POST   /admin/imports/review-archive        tokens:grant, fresh
 POST   /admin/imports/queries-cache         sources:manage, fresh, slow
-POST   /admin/gmbs/locate                   sources:manage, fresh, slow
 GET    /assistant/chats
 POST   /assistant/chats
 GET    /assistant/chats/{id}
@@ -760,7 +769,7 @@ Places requests charge at the buy.
 other gmails' keys, free; then the Google accounts' Places keys (below) at the admin's price per
 request kind (Places' SKU), held under one lock per person from the balance read to the charge, so a
 request below the price is refused before Google is asked. A cached answer costs
-nothing. The operator's `locate` tries the gmail's keys, then the house pays.
+nothing.
 review_archive's lookups are the house's for now.
 
 **A study's pull is sold per search** (`placement.search`) the conductor buys for it, on the
@@ -887,6 +896,16 @@ priced in money, so an account overshoots by its hours behind.
   compared on, in the country's language; any other term is one study's or one location's own and
   stays out of comparisons. Not set up there is shown so, never filled from another country. A
   trade is deleted only once no live GBP holds it; no service stores its id.
+- **A GBP's brand** is under its gmail and its category, at most one, optional: no brand, no kit
+  photos and no logo. A gmail, trade or country moved drops it in the same write; the schema
+  refuses any other. Removed, never deleted, and only while no live GBP holds it.
+
+  ```text
+  user ─┬─ trade ── category (trade × country) ─┐
+        └─ gmail ───────────────────────────────┴─▶ brand: name prefix, logo, site, photos
+                                       GBP ── 0..1 ───┘
+  brand.site ─▶ sites' BrandId (a site key's brands ─▶ its origin); many brands, one site
+  ```
 - **Google's categories** are a closed list: a gcid (`gcid:plumber`) and a name per language. A
   GBP takes a primary one and up to 9 additional ones, entered into Google's form in order; a
   name is shown in the reader's language and copied in the country's, as the form in the GBP's
@@ -940,23 +959,24 @@ push (a change, a page, 60 s)
   sites down or refusing leaves the GMBs without the link.
 - **A GBP's point** is on its row: Google's, else one the operator places on the map (a
   service-area place has none on Google, a GBP without a place none at all). Google's replaces a placed one, a
-  placed one never replaces Google's. Google's is written with the GBP from the answer that named
-  it; a GBP added without a key, or imported, has none until `POST /admin/gmbs/locate` asks for the
-  missing ones and lists those Google gives no point: an operation, so the spend is explicit and
-  an agent proposes it; run after a deploy that brings points, and after `local-stack --from-prod`.
+  placed one never replaces Google's. Google's arrives with the answer that named the GBP, or by
+  **Sync** (`POST /gmbs/{id}/sync`): its owner's, a verified GBP's only, paid, asked afresh, it
+  overwrites the name, address, phone, website, hours, primary category (`gcid:<primaryType>` the
+  catalog knows), country, point and photos (`gmb_photos`, at most 10) with Places (New)'s. A GBP
+  added without a key, or imported, has no point until synced. Categories as configured (the
+  additional ones) and the owner's own photos are the Business Profile API's, which is not asked.
 - **The review kit** is below.
 - **A GBP's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
   language table) follows the point's rule: Google's (its address), else set by hand
-  (`PUT /gmbs/{id}/country`); `locate` asks for the missing ones too and
-  lists those Google gives none.
+  (`PUT /gmbs/{id}/country`); a Sync brings Google's over one set by hand.
 
 ## Review kit
 
 The operator shows a GBP's QR on their phone; the reviewer scans it and lands on the GBP's page on
 its landing, which offers drafts to copy into Google's form (what that form takes, per OS:
-docs/review_kit.typ). Drafts and photos are a category's: its owner's, per trade and country. A
-**kit** is an owner's named selection of their GBPs (`kits`, `kit_members`): it owns no content,
-only which GBPs and since when each; its area is a reference, never its membership.
+docs/review_kit.typ). Drafts are a category's, photos its GBP's brand's. A **kit** is an owner's
+named selection of their GBPs (`kits`, `kit_members`): it owns no content, only which GBPs and
+since when each; its area is a reference, never its membership.
 
 ```text
 operator (conductor, signed in)                reviewer phone (landing, public)
@@ -975,8 +995,9 @@ conductor ── GET /api/conductor/reviews (Conductor), followed ──▶ revi
 offer, per view of GBP g:
   the drafts of g's category, not removed, in g's places (none tagged, or an area holding g's point)
     − copied on g                 − offered to another view of g whose 15-min lease runs
-  order: copies ↑, then saves of its photos not saved on g ↑, then the oldest
-  take 6 (one_tap: 1), lease them to this view; each its photos in its order, in g's places, not saved on g
+  order: copies ↑, then the oldest
+  take 6 (one_tap: 1), lease them to this view; each 2 of g's brand's photos not saved on g,
+  saves ↑, on round them (no brand: none)
   none left: the view is answered as `google`
 copy tap      → a use (draft, g), once     the reviewer's tap, before Google's form opens
 photos saved  → a use (photo, g), once
@@ -997,7 +1018,7 @@ a review of g first seen at s (review_archive's feed) → kit_posted, decided on
   off. A GBP with no landing page has only `google`, and its QR is Google's review link itself
   (Places' `writeAReviewUri`, asked when the target is set).
 - **The QR's URL** is `<origin>/avis/<slug>?qr`: the origin of the one active site key holding the
-  GBP's brand (two origins: 409), the slug sites' page of it.
+  place's sites brand (two origins: 409; the GBP's brand on another site: 409), the slug sites' page of it.
 - **The landings' calls** are signed as ingest's (a GET over `GET <path?query>`); the key's brands
   must hold the place's brand. A view's photos are fetched through the landing, same-origin, so a
   download works.

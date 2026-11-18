@@ -41,7 +41,7 @@ export function setOnMap(change: Partial<OnMap>): void {
 }
 
 /** One window at a time over the map: opening one closes the rest. */
-const NO_WINDOW = { gmb: undefined, trade: undefined, country: undefined, account: undefined, tab: undefined, categories: undefined, trash: undefined, add: undefined, kit: undefined, kit_gmb: undefined, kit_pool: undefined, kit_edit: undefined } as const;
+const NO_WINDOW = { gmb: undefined, trade: undefined, country: undefined, brand: undefined, account: undefined, tab: undefined, categories: undefined, trash: undefined, add: undefined, kit: undefined, kit_gmb: undefined, kit_pool: undefined, kit_edit: undefined } as const;
 
 /** The GMB whose card is open on the map. */
 export function usePeeked(): number | null {
@@ -71,15 +71,16 @@ export function openOrFocus(gmb: Gmb, peeked: boolean): void {
   setOnMap({ focus: gmb.id });
 }
 
-/** The trade whose window is open, on a country's tab; `null` country: the trade has none set up yet, or none picked. */
-export function useTradeWindow(): { trade: number; country: Country | null } | null {
+/** The trade whose window is open, on a country's tab; `null` country: the trade has none set up yet, or none picked. `brand`: a brand's page under that tab. */
+export function useTradeWindow(): { trade: number; country: Country | null; brand: number | null } | null {
   const home = useHome();
   if (home?.trade === undefined) return null;
-  return { trade: home.trade, country: home.country ?? null };
+  if (home.brand !== undefined && home.country === undefined) throw new Error(`?brand=${home.brand}: its page sits under a country's tab`);
+  return { trade: home.trade, country: home.country ?? null, brand: home.brand ?? null };
 }
 
-export function openTrade(trade: number | null, country?: Country): void {
-  setHome({ ...NO_WINDOW, trade: trade ?? undefined, country });
+export function openTrade(trade: number | null, country?: Country, brand?: number): void {
+  setHome({ ...NO_WINDOW, trade: trade ?? undefined, country, brand });
 }
 
 /** Every trade by country, the level a trade's window sits under (`?categories`). */

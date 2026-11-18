@@ -1039,6 +1039,114 @@
     "en": "Worked for {time}",
     "t": "Работал {time}"
   },
+  "brand.add": {
+    "en": "Brand",
+    "t": "Бренд"
+  },
+  "brand.brandless": {
+    "en": "{gbp} is {gmail}'s and {category}, without a brand",
+    "t": "{gbp} — {category} у {gmail}, без бренда"
+  },
+  "brand.counts": {
+    "en": "{gmail} · {gbps} GBPs",
+    "t": "{gmail} · {gbps} GBP"
+  },
+  "brand.gbps": {
+    "en": "GBPs",
+    "t": "GBP"
+  },
+  "brand.gbps.none": {
+    "en": "No GBP holds it yet.",
+    "t": "Пока ни один GBP его не использует."
+  },
+  "brand.gbps.whose": {
+    "en": "{gmail}'s {category} GBPs",
+    "t": "GBP {category} у {gmail}"
+  },
+  "brand.give": {
+    "en": "Give it {brand}",
+    "t": "Назначить {brand}"
+  },
+  "brand.identity": {
+    "en": "Identity",
+    "t": "Фирменный стиль"
+  },
+  "brand.identity.what": {
+    "en": "what every GBP of it shares",
+    "t": "то, что общее у всех его GBP"
+  },
+  "brand.logo": {
+    "en": "Logo",
+    "t": "Логотип"
+  },
+  "brand.logo.replace": {
+    "en": "Replace",
+    "t": "Заменить"
+  },
+  "brand.logo.upload": {
+    "en": "Upload",
+    "t": "Загрузить"
+  },
+  "brand.logo.what": {
+    "en": "on the review kit · square, PNG, JPEG or WebP",
+    "t": "в наборе для отзывов · квадратный, PNG, JPEG или WebP"
+  },
+  "brand.more": {
+    "en": "More",
+    "t": "Ещё"
+  },
+  "brand.name": {
+    "en": "Name",
+    "t": "Название"
+  },
+  "brand.name.what": {
+    "en": "every GBP's name starts with it",
+    "t": "название каждого GBP начинается с него"
+  },
+  "brand.new.add": {
+    "en": "Add the brand",
+    "t": "Добавить бренд"
+  },
+  "brand.new.name": {
+    "en": "A brand's name: Aquafix",
+    "t": "Название бренда: Aquafix"
+  },
+  "brand.new.site": {
+    "en": "its site: aquafix",
+    "t": "его сайт: aquafix"
+  },
+  "brand.photos.order": {
+    "en": "least used first · a GBP gets each at most once",
+    "t": "сначала наименее используемые · каждое фото достаётся GBP не более одного раза"
+  },
+  "brand.photos.why": {
+    "en": "The review kit offers them with {category}'s drafts. A GBP without a brand is offered drafts only.",
+    "t": "Набор для отзывов предлагает их вместе с черновиками {category}. GBP без бренда получает только черновики."
+  },
+  "brand.remove": {
+    "en": "Remove {brand}",
+    "t": "Удалить {brand}"
+  },
+  "brand.remove.body": {
+    "en": "Its photos leave every offer. The GBPs they went to keep them as used.",
+    "t": "Его фото исчезнут из всех предложений. У GBP, которым они достались, они останутся как использованные."
+  },
+  "brand.remove.held": {
+    "en": "{n} GBPs hold it: give them another first",
+    "t": "{n} GBP используют его: сначала назначьте им другой"
+  },
+  "brand.row": {
+    "en": "{gbps} GBPs · {photos} photos",
+    "t": "{gbps} GBP · {photos} фото"
+  },
+  "brand.site": {
+    "en": "Site",
+    "t": "Сайт"
+  },
+  "brand.site.what": {
+    "en": "its GBPs' pages and QRs are on it",
+    "t": "на нём страницы и QR-коды его GBP"
+  },
   "browser.address": {
     "en": "Address",
     "t": "Адрес"
@@ -1787,6 +1895,18 @@
     "en": "{name} on or off",
     "t": "{name}: вкл. или выкл."
   },
+  "gmbs.sync": {
+    "en": "Sync from Google",
+    "t": "Синхронизировать с Google"
+  },
+  "gmbs.sync.done": {
+    "en": "{name} synced from Google",
+    "t": "{name}: данные синхронизированы с Google"
+  },
+  "gmbs.sync.noPoint": {
+    "en": "Google shows {name} at no point: set its location on the map",
+    "t": "Google не показывает точку для {name}: укажите её положение на карте"
+  },
   "gmbs.tag.overdue": {
     "en": "{n} overdue",
     "t": "просрочено: {n}"
@@ -1835,6 +1955,10 @@
     "en": "Nothing needs you",
     "t": "Ничего не требует внимания"
   },
+  "home.peek.hours": {
+    "en": "Hours",
+    "t": "Часы работы"
+  },
   "home.peek.leads": {
     "en": "{n} leads in 7 days",
     "t": "заявок за 7 дней: {n}"
@@ -1850,6 +1974,10 @@
   "home.peek.open": {
     "en": "Open",
     "t": "Открыть"
+  },
+  "home.peek.photoBy": {
+    "en": "Photo: {author}",
+    "t": "Фото: {author}"
   },
   "home.peek.rating": {
     "en": "★ {rating} ({n} reviews)",
@@ -1918,6 +2046,14 @@
   "keys.sidebar": {
     "en": "Sidebar: fold or unfold",
     "t": "Боковая панель: свернуть или развернуть"
+  },
+  "kit.pane.drafts": {
+    "en": "Drafts",
+    "t": "Черновики"
+  },
+  "kit.pane.draftsCounted": {
+    "en": "Drafts {drafts}",
+    "t": "Черновики {drafts}"
   },
   "launch.areas.add": {
     "en": "Add an area, Enter",
@@ -3099,17 +3235,21 @@
     "en": "Off Google's own list. Every {category} draft's Launch tab shows them to type in.",
     "t": "Из списка самого Google. Вкладка запуска каждого черновика {category} показывает их для ввода."
   },
-  "trades.heldBy": {
-    "en": "Held by",
-    "t": "Держат"
+  "trades.heldBy.brandless": {
+    "en": "{n} without a brand",
+    "t": "{n} без бренда"
+  },
+  "trades.heldBy.brands": {
+    "en": "Gmails · Brands",
+    "t": "Gmail-аккаунты · Бренды"
+  },
+  "trades.heldBy.brands.what": {
+    "en": "a brand is one gmail's, in one category · logo, name, site, photos",
+    "t": "бренд принадлежит одному gmail-аккаунту, в одной категории · логотип, название, сайт, фото"
   },
   "trades.heldBy.none": {
     "en": "No GBP holds it yet.",
     "t": "Ни один GBP её пока не держит."
-  },
-  "trades.heldBy.what": {
-    "en": "one category, several gmails · click narrows the outline",
-    "t": "одна категория, несколько gmail · клик сужает outline"
   },
   "trades.keywords": {
     "en": "Keywords",

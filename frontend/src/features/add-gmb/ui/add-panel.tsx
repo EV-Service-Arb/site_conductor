@@ -1,7 +1,6 @@
 "use client";
 
-import { Button, Field, FieldDescription, FieldLabel, Input, NativeSelect, NativeSelectOption, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
-import { X } from "lucide-react";
+import { CloseButton, Button, Field, FieldDescription, FieldLabel, Input, NativeSelect, NativeSelectOption, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
 import { useEffect, useId, useState } from "react";
 
 import {
@@ -109,9 +108,7 @@ export function AddPanel({ gmail: scopedGmail, trade: scopedTrade }: Adding) {
           <h2 className="text-lg font-semibold text-ink">{title}</h2>
           <p className="text-sm text-ink-soft">{STATE_HINT[state](t)}</p>
         </div>
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(addKeys.close, "Close")} title={t(addKeys.close, "Close")} onClick={() => openAdd(null)}>
-          <X aria-hidden />
-        </Button>
+        <CloseButton size={button("sm")} label={t(addKeys.close, "Close")} onClose={() => openAdd(null)} />
       </header>
       {/* no <form>: the trade select holds its own, for a new trade */}
       <div className="flex flex-1 flex-col gap-4 px-6 pb-6">

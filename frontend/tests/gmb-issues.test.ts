@@ -17,6 +17,7 @@ const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
   country: { code: "FR", by_hand: false },
   phone: null,
   trade_id: null,
+  brand_id: null,
   areas: [],
   hidden_address: null,
   customers_visit: null,
@@ -25,6 +26,10 @@ const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
   enabled,
   location: located ? { lat: 45.76, lng: 4.83, placed: false } : null,
   spots: [],
+  website: null,
+  hours: [],
+  google_primary: null,
+  photos: [],
   readiness: null,
   tabs: [],
 });

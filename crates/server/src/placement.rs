@@ -109,7 +109,9 @@ async fn catalog(State(s): State<ApiState>, Extension(caller): Extension<Caller>
 	if res.status() != StatusCode::OK {
 		return Err(refused(res, "/trades.json").await);
 	}
-	let body = to_bytes(res.into_body(), REFUSAL).await.map_err(|e| Refusal::new(Code::BadGateway, format!("reading placement's catalog: {e}")))?;
+	let body = to_bytes(res.into_body(), REFUSAL)
+		.await
+		.map_err(|e| Refusal::new(Code::BadGateway, format!("reading placement's catalog: {e}")))?;
 	Ok(Json(serde_json::from_slice(&body).map_err(|e| eyre::eyre!("placement's catalog: {e}"))?))
 }
 
@@ -158,7 +160,9 @@ async fn bought(s: &ApiState, caller: &Caller, def: &Definition, held: &sa_panel
 		if res.status() != StatusCode::OK {
 			return Err(refused(res, "/studies/asks").await);
 		}
-		let body = to_bytes(res.into_body(), ASKS).await.map_err(|e| Refusal::new(Code::BadGateway, format!("reading placement's asks: {e}")))?;
+		let body = to_bytes(res.into_body(), ASKS)
+			.await
+			.map_err(|e| Refusal::new(Code::BadGateway, format!("reading placement's asks: {e}")))?;
 		let Asks { since, asks } = serde_json::from_slice(&body).map_err(|e| eyre::eyre!("placement's asks of {}: {e}", def.id()))?;
 		if asks.is_empty() {
 			return Ok(());

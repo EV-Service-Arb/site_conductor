@@ -527,175 +527,6 @@
         "x-permission": "sa:admin:tokens:grant"
       }
     },
-    "/api/v1/admin/gmbs/locate": {
-      "post": {
-        "tags": [
-          "admin"
-        ],
-        "summary": "Locates every GBP on Google that has no point or no country of Google's yet, through Places.",
-        "description": "Each place is asked of its gmail's keys first, then the shared ones, which the house pays for.\nRun after a deploy that brings points or countries, and after a copy of prod. 503 when no Google\naccount has a Places key.",
-        "operationId": "locate",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Located"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`bad_request`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthenticated`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "`unaffordable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`csrf`, `forbidden`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`conflict`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "`too_large`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "`too_many`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`internal`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "`bad_gateway`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "`browsers_not_connected`, `unavailable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "x-errors": {
-          "another_country": 422,
-          "bad_gateway": 502,
-          "bad_request": 400,
-          "browsers_not_connected": 503,
-          "conflict": 409,
-          "csrf": 403,
-          "forbidden": 403,
-          "internal": 500,
-          "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
-          "not_found": 404,
-          "too_large": 413,
-          "too_many": 429,
-          "unaffordable": 402,
-          "unauthenticated": 401,
-          "unavailable": 503,
-          "unstudied": 422
-        },
-        "x-permission": "sa:admin:sources:manage",
-        "x-spends": [
-          "places.details",
-          "places.search",
-          "places.autocomplete",
-          "places.geocode"
-        ]
-      }
-    },
     "/api/v1/admin/imports/queries-cache": {
       "post": {
         "tags": [
@@ -4146,7 +3977,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -7123,6 +6956,1963 @@
         }
       }
     },
+    "/api/v1/brands": {
+      "get": {
+        "summary": "The caller's brands, each with how many GBPs hold it and its photos.",
+        "operationId": "brands",
+        "responses": {
+          "200": {
+            "description": "`GET /brands`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Brands"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      },
+      "post": {
+        "tags": [
+          "brands"
+        ],
+        "summary": "Adds a brand under one of the caller's gmails and categories (set up there). 409 a live one of that gmail and category is so named already, whatever its case.",
+        "operationId": "add_brand",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewBrand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "A brand of the caller's: under one gmail and one category, the name its GBPs share.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Brand"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      }
+    },
+    "/api/v1/brands/{id}": {
+      "delete": {
+        "tags": [
+          "brands"
+        ],
+        "summary": "Removes a brand; its photos' uses are kept. 409 while a live GBP holds it.",
+        "operationId": "remove_brand",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      },
+      "patch": {
+        "tags": [
+          "brands"
+        ],
+        "summary": "Renames a brand or moves it to another site.",
+        "operationId": "edit_brand",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditBrand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "A brand of the caller's: under one gmail and one category, the name its GBPs share.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Brand"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      }
+    },
+    "/api/v1/brands/{id}/logo": {
+      "get": {
+        "tags": [
+          "brands"
+        ],
+        "summary": "A brand's logo. 404 none yet.",
+        "operationId": "logo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A PNG.",
+            "content": {
+              "image/png": {}
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      },
+      "put": {
+        "tags": [
+          "brands"
+        ],
+        "summary": "Sets a brand's logo, ≤ 10 MiB: re-encoded as a PNG, at most 512 px on its longer side.",
+        "operationId": "set_logo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 10485760
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 10485760
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 10485760
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "A brand of the caller's: under one gmail and one category, the name its GBPs share.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Brand"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      }
+    },
+    "/api/v1/brands/{id}/photos": {
+      "get": {
+        "tags": [
+          "brands"
+        ],
+        "summary": "A brand's photos, newest first.",
+        "operationId": "photos",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A brand's photos, newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandPhotos"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      },
+      "post": {
+        "tags": [
+          "brands"
+        ],
+        "summary": "Adds a photo to a brand, ≤ 10 MiB: re-encoded as a JPEG, its EXIF (GPS with it) gone, turned upright; the same bytes again are the same photo, back if removed. Answers its photos.",
+        "operationId": "add_photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 10485760
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 10485760
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 10485760
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "A brand's photos, newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandPhotos"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      }
+    },
+    "/api/v1/brands/{id}/photos/{file}": {
+      "get": {
+        "tags": [
+          "brands"
+        ],
+        "summary": "A photo of a brand, `{file}` being `<photo>.jpg`.",
+        "operationId": "photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file",
+            "description": "`<photo>.jpg`.",
+            "required": true,
+            "schema": {
+              "description": "`<photo>.jpg`.",
+              "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A JPEG.",
+            "content": {
+              "image/jpeg": {}
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      },
+      "delete": {
+        "tags": [
+          "brands"
+        ],
+        "summary": "Removes a photo: out of every offer, its uses kept.",
+        "operationId": "remove_photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file",
+            "description": "`<photo>.jpg`.",
+            "required": true,
+            "schema": {
+              "description": "`<photo>.jpg`.",
+              "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      },
+      "patch": {
+        "tags": [
+          "brands"
+        ],
+        "summary": "Labels a photo of the brand with what it shows; answers the brand's photos.",
+        "operationId": "label_photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file",
+            "description": "`<photo>.jpg`.",
+            "required": true,
+            "schema": {
+              "description": "`<photo>.jpg`.",
+              "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabelPhoto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "A brand's photos, newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandPhotos"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      }
+    },
     "/api/v1/gmails": {
       "get": {
         "tags": [
@@ -9568,7 +11358,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -10786,6 +12578,170 @@
         }
       }
     },
+    "/api/v1/gmbs/brand": {
+      "put": {
+        "tags": [
+          "brands"
+        ],
+        "summary": "Gives GBPs a brand, every one or none: 404 one not the caller's, 409 one not of the brand's gmail and category.",
+        "operationId": "set_brands",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetBrands"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      }
+    },
     "/api/v1/gmbs/enabled": {
       "put": {
         "tags": [
@@ -11141,7 +13097,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -11335,7 +13293,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -12395,7 +14355,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -12761,6 +14723,185 @@
         "responses": {
           "204": {
             "description": "no content"
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      }
+    },
+    "/api/v1/gmbs/{id}/photos/{photo}": {
+      "get": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "A photo a GBP's last Sync took, never another under its id.",
+        "operationId": "gmb_photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "photo",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A JPEG.",
+            "content": {
+              "image/jpeg": {}
+            }
           },
           "400": {
             "description": "`bad_request`",
@@ -13273,7 +15414,191 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
+        ]
+      }
+    },
+    "/api/v1/gmbs/{id}/sync": {
+      "post": {
+        "tags": [
+          "gmbs"
+        ],
+        "summary": "Overwrites a verified GBP with its profile on Google, asked afresh, paid by the caller: name, address, phone, website, hours, primary category, country, point (none on Google: one placed by hand kept), photos. With no trade, it takes the caller's one trade set up there with that category.",
+        "description": "409 for a GBP not verified, a name or phone another live GBP has, or a place Google now names\notherwise.",
+        "operationId": "sync_gmb",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A GBP of the caller's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Gmb"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        },
+        "x-spends": [
+          "places.details",
+          "places.search",
+          "places.autocomplete",
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -13625,7 +15950,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -13803,7 +16130,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -13992,7 +16321,9 @@
           "places.details",
           "places.search",
           "places.autocomplete",
-          "places.geocode"
+          "places.geocode",
+          "places.profile",
+          "places.photo"
         ]
       }
     },
@@ -19931,7 +22262,7 @@
         "tags": [
           "kit"
         ],
-        "summary": "The category's drafts and photos.",
+        "summary": "The category's drafts.",
         "operationId": "kit_pool",
         "parameters": [
           {
@@ -19956,7 +22287,7 @@
         ],
         "responses": {
           "200": {
-            "description": "A category's drafts and photos.",
+            "description": "A category's drafts.",
             "content": {
               "application/json": {
                 "schema": {
@@ -20113,7 +22444,7 @@
         "tags": [
           "kit"
         ],
-        "summary": "Adds a draft to the category, selecting some of its photos; answers the category's drafts and photos.",
+        "summary": "Adds a draft to the category; answers the category's drafts.",
         "operationId": "add_kit_draft",
         "parameters": [
           {
@@ -20148,7 +22479,7 @@
         },
         "responses": {
           "201": {
-            "description": "A category's drafts and photos.",
+            "description": "A category's drafts.",
             "content": {
               "application/json": {
                 "schema": {
@@ -20488,8 +22819,8 @@
         "tags": [
           "kit"
         ],
-        "summary": "Edits a draft's text or the photos it selects; answers the category's drafts and photos.",
-        "description": "409 the text of one already copied: a use is of the text it had.",
+        "summary": "Edits a draft's text or its places; answers the category's drafts.",
+        "description": "409 one already copied: a use is of the text it had.",
         "operationId": "edit_kit_draft",
         "parameters": [
           {
@@ -20534,787 +22865,7 @@
         },
         "responses": {
           "200": {
-            "description": "A category's drafts and photos.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/KitPool"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`bad_request`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthenticated`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "`unaffordable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`csrf`, `forbidden`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`conflict`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "`too_large`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "`too_many`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`internal`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "`bad_gateway`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "`browsers_not_connected`, `unavailable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "x-errors": {
-          "another_country": 422,
-          "bad_gateway": 502,
-          "bad_request": 400,
-          "browsers_not_connected": 503,
-          "conflict": 409,
-          "csrf": 403,
-          "forbidden": 403,
-          "internal": 500,
-          "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
-          "not_found": 404,
-          "too_large": 413,
-          "too_many": 429,
-          "unaffordable": 402,
-          "unauthenticated": 401,
-          "unavailable": 503,
-          "unstudied": 422
-        }
-      }
-    },
-    "/api/v1/trades/{id}/{country}/kit/photos": {
-      "post": {
-        "tags": [
-          "kit"
-        ],
-        "summary": "Adds a photo to the category, ≤ 10 MiB: re-encoded as a JPEG, its EXIF (GPS with it) gone, turned upright; the same bytes again are the same photo, back if removed. Answers the category's drafts and photos.",
-        "operationId": "add_kit_photo",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "country",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Country"
-            },
-            "style": "simple"
-          },
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "image/jpeg": {
-              "schema": {
-                "type": "string",
-                "format": "binary",
-                "maxLength": 10485760
-              }
-            },
-            "image/png": {
-              "schema": {
-                "type": "string",
-                "format": "binary",
-                "maxLength": 10485760
-              }
-            },
-            "image/webp": {
-              "schema": {
-                "type": "string",
-                "format": "binary",
-                "maxLength": 10485760
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "A category's drafts and photos.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/KitPool"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`bad_request`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthenticated`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "`unaffordable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`csrf`, `forbidden`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`conflict`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "`too_large`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "`too_many`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`internal`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "`bad_gateway`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "`browsers_not_connected`, `unavailable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "x-errors": {
-          "another_country": 422,
-          "bad_gateway": 502,
-          "bad_request": 400,
-          "browsers_not_connected": 503,
-          "conflict": 409,
-          "csrf": 403,
-          "forbidden": 403,
-          "internal": 500,
-          "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
-          "not_found": 404,
-          "too_large": 413,
-          "too_many": 429,
-          "unaffordable": 402,
-          "unauthenticated": 401,
-          "unavailable": 503,
-          "unstudied": 422
-        }
-      }
-    },
-    "/api/v1/trades/{id}/{country}/kit/photos/{file}": {
-      "get": {
-        "tags": [
-          "kit"
-        ],
-        "summary": "A photo of the category, `{file}` being `<photo>.jpg`.",
-        "operationId": "kit_photo",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "country",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Country"
-            },
-            "style": "simple"
-          },
-          {
-            "in": "path",
-            "name": "file",
-            "description": "`<photo>.jpg`.",
-            "required": true,
-            "schema": {
-              "description": "`<photo>.jpg`.",
-              "type": "string"
-            },
-            "style": "simple"
-          },
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "A JPEG.",
-            "content": {
-              "image/jpeg": {}
-            }
-          },
-          "400": {
-            "description": "`bad_request`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthenticated`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "`unaffordable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`csrf`, `forbidden`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`conflict`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "`too_large`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "`too_many`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`internal`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "`bad_gateway`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "`browsers_not_connected`, `unavailable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "x-errors": {
-          "another_country": 422,
-          "bad_gateway": 502,
-          "bad_request": 400,
-          "browsers_not_connected": 503,
-          "conflict": 409,
-          "csrf": 403,
-          "forbidden": 403,
-          "internal": 500,
-          "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
-          "not_found": 404,
-          "too_large": 413,
-          "too_many": 429,
-          "unaffordable": 402,
-          "unauthenticated": 401,
-          "unavailable": 503,
-          "unstudied": 422
-        }
-      },
-      "delete": {
-        "tags": [
-          "kit"
-        ],
-        "summary": "Removes a photo, as a draft is: out of every offer, its uses kept.",
-        "operationId": "remove_kit_photo",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "country",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Country"
-            },
-            "style": "simple"
-          },
-          {
-            "in": "path",
-            "name": "file",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          },
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "no content"
-          },
-          "400": {
-            "description": "`bad_request`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthenticated`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "`unaffordable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`csrf`, `forbidden`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`conflict`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "`too_large`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "`too_many`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`internal`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "`bad_gateway`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "`browsers_not_connected`, `unavailable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "x-errors": {
-          "another_country": 422,
-          "bad_gateway": 502,
-          "bad_request": 400,
-          "browsers_not_connected": 503,
-          "conflict": 409,
-          "csrf": 403,
-          "forbidden": 403,
-          "internal": 500,
-          "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
-          "not_found": 404,
-          "too_large": 413,
-          "too_many": 429,
-          "unaffordable": 402,
-          "unauthenticated": 401,
-          "unavailable": 503,
-          "unstudied": 422
-        }
-      },
-      "patch": {
-        "tags": [
-          "kit"
-        ],
-        "summary": "Labels a photo with what it shows, or tags its places; answers the category's drafts and photos.",
-        "operationId": "edit_kit_photo",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "country",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Country"
-            },
-            "style": "simple"
-          },
-          {
-            "in": "path",
-            "name": "file",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          },
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EditKitPhoto"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "A category's drafts and photos.",
+            "description": "A category's drafts.",
             "content": {
               "application/json": {
                 "schema": {
@@ -35601,6 +37152,72 @@
           "sequence"
         ]
       },
+      "Brand": {
+        "description": "A brand of the caller's: under one gmail and one category, the name its GBPs share.",
+        "type": "object",
+        "properties": {
+          "country": {
+            "$ref": "#/components/schemas/Country"
+          },
+          "created_at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
+          "gmail_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "gmbs": {
+            "description": "Live GBPs holding it.",
+            "type": "integer",
+            "format": "int64"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "logo": {
+            "description": "The logo's version, for its URL; `null` until one is uploaded.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "description": "What its GBPs' names start with: \"Aquafix\" → \"Aquafix · Guillotière\".",
+            "type": "string"
+          },
+          "photos": {
+            "description": "Live photos.",
+            "type": "integer",
+            "format": "int64"
+          },
+          "site": {
+            "description": "The site (sites' brand) its pages are on; brands of other gmails may share it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BrandId"
+              }
+            ]
+          },
+          "trade_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "id",
+          "gmail_id",
+          "trade_id",
+          "country",
+          "name",
+          "site",
+          "logo",
+          "created_at",
+          "gmbs",
+          "photos"
+        ]
+      },
       "BrandId": {
         "description": "A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.",
         "type": "string",
@@ -35608,6 +37225,21 @@
           "aquafix"
         ],
         "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+      },
+      "BrandPhotos": {
+        "description": "A brand's photos, newest first.",
+        "type": "object",
+        "properties": {
+          "photos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KitPhoto"
+            }
+          }
+        },
+        "required": [
+          "photos"
+        ]
       },
       "BrandReads": {
         "type": "object",
@@ -35639,6 +37271,21 @@
           "locations",
           "pricing",
           "experiments"
+        ]
+      },
+      "Brands": {
+        "description": "`GET /brands`.",
+        "type": "object",
+        "properties": {
+          "brands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Brand"
+            }
+          }
+        },
+        "required": [
+          "brands"
         ]
       },
       "Browser": {
@@ -36281,19 +37928,31 @@
           "redmi_note_14"
         ]
       },
+      "EditBrand": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BrandId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "EditKitDraft": {
         "type": "object",
         "properties": {
-          "photos": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
           "places": {
             "type": [
               "array",
@@ -36304,28 +37963,6 @@
             }
           },
           "text": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "additionalProperties": false
-      },
-      "EditKitPhoto": {
-        "type": "object",
-        "properties": {
-          "places": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "shows": {
-            "description": "What it shows, ≤ 60 characters; empty clears it.",
             "type": [
               "string",
               "null"
@@ -36868,6 +38505,14 @@
               "type": "string"
             }
           },
+          "brand_id": {
+            "description": "Of its gmail and its category.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
           "country": {
             "description": "`by_hand`: set by the caller, Google having none.",
             "anyOf": [
@@ -36909,12 +38554,26 @@
             ],
             "format": "int64"
           },
+          "google_primary": {
+            "description": "`gcid:plumber`, when the catalog knows Google's.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "hidden_address": {
             "description": "Where its verification film is shot.",
             "type": [
               "string",
               "null"
             ]
+          },
+          "hours": {
+            "description": "A line a weekday, Monday first.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "id": {
             "type": "integer",
@@ -36947,6 +38606,13 @@
               "string",
               "null"
             ]
+          },
+          "photos": {
+            "description": "In Google's order, each at `GET /gmbs/{id}/photos/{photo}`.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GmbPhoto"
+            }
           },
           "place_id": {
             "description": "Google's place id; `null` while a draft, and maybe while verifying or suspended: off Maps.",
@@ -36990,6 +38656,13 @@
               "null"
             ],
             "format": "int64"
+          },
+          "website": {
+            "description": "Google's, from its last Sync, as `hours`, `google_primary` and `photos`.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -37003,6 +38676,7 @@
           "country",
           "phone",
           "trade_id",
+          "brand_id",
           "areas",
           "hidden_address",
           "customers_visit",
@@ -37011,6 +38685,10 @@
           "enabled",
           "location",
           "spots",
+          "website",
+          "hours",
+          "google_primary",
+          "photos",
           "tabs",
           "readiness"
         ]
@@ -37088,6 +38766,17 @@
         "description": "A GBP's kit.",
         "type": "object",
         "properties": {
+          "brand": {
+            "description": "Whose photos its drafts carry: `null`, none.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Brand"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "drafts": {
             "description": "Its category's drafts in its places, in the offer's order.",
             "type": "array",
@@ -37128,8 +38817,31 @@
           "target",
           "url",
           "page",
+          "brand",
           "drafts",
           "tally"
+        ]
+      },
+      "GmbPhoto": {
+        "description": "A photo a Sync took of a GBP's profile on Google.",
+        "type": "object",
+        "properties": {
+          "author": {
+            "description": "Google's attribution.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "Never another photo's.",
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "id",
+          "author"
         ]
       },
       "GoogleCategories": {
@@ -37434,13 +39146,6 @@
               "type": "string"
             }
           },
-          "photos": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
           "places": {
             "description": "Areas it is offered in; none: everywhere.",
             "type": "array",
@@ -37460,7 +39165,6 @@
         "required": [
           "id",
           "text",
-          "photos",
           "places",
           "keywords",
           "names",
@@ -37639,14 +39343,6 @@
           "created_at": {
             "type": "string"
           },
-          "drafts": {
-            "description": "The drafts it rides with: in none, it is never offered.",
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
           "height": {
             "type": "integer",
             "format": "int64"
@@ -37654,12 +39350,6 @@
           "id": {
             "type": "integer",
             "format": "int64"
-          },
-          "places": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           },
           "shows": {
             "description": "What it shows, for the reviewer; `null`: not labelled yet.",
@@ -37681,8 +39371,6 @@
         "required": [
           "id",
           "shows",
-          "places",
-          "drafts",
           "width",
           "height",
           "uses",
@@ -37690,20 +39378,13 @@
         ]
       },
       "KitPool": {
-        "description": "A category's drafts and photos.",
+        "description": "A category's drafts.",
         "type": "object",
         "properties": {
           "drafts": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/KitDraft"
-            }
-          },
-          "photos": {
-            "description": "Newest first.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/KitPhoto"
             }
           },
           "unmentioned": {
@@ -37716,7 +39397,6 @@
         },
         "required": [
           "drafts",
-          "photos",
           "unmentioned"
         ]
       },
@@ -37732,10 +39412,6 @@
           },
           "name": {
             "type": "string"
-          },
-          "photos": {
-            "type": "integer",
-            "format": "int64"
           },
           "trade": {
             "type": "integer",
@@ -37753,7 +39429,6 @@
           "country",
           "name",
           "drafts",
-          "photos",
           "warnings"
         ]
       },
@@ -37774,6 +39449,7 @@
             "type": "boolean"
           },
           "photos": {
+            "description": "Its brand's photos it is offered with.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/KitRankedPhoto"
@@ -37822,10 +39498,6 @@
             "type": "integer",
             "format": "int64"
           },
-          "went_here": {
-            "description": "Saved on this GBP: never offered here again.",
-            "type": "boolean"
-          },
           "width": {
             "type": "integer",
             "format": "int64"
@@ -37836,8 +39508,7 @@
           "shows",
           "width",
           "height",
-          "uses",
-          "went_here"
+          "uses"
         ]
       },
       "KitRow": {
@@ -37942,6 +39613,19 @@
         },
         "required": [
           "kits"
+        ]
+      },
+      "LabelPhoto": {
+        "type": "object",
+        "properties": {
+          "shows": {
+            "description": "What it shows, ≤ 60 characters: its alt and caption on the landing; empty clears it.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "shows"
         ]
       },
       "LatLng": {
@@ -38083,44 +39767,6 @@
           "location",
           "viewport",
           "country"
-        ]
-      },
-      "Located": {
-        "type": "object",
-        "properties": {
-          "located": {
-            "description": "Places given a point or a country.",
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0
-          },
-          "no_country": {
-            "description": "For a person to set the country of.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "no_point": {
-            "description": "Service-area places not placed yet: for the map to place.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "refused": {
-            "description": "Places Places refused, or put in a country not served.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RefusedPlace"
-            }
-          }
-        },
-        "required": [
-          "located",
-          "no_point",
-          "no_country",
-          "refused"
         ]
       },
       "MapConfig": {
@@ -38615,6 +40261,36 @@
           ]
         }
       },
+      "NewBrand": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "$ref": "#/components/schemas/Country"
+          },
+          "gmail": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "site": {
+            "$ref": "#/components/schemas/BrandId"
+          },
+          "trade": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "gmail",
+          "trade",
+          "country",
+          "name",
+          "site"
+        ]
+      },
       "NewChat": {
         "type": "object",
         "properties": {
@@ -38698,13 +40374,6 @@
       "NewKitDraft": {
         "type": "object",
         "properties": {
-          "photos": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
           "places": {
             "description": "Area slugs; none: everywhere.",
             "type": "array",
@@ -38719,7 +40388,6 @@
         "additionalProperties": false,
         "required": [
           "text",
-          "photos",
           "places"
         ]
       },
@@ -39099,6 +40767,8 @@
           "places.search",
           "places.autocomplete",
           "places.geocode",
+          "places.profile",
+          "places.photo",
           "street_view.panorama",
           "map.map",
           "walk.open",
@@ -39419,21 +41089,6 @@
           "unknown"
         ]
       },
-      "RefusedPlace": {
-        "type": "object",
-        "properties": {
-          "place_id": {
-            "type": "string"
-          },
-          "why": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "place_id",
-          "why"
-        ]
-      },
       "ReportSources": {
         "type": "object",
         "properties": {
@@ -39603,6 +41258,30 @@
           "review_archive",
           "browsers",
           "placement"
+        ]
+      },
+      "SetBrands": {
+        "type": "object",
+        "properties": {
+          "brand": {
+            "description": "`null` takes their brand away.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "gmbs": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "gmbs"
         ]
       },
       "SetBrowser": {
@@ -39780,6 +41459,14 @@
                 "type": "number",
                 "format": "double"
               },
+              "places.photo": {
+                "type": "number",
+                "format": "double"
+              },
+              "places.profile": {
+                "type": "number",
+                "format": "double"
+              },
               "places.search": {
                 "type": "number",
                 "format": "double"
@@ -39879,6 +41566,14 @@
                 "format": "double"
               },
               "places.geocode": {
+                "type": "number",
+                "format": "double"
+              },
+              "places.photo": {
+                "type": "number",
+                "format": "double"
+              },
+              "places.profile": {
                 "type": "number",
                 "format": "double"
               },
@@ -40755,6 +42450,14 @@
                 "format": "int64"
               },
               "places.geocode": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "places.photo": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "places.profile": {
                 "type": "integer",
                 "format": "int64"
               },
@@ -46484,6 +48187,14 @@
               ],
               "type": [
                 "array",
+                "null"
+              ]
+            },
+            "brand": {
+              "description": "The brand whose page is open, under `trade` · `country`.",
+              "format": "int64",
+              "type": [
+                "integer",
                 "null"
               ]
             },

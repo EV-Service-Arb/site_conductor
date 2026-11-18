@@ -9,4 +9,5 @@ export const trash = scope("trash");
 export const undo = scope("undo");
 export const move = scope("move");
 export const kit = scope("kit");
+export const brandKeys = scope("brand");
 export const areaKeys = scope("area");

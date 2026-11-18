@@ -1,4 +1,4 @@
-//! A brand a source key writes for, the shape of a key id, and a site key's origin.
+//! A sites brand (a site codebase) a source key writes for, the shape of a key id, and a site key's origin.
 
 use std::fmt;
 
@@ -11,7 +11,7 @@ pub const SLUG_PATTERN: &str = "^[a-z0-9][a-z0-9_-]{0,63}$";
 /// which only the URL's own origin drops.
 pub const SITE_ORIGIN_PATTERN: &str = r"^(https://([a-z0-9-]+\.)*[a-z][a-z0-9-]*|http://(localhost|127\.0\.0\.1))(:[0-9]{1,5})?$";
 
-/// A brand: aquafix, vifnet, … Lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.
+/// A sites brand: aquafix, vifnet, … Not the conductor's per-user brands, which name one as their site. Lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct BrandId(String);

@@ -102,7 +102,7 @@ Nothing a page does removes the tap: it is what lets the copy happen.
               not on the review
 ```
 
-Google's policy prohibits photos that are not the reviewer's own; the kit's photos are the category's (§6), against it.
+Google's policy prohibits photos that are not the reviewer's own; the kit's photos are the GBP's brand's (§6), against it.
 
 == 5. Taps after the scan
 
@@ -145,17 +145,18 @@ Counted from the scan; the scan itself is one more tap on each (the camera's lin
 
 == 6. The offer
 
-Drafts and photos are a category's (trade × country); each view of a GBP's page is offered from
-them. A draft or a photo goes to one GBP once: the reviewer's copy (or save) is its use there.
+Drafts are a category's (trade × country), photos a brand's (one gmail's, in one category); each
+view of a GBP's page is offered its category's drafts and its brand's photos. A draft or a photo
+goes to one GBP once: the reviewer's copy (or save) is its use there.
 
 ```
  a view of GBP g                         excluded                         order
    drafts of g's category ──────────▶  copied on g                    copies ↑
-   (not removed)                        held by another live view      saves of its photos still
-                                        of g (15-min lease)             offerable on g ↑
-                                                                        oldest first
+   (not removed)                        held by another live view      oldest first
+                                        of g (15-min lease)
    take 6 (one tap: 1) → leased to this view
-   each draft's photos                  saved on g                     saves ↑
+   each 2 of g's brand's photos         saved on g                     saves ↑, on round
+   (no brand: none)
 ```
 
 #align(center, diagram(
@@ -176,5 +177,5 @@ them. A draft or a photo goes to one GBP once: the reviewer's copy (or save) is 
 ))
 
 A copy never posted still keeps the draft off g: posting is confirmed later, from the archive. A
-photo saved on g drops out of its draft's photos there; the draft stays offered. The lease is for
+photo saved on g is offered there no more; the drafts stay offered. The lease is for
 people standing together who scan one QR.

@@ -50,7 +50,6 @@ async fn an_operator_runs_none_of_them() {
 	let ops = [
 		(Method::PUT, "/api/v1/sources/aquafix-site/origin", json!({ "origin": "https://aquafix.top" })),
 		(Method::POST, "/api/v1/admin/gmails", json!({ "email": "a@b.c", "gmail": "a@gmail.com" })),
-		(Method::POST, "/api/v1/admin/gmbs/locate", Value::Null),
 		(Method::POST, "/api/v1/admin/imports/review-archive", empty_export()),
 		(Method::POST, "/api/v1/admin/imports/queries-cache", json!({ "scheme": "gop", "answers": {} })),
 	];

@@ -82,7 +82,7 @@ function Member({ slug, members, at, go, onSet }: { slug: string; members: reado
               </div>
             )}
           </section>
-          {cat === null ? <p className="text-sm text-ink-soft">{t(kitKeys.gmb.noCategory, "No category: nothing to offer but Google's form.")}</p> : <Offered drafts={res.data.drafts} cat={cat} />}
+          {cat === null ? <p className="text-sm text-ink-soft">{t(kitKeys.gmb.noCategory, "No category: nothing to offer but Google's form.")}</p> : <Offered drafts={res.data.drafts} cat={cat} brand={res.data.brand?.id ?? null} />}
           <section className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <h3 className={cn(SECTION_HEAD, "flex-1")}>{t(kitKeys.tally.title, "Collected")}</h3>
@@ -96,20 +96,20 @@ function Member({ slug, members, at, go, onSet }: { slug: string; members: reado
   );
 }
 
-function Offered({ drafts, cat }: { drafts: readonly KitRanked[]; cat: NonNullable<KitMember["category"]> }) {
+function Offered({ drafts, cat, brand }: { drafts: readonly KitRanked[]; cat: NonNullable<KitMember["category"]>; brand: number | null }) {
   const t = useT();
   const pool = useResource(api, "/trades/{id}/{country}/kit", { params: { path: { id: cat.trade, country: cat.country } } });
   const tags = new Map<number, KitDraft>(pool.status === "ok" ? pool.data.drafts.map((d) => [d.id, d]) : []);
   const went = drafts.filter((d) => d.went_here);
   return (
     <>
-      <Drafts title={t(kitKeys.drafts, "Drafts")} hint={t(kitKeys.drafts.offerOrder, "least used first · the pool is the category's")} drafts={drafts.filter((d) => !d.went_here)} tags={tags} cat={cat} empty={t(kitKeys.drafts.noneLeft, "None left to offer here: its page answers with Google's form.")} />
-      {went.length > 0 && <Drafts title={t(kitKeys.wentHere, "Went here")} hint={t(kitKeys.wentHere.why, "copied on this GBP: never offered here again")} drafts={went} tags={tags} cat={cat} />}
+      <Drafts title={t(kitKeys.drafts, "Drafts")} hint={t(kitKeys.drafts.offerOrder, "least used first · the pool is the category's")} drafts={drafts.filter((d) => !d.went_here)} tags={tags} brand={brand} empty={t(kitKeys.drafts.noneLeft, "None left to offer here: its page answers with Google's form.")} />
+      {went.length > 0 && <Drafts title={t(kitKeys.wentHere, "Went here")} hint={t(kitKeys.wentHere.why, "copied on this GBP: never offered here again")} drafts={went} tags={tags} brand={brand} />}
     </>
   );
 }
 
-function Drafts({ title, hint, drafts, tags, cat, empty }: { title: string; hint: string; drafts: readonly KitRanked[]; tags: Map<number, KitDraft>; cat: KitMember["category"]; empty?: string }) {
+function Drafts({ title, hint, drafts, tags, brand, empty }: { title: string; hint: string; drafts: readonly KitRanked[]; tags: Map<number, KitDraft>; brand: number | null; empty?: string }) {
   const t = useT();
   return (
     <section className="flex flex-col gap-2">
@@ -139,11 +139,11 @@ function Drafts({ title, hint, drafts, tags, cat, empty }: { title: string; hint
                   </span>
                 )}
               </span>
-              {cat !== null && (
+              {brand !== null && (
                 <span className="flex shrink-0 gap-1">
                   {d.photos.map((p) => (
-                    <span key={p.id} className={cn(p.went_here && "opacity-40")} title={p.shows ?? undefined}>
-                      <Thumb trade={cat.trade} country={cat.country} photo={p.id} className="size-9" />
+                    <span key={p.id} title={p.shows ?? undefined}>
+                      <Thumb brand={brand} photo={p.id} className="size-9" />
                     </span>
                   ))}
                 </span>

@@ -1,7 +1,7 @@
 "use client";
 
-import { Button, NativeSelect, NativeSelectOption, Settled, Skeleton, cn } from "@evinvest/uikit";
-import { Mail, X } from "lucide-react";
+import { CloseButton, NativeSelect, NativeSelectOption, Settled, Skeleton, cn } from "@evinvest/uikit";
+import { Mail } from "lucide-react";
 
 import { GMAIL_ROLE_NAME, openAccount, useGmails, windowKeys, gmbs } from "@/entities/gmb";
 import { BrowserSession } from "@/features/browser-session";
@@ -36,9 +36,7 @@ export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Tab; gb
             <RoleSelect gmail={gmail} />
           </p>
         </div>
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => openAccount(null)}>
-          <X aria-hidden />
-        </Button>
+        <CloseButton size={button("sm")} label={t(windowKeys.close, "Close the window")} onClose={() => openAccount(null)} />
       </header>
       <nav role="tablist" aria-label={gmail.gmail} className="flex items-center gap-1 border-b border-border px-6 pt-3">
         {gmail.tabs.map((k) => (
