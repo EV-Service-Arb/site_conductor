@@ -131,6 +131,11 @@ impl Live {
 	}
 }
 
+/// Follows every service's change feed until `shutdown`, onto `bus`.
+pub async fn follow(services: Services, bus: sa_panel::live::Bus, shutdown: tokio::sync::watch::Receiver<bool>) {
+	futures::future::join_all(CHANGE_FEEDS.map(|service| follow_one(&services, service, &bus, shutdown.clone()))).await;
+}
+
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	vec![ApiRoute::new(Method::GET, "/live", USER, live)]
 }
@@ -177,11 +182,6 @@ async fn live(
 		.run()
 		.instrument(span)
 	}))
-}
-
-/// Follows every service's change feed until `shutdown`, onto `bus`.
-pub async fn follow(services: Services, bus: sa_panel::live::Bus, shutdown: tokio::sync::watch::Receiver<bool>) {
-	futures::future::join_all(CHANGE_FEEDS.map(|service| follow_one(&services, service, &bus, shutdown.clone()))).await;
 }
 
 /// One service's feed: reconnected with a backoff whenever it ends, fails, or goes quiet; the
@@ -444,6 +444,7 @@ async fn feed(services: &Services, service: Service, bus: &sa_panel::live::Bus) 
 	let mut body = res.into_body();
 	let mut pending: Vec<u8> = Vec::new();
 	let mut heard = false;
+	//LOOP: ends with the stream, or when it is idle for FEED_IDLE
 	loop {
 		let frame = match tokio::time::timeout(FEED_IDLE, body.frame()).await {
 			Ok(Some(frame)) => frame?,

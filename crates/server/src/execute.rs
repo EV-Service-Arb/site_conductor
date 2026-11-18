@@ -36,20 +36,6 @@ pub struct Sandbox {
 	http: reqwest::Client,
 	runs: Arc<Mutex<HashMap<String, Held>>>,
 }
-
-/// A run in flight, by its token.
-struct Held {
-	credentials: HeaderMap,
-	calls: usize,
-	proposed: Option<Call>,
-}
-
-/// What a run did, and the call it stopped at to propose.
-pub struct Executed {
-	pub ran: Ran,
-	pub proposed: Option<Call>,
-}
-
 impl Sandbox {
 	pub fn try_new(runner: &str, signer: Signer) -> eyre::Result<Self> {
 		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
@@ -109,6 +95,19 @@ impl Sandbox {
 	pub(crate) fn routes(tools: Tools) -> Router {
 		Router::new().route(&format!("{PREFIX}/{{*path}}"), any(relay)).with_state(tools)
 	}
+}
+
+/// What a run did, and the call it stopped at to propose.
+pub struct Executed {
+	pub ran: Ran,
+	pub proposed: Option<Call>,
+}
+
+/// A run in flight, by its token.
+struct Held {
+	credentials: HeaderMap,
+	calls: usize,
+	proposed: Option<Call>,
 }
 
 /// Drops the run's token however its `execute` ends.

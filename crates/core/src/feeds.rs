@@ -28,6 +28,44 @@ pub const PLACES: &str = "/api/conductor/places";
 pub const SOURCES_RECEIVED: &str = "/api/conductor/sources/received";
 pub const INTERNAL_READS: &str = "/api/conductor/internal-reads";
 
+/// Each source key's last event's arrival.
+pub type Received = BTreeMap<String, Timestamp>;
+
+#[cfg(feature = "api")]
+pub use stream::changes;
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BrandReads {
+	pub locations: Option<Timestamp>,
+	pub pricing: Option<Timestamp>,
+	pub experiments: Option<Timestamp>,
+}
+
+/// The last `/api/internal` read per brand since `since` (the service's boot); an endpoint is absent
+/// when not read since.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InternalReads {
+	pub since: Timestamp,
+	pub reads: BTreeMap<String, BrandReads>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Place {
+	pub gmb_id: i64,
+	pub brand: String,
+	pub slug: String,
+}
+
+/// Every live place with a GBP: which landing page is which GBP.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Places {
+	pub places: Vec<Place>,
+}
+
 /// A line of a service's change feed.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -39,44 +77,6 @@ pub enum Line {
 	/// Nothing happened; the feed is alive.
 	Ping,
 }
-
-/// Every live place with a GBP: which landing page is which GBP.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Places {
-	pub places: Vec<Place>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Place {
-	pub gmb_id: i64,
-	pub brand: String,
-	pub slug: String,
-}
-
-/// Each source key's last event's arrival.
-pub type Received = BTreeMap<String, Timestamp>;
-
-/// The last `/api/internal` read per brand since `since` (the service's boot); an endpoint is absent
-/// when not read since.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct InternalReads {
-	pub since: Timestamp,
-	pub reads: BTreeMap<String, BrandReads>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct BrandReads {
-	pub locations: Option<Timestamp>,
-	pub pricing: Option<Timestamp>,
-	pub experiments: Option<Timestamp>,
-}
-
-#[cfg(feature = "api")]
-pub use stream::changes;
 
 #[cfg(feature = "api")]
 mod stream {

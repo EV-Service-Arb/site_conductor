@@ -166,13 +166,8 @@ pub(crate) async fn ask(
 		.map(|t| json!({ "name": t.name, "description": t.description, "input_schema": t.input }))
 		.collect();
 	let tools = Value::Array(tools);
-	let mut rounds = 0;
-	let end = loop {
-		rounds += 1;
-		if rounds > ROUNDS {
-			answer.text.push_str("\n\nI stopped here: this took more steps than one answer may.");
-			break AnswerState::Stopped;
-		}
+	let end = 'rounds: {
+	for _ in 0..ROUNDS {
 		let asked = json!({
 			"model": MODEL,
 			"max_tokens": 16000,
@@ -189,7 +184,7 @@ pub(crate) async fn ask(
 				answer
 					.text
 					.push_str("\n\nYour Claude connection was refused: reconnect it, or disconnect it to ask on the panel's.");
-				break AnswerState::Stopped;
+				break 'rounds AnswerState::Stopped;
 			}
 			Err(said) => return Err(Refusal::new(Code::Unavailable, format!("the panel's Claude refused its token: {said}"))),
 		};
@@ -220,7 +215,7 @@ pub(crate) async fn ask(
 			Some("tool_use") => match spent {
 				Some(why) => {
 					answer.text.push_str(&format!("\n\nI stopped here: {why}."));
-					break AnswerState::Stopped;
+					break 'rounds AnswerState::Stopped;
 				}
 				None => {
 					history.push(json!({ "role": "user", "content": results }));
@@ -229,11 +224,14 @@ pub(crate) async fn ask(
 			},
 			Some("refusal") => {
 				answer.text = "I can't help with that.".to_owned();
-				break AnswerState::Done;
+				break 'rounds AnswerState::Done;
 			}
-			Some("end_turn" | "max_tokens" | "pause_turn" | "stop_sequence") => break AnswerState::Done,
+			Some("end_turn" | "max_tokens" | "pause_turn" | "stop_sequence") => break 'rounds AnswerState::Done,
 			other => return Err(eyre::eyre!("the model stopped for {other:?}").into()),
 		}
+	}
+	answer.text.push_str("\n\nI stopped here: this took more steps than one answer may.");
+	AnswerState::Stopped
 	};
 	let done = written.write(&turns, &answer, end, Some(started)).await?;
 	Ok(Json(done))

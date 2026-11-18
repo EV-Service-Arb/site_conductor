@@ -18,6 +18,17 @@ use serde::Serialize;
 
 use crate::{Assertion, HEADER, Keys, Principal, Service, Source, User};
 
+/// Who a router's state says is calling: the conductor's assertion ([`Verifier`]), or, in the
+/// conductor, its own session.
+pub trait Vouch<F> {
+	type Refusal: ErrorCode + From<Denied>;
+
+	/// Every code [`Self::vouch`] refuses with.
+	const REFUSALS: &'static [Self::Refusal];
+
+	fn vouch(&self, gate: &Gate<F>, parts: &mut Parts) -> impl Future<Output = Result<Principal, Refusal<Self::Refusal>>> + Send;
+}
+
 /// Who passes a route's gate: a signed-in person holding `needs` (any, without one), and the
 /// conductor where it admits it.
 #[derive(Clone, Copy, Debug)]
@@ -84,17 +95,6 @@ impl ErrorCode for Denied {
 			Self::Forbidden => StatusCode::FORBIDDEN,
 		}
 	}
-}
-
-/// Who a router's state says is calling: the conductor's assertion ([`Verifier`]), or, in the
-/// conductor, its own session.
-pub trait Vouch<F> {
-	type Refusal: ErrorCode + From<Denied>;
-
-	/// Every code [`Self::vouch`] refuses with.
-	const REFUSALS: &'static [Self::Refusal];
-
-	fn vouch(&self, gate: &Gate<F>, parts: &mut Parts) -> impl Future<Output = Result<Principal, Refusal<Self::Refusal>>> + Send;
 }
 
 impl<S, F> Vouch<F> for S

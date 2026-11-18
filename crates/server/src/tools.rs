@@ -29,6 +29,9 @@ const FOUND: usize = 8;
 /// The most of an answer an agent is handed back.
 pub(crate) const ANSWER: usize = 1 << 20;
 
+/// The tools every agent has, whatever the catalog holds: an operation's own tool may not take their names.
+pub(crate) const BUILT_IN: [&str; 5] = ["search", "call", "open", "run", "execute"];
+
 #[derive(Clone)]
 pub struct Tools {
 	catalog: Catalog,
@@ -218,64 +221,7 @@ impl Tools {
 			})
 			.collect()
 	}
-}
 
-/// What an agent is named an operation by when it is its own tool: `playbook.search` is `playbook_search`.
-pub(crate) fn tool_name(operation: &str) -> String {
-	operation.replacen('.', "_", 1)
-}
-
-/// The tools every agent has, whatever the catalog holds: an operation's own tool may not take their names.
-pub(crate) const BUILT_IN: [&str; 5] = ["search", "call", "open", "run", "execute"];
-
-/// What of a request says who the caller is.
-fn credentials_of(headers: &HeaderMap) -> HeaderMap {
-	[header::COOKIE.as_str(), header::AUTHORIZATION.as_str(), crate::cookies::CSRF_HEADER]
-		.into_iter()
-		.filter_map(|name| headers.get(name).map(|v| (header::HeaderName::from_static(name), v.clone())))
-		.collect()
-}
-
-/// A tool as every transport gives it.
-pub struct Def {
-	pub name: String,
-	pub description: String,
-	/// A JSON Schema with nothing to resolve.
-	pub input: Value,
-	pub hints: Hints,
-}
-
-/// Offers a view as a link: one of the views' table, its params by name.
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Open {
-	/// A view's name.
-	pub view: String,
-	/// Its params and query keys, by name.
-	pub params: Map<String, Value>,
-	pub label: String,
-}
-
-/// TypeScript over the catalog's client, run apart, as the caller.
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Execute {
-	/// The code: `api` is in scope, the catalog's paths absolute, as `search` names them:
-	/// `const gmbs = await api.GET("/api/v1/gmbs"); if (gmbs.error) throw new Error(gmbs.error.code);`.
-	/// What it `console.log`s is what comes back.
-	pub code: String,
-}
-
-/// Offers a binding of the page's keymap as a button.
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Run {
-	/// A binding's id, as the page names it.
-	pub binding: String,
-	pub label: String,
-}
-
-impl Tools {
 	/// Every tool `may`'s caller is given: `search` and `call`, each operation that is its own; with
 	/// `page`, the in-page assistant's `open` and `run` too.
 	pub fn definitions(&self, may: impl Fn(Option<&str>) -> bool + Copy, page: bool) -> Vec<Def> {
@@ -386,6 +332,45 @@ An operation that destroys or spends is not run: the run stops there, and that c
 	}
 }
 
+/// A tool as every transport gives it.
+pub struct Def {
+	pub name: String,
+	pub description: String,
+	/// A JSON Schema with nothing to resolve.
+	pub input: Value,
+	pub hints: Hints,
+}
+
+/// Offers a view as a link: one of the views' table, its params by name.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Open {
+	/// A view's name.
+	pub view: String,
+	/// Its params and query keys, by name.
+	pub params: Map<String, Value>,
+	pub label: String,
+}
+
+/// TypeScript over the catalog's client, run apart, as the caller.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Execute {
+	/// The code: `api` is in scope, the catalog's paths absolute, as `search` names them:
+	/// `const gmbs = await api.GET("/api/v1/gmbs"); if (gmbs.error) throw new Error(gmbs.error.code);`.
+	/// What it `console.log`s is what comes back.
+	pub code: String,
+}
+
+/// Offers a binding of the page's keymap as a button.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Run {
+	/// A binding's id, as the page names it.
+	pub binding: String,
+	pub label: String,
+}
+
 /// An operation that is its own tool.
 pub struct Own {
 	pub name: String,
@@ -397,7 +382,6 @@ pub struct Own {
 	/// Which of the input's names are the path's.
 	path: Vec<String>,
 }
-
 impl Own {
 	/// The call its input stands for: the path's parameters, the query's, and the body.
 	pub fn call(&self, mut input: Map<String, Value>) -> Call {
@@ -409,24 +393,6 @@ impl Own {
 			query: Some(query),
 			body,
 		}
-	}
-}
-
-/// `schema` with every `$ref` to `components` put in place.
-fn inline(schema: &Value, components: &Value, within: &mut Vec<String>) -> Value {
-	match schema {
-		Value::Object(o) => {
-			if let Some(name) = o.get("$ref").and_then(Value::as_str).and_then(|r| r.strip_prefix("#/components/schemas/")) {
-				assert!(!within.iter().any(|n| n == name), "{name} holds itself: a tool's input is no recursive schema");
-				within.push(name.to_owned());
-				let inlined = inline(&components[name], components, within);
-				within.pop();
-				return inlined;
-			}
-			Value::Object(o.iter().map(|(k, v)| (k.clone(), inline(v, components, within))).collect())
-		}
-		Value::Array(a) => Value::Array(a.iter().map(|v| inline(v, components, within)).collect()),
-		v => v.clone(),
 	}
 }
 
@@ -474,7 +440,6 @@ pub struct Hints {
 	/// The priced items it may buy: a Places request, a cloud phone's minutes.
 	pub spends: Vec<Item>,
 }
-
 impl Hints {
 	/// What the user confirms before it runs.
 	pub fn proposed(&self) -> bool {
@@ -487,6 +452,37 @@ impl Hints {
 pub struct Answer {
 	pub status: u16,
 	pub body: Value,
+}
+
+/// What an agent is named an operation by when it is its own tool: `playbook.search` is `playbook_search`.
+pub(crate) fn tool_name(operation: &str) -> String {
+	operation.replacen('.', "_", 1)
+}
+
+/// What of a request says who the caller is.
+fn credentials_of(headers: &HeaderMap) -> HeaderMap {
+	[header::COOKIE.as_str(), header::AUTHORIZATION.as_str(), crate::cookies::CSRF_HEADER]
+		.into_iter()
+		.filter_map(|name| headers.get(name).map(|v| (header::HeaderName::from_static(name), v.clone())))
+		.collect()
+}
+
+/// `schema` with every `$ref` to `components` put in place.
+fn inline(schema: &Value, components: &Value, within: &mut Vec<String>) -> Value {
+	match schema {
+		Value::Object(o) => {
+			if let Some(name) = o.get("$ref").and_then(Value::as_str).and_then(|r| r.strip_prefix("#/components/schemas/")) {
+				assert!(!within.iter().any(|n| n == name), "{name} holds itself: a tool's input is no recursive schema");
+				within.push(name.to_owned());
+				let inlined = inline(&components[name], components, within);
+				within.pop();
+				return inlined;
+			}
+			Value::Object(o.iter().map(|(k, v)| (k.clone(), inline(v, components, within))).collect())
+		}
+		Value::Array(a) => Value::Array(a.iter().map(|v| inline(v, components, within)).collect()),
+		v => v.clone(),
+	}
 }
 
 pub(crate) fn hints(method: &str, op: &Operation) -> Hints {

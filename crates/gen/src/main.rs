@@ -6,7 +6,10 @@
 //! catalog those documents make, as the conductor merges them, for the sandbox's client
 //! (`crates/sandbox/js/catalog.json`).
 
-use std::{collections::BTreeMap, path::Path};
+use std::{
+	collections::BTreeMap,
+	path::{Path, PathBuf},
+};
 
 use ev_lib::{
 	api::{openapi::SchemaObject, schemars::generate::SchemaSettings},
@@ -46,10 +49,10 @@ fn main() {
 	}
 	std::fs::write(&out, serde_json::to_string_pretty(&doc).expect("the document serializes") + "\n").expect("frontend/src/shared/api is writable");
 	let local = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../_.siblings-local.json");
-	let roots: BTreeMap<sa_auth::Service, std::path::PathBuf> =
+	let roots: BTreeMap<sa_auth::Service, PathBuf> =
 		serde_json::from_str(&std::fs::read_to_string(&local).unwrap_or_else(|e| panic!("{}: each sibling's checkout root: {e}", local.display())))
 			.unwrap_or_else(|e| panic!("{}: {e}", local.display()));
-	let sources: Vec<(sa_auth::Service, Option<std::path::PathBuf>)> = DOCUMENTS
+	let sources: Vec<(sa_auth::Service, Option<PathBuf>)> = DOCUMENTS
 		.iter()
 		.map(|(service, at)| {
 			let root = roots.get(service).unwrap_or_else(|| panic!("{} names no {service}", local.display()));

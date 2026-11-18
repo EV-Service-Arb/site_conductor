@@ -62,6 +62,7 @@ where
 	Fut: Future<Output = eyre::Result<()>> + Send, {
 	let mut tick = tokio::time::interval(period);
 	tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+	//LOOP: runs until shutdown
 	loop {
 		tokio::select! {
 			_ = tick.tick() => {}

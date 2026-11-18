@@ -152,6 +152,7 @@ async fn pull(State(s): State<ApiState>, Spends(caller, _): Spends<PlacementRequ
 /// lies behind a page (the next one, a tile's quarters) is known only once it is answered.
 async fn bought(s: &ApiState, caller: &Caller, def: &Definition, held: &sa_panel::placement::Pull) -> ApiResult<()> {
 	let mut asked = std::collections::HashSet::new();
+	//LOOP: a repeated ask errors, so it ends once placement asks for nothing
 	loop {
 		let res = ask(s, caller, Method::POST, "/studies/asks", json(def)).await?;
 		if res.status() != StatusCode::OK {

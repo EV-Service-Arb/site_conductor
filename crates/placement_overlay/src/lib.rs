@@ -19,6 +19,7 @@ use crate::scene::Scene;
 
 mod scene;
 
+type Hooks = (Closure<dyn Fn(f64, f64, f64, f64)>, Closure<dyn Fn(usize)>);
 /// What the host is told: what the shown payload is (on every `show`), what is drawn in view, and
 /// why the map is less than asked.
 #[derive(Serialize, Tsify)]
@@ -76,56 +77,15 @@ pub struct Notice {
 	text: Option<String>,
 	missing: Option<usize>,
 }
-type Hooks = (Closure<dyn Fn(f64, f64, f64, f64)>, Closure<dyn Fn(usize)>);
 
 #[wasm_bindgen]
 pub struct Overlay {
 	inner: Rc<RefCell<Inner>>,
 }
-
-struct Inner {
-	scene: Scene,
-	emit: Function,
-	model: Option<Rc<Model>>,
-	/// Whether the notice on screen is the shown study's, so the payload after it can clear it.
-	noticed: bool,
-	heat: Option<String>,
-	tune: Tune,
-	field: bool,
-	/// Which competitor the coverage layers are about. The loudest until one is clicked.
-	focus: usize,
-	dots: bool,
-	hide_imputed: bool,
-	/// At `tune`. Moves only with `tune` and the model, never with the view.
-	press: Vec<f64>,
-	unmet: Vec<f64>,
-	legend: Option<Legend>,
-	/// Kept alive while attached: `paint.js` calls them on settle and on a dot's click.
-	hooks: Option<Hooks>,
-}
-
-/// `tune()`'s argument. A null is the payload's own; a tier left out keeps its own weight and shows.
-#[derive(Clone, Default, Deserialize, Tsify)]
-#[serde(deny_unknown_fields)]
-pub struct Tune {
-	lambda_m: Option<f64>,
-	tiers: Option<HashMap<String, TierTune>>,
-}
-
-#[derive(Clone, Deserialize, Tsify)]
-#[serde(deny_unknown_fields)]
-pub struct TierTune {
-	weight: f64,
-	show: bool,
-}
-
 #[wasm_bindgen]
 impl Overlay {
 	#[wasm_bindgen(constructor)]
-	pub fn new(
-		#[wasm_bindgen(unchecked_param_type = "google.maps.Map")] map: JsValue,
-		#[wasm_bindgen(unchecked_param_type = "(event: Event) => void")] emit: Function,
-	) -> Overlay {
+	pub fn new(#[wasm_bindgen(unchecked_param_type = "google.maps.Map")] map: JsValue, #[wasm_bindgen(unchecked_param_type = "(event: Event) => void")] emit: Function) -> Overlay {
 		let inner = Rc::new_cyclic(|me: &Weak<RefCell<Inner>>| {
 			let (v, p) = (me.clone(), me.clone());
 			let on_view = Closure::<dyn Fn(f64, f64, f64, f64)>::new(move |w, s, e, n| {
@@ -259,6 +219,41 @@ impl Overlay {
 	}
 }
 
+/// `tune()`'s argument. A null is the payload's own; a tier left out keeps its own weight and shows.
+#[derive(Clone, Default, Deserialize, Tsify)]
+#[serde(deny_unknown_fields)]
+pub struct Tune {
+	lambda_m: Option<f64>,
+	tiers: Option<HashMap<String, TierTune>>,
+}
+
+#[derive(Clone, Deserialize, Tsify)]
+#[serde(deny_unknown_fields)]
+pub struct TierTune {
+	weight: f64,
+	show: bool,
+}
+
+struct Inner {
+	scene: Scene,
+	emit: Function,
+	model: Option<Rc<Model>>,
+	/// Whether the notice on screen is the shown study's, so the payload after it can clear it.
+	noticed: bool,
+	heat: Option<String>,
+	tune: Tune,
+	field: bool,
+	/// Which competitor the coverage layers are about. The loudest until one is clicked.
+	focus: usize,
+	dots: bool,
+	hide_imputed: bool,
+	/// At `tune`. Moves only with `tune` and the model, never with the view.
+	press: Vec<f64>,
+	unmet: Vec<f64>,
+	legend: Option<Legend>,
+	/// Kept alive while attached: `paint.js` calls them on settle and on a dot's click.
+	hooks: Option<Hooks>,
+}
 impl Inner {
 	fn notice(&mut self, text: Option<&str>, missing: Option<usize>) -> Event {
 		self.noticed = text.is_some();

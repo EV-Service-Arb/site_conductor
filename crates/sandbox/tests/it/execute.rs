@@ -23,6 +23,17 @@ use sa_server::{
 use serde_json::{Value, json};
 use uuid::Uuid;
 
+const READS: &str = r#"const me = await api.GET("/api/v1/me");
+if (me.error) throw new Error(me.error.code);
+console.log(me.data.email);"#;
+
+const ESCAPES: &str = r#"const at = Deno.env.get("SA_RUN_URL")!, token = Deno.env.get("SA_RUN_TOKEN")!;
+const out = await fetch(`${at}/auth/logout`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
+console.log(out.status, out.headers.has("x-sa-run-refused"), token);"#;
+
+const DESTROYS: &str = r#"await api.DELETE("/api/v1/trades/{id}", { params: { path: { id: 7 } } });
+console.log("after");"#;
+
 /// A Claude API that answers each request with the next of `script`, and keeps what it was sent.
 async fn claude(script: Vec<Value>) -> (String, Arc<Mutex<Vec<Value>>>) {
 	let sent = Arc::new(Mutex::new(Vec::new()));
@@ -50,17 +61,6 @@ async fn claude(script: Vec<Value>) -> (String, Arc<Mutex<Vec<Value>>>) {
 fn execute(id: &str, code: &str) -> Value {
 	json!({ "type": "tool_use", "id": id, "name": "execute", "input": { "code": code } })
 }
-
-const READS: &str = r#"const me = await api.GET("/api/v1/me");
-if (me.error) throw new Error(me.error.code);
-console.log(me.data.email);"#;
-
-const ESCAPES: &str = r#"const at = Deno.env.get("SA_RUN_URL")!, token = Deno.env.get("SA_RUN_TOKEN")!;
-const out = await fetch(`${at}/auth/logout`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
-console.log(out.status, out.headers.has("x-sa-run-refused"), token);"#;
-
-const DESTROYS: &str = r#"await api.DELETE("/api/v1/trades/{id}", { params: { path: { id: 7 } } });
-console.log("after");"#;
 
 /// The runner, sending back to `conductor`.
 async fn runner(conductor: &str) -> (String, tokio::process::Child) {

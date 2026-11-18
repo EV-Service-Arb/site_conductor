@@ -11,12 +11,12 @@ repository.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-gmaps_optimal_placement_core = { git = "https://github.com/EV-Service-Arb/gmaps_optimal_placement", branch = "main", features = ["ts"] }
-js-sys = "0.3"
+gmaps_optimal_placement_core = { workspace = true, features = ["ts"] }
+js-sys.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tsify = "0.5"
-wasm-bindgen = "0.2"
+tsify.workspace = true
+wasm-bindgen.workspace = true
 
 [lints]
 workspace = true

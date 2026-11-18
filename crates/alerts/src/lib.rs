@@ -166,7 +166,7 @@ impl Note {
 			return Err(fail("seq is not positive".into()));
 		}
 		if self.rule.feed() != Some(feed) {
-			return Err(fail(format!("rule belongs to {}, not {}", self.rule.feed().map_or("the conductor", Service::as_str), feed)));
+			return Err(fail(format!("rule belongs to {}, not {feed}", self.rule.feed().map_or("the conductor", Service::as_str))));
 		}
 		match self.rule.audience() {
 			Audience::GmbOwners if self.gmbs.is_empty() => return Err(fail("GMB-owned rule has no GMBs".into())),

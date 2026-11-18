@@ -111,6 +111,28 @@ const OWN: [Path; 15] = [
 	Path::new("/cabinet", false, true),
 ];
 
+/// Hop-by-hop headers (RFC 9110 §7.6.1) and what only the panel may say: never passed on.
+pub(crate) const DROPPED_UP: [&str; 11] = [
+	"connection",
+	"keep-alive",
+	"proxy-connection",
+	"te",
+	"trailer",
+	"transfer-encoding",
+	"upgrade",
+	"cookie",
+	sa_auth::HEADER,
+	cookies::CSRF_HEADER,
+	crate::grafana::VIEWER_HEADER,
+];
+
+pub(crate) const DROPPED_DOWN: [&str; 8] = ["connection", "keep-alive", "proxy-connection", "te", "trailer", "transfer-encoding", "upgrade", "set-cookie"];
+
+/// How long a call of the conductor's own to a service may take.
+pub(crate) const SITES_TIMEOUT: Duration = Duration::from_secs(10);
+/// The most of a service's answer the conductor reads: a page of notes or a photo, with room.
+const ANSWER: usize = 16 * 1024 * 1024;
+
 /// A prefix of the conductor's origin, and what the edge does with it.
 #[derive(Clone, Copy, Debug)]
 pub struct Path {
@@ -131,28 +153,6 @@ impl Path {
 pub fn paths() -> impl Iterator<Item = Path> {
 	ROUTES.iter().map(|r| Path::new(r.prefix, r.rate_limited, r.published)).chain(OWN)
 }
-
-/// Hop-by-hop headers (RFC 9110 §7.6.1) and what only the panel may say: never passed on.
-pub(crate) const DROPPED_UP: [&str; 11] = [
-	"connection",
-	"keep-alive",
-	"proxy-connection",
-	"te",
-	"trailer",
-	"transfer-encoding",
-	"upgrade",
-	"cookie",
-	sa_auth::HEADER,
-	cookies::CSRF_HEADER,
-	crate::grafana::VIEWER_HEADER,
-];
-
-pub(crate) const DROPPED_DOWN: [&str; 8] = ["connection", "keep-alive", "proxy-connection", "te", "trailer", "transfer-encoding", "upgrade", "set-cookie"];
-/// How long a call of the conductor's own to a service may take.
-pub(crate) const SITES_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// The most of a service's answer the conductor reads: a page of notes or a photo, with room.
-const ANSWER: usize = 16 * 1024 * 1024;
 
 /// Whether `path` is `prefix` or below it, by whole segments.
 pub fn under(path: &str, prefix: &str) -> bool {

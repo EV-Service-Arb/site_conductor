@@ -41,24 +41,11 @@ use crate::{
 	trash, usage,
 };
 
-/// One `/api/v1` operation.
-pub(crate) type ApiRoute = Route<ApiState, Gate>;
-
-/// Who passes an `/api/v1` row: a signed-in person holding its permission, if it names one.
-pub(crate) type Gate = sa_auth::Gate<Flags>;
-
-/// What a row's gate decides beside its permission.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct Flags {
-	pub(crate) freshness: Freshness,
-	/// Waits on a browser or takes a film's bytes: 8 at once, 10 min each.
-	pub(crate) slow: bool,
-}
-
 pub(crate) const USER: Gate = sa_auth::Gate::USER.with(Flags {
 	freshness: Freshness::Cached,
 	slow: false,
 });
+
 /// Asks concierge afresh: for what must not outlive a revoked permission by a minute.
 pub(crate) const FRESH: Gate = sa_auth::Gate::USER.with(Flags {
 	freshness: Freshness::Fresh,
@@ -68,6 +55,11 @@ pub(crate) const SLOW: Gate = sa_auth::Gate::USER.with(Flags {
 	freshness: Freshness::Cached,
 	slow: true,
 });
+/// One `/api/v1` operation.
+pub(crate) type ApiRoute = Route<ApiState, Gate>;
+
+/// Who passes an `/api/v1` row: a signed-in person holding its permission, if it names one.
+pub(crate) type Gate = sa_auth::Gate<Flags>;
 
 /// The conductor's own `/api/v1` document, derived from its table.
 pub fn document() -> OpenApi {
@@ -204,6 +196,14 @@ pub fn app(
 	let app = app.layer(middleware::map_response(nosniff));
 	tools.serve(app.clone());
 	app
+}
+
+/// What a row's gate decides beside its permission.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Flags {
+	pub(crate) freshness: Freshness,
+	/// Waits on a browser or takes a film's bytes: 8 at once, 10 min each.
+	pub(crate) slow: bool,
 }
 
 /// Every `/api/v1` route on `ApiState`.

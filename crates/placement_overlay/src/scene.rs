@@ -39,15 +39,6 @@ pub struct Scene {
 	hide_imputed: bool,
 	shown: Vec<u8>,
 }
-
-/// What a draw put on screen, for the legend.
-pub struct Drawn {
-	/// The heat's five ticks over the cells in view, and how many cells that is.
-	pub heat: Option<([f64; 5], usize)>,
-	/// The pressure values the iso-lines run at. `None` when nothing in view is under pressure.
-	pub levels: Option<[f64; 3]>,
-}
-
 impl Scene {
 	/// `on_view(west, south, east, north)` fires whenever the map settles, and once on attach if it
 	/// already has bounds; `on_poi(i)` on a dot's click, beside its info window.
@@ -169,6 +160,14 @@ impl Scene {
 		};
 		Some(Drawn { heat, levels })
 	}
+}
+
+/// What a draw put on screen, for the legend.
+pub struct Drawn {
+	/// The heat's five ticks over the cells in view, and how many cells that is.
+	pub heat: Option<([f64; 5], usize)>,
+	/// The pressure values the iso-lines run at. `None` when nothing in view is under pressure.
+	pub levels: Option<[f64; 3]>,
 }
 
 /// Every competitor of every study, as `paint.js`'s markers want them, in `models` order — which is

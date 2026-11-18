@@ -17,6 +17,9 @@ use super::{from_db, to_db};
 /// The service whose charges the ledger follows, as its rows name it.
 pub const REVIEW_ARCHIVE: &str = "review_archive";
 
+/// Above what an action costing tokens asks its person first, when they never said.
+pub const CONFIRM_ABOVE: i64 = 100;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, schemars::JsonSchema, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 #[schemars(rename = "LedgerKind")]
@@ -404,17 +407,6 @@ pub struct Flow {
 	pub note: Option<String>,
 }
 
-fn charged(service: Option<String>, key: Option<String>, label: Option<String>) -> Option<Charged> {
-	match (service, key) {
-		(Some(service), Some(key)) => Some(Charged { service, key, label }),
-		(None, None) => None,
-		other => unreachable!("the table's CHECK: service and key together; got {other:?}"),
-	}
-}
-
-/// Above what an action costing tokens asks its person first, when they never said.
-pub const CONFIRM_ABOVE: i64 = 100;
-
 pub async fn confirm_above(conn: &mut SqliteConnection, user: Uuid) -> eyre::Result<i64> {
 	let set: Option<i64> = sqlx::query_scalar("SELECT confirm_above FROM user_settings WHERE user_id = $1")
 		.bind(user)
@@ -432,4 +424,12 @@ pub async fn set_confirm_above(conn: &mut SqliteConnection, user: Uuid, tokens: 
 		.await
 		.wrap_err("setting a person's settings")?;
 	Ok(())
+}
+
+fn charged(service: Option<String>, key: Option<String>, label: Option<String>) -> Option<Charged> {
+	match (service, key) {
+		(Some(service), Some(key)) => Some(Charged { service, key, label }),
+		(None, None) => None,
+		other => unreachable!("the table's CHECK: service and key together; got {other:?}"),
+	}
 }

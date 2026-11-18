@@ -10,6 +10,7 @@ jobs:
     outputs:
       code-duplication_seconds: ${{ steps.run.outputs['code-duplication_seconds'] }}
       code-duplication_status: ${{ steps.run.outputs['code-duplication_status'] }}
+      frontend-lint_prepare_seconds: ${{ steps.run.outputs['frontend-lint_prepare_seconds'] }}
       frontend-lint_seconds: ${{ steps.run.outputs['frontend-lint_seconds'] }}
       frontend-lint_status: ${{ steps.run.outputs['frontend-lint_status'] }}
       rust-machete_seconds: ${{ steps.run.outputs['rust-machete_seconds'] }}
@@ -84,6 +85,7 @@ jobs:
       - env:
           NEEDS: ${{ toJSON(needs) }}
           PARTICLES: '[{"generic":false,"name":"rust-doc"},{"generic":false,"name":"rust-clippy"},{"generic":true,"name":"rust-machete"},{"generic":true,"name":"rust-sorted"},{"generic":true,"name":"rust-sorted-derives"},{"generic":true,"name":"tokei"},{"generic":true,"name":"frontend-lint"},{"generic":true,"name":"code-duplication"}]'
+          TIMED: '[]'
         name: Tally the particles
         run: |
           read -r failed total seconds incomplete < <(jq -rn --argjson needs "$NEEDS" --argjson spec "$PARTICLES" '
@@ -97,6 +99,11 @@ jobs:
             echo "::notice::a particle's job was skipped or cancelled: the badge keeps its last complete run"
             exit 0
           fi
+          # only a succeeded job's numbers: a failed run's are partial
+          jq -rn --argjson needs "$NEEDS" --argjson timed "$TIMED" '
+            $timed[] | select($needs[.particle].result == "success")
+            | ($needs[.particle].outputs[.output] | tonumber) as $s
+            | "BADGE_\(.key | ascii_upcase)=\($s / 60 | floor)m \($s % 60)s"' >> "$GITHUB_ENV"
           time="$((seconds / 60))m $((seconds % 60))s"
           if [ "$failed" = 0 ]; then msg="✓ $time" color=brightgreen; else msg="✗ $failed/$total · $time" color=red; fi
           { echo "BADGE_MESSAGE=$msg"; echo "BADGE_COLOR=$color"; } >> "$GITHUB_ENV"

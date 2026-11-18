@@ -87,17 +87,17 @@ pub async fn settled(panel: &Panel) {
 /// The topics told on `rx` since it was last drained, once `panel`'s pool has [`settled`].
 pub async fn told(panel: &Panel, rx: &mut Receiver<Signal>) -> BTreeSet<String> {
 	settled(panel).await;
-	let mut topics = BTreeSet::new();
-	loop {
-		match rx.try_recv() {
-			Ok(Signal::Changed(c)) => {
-				topics.insert(c.topic);
-			}
-			Ok(_) => {}
-			Err(TryRecvError::Empty) => return topics,
-			Err(e) => panic!("the bus behind a test: {e}"),
-		}
-	}
+	std::iter::from_fn(|| match rx.try_recv() {
+		Ok(signal) => Some(Some(signal)),
+		Err(TryRecvError::Empty) => None,
+		Err(e) => panic!("the bus behind a test: {e}"),
+	})
+	.flatten()
+	.filter_map(|signal| match signal {
+		Signal::Changed(c) => Some(c.topic),
+		_ => None,
+	})
+	.collect()
 }
 
 /// `conductor.<table>` for each of `tables`.
