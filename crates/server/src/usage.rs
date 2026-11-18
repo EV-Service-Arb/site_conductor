@@ -75,7 +75,7 @@ pub async fn run(panel: Panel, services: Option<Services>, browsers: Option<Conn
 		services.map(|s| Feed {
 			name: "review_archive",
 			items: of(Scope::ReviewArchive),
-			from: From::ReviewArchive(s),
+			from: From::ReviewArchive(Box::new(s)),
 		}),
 		browsers.map(|b| Feed {
 			name: "browsers",
@@ -159,7 +159,7 @@ pub(crate) async fn spend(State(panel): State<Panel>, Params(q): Params<Window>)
 	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| Refusal::new(Code::BadRequest, format!("{ms}: {e}")));
 	let (from, to) = (at(q.from)?, at(q.to)?);
 	if from >= to || to.duration_since(from) > SPAN {
-		return Err(Refusal::new(Code::BadRequest, format!("from is before to, at most {} days", SPAN.as_hours() / 24)));
+		return Err(Refusal::new(Code::BadRequest, format!("from is before to, at most {} days", SPAN.as_hours().div_euclid(24))));
 	}
 	let days = panel.used(from, to).await?;
 	Ok(Json(UsageDto {
@@ -227,6 +227,6 @@ impl Feed {
 }
 
 enum From {
-	ReviewArchive(Services),
+	ReviewArchive(Box<Services>),
 	Browsers(Connected),
 }

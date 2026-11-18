@@ -553,7 +553,10 @@ pub(crate) async fn token_flows(State(panel): State<Panel>, Params(q): Params<Fl
 	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| Refusal::new(Code::BadRequest, format!("{ms}: {e}")));
 	let (from, to) = (at(q.from)?, at(q.to)?);
 	if from >= to || to.duration_since(from) > FLOWS_SPAN {
-		return Err(Refusal::new(Code::BadRequest, format!("from is before to, at most {} days", FLOWS_SPAN.as_hours() / 24)));
+		return Err(Refusal::new(
+			Code::BadRequest,
+			format!("from is before to, at most {} days", FLOWS_SPAN.as_hours().div_euclid(24)),
+		));
 	}
 	let flows = panel.flows(from, to).await??;
 	Ok(Json(FlowsDto {

@@ -6,6 +6,10 @@ use serde_json::{Value, json};
 
 use crate::grafana::CONDUCTOR;
 
+const OUR_BILL: &str = r#"days[bill = "ours" and $type(usd) = "number"]"#;
+
+const RANGE: &[(&str, &str)] = &[("from", "${__from}"), ("to", "${__to}")];
+
 /// Each dashboard by its uid.
 pub(crate) fn own(doc: &OpenApi) -> [(&'static str, Value); 2] {
 	[("sa-tokens", tokens(doc)), ("sa-meters", meters(doc))]
@@ -18,12 +22,9 @@ fn tokens(doc: &OpenApi) -> Value {
 			"stat",
 			"In the range",
 			[0, 0, 24, 5],
-			Query {
-				operation: op_id(crate::tokens::token_flows),
-				path: &[],
-				params: &[("from", "${__from}"), ("to", "${__to}")],
-				headers: &[],
-				select: Some(Select {
+			in_range(
+				op_id(crate::tokens::token_flows),
+				Select {
 					root_selector: r##"(
   $rows := flows[kind in ["spend", "purchase", "granted", "renewal", "refund"]];
   [$distinct($rows.kind).(
@@ -32,176 +33,60 @@ fn tokens(doc: &OpenApi) -> Value {
   )]
 )"##,
 					columns: &[("kind", Column::String), ("tokens", Column::Number)],
-				}),
-			},
-			json!({
-				"options": {
-					"reduceOptions": {
-						"calcs": [
-							"lastNotNull"
-						],
-						"fields": "",
-						"values": true
-					},
-					"orientation": "vertical",
-					"textMode": "value_and_name",
-					"colorMode": "none",
-					"graphMode": "none",
-					"justifyMode": "center",
-					"text": {
-						"titleSize": 13,
-						"valueSize": 28
-					}
 				},
-				"fieldConfig": {
-					"defaults": {
-						"unit": "none",
-						"decimals": 0,
-						"displayName": "${__data.fields.kind}"
-					},
-					"overrides": []
-				}
-			}),
+			),
+			stat(
+				"lastNotNull",
+				true,
+				"value_and_name",
+				json!({
+					"unit": "none",
+					"decimals": 0,
+					"displayName": "${__data.fields.kind}"
+				}),
+			),
 		)
 		.panel(
 			2,
 			"timeseries",
 			"Spent per day, by service",
 			[0, 5, 12, 9],
-			Query {
-				operation: op_id(crate::tokens::token_flows),
-				path: &[],
-				params: &[("from", "${__from}"), ("to", "${__to}")],
-				headers: &[],
-				select: Some(Select {
-					root_selector: r##"(
-  $rows := flows[kind in ["spend"]];
-  $keys := $distinct($rows.($substring(at, 0, 10) & "|" & service));
-  [$keys.(
-    $k := $;
-    {"day": $substringBefore($k, "|") & "T00:00:00Z", "series": $substringAfter($k, "|"), "tokens": -$sum($rows[$substring(at, 0, 10) & "|" & service = $k].tokens)}
-  )]
-)"##,
+			in_range(
+				op_id(crate::tokens::token_flows),
+				Select {
+					root_selector: &per_day(r#"flows[kind in ["spend"]]"#, "$substring(at, 0, 10)", "service", r#""tokens": -$sum($r.tokens)"#),
 					columns: &[("day", Column::Timestamp), ("series", Column::String), ("tokens", Column::Number)],
-				}),
-			},
-			json!({
-				"transformations": [
-					{
-						"id": "prepareTimeSeries",
-						"options": {
-							"format": "multi"
-						}
-					}
-				],
-				"options": {
-					"legend": {
-						"displayMode": "list",
-						"placement": "bottom",
-						"showLegend": true
-					},
-					"tooltip": {
-						"mode": "multi",
-						"sort": "desc"
-					}
 				},
-				"fieldConfig": {
-					"defaults": {
-						"custom": {
-							"drawStyle": "bars",
-							"fillOpacity": 80,
-							"lineWidth": 1,
-							"showPoints": "never",
-							"stacking": {
-								"mode": "normal",
-								"group": "A"
-							},
-							"axisLabel": "tokens",
-							"barAlignment": 0
-						},
-						"unit": "none",
-						"decimals": 0,
-						"displayName": "${__field.labels.series}"
-					},
-					"overrides": []
-				}
-			}),
+			),
+			bars_per_day("tokens", "none", 0),
 		)
 		.panel(
 			3,
 			"timeseries",
 			"Given per day: bought, granted, renewed, refunded",
 			[12, 5, 12, 9],
-			Query {
-				operation: op_id(crate::tokens::token_flows),
-				path: &[],
-				params: &[("from", "${__from}"), ("to", "${__to}")],
-				headers: &[],
-				select: Some(Select {
-					root_selector: r##"(
-  $rows := flows[kind in ["purchase", "granted", "renewal", "refund"]];
-  $keys := $distinct($rows.($substring(at, 0, 10) & "|" & kind));
-  [$keys.(
-    $k := $;
-    {"day": $substringBefore($k, "|") & "T00:00:00Z", "series": $substringAfter($k, "|"), "tokens": $sum($rows[$substring(at, 0, 10) & "|" & kind = $k].tokens)}
-  )]
-)"##,
+			in_range(
+				op_id(crate::tokens::token_flows),
+				Select {
+					root_selector: &per_day(
+						r#"flows[kind in ["purchase", "granted", "renewal", "refund"]]"#,
+						"$substring(at, 0, 10)",
+						"kind",
+						r#""tokens": $sum($r.tokens)"#,
+					),
 					columns: &[("day", Column::Timestamp), ("series", Column::String), ("tokens", Column::Number)],
-				}),
-			},
-			json!({
-				"transformations": [
-					{
-						"id": "prepareTimeSeries",
-						"options": {
-							"format": "multi"
-						}
-					}
-				],
-				"options": {
-					"legend": {
-						"displayMode": "list",
-						"placement": "bottom",
-						"showLegend": true
-					},
-					"tooltip": {
-						"mode": "multi",
-						"sort": "desc"
-					}
 				},
-				"fieldConfig": {
-					"defaults": {
-						"custom": {
-							"drawStyle": "bars",
-							"fillOpacity": 80,
-							"lineWidth": 1,
-							"showPoints": "never",
-							"stacking": {
-								"mode": "normal",
-								"group": "A"
-							},
-							"axisLabel": "tokens",
-							"barAlignment": 0
-						},
-						"unit": "none",
-						"decimals": 0,
-						"displayName": "${__field.labels.series}"
-					},
-					"overrides": []
-				}
-			}),
+			),
+			bars_per_day("tokens", "none", 0),
 		)
 		.panel(
 			4,
 			"bargauge",
 			"Spent by person",
 			[0, 14, 12, 10],
-			Query {
-				operation: op_id(crate::tokens::token_flows),
-				path: &[],
-				params: &[("from", "${__from}"), ("to", "${__to}")],
-				headers: &[],
-				select: Some(Select {
+			in_range(
+				op_id(crate::tokens::token_flows),
+				Select {
 					root_selector: r##"(
   $rows := flows[kind = "spend"];
   [$distinct($rows.email).(
@@ -211,10 +96,10 @@ fn tokens(doc: &OpenApi) -> Value {
   )]^(>spent)
 )"##,
 					columns: &[("who", Column::String), ("spent", Column::Number)],
-				}),
-			},
+				},
+			),
 			json!({
-				"options": {
+					"options": {
 					"displayMode": "basic",
 					"orientation": "horizontal",
 					"reduceOptions": {
@@ -234,8 +119,8 @@ fn tokens(doc: &OpenApi) -> Value {
 						"titleSize": 13,
 						"valueSize": 13
 					}
-				},
-				"fieldConfig": {
+					},
+					"fieldConfig": {
 					"defaults": {
 						"unit": "none",
 						"decimals": 0,
@@ -246,7 +131,7 @@ fn tokens(doc: &OpenApi) -> Value {
 						}
 					},
 					"overrides": []
-				}
+					}
 			}),
 		)
 		.panel(
@@ -254,12 +139,9 @@ fn tokens(doc: &OpenApi) -> Value {
 			"table",
 			"Spent on",
 			[12, 14, 12, 10],
-			Query {
-				operation: op_id(crate::tokens::token_flows),
-				path: &[],
-				params: &[("from", "${__from}"), ("to", "${__to}")],
-				headers: &[],
-				select: Some(Select {
+			in_range(
+				op_id(crate::tokens::token_flows),
+				Select {
 					root_selector: r##"(
   $rows := flows[kind = "spend"];
   [$distinct($rows.(service & "|" & label)).(
@@ -269,74 +151,31 @@ fn tokens(doc: &OpenApi) -> Value {
   )]^(>tokens)
 )"##,
 					columns: &[("service", Column::String), ("what", Column::String), ("times", Column::Number), ("tokens", Column::Number)],
-				}),
-			},
+				},
+			),
 			json!({
-				"options": {
+					"options": {
 					"showHeader": true,
 					"cellHeight": "sm",
 					"footer": {
 						"show": false
 					}
-				},
-				"fieldConfig": {
+					},
+					"fieldConfig": {
 					"defaults": {
 						"custom": {
 							"align": "auto"
 						}
 					},
 					"overrides": [
-						{
-							"matcher": {
-								"id": "byName",
-								"options": "service"
-							},
-							"properties": [
-								{
-									"id": "custom.width",
-									"value": 130
-								}
-							]
-						},
-						{
-							"matcher": {
-								"id": "byName",
-								"options": "times"
-							},
-							"properties": [
-								{
-									"id": "custom.width",
-									"value": 70
-								}
-							]
-						},
-						{
-							"matcher": {
-								"id": "byName",
-								"options": "tokens"
-							},
-							"properties": [
-								{
-									"id": "custom.width",
-									"value": 80
-								}
-							]
-						}
+						width("service", 130),
+						width("times", 70),
+						width("tokens", 80)
 					]
-				},
-				"transformations": [
-					{
-						"id": "organize",
-						"options": {
-							"indexByName": {
-								"what": 0,
-								"service": 1,
-								"times": 2,
-								"tokens": 3
-							}
-						}
-					}
-				]
+					},
+					"transformations": [
+					order(&["what", "service", "times", "tokens"])
+					]
 			}),
 		)
 		.panel(
@@ -344,12 +183,9 @@ fn tokens(doc: &OpenApi) -> Value {
 			"table",
 			"Purchases, grants and balances set",
 			[0, 24, 24, 9],
-			Query {
-				operation: op_id(crate::tokens::token_flows),
-				path: &[],
-				params: &[("from", "${__from}"), ("to", "${__to}")],
-				headers: &[],
-				select: Some(Select {
+			in_range(
+				op_id(crate::tokens::token_flows),
+				Select {
 					root_selector: r##"[flows[kind in ["purchase", "granted", "grant_claimed", "set"]].{
   "at": at, "who": name ? name : email, "kind": kind, "tokens": tokens, "by": by, "note": note
 }]^(>at)"##,
@@ -361,76 +197,31 @@ fn tokens(doc: &OpenApi) -> Value {
 						("by", Column::String),
 						("note", Column::String),
 					],
-				}),
-			},
+				},
+			),
 			json!({
-				"options": {
+					"options": {
 					"showHeader": true,
 					"cellHeight": "sm",
 					"footer": {
 						"show": false
 					}
-				},
-				"fieldConfig": {
+					},
+					"fieldConfig": {
 					"defaults": {
 						"custom": {
 							"align": "auto"
 						}
 					},
 					"overrides": [
-						{
-							"matcher": {
-								"id": "byName",
-								"options": "at"
-							},
-							"properties": [
-								{
-									"id": "custom.width",
-									"value": 170
-								}
-							]
-						},
-						{
-							"matcher": {
-								"id": "byName",
-								"options": "kind"
-							},
-							"properties": [
-								{
-									"id": "custom.width",
-									"value": 120
-								}
-							]
-						},
-						{
-							"matcher": {
-								"id": "byName",
-								"options": "tokens"
-							},
-							"properties": [
-								{
-									"id": "custom.width",
-									"value": 80
-								}
-							]
-						}
+						width("at", 170),
+						width("kind", 120),
+						width("tokens", 80)
 					]
-				},
-				"transformations": [
-					{
-						"id": "organize",
-						"options": {
-							"indexByName": {
-								"at": 0,
-								"who": 1,
-								"kind": 2,
-								"tokens": 3,
-								"by": 4,
-								"note": 5
-							}
-						}
-					}
-				]
+					},
+					"transformations": [
+					order(&["at", "who", "kind", "tokens", "by", "note"])
+					]
 			}),
 		)
 		.row(7, "What it costs us", [0, 33, 24, 1])
@@ -439,188 +230,60 @@ fn tokens(doc: &OpenApi) -> Value {
 			"stat",
 			"Our bill in the range",
 			[0, 34, 24, 4],
-			Query {
-				operation: op_id(crate::usage::spend),
-				path: &[],
-				params: &[("from", "${__from}"), ("to", "${__to}")],
-				headers: &[],
-				select: Some(Select {
-					root_selector: r##"(
-  $rows := days[bill = "ours" and $type(usd) = "number"];
-  [$distinct($rows.(day & "|" & tool_title)).(
-    $k := $;
-    {"day": $substringBefore($k, "|") & "T00:00:00Z", "series": $substringAfter($k, "|"), "value": $sum($rows[day & "|" & tool_title = $k].usd)}
-  )]
-)"##,
+			in_range(
+				op_id(crate::usage::spend),
+				Select {
+					root_selector: &per_day(OUR_BILL, "day", "tool_title", r#""value": $sum($r.usd)"#),
 					columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
-				}),
-			},
-			json!({
-				"options": {
-					"reduceOptions": {
-						"calcs": [
-							"sum"
-						],
-						"fields": "",
-						"values": false
-					},
-					"orientation": "vertical",
-					"textMode": "value",
-					"colorMode": "none",
-					"graphMode": "none",
-					"justifyMode": "center",
-					"text": {
-						"titleSize": 13,
-						"valueSize": 28
-					}
 				},
-				"fieldConfig": {
-					"defaults": {
-						"unit": "currencyUSD",
-						"decimals": 2,
-						"noValue": "no unit costs set"
-					},
-					"overrides": []
-				}
-			}),
+			),
+			stat(
+				"sum",
+				false,
+				"value",
+				json!({
+					"unit": "currencyUSD",
+					"decimals": 2,
+					"noValue": "no unit costs set"
+				}),
+			),
 		)
 		.panel(
 			9,
 			"timeseries",
 			"$ per day, by tool (our keys and accounts)",
 			[0, 38, 12, 9],
-			Query {
-				operation: op_id(crate::usage::spend),
-				path: &[],
-				params: &[("from", "${__from}"), ("to", "${__to}")],
-				headers: &[],
-				select: Some(Select {
-					root_selector: r##"(
-  $rows := days[bill = "ours" and $type(usd) = "number"];
-  [$distinct($rows.(day & "|" & tool_title)).(
-    $k := $;
-    {"day": $substringBefore($k, "|") & "T00:00:00Z", "series": $substringAfter($k, "|"), "value": $sum($rows[day & "|" & tool_title = $k].usd)}
-  )]
-)"##,
+			in_range(
+				op_id(crate::usage::spend),
+				Select {
+					root_selector: &per_day(OUR_BILL, "day", "tool_title", r#""value": $sum($r.usd)"#),
 					columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
-				}),
-			},
-			json!({
-				"transformations": [
-					{
-						"id": "prepareTimeSeries",
-						"options": {
-							"format": "multi"
-						}
-					}
-				],
-				"options": {
-					"legend": {
-						"displayMode": "list",
-						"placement": "bottom",
-						"showLegend": true
-					},
-					"tooltip": {
-						"mode": "multi",
-						"sort": "desc"
-					}
 				},
-				"fieldConfig": {
-					"defaults": {
-						"custom": {
-							"drawStyle": "bars",
-							"fillOpacity": 80,
-							"lineWidth": 1,
-							"showPoints": "never",
-							"stacking": {
-								"mode": "normal",
-								"group": "A"
-							},
-							"barAlignment": 0,
-							"axisLabel": "$"
-						},
-						"unit": "currencyUSD",
-						"decimals": 2,
-						"displayName": "${__field.labels.series}"
-					},
-					"overrides": []
-				}
-			}),
+			),
+			bars_per_day("$", "currencyUSD", 2),
 		)
 		.panel(
 			10,
 			"timeseries",
 			"Actions per day, by tool (in its unit)",
 			[12, 38, 12, 9],
-			Query {
-				operation: op_id(crate::usage::spend),
-				path: &[],
-				params: &[("from", "${__from}"), ("to", "${__to}")],
-				headers: &[],
-				select: Some(Select {
-					root_selector: r##"(
-  $rows := days[true];
-  [$distinct($rows.(day & "|" & (tool_title & " · " & unit & "s"))).(
-    $k := $;
-    {"day": $substringBefore($k, "|") & "T00:00:00Z", "series": $substringAfter($k, "|"), "value": $sum($rows[day & "|" & (tool_title & " · " & unit & "s") = $k].units)}
-  )]
-)"##,
+			in_range(
+				op_id(crate::usage::spend),
+				Select {
+					root_selector: &per_day("days[true]", "day", r#"(tool_title & " · " & unit & "s")"#, r#""value": $sum($r.units)"#),
 					columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
-				}),
-			},
-			json!({
-				"transformations": [
-					{
-						"id": "prepareTimeSeries",
-						"options": {
-							"format": "multi"
-						}
-					}
-				],
-				"options": {
-					"legend": {
-						"displayMode": "list",
-						"placement": "bottom",
-						"showLegend": true
-					},
-					"tooltip": {
-						"mode": "multi",
-						"sort": "desc"
-					}
 				},
-				"fieldConfig": {
-					"defaults": {
-						"custom": {
-							"drawStyle": "bars",
-							"fillOpacity": 80,
-							"lineWidth": 1,
-							"showPoints": "never",
-							"stacking": {
-								"mode": "normal",
-								"group": "A"
-							},
-							"barAlignment": 0,
-							"axisLabel": "units"
-						},
-						"unit": "none",
-						"decimals": 0,
-						"displayName": "${__field.labels.series}"
-					},
-					"overrides": []
-				}
-			}),
+			),
+			bars_per_day("units", "none", 0),
 		)
 		.panel(
 			11,
 			"table",
 			"Every costly action in the range",
 			[0, 47, 24, 10],
-			Query {
-				operation: op_id(crate::usage::spend),
-				path: &[],
-				params: &[("from", "${__from}"), ("to", "${__to}")],
-				headers: &[],
-				select: Some(Select {
+			in_range(
+				op_id(crate::usage::spend),
+				Select {
 					root_selector: r##"(
   $d := days;
   $count($d) = 0 ? [] : [$append([], $distinct($d.item)).(
@@ -646,26 +309,13 @@ fn tokens(doc: &OpenApi) -> Value {
 						("$", Column::Number),
 						("by", Column::String),
 					],
-				}),
-			},
+				},
+			),
 			json!({
-				"transformations": [
-					{
-						"id": "organize",
-						"options": {
-							"indexByName": {
-								"what": 0,
-								"unit": 1,
-								"ours": 2,
-								"their keys": 3,
-								"times": 4,
-								"$": 5,
-								"by": 6
-							}
-						}
-					}
-				],
-				"options": {
+					"transformations": [
+					order(&["what", "unit", "ours", "their keys", "times", "$", "by"])
+					],
+					"options": {
 					"showHeader": true,
 					"cellHeight": "sm",
 					"footer": {
@@ -677,8 +327,8 @@ fn tokens(doc: &OpenApi) -> Value {
 							"$"
 						]
 					}
-				},
-				"fieldConfig": {
+					},
+					"fieldConfig": {
 					"defaults": {
 						"custom": {
 							"align": "auto"
@@ -705,77 +355,15 @@ fn tokens(doc: &OpenApi) -> Value {
 								}
 							]
 						},
-						{
-							"matcher": {
-								"id": "byName",
-								"options": "unit"
-							},
-							"properties": [
-								{
-									"id": "custom.width",
-									"value": 90
-								}
-							]
-						},
-						{
-							"matcher": {
-								"id": "byName",
-								"options": "ours"
-							},
-							"properties": [
-								{
-									"id": "custom.width",
-									"value": 90
-								}
-							]
-						},
-						{
-							"matcher": {
-								"id": "byName",
-								"options": "their keys"
-							},
-							"properties": [
-								{
-									"id": "custom.width",
-									"value": 100
-								}
-							]
-						},
-						{
-							"matcher": {
-								"id": "byName",
-								"options": "times"
-							},
-							"properties": [
-								{
-									"id": "custom.width",
-									"value": 80
-								}
-							]
-						}
+						width("unit", 90),
+						width("ours", 90),
+						width("their keys", 100),
+						width("times", 80)
 					]
-				}
+					}
 			}),
 		)
-		.build(json!({
-			"uid": "sa-tokens",
-			"title": "Tokens and costs · everyone",
-			"tags": [
-				"conductor"
-			],
-			"timezone": "utc",
-			"editable": false,
-			"graphTooltip": 1,
-			"time": {
-				"from": "now-30d",
-				"to": "now"
-			},
-			"refresh": "",
-			"schemaVersion": 39,
-			"templating": {
-				"list": []
-			}
-		}))
+		.build(dashboard("sa-tokens", "Tokens and costs · everyone", "now-30d"))
 }
 
 fn meters(doc: &OpenApi) -> Value {
@@ -786,11 +374,11 @@ fn meters(doc: &OpenApi) -> Value {
 			"This period, every meter on each account",
 			[0, 0, 24, 10],
 			Query {
-				operation: op_id(crate::meters::meters),
-				path: &[],
-				params: &[],
-				headers: &[],
-				select: Some(Select {
+					operation: op_id(crate::meters::meters),
+					path: &[],
+					params: &[],
+					headers: &[],
+					select: Some(Select {
 					root_selector: r##"$map(meters, function($m) { $map($m.accounts, function($a) { {"meter": $m.name, "account": $a.account, "used": $a.used, "free": $m.free, "left": $a.left, "stops": $m.stop = "at_free" ? "at free" : "never", "google's count": $a.baseline, "as of": $a.since, "ours since": $a.delta, "synced": $a.reading = null ? "never" : $a.reading.synced_at, "vendor's cost": $a.reading = null ? null : $a.reading.cost, "net": $a.reading = null ? null : $a.reading.net, "currency": $a.reading = null ? null : $a.reading.currency} }) })"##,
 					columns: &[("meter", Column::String), ("account", Column::String), ("used", Column::Number), ("free", Column::Number), ("left", Column::Number), ("stops", Column::String), ("google's count", Column::Number), ("as of", Column::Timestamp), ("ours since", Column::Number), ("synced", Column::String), ("vendor's cost", Column::Number), ("net", Column::Number), ("currency", Column::String)],
 				}),
@@ -843,26 +431,7 @@ fn meters(doc: &OpenApi) -> Value {
 					]
 				},
 				"transformations": [
-					{
-						"id": "organize",
-						"options": {
-							"indexByName": {
-								"meter": 0,
-								"account": 1,
-								"used": 2,
-								"free": 3,
-								"left": 4,
-								"stops": 5,
-								"google's count": 6,
-								"as of": 7,
-								"ours since": 8,
-								"synced": 9,
-								"vendor's cost": 10,
-								"net": 11,
-								"currency": 12
-							}
-						}
-					}
+					order(&["meter", "account", "used", "free", "left", "stops", "google's count", "as of", "ours since", "synced", "vendor's cost", "net", "currency"])
 				]
 			}),
 		)
@@ -929,16 +498,13 @@ fn meters(doc: &OpenApi) -> Value {
 			"timeseries",
 			"Google's count on each account, at each reading",
 			[12, 10, 12, 9],
-			Query {
-				operation: op_id(crate::meters::meter_readings),
-				path: &[],
-				params: &[("from", "${__from}"), ("to", "${__to}")],
-				headers: &[],
-				select: Some(Select {
+			in_range(
+				op_id(crate::meters::meter_readings),
+				Select {
 					root_selector: r##"$map(readings, function($r) { {"at": $r.synced_at, "series": $r.account & " · " & $r.meter, "units": $r.units} })"##,
 					columns: &[("at", Column::Timestamp), ("series", Column::String), ("units", Column::Number)],
-				}),
-			},
+				},
+			),
 			json!({
 				"transformations": [
 					{
@@ -976,23 +542,97 @@ fn meters(doc: &OpenApi) -> Value {
 				}
 			}),
 		)
-		.build(json!({
-			"uid": "sa-meters",
-			"title": "Vendors' meters · everyone",
-			"tags": [
-				"conductor"
-			],
-			"timezone": "utc",
-			"editable": false,
-			"graphTooltip": 1,
-			"time": {
-				"from": "now-90d",
-				"to": "now"
+		.build(dashboard("sa-meters", "Vendors' meters · everyone", "now-90d"))
+}
+
+/// `rows` grouped by `day` and `series`, each group `$r` given the `day`, the `series` and `value` (a JSONata `"key": …` pair).
+fn per_day(rows: &str, day: &str, series: &str, value: &str) -> String {
+	format!(
+		r#"(
+  $rows := {rows};
+  [$distinct($rows.({day} & "|" & {series})).(
+    $k := $;
+    $r := $rows[{day} & "|" & {series} = $k];
+    {{"day": $substringBefore($k, "|") & "T00:00:00Z", "series": $substringAfter($k, "|"), {value}}}
+  )]
+)"#
+	)
+}
+
+fn in_range<'a>(operation: &'a str, select: Select<'a>) -> Query<'a> {
+	Query {
+		operation,
+		path: &[],
+		params: RANGE,
+		headers: &[],
+		select: Some(select),
+	}
+}
+
+/// Each row's figure, the range reduced by `calc`.
+fn stat(calc: &str, values: bool, text_mode: &str, defaults: Value) -> Value {
+	json!({
+		"options": {
+			"reduceOptions": { "calcs": [calc], "fields": "", "values": values },
+			"orientation": "vertical",
+			"textMode": text_mode,
+			"colorMode": "none",
+			"graphMode": "none",
+			"justifyMode": "center",
+			"text": { "titleSize": 13, "valueSize": 28 }
+		},
+		"fieldConfig": { "defaults": defaults, "overrides": [] }
+	})
+}
+
+fn dashboard(uid: &str, title: &str, from: &str) -> Value {
+	json!({
+		"uid": uid,
+		"title": title,
+		"tags": ["conductor"],
+		"timezone": "utc",
+		"editable": false,
+		"graphTooltip": 1,
+		"time": { "from": from, "to": "now" },
+		"refresh": "",
+		"schemaVersion": 39,
+		"templating": { "list": [] }
+	})
+}
+
+/// A day's bars, one per `series`, stacked.
+fn bars_per_day(axis: &str, unit: &str, decimals: u8) -> Value {
+	json!({
+		"transformations": [{ "id": "prepareTimeSeries", "options": { "format": "multi" } }],
+		"options": {
+			"legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+			"tooltip": { "mode": "multi", "sort": "desc" }
+		},
+		"fieldConfig": {
+			"defaults": {
+				"custom": {
+					"drawStyle": "bars",
+					"fillOpacity": 80,
+					"lineWidth": 1,
+					"showPoints": "never",
+					"stacking": { "mode": "normal", "group": "A" },
+					"axisLabel": axis,
+					"barAlignment": 0
+				},
+				"unit": unit,
+				"decimals": decimals,
+				"displayName": "${__field.labels.series}"
 			},
-			"refresh": "",
-			"schemaVersion": 39,
-			"templating": {
-				"list": []
-			}
-		}))
+			"overrides": []
+		}
+	})
+}
+
+fn width(column: &str, px: u32) -> Value {
+	json!({ "matcher": { "id": "byName", "options": column }, "properties": [{ "id": "custom.width", "value": px }] })
+}
+
+/// A table's columns in this order.
+fn order(columns: &[&str]) -> Value {
+	json!({ "id": "organize", "options": { "indexByName": columns.iter().zip(0..).map(|(c, i)| (c.to_string(), json!(i))).collect::<serde_json::Map<_, _>>() } })
 }

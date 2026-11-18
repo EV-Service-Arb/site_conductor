@@ -37,15 +37,18 @@ use crate::{
 const PULL_EVERY: Duration = Duration::from_secs(60);
 const PULL_TIMEOUT: Duration = Duration::from_secs(10);
 const DOCUMENT_ANSWER: usize = 16 * 1024 * 1024;
+
 /// What a path segment may hold as it is: RFC 3986's unreserved, but `.` (no value is a `..` segment).
 const SEGMENT: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'_').remove(b'~');
+/// Each service's document and views, by name.
+type Pulled = BTreeMap<String, (OpenApi, Option<Table>)>;
 
 #[derive(Clone)]
 pub struct Catalog {
 	/// The conductor's own, under `/api/v1`.
 	own: Arc<OpenApi>,
 	/// Each service's, as last pulled, its prefix applied, and its views (`x-views`).
-	services: Arc<RwLock<BTreeMap<String, (OpenApi, Option<Table>)>>>,
+	services: Arc<RwLock<Pulled>>,
 	/// `own` and `services` merged, absolute paths: rebuilt on a pull that changed something.
 	merged: Arc<RwLock<Arc<OpenApi>>>,
 	/// The conductor's views, each service's nested under its page: rebuilt as `merged` is.

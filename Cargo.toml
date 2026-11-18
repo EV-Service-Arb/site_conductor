@@ -14,11 +14,11 @@ readme = "README.md"
 sa_alerts = { path = "crates/alerts", version = "0.1.0" }
 sa_auth = { path = "crates/auth", version = "0.1.0" }
 sa_browsers = { path = "crates/browsers", version = "0.1.0" }
-sa_sandbox = { path = "crates/sandbox", version = "0.1.0" }
 sa_contracts = { path = "crates/contracts", version = "0.1.0" }
 sa_core = { path = "crates/core", version = "0.1.0" }
 sa_panel = { path = "crates/panel", version = "0.1.0" }
 sa_places = { path = "crates/places", version = "0.1.0" }
+sa_sandbox = { path = "crates/sandbox", version = "0.1.0" }
 sa_server = { path = "crates/server", version = "0.1.0" }
 
 axum = "0.8"
@@ -33,6 +33,7 @@ ev_lib = { version = "0.34.0", default-features = false }
 eyre = "0.6"
 futures = "0.3"
 getrandom = "0.3"
+gmaps_optimal_placement_core = { git = "https://github.com/EV-Service-Arb/gmaps_optimal_placement", branch = "main" }
 hex = "0.4"
 hmac = "0.13"
 http-body-util = "0.1"
@@ -40,6 +41,7 @@ hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
 icu_locale = "2"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 jiff = "0.2"
+js-sys = "0.3"
 percent-encoding = "2"
 prost = "0.14"
 protox = "0.9"
@@ -68,10 +70,12 @@ tower = "0.5"
 tower-http = "0.6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tsify = "0.5"
 tzf-rs = { version = "2", default-features = false, features = ["bundled"] }
 url = "2"
 uuid = "1"
 v_utils = { version = "2.24.1", default-features = false, features = ["macros"] }
+wasm-bindgen = "0.2"
 zeroize = "1"
 
 [workspace.lints.clippy]

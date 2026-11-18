@@ -2439,6 +2439,10 @@
     "en": "The category links no study",
     "t": "С категорией не связано ни одного исследования"
   },
+  "placement.refused.unstudied": {
+    "en": "Placement does not study this category here",
+    "t": "Placement не изучает эту категорию здесь"
+  },
   "placement.studies.category": {
     "en": "Categories with a study",
     "t": "Категории с исследованием"

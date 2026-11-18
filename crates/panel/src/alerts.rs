@@ -319,7 +319,7 @@ impl Panel {
 				continue;
 			}
 			// One message per full day of the same silence: at 24 h, at 48 h, …
-			let days = now.duration_since(since).as_hours() / 24;
+			let days = now.duration_since(since).as_hours().div_euclid(24);
 			let event = derived_event_id(&["source_silent", &key_id, &since.to_string(), &days.to_string()]);
 			own.push((event, Note::SourceSilent { key_id, kind, last }));
 		}

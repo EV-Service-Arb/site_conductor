@@ -98,7 +98,7 @@ pub fn allowance(account: &Account) -> f64 {
 	account.allow.get("maps").copied().unwrap_or(0.0) // a slice not named is allowed none, as accounting's guard reads it
 }
 
-/// The conductor's [`sa_places::Rank`]: each account by its [`standing`] on the meter of the
+/// The conductor's [`sa_places::Rank`]: each account by its `standing` on the meter of the
 /// SKU bought.
 #[derive(Debug)]
 pub struct ByStanding {

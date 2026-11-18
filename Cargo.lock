@@ -1598,7 +1598,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2160,6 +2160,7 @@ dependencies = [
 [[package]]
 name = "gmaps_optimal_placement_core"
 version = "0.1.0"
+source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#1b09fd629b79b8f7f182e41502c913df8ee890d1"
 dependencies = [
  "evalexpr",
  "eyre",
@@ -4003,7 +4004,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4313,7 +4314,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4372,7 +4373,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5542,7 +5543,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6312,6 +6313,8 @@ dependencies = [
 [[package]]
 name = "v_utils"
 version = "2.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0627e7f64fbfb47aa475bd0ea44f35cf8aee38441d0129dc0ed6f0345dbe854"
 dependencies = [
  "ahash",
  "bon",
@@ -6344,6 +6347,8 @@ dependencies = [
 [[package]]
 name = "v_utils_macros"
 version = "2.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7530357746c9a98f791caa4dacc46e767de5924dcca96584fd10a002c9d7f16"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -6567,7 +6572,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

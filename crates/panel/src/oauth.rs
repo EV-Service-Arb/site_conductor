@@ -71,17 +71,15 @@ impl Panel {
 		let sealed = self.key.seal(&bearer_aad(&hash), opened.cookie.as_bytes())?;
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for an MCP code")?;
 		oauth::prune_codes(&mut conn, now).await?;
-		oauth::insert_code(
-			&mut conn,
-			&hash,
-			key.as_bytes(),
-			&grant.redirect_uri,
-			&grant.challenge,
-			&sealed,
-			&self.key.fingerprint(),
-			now + CODE_TTL,
-		)
-		.await?;
+		let issued = oauth::CodeRow {
+			session: key.as_bytes().to_vec(),
+			redirect_uri: grant.redirect_uri.clone(),
+			challenge: grant.challenge.clone(),
+			bearer_sealed: sealed,
+			data_key_fp: self.key.fingerprint().to_vec(),
+			expires_at: now + CODE_TTL,
+		};
+		oauth::insert_code(&mut conn, &hash, &issued).await?;
 		Ok(code)
 	}
 

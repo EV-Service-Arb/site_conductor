@@ -100,6 +100,8 @@
           jobs.default = true;
           jobs.errors.install.packages = [ "ffmpeg" "deno" ]; # crates/browsers/tests/runner.rs cuts its films with ffmpeg; crates/sandbox's tests run Deno
           jobs.errors.augment = [ e2e { name = "checks"; builds = checks; } ];
+          jobs.warnings.exclude = [ "code-duplication" ];
+          jobs.warnings.augment = [{ name = "code-duplication"; args.excludePatterns = [ "frontend/src/shared/api/schema.ts" "frontend/src/shared/api/services/**" "frontend/src/shared/api/views.ts" "crates/sandbox/js/catalog.ts" ]; }]; # generated
           lfs = false;
         };
         readme = v_flakes.readme-fw {
@@ -148,7 +150,7 @@
           pname = "sa_sandbox";
           version = manifest.version;
           src = pureSrc;
-          cargoLock.lockFile = ./Cargo.lock;
+          inherit cargoLock;
           cargoBuildFlags = [ "-p" "sa_sandbox" ];
           doCheck = false; # its tests run Deno against loopback stand-ins, in the devShell and CI
           auditable = false;
@@ -217,7 +219,7 @@
             src = lib.cleanSource ./frontend;
             filter = path: _type: !(builtins.elem (baseNameOf path) [ "node_modules" ".next" "out" ]);
           };
-          npmDepsHash = "sha256-rKrHnJXmOvdKYlz8gOZELG8WSWfItTiPGm2ZoOi/a7Q=";
+          npmDepsHash = "sha256-rny9u1FSldhSYbkRjMijxRaOJtnE76Ql5aCg+apy/d8=";
           env = {
             NEXT_TELEMETRY_DISABLED = "1";
           };
@@ -231,7 +233,7 @@
           # the image is the release: every key translated, as committed
           preBuild = ''
             export HOME="$TMPDIR"
-            mkdir -p src/shared/placement_overlay && cp ${placementOverlay}/* src/shared/placement_overlay/
+            cp -r --no-preserve=mode ${placementOverlay} src/shared/placement_overlay
             npm run i18n:release
           '';
           installPhase = ''

@@ -156,7 +156,7 @@ impl Panel {
 		};
 		tab.owed += used.iter().map(|(tokens, units)| tab.prices[tokens] * units).sum::<i64>();
 		let per = Item::from(ModelTokens::Input).per();
-		let due = (tab.owed + per - 1) / per - tab.billed;
+		let due = (tab.owed + per - 1).div_euclid(per) - tab.billed;
 		let balance = ledger::renewed(&mut tx, by.user(), now, &self.renewal).await?;
 		// a round's cost is known only once it is done: what it costs past the balance is let go
 		let charge = due.min(balance.max(0));
@@ -239,7 +239,7 @@ impl Panel {
 				);
 			};
 			let per = u.item.per();
-			let due = (u.units * price + per - 1) / per;
+			let due = (u.units * price + per - 1).div_euclid(per);
 			let balance = ledger::renewed(&mut tx, user, Timestamp::now(), &self.renewal).await?;
 			// its cost is known only once it is done: what it costs past the balance is let go
 			let charge = due.min(balance.max(0));

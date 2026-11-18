@@ -234,19 +234,7 @@ impl World {
 	}
 
 	async fn call(&mut self, method: Method, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
-		let json = [("content-type", "application/json")];
-		let (status, _, bytes) = self
-			.b
-			.send_body(
-				&self.app,
-				method,
-				uri,
-				if body.is_some() { &json } else { &[] },
-				true,
-				body.map_or(Body::empty(), |b| Body::from(b.to_string())),
-			)
-			.await;
-		(status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+		self.b.call(&self.app, method, uri, body).await
 	}
 
 	async fn gmail(&mut self, gmail: &str) -> i64 {
@@ -607,7 +595,7 @@ async fn a_cloud_phone_is_made_at_its_set_up_its_model_drawn_its_proxy_replaced_
 	assert_eq!(w.multilogin.paths(), ["/workspace/automation_token"], "a run's own token, nothing else");
 	assert_eq!(
 		w.launches()[0]["browser"],
-		json!({ "provider": "multilogin_phone", "token": "three-hour-token", "phone": "ph-1", "geo": [45.75, 4.85], "zone": "Europe/Paris", "country": "FR", "minutes": 500 / 4 })
+		json!({ "provider": "multilogin_phone", "token": "three-hour-token", "phone": "ph-1", "geo": [45.75, 4.85], "zone": "Europe/Paris", "country": "FR", "minutes": 500_i64.div_euclid(4) })
 	);
 
 	assert_eq!(w.film(a, vec![7u8; 1 << 20]).await, StatusCode::NO_CONTENT);

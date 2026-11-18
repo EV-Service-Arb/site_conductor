@@ -20,7 +20,7 @@ use sa_core::{
 	queries_cache::{Claim, Key, Put, Scheme, Stored},
 };
 use sa_places::{
-	Ask, Error, Google, InOrder, Keys, Rank, LatLng, Payer, Pending, QueriesCache, Remote, Spent,
+	Ask, Error, Google, InOrder, Keys, LatLng, Payer, Pending, QueriesCache, Rank, Remote, Spent,
 	parse::{Parsed, parse},
 };
 use serde_json::{Value, json};
@@ -38,6 +38,8 @@ const SEARCH: &str = "https://www.google.com/maps/place/Le+Procope/@48.853,2.338
 
 type Refusals = HashMap<String, Vec<(StatusCode, String)>>;
 
+type Answers = HashMap<(Scheme, Key), Stored>;
+type Claims = HashSet<(Scheme, Key)>;
 /// A spent window as Google spells it, from `start` (unix seconds).
 fn refusal(start: u64) -> String {
 	json!({"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "details": [
@@ -135,7 +137,7 @@ async fn place_details(State(s): State<Stub>, headers: HeaderMap, Path(id): Path
 /// The queries cache as the conductor keeps it, in memory: the latest answer per key, a claim
 /// held until its holder puts or releases.
 #[derive(Debug, Default)]
-struct Memory(Mutex<(HashMap<(Scheme, Key), Stored>, HashSet<(Scheme, Key)>)>);
+struct Memory(Mutex<(Answers, Claims)>);
 
 impl QueriesCache for Memory {
 	fn get(&self, scheme: Scheme, key: Key) -> Pending<'_, Option<Stored>> {

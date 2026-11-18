@@ -137,7 +137,8 @@ pub(crate) async fn set_cost(conn: &mut SqliteConnection, item: Item, usd_micros
 /// Every day's usage between `from` and `to`, oldest first. A use before its item's first cost
 /// takes that first one: the vendor charged it all along, nobody had typed it in yet.
 pub(crate) async fn by_day(conn: &mut SqliteConnection, from: Timestamp, to: Timestamp) -> eyre::Result<Vec<Day>> {
-	let rows: Vec<(i64, String, String, String, i64, i64, Option<i64>, i64)> = sqlx::query_as(
+	type Row = (i64, String, String, String, i64, i64, Option<i64>, i64);
+	let rows: Vec<Row> = sqlx::query_as(
 		"WITH costed AS ( \
 		   SELECT u.at, u.item, u.bill, u.source, u.units, CASE \
 		     WHEN EXISTS (SELECT 1 FROM unit_costs c WHERE c.item = u.item AND c.set_at <= u.at) \
@@ -164,7 +165,7 @@ pub(crate) async fn by_day(conn: &mut SqliteConnection, from: Timestamp, to: Tim
 				source,
 				units,
 				times,
-				usd_micros: usd_micros.map(|u| u / item.per()),
+				usd_micros: usd_micros.map(|u| u.div_euclid(item.per())),
 				uncosted,
 			})
 		})

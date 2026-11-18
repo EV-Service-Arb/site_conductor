@@ -63,7 +63,12 @@ impl Spent {
 impl std::fmt::Display for Spent {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Self::Quota { limit, reset } => write!(f, "its project's {limit} is used, until {:02}:{:02} UTC", reset % 86_400 / 3600, reset % 3600 / 60),
+			Self::Quota { limit, reset } => write!(
+				f,
+				"its project's {limit} is used, until {:02}:{:02} UTC",
+				(reset % 86_400).div_euclid(3600),
+				(reset % 3600).div_euclid(60)
+			),
 			Self::Billing => write!(f, "its project's billing is disabled"),
 			Self::Allowance => write!(f, "its account's free units and allowance this month are used"),
 		}

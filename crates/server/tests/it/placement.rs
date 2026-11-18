@@ -24,8 +24,8 @@ use sa_core::{
 	queries_cache::{Key, Scheme, gop},
 };
 use sa_panel::{
-	areas::Area,
 	Panel,
+	areas::Area,
 	import::Export,
 	seal::DataKey,
 	store::Store,
@@ -145,7 +145,10 @@ impl Conductor {
 		.unwrap()
 		.unwrap();
 		let now = jiff::Timestamp::now();
-		p.set_prices(&[(Item::Placement(PlacementRequest::Search), price)], &[], "admin@localhost", now).await.unwrap().unwrap();
+		p.set_prices(&[(Item::Placement(PlacementRequest::Search), price)], &[], "admin@localhost", now)
+			.await
+			.unwrap()
+			.unwrap();
 		let pulled = Pulled {
 			store: db.store().await,
 			since: Arc::default(),
@@ -282,8 +285,16 @@ async fn a_category_not_set_up_to_be_studied_is_refused_by_why() {
 		assert_eq!((status, &body["code"]), (StatusCode::UNPROCESSABLE_ENTITY, &json!(code)), "{name}: {body}");
 		assert!(c.asked().is_empty(), "{name}: placement is not asked");
 	}
-	assert_eq!(c.send(Method::GET, "/api/v1/placement/study?area=lyon&category=9999.FR", Value::Null).await.0, StatusCode::NOT_FOUND, "not a category of the caller's");
-	assert_eq!(c.send(Method::GET, "/api/v1/placement/study?area=paris", Value::Null).await.0, StatusCode::NOT_FOUND, "no such area");
+	assert_eq!(
+		c.send(Method::GET, "/api/v1/placement/study?area=lyon&category=9999.FR", Value::Null).await.0,
+		StatusCode::NOT_FOUND,
+		"not a category of the caller's"
+	);
+	assert_eq!(
+		c.send(Method::GET, "/api/v1/placement/study?area=paris", Value::Null).await.0,
+		StatusCode::NOT_FOUND,
+		"no such area"
+	);
 
 	let carpentry = c.trade("Carpentry", "FR", set_up(Some("carpentry"), Some("gcid:plumber"), &["menuisier"])).await;
 	let (status, body) = c.call(Method::GET, &format!("/api/v1/placement/study?area=lyon&category={carpentry}"), Value::Null).await;
@@ -366,7 +377,11 @@ async fn a_failed_pull_is_charged_what_it_bought_and_owes_it_all_back() {
 	let (_, tokens) = c.call(Method::GET, "/api/v1/tokens", Value::Null).await;
 	assert_eq!(tokens["balance"], 1000 - 39 * 8);
 	let owed = &tokens["kickbacks"][0];
-	assert_eq!((&owed["amount"], &owed["service"], &owed["key"]), (&json!(312), &json!("placement"), &json!(def.id())), "{tokens}");
+	assert_eq!(
+		(&owed["amount"], &owed["service"], &owed["key"]),
+		(&json!(312), &json!("placement"), &json!(def.id())),
+		"{tokens}"
+	);
 }
 
 #[tokio::test]
@@ -407,7 +422,7 @@ async fn a_person_reads_the_prices_and_sets_above_what_they_are_asked() {
 async fn without_placement_its_studies_are_not_connected() {
 	let db = TestDb::create().await;
 	let (sign_in, _) = sa_server::testing::conductor(panel(&db).await, operator(), EMAIL, "http://127.0.0.1:9");
-	let app = sa_server::http::app(sign_in, None, None, Default::default(), None, None, None, None);
+	let app = sa_server::http::app(sign_in, None, None, Default::default(), None, None, None, None, None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (status, _, body) = b.send_body(&app, Method::GET, "/api/v1/placement/catalog", &[], false, Body::empty()).await;

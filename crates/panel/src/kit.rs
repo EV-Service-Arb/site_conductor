@@ -264,7 +264,7 @@ impl Panel {
 	}
 
 	/// A photo of the category: re-encoded as a JPEG (its EXIF, GPS with it, gone; turned upright),
-	/// at most [`PHOTO_SIDE`] on its longer side. The same bytes again are the same photo, back
+	/// at most `PHOTO_SIDE` on its longer side. The same bytes again are the same photo, back
 	/// if removed.
 	pub async fn add_photo(&self, owner: Uuid, trade: i64, country: Country, upload: Vec<u8>, now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
 		if upload.len() > PHOTO_MAX {
