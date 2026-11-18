@@ -1,7 +1,7 @@
 "use client";
 
 import { useResource } from "@evinvest/api/react";
-import { Button, Skeleton, cn } from "@evinvest/uikit";
+import { Button, Skeleton, cn, useDismissableLayer } from "@evinvest/uikit";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -228,6 +228,7 @@ function GmbMap({ config }: { config: MapConfig }) {
     setOnMap({ focus: null });
   }, [map, focus, peekedListed?.gmb.id, peekedListed?.gmb.location]);
 
+  useDismissableLayer({ enabled: picking !== null, onDismiss: () => setOnMap({ picking: null }), pointerOutside: false });
   useEffect(() => {
     if (map.status !== "ok" || picking === null) return;
     const m = map.map;
@@ -237,12 +238,9 @@ function GmbMap({ config }: { config: MapConfig }) {
       setOnMap({ picking: null });
       picking.onPick(e.latLng.toJSON());
     });
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOnMap({ picking: null });
-    window.addEventListener("keydown", esc);
     return () => {
       click.remove();
       m.setOptions({ draggableCursor: null });
-      window.removeEventListener("keydown", esc);
     };
   }, [map, picking]);
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { Badge, Button, cn } from "@evinvest/uikit";
-import { ChevronDown, ChevronUp, Globe, Hash, Mail, MapPin, Phone, Plug, QrCode, Send, Smartphone, X } from "lucide-react";
+import { CloseButton, Badge, Button, cn } from "@evinvest/uikit";
+import { ChevronDown, ChevronUp, Globe, Hash, Mail, MapPin, Phone, Plug, QrCode, Send, Smartphone } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { CategoryChip, type Listed, open, openAccount, readyCount, useGmbTags, useSelection, windowKeys, STATE_NAME, STATE_TONE } from "@/entities/gmb";
@@ -76,9 +76,7 @@ export function LocationWindow({ listed, tab }: { listed: Listed; tab: Tab }) {
               </Button>
             </span>
           )}
-          <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => setHome({ tab: undefined })}>
-            <X aria-hidden />
-          </Button>
+          <CloseButton size={button("sm")} label={t(windowKeys.close, "Close the window")} onClose={() => setHome({ tab: undefined })} />
         </div>
         <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-soft [&_svg]:size-3.5">
           {facts.map((f) =>

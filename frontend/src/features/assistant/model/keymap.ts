@@ -13,10 +13,11 @@ export function useKeymap(keys: { toggle: (() => void) | null; newChat: () => vo
   useBinding({ on: { key: "l" }, id: "copy-link", run: { label: t(assistant.copyLink, "Copy link"), run: keys.copyLink } });
 }
 
-/** Escape inside the sidebar or the floating window hides it, unless a menu, the picker or an edit box took it first. */
+/** Escape inside the sidebar or the floating window hides it, unless a menu, the picker or an edit box took it first; the Escape it takes is no close button's. */
 export function hideOnEscape(e: React.KeyboardEvent<HTMLElement>, hide: () => void): void {
   if (e.key !== "Escape" || e.defaultPrevented || !e.currentTarget.contains(e.target as Node)) return;
   // An open menu, popover or dialog takes Escape itself, from the document, after this has heard it.
   if (document.querySelector('[data-state="open"][data-slot$="content"]:not([data-slot="tooltip-content"])') !== null) return;
+  e.preventDefault();
   hide();
 }

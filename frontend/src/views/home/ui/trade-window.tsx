@@ -10,6 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   Button,
+  CloseButton,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -85,9 +86,7 @@ export function TradeWindow({ trade, country: tab, gmbs, gmails }: { trade: Trad
           {t(tradesKeys.window.scope, "Scope the outline to it")}
         </Button>
         <More trade={trade} tab={category === undefined ? null : tab} holders={held.length} onRename={() => setRenaming(true)} />
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => openTrade(null)}>
-          <X aria-hidden />
-        </Button>
+        <CloseButton size={button("sm")} label={t(windowKeys.close, "Close the window")} onClose={() => openTrade(null)} />
       </header>
       <nav role="tablist" aria-label={t(tradesKeys.window.countries, "Countries")} className="flex items-center gap-1 border-b border-border px-6 pt-3">
         {tabs.map((c) => {

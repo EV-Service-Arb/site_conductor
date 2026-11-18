@@ -1,7 +1,6 @@
 "use client";
 
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, buttonVariants, cn } from "@evinvest/uikit";
-import { X } from "lucide-react";
+import { CloseButton, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, buttonVariants, cn } from "@evinvest/uikit";
 
 import { CategoryChip, type Listed, issueOf, issueText, open, useGmbTags, gmbs } from "@/entities/gmb";
 import { ViewLink } from "@/shared/lib/location";
@@ -35,9 +34,7 @@ export function Peek({ listed, onClose, className }: { listed: Listed; onClose: 
             <CategoryChip gmb={gmb} />
           </div>
         </div>
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(home.peek.close, "Close")} title={t(home.peek.close, "Close")} onClick={onClose}>
-          <X aria-hidden />
-        </Button>
+        <CloseButton size={button("sm")} label={t(home.peek.close, "Close")} onClose={onClose} />
       </CardHeader>
       <CardContent className="flex flex-col gap-3 px-4">
         <div className="flex flex-col gap-0.5 text-sm">

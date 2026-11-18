@@ -1,8 +1,8 @@
 "use client";
 
-import { Button, Skeleton, buttonVariants, toast } from "@evinvest/uikit";
+import { CloseButton, Button, Skeleton, buttonVariants, toast } from "@evinvest/uikit";
 import { href } from "@evinvest/views";
-import { Copy, ExternalLink, Plus, QrCode, X } from "lucide-react";
+import { Copy, ExternalLink, Plus, QrCode } from "lucide-react";
 
 import { AreaDraw, TARGET_NAME, kit, open, openKit, useGmails, useOutline, windowKeys } from "@/entities/gmb";
 import { api } from "@/shared/api";
@@ -31,9 +31,7 @@ export function KitWindow({ map, area }: { map: google.maps.Map; area: string })
         <header className="flex items-center gap-2 border-b border-border px-4 py-3">
           <QrCode aria-hidden className="size-4 text-ink-soft" />
           <h2 className="flex-1 text-sm font-semibold text-ink">{area === "" ? t(kit.area.new, "Review kit · a new area") : t(kit.window, "Review kit")}</h2>
-          <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => openKit(null)}>
-            <X aria-hidden />
-          </Button>
+          <CloseButton size={button("sm")} label={t(windowKeys.close, "Close the window")} onClose={() => openKit(null)} />
         </header>
         {area === "" ? <Draw map={map} /> : <Area key={area} map={map} slug={area} />}
       </section>
