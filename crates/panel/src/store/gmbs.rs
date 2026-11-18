@@ -14,7 +14,7 @@ use super::{from_db, to_db};
 use crate::google_categories::GoogleCategory;
 
 const GMB: &str = "SELECT b.id, b.gmail_id, b.place_id, b.name, b.address, b.state, b.country, b.country_by IS NOT NULL AS country_by_hand, b.phone, \
-	b.trade_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, b.website, b.hours, b.google_primary, \
+	b.trade_id, b.brand_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, b.website, b.hours, b.google_primary, \
 	(SELECT json_group_array(json_object('id', p.id, 'author', p.author)) FROM (SELECT * FROM gmb_photos p WHERE p.gmb_id = b.id ORDER BY p.n) p) AS photos, NOT EXISTS (SELECT 1 FROM gmbs_off o WHERE o.gmb_id = b.id) AS enabled, \
 	(SELECT json_group_array(json_object('lat', s.lat, 'lng', s.lng, 'label', s.label, 'note', s.note)) FROM (SELECT * FROM gmb_spots s WHERE s.gmb_id = b.id ORDER BY s.pos) s) AS spots FROM gmbs b";
 
@@ -61,6 +61,8 @@ pub struct Gmb {
 	pub phone: Option<String>,
 	/// Its category is this trade in its country.
 	pub trade_id: Option<i64>,
+	/// Of its gmail and its category.
+	pub brand_id: Option<i64>,
 	/// Its service areas, none to 20.
 	pub areas: Vec<String>,
 	/// Where the verification film is shot.
@@ -312,9 +314,9 @@ pub async fn rename(conn: &mut SqliteConnection, id: i64, name: &str) -> eyre::R
 	Ok(())
 }
 
-/// To another gmail of its owner's: the schema refuses anyone else's.
+/// To another gmail of its owner's: the schema refuses anyone else's. Its brand stays its old gmail's.
 pub async fn move_to(conn: &mut SqliteConnection, id: GmbId, gmail_id: i64) -> eyre::Result<()> {
-	sqlx::query("UPDATE gmbs SET gmail_id = $2 WHERE id = $1")
+	sqlx::query("UPDATE gmbs SET gmail_id = $2, brand_id = CASE WHEN gmail_id IS $2 THEN brand_id END WHERE id = $1")
 		.bind(id.v)
 		.bind(gmail_id)
 		.execute(&mut *conn)
@@ -324,11 +326,12 @@ pub async fn move_to(conn: &mut SqliteConnection, id: GmbId, gmail_id: i64) -> e
 }
 
 /// `e`'s fields but the name and the gmail, which move by their own rules; the phone free
-/// ([`taken`]), the trade the owner's.
+/// ([`taken`]), the trade the owner's, another one dropping the brand.
 pub async fn set_fields(conn: &mut SqliteConnection, id: i64, e: &crate::gmbs::Edit) -> eyre::Result<()> {
 	let areas = e.areas.as_ref().map(|a| a.as_ref().map(|a| serde_json::to_string(a).expect("strings serialize")));
 	sqlx::query(
 		"UPDATE gmbs SET phone = CASE WHEN $2 THEN $3 ELSE phone END, trade_id = CASE WHEN $4 THEN $5 ELSE trade_id END, \
+		 brand_id = CASE WHEN $4 AND trade_id IS NOT $5 THEN NULL ELSE brand_id END, \
 		 areas = CASE WHEN $6 THEN $7 ELSE areas END, hidden_address = CASE WHEN $8 THEN $9 ELSE hidden_address END, \
 		 customers_visit = CASE WHEN $10 THEN $11 ELSE customers_visit END, film = CASE WHEN $12 THEN $13 ELSE film END WHERE id = $1",
 	)
@@ -541,9 +544,9 @@ pub async fn photo(conn: &mut SqliteConnection, owner: Uuid, id: i64, photo: i64
 		.wrap_err("loading a GBP's photo")
 }
 
-/// Google's country for GBP `id`, over one set by hand.
+/// Google's country for GBP `id`, over one set by hand; another one drops the brand.
 pub async fn set_country(conn: &mut SqliteConnection, id: i64, country: Country) -> eyre::Result<()> {
-	sqlx::query("UPDATE gmbs SET country = $2, country_by = NULL WHERE id = $1")
+	sqlx::query("UPDATE gmbs SET country = $2, country_by = NULL, brand_id = CASE WHEN country IS $2 THEN brand_id END WHERE id = $1")
 		.bind(id)
 		.bind(country.as_str())
 		.execute(&mut *conn)
@@ -562,7 +565,7 @@ pub async fn set_country_by_hand(conn: &mut SqliteConnection, owner: Option<Uuid
 	if gbp.country.is_some_and(|c| !c.by_hand) {
 		return Ok(Err(crate::Refused::Conflict(format!("Google gives GBP {gmb_id} its country"))));
 	}
-	sqlx::query("UPDATE gmbs SET country = $2, country_by = owner WHERE id = $1")
+	sqlx::query("UPDATE gmbs SET country = $2, country_by = owner, brand_id = CASE WHEN country IS $2 THEN brand_id END WHERE id = $1")
 		.bind(gmb_id)
 		.bind(country.as_str())
 		.execute(&mut *conn)
@@ -810,18 +813,21 @@ pub async fn remove_category(conn: &mut SqliteConnection, id: i64, country: Coun
 	Ok(done.rows_affected() == 1)
 }
 
-/// Each of `ids` given `trade`, the owner's. `false`: one is no GBP of the owner's not removed,
-/// and the others may be written: roll back.
+/// Each of `ids` given `trade`, the owner's, another one dropping the brand. `false`: one is no
+/// GBP of the owner's not removed, and the others may be written: roll back.
 pub async fn set_trades(conn: &mut SqliteConnection, owner: Uuid, ids: &BTreeSet<i64>, trade: Option<i64>) -> eyre::Result<bool> {
 	let asked = i64::try_from(ids.len()).expect("a few ids");
 	let ids = serde_json::to_string(ids).expect("ids serialize");
-	let done = sqlx::query("UPDATE gmbs SET trade_id = $3 WHERE id IN (SELECT value FROM json_each($1)) AND owner = $2 AND removed_at IS NULL")
-		.bind(&ids)
-		.bind(owner)
-		.bind(trade)
-		.execute(&mut *conn)
-		.await
-		.wrap_err("setting GMBs' trade")?;
+	let done = sqlx::query(
+		"UPDATE gmbs SET trade_id = $3, brand_id = CASE WHEN trade_id IS $3 THEN brand_id END \
+		 WHERE id IN (SELECT value FROM json_each($1)) AND owner = $2 AND removed_at IS NULL",
+	)
+	.bind(&ids)
+	.bind(owner)
+	.bind(trade)
+	.execute(&mut *conn)
+	.await
+	.wrap_err("setting GMBs' trade")?;
 	Ok(i64::try_from(done.rows_affected()).expect("a few rows") == asked)
 }
 
@@ -847,6 +853,7 @@ struct GmbRow {
 	country_by_hand: bool,
 	phone: Option<String>,
 	trade_id: Option<i64>,
+	brand_id: Option<i64>,
 	areas: Option<String>,
 	hidden_address: Option<String>,
 	customers_visit: Option<bool>,
@@ -893,6 +900,7 @@ fn gmb(r: GmbRow) -> eyre::Result<Gmb> {
 		country: r.country.as_deref().map(str::parse).transpose()?.map(|code| GbpCountry { code, by_hand: r.country_by_hand }),
 		phone: r.phone,
 		trade_id: r.trade_id,
+		brand_id: r.brand_id,
 		areas: r
 			.areas
 			.as_deref()

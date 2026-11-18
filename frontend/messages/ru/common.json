@@ -111,17 +111,9 @@
     "en": "None left to offer here: its page answers with Google's form.",
     "t": "Здесь предлагать больше нечего: страница отвечает формой Google."
   },
-  "kit.drafts.offerOrder": {
-    "en": "in the offer's order · the pool is the trade's",
-    "t": "в порядке предложения · пул принадлежит направлению"
-  },
   "kit.drafts.order": {
     "en": "least used first · a GBP gets each at most once",
     "t": "сначала наименее использованные · каждый GBP получает каждый не больше раза"
-  },
-  "kit.drafts.photos": {
-    "en": "Its photos",
-    "t": "Его фото"
   },
   "kit.drafts.placeholder": {
     "en": "A review as a customer would write it, in the country's language",
@@ -231,21 +223,9 @@
     "en": "Keywords · category · study",
     "t": "Ключевые слова · категория · исследование"
   },
-  "kit.pane.kit": {
-    "en": "Drafts · Photos",
-    "t": "Черновики · Фото"
-  },
-  "kit.pane.kitCounted": {
-    "en": "Drafts {drafts} · Photos {photos}",
-    "t": "Черновики {drafts} · Фото {photos}"
-  },
   "kit.photos": {
     "en": "Photos",
     "t": "Фото"
-  },
-  "kit.photos.order": {
-    "en": "least used first · a GBP gets each at most once · a draft selects its own",
-    "t": "сначала наименее использованные · каждый GBP получает каждое не больше раза · черновик выбирает свои"
   },
   "kit.photos.remove": {
     "en": "Remove the photo",
@@ -258,10 +238,6 @@
   "kit.photos.upload": {
     "en": "Upload",
     "t": "Загрузить"
-  },
-  "kit.photos.wentHere": {
-    "en": "saved here already",
-    "t": "уже сохранено здесь"
   },
   "kit.qrOpens": {
     "en": "The QR opens",

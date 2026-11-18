@@ -804,7 +804,10 @@ impl Panel {
 			n => return Ok(Err(Refused::Conflict(format!("{n} GBPs hold trade {id}: give them another first")))),
 		}
 		if crate::store::kit::held(&mut tx, id, None).await? > 0 {
-			return Ok(Err(Refused::Conflict(format!("trade {id} has review drafts or photos: their uses are kept"))));
+			return Ok(Err(Refused::Conflict(format!("trade {id} has review drafts: their uses are kept"))));
+		}
+		if crate::store::brands::ever(&mut tx, id, None).await? > 0 {
+			return Ok(Err(Refused::Conflict(format!("trade {id} has brands: their photos' uses are kept"))));
 		}
 		db::delete_trade(&mut tx, id).await?;
 		tx.commit().await.wrap_err("committing a trade's deletion")?;
@@ -857,7 +860,10 @@ impl Panel {
 			return Ok(Err(Refused::NotFound));
 		}
 		if crate::store::kit::held(&mut tx, id, Some(country)).await? > 0 {
-			return Ok(Err(Refused::Conflict(format!("{country} has review drafts or photos: their uses are kept"))));
+			return Ok(Err(Refused::Conflict(format!("{country} has review drafts: their uses are kept"))));
+		}
+		if crate::store::brands::ever(&mut tx, id, Some(country)).await? > 0 {
+			return Ok(Err(Refused::Conflict(format!("{country} has brands: their photos' uses are kept"))));
 		}
 		if !db::remove_category(&mut tx, id, country).await? {
 			return Ok(Err(Refused::NotFound));

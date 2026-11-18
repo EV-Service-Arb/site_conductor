@@ -4,6 +4,7 @@ mod alerts;
 mod areas;
 mod ask;
 mod assistant;
+mod brands;
 mod browser;
 mod catalog;
 mod claude;

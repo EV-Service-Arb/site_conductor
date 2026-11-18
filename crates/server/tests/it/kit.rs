@@ -22,6 +22,7 @@ use sa_core::{
 };
 use sa_panel::{
 	Panel,
+	brands::NewBrand,
 	gmbs::{Category, Existing},
 	import::Export,
 	kit::Target,
@@ -63,15 +64,20 @@ async fn stand_ins(gmbs: Arc<Mutex<Vec<(i64, &'static str)>>>) -> String {
 	base
 }
 
-struct Kit {
+pub(super) struct Kit {
 	app: Router,
-	panel: Panel,
+	pub(super) panel: Panel,
 	secret: String,
-	/// Lyon 7, the GBP the checks are about; Lyon 3 shares its category.
-	seven: i64,
-	three: i64,
-	drafts: Vec<i64>,
-	photos: Vec<i64>,
+	pub(super) owner: Uuid,
+	pub(super) trade: i64,
+	/// Aquafix, on aquafix, the brand of both GBPs.
+	pub(super) brand: i64,
+	/// Lyon 7, the GBP the checks are about; Lyon 3 shares its category and brand.
+	pub(super) seven: i64,
+	pub(super) three: i64,
+	pub(super) drafts: Vec<i64>,
+	/// The brand's.
+	pub(super) photos: Vec<i64>,
 }
 impl Kit {
 	async fn send(&self, req: Request<Body>) -> (StatusCode, Vec<u8>) {
@@ -80,7 +86,7 @@ impl Kit {
 		(status, to_bytes(res.into_body(), usize::MAX).await.unwrap().to_vec())
 	}
 
-	async fn get(&self, path: &str) -> (StatusCode, Vec<u8>) {
+	pub(super) async fn get(&self, path: &str) -> (StatusCode, Vec<u8>) {
 		let s = sign_get(SourceKey { id: KEY, secret: &self.secret }, path, Timestamp::now());
 		let req = Request::get(path)
 			.header("x-sa-key-id", &s.key_id)
@@ -90,7 +96,7 @@ impl Kit {
 	}
 
 	/// The page of `slug` opened: its view and the drafts offered, each with its photos.
-	async fn offer(&self, slug: &str) -> (Uuid, Vec<(i64, Vec<i64>)>) {
+	pub(super) async fn offer(&self, slug: &str) -> (Uuid, Vec<(i64, Vec<i64>)>) {
 		let (status, body) = self.get(&format!("/api/kit/v1/offer?brand=aquafix&slug={slug}&qr=1")).await;
 		assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
 		let o: Value = serde_json::from_slice(&body).unwrap();
@@ -104,7 +110,7 @@ impl Kit {
 		(o["view"].as_str().unwrap().parse().unwrap(), drafts)
 	}
 
-	async fn event(&self, body: Value) -> StatusCode {
+	pub(super) async fn event(&self, body: Value) -> StatusCode {
 		let body = body.to_string().into_bytes();
 		let s = sign(SourceKey { id: KEY, secret: &self.secret }, &body, Timestamp::now());
 		let req = Request::post("/api/kit/v1/events")
@@ -121,7 +127,7 @@ impl Kit {
 	}
 }
 
-fn png(shade: u8) -> Vec<u8> {
+pub(super) fn png(shade: u8) -> Vec<u8> {
 	let mut out = Vec::new();
 	image::RgbImage::from_pixel(8, 6, image::Rgb([shade, 0, 0]))
 		.write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png)
@@ -129,9 +135,9 @@ fn png(shade: u8) -> Vec<u8> {
 	out
 }
 
-/// Two GBPs of Plumbing · FR on aquafix's landing, the kit on with drafts; 8 drafts, the fourth
-/// selecting two photos.
-async fn kit(db: &TestDb) -> Kit {
+/// Two GBPs of Plumbing · FR on aquafix's landing, of brand Aquafix with two photos, the kit on
+/// with 8 drafts.
+pub(super) async fn kit(db: &TestDb) -> Kit {
 	let pages = Arc::new(Mutex::new(Vec::new()));
 	let base = stand_ins(pages.clone()).await;
 	let store = db.store().await;
@@ -205,20 +211,30 @@ async fn kit(db: &TestDb) -> Kit {
 	};
 	let (seven, three) = (gmb(SEVEN, "Lyon 7").await, gmb(THREE, "Lyon 3").await);
 	pages.lock().unwrap().extend([(seven, "lyon-7"), (three, "lyon-3")]);
+	let brand = panel
+		.add_brand(
+			owner,
+			NewBrand {
+				gmail_id: gmail,
+				trade_id: trade,
+				country: Country::FR,
+				name: "Aquafix".to_owned(),
+				site: BrandId::parse("aquafix").unwrap(),
+			},
+			now,
+		)
+		.await
+		.unwrap()
+		.unwrap()
+		.id;
+	panel.set_brands(owner, &[seven, three], Some(brand)).await.unwrap().unwrap();
 	let photos = vec![
-		panel.add_photo(owner, trade, Country::FR, png(10), now).await.unwrap().unwrap(),
-		panel.add_photo(owner, trade, Country::FR, png(20), now).await.unwrap().unwrap(),
+		panel.add_photo(owner, brand, png(10), now).await.unwrap().unwrap(),
+		panel.add_photo(owner, brand, png(20), now).await.unwrap().unwrap(),
 	];
 	let mut drafts = Vec::new();
 	for n in 1..=8 {
-		let selects = if n == 4 { photos.clone() } else { vec![] };
-		drafts.push(
-			panel
-				.add_draft(owner, trade, Country::FR, &format!("Draft {n}: quick and clean."), &selects, now)
-				.await
-				.unwrap()
-				.unwrap(),
-		);
+		drafts.push(panel.add_draft(owner, trade, Country::FR, &format!("Draft {n}: quick and clean."), now).await.unwrap().unwrap());
 	}
 	let app = app_with(panel.clone(), operator(), "dev@localhost", &base.parse().unwrap(), http::Limits::default());
 	let mut browser = Browser::default();
@@ -240,6 +256,9 @@ async fn kit(db: &TestDb) -> Kit {
 		app,
 		panel,
 		secret,
+		owner,
+		trade,
+		brand,
 		seven,
 		three,
 		drafts,
@@ -285,15 +304,10 @@ async fn a_photo_saved_on_a_gbp_drops_out_there_and_its_draft_stays() {
 	let fourth = k.drafts[3];
 
 	let (view, offered) = k.offer("lyon-7").await;
-	let photos = &offered.iter().find(|(id, _)| *id == fourth).unwrap().1;
-	assert_eq!(photos.len(), 2);
-	let (status, jpeg) = k.get(&format!("/api/kit/v1/photos/{}.jpg?view={view}", photos[0])).await;
+	assert!(offered.iter().all(|(_, photos)| *photos == k.photos), "each draft its brand's two least used: {offered:?}");
+	let (status, jpeg) = k.get(&format!("/api/kit/v1/photos/{}.jpg?view={view}", k.photos[0])).await;
 	assert_eq!(status, StatusCode::OK);
 	assert_eq!(image::guess_format(&jpeg).unwrap(), image::ImageFormat::Jpeg, "re-encoded");
-	let (held_out, offered) = k.offer("lyon-7").await;
-	assert!(offered.iter().all(|(id, _)| *id != fourth));
-	let (status, _) = k.get(&format!("/api/kit/v1/photos/{}.jpg?view={held_out}", photos[0])).await;
-	assert_eq!(status, StatusCode::NOT_FOUND, "no draft offered to that view selects it");
 
 	assert_eq!(k.event(json!({ "view": view, "saved": [k.photos[0]] })).await, StatusCode::NO_CONTENT);
 	assert_eq!(
@@ -306,13 +320,11 @@ async fn a_photo_saved_on_a_gbp_drops_out_there_and_its_draft_stays() {
 	let again = k.panel.kit_offer(k.seven, true, later).await.unwrap().unwrap();
 	let fourth = again.drafts.iter().find(|d| d.id == fourth).expect("its draft is still offered");
 	assert_eq!(fourth.photos.iter().map(|p| p.id).collect::<Vec<_>>(), [k.photos[1]], "the saved photo dropped out there");
-	let three = k.panel.kit(DevIdentity::named("dev@localhost"), k.three, later).await.unwrap().unwrap();
-	let order: Vec<i64> = three.drafts.iter().map(|d| d.id).collect();
-	assert_eq!(order, [1, 2, 3, 5, 6, 7, 8, 4].map(|n| k.drafts[n - 1]), "elsewhere, a draft whose photos were saved ranks lower");
+	let three = k.panel.kit(k.owner, k.three, later).await.unwrap().unwrap();
 	assert_eq!(
-		three.drafts[7].photos.iter().map(|p| p.id).collect::<Vec<_>>(),
+		three.drafts[0].photos.iter().map(|p| p.id).collect::<Vec<_>>(),
 		[k.photos[1], k.photos[0]],
-		"and the more used photo last"
+		"elsewhere, the more used photo last"
 	);
 }
 

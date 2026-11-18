@@ -17,6 +17,7 @@ const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
   country: { code: "FR", by_hand: false },
   phone: null,
   trade_id: null,
+  brand_id: null,
   areas: [],
   hidden_address: null,
   customers_visit: null,

@@ -5,7 +5,7 @@ import { Button, Skeleton, cn, useDismissableLayer } from "@evinvest/uikit";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { type Listed, type Tags, issueOf, narrowed, openAccount, openOrFocus, openTrade, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useAddWindow, move, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useKitWindow, useTradeWindow, useTrades } from "@/entities/gmb";
+import { type Listed, type Tags, issueOf, narrowed, openAccount, openOrFocus, openTrade, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useAddWindow, move, useBrands, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useKitWindow, useTradeWindow, useTrades } from "@/entities/gmb";
 import { AddPanel } from "@/features/add-gmb";
 import { PlacingBar } from "@/features/place-gmb";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
@@ -21,6 +21,7 @@ import { ErrorState } from "@/shared/ui/error-state";
 
 import { AccountWindow } from "./account-window";
 import { Peek } from "./peek";
+import { BrandWindow } from "./brand-window";
 import { CategoriesWindow, TradeWindow } from "./trade-window";
 import { KitWindow } from "./kit-window";
 import { TrashWindow } from "./trash-window";
@@ -205,6 +206,13 @@ function GmbMap({ config }: { config: MapConfig }) {
   const tradeWindow = useTradeWindow();
   const trades = useTrades();
   const opened = tradeWindow !== null && trades.status === "ok" ? trades.data.find((tr) => tr.id === tradeWindow.trade) : undefined;
+  const brands = useBrands();
+  const openedBrand = tradeWindow?.brand != null && brands.status === "ok" ? brands.data.find((b) => b.id === tradeWindow.brand) : undefined;
+  // a brand removed: its category's tab
+  const brandGone = tradeWindow !== null && tradeWindow.brand !== null && brands.status === "ok" && openedBrand === undefined;
+  useEffect(() => {
+    if (brandGone && tradeWindow.country !== null) openTrade(tradeWindow.trade, tradeWindow.country);
+  }, [brandGone, tradeWindow]);
   // a trade deleted, here or in another tab: its window closes
   const gone = tradeWindow !== null && trades.status === "ok" && opened === undefined;
   useEffect(() => {
@@ -300,7 +308,8 @@ function GmbMap({ config }: { config: MapConfig }) {
       )}
       {peekedListed && windows && !windowed && !peekedListed.gmb.location && <Peek listed={peekedListed} onClose={() => peek(null)} className="absolute top-4 right-4" />}
       {peekedListed && windows && windowed && <LocationWindow listed={peekedListed} tab={tab} />}
-      {opened && tradeWindow && gmails.status === "ok" && windows && <TradeWindow trade={opened} country={tradeWindow.country} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
+      {opened && tradeWindow && tradeWindow.brand === null && gmails.status === "ok" && windows && <TradeWindow trade={opened} country={tradeWindow.country} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
+      {opened && openedBrand && gmails.status === "ok" && windows && <BrandWindow trade={opened} brand={openedBrand} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
       {account && accountWindow && gmails.status === "ok" && windows && <AccountWindow gmail={account} tab={accountWindow.tab} gbps={under(gmails.data, account.id).length} />}
       {kitWindow !== null && map.status === "ok" && windows && <KitWindow map={map.map} area={kitWindow} />}
       {map.status === "ok" && windows && <StudyAreaWindow map={map.map} />}

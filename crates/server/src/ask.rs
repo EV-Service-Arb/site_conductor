@@ -167,71 +167,71 @@ pub(crate) async fn ask(
 		.collect();
 	let tools = Value::Array(tools);
 	let end = 'rounds: {
-	for _ in 0..ROUNDS {
-		let asked = json!({
-			"model": MODEL,
-			"max_tokens": 16000,
-			"fallbacks": "default",
-			"output_config": { "effort": "medium" },
-			"system": [{ "type": "text", "text": SUBSCRIPTION }, { "type": "text", "text": SYSTEM }],
-			"tools": tools,
-			"messages": history,
-		});
-		let reply = match model.answer(&token, &asked).await? {
-			Ok(reply) => reply,
-			Err(said) if bill == Bill::Theirs => {
-				state.sign_in.panel.claude_refused(caller.user_id, said, Timestamp::now()).await?;
-				answer
-					.text
-					.push_str("\n\nYour Claude connection was refused: reconnect it, or disconnect it to ask on the panel's.");
-				break 'rounds AnswerState::Stopped;
-			}
-			Err(said) => return Err(Refusal::new(Code::Unavailable, format!("the panel's Claude refused its token: {said}"))),
-		};
-		let used = tokens(&reply)?;
-		answer.cost.tokens.add(&used);
-		let spent = state.sign_in.panel.model_used(by, answered_by(&reply)?, &used, tab.as_mut(), Timestamp::now()).await?;
-		answer.cost.charged = tab.as_ref().map_or(0, |t| t.charged);
-		let content = reply["content"].as_array().cloned().ok_or_else(|| eyre::eyre!("the model answered no content: {reply}"))?;
-		let mut results = Vec::new();
-		for block in &content {
-			match block["type"].as_str() {
-				Some("text") => answer.text = block["text"].as_str().ok_or_else(|| eyre::eyre!("a text block without text: {block}"))?.to_owned(),
-				Some("tool_use") => {
-					let (result, step) = use_tool(&state, &headers, &permissions, &q, &mut answer, &block["name"], &block["input"]).await;
-					answer.steps.push(Step { label: step, done: true });
-					// a text answer is the model's as it came; anything else, its JSON
-					let content = match result {
-						Value::String(text) => text,
-						other => other.to_string(),
-					};
-					results.push(json!({ "type": "tool_result", "tool_use_id": block["id"], "content": content }));
-				}
-				_ => {}
-			}
-		}
-		history.push(json!({ "role": "assistant", "content": content }));
-		match reply["stop_reason"].as_str() {
-			Some("tool_use") => match spent {
-				Some(why) => {
-					answer.text.push_str(&format!("\n\nI stopped here: {why}."));
+		for _ in 0..ROUNDS {
+			let asked = json!({
+				"model": MODEL,
+				"max_tokens": 16000,
+				"fallbacks": "default",
+				"output_config": { "effort": "medium" },
+				"system": [{ "type": "text", "text": SUBSCRIPTION }, { "type": "text", "text": SYSTEM }],
+				"tools": tools,
+				"messages": history,
+			});
+			let reply = match model.answer(&token, &asked).await? {
+				Ok(reply) => reply,
+				Err(said) if bill == Bill::Theirs => {
+					state.sign_in.panel.claude_refused(caller.user_id, said, Timestamp::now()).await?;
+					answer
+						.text
+						.push_str("\n\nYour Claude connection was refused: reconnect it, or disconnect it to ask on the panel's.");
 					break 'rounds AnswerState::Stopped;
 				}
-				None => {
-					history.push(json!({ "role": "user", "content": results }));
-					written.write(&turns, &answer, AnswerState::Working, None).await?;
+				Err(said) => return Err(Refusal::new(Code::Unavailable, format!("the panel's Claude refused its token: {said}"))),
+			};
+			let used = tokens(&reply)?;
+			answer.cost.tokens.add(&used);
+			let spent = state.sign_in.panel.model_used(by, answered_by(&reply)?, &used, tab.as_mut(), Timestamp::now()).await?;
+			answer.cost.charged = tab.as_ref().map_or(0, |t| t.charged);
+			let content = reply["content"].as_array().cloned().ok_or_else(|| eyre::eyre!("the model answered no content: {reply}"))?;
+			let mut results = Vec::new();
+			for block in &content {
+				match block["type"].as_str() {
+					Some("text") => answer.text = block["text"].as_str().ok_or_else(|| eyre::eyre!("a text block without text: {block}"))?.to_owned(),
+					Some("tool_use") => {
+						let (result, step) = use_tool(&state, &headers, &permissions, &q, &mut answer, &block["name"], &block["input"]).await;
+						answer.steps.push(Step { label: step, done: true });
+						// a text answer is the model's as it came; anything else, its JSON
+						let content = match result {
+							Value::String(text) => text,
+							other => other.to_string(),
+						};
+						results.push(json!({ "type": "tool_result", "tool_use_id": block["id"], "content": content }));
+					}
+					_ => {}
 				}
-			},
-			Some("refusal") => {
-				answer.text = "I can't help with that.".to_owned();
-				break 'rounds AnswerState::Done;
 			}
-			Some("end_turn" | "max_tokens" | "pause_turn" | "stop_sequence") => break 'rounds AnswerState::Done,
-			other => return Err(eyre::eyre!("the model stopped for {other:?}").into()),
+			history.push(json!({ "role": "assistant", "content": content }));
+			match reply["stop_reason"].as_str() {
+				Some("tool_use") => match spent {
+					Some(why) => {
+						answer.text.push_str(&format!("\n\nI stopped here: {why}."));
+						break 'rounds AnswerState::Stopped;
+					}
+					None => {
+						history.push(json!({ "role": "user", "content": results }));
+						written.write(&turns, &answer, AnswerState::Working, None).await?;
+					}
+				},
+				Some("refusal") => {
+					answer.text = "I can't help with that.".to_owned();
+					break 'rounds AnswerState::Done;
+				}
+				Some("end_turn" | "max_tokens" | "pause_turn" | "stop_sequence") => break 'rounds AnswerState::Done,
+				other => return Err(eyre::eyre!("the model stopped for {other:?}").into()),
+			}
 		}
-	}
-	answer.text.push_str("\n\nI stopped here: this took more steps than one answer may.");
-	AnswerState::Stopped
+		answer.text.push_str("\n\nI stopped here: this took more steps than one answer may.");
+		AnswerState::Stopped
 	};
 	let done = written.write(&turns, &answer, end, Some(started)).await?;
 	Ok(Json(done))

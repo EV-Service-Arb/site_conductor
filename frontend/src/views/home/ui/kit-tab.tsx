@@ -22,8 +22,8 @@ export function KitTab({ listed }: { listed: Listed }) {
   if (res.status === "loading") return <Skeleton className="h-64 w-full max-w-3xl" />;
   if (res.status === "error") return <ErrorState failure={res.failure} onRetry={res.reload} />;
   const k = res.data;
-  const country = gmb.country?.code;
-  const src = (photo: number) => (gmb.trade_id === null || country === undefined ? undefined : photoSrc(gmb.trade_id, country, photo));
+  const brand = k.brand;
+  const src = (photo: number) => (brand === null ? undefined : photoSrc(brand.id, photo));
   const open = k.drafts.filter((d) => !d.went_here);
   const went = k.drafts.filter((d) => d.went_here);
   const funnel = [
@@ -51,7 +51,9 @@ export function KitTab({ listed }: { listed: Listed }) {
         <h3 className={SECTION_HEAD}>
           {t(kit.drafts, "Drafts")} <span className="font-normal tabular-nums">{open.length}</span>
           <span className="flex-1" />
-          <span className={HINT}>{t(kit.drafts.offerOrder, "in the offer's order · the pool is the trade's")}</span>
+          <span className={HINT}>
+            {brand === null ? t(kit.drafts.offerOrderNoBrand, "in the offer's order · no brand, no photos") : t(kit.drafts.offerOrderBrand, "in the offer's order · photos: {brand} · {n}", { brand: brand.name, n: brand.photos })}
+          </span>
         </h3>
         {open.length === 0 ? <p className="text-sm text-ink-soft">{t(kit.drafts.noneLeft, "None left to offer here: its page answers with Google's form.")}</p> : <Drafts drafts={open} src={src} />}
       </section>
@@ -91,7 +93,7 @@ function Drafts({ drafts, src }: { drafts: readonly KitRanked[]; src: (photo: nu
           <p className="line-clamp-2 min-w-0 flex-1 text-sm text-ink">{d.text}</p>
           <span className="flex shrink-0 gap-1">
             {d.photos.map((p) => (
-              <span key={p.id} className={cn(p.went_here && "opacity-40")} title={p.went_here ? t(kit.photos.wentHere, "saved here already") : t(kit.uses, "{n} uses", { n: p.uses })}>
+              <span key={p.id} title={t(kit.uses, "{n} uses", { n: p.uses })}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- the API's own JPEG, behind the session */}
                 <img src={src(p.id)} alt="" loading="lazy" className="size-9 rounded-md object-cover" />
               </span>

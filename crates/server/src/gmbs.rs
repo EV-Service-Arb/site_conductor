@@ -55,6 +55,8 @@ pub struct GmbDto {
 	pub phone: Option<String>,
 	/// Its category is this trade in its country.
 	pub trade_id: Option<i64>,
+	/// Of its gmail and its category.
+	pub brand_id: Option<i64>,
 	/// Service areas, at most 20.
 	pub areas: Vec<String>,
 	/// Where its verification film is shot.
@@ -326,6 +328,7 @@ impl Around {
 			country: b.country,
 			phone: b.phone,
 			trade_id: b.trade_id,
+			brand_id: b.brand_id,
 			areas: b.areas,
 			hidden_address: b.hidden_address,
 			customers_visit: b.customers_visit,
