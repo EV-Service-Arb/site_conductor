@@ -754,12 +754,12 @@ Places requests charge at the buy.
 **Who pays a Places request** about a GBP or a gmail: its gmail's own Maps key, then its owner's
 other gmails' keys, free; then the Google accounts' Places keys (below) at the admin's price per
 request kind (Places' SKU), held under one lock per person from the balance read to the charge, so a
-request below the price, or unpriced, is refused before Google is asked. A cached answer costs
+request below the price is refused before Google is asked. A cached answer costs
 nothing. The operator's `locate` tries the gmail's keys, then the house pays.
 review_archive's lookups are the house's for now.
 
 **A study's pull is sold per search** (`placement.search`) the conductor buys for it, on the
-house's rotation, under the same lock; refused while it is unpriced:
+house's rotation, under the same lock:
 
 ```text
 POST /api/v1/placement/study/pull ─ price set, budget = balance ÷ price ─▶ placement …/asks: [Ask]
@@ -780,7 +780,7 @@ model's tokens: a million). Both halves are the admin's:
 
 ```text
 cost        what its units cost us, dated (`unit_costs`, append-only): a use costs what its unit did
-            when it was done, the first cost ever set for a use before it, none after one set back to unknown
+            when it was done, the first cost ever set for a use before it
 multiplier  the premium over it (`token_multipliers`): 1 at cost, 0 free
 price       the cost now, in tokens, × the multiplier, rounded up (`Rate::price`); never stored
 ```
@@ -788,8 +788,8 @@ price       the cost now, in tokens, × the multiplier, rounded up (`Rate::price
 Every use of every item is charged to whom it was made for at its price, and the charge keeps what
 it cost us (`token_ledger.cost_usd_micros`; review_archive's charge names what its run used), so a
 spend reads as charged or at cost. The admin's page, both tables and the snapshot are walked from the
-catalog. An item without both is not sold: a Places request, a map, a browser's start is refused, a
-walk step not walked.
+catalog. Each item the catalog gains starts at cost 0, ×1 (`init_rates`, on open): free until
+priced, never refused for want of a price.
 
 **Usage is what vendors bill us.** Each use is a row of `usage` (append-only: item, units, whose
 bill, who told), counted where it happens:

@@ -96,7 +96,6 @@ async fn a_page_breaking_the_feeds_rules_is_refused_whole() {
 	for (scope, page) in [
 		(Scope::Browsers, vec![used(1, BrowserStart::Gologin, 1, Some(a)), used(2, PhoneTime::Running, 1, None)]),
 		(Scope::ReviewArchive, vec![used(1, WalkStep::Open, 1, Some(a))]),
-		(Scope::Browsers, vec![used(1, BrowserStart::Gologin, 1, Some(a)), used(2, BrowserStart::Mimic, 1, Some(a))]),
 	] {
 		assert!(take(&p, scope, page.clone(), 0).await.is_err(), "{page:?}");
 	}

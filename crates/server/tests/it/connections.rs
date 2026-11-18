@@ -310,8 +310,8 @@ async fn every_priced_item_is_the_admins_to_price_and_the_archive_is_told() {
 	let of = |read: &Value, item: &str| row(read, item)["price"].clone();
 	assert_eq!(
 		(of(&read, "places.details"), of(&read, "walk.open"), row(&read, "walk.open")["multiplier"]["multiplier"].clone()),
-		(Value::Null, json!(7), json!(1.0)),
-		"Places unsold, a walk as the archive metered it: its price its cost, at ×1"
+		(json!(0), json!(7), json!(1.0)),
+		"Places free until priced, a walk as the archive metered it: its price its cost, at ×1"
 	);
 
 	let (status, set) = w
@@ -408,8 +408,6 @@ async fn a_use_is_costed_at_the_cost_it_had_when_done() {
 	assert_eq!(load(&mut w).await, StatusCode::OK);
 	cost(&mut w, json!(14)).await;
 	assert_eq!(load(&mut w).await, StatusCode::OK);
-	cost(&mut w, Value::Null).await;
-	assert_eq!(load(&mut w).await, StatusCode::CONFLICT, "without a cost, not sold");
 
 	let now = jiff::Timestamp::now().as_millisecond();
 	let (status, usage) = w.call(Method::GET, &format!("/api/v1/admin/usage?from={}&to={}", now - 3_600_000, now + 60_000), None).await;

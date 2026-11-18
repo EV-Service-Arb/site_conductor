@@ -199,10 +199,6 @@
     "en": "Google Maps key",
     "t": "Ключ Google Maps"
   },
-  "account.mapsKey.unsold": {
-    "en": "not sold",
-    "t": "не продаётся"
-  },
   "account.mapsKey.works": {
     "en": "Works",
     "t": "Работает"

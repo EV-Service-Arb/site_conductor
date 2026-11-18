@@ -5,5 +5,5 @@ CREATE TABLE places_prices (
 	set_at INTEGER NOT NULL
 ) STRICT;
 
-INSERT INTO places_prices SELECT substr(item, 8), tokens, set_by, set_at FROM token_prices WHERE item LIKE 'places.%';
+INSERT INTO places_prices SELECT substr(item, 8), tokens, set_by, set_at FROM token_prices WHERE item IN ('places.details', 'places.search', 'places.autocomplete');
 DROP TABLE token_prices;

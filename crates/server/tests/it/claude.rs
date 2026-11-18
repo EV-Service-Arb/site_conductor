@@ -207,6 +207,7 @@ async fn a_person_connects_their_claude_from_the_pasted_code() {
 #[tokio::test]
 async fn an_answer_runs_on_whose_claude_and_says_what_it_cost() {
 	let mut w = World::new().await;
+	w.call(Method::GET, "/api/v1/me", None).await; // the gate's GetMe records the user a balance is kept for
 	let start = w.balance().await;
 
 	let per_million = [(ModelTokens::Input, 10), (ModelTokens::CacheWrite, 12), (ModelTokens::CacheRead, 1), (ModelTokens::Output, 50)];
