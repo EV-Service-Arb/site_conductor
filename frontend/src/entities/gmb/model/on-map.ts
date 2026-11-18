@@ -41,7 +41,7 @@ export function setOnMap(change: Partial<OnMap>): void {
 }
 
 /** One window at a time over the map: opening one closes the rest. */
-const NO_WINDOW = { gmb: undefined, trade: undefined, country: undefined, brand: undefined, account: undefined, tab: undefined, categories: undefined, trash: undefined, add: undefined, kit: undefined } as const;
+const NO_WINDOW = { gmb: undefined, trade: undefined, country: undefined, brand: undefined, account: undefined, tab: undefined, categories: undefined, trash: undefined, add: undefined, kit: undefined, kit_gmb: undefined, kit_pool: undefined, kit_edit: undefined } as const;
 
 /** The GMB whose card is open on the map. */
 export function usePeeked(): number | null {
@@ -113,13 +113,19 @@ export function openTrash(on: boolean): void {
   setHome({ ...NO_WINDOW, trash: on });
 }
 
-/** The review kit's area window (`?kit`): `""` draws a new area, a slug shows that one. */
-export function useKitWindow(): string | null {
-  return useHome()?.kit ?? null;
+/** Where in a review kit: `kit` its slug (`""`: the list, or with `edit` a new one); a GBP of it, a pool (`<trade>.<country>`) or its editor. */
+export type KitAt = { kit: string; gmb?: number | undefined; pool?: string | undefined; edit?: true | undefined };
+
+/** The kit floating over the map (`?kit`). */
+export function useKitFloat(): KitAt | null {
+  const home = useHome();
+  if (home?.kit === undefined) return null;
+  return { kit: home.kit, gmb: home.kit_gmb, pool: home.kit_pool, edit: home.kit_edit ? true : undefined };
 }
 
-export function openKit(area: string | null): void {
-  setHome({ ...NO_WINDOW, kit: area ?? undefined });
+/** Over the map: one window at a time. */
+export function floatKit(at: KitAt | null): void {
+  setHome({ ...NO_WINDOW, kit: at?.kit, kit_gmb: at?.gmb, kit_pool: at?.pool, kit_edit: at?.edit });
 }
 
 /** What the Add a GBP panel opens with: the outline's gmail and trade, when it is scoped to one. */

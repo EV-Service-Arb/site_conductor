@@ -374,13 +374,30 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The area at `/<slug>/`. */
+        /** The area `slug`. */
         get: operations["area"];
         /**
-         * Draws the area at `/<slug>/`, a circle; its country its city's, else its centre's (Places, paid by the caller); over what it was if the caller drew it.
-         * @description 400 a link the conductor's own pages hold, or a centre in no country; 409 someone else's area.
+         * Draws the area `slug`, a circle; its country its city's, else its centre's (Places, paid by the caller); over what it was if the caller drew it.
+         * @description 400 a centre in no country; 409 someone else's area.
          */
         put: operations["put_area"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/areas/{slug}/gmbs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The area and the caller's GBPs with a point in it or within twice its radius, nearest its centre first. */
+        get: operations["area_gmbs"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -726,7 +743,8 @@ export interface paths {
         delete: operations["remove_photo"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Labels a photo of the brand with what it shows; answers the brand's photos. */
+        patch: operations["label_photo"];
         trace?: never;
     };
     "/gmails": {
@@ -1138,7 +1156,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The GBP's kit: where its QR leads, its category's drafts as its offer weighs them, and the last 30 days' funnel. */
+        /** The GBP's kit: where its QR leads, its category's drafts as its offer weighs them, and what it collected since `since`. */
         get: operations["gmb_kit"];
         /**
          * Points the GBP's QR at `target`, `null` turning the kit off. On, its review link is asked of Places once (a Place Details, paid as a lookup).
@@ -1276,23 +1294,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/kit/areas/{slug}/gmbs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The area and the caller's GBPs with a point in it or within its margin, nearest its centre first. */
-        get: operations["kit_area_gmbs"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/kit/cities": {
         parameters: {
             query?: never;
@@ -1339,6 +1340,45 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's kits. */
+        get: operations["kits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kits/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's kit over the period from `since`: what its GBPs collected, each GBP's QR and what is left to offer it, its categories' pools and the latest of what happened. */
+        get: operations["kit"];
+        /**
+         * Makes the caller's kit `slug`, or sets it over what it was: a GBP that stays keeps when it joined. `new` is no kit's.
+         * @description 400 a bad slug or name, or no such area; 409 a GBP not the caller's.
+         */
+        put: operations["put_kit"];
+        post?: never;
+        /** Deletes the caller's kit: only the selection goes, no draft, photo or use. */
+        delete: operations["delete_kit"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1869,7 +1909,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Edits a draft's text; answers the category's drafts.
+         * Edits a draft's text or its places; answers the category's drafts.
          * @description 409 one already copied: a use is of the text it had.
          */
         patch: operations["edit_kit_draft"];
@@ -2093,6 +2133,23 @@ export interface components {
             /** Format: int64 */
             radius_m: number;
             slug: string;
+        };
+        /** @description One of the caller's GBPs in or next to an area. */
+        AreaGmb: {
+            address: string | null;
+            /** Format: double */
+            distance_m: number;
+            /** Format: int64 */
+            id: number;
+            /** @description Within its radius; else within twice it. */
+            inside: boolean;
+            location: components["schemas"]["LatLng"];
+            name: string;
+            state: components["schemas"]["State"];
+        };
+        AreaGmbs: {
+            area: components["schemas"]["Area"];
+            gmbs: components["schemas"]["AreaGmb"][];
         };
         Areas: {
             areas: components["schemas"]["Area"][];
@@ -2416,6 +2473,10 @@ export interface components {
             name?: string | null;
             site?: components["schemas"]["BrandId"] | null;
         };
+        EditKitDraft: {
+            places?: string[] | null;
+            text?: string | null;
+        };
         /** @description Why the request was refused. */
         Error: {
             code: components["schemas"]["ErrorCode"];
@@ -2671,11 +2732,11 @@ export interface components {
         GmbKit: {
             /** @description Whose photos its drafts carry: `null`, none. */
             brand: components["schemas"]["Brand"] | null;
-            /** @description Its category's drafts in the offer's order. */
+            /** @description Its category's drafts in its places, in the offer's order. */
             drafts: components["schemas"]["KitRanked"][];
-            funnel: components["schemas"]["KitFunnel"];
             /** @description Its page on its landing: `null` without one, and then only `google` is open to it. */
             page: string | null;
+            tally: components["schemas"]["KitTally"];
             /** @description `null`: off. */
             target: components["schemas"]["KitTarget"] | null;
             /** @description What its QR encodes; `null` while off. */
@@ -2756,14 +2817,44 @@ export interface components {
             note: string | null;
             service: string | null;
         };
-        KitAreaGmbs: {
-            area: components["schemas"]["Area"];
-            gmbs: components["schemas"]["KitNearby"][];
+        /** @description A named selection of the caller's GBPs, over a period. */
+        Kit: {
+            area: string | null;
+            /** @description In the order they joined. */
+            gmbs: components["schemas"]["KitMember"][];
+            /** @description Newest first, at most 20. */
+            latest: components["schemas"]["KitEvent"][];
+            name: string;
+            pools: components["schemas"]["KitPoolSummary"][];
+            slug: string;
+            /** @description The members' summed: a GBP in two kits counts in both. */
+            tally: components["schemas"]["KitTally"];
+        };
+        /**
+         * @description Why a member collects nothing, or only through Google's form.
+         *
+         *     - `draft`: Not on Google yet.
+         *     - `verifying`: Google is verifying it: it waits.
+         *     - `off`: Its kit is off.
+         *     - `no_page`: No landing page of its: Google's form only.
+         * @enum {string}
+         */
+        KitBlock: "suspended" | "draft" | "verifying" | "off" | "no_page";
+        KitCategory: {
+            country: components["schemas"]["Country"];
+            /** Format: int64 */
+            trade: number;
         };
         KitDraft: {
             created_at: string;
             /** Format: int64 */
             id: number;
+            /** @description The category's keywords its text carries. */
+            keywords: string[];
+            /** @description Areas its text names that `places` lacks: it is offered outside them. */
+            names: string[];
+            /** @description Areas it is offered in; none: everywhere. */
+            places: string[];
             text: string;
             /**
              * Format: int64
@@ -2771,34 +2862,48 @@ export interface components {
              */
             uses: number;
         };
-        KitDraftText: {
-            text: string;
+        KitEvent: {
+            at: string;
+            /**
+             * Format: int64
+             * @description The draft, the photo, or the review's rating.
+             */
+            detail: number | null;
+            /** Format: int64 */
+            gmb: number;
+            kind: components["schemas"]["KitHappening"];
         };
-        /** @description The last 30 days. */
-        KitFunnel: {
+        /**
+         * @description - `posted`: A review from a copy.
+         *     - `reviewed`: A review from no copy.
+         *     - `gone`: A review from a copy, gone.
+         * @enum {string}
+         */
+        KitHappening: "shown" | "scanned" | "opened" | "copied" | "saved" | "posted" | "reviewed" | "gone";
+        KitLeft: {
             /** Format: int64 */
-            copied: number;
+            drafts: number;
             /** Format: int64 */
-            opened: number;
-            /** Format: int64 */
-            photos_saved: number;
-            /** Format: int64 */
-            scanned: number;
-            /** Format: int64 */
-            shown: number;
+            photos: number;
         };
-        /** @description One of the caller's GBPs by an area. */
-        KitNearby: {
+        KitMember: {
             address: string | null;
-            /** Format: double */
-            distance_m: number;
+            blocked: components["schemas"]["KitBlock"] | null;
+            category: components["schemas"]["KitCategory"] | null;
             /** Format: int64 */
             id: number;
-            last_shown: string | null;
-            location: components["schemas"]["LatLng"];
+            /** @description What the offer still has for it. */
+            left: components["schemas"]["KitLeft"];
+            location: components["schemas"]["LatLng"] | null;
             name: string;
+            /** @description Its landing page; `null` without one. */
+            page: string | null;
             state: components["schemas"]["State"];
+            /** @description Since the period's start or its joining, the later. */
+            tally: components["schemas"]["KitTally"];
             target: components["schemas"]["KitTarget"] | null;
+            /** @description What its QR encodes; `null` while off. */
+            url: string | null;
         };
         KitPhoto: {
             created_at: string;
@@ -2806,6 +2911,8 @@ export interface components {
             height: number;
             /** Format: int64 */
             id: number;
+            /** @description What it shows, for the reviewer; `null`: not labelled yet. */
+            shows: string | null;
             /**
              * Format: int64
              * @description Saved, every GBP.
@@ -2817,6 +2924,17 @@ export interface components {
         /** @description A category's drafts. */
         KitPool: {
             drafts: components["schemas"]["KitDraft"][];
+            /** @description The category's keywords no draft carries. */
+            unmentioned: string[];
+        };
+        KitPoolSummary: {
+            country: components["schemas"]["Country"];
+            /** Format: int64 */
+            drafts: number;
+            name: string;
+            /** Format: int64 */
+            trade: number;
+            warnings: string[];
         };
         /** @description A draft as the offer weighs it for one GBP. */
         KitRanked: {
@@ -2839,10 +2957,55 @@ export interface components {
             height: number;
             /** Format: int64 */
             id: number;
+            shows: string | null;
             /** Format: int64 */
             uses: number;
             /** Format: int64 */
             width: number;
+        };
+        KitRow: {
+            area: string | null;
+            /** Format: int64 */
+            members: number;
+            name: string;
+            slug: string;
+        };
+        /** @description What was collected since the period's start. */
+        KitTally: {
+            /** Format: int64 */
+            copied: number;
+            /**
+             * Format: int64
+             * @description Of those, gone off it.
+             */
+            gone: number;
+            /**
+             * Format: int64
+             * @description Reviews from a copy on Google.
+             */
+            on_google: number;
+            /**
+             * Format: int64
+             * @description Pages opened, from anywhere.
+             */
+            opened: number;
+            /**
+             * Format: int64
+             * @description Reviews from no copy.
+             */
+            other_reviews: number;
+            /** Format: int64 */
+            photos_saved: number;
+            /**
+             * Format: int64
+             * @description Pages opened from the QR.
+             */
+            scanned: number;
+            /**
+             * Format: int64
+             * @description QRs shown.
+             */
+            shown: number;
         };
         /**
          * @description Where a GBP's QR leads.
@@ -2853,6 +3016,13 @@ export interface components {
          * @enum {string}
          */
         KitTarget: "google" | "drafts" | "one_tap";
+        Kits: {
+            kits: components["schemas"]["KitRow"][];
+        };
+        LabelPhoto: {
+            /** @description What it shows, ≤ 60 characters: its alt and caption on the landing; empty clears it. */
+            shows: string;
+        };
         LatLng: {
             /** Format: double */
             lat: number;
@@ -3100,6 +3270,11 @@ export interface components {
             /** Format: int64 */
             trade?: number | null;
         };
+        NewKitDraft: {
+            /** @description Area slugs; none: everywhere. */
+            places: string[];
+            text: string;
+        };
         /** @description The key and its secret, shown this once. */
         NewSourceKey: {
             key_id: string;
@@ -3258,6 +3433,12 @@ export interface components {
             name: string;
             /** Format: int64 */
             radius_m: number;
+        };
+        PutKit: {
+            /** @description An area slug, a reference only: membership is `gmbs`. */
+            area?: string | null;
+            gmbs: number[];
+            name: string;
         };
         QueriesCacheImport: {
             /** @description By the request's SHA-256, 64 hex characters. */
@@ -3717,11 +3898,10 @@ export interface components {
         /**
          * @description - `launch`: A draft's launch onto Google.
          *     - `browser`: The gmail's browser.
-         *     - `kit`: A verified GBP's review kit.
          *     - `connections`: A gmail's inbox and Maps key.
          * @enum {string}
          */
-        Tab: "launch" | "browser" | "kit" | "connections";
+        Tab: "launch" | "browser" | "connections";
         /** @description What an action does: a view, an operation, or a binding of the page's keymap — nothing else. */
         Target: {
             href: string;
@@ -4145,6 +4325,8 @@ export type Advance = components['schemas']['Advance'];
 export type Alerts = components['schemas']['Alerts'];
 export type AnswerState = components['schemas']['AnswerState'];
 export type Area = components['schemas']['Area'];
+export type AreaGmb = components['schemas']['AreaGmb'];
+export type AreaGmbs = components['schemas']['AreaGmbs'];
 export type Areas = components['schemas']['Areas'];
 export type Ask = components['schemas']['Ask'];
 export type Attachment = components['schemas']['Attachment'];
@@ -4178,6 +4360,7 @@ export type Destination = components['schemas']['Destination'];
 export type DestinationKind = components['schemas']['DestinationKind'];
 export type Device = components['schemas']['Device'];
 export type EditBrand = components['schemas']['EditBrand'];
+export type EditKitDraft = components['schemas']['EditKitDraft'];
 export type Error = components['schemas']['Error'];
 export type ErrorCode = components['schemas']['ErrorCode'];
 export type Exit = components['schemas']['Exit'];
@@ -4210,16 +4393,24 @@ export type Invite = components['schemas']['Invite'];
 export type KeptAnswer = components['schemas']['KeptAnswer'];
 export type KeyedSourceKind = components['schemas']['KeyedSourceKind'];
 export type Kickback = components['schemas']['Kickback'];
-export type KitAreaGmbs = components['schemas']['KitAreaGmbs'];
+export type Kit = components['schemas']['Kit'];
+export type KitBlock = components['schemas']['KitBlock'];
+export type KitCategory = components['schemas']['KitCategory'];
 export type KitDraft = components['schemas']['KitDraft'];
-export type KitDraftText = components['schemas']['KitDraftText'];
-export type KitFunnel = components['schemas']['KitFunnel'];
-export type KitNearby = components['schemas']['KitNearby'];
+export type KitEvent = components['schemas']['KitEvent'];
+export type KitHappening = components['schemas']['KitHappening'];
+export type KitLeft = components['schemas']['KitLeft'];
+export type KitMember = components['schemas']['KitMember'];
 export type KitPhoto = components['schemas']['KitPhoto'];
 export type KitPool = components['schemas']['KitPool'];
+export type KitPoolSummary = components['schemas']['KitPoolSummary'];
 export type KitRanked = components['schemas']['KitRanked'];
 export type KitRankedPhoto = components['schemas']['KitRankedPhoto'];
+export type KitRow = components['schemas']['KitRow'];
+export type KitTally = components['schemas']['KitTally'];
 export type KitTarget = components['schemas']['KitTarget'];
+export type Kits = components['schemas']['Kits'];
+export type LabelPhoto = components['schemas']['LabelPhoto'];
 export type LatLng = components['schemas']['LatLng'];
 export type Ledger = components['schemas']['Ledger'];
 export type LedgerEntry = components['schemas']['LedgerEntry'];
@@ -4245,6 +4436,7 @@ export type NewBrand = components['schemas']['NewBrand'];
 export type NewChat = components['schemas']['NewChat'];
 export type NewGmail = components['schemas']['NewGmail'];
 export type NewGmb = components['schemas']['NewGmb'];
+export type NewKitDraft = components['schemas']['NewKitDraft'];
 export type NewSourceKey = components['schemas']['NewSourceKey'];
 export type NewUnplaced = components['schemas']['NewUnplaced'];
 export type On = components['schemas']['On'];
@@ -4265,6 +4457,7 @@ export type Prices = components['schemas']['Prices'];
 export type Probe = components['schemas']['Probe'];
 export type Provider = components['schemas']['Provider'];
 export type PutArea = components['schemas']['PutArea'];
+export type PutKit = components['schemas']['PutKit'];
 export type QueriesCacheImport = components['schemas']['QueriesCacheImport'];
 export type Question = components['schemas']['Question'];
 export type ReadInternalReads = components['schemas']['ReadInternalReads'];
@@ -7247,6 +7440,135 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Area"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    area_gmbs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AreaGmbs"];
                 };
             };
             /** @description `bad_request` */
@@ -10666,6 +10988,142 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    label_photo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description `<photo>.jpg`. */
+                file: string;
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabelPhoto"];
+            };
+        };
+        responses: {
+            /** @description A brand's photos, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandPhotos"];
+                };
             };
             /** @description `bad_request` */
             400: {
@@ -14569,7 +15027,9 @@ export interface operations {
     };
     gmb_kit: {
         parameters: {
-            query?: never;
+            query: {
+                since: number;
+            };
             header?: never;
             path: {
                 id: number;
@@ -15878,135 +16338,6 @@ export interface operations {
             };
         };
     };
-    kit_area_gmbs: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KitAreaGmbs"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     cities: {
         parameters: {
             query: {
@@ -16286,6 +16617,525 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Locality"];
                 };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    kits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Kits"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    kit: {
+        parameters: {
+            query: {
+                since: number;
+            };
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A named selection of the caller's GBPs, over a period. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Kit"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    put_kit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutKit"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_kit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description `bad_request` */
             400: {
@@ -20577,7 +21427,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["KitDraftText"];
+                "application/json": components["schemas"]["NewKitDraft"];
             };
         };
         responses: {
@@ -20843,7 +21693,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["KitDraftText"];
+                "application/json": components["schemas"]["EditKitDraft"];
             };
         };
         responses: {
@@ -21758,6 +22608,8 @@ export const flowKindDtoValues: ReadonlyArray<FlattenedDeepRequired<components>[
 export const generalAccessValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GeneralAccess"]> = ["none", "view"];
 export const gmailRoleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GmailRole"]> = ["owner", "manager"];
 export const keyedSourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KeyedSourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "bot"];
+export const kitBlockValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitBlock"]> = ["suspended", "draft", "verifying", "off", "no_page"];
+export const kitHappeningValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitHappening"]> = ["shown", "scanned", "opened", "copied", "saved", "posted", "reviewed", "gone"];
 export const kitTargetValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitTarget"]> = ["google", "drafts", "one_tap"];
 export const ledgerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["LedgerKind"]> = ["add", "set", "charge", "accrual", "kickback"];
 export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MentionKind"]> = ["location"];
@@ -21773,7 +22625,7 @@ export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schem
 export const sourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "panel", "booking", "bot"];
 export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["State"]> = ["draft", "verifying", "verified", "suspended"];
 export const stopValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Stop"]> = ["at_free", "never"];
-export const tabValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tab"]> = ["launch", "browser", "kit", "connections"];
+export const tabValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tab"]> = ["launch", "browser", "connections"];
 export const vendorValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Vendor"]> = ["google"];
 export const browserCloseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BrowserClose"]> = [4401, 4404, 4409, 4410, 1000, 1001, 1003, 1007];
 export const touchPhaseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["TouchPhase"]> = ["start", "move", "end"];

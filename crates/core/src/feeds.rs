@@ -6,6 +6,7 @@
 //! GET  NOTIFICATIONS?after&limit  sa_alerts::NotePage                            sites, review_archive
 //! GET  CHARGES?after&limit      tokens::ChargePage                               review_archive
 //! GET  USAGE?after&limit        usage::UsagePage                                 review_archive
+//! GET  REVIEWS?after&limit      ReviewPage                                       review_archive
 //! PUT  GMBS                     gbp::Snapshot                                    review_archive
 //! GET  CAPTURES/<sha>.png       a note's photo                                   review_archive
 //! GET  PLACES                   Places                                           sites
@@ -22,6 +23,7 @@ pub const CHANGES: &str = "/api/conductor/changes";
 pub const NOTIFICATIONS: &str = "/api/conductor/notifications";
 pub const CHARGES: &str = "/api/conductor/charges";
 pub const USAGE: &str = "/api/conductor/usage";
+pub const REVIEWS: &str = "/api/conductor/reviews";
 pub const GMBS: &str = "/api/conductor/gmbs";
 pub const CAPTURES: &str = "/api/conductor/captures";
 pub const PLACES: &str = "/api/conductor/places";
@@ -64,6 +66,31 @@ pub struct Place {
 #[serde(deny_unknown_fields)]
 pub struct Places {
 	pub places: Vec<Place>,
+}
+
+/// A review of a GBP the archive saw appear, go or come back, in the order it saw it.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Review {
+	pub seq: i64,
+	/// Google's id of the review.
+	pub review_id: String,
+	pub gmb_id: i64,
+	/// 1 to 5.
+	pub rating: u8,
+	pub text: String,
+	pub first_seen: Timestamp,
+	/// Not seen on its last walk; `None` again when it came back.
+	pub gone_at: Option<Timestamp>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReviewPage {
+	/// Ascending by `seq`; a review again each time it appears, goes or comes back.
+	pub reviews: Vec<Review>,
+	/// The last `seq` of the page; `after` for an empty one.
+	pub next: i64,
 }
 
 /// A line of a service's change feed.

@@ -31,7 +31,7 @@ const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
   google_primary: null,
   photos: [],
   readiness: null,
-  tabs: ["kit"],
+  tabs: [],
 });
 const archive = (suspended: number, failing: boolean): ArchiveTag => ({ tracked: true, rating: 4.5, reviews: 10, suspended, reinstating: 0, failing, live_30d: Array(30).fill(null) });
 const site = (overdue: number): SiteTag => ({ brand: "aquafix", location: "lyon-9", leads_7d: 3, overdue });

@@ -261,8 +261,12 @@ function PhotoTile({ brand, photo, reload }: { brand: number; photo: KitPhoto; r
   const t = useT();
   const button = useButtonSize();
   const title = t(kit.photos.remove, "Remove the photo");
+  const [shows, setShows] = useState(photo.shows ?? "");
+  const label = () =>
+    shows.trim() !== (photo.shows ?? "") &&
+    void ok(api.PATCH("/brands/{id}/photos/{file}", { params: { path: { id: brand, file: `${photo.id}.jpg` } }, body: { shows: shows.trim() } })).then(reload, (e: unknown) => notifyFailure(e, t));
   return (
-    <li className="group relative">
+    <li className="group relative flex w-14 flex-col gap-1">
       {/* eslint-disable-next-line @next/next/no-img-element -- the API's own JPEG, behind the session */}
       <img src={photoSrc(brand, photo.id)} alt="" loading="lazy" className="size-14 rounded-md object-cover" />
       <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1 font-mono text-xs text-white tabular-nums">{photo.uses}×</span>
@@ -284,6 +288,18 @@ function PhotoTile({ brand, photo, reload }: { brand: number; photo: KitPhoto; r
           }}
         />
       </span>
+      <Input
+        size="sm"
+        value={shows}
+        maxLength={60}
+        onChange={(e) => setShows(e.target.value)}
+        onBlur={label}
+        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        placeholder={t(brandKeys.photos.shows, "shows…")}
+        aria-label={t(brandKeys.photos.showsLabel, "What it shows: its caption for the reviewer")}
+        title={t(brandKeys.photos.showsLabel, "What it shows: its caption for the reviewer")}
+        className="h-6 px-1 text-xs"
+      />
     </li>
   );
 }

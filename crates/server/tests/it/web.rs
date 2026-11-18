@@ -9,7 +9,6 @@ use axum::{
 	http::{HeaderMap, Method, Request, StatusCode, header},
 	routing::get,
 };
-use sa_panel::testing::{TestDb, panel};
 use sa_server::web::{self, Files};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -58,8 +57,8 @@ fn app_routes() -> Router {
 	Router::new().route("/health", get(|| async { "ok" })).nest("/api/v1", api)
 }
 
-async fn app(dir: &Path, db: &TestDb) -> Router {
-	web::serve(app_routes(), Files::try_new(dir).unwrap(), panel(db).await)
+fn app(dir: &Path) -> Router {
+	web::serve(app_routes(), Files::try_new(dir).unwrap())
 }
 
 async fn send(app: &Router, method: Method, uri: &str, headers: &[(header::HeaderName, &str)]) -> (StatusCode, HeaderMap, String) {
@@ -89,8 +88,7 @@ fn is_page(h: &HeaderMap) -> bool {
 #[tokio::test]
 async fn pages_directories_and_the_404_page() {
 	let export = Export::new();
-	let db = TestDb::create().await;
-	let app = app(&export.web(), &db).await;
+	let app = app(&export.web());
 
 	let (status, h, body) = get_(&app, "/").await;
 	assert_eq!((status, body.as_str()), (StatusCode::OK, INDEX));
@@ -126,8 +124,7 @@ async fn pages_directories_and_the_404_page() {
 #[tokio::test]
 async fn hashed_assets_are_immutable_and_nothing_revalidates_by_date() {
 	let export = Export::new();
-	let db = TestDb::create().await;
-	let app = app(&export.web(), &db).await;
+	let app = app(&export.web());
 
 	let (status, h, body) = get_(&app, "/_next/static/chunks/app-3f2a.js").await;
 	assert_eq!((status, body.as_str()), (StatusCode::OK, "console.log(1)"));
@@ -150,8 +147,7 @@ async fn hashed_assets_are_immutable_and_nothing_revalidates_by_date() {
 #[tokio::test]
 async fn a_services_views_are_the_page() {
 	let export = Export::new();
-	let db = TestDb::create().await;
-	let app = app(&export.web(), &db).await;
+	let app = app(&export.web());
 	for uri in ["/sites", "/sites/leads", "/sites/leads/aquafix/L-1", "/review_archive/gmbs/3"] {
 		let (status, h, body) = get_(&app, uri).await;
 		assert_eq!((status, body.as_str()), (StatusCode::OK, INDEX), "{uri}");
@@ -169,8 +165,7 @@ async fn a_services_views_are_the_page() {
 #[tokio::test]
 async fn the_api_side_never_falls_through_to_the_front_end() {
 	let export = Export::new();
-	let db = TestDb::create().await;
-	let app = app(&export.web(), &db).await;
+	let app = app(&export.web());
 
 	assert_eq!(get_(&app, "/health").await.2, "ok");
 	assert_eq!(get_(&app, "/api/v1/me").await.2, "me");
@@ -199,8 +194,7 @@ async fn the_retired_mfe_paths_are_json_404s_never_a_page() {
 	// The chip and the sign-in load from the platform now; a tab on an earlier build may still
 	// ask here, and a script request must not get the panel's HTML.
 	let export = Export::new();
-	let db = TestDb::create().await;
-	let app = app(&export.web(), &db).await;
+	let app = app(&export.web());
 	for uri in ["/cabinet/mfe/account-chip.js", "/cabinet", "/cabinet/elsewhere", "/auth/mfe/account-chip.js"] {
 		let (status, h, body) = get_(&app, uri).await;
 		assert_eq!((status, body.as_str()), (StatusCode::NOT_FOUND, r#"{"code":"not_found","error":"not found"}"#), "{uri}");
@@ -211,8 +205,7 @@ async fn the_retired_mfe_paths_are_json_404s_never_a_page() {
 #[tokio::test]
 async fn nothing_outside_the_directory() {
 	let export = Export::new();
-	let db = TestDb::create().await;
-	let app = app(&export.web(), &db).await;
+	let app = app(&export.web());
 	for uri in [
 		"/../secret.txt",
 		"/%2e%2e/secret.txt",
@@ -237,34 +230,23 @@ fn a_directory_without_the_export_is_refused_at_boot() {
 }
 
 #[tokio::test]
-async fn a_kit_areas_link_is_the_kit_page() {
+async fn a_kits_paths_are_the_page() {
 	let export = Export::new();
-	let db = TestDb::create().await;
-	let app = app(&export.web(), &db).await;
-	let pool = db.pool().await;
-	let user = Uuid::now_v7();
-	sqlx::query("INSERT INTO users (user_id, email, name, first_seen, last_seen) VALUES ($1, 'a@localhost', 'A', 0, 0)")
-		.bind(user)
-		.execute(&pool)
-		.await
-		.unwrap();
-	sqlx::query("INSERT INTO areas (slug, name, country, lat, lng, radius_m, created_by, created_at) VALUES ('chassieu-10km', 'Chassieu', 'FR', 45.74, 4.97, 10000, $1, 0)")
-		.bind(user)
-		.execute(&pool)
-		.await
-		.unwrap();
-
-	for path in ["/chassieu-10km/", "/chassieu-10km"] {
+	let app = app(&export.web());
+	for path in [
+		"/kit",
+		"/kit/lyon-east",
+		"/kit/lyon-east/3",
+		"/kit/lyon-east/3/qr",
+		"/kit/lyon-east/pool/2/FR",
+		"/?kit=lyon-east&kit_gmb=3",
+	] {
 		let (status, h, body) = get_(&app, path).await;
 		assert_eq!((status, body.as_str()), (StatusCode::OK, INDEX), "{path}");
 		assert!(is_page(&h), "{h:?}");
 	}
-	for path in ["/lyon/", "/chassieu-10km/deeper/", "/chassieu-10km/a/b.txt"] {
+	for path in ["/lyon-east/", "/kit/lyon-east/three", "/kit/lyon-east/3/qr/more"] {
 		let (status, _, body) = get_(&app, path).await;
-		assert_eq!(
-			(status, body.as_str()),
-			(StatusCode::NOT_FOUND, "<html>not here</html>"),
-			"an area nobody drew, or below one: {path}"
-		);
+		assert_eq!((status, body.as_str()), (StatusCode::NOT_FOUND, "<html>not here</html>"), "{path}");
 	}
 }

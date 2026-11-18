@@ -40,8 +40,8 @@ import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 import { BrandMark, useSites } from "./brand-window";
 import { GoogleCategories } from "./google-categories";
-import { KitPoolPane } from "./kit-pool";
 import { categories } from "../model/i18n";
+import { KitPool } from "@/views/kit";
 import { FLOAT_AT } from "./trash-window";
 
 const MAX_KEYWORDS = 50;
@@ -464,7 +464,7 @@ function CategoryTab({ trade, category, here, gmails }: { trade: Trade; category
           {pool.status === "ok" ? t(kit.pane.draftsCounted, "Drafts {drafts}", { drafts: pool.data.drafts.length }) : t(kit.pane.drafts, "Drafts")}
         </ToggleGroupItem>
       </ToggleGroup>
-      {pane === "category" ? <CategoryEditor trade={trade} category={category} here={here} gmails={gmails} /> : <KitPoolPane trade={trade.id} country={category.country} pool={pool} />}
+      {pane === "category" ? <CategoryEditor trade={trade} category={category} here={here} gmails={gmails} /> : <KitPool trade={trade.id} country={category.country} />}
     </div>
   );
 }

@@ -1,4 +1,8 @@
 {
+  "account.usage.month": {
+    "en": "Last 30 days",
+    "t": "Последние 30 дней"
+  },
   "area.badSlug": {
     "en": "Lowercase letters, digits, - and _; up to 64.",
     "t": "Строчные латинские буквы, цифры, - и _; до 64."
@@ -43,53 +47,13 @@
     "en": "City or town",
     "t": "Город"
   },
-  "kit.area.another": {
-    "en": "Another area",
-    "t": "Другая зона"
+  "brand.photos.order": {
+    "en": "least used first · a GBP gets each at most once",
+    "t": "сначала наименее использованные · каждый GBP получает каждый не больше раза"
   },
-  "kit.area.copied": {
-    "en": "Link copied",
-    "t": "Ссылка скопирована"
-  },
-  "kit.area.copy": {
-    "en": "Copy link",
-    "t": "Копировать ссылку"
-  },
-  "kit.area.inIt": {
-    "en": "In it",
-    "t": "В ней"
-  },
-  "kit.area.isCircle": {
-    "en": "a circle of {radius}",
-    "t": "круг {radius}"
-  },
-  "kit.area.kit": {
-    "en": "Review kit · {n} places",
-    "t": "Набор для отзывов · мест: {n}"
-  },
-  "kit.area.new": {
-    "en": "Review kit · a new area",
-    "t": "Набор для отзывов · новая зона"
-  },
-  "kit.area.noGbps": {
-    "en": "None of your GBPs with a point is in it.",
-    "t": "Ни одного вашего GBP с точкой в ней нет."
-  },
-  "kit.area.notFound": {
-    "en": "No area is at /{slug}/.",
-    "t": "По адресу /{slug}/ зоны нет."
-  },
-  "kit.area.open": {
-    "en": "Open {page}",
-    "t": "Открыть {page}"
-  },
-  "kit.area.scan": {
-    "en": "Scan with your phone to take it out; signed-in only.",
-    "t": "Отсканируйте телефоном, чтобы взять с собой; только после входа."
-  },
-  "kit.areas": {
-    "en": "Areas",
-    "t": "Зоны"
+  "kit.block.off": {
+    "en": "kit off",
+    "t": "набор выключен"
   },
   "kit.drafts": {
     "en": "Drafts",
@@ -99,10 +63,6 @@
     "en": "Add a draft",
     "t": "Добавить черновик"
   },
-  "kit.drafts.edit": {
-    "en": "Edit the draft",
-    "t": "Изменить черновик"
-  },
   "kit.drafts.none": {
     "en": "No drafts yet: a reviewer's page offers Google's form alone.",
     "t": "Черновиков пока нет: страница рецензента предлагает только форму Google."
@@ -110,10 +70,6 @@
   "kit.drafts.noneLeft": {
     "en": "None left to offer here: its page answers with Google's form.",
     "t": "Здесь предлагать больше нечего: страница отвечает формой Google."
-  },
-  "kit.drafts.order": {
-    "en": "least used first · a GBP gets each at most once",
-    "t": "сначала наименее использованные · каждый GBP получает каждый не больше раза"
   },
   "kit.drafts.placeholder": {
     "en": "A review as a customer would write it, in the country's language",
@@ -127,49 +83,13 @@
     "en": "The draft's text",
     "t": "Текст черновика"
   },
-  "kit.funnel": {
-    "en": "Last 30 days",
-    "t": "Последние 30 дней"
-  },
-  "kit.funnel.copied": {
-    "en": "copied",
-    "t": "скопировано"
-  },
-  "kit.funnel.opened": {
-    "en": "opened",
-    "t": "открыто"
-  },
-  "kit.funnel.photosSaved": {
-    "en": "photos saved",
-    "t": "фото сохранено"
-  },
-  "kit.funnel.scanned": {
-    "en": "scanned",
-    "t": "отсканировано"
-  },
-  "kit.funnel.shown": {
-    "en": "shown",
-    "t": "показано"
-  },
   "kit.held": {
     "en": "held by an open page",
     "t": "занят открытой страницей"
   },
-  "kit.off": {
-    "en": "kit off",
-    "t": "набор выключен"
-  },
   "kit.offered": {
     "en": "offered now",
     "t": "предлагается сейчас"
-  },
-  "kit.open": {
-    "en": "Review kit",
-    "t": "QR для отзывов"
-  },
-  "kit.page.find": {
-    "en": "A place, or what it does",
-    "t": "Место или чем оно занимается"
   },
   "kit.page.lead.drafts": {
     "en": "a drafted review to start from, then Google",
@@ -183,45 +103,21 @@
     "en": "one tap copies a drafted review, then Google",
     "t": "одно касание копирует готовый отзыв, затем Google"
   },
-  "kit.page.nearest": {
-    "en": "Nearest first",
-    "t": "Сначала ближайшие"
-  },
-  "kit.page.next": {
-    "en": "Next",
-    "t": "Следующее"
-  },
-  "kit.page.noArea": {
-    "en": "No area named",
-    "t": "Зона не указана"
-  },
-  "kit.page.noArea.why": {
-    "en": "An area's kit is at its own link, /<area>/: draw one from the map's Review kit.",
-    "t": "У набора зоны своя ссылка, /<зона>/: нарисуйте её в «Наборе для отзывов» на карте."
-  },
   "kit.page.off": {
     "en": "Its kit is off: pick where its QR leads below.",
     "t": "Набор выключен: выберите ниже, куда ведёт QR."
-  },
-  "kit.page.prev": {
-    "en": "Previous",
-    "t": "Предыдущее"
   },
   "kit.page.scan": {
     "en": "Scan to leave a review",
     "t": "Отсканируйте, чтобы оставить отзыв"
   },
-  "kit.page.shownToday": {
-    "en": "shown today",
-    "t": "показано сегодня"
-  },
-  "kit.page.tap": {
-    "en": "Tap a place: its QR fills the screen, for them to scan",
-    "t": "Коснитесь места: его QR займёт экран, чтобы его отсканировали"
-  },
   "kit.pane.category": {
     "en": "Keywords · category · study",
     "t": "Ключевые слова · категория · исследование"
+  },
+  "kit.phone.nearest": {
+    "en": "Nearest first",
+    "t": "Сначала ближайшие"
   },
   "kit.photos": {
     "en": "Photos",
@@ -255,6 +151,10 @@
     "en": "Save",
     "t": "Сохранить"
   },
+  "kit.tally.copiedShort": {
+    "en": "copied",
+    "t": "скопировано"
+  },
   "kit.target.drafts": {
     "en": "Drafts page",
     "t": "Страница черновиков"
@@ -287,16 +187,20 @@
     "en": "copied on this GBP: never offered here again",
     "t": "скопированы на этом GBP: здесь больше не предлагаются"
   },
-  "kit.window": {
-    "en": "Review kit",
-    "t": "Набор для отзывов"
+  "launch.must.areas": {
+    "en": "Areas",
+    "t": "Зоны"
   },
   "state.noView": {
     "en": "Nothing is at this address",
     "t": "По этому адресу ничего нет"
   },
-  "window.tab.kit": {
-    "en": "Review kit",
-    "t": "Набор для отзывов"
+  "window.next": {
+    "en": "Next",
+    "t": "Следующее"
+  },
+  "window.prev": {
+    "en": "Previous",
+    "t": "Предыдущее"
   }
 }

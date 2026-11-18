@@ -3625,7 +3625,7 @@
         "tags": [
           "areas"
         ],
-        "summary": "The area at `/<slug>/`.",
+        "summary": "The area `slug`.",
         "operationId": "area",
         "parameters": [
           {
@@ -3796,8 +3796,8 @@
         "tags": [
           "areas"
         ],
-        "summary": "Draws the area at `/<slug>/`, a circle; its country its city's, else its centre's (Places, paid by the caller); over what it was if the caller drew it.",
-        "description": "400 a link the conductor's own pages hold, or a centre in no country; 409 someone else's area.",
+        "summary": "Draws the area `slug`, a circle; its country its city's, else its centre's (Places, paid by the caller); over what it was if the caller drew it.",
+        "description": "400 a centre in no country; 409 someone else's area.",
         "operationId": "put_area",
         "parameters": [
           {
@@ -3981,6 +3981,179 @@
           "places.profile",
           "places.photo"
         ]
+      }
+    },
+    "/areas/{slug}/gmbs": {
+      "get": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "The area and the caller's GBPs with a point in it or within twice its radius, nearest its centre first.",
+        "operationId": "area_gmbs",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AreaGmbs"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
       }
     },
     "/assistant/archived": {
@@ -8404,6 +8577,198 @@
         "responses": {
           "204": {
             "description": "no content"
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      },
+      "patch": {
+        "tags": [
+          "brands"
+        ],
+        "summary": "Labels a photo of the brand with what it shows; answers the brand's photos.",
+        "operationId": "label_photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file",
+            "description": "`<photo>.jpg`.",
+            "required": true,
+            "schema": {
+              "description": "`<photo>.jpg`.",
+              "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabelPhoto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "A brand's photos, newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandPhotos"
+                }
+              }
+            }
           },
           "400": {
             "description": "`bad_request`",
@@ -13628,7 +13993,7 @@
         "tags": [
           "kit"
         ],
-        "summary": "The GBP's kit: where its QR leads, its category's drafts as its offer weighs them, and the last 30 days' funnel.",
+        "summary": "The GBP's kit: where its QR leads, its category's drafts as its offer weighs them, and what it collected since `since`.",
         "operationId": "gmb_kit",
         "parameters": [
           {
@@ -13640,6 +14005,16 @@
               "format": "int64"
             },
             "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "form"
           }
         ],
         "responses": {
@@ -15399,179 +15774,6 @@
         }
       }
     },
-    "/kit/areas/{slug}/gmbs": {
-      "get": {
-        "tags": [
-          "kit"
-        ],
-        "summary": "The area and the caller's GBPs with a point in it or within its margin, nearest its centre first.",
-        "operationId": "kit_area_gmbs",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "slug",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
-            },
-            "style": "simple"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/KitAreaGmbs"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`bad_request`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthenticated`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "`unaffordable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`csrf`, `forbidden`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`conflict`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "`too_large`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "`too_many`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`internal`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "`bad_gateway`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "`browsers_not_connected`, `unavailable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "x-errors": {
-          "another_country": 422,
-          "bad_gateway": 502,
-          "bad_request": 400,
-          "browsers_not_connected": 503,
-          "conflict": 409,
-          "csrf": 403,
-          "forbidden": 403,
-          "internal": 500,
-          "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
-          "not_found": 404,
-          "too_large": 413,
-          "too_many": 429,
-          "unaffordable": 402,
-          "unauthenticated": 401,
-          "unavailable": 503,
-          "unstudied": 422
-        }
-      }
-    },
     "/kit/cities": {
       "get": {
         "tags": [
@@ -16123,6 +16325,686 @@
           "places.profile",
           "places.photo"
         ]
+      }
+    },
+    "/kits": {
+      "get": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "The caller's kits.",
+        "operationId": "kits",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Kits"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      }
+    },
+    "/kits/{slug}": {
+      "get": {
+        "summary": "The caller's kit over the period from `since`: what its GBPs collected, each GBP's QR and what is left to offer it, its categories' pools and the latest of what happened.",
+        "operationId": "kit",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A named selection of the caller's GBPs, over a period.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Kit"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      },
+      "put": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "Makes the caller's kit `slug`, or sets it over what it was: a GBP that stays keeps when it joined. `new` is no kit's.",
+        "description": "400 a bad slug or name, or no such area; 409 a GBP not the caller's.",
+        "operationId": "put_kit",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutKit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
+      },
+      "delete": {
+        "tags": [
+          "kit"
+        ],
+        "summary": "Deletes the caller's kit: only the selection goes, no draft, photo or use.",
+        "operationId": "delete_kit",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "no_google_category": 422,
+          "no_keywords": 422,
+          "no_study": 422,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unstudied": 422
+        }
       }
     },
     "/live": {
@@ -21589,7 +22471,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/KitDraftText"
+                "$ref": "#/components/schemas/NewKitDraft"
               }
             }
           },
@@ -21937,7 +22819,7 @@
         "tags": [
           "kit"
         ],
-        "summary": "Edits a draft's text; answers the category's drafts.",
+        "summary": "Edits a draft's text or its places; answers the category's drafts.",
         "description": "409 one already copied: a use is of the text it had.",
         "operationId": "edit_kit_draft",
         "parameters": [
@@ -21975,7 +22857,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/KitDraftText"
+                "$ref": "#/components/schemas/EditKitDraft"
               }
             }
           },
@@ -23460,6 +24342,66 @@
           "city"
         ]
       },
+      "AreaGmb": {
+        "description": "One of the caller's GBPs in or next to an area.",
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "distance_m": {
+            "type": "number",
+            "format": "double"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "inside": {
+            "description": "Within its radius; else within twice it.",
+            "type": "boolean"
+          },
+          "location": {
+            "$ref": "#/components/schemas/LatLng"
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/State"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state",
+          "address",
+          "location",
+          "distance_m",
+          "inside"
+        ]
+      },
+      "AreaGmbs": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "$ref": "#/components/schemas/Area"
+          },
+          "gmbs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AreaGmb"
+            }
+          }
+        },
+        "required": [
+          "area",
+          "gmbs"
+        ]
+      },
       "Areas": {
         "type": "object",
         "properties": {
@@ -24445,6 +25387,27 @@
         },
         "additionalProperties": false
       },
+      "EditKitDraft": {
+        "type": "object",
+        "properties": {
+          "places": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "Error": {
         "description": "Why the request was refused.",
         "type": "object",
@@ -25252,14 +26215,11 @@
             ]
           },
           "drafts": {
-            "description": "Its category's drafts in the offer's order.",
+            "description": "Its category's drafts in its places, in the offer's order.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/KitRanked"
             }
-          },
-          "funnel": {
-            "$ref": "#/components/schemas/KitFunnel"
           },
           "page": {
             "description": "Its page on its landing: `null` without one, and then only `google` is open to it.",
@@ -25267,6 +26227,9 @@
               "string",
               "null"
             ]
+          },
+          "tally": {
+            "$ref": "#/components/schemas/KitTally"
           },
           "target": {
             "description": "`null`: off.",
@@ -25293,7 +26256,7 @@
           "page",
           "brand",
           "drafts",
-          "funnel"
+          "tally"
         ]
       },
       "GmbPhoto": {
@@ -25514,22 +26477,86 @@
           "note"
         ]
       },
-      "KitAreaGmbs": {
+      "Kit": {
+        "description": "A named selection of the caller's GBPs, over a period.",
         "type": "object",
         "properties": {
           "area": {
-            "$ref": "#/components/schemas/Area"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "gmbs": {
+            "description": "In the order they joined.",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/KitNearby"
+              "$ref": "#/components/schemas/KitMember"
             }
+          },
+          "latest": {
+            "description": "Newest first, at most 20.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KitEvent"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "pools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KitPoolSummary"
+            }
+          },
+          "slug": {
+            "type": "string"
+          },
+          "tally": {
+            "description": "The members' summed: a GBP in two kits counts in both.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/KitTally"
+              }
+            ]
           }
         },
         "required": [
+          "slug",
+          "name",
           "area",
-          "gmbs"
+          "tally",
+          "gmbs",
+          "pools",
+          "latest"
+        ]
+      },
+      "KitBlock": {
+        "description": "Why a member collects nothing, or only through Google's form.\n\n- `draft`: Not on Google yet.\n- `verifying`: Google is verifying it: it waits.\n- `off`: Its kit is off.\n- `no_page`: No landing page of its: Google's form only.",
+        "type": "string",
+        "enum": [
+          "suspended",
+          "draft",
+          "verifying",
+          "off",
+          "no_page"
+        ]
+      },
+      "KitCategory": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "$ref": "#/components/schemas/Country"
+          },
+          "trade": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "trade",
+          "country"
         ]
       },
       "KitDraft": {
@@ -25541,6 +26568,27 @@
           "id": {
             "type": "integer",
             "format": "int64"
+          },
+          "keywords": {
+            "description": "The category's keywords its text carries.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "names": {
+            "description": "Areas its text names that `places` lacks: it is offered outside them.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "places": {
+            "description": "Areas it is offered in; none: everywhere.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "text": {
             "type": "string"
@@ -25554,57 +26602,74 @@
         "required": [
           "id",
           "text",
+          "places",
+          "keywords",
+          "names",
           "uses",
           "created_at"
         ]
       },
-      "KitDraftText": {
+      "KitEvent": {
         "type": "object",
         "properties": {
-          "text": {
+          "at": {
             "type": "string"
+          },
+          "detail": {
+            "description": "The draft, the photo, or the review's rating.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "gmb": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/KitHappening"
           }
         },
-        "additionalProperties": false,
         "required": [
-          "text"
+          "at",
+          "gmb",
+          "kind",
+          "detail"
         ]
       },
-      "KitFunnel": {
-        "description": "The last 30 days.",
-        "type": "object",
-        "properties": {
-          "copied": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "opened": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "photos_saved": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "scanned": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "shown": {
-            "type": "integer",
-            "format": "int64"
-          }
-        },
-        "required": [
+      "KitHappening": {
+        "description": "- `posted`: A review from a copy.\n- `reviewed`: A review from no copy.\n- `gone`: A review from a copy, gone.",
+        "type": "string",
+        "enum": [
           "shown",
           "scanned",
           "opened",
           "copied",
-          "photos_saved"
+          "saved",
+          "posted",
+          "reviewed",
+          "gone"
         ]
       },
-      "KitNearby": {
-        "description": "One of the caller's GBPs by an area.",
+      "KitLeft": {
+        "type": "object",
+        "properties": {
+          "drafts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "photos": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "drafts",
+          "photos"
+        ]
+      },
+      "KitMember": {
         "type": "object",
         "properties": {
           "address": {
@@ -25613,28 +26678,68 @@
               "null"
             ]
           },
-          "distance_m": {
-            "type": "number",
-            "format": "double"
+          "blocked": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KitBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KitCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "type": "integer",
             "format": "int64"
           },
-          "last_shown": {
+          "left": {
+            "description": "What the offer still has for it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/KitLeft"
+              }
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LatLng"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "page": {
+            "description": "Its landing page; `null` without one.",
             "type": [
               "string",
               "null"
             ]
           },
-          "location": {
-            "$ref": "#/components/schemas/LatLng"
-          },
-          "name": {
-            "type": "string"
-          },
           "state": {
             "$ref": "#/components/schemas/State"
+          },
+          "tally": {
+            "description": "Since the period's start or its joining, the later.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/KitTally"
+              }
+            ]
           },
           "target": {
             "anyOf": [
@@ -25645,6 +26750,13 @@
                 "type": "null"
               }
             ]
+          },
+          "url": {
+            "description": "What its QR encodes; `null` while off.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -25653,9 +26765,13 @@
           "state",
           "address",
           "location",
-          "distance_m",
+          "category",
           "target",
-          "last_shown"
+          "page",
+          "url",
+          "tally",
+          "left",
+          "blocked"
         ]
       },
       "KitPhoto": {
@@ -25672,6 +26788,13 @@
             "type": "integer",
             "format": "int64"
           },
+          "shows": {
+            "description": "What it shows, for the reviewer; `null`: not labelled yet.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "uses": {
             "description": "Saved, every GBP.",
             "type": "integer",
@@ -25684,6 +26807,7 @@
         },
         "required": [
           "id",
+          "shows",
           "width",
           "height",
           "uses",
@@ -25699,10 +26823,50 @@
             "items": {
               "$ref": "#/components/schemas/KitDraft"
             }
+          },
+          "unmentioned": {
+            "description": "The category's keywords no draft carries.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
-          "drafts"
+          "drafts",
+          "unmentioned"
+        ]
+      },
+      "KitPoolSummary": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "$ref": "#/components/schemas/Country"
+          },
+          "drafts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "trade": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "trade",
+          "country",
+          "name",
+          "drafts",
+          "warnings"
         ]
       },
       "KitRanked": {
@@ -25761,6 +26925,12 @@
             "type": "integer",
             "format": "int64"
           },
+          "shows": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "uses": {
             "type": "integer",
             "format": "int64"
@@ -25772,9 +26942,91 @@
         },
         "required": [
           "id",
+          "shows",
           "width",
           "height",
           "uses"
+        ]
+      },
+      "KitRow": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "members": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "area",
+          "members"
+        ]
+      },
+      "KitTally": {
+        "description": "What was collected since the period's start.",
+        "type": "object",
+        "properties": {
+          "copied": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "gone": {
+            "description": "Of those, gone off it.",
+            "type": "integer",
+            "format": "int64"
+          },
+          "on_google": {
+            "description": "Reviews from a copy on Google.",
+            "type": "integer",
+            "format": "int64"
+          },
+          "opened": {
+            "description": "Pages opened, from anywhere.",
+            "type": "integer",
+            "format": "int64"
+          },
+          "other_reviews": {
+            "description": "Reviews from no copy.",
+            "type": "integer",
+            "format": "int64"
+          },
+          "photos_saved": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "scanned": {
+            "description": "Pages opened from the QR.",
+            "type": "integer",
+            "format": "int64"
+          },
+          "shown": {
+            "description": "QRs shown.",
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "shown",
+          "scanned",
+          "opened",
+          "copied",
+          "photos_saved",
+          "on_google",
+          "gone",
+          "other_reviews"
         ]
       },
       "KitTarget": {
@@ -25784,6 +27036,33 @@
           "google",
           "drafts",
           "one_tap"
+        ]
+      },
+      "Kits": {
+        "type": "object",
+        "properties": {
+          "kits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KitRow"
+            }
+          }
+        },
+        "required": [
+          "kits"
+        ]
+      },
+      "LabelPhoto": {
+        "type": "object",
+        "properties": {
+          "shows": {
+            "description": "What it shows, ≤ 60 characters: its alt and caption on the landing; empty clears it.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "shows"
         ]
       },
       "LatLng": {
@@ -26529,6 +27808,26 @@
           "state"
         ]
       },
+      "NewKitDraft": {
+        "type": "object",
+        "properties": {
+          "places": {
+            "description": "Area slugs; none: everywhere.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "places"
+        ]
+      },
       "NewSourceKey": {
         "description": "The key and its secret, shown this once.",
         "type": "object",
@@ -27033,6 +28332,33 @@
           "name",
           "center",
           "radius_m"
+        ]
+      },
+      "PutKit": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "description": "An area slug, a reference only: membership is `gmbs`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gmbs": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "gmbs"
         ]
       },
       "QueriesCacheImport": {
@@ -28341,12 +29667,11 @@
         ]
       },
       "Tab": {
-        "description": "- `launch`: A draft's launch onto Google.\n- `browser`: The gmail's browser.\n- `kit`: A verified GBP's review kit.\n- `connections`: A gmail's inbox and Maps key.",
+        "description": "- `launch`: A draft's launch onto Google.\n- `browser`: The gmail's browser.\n- `connections`: A gmail's inbox and Maps key.",
         "type": "string",
         "enum": [
           "launch",
           "browser",
-          "kit",
           "connections"
         ]
       },
@@ -29783,7 +31108,7 @@
       },
       "admin_tokens": {
         "description": "Everyone's tokens, prices and flows.",
-        "key": "k",
+        "key": "a",
         "needs": "sa:admin:tokens:grant",
         "params": {
           "properties": {},
@@ -29806,26 +31131,6 @@
           "type": "object"
         },
         "path": "/alerts",
-        "query": {
-          "properties": {},
-          "required": [],
-          "type": "object"
-        }
-      },
-      "area": {
-        "description": "The review kit on the operator's phone: an area's GBPs and their QRs.",
-        "params": {
-          "properties": {
-            "area": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "area"
-          ],
-          "type": "object"
-        },
-        "path": "/{area}",
         "query": {
           "properties": {},
           "required": [],
@@ -29977,7 +31282,26 @@
               "type": "boolean"
             },
             "kit": {
-              "description": "The review kit's area: empty, one being drawn.",
+              "description": "The review kit floating over the map: its slug; empty, the list (or, with `kit_edit`, a new one).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kit_edit": {
+              "description": "The kit's editor, its area drawn on the map.",
+              "type": "boolean"
+            },
+            "kit_gmb": {
+              "description": "The kit's GBP open.",
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "kit_pool": {
+              "description": "The kit's pool open: `<trade id>.<country>`.",
               "type": [
                 "string",
                 "null"
@@ -30015,7 +31339,6 @@
               "enum": [
                 "launch",
                 "browser",
-                "kit",
                 "connections",
                 null
               ],
@@ -30060,6 +31383,127 @@
               "type": "boolean"
             }
           },
+          "required": [],
+          "type": "object"
+        }
+      },
+      "kit": {
+        "description": "A review kit: what it collected, its GBPs, its pools; on a phone, its GBPs nearest first.",
+        "params": {
+          "properties": {
+            "slug": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "slug"
+          ],
+          "type": "object"
+        },
+        "path": "/kit/{slug}",
+        "query": {
+          "properties": {},
+          "required": [],
+          "type": "object"
+        }
+      },
+      "kit_gmb": {
+        "description": "A kit's GBP: its QR's target, drafts, photos and tally.",
+        "params": {
+          "properties": {
+            "gmb": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "slug": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "gmb",
+            "slug"
+          ],
+          "type": "object"
+        },
+        "path": "/kit/{slug}/{gmb}",
+        "query": {
+          "properties": {},
+          "required": [],
+          "type": "object"
+        }
+      },
+      "kit_pool": {
+        "description": "A category's drafts and photos, from a kit.",
+        "params": {
+          "properties": {
+            "country": {
+              "description": "ISO 3166-1 alpha-2, of the countries GBPs are in.",
+              "enum": [
+                "FR",
+                "US",
+                "CA",
+                "GB"
+              ],
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "trade": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "country",
+            "slug",
+            "trade"
+          ],
+          "type": "object"
+        },
+        "path": "/kit/{slug}/pool/{trade}/{country}",
+        "query": {
+          "properties": {},
+          "required": [],
+          "type": "object"
+        }
+      },
+      "kit_qr": {
+        "description": "A kit's GBP's QR, full screen, for the reviewer; a swipe goes through the kit.",
+        "params": {
+          "properties": {
+            "gmb": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "slug": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "gmb",
+            "slug"
+          ],
+          "type": "object"
+        },
+        "path": "/kit/{slug}/{gmb}/qr",
+        "query": {
+          "properties": {},
+          "required": [],
+          "type": "object"
+        }
+      },
+      "kits": {
+        "description": "The caller's review kits.",
+        "key": "k",
+        "params": {
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "path": "/kit",
+        "query": {
+          "properties": {},
           "required": [],
           "type": "object"
         }

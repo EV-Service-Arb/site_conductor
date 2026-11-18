@@ -98,8 +98,7 @@ pub struct Limits {
 }
 
 /// Everything the conductor answers but the front end's files; ingest, the forward and the
-/// landings' kit only with `forward`, `/grafana/` only with `grafana`. `web`: the front end's
-/// files, whose directories no kit area may take.
+/// landings' kit only with `forward`, `/grafana/` only with `grafana`.
 #[expect(clippy::too_many_arguments, reason = "each is one optional part of the deployment")]
 pub fn app(
 	sign_in: SignIn,
@@ -108,7 +107,6 @@ pub fn app(
 	limits: Limits,
 	telegram: Option<Telegram>,
 	browsers: Option<browser::Connected>,
-	web: Option<&crate::web::Files>,
 	model: Option<Model>,
 	sandbox: Option<Sandbox>,
 ) -> Router {
@@ -136,7 +134,6 @@ pub fn app(
 		sites: forward.as_ref().map(|f| f.services().clone()),
 		placement: forward.as_ref().map(|f| f.services().clone()).filter(|s| s.serves(sa_auth::Service::Placement)),
 		pages: pages.clone(),
-		web: web.cloned(),
 		probe: connected::probe_client(),
 		telegram,
 		browsers,
@@ -257,8 +254,6 @@ pub(crate) struct ApiState {
 	pub(crate) model: Option<Model>,
 	/// With the forward: which landing page is which GBP.
 	pub(crate) pages: Option<kit::Pages>,
-	/// PANEL_WEB_DIR's.
-	pub(crate) web: Option<crate::web::Files>,
 }
 
 impl FromRef<ApiState> for Panel {

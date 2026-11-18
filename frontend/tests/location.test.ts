@@ -38,7 +38,7 @@ describe("the location store", () => {
   });
 
   it("sets Home's keys in place, or moves to Home with them", async () => {
-    await check("/?gmb=5&tab=kit", (store) => store.setHome({ tab: undefined }), "/?gmb=5");
+    await check("/?gmb=5&tab=launch", (store) => store.setHome({ tab: undefined }), "/?gmb=5");
     await check("/alerts?find=x", (store) => store.setHome({ trash: true }), "/?find=x&trash=");
   });
 });

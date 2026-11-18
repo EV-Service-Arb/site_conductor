@@ -138,7 +138,7 @@ export const VIEWS = {
         "type": "object"
       },
       "needs": "sa:admin:tokens:grant",
-      "key": "k"
+      "key": "a"
     },
     "alerts": {
       "path": "/alerts",
@@ -154,26 +154,6 @@ export const VIEWS = {
         "type": "object"
       },
       "key": "e"
-    },
-    "area": {
-      "path": "/{area}",
-      "description": "The review kit on the operator's phone: an area's GBPs and their QRs.",
-      "params": {
-        "properties": {
-          "area": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "area"
-        ],
-        "type": "object"
-      },
-      "query": {
-        "properties": {},
-        "required": [],
-        "type": "object"
-      }
     },
     "assistant": {
       "path": "/assistant",
@@ -319,7 +299,26 @@ export const VIEWS = {
             "type": "boolean"
           },
           "kit": {
-            "description": "The review kit's area: empty, one being drawn.",
+            "description": "The review kit floating over the map: its slug; empty, the list (or, with `kit_edit`, a new one).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kit_edit": {
+            "description": "The kit's editor, its area drawn on the map.",
+            "type": "boolean"
+          },
+          "kit_gmb": {
+            "description": "The kit's GBP open.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "kit_pool": {
+            "description": "The kit's pool open: `<trade id>.<country>`.",
             "type": [
               "string",
               "null"
@@ -357,7 +356,6 @@ export const VIEWS = {
             "enum": [
               "launch",
               "browser",
-              "kit",
               "connections",
               null
             ],
@@ -406,6 +404,127 @@ export const VIEWS = {
         "type": "object"
       },
       "key": "h"
+    },
+    "kit": {
+      "path": "/kit/{slug}",
+      "description": "A review kit: what it collected, its GBPs, its pools; on a phone, its GBPs nearest first.",
+      "params": {
+        "properties": {
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug"
+        ],
+        "type": "object"
+      },
+      "query": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      }
+    },
+    "kit_gmb": {
+      "path": "/kit/{slug}/{gmb}",
+      "description": "A kit's GBP: its QR's target, drafts, photos and tally.",
+      "params": {
+        "properties": {
+          "gmb": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "gmb",
+          "slug"
+        ],
+        "type": "object"
+      },
+      "query": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      }
+    },
+    "kit_pool": {
+      "path": "/kit/{slug}/pool/{trade}/{country}",
+      "description": "A category's drafts and photos, from a kit.",
+      "params": {
+        "properties": {
+          "country": {
+            "description": "ISO 3166-1 alpha-2, of the countries GBPs are in.",
+            "enum": [
+              "FR",
+              "US",
+              "CA",
+              "GB"
+            ],
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "trade": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "country",
+          "slug",
+          "trade"
+        ],
+        "type": "object"
+      },
+      "query": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      }
+    },
+    "kit_qr": {
+      "path": "/kit/{slug}/{gmb}/qr",
+      "description": "A kit's GBP's QR, full screen, for the reviewer; a swipe goes through the kit.",
+      "params": {
+        "properties": {
+          "gmb": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "gmb",
+          "slug"
+        ],
+        "type": "object"
+      },
+      "query": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      }
+    },
+    "kits": {
+      "path": "/kit",
+      "description": "The caller's review kits.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "key": "k"
     },
     "members": {
       "path": "/members",

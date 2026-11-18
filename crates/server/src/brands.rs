@@ -91,6 +91,14 @@ pub(crate) struct SetBrands {
 }
 
 #[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "LabelPhoto")]
+#[serde(deny_unknown_fields)]
+pub(crate) struct LabelDto {
+	/// What it shows, ≤ 60 characters: its alt and caption on the landing; empty clears it.
+	shows: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
 struct PhotoIn {
 	id: i64,
 	/// `<photo>.jpg`.
@@ -126,6 +134,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/brands/{id}/photos", USER, photos),
 		ApiRoute::new(M::POST, "/brands/{id}/photos", SLOW, add_photo).layer(|h| h.layer(DefaultBodyLimit::max(PHOTO_MAX))),
 		ApiRoute::new(M::GET, "/brands/{id}/photos/{file}", USER, photo),
+		ApiRoute::new(M::PATCH, "/brands/{id}/photos/{file}", USER, label_photo),
 		ApiRoute::new(M::DELETE, "/brands/{id}/photos/{file}", USER, remove_photo),
 		ApiRoute::new(M::PUT, "/gmbs/brand", USER, set_brands),
 	]
@@ -193,6 +202,12 @@ async fn photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>,
 	Ok(Jpeg(panel.kit_photo(caller.user_id, id, jpg(&file)?).await??))
 }
 
+/// Labels a photo of the brand with what it shows; answers the brand's photos.
+async fn label_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PhotoIn { id, file }): Ids<PhotoIn>, Body(b): Body<LabelDto>) -> ApiResult<Json<PhotosDto>> {
+	panel.label_photo(caller.user_id, id, jpg(&file)?, &b.shows).await??;
+	Ok(Json(photos_of(&panel, &caller, id).await?))
+}
+
 /// Removes a photo: out of every offer, its uses kept.
 async fn remove_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PhotoIn { id, file }): Ids<PhotoIn>) -> ApiResult<NoContent> {
 	panel.remove_photo(caller.user_id, id, jpg(&file)?, Timestamp::now()).await??;
@@ -215,6 +230,7 @@ async fn photos_of(panel: &Panel, caller: &Caller, brand: i64) -> ApiResult<Phot
 			.into_iter()
 			.map(|p| PhotoDto {
 				id: p.id,
+				shows: p.shows,
 				width: p.width,
 				height: p.height,
 				uses: p.uses,

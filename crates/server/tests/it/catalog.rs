@@ -49,7 +49,7 @@ async fn a_services_operations_join_the_catalog_under_its_prefix() {
 	let operator_holds: sa_auth::PermissionSet = ["sa:sites:work:read"].into_iter().collect();
 	let (sign_in, forward) = conductor(p.clone(), operator_holds, "op@localhost", &base.parse().unwrap());
 	let catalog = forward.catalog().clone();
-	let app = http::app(sign_in, Some(forward), None, Default::default(), None, None, None, None, None);
+	let app = http::app(sign_in, Some(forward), None, Default::default(), None, None, None, None);
 	let (stop, stopped) = watch::channel(false);
 	let following = tokio::spawn({
 		let catalog = catalog.clone();

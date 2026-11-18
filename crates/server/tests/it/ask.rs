@@ -73,17 +73,7 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 		concierge_origin: ORIGIN.to_owned(),
 	};
 	let model = Model::new(Origins { api: base.clone(), oauth: base }, Some("owner".to_owned().into()));
-	let app = http::app(
-		SignIn::new(p.clone(), Concierge::dev(who), config),
-		None,
-		None,
-		Default::default(),
-		None,
-		None,
-		None,
-		Some(model),
-		None,
-	);
+	let app = http::app(SignIn::new(p.clone(), Concierge::dev(who), config), None, None, Default::default(), None, None, Some(model), None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let json = [("content-type", "application/json")];

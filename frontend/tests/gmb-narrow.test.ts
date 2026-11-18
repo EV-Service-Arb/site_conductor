@@ -28,7 +28,7 @@ const gmb = (id: number, name: string, address: string | null, located: boolean,
   google_primary: null,
   photos: [],
   readiness: null,
-  tabs: ["kit"],
+  tabs: [],
 });
 
 const gmails: Gmails = {

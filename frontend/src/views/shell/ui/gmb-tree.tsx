@@ -1,10 +1,10 @@
 "use client";
 
 import { toast, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn, useBinding } from "@evinvest/uikit";
-import { ChevronDown, CircleMinus, CirclePlus, Link2, Pencil, QrCode, RefreshCw, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
+import { ChevronDown, CircleMinus, CirclePlus, Link2, Pencil, RefreshCw, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
-import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, openOrFocus, openKit, openTrash, readyCount, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, syncGmb, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, kit as kitKeys, trades as tradesKeys } from "@/entities/gmb";
+import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, openOrFocus, openTrash, readyCount, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, syncGmb, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, trades as tradesKeys } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { AddGmbButton } from "@/features/add-gmb";
@@ -189,22 +189,9 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
           <AddGmbButton labeled gmail={scoped[0]?.id ?? null} trade={categories?.length === 1 && categories[0]!.trade !== "*" ? categories[0]!.trade : null} />
         )}
         <span className="flex-1" />
-        <KitButton />
         <TrashButton />
       </footer>
     </section>
-  );
-}
-
-/** The review kit's areas, over the map. */
-function KitButton() {
-  const t = useT();
-  const button = useButtonSize();
-  return (
-    <Button variant="ghost" size={button("sm")} className="text-ink-soft" onClick={() => openKit("")}>
-      <QrCode aria-hidden />
-      {t(kitKeys.open, "Review kit")}
-    </Button>
   );
 }
 

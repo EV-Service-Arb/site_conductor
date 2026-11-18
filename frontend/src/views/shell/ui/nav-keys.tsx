@@ -24,6 +24,7 @@ const LABEL: Record<Keyed, (t: T) => string> = {
   members: (t) => t(nav.members, "View as member"),
   alerts: (t) => t(nav.alerts, "Alerts"),
   account: (t) => t(nav.account, "Profile"),
+  kits: (t) => t(nav.kits, "Review kits"),
 };
 
 /** `leader g …`: every screen the caller may open, by its view's key. */

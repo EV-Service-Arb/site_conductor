@@ -2047,14 +2047,6 @@
     "en": "Sidebar: fold or unfold",
     "t": "Боковая панель: свернуть или развернуть"
   },
-  "kit.drafts.offerOrderBrand": {
-    "en": "in the offer's order · photos: {brand} · {n}",
-    "t": "в порядке оффера · фото: {brand} · {n}"
-  },
-  "kit.drafts.offerOrderNoBrand": {
-    "en": "in the offer's order · no brand, no photos",
-    "t": "в порядке оффера · без бренда, без фото"
-  },
   "kit.pane.drafts": {
     "en": "Drafts",
     "t": "Черновики"

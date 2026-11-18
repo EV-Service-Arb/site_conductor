@@ -333,7 +333,6 @@ async fn serve(
 		tracing::warn!("CLAUDE_CODE_OAUTH_TOKEN unset: the assistant answers only on a person's own Claude");
 	}
 	let catalog = forward.as_ref().map(|f| f.catalog().clone());
-	let panel_for_pages = sign_in.panel.clone();
 	let browsers_followed = browsers.clone();
 	let app = http::app(
 		sign_in,
@@ -342,12 +341,11 @@ async fn serve(
 		http::Limits::default(),
 		bot.clone(),
 		browsers,
-		files.as_ref(),
 		Some(model),
 		sandbox,
 	);
 	let app = match files {
-		Some(files) => web::serve(app, files, panel_for_pages),
+		Some(files) => web::serve(app, files),
 		None => {
 			tracing::warn!("PANEL_WEB_DIR unset: serving the API alone, no front end");
 			app

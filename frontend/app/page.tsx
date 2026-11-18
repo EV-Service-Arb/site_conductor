@@ -9,7 +9,7 @@ import { AdminTokensView } from "@/views/admin-tokens";
 import { AlertsView } from "@/views/alerts";
 import { AssistantView } from "@/views/assistant";
 import { Home } from "@/views/home";
-import { KitView } from "@/views/kit";
+import { KitPage, KitQr, kitOfPage } from "@/views/kit";
 import { MembersView } from "@/views/members";
 import { ReviewArchiveView } from "@/views/review-archive";
 import { PanelShell } from "@/views/shell";
@@ -29,16 +29,16 @@ export default function Page() {
   const { at } = here;
   // Outside the shell: whoever lands here may hold nothing it shows.
   if (at.view === "access") return <AccessView need={at.params.need} continueTo={at.params.continue} />;
-  if (at.view === "area")
+  if (at.view === "kit_qr")
     return (
       <PanelShell bare>
-        <KitView slug={at.params.area} />
+        <KitQr slug={at.params.slug} gmb={at.params.gmb} />
       </PanelShell>
     );
   return <PanelShell>{framed(at)}</PanelShell>;
 }
 
-function framed(at: Exclude<At, { view: "access" | "area" }>): ReactNode {
+function framed(at: Exclude<At, { view: "access" | "kit_qr" }>): ReactNode {
   switch (at.view) {
     case "home":
       return <Home />;
@@ -60,6 +60,11 @@ function framed(at: Exclude<At, { view: "access" | "area" }>): ReactNode {
       return <MembersView />;
     case "alerts":
       return <AlertsView />;
+    case "kits":
+    case "kit":
+    case "kit_gmb":
+    case "kit_pool":
+      return <KitPage at={kitOfPage(at)!} />;
     default:
       if (at.view === "sites" || at.view.startsWith("sites.")) return <SitesView />;
       at.view satisfies `review_archive${string}` | `sites${string}`;

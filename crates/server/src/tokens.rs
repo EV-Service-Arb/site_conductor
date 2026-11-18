@@ -1,6 +1,7 @@
 //! People's tokens (`sa_panel::tokens`): the caller's own under `/api/v1/tokens`, everyone's under
 //! `/api/v1/admin/tokens` (`sa:admin:tokens:grant`), and what `serve` does with review_archive —
-//! follows its charges and pushes it the snapshot, under a Conductor assertion.
+//! follows its charges and its reviews (the kit's posted ones), and pushes it the snapshot, under a
+//! Conductor assertion.
 //!
 //! Before the import from review_archive, every one of them answers 503, and `serve` waits.
 
@@ -40,7 +41,7 @@ const TOKEN_USD: f64 = TOKEN_USD_MICROS as f64 / 1e6;
 const LEDGER_PAGE: i64 = 200;
 
 /// Charges asked of review_archive at once.
-const CHARGES_PAGE: usize = 500;
+const PAGE: usize = 500;
 
 /// A page is asked for this often while review_archive has no more.
 const FOLLOW_EVERY: Duration = Duration::from_secs(10);
@@ -176,12 +177,12 @@ pub struct BalanceDto {
 	pub balance: i64,
 }
 
-/// Follows review_archive's charges and pushes it the snapshot until `shutdown` turns true.
+/// Follows review_archive's charges and reviews and pushes it the snapshot until `shutdown` turns true.
 /// Nothing here ends `serve`.
 pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<bool>) {
 	let follow = repeat("following review_archive's charges", FOLLOW_EVERY, std::future::pending, shutdown.clone(), || async {
 		let Some(after) = panel.charges_after().await? else { return Ok(Pass::Closed) };
-		let (status, answer) = call(&services, Method::GET, &format!("{}?after={after}&limit={CHARGES_PAGE}", sa_core::feeds::CHARGES), None).await?;
+		let (status, answer) = call(&services, Method::GET, &format!("{}?after={after}&limit={PAGE}", sa_core::feeds::CHARGES), None).await?;
 		match status {
 			StatusCode::NOT_FOUND => return Ok(Pass::NotCutOver),
 			StatusCode::OK => {}
@@ -189,6 +190,20 @@ pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<boo
 		}
 		let page: ChargePage = serde_json::from_slice(&answer).map_err(|e| eyre::eyre!("review_archive's charges: {e}"))?;
 		Ok(Pass::Done(panel.take_charges(page, after, Timestamp::now()).await?))
+	});
+	let reviews = repeat("following review_archive's reviews", FOLLOW_EVERY, std::future::pending, shutdown.clone(), || async {
+		if panel.charges_after().await?.is_none() {
+			return Ok(Pass::Closed); // the GBPs reviews are of arrive with the import
+		}
+		let after = panel.reviews_after().await?;
+		let (status, answer) = call(&services, Method::GET, &format!("{}?after={after}&limit={PAGE}", sa_core::feeds::REVIEWS), None).await?;
+		match status {
+			StatusCode::NOT_FOUND => return Ok(Pass::NotCutOver),
+			StatusCode::OK => {}
+			other => eyre::bail!("review_archive answered its reviews with {other}: {}", String::from_utf8_lossy(&answer)),
+		}
+		let page: sa_core::feeds::ReviewPage = serde_json::from_slice(&answer).map_err(|e| eyre::eyre!("review_archive's reviews: {e}"))?;
+		Ok(Pass::Done(panel.take_reviews(page, after).await?))
 	});
 	let push = repeat(
 		"pushing review_archive the snapshot",
@@ -206,7 +221,7 @@ pub async fn run(panel: Panel, services: Services, shutdown: watch::Receiver<boo
 			}
 		},
 	);
-	tokio::join!(follow, push);
+	tokio::join!(follow, reviews, push);
 }
 
 /// A catalog item: what `per` units cost us, the multiplier charged over it and the price they make.
@@ -596,7 +611,7 @@ pub(crate) async fn token_flows(State(panel): State<Panel>, Params(q): Params<Fl
 /// How a pass with review_archive went.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Pass {
-	/// That many charges taken; the snapshot pushed.
+	/// That many charges or reviews taken; the snapshot pushed.
 	Done(usize),
 	/// Tokens are not open: the import has not run.
 	Closed,
@@ -604,7 +619,7 @@ enum Pass {
 	NotCutOver,
 }
 
-/// `pass` until `shutdown`: again at once after a full page of charges, else after `every` or
+/// `pass` until `shutdown`: again at once after a full page, else after `every` or
 /// as soon as `early` resolves; a closed or absent counterpart is said once and looked at again
 /// after LOOK_AGAIN (or `early`); a failure is reported and tried again after a growing wait.
 async fn repeat<F, Fut, E, EFut>(what: &'static str, every: Duration, early: E, mut shutdown: watch::Receiver<bool>, pass: F)
@@ -620,7 +635,7 @@ where
 			Ok(Pass::Done(n)) => {
 				said = None;
 				backoff = BACKOFF.0;
-				if n == CHARGES_PAGE { (Duration::ZERO, false) } else { (every, true) }
+				if n == PAGE { (Duration::ZERO, false) } else { (every, true) }
 			}
 			Ok(p) => {
 				if said != Some(p) {
