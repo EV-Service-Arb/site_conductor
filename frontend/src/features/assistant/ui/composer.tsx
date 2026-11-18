@@ -315,11 +315,12 @@ function Chip({ title, onRemove, removeLabel, children }: { title?: string; onRe
 }
 
 const APPROVAL = {
-  ask: { name: (t) => t(assistant.approval.ask, "Ask first"), hint: (t) => t(assistant.approval.ask.hint, "Proposes actions; you press to take one") },
-  act: { name: (t) => t(assistant.approval.act, "Act on its own"), hint: (t) => t(assistant.approval.act.hint, "Takes the first action at once") },
+  ask: { name: (t) => t(assistant.approval.ask, "Ask first"), hint: (t) => t(assistant.approval.ask.hint, "Proposes what spends or removes; you press to take it") },
+  spend: { name: (t) => t(assistant.approval.spend, "Spend on its own"), hint: (t) => t(assistant.approval.spend.hint, "Spends tokens without asking; proposes what removes") },
+  act: { name: (t) => t(assistant.approval.act, "Act on its own"), hint: (t) => t(assistant.approval.act.hint, "Spends and removes without asking") },
 } satisfies Record<Approval, { name: (t: T) => string; hint: (t: T) => string }>;
 
-/** Whether the assistant waits for a press before acting. */
+/** What the assistant does without waiting for a press. */
 function ApprovalChip({ approval, t }: { approval: Approval; t: T }) {
   return (
     <DropdownMenu>
@@ -334,7 +335,7 @@ function ApprovalChip({ approval, t }: { approval: Approval; t: T }) {
         <DropdownMenuLabel>{t(assistant.approval, "Before acting")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup value={approval} onValueChange={(v) => setApproval(v as Approval)}>
-          {(["ask", "act"] as const).map((a) => (
+          {(["ask", "spend", "act"] as const).map((a) => (
             <DropdownMenuRadioItem key={a} value={a} className="items-start">
               <span className="flex flex-col">
                 <span>{APPROVAL[a].name(t)}</span>

@@ -14,14 +14,14 @@ use ev_lib::api::{
 	JsonSchema,
 	openapi::{Operation, ReferenceOr},
 };
-use sa_core::prices::Item;
+use sa_core::{agent::Approval, prices::Item};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 use tower::ServiceExt;
 
 use crate::{
 	catalog::{Catalog, scalar},
-	execute::{Executed, Sandbox},
+	execute::{CellState, Key, Sandbox, Told},
 };
 
 /// The most operations one search answers whole.
@@ -30,7 +30,7 @@ const FOUND: usize = 8;
 pub(crate) const ANSWER: usize = 1 << 20;
 
 /// The tools every agent has, whatever the catalog holds: an operation's own tool may not take their names.
-pub(crate) const BUILT_IN: [&str; 5] = ["search", "call", "open", "run", "execute"];
+pub(crate) const BUILT_IN: [&str; 6] = ["search", "call", "open", "run", "execute", "poll"];
 
 #[derive(Clone)]
 pub struct Tools {
@@ -193,10 +193,41 @@ impl Tools {
 		app.oneshot(req.body(body).expect("a request from parts that parsed")).await.expect("the router is infallible")
 	}
 
-	/// Runs `code` in the sandbox as the caller `credentials` names.
-	pub async fn execute(&self, credentials: &HeaderMap, code: String) -> Result<Executed, String> {
+	/// Runs `code` as a cell of `key`'s session, as the caller `credentials` names, its calls held as
+	/// `approval` holds them: what the agent is told of it.
+	pub(crate) async fn execute(&self, key: Key, credentials: &HeaderMap, code: String, approval: Approval, pause: bool) -> Result<Told, String> {
 		let sandbox = self.sandbox.as_ref().ok_or("no sandbox here: there is no execute")?;
-		sandbox.execute(credentials_of(credentials), code).await
+		sandbox.execute(key, credentials_of(credentials), code, approval, pause).await
+	}
+
+	/// Cell `cell` of `key`'s session, past what was told of it.
+	pub(crate) async fn poll(&self, key: Key, credentials: &HeaderMap, cell: usize, until: sa_sandbox::Until) -> Result<Told, String> {
+		let sandbox = self.sandbox.as_ref().ok_or("no sandbox here: there is no poll")?;
+		sandbox.poll(key, credentials_of(credentials), cell, until).await
+	}
+
+	/// A cell as the agent reads it: a paused one's call as its proposal.
+	pub(crate) fn told(&self, told: &Told) -> Value {
+		let mut v = serde_json::to_value(told).expect("a cell serializes");
+		if let CellState::Paused(call) = &told.state {
+			v["state"] = json!({ "paused": self.proposal(call) });
+		}
+		v
+	}
+
+	/// What a held call would do, for the person to agree to; `None` when the catalog, pulled anew,
+	/// no longer holds it.
+	pub(crate) fn proposal(&self, c: &Call) -> Option<Value> {
+		let doc = self.catalog.document();
+		let (path, method, op) = doc.operations().find(|(_, _, op)| op.operation_id.as_deref() == Some(c.operation.as_str()))?;
+		Some(json!({
+			"operation": c.operation,
+			"method": method.to_uppercase(),
+			"path": path,
+			"summary": op.summary,
+			"hints": hints(method, op),
+			"with": { "path": c.path, "query": c.query, "body": c.body },
+		}))
 	}
 
 	/// The operations that are their own tools (`x-tool`) and that `may` opens, as an agent is given them.
@@ -245,7 +276,8 @@ impl Tools {
 
 	/// Every tool `may`'s caller is given: `search` and `call`, each operation that is its own; with
 	/// `page`, the in-page assistant's `open` and `run` too.
-	pub fn definitions(&self, may: impl Fn(Option<&str>) -> bool + Copy, page: bool) -> Vec<Def> {
+	pub fn definitions(&self, may: impl Fn(Option<&str>) -> bool + Copy, page: bool, approval: Approval) -> Vec<Def> {
+		let held = held(approval);
 		let schema = |s: ev_lib::api::schemars::Schema| serde_json::to_value(s).expect("a schema serializes");
 		let reads = Hints {
 			read_only: true,
@@ -262,7 +294,7 @@ impl Tools {
 			},
 			Def {
 				name: "call".into(),
-				description: "Runs one operation by its id from `search`, as the person asking; answers its status and body. One whose hints say destructive or spends is not run: it is proposed, for the person to agree to.".into(),
+				description: format!("Runs one operation by its id from `search`, as the person asking; answers its status and body. {held}"),
 				input: schema(ev_lib::api::schemars::generate::SchemaSettings::draft07().into_generator().into_root_schema_for::<Call>()),
 				hints: Hints {
 					read_only: false,
@@ -302,7 +334,7 @@ impl Tools {
 				name: "run".into(),
 				description: "Offers a binding of the page's keymap, by its id, as a button: the <page> block lists those bound now.".into(),
 				input: schema(ev_lib::api::schemars::schema_for!(Run)),
-				hints: reads,
+				hints: reads.clone(),
 			});
 		}
 		if self.sandbox.is_some() {
@@ -311,10 +343,13 @@ impl Tools {
 				description: format!(
 					"Runs TypeScript over the panel's operations as the person asking, apart from the panel: for work that takes several calls, or that would hand you more than you need. \
 `api` is the catalog's client (`api.GET(path, {{ params: {{ path, query }} }})`, `api.POST(path, {{ params, body }})`, …), every answer `{{ data }}` or `{{ error: {{ code, error }} }}`; the paths are absolute, as `search` names them. \
-The code is type-checked against them first: a type error runs nothing, and says what is wrong. What it `console.log`s comes back, {} KiB of each stream at most; it is stopped after {} s and {} calls. \
-An operation that destroys or spends is not run: the run stops there, and that call is proposed to the person.",
+Each run is a cell of one session, kept between runs: a later cell reads what earlier ones declared at their top level (declare a name again to change it), so fetch once and keep it. \
+The code is type-checked against the catalog and those declarations first: a type error runs nothing, and says what is wrong. What it `console.log`s comes back, {} KiB of each stream a cell at most. \
+A cell is answered after {} s at most: one still running is told by its number, and `poll` follows it; it is stopped after {} min, its session with it, and after {} calls. \
+{held} When the person agrees, the call goes on in the code; when they decline, it throws there.",
 					sa_sandbox::OUTPUT >> 10,
-					sa_sandbox::LIMIT.as_secs(),
+					sa_sandbox::WAIT.as_secs(),
+					sa_sandbox::LIMIT.as_secs() / 60,
 					sa_sandbox::CALLS
 				),
 				input: schema(ev_lib::api::schemars::schema_for!(Execute)),
@@ -324,6 +359,15 @@ An operation that destroys or spends is not run: the run stops there, and that c
 					destructive: false,
 					spends: Vec::new(),
 				},
+			});
+			defs.push(Def {
+				name: "poll".into(),
+				description: format!(
+					"Follows a cell `execute` answered while it still ran: what it printed since you were last told, once it says more, ends, or waits for the person on a call, or after {} s.",
+					sa_sandbox::WAIT.as_secs()
+				),
+				input: schema(ev_lib::api::schemars::schema_for!(PollCell)),
+				hints: reads.clone(),
 			});
 		}
 		defs.extend(self.own(may).into_iter().map(|t| Def {
@@ -381,6 +425,14 @@ pub struct Execute {
 	/// `const gmbs = await api.GET("/api/v1/gmbs"); if (gmbs.error) throw new Error(gmbs.error.code);`.
 	/// What it `console.log`s is what comes back.
 	pub code: String,
+}
+
+/// Follows a cell of the session's.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PollCell {
+	/// Its number, as `execute` answered it.
+	pub cell: usize,
 }
 
 /// Offers a binding of the page's keymap as a button.
@@ -462,9 +514,9 @@ pub struct Hints {
 	pub spends: Vec<Item>,
 }
 impl Hints {
-	/// What the user confirms before it runs.
-	pub fn proposed(&self) -> bool {
-		self.destructive || !self.spends.is_empty()
+	/// Whether `approval` waits for the person before this runs.
+	pub fn held_by(&self, approval: Approval) -> bool {
+		(self.destructive && approval < Approval::Act) || (!self.spends.is_empty() && approval < Approval::Spend)
 	}
 }
 
@@ -473,6 +525,15 @@ impl Hints {
 pub struct Answer {
 	pub status: u16,
 	pub body: Value,
+}
+
+/// What `approval` holds for the person, as a tool's description says it.
+pub(crate) fn held(approval: Approval) -> &'static str {
+	match approval {
+		Approval::Ask => "One whose hints say destructive or spends is not run: it is proposed, for the person to agree to.",
+		Approval::Spend => "One whose hints say spends runs; one that says destructive is not run: it is proposed, for the person to agree to.",
+		Approval::Act => "Every operation runs, what destroys or spends included: the person lets you act on your own.",
+	}
 }
 
 /// What an agent is named an operation by when it is its own tool: `playbook.search` is `playbook_search`.

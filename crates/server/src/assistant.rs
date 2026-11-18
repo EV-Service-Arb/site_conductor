@@ -296,7 +296,8 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/assistant/people", USER, chat_people),
 		// The answer takes the model's turns and the operations it calls.
 		ApiRoute::new(M::POST, "/assistant/chats/{id}/ask", SLOW, crate::ask::ask),
-		ApiRoute::new(M::POST, "/assistant/chats/{id}/act", USER, crate::ask::act),
+		// A cell waiting on the action goes on, and the answer resumes: the model's turns again.
+		ApiRoute::new(M::POST, "/assistant/chats/{id}/act", SLOW, crate::ask::act),
 	]
 }
 

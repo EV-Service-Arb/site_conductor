@@ -122,6 +122,7 @@ pub fn app(
 		sign_in: sign_in.clone(),
 		tools: tools.clone(),
 		catalog: catalog.clone(),
+		sessions: mcp::Sessions::default(),
 	};
 	// A call waits as long as the slowest operation it runs.
 	let agents = bounded(oauth::routes(sign_in.clone()), limits.auth_concurrent, limits.auth_timeout).merge(bounded(mcp::routes(agents), limits.api_concurrent, Duration::from_secs(600)));
