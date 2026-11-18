@@ -31,6 +31,7 @@ pub struct Remote {
 impl Remote {
 	/// The cache at `url`, `<origin>/api/queries_cache`.
 	pub fn try_new(url: &str) -> Result<Self, Error> {
+		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		let http = reqwest::Client::builder().connect_timeout(Duration::from_secs(5)).timeout(Duration::from_secs(30)).build()?;
 		url::Url::parse(url).map_err(|e| Error::Invalid(format!("the queries cache's URL {url:?}: {e}")))?;
 		Ok(Self {

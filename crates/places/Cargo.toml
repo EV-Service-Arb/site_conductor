@@ -20,6 +20,7 @@ base64.workspace = true
 eyre.workspace = true
 jiff.workspace = true
 reqwest.workspace = true
+rustls.workspace = true
 sa_core.workspace = true
 schemars = { workspace = true, optional = true }
 serde.workspace = true

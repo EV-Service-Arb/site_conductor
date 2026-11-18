@@ -36,6 +36,7 @@ async fn main() -> eyre::Result<()> {
 		.map_err(|_| eyre!("<phone id> <out dir> <phone-tools dir> <chromium>"))?;
 	let (out, tools) = (PathBuf::from(out), PathBuf::from(tools));
 	std::fs::create_dir_all(&out)?;
+	let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 	let api = Api {
 		http: reqwest::Client::builder().timeout(Duration::from_secs(20)).build()?,
 		token: std::env::var("MULTILOGIN_TOKEN").map_err(|_| eyre!("MULTILOGIN_TOKEN"))?,

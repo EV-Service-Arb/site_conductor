@@ -157,6 +157,7 @@ pub struct Connected {
 
 impl Connected {
 	pub fn try_new(browsers: Browsers, runner: &str, signer: Signer) -> eyre::Result<Self> {
+		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		Ok(Self {
 			browsers: Arc::new(browsers),
 			runner: Runner {

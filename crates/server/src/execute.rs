@@ -52,6 +52,7 @@ pub struct Executed {
 
 impl Sandbox {
 	pub fn try_new(runner: &str, signer: Signer) -> eyre::Result<Self> {
+		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		Ok(Self {
 			base: runner.trim_end_matches('/').to_owned(),
 			signer: Arc::new(signer),

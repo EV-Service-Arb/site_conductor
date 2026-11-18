@@ -684,6 +684,7 @@ impl Exits {
 		let pinned = reqwest::Proxy::all(format!("{scheme}://{addr}"))
 			.wrap_err("a proxy for the check")?
 			.basic_auth(&proxy.username, &proxy.password);
+		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		let client = reqwest::Client::builder().proxy(pinned).timeout(CHECK_WITHIN).build().wrap_err("a client for the check")?;
 		#[derive(Deserialize)]
 		#[serde(rename_all = "camelCase")]
@@ -727,6 +728,7 @@ impl GoLogin {
 		let mut auth = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", *token)).wrap_err("GOLOGIN_TOKEN is not a header value")?;
 		auth.set_sensitive(true);
 		let headers = reqwest::header::HeaderMap::from_iter([(reqwest::header::AUTHORIZATION, auth)]);
+		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		Ok(Self {
 			base: base.to_owned(),
 			// api.gologin.com's edge refuses a request without a user agent
@@ -845,6 +847,7 @@ impl Multilogin {
 		let mut auth = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", *token)).wrap_err("MULTILOGIN_TOKEN is not a header value")?;
 		auth.set_sensitive(true);
 		let headers = reqwest::header::HeaderMap::from_iter([(reqwest::header::AUTHORIZATION, auth)]);
+		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		Ok(Self {
 			base: base.to_owned(),
 			http: reqwest::Client::builder()

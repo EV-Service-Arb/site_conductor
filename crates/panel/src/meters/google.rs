@@ -44,6 +44,7 @@ impl Google {
 			.decode(pem)
 			.wrap_err_with(|| format!("{name}'s reader's private_key is no PEM"))?;
 		let rsa = RsaKeyPair::from_pkcs8(&der).map_err(|e| eyre!("{name}'s reader's private_key is no RSA PKCS#8 key: {e}"))?;
+		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		Ok(Self {
 			account: name.clone(),
 			http: reqwest::Client::builder().timeout(Duration::from_secs(90)).build().wrap_err("an HTTP client for BigQuery")?,
