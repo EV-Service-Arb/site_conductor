@@ -71,6 +71,7 @@
                 entry = "bash -c '${gen}/bin/gen && git add -A frontend/src/shared/api/openapi.json frontend/src/shared/api/schema.ts'";
                 pass_filenames = false;
                 require_serial = true;
+                files = "^(crates/.*\\.(rs|toml)|Cargo\\.(toml|lock)|contracts/.*)$"; # what the document is built from: a front-end-only commit skips the build
               };
               # English from the code, stale and orphaned translations dropped, the untranslated asked of ask_llm:
               # nothing in messages/ is edited but ru overrides.
