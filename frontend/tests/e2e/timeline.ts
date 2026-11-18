@@ -1,4 +1,4 @@
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 
 import type { FullResult, Reporter, TestCase, TestResult } from "@playwright/test/reporter";
 
@@ -19,6 +19,7 @@ export default class Timeline implements Reporter {
   }
 
   onEnd(_result: FullResult) {
+    if (!existsSync(this.options.stack)) return; // the stack never started: playwright says why
     const stack: Span[] = readFileSync(this.options.stack, "utf8")
       .trim()
       .split("\n")

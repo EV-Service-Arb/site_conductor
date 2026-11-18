@@ -143,12 +143,16 @@ service_arb="$(dirname "$main_checkout")"
 # the siblings' checkouts, one gitignored file for gen and this script alike: {"sites", "review_archive",
 # "placement", "playbook": <checkout root>}
 siblings="$root/_.siblings-local.json"
-[ -f "$siblings" ] || die "$siblings names each sibling's checkout root: sites, review_archive, placement, playbook"
 sibling() { jq -er --arg k "$1" '.[$k]' "$siblings" || die "$siblings names no $1"; }
-SITES_DIR="$(sibling sites)"
-REVIEW_ARCHIVE_DIR="$(sibling review_archive)"
-PLACEMENT_DIR="$(sibling placement)"
-PLAYBOOK_DIR="$(sibling playbook)"
+if [ "$no_peers" = 1 ]; then # no checkouts: a CI runner has none
+	SITES_DIR="" REVIEW_ARCHIVE_DIR="" PLACEMENT_DIR="" PLAYBOOK_DIR=""
+else
+	[ -f "$siblings" ] || die "$siblings names each sibling's checkout root: sites, review_archive, placement, playbook"
+	SITES_DIR="$(sibling sites)"
+	REVIEW_ARCHIVE_DIR="$(sibling review_archive)"
+	PLACEMENT_DIR="$(sibling placement)"
+	PLAYBOOK_DIR="$(sibling playbook)"
+fi
 AQUAFIX_DIR="${AQUAFIX_DIR:-$service_arb/sites/aquafix}"
 VIFNET_DIR="${VIFNET_DIR:-$service_arb/sites/vifnet}"
 DEBOUCHAGE_DIR="${DEBOUCHAGE_DIR:-$service_arb/sites/debouchage}"
