@@ -1,17 +1,6 @@
-import { appendFileSync } from "node:fs";
-
 import { type FullConfig, request } from "@playwright/test";
 
-/** `fn` as a span of the stack's timeline (timeline.ts), beside its phases. */
-async function timed<T>(name: string, fn: () => Promise<T>): Promise<T> {
-  const file = process.env.STACK_TIMELINE;
-  if (file === undefined) throw new Error("STACK_TIMELINE: stackConfig sets it");
-  const start = Date.now();
-  appendFileSync(file, `${name}\t${start}\t\n`);
-  const value = await fn();
-  appendFileSync(file, `${name}\t${start}\t${Date.now()}\n`);
-  return value;
-}
+import { timed } from "./timeline";
 
 /** Dev sign-in: `/auth/login` goes straight to the callback, which opens a session; its cookies are every test's. */
 export default async function signIn(config: FullConfig) {

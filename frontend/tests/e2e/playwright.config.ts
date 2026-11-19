@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import type { Stack } from "./stack";
+
 const port = (name: string): number => {
   const value = process.env[name];
   if (!value) throw new Error(`${name}: the flake's localEnv sets it; run through \`nix run .#e2e\` or \`nix run .#figma\``);
@@ -9,7 +11,8 @@ const port = (name: string): number => {
 // The real stack on ports of its own (`dev --port`: its conductor, dev sign-in as an admin, and its
 // `next dev`), never a running one's servers: those may face the real backend, as an operator. Run
 // through the flake, which supplies `@playwright/test` with its pinned browsers.
-export function stackConfig({ ports, args, specs, env }: { ports: [stack: string, web: string]; args: string; specs: { testMatch: string } | { testIgnore: string }; env: Record<string, string> }) {
+// persistent: the stack outlives the run and is reused by the next (stack.ts); else Playwright's webServer, stopped at the end.
+export function stackConfig({ ports, args, specs, env, persistent }: { ports: [stack: string, web: string]; args: string; specs: { testMatch: string } | { testIgnore: string }; env: Record<string, string>; persistent: boolean }) {
   const STACK = port(ports[0]);
   const WEB = port(ports[1]);
   if (WEB !== STACK + 1) throw new Error(`${ports[1]} ${WEB}: \`dev --port ${STACK}\` serves its next dev on ${STACK + 1}`);
@@ -21,7 +24,8 @@ export function stackConfig({ ports, args, specs, env }: { ports: [stack: string
     fullyParallel: true, // the specs share no server state: each page is its own context, over the one session
     outputDir: tmp(""),
     reporter: [["list"], ["./timeline.ts", { out: tmp("timeline.txt") }]],
-    globalSetup: "./sign-in.ts",
+    globalSetup: persistent ? ["./stack.ts", "./sign-in.ts"] : "./sign-in.ts",
+    metadata: persistent ? { stack: { port: STACK, args: args.split(" ").filter(Boolean), env } satisfies Stack } : {},
     use: {
       baseURL: `http://localhost:${WEB}`, // `next dev` refuses its dev resources to any other host, so the page never hydrates
       deviceScaleFactor: 1,
@@ -31,7 +35,7 @@ export function stackConfig({ ports, args, specs, env }: { ports: [stack: string
       { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
       { name: "mobile", use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 } } },
     ],
-    webServer: {
+    ...(persistent ? {} : { webServer: {
       command: `dev --port ${STACK} --role admin ${args}`,
       cwd: "../../..",
       url: `http://localhost:${WEB}/`,
@@ -39,9 +43,9 @@ export function stackConfig({ ports, args, specs, env }: { ports: [stack: string
       env,
       timeout: 30 * 60_000, // the conductor's and its peers' builds; with --from-prod, the restore too
       gracefulShutdown: { signal: "SIGTERM", timeout: 15_000 }, // its default SIGKILL skips local-stack's stop_all: the watched servers, in groups of their own, serve on and hold the output open
-    },
+    } }),
   });
 }
 
 // the specs touch the conductor's own screens alone
-export default stackConfig({ ports: ["E2E_STACK_PORT", "E2E_WEB_PORT"], args: "--no-peers", specs: { testIgnore: "figma.spec.ts" }, env: { SA_CONDUCTOR_CONFIG: new URL("./conductor.nix", import.meta.url).pathname } }); // no Google accounts: never spends on, nor reads, a person's
+export default stackConfig({ ports: ["E2E_STACK_PORT", "E2E_WEB_PORT"], args: "--no-peers", specs: { testIgnore: "figma.spec.ts" }, env: { SA_CONDUCTOR_CONFIG: new URL("./conductor.nix", import.meta.url).pathname }, persistent: true }); // no Google accounts: never spends on, nor reads, a person's

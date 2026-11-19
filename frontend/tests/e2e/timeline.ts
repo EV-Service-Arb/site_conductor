@@ -3,6 +3,17 @@ import { dirname } from "node:path";
 
 import type { Reporter, TestCase, TestResult } from "@playwright/test/reporter";
 
+/** `fn` as a span of the stack's timeline, beside its phases. */
+export async function timed<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  const file = process.env.STACK_TIMELINE;
+  if (file === undefined) throw new Error("STACK_TIMELINE: stackConfig sets it");
+  const start = Date.now();
+  appendFileSync(file, `${name}\t${start}\t\n`);
+  const value = await fn();
+  appendFileSync(file, `${name}\t${start}\t${Date.now()}\n`);
+  return value;
+}
+
 /** `end` absent: still running. A `/` in `name` nests it under the span named by what precedes. */
 type Span = { name: string; start: number; end: number | undefined };
 type Row = { label: string; depth: number; start: number; end: number; open: boolean };
@@ -131,7 +142,6 @@ export default class Timeline implements Reporter {
   onConfigure() {
     if (this.timer !== undefined) throw new Error("timeline: configured twice");
     mkdirSync(dirname(this.file), { recursive: true });
-    writeFileSync(this.file, ""); // a previous run's spans are not this one's
     if (process.stdout.isTTY) {
       const log = this.file.replace(/[^/]*$/, "playwright.log"); // not beside `out`: playwright empties its outputDir after configuring the reporters
       mkdirSync(dirname(log), { recursive: true });
@@ -219,10 +229,11 @@ export default class Timeline implements Reporter {
     return text;
   }
 
-  /** What the stack wrote so far, and the runner's own load. */
+  /** What the stack wrote since this run began (a persistent stack's file holds earlier runs'), and the runner's own load. */
   private stack(): Span[] {
-    const written = existsSync(this.file) ? parse(readFileSync(this.file, "utf8")) : [];
-    return [{ name: "playwright load", start: Math.round(performance.timeOrigin), end: this.loaded }, ...written];
+    const origin = Math.round(performance.timeOrigin);
+    const written = existsSync(this.file) ? parse(readFileSync(this.file, "utf8")).filter((s) => s.start >= origin) : [];
+    return [{ name: "playwright load", start: origin, end: this.loaded }, ...written];
   }
 
   private snapshot(): string {

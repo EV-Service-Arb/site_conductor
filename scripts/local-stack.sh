@@ -378,6 +378,10 @@ for port in "${ports[@]}"; do
 	[ -n "$port" ] || continue # a checkout absent, skipped below
 	busy "$port" && die "port $port is taken — another local stack, or \`lsof -nP -iTCP:$port -sTCP:LISTEN\` says who"
 done
+# whose stack this is, for e2e's stack.ts: reused while these match, stopped by the pid; before the builds, so a second run finds it starting
+printf '%s\n' ${argv[@]+"${argv[@]}"} "SA_CONDUCTOR_CONFIG=${SA_CONDUCTOR_CONFIG:-}" >"$state/args"
+echo $$ >"$state/pid"
+rm -f "$state/panel.built" "$state/panel.failed" # a previous stack's builds
 
 # ── prod's data ──────────────────────────────────────────────────────────────────────────
 
@@ -770,10 +774,6 @@ stop_all() {
 }
 trap stop_all EXIT
 trap 'stop_all; exit 130' INT TERM
-# whose stack this is, for e2e's stack.ts: reused while these match, stopped by the pid
-printf '%s\n' ${argv[@]+"${argv[@]}"} "SA_CONDUCTOR_CONFIG=${SA_CONDUCTOR_CONFIG:-}" >"$state/args"
-echo $$ >"$state/pid"
-rm -f "$state/panel.built" "$state/panel.failed" # a previous stack's builds
 
 # Polls `url` while `pid` lives, at most `tries` seconds.
 wait_for() {

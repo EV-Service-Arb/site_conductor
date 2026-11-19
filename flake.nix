@@ -388,8 +388,24 @@
           package = "frontend";
           config = "tests/e2e";
           env = localEnv;
-          runtimeInputs = [ dev ];
-          run = ''exec playwright test -c tests/e2e "$@"'';
+          runtimeInputs = [ dev pkgs.procps pkgs.gnugrep ];
+          # its stack outlives the run (tests/e2e/stack.ts): --stop stops it, --restart starts the run on a new one
+          run = ''
+            stop() {
+              local pid
+              pid="$(cat "../.local-port-$E2E_STACK_PORT/pid" 2>/dev/null)" || return 0
+              ps -o args= -p "$pid" | grep -q local-stack || return 0
+              kill -TERM "$pid"
+              for _ in $(seq 60); do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.5; done
+              echo "local-stack $pid did not stop in 30s" >&2
+              exit 1
+            }
+            case "''${1:-}" in
+            --stop) stop; exit 0 ;;
+            --restart) stop; shift ;;
+            esac
+            exec playwright test -c tests/e2e "$@"
+          '';
         };
         # In the devShell, not an app: built in another environment, every crate's fingerprint is stale.
         testTimeline = pkgs.writeShellApplication {
