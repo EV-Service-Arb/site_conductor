@@ -29,3 +29,10 @@ body {
 html {
   scrollbar-gutter: stable;
 }
+
+/* a print-only sheet (a kit's cards) prints alone */
+@media print {
+  body > :not(.print-sheet) {
+    display: none !important;
+  }
+}

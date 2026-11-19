@@ -40,7 +40,7 @@ use sa_core::{
 use sa_panel::{
 	Grant, Panel, SignedBatch,
 	gmbs::TradeId,
-	kit::{Event, Funnel, Kit, Nearby, Offer, PHOTO_MAX, Pool, PutKit, Ranked, Scope, Target},
+	kit::{Event, Funnel, Kit, Offer, PHOTO_MAX, Pool, PutKit, Ranked, Scope, Target},
 	store::kit::Happening,
 };
 use sa_places::LatLng;
@@ -51,7 +51,7 @@ use uuid::Uuid;
 
 use crate::{
 	api::{ApiResult, Code, Id},
-	areas::{AreaDto, SlugIn},
+	areas::SlugIn,
 	brands::BrandDto,
 	forward::Services,
 	gmbs::TradeIn,
@@ -214,26 +214,6 @@ pub(crate) struct SetKitDto {
 }
 
 /// One of the caller's GBPs in or next to an area.
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "AreaGmb")]
-pub(crate) struct NearbyDto {
-	pub id: i64,
-	pub name: String,
-	pub state: GbpState,
-	pub address: Option<String>,
-	pub location: LatLng,
-	pub distance_m: f64,
-	/// Within its radius; else within twice it.
-	pub inside: bool,
-}
-
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "AreaGmbs")]
-pub(crate) struct AreaGmbsDto {
-	pub area: AreaDto,
-	pub gmbs: Vec<NearbyDto>,
-}
-
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitRow")]
 pub(crate) struct KitRowDto {
@@ -483,20 +463,6 @@ impl From<Pool> for PoolDto {
 	}
 }
 
-impl From<Nearby> for NearbyDto {
-	fn from(n: Nearby) -> Self {
-		Self {
-			id: n.gmb.id,
-			name: n.gmb.name,
-			state: n.gmb.state,
-			address: n.gmb.address,
-			location: n.gmb.location.expect("only a GBP with a point is by an area").at,
-			distance_m: n.distance_m.round(),
-			inside: n.inside,
-		}
-	}
-}
-
 fn ranked(drafts: Vec<Ranked>, target: Option<Target>) -> Vec<RankedDto> {
 	let shown = match target {
 		Some(Target::Drafts) => sa_panel::kit::OFFERED,
@@ -542,7 +508,6 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/gmbs/{id}/kit", USER, gmb_kit),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/kit", USER, set_gmb_kit),
 		ApiRoute::new(M::POST, "/gmbs/{id}/kit/shown", USER, kit_shown),
-		ApiRoute::new(M::GET, "/areas/{slug}/gmbs", USER, area_gmbs),
 		ApiRoute::new(M::GET, "/kits", USER, kits),
 		ApiRoute::new(M::GET, "/kits/{slug}", USER, kit),
 		ApiRoute::new(M::PUT, "/kits/{slug}", USER, put_kit),
@@ -766,17 +731,6 @@ async fn set_gmb_kit(
 async fn kit_shown(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>, Params(q): Params<ShownIn>) -> ApiResult<NoContent> {
 	panel.kit_shown(caller.user_id, gmb, q.kit.as_deref(), Timestamp::now()).await??;
 	Ok(NoContent)
-}
-
-/// The area and the caller's GBPs with a point in it or within twice its radius, nearest its
-/// centre first.
-async fn area_gmbs(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>) -> ApiResult<Json<AreaGmbsDto>> {
-	let gmbs = panel.area_gmbs(caller.user_id, &slug).await??;
-	let area = panel.area(&slug).await?.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
-	Ok(Json(AreaGmbsDto {
-		area: area.into(),
-		gmbs: gmbs.into_iter().map(Into::into).collect(),
-	}))
 }
 
 /// The caller's kits.

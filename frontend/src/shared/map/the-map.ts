@@ -131,7 +131,7 @@ export function pin(
   map: google.maps.Map,
   element: HTMLElement,
   at: google.maps.LatLngLiteral,
-  { anchor = "centre", onDrag }: { anchor?: "centre" | "tip"; onDrag?: (to: google.maps.LatLngLiteral) => void } = {},
+  { anchor = "centre", onDrag, onMoving }: { anchor?: "centre" | "tip"; onDrag?: (to: google.maps.LatLngLiteral) => void; onMoving?: (to: google.maps.LatLngLiteral) => void } = {},
 ): { move: (to: google.maps.LatLngLiteral) => void; remove: () => void } {
   element.style.position = "absolute";
   element.style.transform = anchor === "tip" ? "translate(-50%, -100%)" : "translate(-50%, -50%)";
@@ -162,6 +162,7 @@ export function pin(
         if (to === null) throw new Error("the pointer's pixel has no point while dragging");
         at = to.toJSON();
         redraw();
+        onMoving?.(at);
       };
       element.addEventListener("pointermove", follow);
       element.addEventListener("pointerup", () => {
@@ -178,4 +179,13 @@ export function pin(
     },
     remove: () => overlay.setMap(null),
   };
+}
+
+const EARTH_M = 6_371_008.8;
+const rad = (deg: number) => (deg * Math.PI) / 180;
+
+/** Metres between two points along the ground (haversine). */
+export function distanceM(a: google.maps.LatLngLiteral, b: google.maps.LatLngLiteral): number {
+  const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lng - a.lng) / 2) ** 2;
+  return 2 * EARTH_M * Math.asin(Math.sqrt(h));
 }

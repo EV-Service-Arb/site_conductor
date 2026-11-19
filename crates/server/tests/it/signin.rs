@@ -996,7 +996,6 @@ async fn no_permission_opens_no_section() {
 			"/gmbs/{id}/kit",
 			"/gmbs/{id}/kit",
 			"/gmbs/{id}/kit/shown",
-			"/areas/{slug}/gmbs",
 			"/kits",
 			"/kits/{slug}",
 			"/kits/{slug}",

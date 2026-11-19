@@ -1,3 +1,3 @@
-export { type Base, type TheMap, pin, setBase, showPlaces, useBase, usePlacesShown, useTheMap } from "./the-map";
+export { type Base, type TheMap, distanceM, pin, setBase, showPlaces, useBase, usePlacesShown, useTheMap } from "./the-map";
 export { StreetView } from "./street-view";
 export { Locate } from "./locate";

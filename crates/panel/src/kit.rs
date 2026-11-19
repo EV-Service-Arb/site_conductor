@@ -271,16 +271,6 @@ pub enum Event {
 	Saved(Vec<i64>),
 }
 
-/// One of the caller's GBPs in or next to an area.
-#[derive(Clone, Debug)]
-pub struct Nearby {
-	pub gmb: Gmb,
-	/// From the area's centre.
-	pub distance_m: f64,
-	/// Within its radius; else within twice it.
-	pub inside: bool,
-}
-
 impl Panel {
 	/// The owner's category `trade` · `country`, set up.
 	async fn category_is(&self, conn: &mut sqlx::SqliteConnection, owner: Uuid, trade: i64, country: Country) -> eyre::Result<bool> {
@@ -607,29 +597,6 @@ impl Panel {
 		}
 		tx.commit().await.wrap_err("committing a kit's event")?;
 		Ok(Ok(()))
-	}
-
-	/// The owner's GBPs with a point in area `slug` or within twice its radius, nearest its centre first.
-	pub async fn area_gmbs(&self, owner: Uuid, slug: &str) -> eyre::Result<Result<Vec<Nearby>, Refused>> {
-		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for an area")?;
-		let Some(area) = areas_db::area(&mut conn, slug).await? else {
-			return Ok(Err(Refused::NotFound));
-		};
-		let r = area.radius_m as f64;
-		let mut near: Vec<Nearby> = gmbs_db::gmbs(&mut conn, owner)
-			.await?
-			.into_iter()
-			.filter_map(|g| {
-				let distance_m = metres(g.location.as_ref()?.at, area.center);
-				(distance_m <= 2. * r).then_some(Nearby {
-					distance_m,
-					inside: distance_m <= r,
-					gmb: g,
-				})
-			})
-			.collect();
-		near.sort_by(|a, b| a.distance_m.total_cmp(&b.distance_m));
-		Ok(Ok(near))
 	}
 
 	pub async fn kits(&self, owner: Uuid) -> eyre::Result<Vec<KitSummary>> {

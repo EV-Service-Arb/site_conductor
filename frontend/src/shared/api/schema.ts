@@ -388,23 +388,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/areas/{slug}/gmbs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The area and the caller's GBPs with a point in it or within twice its radius, nearest its centre first. */
-        get: operations["area_gmbs"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/assistant/archived": {
         parameters: {
             query?: never;
@@ -2254,23 +2237,6 @@ export interface components {
             radius_m: number;
             slug: string;
         };
-        /** @description One of the caller's GBPs in or next to an area. */
-        AreaGmb: {
-            address: string | null;
-            /** Format: double */
-            distance_m: number;
-            /** Format: int64 */
-            id: number;
-            /** @description Within its radius; else within twice it. */
-            inside: boolean;
-            location: components["schemas"]["LatLng"];
-            name: string;
-            state: components["schemas"]["State"];
-        };
-        AreaGmbs: {
-            area: components["schemas"]["Area"];
-            gmbs: components["schemas"]["AreaGmb"][];
-        };
         Areas: {
             areas: components["schemas"]["Area"][];
         };
@@ -3164,6 +3130,7 @@ export interface components {
             /** Format: int64 */
             width: number;
         };
+        /** @description One of the caller's GBPs in or next to an area. */
         KitRow: {
             area: string | null;
             /** Format: int64 */
@@ -4663,8 +4630,6 @@ export type Alerts = components['schemas']['Alerts'];
 export type AnswerState = components['schemas']['AnswerState'];
 export type Approval = components['schemas']['Approval'];
 export type Area = components['schemas']['Area'];
-export type AreaGmb = components['schemas']['AreaGmb'];
-export type AreaGmbs = components['schemas']['AreaGmbs'];
 export type Areas = components['schemas']['Areas'];
 export type Ask = components['schemas']['Ask'];
 export type Attachment = components['schemas']['Attachment'];
@@ -7794,135 +7759,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Area"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    area_gmbs: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                slug: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AreaGmbs"];
                 };
             };
             /** @description `bad_request` */

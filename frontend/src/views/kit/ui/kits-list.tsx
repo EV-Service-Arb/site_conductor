@@ -30,7 +30,7 @@ export function KitsList({ go, current }: { go: (at: KitAt) => void; current?: s
           {t(kitKeys.list.new, "New")}
         </Button>
       </div>
-      {kits.data.kits.length === 0 && <p className="px-1 text-sm text-ink-soft">{t(kitKeys.list.none, "No kit yet: a kit is GBPs you collect reviews for together, from an area, the outline or by hand.")}</p>}
+      {kits.data.kits.length === 0 && <p className="px-1 text-sm text-ink-soft">{t(kitKeys.list.none, "No kit yet: a kit is the GBPs in one area you collect reviews in together.")}</p>}
       <ul className="flex flex-col gap-0.5">
         {kits.data.kits.map((k) => (
           <li key={k.slug}>

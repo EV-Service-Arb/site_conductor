@@ -1096,8 +1096,9 @@ a review of g first seen at s (review_archive's feed) → kit_posted, decided on
 - **Photos** are re-encoded on the way in (JPEG, ≤ 2048 px, upright, no EXIF): what a reviewer
   saves carries nothing of where it was taken; what one shows is its alt and caption there.
 - **Areas** are geography, everyone's, and carry their country (ISO 3166-1 alpha-2, Places'): a circle
-  around a centre, and the locality it was drawn from, if any, an outline to see it by. A kit is at
-  `/kit/<slug>`, its slug the owner's, never `new`.
+  around a centre, and the locality its centre lies in, if any, an outline to see it by. One is named
+  `<city> × <radius>` while its centre is in the city's circle, else by hand; a kit made from one takes
+  its name and link. A kit is at `/kit/<slug>`, its slug the owner's, never `new`.
 
 ## Alerts
 
