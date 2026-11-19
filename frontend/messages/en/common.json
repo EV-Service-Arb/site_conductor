@@ -1168,7 +1168,6 @@
   "window.connections.playbook.prompt": "What does the playbook's {page} guide say to do for @{name}?",
   "window.connections.playbook.title": "Playbook prompts",
   "window.connections.ready": "{n} of {of} ready",
-  "window.flip": "Window: over the map or its own page",
   "window.header.email": "Google: {subject} · {ago}",
   "window.header.inView": "{at}/{n} in view",
   "window.header.maps": "Maps",

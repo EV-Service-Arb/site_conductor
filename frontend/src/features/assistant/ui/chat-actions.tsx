@@ -19,7 +19,9 @@ export type Confirm = { kind: "delete" | "leave"; chat: ChatSummary } | { kind: 
 export interface Controls {
   display: Display;
   /** `id` moved into `display`. */
-  onDisplay: (id: string, display: Display) => void;
+  onDisplay: (id: string | null, display: Display) => void;
+  /** The keys flipping floating ⇄ full screen, while they do. */
+  flipKeys: string | undefined;
   onConfirm: (confirm: Confirm) => void;
   /** A write landed: what the surface reads is read again. */
   onChanged: () => void;
@@ -50,7 +52,8 @@ const DISPLAYS = [
 export function ChatActions({ chat, onRename, pinOutside = false }: { chat: ChatSummary; onRename: () => void; pinOutside?: boolean }) {
   const t = useT();
   const locale = useLocale();
-  const { display, onDisplay, onConfirm, onChanged } = useControls();
+  const { display, onDisplay, onConfirm, onChanged, flipKeys } = useControls();
+  const flipsTo = display === "floating" ? "full" : display === "full" ? "floating" : null;
   const interacts = chat.role !== "viewer";
   const write = (p: Promise<unknown>) => void p.then(onChanged, (e: unknown) => notifyFailure(e, t));
   return (
@@ -96,6 +99,7 @@ export function ChatActions({ chat, onRename, pinOutside = false }: { chat: Chat
           <DropdownMenuRadioItem key={id} value={id}>
             <Icon aria-hidden />
             {name(t)}
+            {id === flipsTo && flipKeys !== undefined && <DropdownMenuShortcut>{flipKeys}</DropdownMenuShortcut>}
           </DropdownMenuRadioItem>
         ))}
       </DropdownMenuRadioGroup>

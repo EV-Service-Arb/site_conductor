@@ -1,24 +1,17 @@
 "use client";
 
-import { Button, FloatingPanel, useBinding, useKeymap } from "@evinvest/uikit";
+import { Button, FloatingPanel } from "@evinvest/uikit";
 import { Maximize2, Minimize2 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { type WinKey, closeWindow, floatWindow, keepOpen, pageOf, pageWindow, shownAt, subjectOf, useShown, windowKeys } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { type At, go } from "@/shared/lib/location";
 import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
+import { useFloatie } from "@/shared/ui/floatie";
 import { useButtonSize } from "@/shared/ui/touch";
 
 import { faceOf } from "./faces";
-
-/** `leader z`: the shown window over the map ⇄ its own page; its button's hint carries the keys. */
-function useFlipKey(flip: (() => void) | null): string | undefined {
-  const t = useT();
-  useBinding({ on: { key: "z" }, id: "window-flip", run: { label: t(windowKeys.flip, "Window: over the map or its own page"), run: flip } });
-  return useKeymap().bound.get("window-flip")?.sequence;
-}
-
 const TOP_PX = 64;
 
 /** The window shown over the map, from md up; below it, its page instead. */
@@ -35,7 +28,8 @@ function WindowFrame({ k }: { k: WinKey }) {
   const face = faceOf(k);
   const width = typeof face.width === "number" ? face.width : face.width(k);
   const page = JSON.stringify(pageOf(k));
-  const keys = useFlipKey(desk ? () => pageWindow(k) : null);
+  const body = useRef<HTMLDivElement>(null);
+  const keys = useFloatie(body, desk ? () => pageWindow(k) : null);
   const toPage = keys === undefined ? t(windowKeys.toPage, "Its own page") : `${t(windowKeys.toPage, "Its own page")} · ${keys}`;
   useEffect(() => {
     if (!desk) go(JSON.parse(page) as At, "replace");
@@ -53,7 +47,7 @@ function WindowFrame({ k }: { k: WinKey }) {
         </Button>
       }
     >
-      <div className="max-w-full" style={{ width }}>
+      <div ref={body} className="max-w-full" style={{ width }}>
         <face.Body k={k} page={false} />
       </div>
     </FloatingPanel>
@@ -69,9 +63,10 @@ export function WindowPage({ at }: { at: At }) {
   if (shown === null || !shown.page) throw new Error(`${at.view} is no window's page`);
   const k = shown.key;
   const face = faceOf(k);
-  const keys = useFlipKey(desk ? () => floatWindow(k) : null);
+  const el = useRef<HTMLDivElement>(null);
+  const keys = useFloatie(el, desk ? () => floatWindow(k) : null);
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div ref={el} className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-2 border-b border-border px-4 py-2 text-sm">
         <span className="flex min-w-0 flex-1 items-center">
           <face.Title k={k} page />

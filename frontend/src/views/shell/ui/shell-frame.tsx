@@ -13,6 +13,7 @@ import { useT, keys, nav } from "@/shared/i18n";
 import { VIEWS } from "@/shared/api/views";
 import { useAt } from "@/shared/lib/location";
 import { useLiveSocket } from "@evinvest/api/react";
+import { FloatieKey } from "@/shared/ui/floatie";
 import { ResizeEdge } from "@/shared/ui/resize-edge";
 
 import { WIDTH, setSidebarWidth, useSidebarFolded, useSidebarWidth } from "../model/sidebar";
@@ -49,6 +50,7 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
         <GmailsProvider>
           <PublishSelection />
           <NavKeys />
+          <FloatieKey />
           <div className="flex h-svh flex-col">
             <PanelTopBar />
             <div className="relative flex min-h-0 flex-1">

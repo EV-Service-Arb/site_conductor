@@ -13,6 +13,7 @@ import { VIEWS } from "@/shared/api/views";
 import { href } from "@evinvest/views";
 import { go, useAt, useCarried } from "@/shared/lib/location";
 import { type T, useT } from "@/shared/i18n";
+import { useFloatie } from "@/shared/ui/floatie";
 import { notifyFailure } from "@/shared/ui/notify";
 
 import { type Display, type Page, ask, openChat, overlaid, shown, stop, useAssistant } from "../model/chat";
@@ -73,6 +74,7 @@ function ChatBody({ id, display, onOpen, onHide, read }: Surface & { id: string 
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [context, setContext] = useState(true);
   const seen = useRef(new Set<string>());
+  const surface = useRef<HTMLDivElement>(null);
   const runningHere = overlaid(chat, id, s.running);
   const streaming = runningHere && (s.running!.answer.state === "working" || s.running!.answer.state === "writing");
   const gone = id !== null && read.status === "ok" && read.fresh && read.data === null && !runningHere;
@@ -141,7 +143,7 @@ function ChatBody({ id, display, onOpen, onHide, read }: Surface & { id: string 
           delete kept.assistant;
           back = href(VIEWS, at, kept);
         }
-        go({ view: "assistant", params: { chat: chatId } });
+        go({ view: "assistant", params: chatId === null ? {} : { chat: chatId } });
       } else {
         openChat(chatId, to);
         if (display === "full") {
@@ -152,6 +154,7 @@ function ChatBody({ id, display, onOpen, onHide, read }: Surface & { id: string 
     },
     onConfirm: setConfirm,
     onChanged: reload,
+    flipKeys: useFloatie(surface, display === "floating" ? () => controls.onDisplay(id, "full") : display === "full" ? () => controls.onDisplay(id, "floating") : null),
   };
   const confirmed = async (c: Confirm) => {
     if (c.kind === "clear") await ok(api.DELETE("/assistant/archived"));
@@ -236,6 +239,7 @@ function ChatBody({ id, display, onOpen, onHide, read }: Surface & { id: string 
   return (
     <ControlsContext.Provider value={controls}>
       <div
+        ref={surface}
         className="relative flex min-h-0 flex-1 flex-col"
         onDragEnter={(e) => interacts && e.dataTransfer.types.includes("Files") && setDropping((n) => n + 1)}
         onDragLeave={(e) => interacts && e.dataTransfer.types.includes("Files") && setDropping((n) => n - 1)}
