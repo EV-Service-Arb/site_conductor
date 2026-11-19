@@ -55,6 +55,7 @@ no_peers=0
 fixed=0
 fixed_rev=""
 own_port=""
+side=0
 from_prod=0
 role="admin"
 while [ $# -gt 0 ]; do
@@ -75,6 +76,7 @@ while [ $# -gt 0 ]; do
 		;;
 	--port)
 		own_port="${2:-}"
+		side=1
 		[[ "$own_port" =~ ^[0-9]+$ ]] || {
 			echo "--port takes a number, not '$own_port'" >&2
 			exit 2
@@ -111,7 +113,8 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [-
   dev (--dev): --watch without the landings. A conductor or its next dev already on their ports is
   stopped, with the run that started it, and replaced; sites_panel and review_archive are started
   unless they already answer on their ports, a peer without a checkout skipped with a warning.
-  --port <n>: the conductor on n and its next dev on n+1, in SA_PORT_RANGE, with a state of its own.
+  --port <n>: the conductor on n and its next dev on n+1, in SA_PORT_RANGE, with a state of its own; no browsers' nor
+  sandbox's runner, whose ports are the stack's on the usual ones.
   --no-peers: neither built nor started: sites_panel, review_archive, gmaps_optimal_placement, playbook; the conductor answers 502 for them.
   --fixed [<rev>]: nothing watched; the conductor and its static front end built once from a copy of this checkout
   as it is now, or at <rev> (a commit, a tag), into this checkout's build dir: only what differs compiles. Without --port,
@@ -646,7 +649,7 @@ if [ -n "$PLAYBOOK_PORT" ] && { [ "$run_playbook" = 1 ] || answers "$PLAYBOOK_PO
 fi
 # The gmails' browsers only with the caller's GOLOGIN_TOKEN or MULTILOGIN_TOKEN: neither runs without a plan's.
 browsers_origin=""
-[ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ] || [ "$run_panel" = 0 ] || browsers_origin="http://127.0.0.1:$BROWSERS_PORT"
+[ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ] || [ "$run_panel" = 0 ] || [ "$side" = 1 ] || browsers_origin="http://127.0.0.1:$BROWSERS_PORT"
 # a runner answers one conductor: under dev, another stack's (a --port one beside it) leaves this one without
 if [ -n "$browsers_origin" ] && [ "$dev" = 1 ] && busy "$BROWSERS_PORT"; then
 	warn "port $BROWSERS_PORT is another stack's browsers' runner: none here, the gmails' browsers say they are not connected"
@@ -654,7 +657,7 @@ if [ -n "$browsers_origin" ] && [ "$dev" = 1 ] && busy "$BROWSERS_PORT"; then
 fi
 # The agents' `execute` once crates/sandbox/js has its packages: @evinvest/api comes through its _.js-local.json until published.
 sandbox_origin=""
-if [ "$run_panel" = 1 ]; then
+if [ "$run_panel" = 1 ] && [ "$side" = 0 ]; then
 	sandbox_js="$src/crates/sandbox/js"
 	[ "$sandbox_js/node_modules/.package-lock.json" -nt "$sandbox_js/package.json" ] || timed sandbox-js in_shell "$root" bash -c "cd crates/sandbox/js && npm install --no-audit --no-fund >&2"
 	if [ -d "$sandbox_js/node_modules/@evinvest/api" ]; then
@@ -936,6 +939,8 @@ if [ -n "$browsers_origin" ]; then
 	[ "$watch" = 1 ] || [ "$fixed" = 1 ] || timed browsers in_shell "$root" bash -c "$own_cargo b -q -p sa_browsers" # under --watch, the conductor's build
 	serving browsers "$root" "$own_cargo b -q $conductor_packages" "browsers serve" -e rs,toml,lock &
 	essential+=("$!")
+elif [ "$side" = 1 ]; then
+	say "--port: no browsers' nor sandbox's runner, whose ports are the stack's on the usual ones"
 elif [ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ]; then
 	say "GOLOGIN_TOKEN and MULTILOGIN_TOKEN unset: no browsers' runner; the gmails' browsers say they are not connected"
 fi
