@@ -840,7 +840,7 @@ if [ -n "$sandbox_origin" ]; then
 	timed sandbox in_shell "$root" cargo b -q -p sa_sandbox
 	serving sandbox "$root" "cargo b -q -p sa_sandbox" "sandbox serve" -e rs,toml,lock &
 	essential+=("$!")
-elif [ "$run_panel" = 1 ]; then
+elif [ "$run_panel" = 1 ] && [ ! -d "$root/crates/sandbox/js/node_modules/@evinvest/api" ]; then
 	say "crates/sandbox/js has no @evinvest/api (its _.js-local.json names the checkout until it is published): no sandbox, the agents have no execute"
 fi
 
