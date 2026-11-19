@@ -51,7 +51,13 @@ live socket comes from there). The landings are `next dev` either way.
 ```sh
 nix run .#dev                  # the conductor, sites_panel and review_archive under --watch, no landings
 nix run .#dev -- --port <n>    # the conductor on n and its next dev on n+1, beside the usual one
+nix run .#dev -- --fixed [<rev>]   # nothing watched: the conductor as the checkout is now, or at <rev> (commit, tag)
 ```
+
+`--fixed` copies the code into `.local/fixed/<content hash>/` and builds it into this checkout's build dir, so only
+crates whose sources differ compile: cargo tells sources apart by checksum (`checksum-freshness`, .cargo/config.toml),
+and a build script's `rerun-if-changed` paths stay relative to its package. The front end is the copy's static export.
+The peers run unwatched from their checkouts.
 
 A conductor or its `next dev` already listening on their ports (another run's, another
 checkout's) is stopped, together with the run that started it and whatever else that run served,

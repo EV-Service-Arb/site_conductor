@@ -1,6 +1,8 @@
 [[include]]
 optional = true
 path = "local.toml"
+[unstable]
+checksum-freshness = true # a source's content, not its mtime: `dev --fixed`'s copies build into this checkout's build dir
 
 [profile.rust]
 codegen-backend = "cranelift"

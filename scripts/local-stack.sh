@@ -14,6 +14,7 @@
 #   nix run .#dev [-- --port <n>]          the conductor, sites_panel and review_archive under --watch,
 #                                          a peer started unless it already serves, a conductor already
 #                                          serving stopped and replaced; the conductor on n
+#   nix run .#dev -- --fixed [<rev>]       the same unwatched, the conductor as this checkout is now, or at <rev>
 #
 # The conductor and its front end come from `nix build .#bin` / `.#frontend` of this checkout,
 # unless PANEL_BIN / PANEL_WEB_DIR name others (PANEL_BIN=target/debug/panel for a cargo build);
@@ -24,6 +25,7 @@
 # _.siblings-local.json names the siblings' checkouts; AQUAFIX_DIR, VIFNET_DIR and DEBOUCHAGE_DIR the landings', by
 # default beside this one's. Each part's port is what its own dev shell sets (docs/port_range.md).
 set -euo pipefail
+argv=("$@")
 
 need="run it as \`nix run .#local-stack\`, or inside \`nix develop\`: the flake sets the conductor's ports"
 PANEL_PORT="${PANEL_BIND:?$need}"
@@ -49,6 +51,8 @@ watch=0
 spend_flag=""
 dev=0
 no_peers=0
+fixed=0
+fixed_rev=""
 own_port=""
 from_prod=0
 role="admin"
@@ -61,6 +65,13 @@ while [ $# -gt 0 ]; do
 	--from-prod) from_prod=1 ;;
 	--dev) dev=1 ;;
 	--no-peers) no_peers=1 ;;
+	--fixed)
+		fixed=1
+		if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
+			fixed_rev="$2"
+			shift
+		fi
+		;;
 	--port)
 		own_port="${2:-}"
 		[[ "$own_port" =~ ^[0-9]+$ ]] || {
@@ -84,7 +95,7 @@ while [ $# -gt 0 ]; do
 	-h | --help)
 		cat <<'EOF'
 local-stack [--reset] [--no-sites] [--watch] [--role admin|operator] [--port-offset <n>] [--from-prod] [--spend-real-quota-i-am-certain]
-dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers]
+dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [--fixed [<rev>]]
 
   The conductor (dev sign-in, its Grafana at /grafana/), sites_panel, review_archive, aquafix,
   vifnet and debouchage, wired together, each on the port its dev shell sets. State in .local/
@@ -101,6 +112,8 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers]
   unless they already answer on their ports, a peer without a checkout skipped with a warning.
   --port <n>: the conductor on n and its next dev on n+1, in SA_PORT_RANGE, with a state of its own.
   --no-peers: neither built nor started: sites_panel, review_archive, gmaps_optimal_placement, playbook; the conductor answers 502 for them.
+  --fixed [<rev>]: nothing watched; the conductor and its static front end built once from a copy of this checkout
+  as it is now, or at <rev> (a commit, a tag), into this checkout's build dir: only what differs compiles.
 EOF
 		exit 0
 		;;
@@ -122,6 +135,13 @@ if [ "$dev" = 1 ]; then
 	watch=1
 	sites=0
 fi
+if [ "$fixed" = 1 ]; then
+	[ "$dev" = 1 ] || {
+		echo "--fixed is dev's" >&2
+		exit 2
+	}
+	watch=0
+fi
 [ -z "$own_port" ] || [ "$dev" = 1 ] || {
 	echo "--port is dev's: local-stack moves every port with --port-offset" >&2
 	exit 2
@@ -136,9 +156,50 @@ warn() { printf '\033[33m! %s\033[0m\n' "$*" >&2; }
 
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "run this from inside the conductor's checkout"
 [ -f "$root/crates/server/Cargo.toml" ] || die "$root is not the conductor's checkout"
+# the root's dev shell entered once for the whole run, not per command: each entry costs seconds
+if [ "${LOCAL_STACK_SHELL:-}" != "$root" ]; then
+	cd "$root" # its shellHook writes into the working directory
+	exec nix develop "$root" -c env LOCAL_STACK_SHELL="$root" "$0" ${argv[@]+"${argv[@]}"}
+fi
 # The others sit beside the conductor's main checkout (_sa/{site_conductor,review_archive,
 # sites/{panel,aquafix,vifnet,debouchage}}), also when this is one of its worktrees.
 main_checkout="$(dirname "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)")"
+# Where the conductor's code is built from. --fixed: a copy no one edits, in a dir named by its content, building into this
+# checkout's build dir, which tells sources apart by checksum (.cargo/config.toml, whose settings the copy inherits)
+src="$root"
+if [ "$fixed" = 1 ]; then
+	worktree_files() { git -C "$root" ls-files -z -co --exclude-standard --deduplicate | while IFS= read -rd '' f; do [ ! -e "$root/$f" ] || printf '%s\0' "$f"; done; }
+	if [ -n "$fixed_rev" ]; then
+		commit="$(git -C "$root" rev-parse --verify -q "$fixed_rev^{commit}")" || die "--fixed $fixed_rev: not a commit of $root"
+		src="$root/.local/fixed/$(git -C "$root" rev-parse --short=12 "$commit^{tree}")"
+		fixed_at="$fixed_rev"
+	else
+		fixed_at="this checkout's state at the start"
+		commit="$(git -C "$root" rev-parse HEAD)"
+		src="$root/.local/fixed/$(worktree_files | (cd "$root" && xargs -0 sha256sum) | sha256sum | cut -c1-12)"
+	fi
+	if [ ! -e "$src/.copied" ]; then
+		say "copying the conductor at $fixed_at into $src"
+		rm -rf "$src"
+		mkdir -p "$src"
+		if [ -n "$fixed_rev" ]; then
+			git -C "$root" archive "$commit" | tar -x -C "$src"
+		else
+			worktree_files | tar -C "$root" --null -T - -c | tar -x -C "$src"
+		fi
+		# the build script's GIT_HASH: the commit, its objects the checkout's
+		git -C "$src" init -q
+		echo "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)/objects" >"$src/.git/objects/info/alternates"
+		git -C "$src" update-ref --no-deref HEAD "$commit"
+		# no newer than the checkout's when the same commit: the build script reruns on a newer one, and sa_server with it
+		[ -n "$fixed_rev" ] || for f in HEAD logs/HEAD; do touch -r "$(git -C "$root" rev-parse --path-format=absolute --git-path "$f")" "$src/.git/$f"; done
+		# gitignored, and read by the builds; the installs hard-linked (npm ci replaces what it changes), the overlay copied (rebuilt in place)
+		[ ! -e "$root/frontend/_.js-local.json" ] || cp "$root/frontend/_.js-local.json" "$src/frontend/"
+		for d in frontend/node_modules crates/sandbox/js/node_modules; do [ ! -d "$root/$d" ] || cp -al "$root/$d" "$src/$d"; done
+		[ ! -d "$root/frontend/src/shared/placement_overlay" ] || cp -a "$root/frontend/src/shared/placement_overlay" "$src/frontend/src/shared/"
+		touch "$src/.copied"
+	fi
+fi
 service_arb="$(dirname "$main_checkout")"
 # the siblings' checkouts, one gitignored file for gen and this script alike: {"sites", "review_archive",
 # "placement", "playbook": <checkout root>}
@@ -360,6 +421,10 @@ fi
 in_shell() {
 	local dir="$1"
 	shift
+	if [ "$dir" = "$root" ] || [ "$dir" = "$src" ]; then # entered at the top; --fixed's copy builds under it too
+		if [ -z "${TIMELINE_PARENT:-}" ]; then (cd "$dir" && "$@"); else (cd "$dir" && timed "${1##*/}" "$@"); fi
+		return
+	fi
 	if [ -z "${TIMELINE_PARENT:-}" ]; then
 		(cd "$dir" && nix develop -c "$@")
 		return
@@ -424,12 +489,19 @@ fi
 web_prep() {
 	# in the dev shell, whose js-local lays our packages' checkouts over the install (frontend/_.js-local.json);
 	# npm ci stamps node_modules/.package-lock.json: a lockfile pulled since is newer
-	timed packages prefixed web in_shell "$root" bash -c \
+	timed packages prefixed web in_shell "$src" bash -c \
 		'cd frontend && if [ node_modules/.package-lock.json -nt package-lock.json ]; then js-local; else npm ci; fi'
-	timed overlay prefixed placement-overlay in_shell "$root" placement-overlay
+	# skipped while its inputs hash as they did at its last build: the wasm takes ~20s
+	local out="$src/frontend/src/shared/placement_overlay" inputs
+	inputs="$( (cd "$src" && find crates/placement_overlay Cargo.toml Cargo.lock .cargo -type f ! -path '*/target/*'; [ -z "$PLACEMENT_DIR" ] || find "$PLACEMENT_DIR/gmaps_optimal_placement_core" -type f ! -path '*/target/*') | sort | (cd "$src" && xargs -d '\n' sha256sum) | sha256sum)"
+	if [ ! -f "$out/placement_overlay_bg.wasm" ] || [ "$(cat "$out/.inputs-hash" 2>/dev/null)" != "$inputs" ]; then
+		timed overlay prefixed placement-overlay in_shell "$src" env CARGO_BUILD_BUILD_DIR="$root/target" placement-overlay
+		echo "$inputs" >"$out/.inputs-hash"
+	fi
+	[ "$fixed" = 0 ] || timed export prefixed web in_shell "$src" bash -c 'cd frontend && npm run -s build'
 }
 web_prep_build=""
-if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
+if [ "$run_panel" = 1 ] && { [ "$watch" = 1 ] || [ "$fixed" = 1 ]; }; then
 	timed web-prep web_prep &
 	web_prep_build=$!
 fi
@@ -441,13 +513,16 @@ build_review_archive() {
 	retried in_shell "$REVIEW_ARCHIVE_DIR" cargo b -q -p review_archive_server &&
 		(cd "$REVIEW_ARCHIVE_DIR" && retried nix run .#build-mfe -- "$state/watch/review_archive-mfe")
 }
-if [ "$watch" = 1 ]; then
+if [ "$watch" = 1 ] || [ "$fixed" = 1 ]; then
 	for v in PANEL_BIN PANEL_WEB_DIR SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR; do
-		[ -z "${!v:-}" ] || die "--watch builds every part from its checkout: unset $v"
+		[ -z "${!v:-}" ] || die "--watch and --fixed build every part from its checkout: unset $v"
 	done
 	say "building the conductor, sites_panel and review_archive from their checkouts, at once"
 	# also when another conductor serves: `panel gen-data-key` makes the state's key
-	timed conductor retried in_shell "$root" bash -c "$own_cargo b -q -p sa_server" &
+	# the runners' binaries in the same build: one dependency graph, one hold of the build dir's lock
+	conductor_packages="-p sa_server -p sa_sandbox"
+	[ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ] || conductor_packages+=" -p sa_browsers"
+	timed conductor retried in_shell "$src" bash -c "$own_cargo b -q $conductor_packages" &
 	conductor_build=$!
 	sites_build=""
 	if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
@@ -489,6 +564,9 @@ if [ -z "${PANEL_BIN:-}" ]; then
 fi
 if [ "$watch" = 1 ]; then
 	PANEL_WEB_DIR=""
+elif [ "$fixed" = 1 ]; then
+	[ "$run_panel" = 0 ] || wait "$web_prep_build" || die "the front end did not build"
+	PANEL_WEB_DIR="$src/frontend/out"
 elif [ -z "${PANEL_WEB_DIR:-}" ]; then
 	say "building the front end (nix build .#frontend)"
 	nix build "$root#frontend" --out-link "$state/build/frontend"
@@ -561,7 +639,7 @@ fi
 # The agents' `execute` once crates/sandbox/js has its packages: @evinvest/api comes through its _.js-local.json until published.
 sandbox_origin=""
 if [ "$run_panel" = 1 ]; then
-	sandbox_js="$root/crates/sandbox/js"
+	sandbox_js="$src/crates/sandbox/js"
 	[ "$sandbox_js/node_modules/.package-lock.json" -nt "$sandbox_js/package.json" ] || timed sandbox-js in_shell "$root" bash -c "cd crates/sandbox/js && npm install --no-audit --no-fund >&2"
 	if [ -d "$sandbox_js/node_modules/@evinvest/api" ]; then
 		sandbox_origin="http://127.0.0.1:$SANDBOX_PORT"
@@ -667,6 +745,7 @@ set -m
 stop_all() {
 	trap - INT TERM EXIT
 	set +e # a closed terminal fails the writes below; under -e that would leave every part running
+	rm -f "$state/args" "$state/pid"
 	echo >&2
 	say "stopping"
 	# Every descendant, not the jobs' groups: watchexec runs its command in a group of its own, and
@@ -691,6 +770,10 @@ stop_all() {
 }
 trap stop_all EXIT
 trap 'stop_all; exit 130' INT TERM
+# whose stack this is, for e2e's stack.ts: reused while these match, stopped by the pid
+printf '%s\n' ${argv[@]+"${argv[@]}"} "SA_CONDUCTOR_CONFIG=${SA_CONDUCTOR_CONFIG:-}" >"$state/args"
+echo $$ >"$state/pid"
+rm -f "$state/panel.built" "$state/panel.failed" # a previous stack's builds
 
 # Polls `url` while `pid` lives, at most `tries` seconds.
 wait_for() {
@@ -733,15 +816,15 @@ sandbox() {
 	SANDBOX_BIND="127.0.0.1:$SANDBOX_PORT" \
 		SANDBOX_MAX=2 \
 		SANDBOX_DENO="$(command -v deno)" \
-		SANDBOX_JS="$root/crates/sandbox/js" \
+		SANDBOX_JS="$src/crates/sandbox/js" \
 		SANDBOX_CONDUCTOR_URL="http://127.0.0.1:$PANEL_PORT/api/run" \
 		PANEL_ASSERTION_KEYS="$assertion_public" \
-		"$root/target/debug/sa_sandbox" "$@"
+		"$state/target/debug/sa_sandbox" "$@"
 }
 export -f panel sites_panel review_archive browsers sandbox playbook
 export state conductor_config spend_flag public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_origin browsers_origin sandbox_origin \
 	PANEL_GRAFANA_SERVER PANEL_BIN SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR REVIEW_ARCHIVE_DATA_DIR REVIEW_ARCHIVE_PORT \
-	PANEL_PORT SITES_PORT BROWSERS_PORT SANDBOX_PORT root PLAYBOOK_BIN PLAYBOOK_PORT playbook_origin
+	PANEL_PORT SITES_PORT BROWSERS_PORT SANDBOX_PORT root src PLAYBOOK_BIN PLAYBOOK_PORT playbook_origin
 watched() {
 	local dir="$1"
 	shift
@@ -827,7 +910,7 @@ if [ -n "$browsers_origin" ]; then
 	BROWSERS_ADB="$phone_tools/adb" BROWSERS_BUSYBOX="$phone_tools/busybox" BROWSERS_ADB_KEYBOARD="$phone_tools/ADBKeyboard.apk"
 	export BROWSERS_ORBITA BROWSERS_FFMPEG BROWSERS_MLX BROWSERS_ADB BROWSERS_BUSYBOX BROWSERS_ADB_KEYBOARD
 	busy "$BROWSERS_PORT" && die "port $BROWSERS_PORT is taken: the browsers' runner's"
-	timed browsers in_shell "$root" bash -c "$own_cargo b -q -p sa_browsers"
+	[ "$watch" = 1 ] || [ "$fixed" = 1 ] || timed browsers in_shell "$root" bash -c "$own_cargo b -q -p sa_browsers" # under --watch, the conductor's build
 	serving browsers "$root" "$own_cargo b -q -p sa_browsers" "browsers serve" -e rs,toml,lock &
 	essential+=("$!")
 elif [ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ]; then
@@ -837,8 +920,8 @@ fi
 if [ -n "$sandbox_origin" ]; then
 	say "starting the sandbox's runner on $sandbox_origin"
 	busy "$SANDBOX_PORT" && die "port $SANDBOX_PORT is taken: the sandbox's runner's"
-	timed sandbox in_shell "$root" cargo b -q -p sa_sandbox
-	serving sandbox "$root" "cargo b -q -p sa_sandbox" "sandbox serve" -e rs,toml,lock &
+	[ "$watch" = 1 ] || [ "$fixed" = 1 ] || timed sandbox in_shell "$root" bash -c "$own_cargo b -q -p sa_sandbox" # under --watch, the conductor's build
+	serving sandbox "$root" "$own_cargo b -q -p sa_sandbox" "sandbox serve" -e rs,toml,lock &
 	essential+=("$!")
 elif [ "$run_panel" = 1 ] && [ ! -d "$root/crates/sandbox/js/node_modules/@evinvest/api" ]; then
 	say "crates/sandbox/js has no @evinvest/api (its _.js-local.json names the checkout until it is published): no sandbox, the agents have no execute"
@@ -846,7 +929,8 @@ fi
 
 if [ "$run_panel" = 1 ]; then
 	say "starting the conductor on $origin (dev sign-in: $role)"
-	serving panel "$root" "$own_cargo b -q -p sa_server" "panel serve --bind 127.0.0.1:$PANEL_PORT" -i 'crates/gen/**' -e rs,toml,sql,lock &
+	# panel.built's mtime: the start of the build serving now, so no source older than it is missing (e2e's stack.ts)
+	serving panel "$root" "touch '$state/panel.building' && $own_cargo b -q -p sa_server && mv '$state/panel.building' '$state/panel.built' || { mv '$state/panel.building' '$state/panel.failed'; false; }" "panel serve --bind 127.0.0.1:$PANEL_PORT" -i 'crates/gen/**' -e rs,toml,sql,lock &
 	essential+=("$!")
 	timed conductor-ready wait_for panel "$origin/health" 900 "$!" || die "the conductor did not start"
 	# Dev sign-in's session, as the admin: the seeds are the conductor's own operations.
@@ -996,6 +1080,7 @@ fi
 	echo
 	echo " state    $state   (--reset wipes it)   logs $state/logs/"
 	[ "$watch" = 1 ] && echo " watch    every part is rebuilt and restarted as its checkout is edited"
+	[ "$fixed" = 1 ] && echo " fixed    the conductor at $fixed_at, from $src: nothing is rebuilt"
 	echo " stop     Ctrl-C stops what this run started"
 	echo "────────────────────────────────────────────────────────────────────────"
 } >&2
