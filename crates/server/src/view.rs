@@ -28,6 +28,8 @@ pub enum View {
 		account: Option<i64>,
 		/// The open window's tab.
 		tab: Option<Tab>,
+		/// The GBP's Browser tab: the step of Google's form it is on, 1 to 8.
+		step: Option<u8>,
 		/// The categories' window.
 		categories: bool,
 		/// The trash's window.
@@ -117,7 +119,7 @@ pub enum View {
 	KitPool { slug: String, trade: i64, country: Country },
 	/// A GBP's window as its own page.
 	#[view("/gbp/{gmb}")]
-	Gbp { gmb: i64, tab: Option<Tab> },
+	Gbp { gmb: i64, tab: Option<Tab>, step: Option<u8> },
 	/// A gmail's window as its own page.
 	#[view("/gmail/{account}")]
 	Gmail { account: i64, tab: Option<Tab> },
@@ -169,8 +171,18 @@ pub enum Tab {
 	Launch,
 	/// The gmail's browser.
 	Browser,
-	/// A gmail's inbox and Maps key.
+	/// A gmail's inbox and Maps key; a GBP's verification kit and what it is connected to.
 	Connections,
+	/// A GBP's output: leads, reviews, its changes.
+	Stats,
+	/// Where a GBP ranks for its category's keywords.
+	Ranking,
+	/// A GBP's reviews as review_archive tracks them.
+	Reviews,
+	/// A verifying GBP's road to Verified.
+	Verification,
+	/// A suspended GBP's appeal.
+	Appeal,
 }
 
 /// What the Add a GBP panel starts from.

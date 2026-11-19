@@ -4163,6 +4163,46 @@
     "en": "Close the window",
     "t": "Закрыть окно"
   },
+  "window.closed.frozen": {
+    "en": "Frozen while Google verifies it",
+    "t": "Заморожено, пока Google проверяет"
+  },
+  "window.closed.offMaps": {
+    "en": "Off Maps while suspended",
+    "t": "Скрыто с Карт на время блокировки"
+  },
+  "window.closed.untilVerified": {
+    "en": "Opens once Google verifies it",
+    "t": "Откроется после проверки Google"
+  },
+  "window.header.email": {
+    "en": "Google: {subject} · {ago}",
+    "t": "Google: {subject} · {ago}"
+  },
+  "window.header.inView": {
+    "en": "{at}/{n} in view",
+    "t": "{at}/{n} в просмотре"
+  },
+  "window.header.maps": {
+    "en": "Maps",
+    "t": "Карты"
+  },
+  "window.header.moved": {
+    "en": "{state} {ago}",
+    "t": "{state} {ago}"
+  },
+  "window.header.next": {
+    "en": "Next in view",
+    "t": "Следующий в просмотре"
+  },
+  "window.header.previous": {
+    "en": "Previous in view",
+    "t": "Предыдущий в просмотре"
+  },
+  "window.header.site": {
+    "en": "its site",
+    "t": "сайт"
+  },
   "window.log.added": {
     "en": "Added as {state}",
     "t": "Добавлен как {state}"
@@ -4507,6 +4547,10 @@
     "en": "customers visit",
     "t": "клиенты приходят"
   },
+  "window.tab.appeal": {
+    "en": "Appeal",
+    "t": "Апелляция"
+  },
   "window.tab.browser": {
     "en": "Browser",
     "t": "Браузер"
@@ -4526,6 +4570,22 @@
   "window.tab.profile": {
     "en": "Profile",
     "t": "Профиль"
+  },
+  "window.tab.ranking": {
+    "en": "Ranking",
+    "t": "Рейтинг"
+  },
+  "window.tab.reviews": {
+    "en": "Reviews",
+    "t": "Отзывы"
+  },
+  "window.tab.stats": {
+    "en": "Stats",
+    "t": "Статистика"
+  },
+  "window.tab.verification": {
+    "en": "Verification",
+    "t": "Верификация"
   },
   "window.tabs": {
     "en": "Sections",

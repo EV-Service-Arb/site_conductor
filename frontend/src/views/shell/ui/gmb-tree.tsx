@@ -481,7 +481,7 @@ function GmbRow({
           onKeyDown={(e) => {
             if (e.key !== "Enter") return;
             e.preventDefault();
-            openWindow({ kind: "gbp", gmb: gmb.id, tab: "profile" });
+            openWindow({ kind: "gbp", gmb: gmb.id, tab: gmb.tabs[0]!.tab });
           }}
         >
           {label}

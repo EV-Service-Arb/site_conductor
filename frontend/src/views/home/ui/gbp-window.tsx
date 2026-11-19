@@ -1,14 +1,14 @@
 "use client";
 
 import { useResource } from "@evinvest/api/react";
-import { Badge, Button, NativeSelect, NativeSelectOption, Skeleton, cn, toast } from "@evinvest/uikit";
-import { CalendarClock, Copy, ExternalLink, Globe, Hash, History, ImageIcon, Mail, MapPin, MonitorSmartphone, Pencil, Phone, QrCode, RefreshCw, ShieldAlert, ShieldCheck, Star, Tag, UserCog, Video } from "lucide-react";
+import { Badge, Button, NativeSelect, NativeSelectOption, Skeleton, Tabs, TabsList, TabsTrigger, cn, toast } from "@evinvest/uikit";
+import { CalendarClock, ChevronLeft, ChevronRight, Copy, ExternalLink, Globe, Hash, History, ImageIcon, Mail, MapPin, MonitorSmartphone, Pencil, Phone, QrCode, RefreshCw, ShieldAlert, ShieldCheck, Star, Tag, UserCog, Video } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
-import { CategoryChip, type KeyOf, type Listed, LiveReviews, ROLE_NAME, STATE_NAME, STATE_TONE, closeWindow, gmbPhotoSrc, googleName, narrowed, openWindow, under, syncGmb, useBrands, useGmails, useGmbTags, gmbs as gmbsKeys, windowKeys } from "@/entities/gmb";
+import { CategoryChip, type KeyOf, type Listed, LiveReviews, ROLE_NAME, STATE_NAME, STATE_TONE, closeWindow, gmbPhotoSrc, googleName, narrowed, openWindow, readyCount, under, syncGmb, useBrands, useGmails, useGmbTags, useOnMap, gmbs as gmbsKeys, windowKeys } from "@/entities/gmb";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { api, ok, reviewArchive } from "@/shared/api";
-import { type Changed, type Country, type GbpRole, type Gmail, type Gmb, type GmbEdit, type LogDto, type LoggedDto, type Tab, gbpRoleValues } from "@/shared/api/schema";
+import { type Changed, type Closed, type Country, type GbpRole, type Gmail, type Gmb, type GmbEdit, type LogDto, type LoggedDto, type Tab, gbpRoleValues, mustHaveValues } from "@/shared/api/schema";
 import type { GmbEvent } from "@/shared/api/services/review_archive";
 import { type T, useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
@@ -18,9 +18,15 @@ import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
 
+import { AppealTab } from "./appeal-tab";
 import { BrowserTab } from "./browser-tab";
+import { ConnectionsTab } from "./connections-tab";
 import { Launch, TextEditor } from "./launch";
+import { RankingTab } from "./ranking-tab";
+import { ReviewsTab } from "./reviews-tab";
+import { StatsTab } from "./stats-tab";
 import { TAB_ICON, TAB_NAME } from "./tabs";
+import { VerificationTab } from "./verification-tab";
 
 type Key = KeyOf<"gbp">;
 type Field = Changed["field"];
@@ -32,36 +38,52 @@ function useListed(gmb: number): Listed | null | undefined {
   return narrowed(gmails.data, null, "").find((l) => l.gmb.id === gmb) ?? null;
 }
 
-/** Its tabs as tabbed tiles: the title bar over the map, the strip above a narrow page. */
-export function GbpTabs({ k, tabs }: { k: Key; tabs: readonly Tab[] }) {
+const CLOSED_WHY = {
+  until_verified: (t) => t(windowKeys.closed.untilVerified, "Opens once Google verifies it"),
+  frozen_while_verifying: (t) => t(windowKeys.closed.frozen, "Frozen while Google verifies it"),
+  off_maps: (t) => t(windowKeys.closed.offMaps, "Off Maps while suspended"),
+} satisfies Record<Closed, (t: T) => string>;
+
+/** Its tabs, as its state orders them, the closed greyed with why: the title bar over the map, the strip above a narrow page. */
+export function GbpTabs({ k, gmb, except }: { k: Key; gmb: Gmb; except?: Tab }) {
   const t = useT();
   return (
-    <nav role="tablist" aria-label={t(windowKeys.tabs, "Sections")} className="flex min-w-0 items-stretch self-stretch">
-      {tabs.map((tab) => (
-        <button
-          key={tab}
-          type="button"
-          role="tab"
-          aria-selected={tab === k.tab}
-          onClick={() => openWindow({ ...k, tab })}
-          className={cn(
-            "flex items-center gap-2 border-b-2 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            tab === k.tab ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink",
-          )}
-        >
-          {TAB_ICON[tab]}
-          {TAB_NAME[tab](t)}
-        </button>
-      ))}
-    </nav>
+    <Tabs value={k.tab} onValueChange={(tab) => openWindow({ ...k, tab: tab as Tab })} className="min-w-0 justify-center">
+      <TabsList aria-label={t(windowKeys.tabs, "Sections")} className="max-w-full overflow-x-auto">
+        {gmb.tabs
+          .filter(({ tab }) => tab !== except)
+          .map(({ tab, closed }) => (
+            <TabsTrigger key={tab} value={tab} className="flex-none" {...(closed !== null && { disabledReason: CLOSED_WHY[closed](t) })}>
+              {TAB_ICON[tab]}
+              {TAB_NAME[tab](t)}
+              <TabBadge tab={tab} gmb={gmb} />
+            </TabsTrigger>
+          ))}
+      </TabsList>
+    </Tabs>
   );
+}
+
+/** Reviews: how many are suspended; Connections: a draft's must-haves ready. */
+function TabBadge({ tab, gmb }: { tab: Tab; gmb: Gmb }) {
+  const t = useT();
+  const { tags } = useGmbTags();
+  const suspended = tags.archive?.get(gmb.id)?.suspended ?? 0;
+  if (tab === "reviews" && suspended > 0)
+    return (
+      <Badge tone="error" title={t(gmbsKeys.tag.suspended, "{n} reviews suspended", { n: suspended })}>
+        {suspended}
+      </Badge>
+    );
+  if (tab === "connections" && gmb.readiness !== null) return <Badge tone="neutral">{`${readyCount(gmb.readiness)}/${mustHaveValues.length}`}</Badge>;
+  return null;
 }
 
 export function GbpTitle({ k, page }: { k: Key; page: boolean }) {
   const t = useT();
   const listed = useListed(k.gmb);
   if (listed === undefined || listed === null) return <span />;
-  if (!page) return <GbpTabs k={k} tabs={listed.gmb.tabs} />;
+  if (!page) return <GbpTabs k={k} gmb={listed.gmb} />;
   return (
     <span className="flex min-w-0 items-center gap-2">
       <span className="truncate font-semibold text-ink">{listed.gmb.name}</span>
@@ -80,15 +102,17 @@ export function GbpBody({ k, page }: { k: Key; page: boolean }) {
   useEffect(() => {
     if (listed === null) closeWindow(k);
   }, [listed, k]);
-  // its state moved since the window opened: its first tab
-  const lost = tabs !== undefined && !tabs.includes(k.tab);
+  // its state moved since the window opened, or the tab is closed in it: its first open one
+  const first = tabs?.find((x) => x.closed === null)?.tab;
+  const lost = tabs !== undefined && !tabs.some((x) => x.tab === k.tab && x.closed === null);
   useEffect(() => {
-    if (lost) openWindow({ ...k, tab: "profile" });
-  }, [lost, k]);
+    if (lost && first !== undefined) openWindow({ ...k, tab: first });
+  }, [lost, first, k]);
   if (listed === undefined) return <Skeleton className="m-4 h-96" />;
   if (listed === null || lost) return null;
   return (
     <div ref={setBox} className="flex min-h-0 flex-1 flex-col">
+      <LocationHeader k={k} listed={listed} />
       {wide ? <Split k={k} listed={listed} page={page} /> : <Tabbed k={k} listed={listed} page={page} />}
     </div>
   );
@@ -121,7 +145,7 @@ function Split({ k, listed, page }: { k: Key; listed: Listed; page: boolean }) {
       </section>
       <section className="flex min-h-0 flex-col overflow-y-auto">
         <div className="flex h-10 border-b border-border">
-          <GbpTabs k={{ ...k, tab: other }} tabs={listed.gmb.tabs.filter((tab) => tab !== "profile")} />
+          <GbpTabs k={{ ...k, tab: other }} gmb={listed.gmb} except="profile" />
         </div>
         <TabBody tab={other} listed={listed} page={page} />
       </section>
@@ -134,7 +158,7 @@ function Tabbed({ k, listed, page }: { k: Key; listed: Listed; page: boolean }) 
     <div className="flex min-h-0 flex-col">
       {page && (
         <div className="flex h-10 shrink-0 overflow-x-auto border-b border-border">
-          <GbpTabs k={k} tabs={listed.gmb.tabs} />
+          <GbpTabs k={k} gmb={listed.gmb} />
         </div>
       )}
       <TabBody tab={k.tab} listed={listed} page={page} />
@@ -166,8 +190,101 @@ function TabBody({ tab, listed, page }: { tab: Tab; listed: Listed; page: boolea
         </div>
       );
     case "connections":
-      throw new Error("connections is a gmail's tab");
+      return <ConnectionsTab listed={listed} />;
+    case "stats":
+      return <StatsTab listed={listed} />;
+    case "ranking":
+      return <RankingTab listed={listed} />;
+    case "reviews":
+      return <ReviewsTab listed={listed} />;
+    case "verification":
+      return <VerificationTab listed={listed} />;
+    case "appeal":
+      return <AppealTab listed={listed} />;
   }
+}
+
+/** What every tab sits under (02): who it is, how it stands, where it is; the GBPs in the map's view a step away. */
+function LocationHeader({ k, listed: { gmb, gmail } }: { k: Key; listed: Listed }) {
+  const t = useT();
+  const { tags } = useGmbTags();
+  const archive = tags.archive?.get(gmb.id);
+  const site = tags.sites?.get(gmb.id);
+  const dot = <span aria-hidden>·</span>;
+  return (
+    <header className="flex shrink-0 flex-col gap-1 border-b border-border px-5 py-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <h2 className="min-w-0 truncate text-lg font-semibold text-ink">{gmb.name}</h2>
+        <Badge tone={STATE_TONE[gmb.state]}>{STATE_NAME[gmb.state](t)}</Badge>
+        <CategoryChip gmb={gmb} />
+        {archive?.rating != null && (
+          <span className="flex items-center gap-1 text-sm text-ink tabular-nums">
+            <Star aria-hidden className="size-3.5 fill-current" />
+            {archive.rating.toFixed(1)}
+            {archive.reviews !== null && <span className="text-ink-soft">({archive.reviews})</span>}
+          </span>
+        )}
+        {archive && <LiveReviews days={archive.live_30d} />}
+        <StateNote gmb={gmb.id} />
+        <span className="flex-1" />
+        {gmb.place_id !== null && (
+          <a href={`https://www.google.com/maps/place/?q=place_id:${gmb.place_id}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-ink-soft hover:text-ink">
+            {t(windowKeys.header.maps, "Maps")}
+            <ExternalLink aria-hidden className="size-3" />
+          </a>
+        )}
+        <InViewPager k={k} />
+      </div>
+      <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-ink-soft">
+        {[
+          gmb.address,
+          gmb.phone,
+          gmb.website ?? (site && t(windowKeys.header.site, "its site")),
+          gmb.place_id && <span className="font-mono">{gmb.place_id}</span>,
+          gmail?.gmail,
+        ]
+          .filter(Boolean)
+          .flatMap((part, i) => (i === 0 ? [<span key={i}>{part}</span>] : [<span key={`d${i}`}>{dot}</span>, <span key={i}>{part}</span>]))}
+      </p>
+    </header>
+  );
+}
+
+/** The latest word on its standing: a move of its state, or an email with Google. */
+function StateNote({ gmb }: { gmb: number }) {
+  const t = useT();
+  const locale = useLocale();
+  const log = useResource(api, "/gmbs/{id}/log", { params: { path: { id: gmb } } });
+  if (log.status !== "ok") return null;
+  const e = log.data.events.find((x) => x.kind === "state" || x.kind === "email");
+  if (e === undefined) return null;
+  const said = e.kind === "state" ? t(windowKeys.header.moved, "{state} {ago}", { state: STATE_NAME[e.to](t), ago: ago(e.at, locale) }) : e.kind === "email" ? t(windowKeys.header.email, "Google: {subject} · {ago}", { subject: e.subject ?? t(windowKeys.log.noSubject, "(no subject)"), ago: ago(e.at, locale) }) : null;
+  return <span className="min-w-0 truncate text-xs text-ink-soft">{said}</span>;
+}
+
+/** The GBPs in the map's view, in the outline's order: the one before and after this. */
+function InViewPager({ k }: { k: Key }) {
+  const t = useT();
+  const inView = useOnMap((s) => s.inView);
+  const gmails = useGmails();
+  if (inView === null || gmails.status !== "ok") return null;
+  const ids = narrowed(gmails.data, null, "")
+    .map((l) => l.gmb.id)
+    .filter((id) => inView.has(id));
+  const at = ids.indexOf(k.gmb);
+  if (at === -1 || ids.length < 2) return null;
+  const go = (step: number) => openWindow({ ...k, gmb: ids[(at + step + ids.length) % ids.length]! });
+  return (
+    <span className="flex items-center text-xs text-ink-soft tabular-nums">
+      <Button variant="ghost" size="xs" icon aria-label={t(windowKeys.header.previous, "Previous in view")} onClick={() => go(-1)}>
+        <ChevronLeft aria-hidden />
+      </Button>
+      {t(windowKeys.header.inView, "{at}/{n} in view", { at: at + 1, n: ids.length })}
+      <Button variant="ghost" size="xs" icon aria-label={t(windowKeys.header.next, "Next in view")} onClick={() => go(1)}>
+        <ChevronRight aria-hidden />
+      </Button>
+    </span>
+  );
 }
 
 const SHOWN_PHOTOS = 5;
@@ -178,7 +295,6 @@ function Profile({ listed }: { listed: Listed }) {
   const locale = useLocale();
   const { gmb, gmail } = listed;
   const { tags } = useGmbTags();
-  const archive = tags.archive?.get(gmb.id);
   const site = tags.sites?.get(gmb.id);
   const brands = useBrands();
   const brand = gmb.brand_id === null || brands.status !== "ok" ? undefined : brands.data.find((b) => b.id === gmb.brand_id);
@@ -203,24 +319,7 @@ function Profile({ listed }: { listed: Listed }) {
           {gmb.state === "verified" ? t(windowKeys.profile.noPhotos, "No photos: Sync pulls Google's") : t(windowKeys.profile.offGoogle, "Not on Maps: no photos from Google")}
         </div>
       )}
-      <header className="flex flex-col gap-1 px-5 pt-4">
-        <div className="flex items-start gap-3">
-          <h2 className="min-w-0 flex-1 text-xl font-semibold text-ink">{gmb.name}</h2>
-          <Badge tone={STATE_TONE[gmb.state]}>{STATE_NAME[gmb.state](t)}</Badge>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-ink-soft">
-          {primary !== null && <span>{primary}</span>}
-          {archive?.rating != null && (
-            <span className="flex items-center gap-1 text-ink tabular-nums">
-              <Star aria-hidden className="size-3.5 fill-current" />
-              {archive.rating.toFixed(1)}
-              {archive.reviews !== null && <span className="text-ink-soft">({archive.reviews})</span>}
-            </span>
-          )}
-          <span className="flex-1" />
-          {archive && <LiveReviews days={archive.live_30d} />}
-        </div>
-      </header>
+      {primary !== null && <p className="px-5 pt-3 text-sm text-ink-soft">{primary}</p>}
       <Actions listed={listed} />
       <dl className="flex flex-col gap-3 border-t border-border px-5 py-4 text-sm">
         <Fact icon={<MapPin aria-hidden />} value={gmb.address ?? (gmb.location && t(windowKeys.planned, "planned · {at}", { at: `${gmb.location.lat.toFixed(3)}, ${gmb.location.lng.toFixed(3)}` }))} note={[gmb.customers_visit === null ? null : gmb.customers_visit ? t(windowKeys.profile.visit, "customers visit") : t(windowKeys.profile.serviceArea, "service area"), gmb.location && (gmb.location.placed ? t(windowKeys.profile.pinByHand, "pin placed by hand") : t(windowKeys.profile.pinGoogle, "pin from Google"))]} />
@@ -381,7 +480,7 @@ function Actions({ listed: { gmb, gmail } }: { listed: Listed }) {
         {t(windowKeys.profile.reviews, "Reviews")}
         {archive && archive.suspended > 0 && <span className={sub}>{t(gmbsKeys.tag.suspended, "{n} reviews suspended", { n: archive.suspended })}</span>}
       </ViewLink>
-      {gmb.tabs.includes("browser") && (
+      {gmb.tabs.some((x) => x.tab === "browser") && (
         <button type="button" className={item} onClick={() => openWindow({ kind: "gbp", gmb: gmb.id, tab: "browser" })}>
           <span className={disc}>
             <MonitorSmartphone aria-hidden />

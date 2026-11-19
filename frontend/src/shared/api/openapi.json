@@ -26125,6 +26125,15 @@
           "url"
         ]
       },
+      "Closed": {
+        "description": "Why a tab of a GBP's window is closed in its state.\n\n- `until_verified`: A draft has no place to measure yet.\n- `frozen_while_verifying`: Google holds it while it verifies.\n- `off_maps`: Suspended: it is off Maps.",
+        "type": "string",
+        "enum": [
+          "until_verified",
+          "frozen_while_verifying",
+          "off_maps"
+        ]
+      },
       "ConnectedSites": {
         "type": "object",
         "properties": {
@@ -27117,10 +27126,10 @@
             ]
           },
           "tabs": {
-            "description": "Its window's tabs, in order.",
+            "description": "Its window's tabs, in order: its state's own work first.",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Tab"
+              "$ref": "#/components/schemas/TabDto"
             }
           },
           "trade_id": {
@@ -31122,14 +31131,42 @@
         ]
       },
       "Tab": {
-        "description": "- `profile`: A GBP as Google shows it, and what the conductor knows of it.\n- `log`: What happened to a GBP.\n- `launch`: A draft's launch onto Google.\n- `browser`: The gmail's browser.\n- `connections`: A gmail's inbox and Maps key.",
+        "description": "- `profile`: A GBP as Google shows it, and what the conductor knows of it.\n- `log`: What happened to a GBP.\n- `launch`: A draft's launch onto Google.\n- `browser`: The gmail's browser.\n- `connections`: A gmail's inbox and Maps key; a GBP's verification kit and what it is connected to.\n- `stats`: A GBP's output: leads, reviews, its changes.\n- `ranking`: Where a GBP ranks for its category's keywords.\n- `reviews`: A GBP's reviews as review_archive tracks them.\n- `verification`: A verifying GBP's road to Verified.\n- `appeal`: A suspended GBP's appeal.",
         "type": "string",
         "enum": [
           "profile",
           "log",
           "launch",
           "browser",
-          "connections"
+          "connections",
+          "stats",
+          "ranking",
+          "reviews",
+          "verification",
+          "appeal"
+        ]
+      },
+      "TabDto": {
+        "description": "A GBP's window's tab; a closed one is shown greyed with why.",
+        "type": "object",
+        "properties": {
+          "closed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Closed"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tab": {
+            "$ref": "#/components/schemas/Tab"
+          }
+        },
+        "required": [
+          "tab",
+          "closed"
         ]
       },
       "Target": {
@@ -32719,6 +32756,15 @@
         "path": "/gbp/{gmb}",
         "query": {
           "properties": {
+            "step": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "tab": {
               "enum": [
                 "profile",
@@ -32726,6 +32772,11 @@
                 "launch",
                 "browser",
                 "connections",
+                "stats",
+                "ranking",
+                "reviews",
+                "verification",
+                "appeal",
                 null
               ],
               "type": [
@@ -32762,6 +32813,11 @@
                 "launch",
                 "browser",
                 "connections",
+                "stats",
+                "ranking",
+                "reviews",
+                "verification",
+                "appeal",
                 null
               ],
               "type": [
@@ -32942,6 +32998,16 @@
               "description": "The schematic base map, not the satellite.",
               "type": "boolean"
             },
+            "step": {
+              "description": "The GBP's Browser tab: the step of Google's form it is on, 1 to 8.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "study": {
               "description": "The study drawn: `<trade id>.<country>`; empty, none picked whatever the scope.",
               "type": [
@@ -32957,6 +33023,11 @@
                 "launch",
                 "browser",
                 "connections",
+                "stats",
+                "ranking",
+                "reviews",
+                "verification",
+                "appeal",
                 null
               ],
               "type": [

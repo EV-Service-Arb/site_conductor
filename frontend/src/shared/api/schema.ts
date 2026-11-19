@@ -2514,6 +2514,15 @@ export interface components {
         ClaudeConnect: {
             url: string;
         };
+        /**
+         * @description Why a tab of a GBP's window is closed in its state.
+         *
+         *     - `until_verified`: A draft has no place to measure yet.
+         *     - `frozen_while_verifying`: Google holds it while it verifies.
+         *     - `off_maps`: Suspended: it is off Maps.
+         * @enum {string}
+         */
+        Closed: "until_verified" | "frozen_while_verifying" | "off_maps";
         ConnectedSites: {
             internal_reads: components["schemas"]["ReadInternalReads"];
             received: components["schemas"]["ReadMap_of_Timestamp"];
@@ -2819,8 +2828,8 @@ export interface components {
             state: components["schemas"]["State"];
             /** @description RFC 3339: when a Sync last wrote it. */
             synced_at: string | null;
-            /** @description Its window's tabs, in order. */
-            tabs: components["schemas"]["Tab"][];
+            /** @description Its window's tabs, in order: its state's own work first. */
+            tabs: components["schemas"]["TabDto"][];
             /**
              * Format: int64
              * @description Its category is this trade in its country.
@@ -4150,10 +4159,20 @@ export interface components {
          *     - `log`: What happened to a GBP.
          *     - `launch`: A draft's launch onto Google.
          *     - `browser`: The gmail's browser.
-         *     - `connections`: A gmail's inbox and Maps key.
+         *     - `connections`: A gmail's inbox and Maps key; a GBP's verification kit and what it is connected to.
+         *     - `stats`: A GBP's output: leads, reviews, its changes.
+         *     - `ranking`: Where a GBP ranks for its category's keywords.
+         *     - `reviews`: A GBP's reviews as review_archive tracks them.
+         *     - `verification`: A verifying GBP's road to Verified.
+         *     - `appeal`: A suspended GBP's appeal.
          * @enum {string}
          */
-        Tab: "profile" | "log" | "launch" | "browser" | "connections";
+        Tab: "profile" | "log" | "launch" | "browser" | "connections" | "stats" | "ranking" | "reviews" | "verification" | "appeal";
+        /** @description A GBP's window's tab; a closed one is shown greyed with why. */
+        TabDto: {
+            closed: components["schemas"]["Closed"] | null;
+            tab: components["schemas"]["Tab"];
+        };
         /** @description What an action does: a view, an operation, or a binding of the page's keymap — nothing else. */
         Target: {
             href: string;
@@ -4607,6 +4626,7 @@ export type Chats = components['schemas']['Chats'];
 export type Checked = components['schemas']['Checked'];
 export type Claude = components['schemas']['Claude'];
 export type ClaudeConnect = components['schemas']['ClaudeConnect'];
+export type Closed = components['schemas']['Closed'];
 export type ConnectedSites = components['schemas']['ConnectedSites'];
 export type Connections = components['schemas']['Connections'];
 export type Consent = components['schemas']['Consent'];
@@ -4764,6 +4784,7 @@ export type Suggestion = components['schemas']['Suggestion'];
 export type Suggestions = components['schemas']['Suggestions'];
 export type Switch = components['schemas']['Switch'];
 export type Tab = components['schemas']['Tab'];
+export type TabDto = components['schemas']['TabDto'];
 export type Target = components['schemas']['Target'];
 export type TelegramLink = components['schemas']['TelegramLink'];
 export type Title = components['schemas']['Title'];
@@ -23516,6 +23537,7 @@ export const actionStateValues: ReadonlyArray<FlattenedDeepRequired<components>[
 export const answerStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["AnswerState"]> = ["working", "writing", "done", "stopped"];
 export const approvalValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Approval"]> = ["ask", "spend", "act"];
 export const billValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Bill"]> = ["ours", "theirs"];
+export const closedValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Closed"]> = ["until_verified", "frozen_while_verifying", "off_maps"];
 export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Country"]> = ["FR", "US", "CA", "GB"];
 export const destinationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DestinationKind"]> = ["channel", "private", "group"];
 export const deviceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Device"]> = ["pixel_7", "galaxy_s23", "redmi_note_14"];
@@ -23543,7 +23565,7 @@ export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schem
 export const sourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "panel", "booking", "bot"];
 export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["State"]> = ["draft", "verifying", "verified", "suspended"];
 export const stopValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Stop"]> = ["at_free", "never"];
-export const tabValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tab"]> = ["profile", "log", "launch", "browser", "connections"];
+export const tabValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tab"]> = ["profile", "log", "launch", "browser", "connections", "stats", "ranking", "reviews", "verification", "appeal"];
 export const vendorValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Vendor"]> = ["google"];
 export const browserCloseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BrowserClose"]> = [4401, 4404, 4409, 4410, 1000, 1001, 1003, 1007];
 export const touchPhaseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["TouchPhase"]> = ["start", "move", "end"];

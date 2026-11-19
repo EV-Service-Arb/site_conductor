@@ -103,7 +103,10 @@ const draft = (id: number, fill: Partial<Gmb> = {}): Gmb => ({
   next: ["verifying"],
   country: null,
   readiness: { missing: ["areas", "phone", "film", "gmail", "category", "site", "hidden_address", "profile"], unknown: [] },
-  tabs: ["launch", "browser"],
+  tabs: [
+    { tab: "launch", closed: null },
+    { tab: "browser", closed: null },
+  ],
   ...fill,
 });
 const full: Partial<Gmb> = {

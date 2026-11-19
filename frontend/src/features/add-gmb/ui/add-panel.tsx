@@ -91,7 +91,7 @@ export function AddPanel({ at, page }: { at: Adding; page: boolean }) {
       gmails.reload();
       closeWindow({ kind: "add", at });
       if (added.location === null) setOnMap({ placing: added.id });
-      else openWindow({ kind: "gbp", gmb: added.id, tab: "profile" });
+      else openWindow({ kind: "gbp", gmb: added.id, tab: added.tabs[0]!.tab });
     } catch (e) {
       notifyFailure(e, t);
     } finally {

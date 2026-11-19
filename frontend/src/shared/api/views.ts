@@ -280,6 +280,15 @@ export const VIEWS = {
       },
       "query": {
         "properties": {
+          "step": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "tab": {
             "enum": [
               "profile",
@@ -287,6 +296,11 @@ export const VIEWS = {
               "launch",
               "browser",
               "connections",
+              "stats",
+              "ranking",
+              "reviews",
+              "verification",
+              "appeal",
               null
             ],
             "type": [
@@ -323,6 +337,11 @@ export const VIEWS = {
               "launch",
               "browser",
               "connections",
+              "stats",
+              "ranking",
+              "reviews",
+              "verification",
+              "appeal",
               null
             ],
             "type": [
@@ -502,6 +521,16 @@ export const VIEWS = {
             "description": "The schematic base map, not the satellite.",
             "type": "boolean"
           },
+          "step": {
+            "description": "The GBP's Browser tab: the step of Google's form it is on, 1 to 8.",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "study": {
             "description": "The study drawn: `<trade id>.<country>`; empty, none picked whatever the scope.",
             "type": [
@@ -517,6 +546,11 @@ export const VIEWS = {
               "launch",
               "browser",
               "connections",
+              "stats",
+              "ranking",
+              "reviews",
+              "verification",
+              "appeal",
               null
             ],
             "type": [

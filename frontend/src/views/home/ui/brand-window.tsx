@@ -84,7 +84,7 @@ export function BrandWindow({ trade, brand, gmbs, gmails }: { trade: Trade; bran
           ) : (
             <span className="flex flex-wrap gap-1.5">
               {held.map((b) => (
-                <button key={b.id} type="button" onClick={() => openWindow({ kind: "gbp", gmb: b.id, tab: "profile" })} className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-sm text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring">
+                <button key={b.id} type="button" onClick={() => openWindow({ kind: "gbp", gmb: b.id, tab: b.tabs[0]!.tab })} className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-sm text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring">
                   <MapPin aria-hidden className="size-3.5 text-ink-soft" />
                   {b.name}
                 </button>

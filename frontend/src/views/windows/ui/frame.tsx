@@ -26,6 +26,7 @@ function WindowFrame({ k }: { k: WinKey }) {
   const desk = useMediaQuery(DESKTOP_QUERY);
   const button = useButtonSize();
   const face = faceOf(k);
+  const width = typeof face.width === "number" ? face.width : face.width(k);
   const page = JSON.stringify(pageOf(k));
   useEffect(() => {
     if (!desk) go(JSON.parse(page) as At, "replace");
@@ -34,7 +35,7 @@ function WindowFrame({ k }: { k: WinKey }) {
   return (
     <FloatingPanel
       title={<face.Title k={k} page={false} />}
-      at={{ x: Math.max(16, (window.innerWidth - face.width) / 2), y: TOP_PX }}
+      at={{ x: Math.max(16, (window.innerWidth - width) / 2), y: TOP_PX }}
       onClose={() => closeWindow(k)}
       closeLabel={t(windowKeys.close, "Close the window")}
       actions={
@@ -43,7 +44,7 @@ function WindowFrame({ k }: { k: WinKey }) {
         </Button>
       }
     >
-      <div className="max-w-full" style={{ width: face.width }}>
+      <div className="max-w-full" style={{ width }}>
         <face.Body k={k} page={false} />
       </div>
     </FloatingPanel>

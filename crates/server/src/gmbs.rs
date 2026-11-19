@@ -88,8 +88,8 @@ pub struct GmbDto {
 	pub photos: Vec<sa_panel::gmbs::GmbPhoto>,
 	/// RFC 3339: when a Sync last wrote it.
 	pub synced_at: Option<String>,
-	/// Its window's tabs, in order.
-	pub tabs: Vec<Tab>,
+	/// Its window's tabs, in order: its state's own work first.
+	pub tabs: Vec<TabDto>,
 	/// A draft's must-haves not ready; `null` past a draft.
 	pub readiness: Option<ReadinessDto>,
 }
@@ -404,11 +404,44 @@ impl Around {
 	}
 }
 
-/// A GBP's window's tabs: its profile and log, a draft's launch, its gmail's browser.
-fn tabs(b: &Gmb) -> Vec<Tab> {
-	let launch = (b.state == GbpState::Draft).then_some(Tab::Launch);
-	let browser = b.gmail_id.map(|_| Tab::Browser);
-	[Some(Tab::Profile), Some(Tab::Log), launch, browser].into_iter().flatten().collect()
+/// A GBP's window's tab; a closed one is shown greyed with why.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+pub struct TabDto {
+	pub tab: Tab,
+	pub closed: Option<Closed>,
+}
+
+/// Why a tab of a GBP's window is closed in its state.
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Closed {
+	/// A draft has no place to measure yet.
+	UntilVerified,
+	/// Google holds it while it verifies.
+	FrozenWhileVerifying,
+	/// Suspended: it is off Maps.
+	OffMaps,
+}
+
+/// A GBP's window's tabs: its state's work, its connections and its gmail's browser, then its profile and log.
+fn tabs(b: &Gmb) -> Vec<TabDto> {
+	let open = |tab| Some(TabDto { tab, closed: None });
+	let closed = |tab, why| Some(TabDto { tab, closed: Some(why) });
+	let measured = |why| [closed(Tab::Stats, why), closed(Tab::Ranking, why), closed(Tab::Reviews, why)];
+	let work: [Option<TabDto>; 4] = match b.state {
+		GbpState::Verified => [open(Tab::Stats), open(Tab::Ranking), open(Tab::Reviews), None],
+		GbpState::Draft => {
+			let [s, r, v] = measured(Closed::UntilVerified);
+			[open(Tab::Launch), s, r, v]
+		}
+		GbpState::Verifying => {
+			let [s, r, v] = measured(Closed::FrozenWhileVerifying);
+			[open(Tab::Verification), s, r, v]
+		}
+		GbpState::Suspended => [open(Tab::Appeal), open(Tab::Stats), closed(Tab::Ranking, Closed::OffMaps), open(Tab::Reviews)],
+	};
+	let browser = b.gmail_id.and_then(|_| open(Tab::Browser));
+	work.into_iter().chain([open(Tab::Connections), browser, open(Tab::Profile), open(Tab::Log)]).flatten().collect()
 }
 
 impl From<Gmail> for GmailDto {

@@ -26,7 +26,7 @@ export function Peek({ listed, onClose, className }: { listed: Listed; onClose: 
     <Card className={cn("w-80 gap-3 py-4 shadow-overlay", className)}>
       <CardHeader className="flex items-start gap-2 px-4">
         <div className="min-w-0 flex-1">
-          <button type="button" onClick={() => openWindow({ kind: "gbp", gmb: gmb.id, tab: "profile" })} title={t(home.peek.open, "Open")} className="flex max-w-full flex-col items-start rounded text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+          <button type="button" onClick={() => openWindow({ kind: "gbp", gmb: gmb.id, tab: gmb.tabs[0]!.tab })} title={t(home.peek.open, "Open")} className="flex max-w-full flex-col items-start rounded text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
             <CardTitle className="max-w-full truncate">{name}</CardTitle>
             <CardDescription>{[gmb.address, gmail?.gmail].filter(Boolean).join(" · ")}</CardDescription>
           </button>
@@ -74,7 +74,7 @@ export function Peek({ listed, onClose, className }: { listed: Listed; onClose: 
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button size={button("sm")} onClick={() => openWindow({ kind: "gbp", gmb: gmb.id, tab: "profile" })}>
+          <Button size={button("sm")} onClick={() => openWindow({ kind: "gbp", gmb: gmb.id, tab: gmb.tabs[0]!.tab })}>
             {t(home.peek.open, "Open")}
           </Button>
           <ViewLink to={{ view: "review_archive.mine.gmb", params: { gmb: gmb.id } }} className={buttonVariants({ variant: "outline", size: button("sm") })}>

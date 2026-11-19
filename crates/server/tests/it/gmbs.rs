@@ -587,7 +587,19 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 		Some(json!({ "name": "Lyon 8", "trade": heating["id"], "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] })),
 	)
 	.await;
-	assert_eq!(first["tabs"], json!(["profile", "log", "launch"]), "a draft's window, under no gmail yet");
+	assert_eq!(
+		first["tabs"],
+		json!([
+			{ "tab": "launch", "closed": null },
+			{ "tab": "stats", "closed": "until_verified" },
+			{ "tab": "ranking", "closed": "until_verified" },
+			{ "tab": "reviews", "closed": "until_verified" },
+			{ "tab": "connections", "closed": null },
+			{ "tab": "profile", "closed": null },
+			{ "tab": "log", "closed": null },
+		]),
+		"a draft's window, under no gmail yet"
+	);
 	assert_eq!(
 		first["readiness"],
 		json!({ "missing": ["category", "areas", "phone", "hidden_address", "film", "gmail", "profile"], "unknown": ["site"] }),
