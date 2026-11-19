@@ -3,13 +3,12 @@
 import { useSyncExternalStore } from "react";
 
 import type { AssistantTurn, UserTurn } from "@/entities/assistant";
-import type { Chat, Question, Turn } from "@/shared/api/schema";
+import type { Approval, Chat, Question, Turn } from "@/shared/api/schema";
 import { api, ok } from "@/shared/api";
 import { type Carried, setCarried } from "@/shared/lib/location";
 import { DESKTOP_QUERY } from "@/shared/lib/use-media-query";
 
-/** `ask`: actions wait for a press; `act`: the first is taken at once, and can be undone. */
-export type Approval = "ask" | "act";
+export type { Approval };
 
 /** Where the assistant sits beside the page; full screen is its own page, `/assistant/`. */
 export type Mode = NonNullable<Carried["assistant"]>;
@@ -139,7 +138,7 @@ export type Page = Pick<Question, "url" | "bindings">;
  * conductor, which writes the answer into the chat as it grows. Answers the chat's id at once; `answered` settles
  * with the chat once the answer is done, and rejects with why it was not.
  */
-export function ask(chat: Chat | null, from: number, asked: Omit<UserTurn, "role" | "id" | "at">, page: Page): { id: string; answered: Promise<Chat> } {
+export function ask(chat: Chat | null, from: number, asked: Omit<UserTurn, "role" | "id" | "at">, page: Page, approval: Approval): { id: string; answered: Promise<Chat> } {
   stopping?.abort();
   const id = chat?.id ?? newId();
   const at = Date.now();
@@ -154,7 +153,7 @@ export function ask(chat: Chat | null, from: number, asked: Omit<UserTurn, "role
     .then((c) => {
       // The conductor's first write holds the question and the answer begun: the chat shows its own from then.
       updateRunning((r) => (mine(r) ? { ...r, written: c.version + 1 } : r));
-      return ok(api.POST("/assistant/chats/{id}/ask", { params: { path: { id } }, body: { from, ...asked, ...page }, signal: run.signal }));
+      return ok(api.POST("/assistant/chats/{id}/ask", { params: { path: { id } }, body: { from, ...asked, ...page, approval }, signal: run.signal }));
     })
     .then(
       (done) => {

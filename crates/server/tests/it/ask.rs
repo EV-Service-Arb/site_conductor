@@ -84,7 +84,7 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 	let year = Timestamp::now() + jiff::SignedDuration::from_hours(24 * 365);
 	p.set_claude(DevIdentity::named(email), "theirs", year, Timestamp::now()).await.unwrap();
 
-	let question = json!({ "from": 0, "text": "delete my trade 7", "mentions": [], "files": [], "url": "/", "bindings": [] });
+	let question = json!({ "from": 0, "text": "delete my trade 7", "mentions": [], "files": [], "url": "/", "bindings": [], "approval": "ask" });
 	let (status, _, answer) = b
 		.send_body(&app, Method::POST, &format!("/api/v1/assistant/chats/{chat}/ask"), &json, true, Body::from(question.to_string()))
 		.await;
@@ -144,4 +144,78 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 		.send_body(&app, Method::POST, &format!("/api/v1/assistant/chats/{chat}/act"), &json, true, Body::from(link.to_string()))
 		.await;
 	assert_eq!(status, 409, "a view is the page's to open");
+}
+
+/// The level the person picked holds what it does not cover, and runs the rest: a call taken on its
+/// own is an action already done, its answer the model's in the same turn.
+#[tokio::test]
+async fn the_approval_level_holds_only_what_it_does_not_cover() {
+	let db = TestDb::create().await;
+	let p = panel(&db).await;
+	let round = || {
+		json!({ "stop_reason": "tool_use", "content": [
+			tool_use("spend", "call", json!({ "operation": "buy_map", "body": { "account": "nope" } })),
+			tool_use("destroy", "call", json!({ "operation": "delete_trade", "path": { "id": 7 } })),
+		] })
+	};
+	let end = || json!({ "stop_reason": "end_turn", "content": [{ "type": "text", "text": "Done." }] });
+	let (base, sent) = claude(vec![round(), end(), round(), end(), round(), end()]).await;
+	let email = "asker@x.com";
+	let who = DevIdentity {
+		user_id: DevIdentity::named(email),
+		permissions: operator(),
+		email: email.to_owned(),
+	};
+	let config = SignInConfig {
+		panel_origin: ORIGIN.to_owned(),
+		concierge_origin: ORIGIN.to_owned(),
+	};
+	let model = Model::new(Origins { api: base.clone(), oauth: base }, Some("owner".to_owned().into()));
+	let app = http::app(SignIn::new(p.clone(), Concierge::dev(who), config), None, None, Default::default(), None, None, Some(model), None);
+	let mut b = Browser::default();
+	b.sign_in(&app).await;
+	let json = [("content-type", "application/json")];
+	let chat = Uuid::now_v7();
+	let made = json!({ "id": chat, "title": null, "turns": [] });
+	assert_eq!(b.send_body(&app, Method::POST, "/api/v1/assistant/chats", &json, true, Body::from(made.to_string())).await.0, 201);
+	let year = Timestamp::now() + jiff::SignedDuration::from_hours(24 * 365);
+	p.set_claude(DevIdentity::named(email), "theirs", year, Timestamp::now()).await.unwrap();
+
+	let mut states = Vec::new();
+	for (from, approval) in [(0, "ask"), (2, "spend"), (4, "act")] {
+		let question = json!({ "from": from, "text": "map it, and delete trade 7", "mentions": [], "files": [], "url": "/", "bindings": [], "approval": approval });
+		let (status, _, answer) = b
+			.send_body(&app, Method::POST, &format!("/api/v1/assistant/chats/{chat}/ask"), &json, true, Body::from(question.to_string()))
+			.await;
+		assert_eq!(status, 200, "{}", String::from_utf8_lossy(&answer));
+		let answer: Value = serde_json::from_slice(&answer).unwrap();
+		let said = answer["turns"][from + 1].clone();
+		let actions: Vec<(String, String)> = said["actions"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.map(|a| (a["target"]["call"]["operation"].as_str().unwrap().to_owned(), a["state"].as_str().unwrap().to_owned()))
+			.collect();
+		states.push(actions);
+	}
+	let pair = |a: &str, b: &str| vec![("buy_map".to_owned(), a.to_owned()), ("delete_trade".to_owned(), b.to_owned())];
+	assert_eq!(states, [pair("proposed", "proposed"), pair("done", "proposed"), pair("done", "done")]);
+
+	let sent = sent.lock().unwrap().clone();
+	let result = |n: usize, i: usize| sent[n]["messages"].as_array().unwrap().last().unwrap()["content"][i]["content"].as_str().unwrap().to_owned();
+	let proposed = |s: &str| s.contains("\"proposed\"");
+	assert!(proposed(&result(1, 0)), "asking first, both wait: {} {}", result(1, 0), result(1, 1));
+	assert!(proposed(&result(1, 1)), "asking first, both wait: {} {}", result(1, 0), result(1, 1));
+	assert!(!proposed(&result(3, 0)), "spending on its own, the map's answer is the model's: {}", result(3, 0));
+	assert!(result(3, 0).contains("\"status\""), "spending on its own, the map's answer is the model's: {}", result(3, 0));
+	assert!(proposed(&result(3, 1)), "and what destroys still waits: {}", result(3, 1));
+	assert!(!proposed(&result(5, 0)), "acting on its own, both ran: {} {}", result(5, 0), result(5, 1));
+	assert!(!proposed(&result(5, 1)), "acting on its own, both ran: {} {}", result(5, 0), result(5, 1));
+	let call = |n: usize| {
+		sent[n]["tools"].as_array().unwrap().iter().find(|t| t["name"] == "call").unwrap()["description"]
+			.as_str()
+			.unwrap()
+			.to_owned()
+	};
+	assert_ne!(call(0), call(4), "the tool says what the level holds");
 }

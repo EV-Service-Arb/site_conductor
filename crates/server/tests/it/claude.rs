@@ -146,7 +146,7 @@ impl World {
 		let chat = Uuid::now_v7();
 		let (status, made) = self.call(Method::POST, "/api/v1/assistant/chats", Some(json!({ "id": chat, "title": null, "turns": [] }))).await;
 		assert_eq!(status, StatusCode::CREATED, "{made}");
-		let q = json!({ "from": 0, "text": "hi", "mentions": [], "files": [], "url": "/", "bindings": [] });
+		let q = json!({ "from": 0, "text": "hi", "mentions": [], "files": [], "url": "/", "bindings": [], "approval": "ask" });
 		let (status, answer) = self.call(Method::POST, &format!("/api/v1/assistant/chats/{chat}/ask"), Some(q)).await;
 		assert_eq!(status, StatusCode::OK, "{answer}");
 		answer["turns"][1].clone()

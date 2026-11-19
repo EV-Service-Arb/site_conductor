@@ -127,7 +127,7 @@ async fn acting_needs_act_as_and_a_browsers_session() {
 
 	let db = TestDb::create().await;
 	let (app, _, _) = setup(&db, admin()).await;
-	let (bearer, ..) = crate::mcp::signed_in_client(&app).await;
+	let (bearer, ..) = sa_server::testing::mcp_grant(&app, "ask").await;
 	let auth = format!("Bearer {bearer}");
 	let (status, ..) = Browser::default()
 		.send_body(

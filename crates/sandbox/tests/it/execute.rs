@@ -1,39 +1,48 @@
-//! `execute` end to end: the in-page assistant asks a scripted Claude, whose code runs in the
-//! runner over the generated client (crates/sandbox/js) and comes
-//! back through the conductor's `/api/run` as the asker. What reads runs; what destroys stops the
-//! run and is proposed; nothing but an operation is reached; the token dies with its run.
+//! `execute` end to end: the in-page assistant asks a scripted Claude, whose code runs in the runner over
+//! the generated client (crates/sandbox/js) and comes back through the conductor's `/api/run` as the
+//! asker; an MCP client's the same. A chat's session keeps what its cells declared; a call the level
+//! holds pauses the cell until the person decides; a session ends with its caller's.
 
 use std::{
-	path::Path,
 	process::Stdio,
 	sync::{Arc, Mutex},
 	time::Duration,
 };
 
-use axum::{Json, Router, body::Body, http::Method, routing::post};
+use axum::{Json, Router, http::Method, routing::post};
 use jiff::Timestamp;
-use sa_panel::testing::{TestDb, operator, panel};
+use sa_panel::{
+	Panel,
+	import::Export,
+	testing::{TestDb, operator, panel},
+};
 use sa_server::{
 	claude::{Model, Origins},
 	concierge::{Concierge, DevIdentity},
 	execute::Sandbox,
 	http,
 	signin::{SignIn, SignInConfig},
-	testing::{Browser, ORIGIN, SEED},
+	testing::{Browser, Mcp, ORIGIN, SEED, mcp_grant, tool_result},
 };
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-const READS: &str = r#"const me = await api.GET("/api/v1/me");
-if (me.error) throw new Error(me.error.code);
-console.log(me.data.email);"#;
+const EMAIL: &str = "asker@x.com";
 
-const ESCAPES: &str = r#"const at = Deno.env.get("SA_RUN_URL")!, token = Deno.env.get("SA_RUN_TOKEN")!;
-const out = await fetch(`${at}/auth/logout`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
-console.log(out.status, out.headers.has("x-sa-run-refused"), token);"#;
+const ESCAPES: &str = r#"const at = Deno.env.get("SA_RUN_URL")!;
+const out = await fetch(`${at}/auth/logout`, { method: "POST" });
+console.log(out.status, out.headers.has("x-sa-run-refused"));"#;
 
-const DESTROYS: &str = r#"await api.DELETE("/api/v1/trades/{id}", { params: { path: { id: 7 } } });
-console.log("after");"#;
+/// Spends, then removes: what each level holds of it.
+const SPENDS_THEN_REMOVES: &str = r#"const spent = await api.POST("/api/v1/map/load", { body: { account: "nope" } });
+console.log("spent", spent.error?.code ?? "ok");
+if (spent.error?.code === "refused") throw new Error(spent.error.error);
+const gone = await api.DELETE("/api/v1/trades/{id}", { params: { path: { id: 7 } } });
+console.log("removed", gone.error?.code ?? "ok");"#;
+
+const REMOVES: &str = r#"const gone = await api.DELETE("/api/v1/trades/{id}", { params: { path: { id: 7 } } });
+console.log("removed", gone.error?.code ?? "ok");
+if (gone.error) console.error(gone.error.error);"#;
 
 /// A Claude API that answers each request with the next of `script`, and keeps what it was sent.
 async fn claude(script: Vec<Value>) -> (String, Arc<Mutex<Vec<Value>>>) {
@@ -59,36 +68,43 @@ async fn claude(script: Vec<Value>) -> (String, Arc<Mutex<Vec<Value>>>) {
 	(format!("http://{addr}"), sent)
 }
 
-fn execute(id: &str, code: &str) -> Value {
-	json!({ "type": "tool_use", "id": id, "name": "execute", "input": { "code": code } })
+fn tool(id: &str, name: &str, input: Value) -> Value {
+	json!({ "type": "tool_use", "id": id, "name": name, "input": input })
 }
 
-/// The runner, sending back to `conductor`.
+fn execute(id: &str, code: &str) -> Value {
+	tool(id, "execute", json!({ "code": code }))
+}
+
+fn round(uses: Vec<Value>) -> Value {
+	json!({ "stop_reason": "tool_use", "content": uses })
+}
+
+fn end(text: &str) -> Value {
+	json!({ "stop_reason": "end_turn", "content": [{ "type": "text", "text": text }] })
+}
+
+/// The runner, sending back to `conductor`, answering within a second.
 async fn runner(conductor: &str) -> (String, tokio::process::Child) {
 	let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
 	let deno = std::env::split_paths(&std::env::var_os("PATH").unwrap())
 		.map(|d| d.join("deno"))
 		.find(|p| p.is_file())
 		.expect("deno on PATH: the dev shell has it");
-	let js = concat!(env!("CARGO_MANIFEST_DIR"), "/js");
-	if !Path::new(js).join("node_modules").exists() {
-		// a fresh checkout's, CI's: an installed one may be js-local's links, never replaced
-		let installed = std::process::Command::new(&deno).args(["install", "--no-lock"]).current_dir(js).status().unwrap();
-		assert!(installed.success(), "deno install in {js}: {installed}");
-	}
 	let child = tokio::process::Command::new(env!("CARGO_BIN_EXE_sa_sandbox"))
 		.arg("serve")
 		.env("SANDBOX_BIND", format!("127.0.0.1:{port}"))
-		.env("SANDBOX_MAX", "2")
+		.env("SANDBOX_MAX", "4")
+		.env("SANDBOX_WAIT_SECS", "1")
 		.env("SANDBOX_DENO", deno)
-		.env("SANDBOX_JS", js)
+		.env("SANDBOX_JS", crate::js())
 		.env("SANDBOX_CONDUCTOR_URL", format!("{conductor}/api/run"))
 		.env("PANEL_ASSERTION_KEYS", SEED.parse::<sa_auth::Signer>().unwrap().public())
 		.stdout(Stdio::null())
 		.kill_on_drop(true)
 		.spawn()
 		.unwrap();
-	let base = format!("http://127.0.0.1:{port}");
+	let base = format!("http://{}", format_args!("127.0.0.1:{port}"));
 	for _ in 0..100 {
 		if reqwest::get(format!("{base}/health")).await.is_ok() {
 			return (base, child);
@@ -98,88 +114,248 @@ async fn runner(conductor: &str) -> (String, tokio::process::Child) {
 	panic!("the runner never listened");
 }
 
-#[tokio::test]
-async fn code_runs_as_the_asker_and_stops_at_what_destroys() {
-	let db = TestDb::create().await;
-	let p = panel(&db).await;
-	let (model, sent) = claude(vec![
-		json!({ "stop_reason": "tool_use", "content": [execute("e1", READS), execute("e2", ESCAPES)] }),
-		json!({ "stop_reason": "tool_use", "content": [execute("e3", DESTROYS)] }),
-		json!({ "stop_reason": "end_turn", "content": [{ "type": "text", "text": "Confirm to delete it." }] }),
-	])
-	.await;
-	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-	let conductor = format!("http://{}", listener.local_addr().unwrap());
-	let (sandbox, _runner) = runner(&conductor).await;
-	let email = "asker@x.com";
-	let who = DevIdentity {
-		user_id: DevIdentity::named(email),
-		permissions: operator(),
-		email: email.to_owned(),
-	};
-	let config = SignInConfig {
-		panel_origin: ORIGIN.to_owned(),
-		concierge_origin: ORIGIN.to_owned(),
-	};
-	let app = http::app(
-		SignIn::new(p.clone(), Concierge::dev(who), config),
-		None,
-		None,
-		Default::default(),
-		None,
-		None,
-		None,
-		Some(Model::new(Origins { api: model.clone(), oauth: model }, Some("owner".to_owned().into()))),
-		Some(Sandbox::try_new(&sandbox, SEED.parse().unwrap()).unwrap()),
-	);
-	let served = app.clone();
-	tokio::spawn(async move { axum::serve(listener, served).await.unwrap() });
-	let mut b = Browser::default();
-	b.sign_in(&app).await;
-	let json = [("content-type", "application/json")];
-	let chat = Uuid::now_v7();
-	let made = json!({ "id": chat, "title": null, "turns": [] });
-	assert_eq!(b.send_body(&app, Method::POST, "/api/v1/assistant/chats", &json, true, Body::from(made.to_string())).await.0, 201);
-	let year = Timestamp::now() + jiff::SignedDuration::from_hours(24 * 365);
-	p.set_claude(DevIdentity::named(email), "theirs", year, Timestamp::now()).await.unwrap();
+/// The conductor with a runner behind it, served (a cell's calls come back over the net), its asker
+/// signed in with a chat and their own Claude, trades open.
+struct Stack {
+	app: Router,
+	b: Browser,
+	chat: Uuid,
+	sent: Arc<Mutex<Vec<Value>>>,
+	_db: TestDb,
+	_runner: tokio::process::Child,
+}
 
-	let question = json!({ "from": 0, "text": "delete my trade 7", "mentions": [], "files": [], "url": "/", "bindings": [] });
-	let (status, _, answer) = b
-		.send_body(&app, Method::POST, &format!("/api/v1/assistant/chats/{chat}/ask"), &json, true, Body::from(question.to_string()))
-		.await;
-	assert_eq!(status, 200, "{}", String::from_utf8_lossy(&answer));
-	let answer: Value = serde_json::from_slice(&answer).unwrap();
-	let said = &answer["turns"][1];
+impl Stack {
+	async fn new(script: Vec<Value>) -> Self {
+		let db = TestDb::create().await;
+		let p: Panel = panel(&db).await;
+		let (model, sent) = claude(script).await;
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let conductor = format!("http://{}", listener.local_addr().unwrap());
+		let (sandbox, runner) = runner(&conductor).await;
+		let who = DevIdentity {
+			user_id: DevIdentity::named(EMAIL),
+			permissions: operator(),
+			email: EMAIL.to_owned(),
+		};
+		let config = SignInConfig {
+			panel_origin: ORIGIN.to_owned(),
+			concierge_origin: ORIGIN.to_owned(),
+		};
+		let app = http::app(
+			SignIn::new(p.clone(), Concierge::dev(who), config),
+			None,
+			None,
+			Default::default(),
+			None,
+			None,
+			Some(Model::new(Origins { api: model.clone(), oauth: model }, Some("owner".to_owned().into()))),
+			Some(Sandbox::try_new(&sandbox, SEED.parse().unwrap()).unwrap()),
+		);
+		let served = app.clone();
+		tokio::spawn(async move { axum::serve(listener, served).await.unwrap() });
+		p.import_review_archive(Export {
+			people: vec![],
+			gmails: vec![],
+			gmbs: vec![],
+			ledger: vec![],
+			kickbacks: vec![],
+		})
+		.await
+		.unwrap()
+		.unwrap();
+		let mut b = Browser::default();
+		b.sign_in(&app).await;
+		let chat = Uuid::now_v7();
+		let made = json!({ "id": chat, "title": null, "turns": [] });
+		assert_eq!(b.call(&app, Method::POST, "/api/v1/assistant/chats", Some(made)).await.0, 201);
+		let year = Timestamp::now() + jiff::SignedDuration::from_hours(24 * 365);
+		p.set_claude(DevIdentity::named(EMAIL), "theirs", year, Timestamp::now()).await.unwrap();
+		Self {
+			app,
+			b,
+			chat,
+			sent,
+			_db: db,
+			_runner: runner,
+		}
+	}
 
-	let sent = sent.lock().unwrap().clone();
-	assert!(sent[0]["tools"].as_array().unwrap().iter().any(|t| t["name"] == "execute"), "offered with a sandbox");
-	let result = |n: usize, i: usize| -> Value {
+	/// Asks at `approval` after the chat's turns: the answer.
+	async fn ask(&mut self, approval: &str) -> Value {
+		let (_, chat) = self.b.call(&self.app, Method::GET, &format!("/api/v1/assistant/chats/{}", self.chat), None).await;
+		let from = chat["turns"].as_array().unwrap().len();
+		let question = json!({ "from": from, "text": "go on", "mentions": [], "files": [], "url": "/", "bindings": [], "approval": approval });
+		let (status, answer) = self.b.call(&self.app, Method::POST, &format!("/api/v1/assistant/chats/{}/ask", self.chat), Some(question)).await;
+		assert_eq!(status, 200, "{answer}");
+		answer["turns"][from + 1].clone()
+	}
+
+	/// What tool use `i` of the model's `n`th round was answered, parsed.
+	fn result(&self, n: usize, i: usize) -> Value {
+		let sent = self.sent.lock().unwrap();
 		let results = sent[n]["messages"].as_array().unwrap().last().unwrap()["content"].as_array().unwrap().clone();
 		serde_json::from_str(results[i]["content"].as_str().unwrap()).unwrap()
-	};
-	let read = result(1, 0);
-	assert_eq!((&read["ran"]["ended"], &read["ran"]["stdout"]), (&json!({ "exited": 0 }), &json!("asker@x.com\n")), "{read}");
+	}
 
-	let escaped = result(1, 1);
-	let stdout = escaped["ran"]["stdout"].as_str().unwrap();
-	let (seen, token) = stdout.trim_end().rsplit_once(' ').unwrap();
-	assert_eq!(seen, "404 true", "only an operation is reached: {escaped}");
-	let (status, ..) = b.send(&app, Method::GET, "/api/v1/me", &[], false).await;
-	assert_eq!(status, 200, "the asker's session outlived the run's try at /auth/logout");
-	let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
-	let after = reqwest::Client::new().get(format!("{conductor}/api/run/api/v1/me")).bearer_auth(token).send().await.unwrap();
-	assert_eq!(after.status(), 401, "the token died with its run");
+	/// The operations an answer's actions name, and their states.
+	fn actions(said: &Value) -> Vec<(String, String)> {
+		said["actions"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.map(|a| (a["target"]["call"]["operation"].as_str().unwrap().to_owned(), a["state"].as_str().unwrap().to_owned()))
+			.collect()
+	}
+}
 
-	let destroyed = result(2, 0);
-	assert_eq!(destroyed["ran"]["ended"], json!({ "exited": 4 }), "{destroyed}");
-	assert_eq!(destroyed["ran"]["stdout"], "", "nothing after the proposed call ran");
-	assert!(destroyed["proposed"].is_string(), "{destroyed}");
-	assert_eq!(
-		(&said["actions"][0]["target"], &said["actions"][0]["state"]),
-		(
-			&json!({ "call": { "operation": "delete_trade", "path": { "id": "7" }, "query": {}, "body": null } }),
-			&json!("proposed")
-		)
+fn pairs(of: &[(&str, &str)]) -> Vec<(String, String)> {
+	of.iter().map(|(a, b)| ((*a).to_owned(), (*b).to_owned())).collect()
+}
+
+#[tokio::test]
+async fn code_reaches_only_operations_as_the_asker() {
+	let mut s = Stack::new(vec![
+		round(vec![
+			execute("e1", "const me = await api.GET(\"/api/v1/me\");\nconsole.log(me.data!.email);"),
+			execute("e2", ESCAPES),
+		]),
+		end("Done."),
+	])
+	.await;
+	s.ask("ask").await;
+	assert!(
+		s.sent.lock().unwrap()[0]["tools"].as_array().unwrap().iter().any(|t| t["name"] == "poll"),
+		"offered with a sandbox"
 	);
-	assert_eq!(said["actions"].as_array().unwrap().len(), 1);
+	let read = s.result(1, 0);
+	assert_eq!((&read["state"], &read["stdout"]), (&json!({ "ended": "done" }), &json!("asker@x.com\n")), "{read}");
+	let escaped = s.result(1, 1);
+	assert_eq!(escaped["stdout"], "403 true\n", "nothing but a live cell's token, and an operation, is let by: {escaped}");
+	let (status, _) = s.b.call(&s.app, Method::GET, "/api/v1/me", None).await;
+	assert_eq!(status, 200, "the asker's session outlived the cell");
+}
+
+/// The level holds in code what it holds in a call: a held call pauses the cell, a new question
+/// declines it and the code sees that, and what runs on its own is an action already done.
+#[tokio::test]
+async fn the_level_holds_in_code_what_it_holds_in_a_call() {
+	let mut s = Stack::new(vec![
+		round(vec![execute("e1", SPENDS_THEN_REMOVES)]),
+		end("Agree to the map?"),
+		round(vec![tool("p1", "poll", json!({ "cell": 0 })), execute("e2", SPENDS_THEN_REMOVES)]),
+		end("Agree to the removal?"),
+		round(vec![tool("p2", "poll", json!({ "cell": 1 })), execute("e3", SPENDS_THEN_REMOVES)]),
+		end("Done."),
+	])
+	.await;
+	let asked = s.ask("ask").await;
+	assert_eq!(Stack::actions(&asked), pairs(&[("buy_map", "proposed")]));
+	let paused = s.result(1, 0);
+	assert_eq!(paused["state"]["paused"]["operation"], "buy_map", "{paused}");
+
+	let spent = s.ask("spend").await;
+	let declined = s.result(3, 0);
+	assert_eq!(declined["state"], json!({ "ended": "threw" }), "a new question declines what waited: {declined}");
+	assert!(declined["stderr"].as_str().unwrap().contains("declined"), "{declined}");
+	let paused = s.result(3, 1);
+	assert_eq!(paused["state"]["paused"]["operation"], "delete_trade", "{paused}");
+	assert!(paused["stdout"].as_str().unwrap().starts_with("spent "), "spending ran: {paused}");
+	assert_eq!(Stack::actions(&spent), pairs(&[("buy_map", "done"), ("delete_trade", "proposed")]));
+
+	let acted = s.ask("act").await;
+	let ran = s.result(5, 1);
+	assert_eq!(ran["state"], json!({ "ended": "done" }), "{ran}");
+	assert!(ran["stdout"].as_str().unwrap().contains("removed "), "{ran}");
+	assert_eq!(Stack::actions(&acted), pairs(&[("buy_map", "done"), ("delete_trade", "done")]));
+}
+
+/// A chat's session keeps what its cells declared; a name none declared runs nothing; a long cell is
+/// answered by its number and `poll` follows it to its end.
+#[tokio::test]
+async fn a_session_keeps_what_its_cells_declared() {
+	let mut s = Stack::new(vec![
+		round(vec![
+			execute("e1", "const me = (await api.GET(\"/api/v1/me\")).data!;"),
+			execute("e2", "console.log(me.email);"),
+			execute("e3", "console.log(nobody);"),
+			execute("e4", "await new Promise((r) => setTimeout(r, 1500));\nconsole.log(\"late\");"),
+		]),
+		round(vec![tool("p1", "poll", json!({ "cell": 3 })), tool("p2", "poll", json!({ "cell": 3 }))]),
+		end("Done."),
+	])
+	.await;
+	s.ask("ask").await;
+	assert_eq!(s.result(1, 1)["stdout"], "asker@x.com\n", "{}", s.result(1, 1));
+	let undeclared = s.result(1, 2);
+	assert_eq!(undeclared["state"], json!({ "ended": "rejected" }));
+	assert!(undeclared["stderr"].as_str().unwrap().contains("TS2304"), "{undeclared}");
+	let long = s.result(1, 3);
+	assert_eq!((&long["cell"], &long["state"]), (&json!(3), &json!("running")), "{long}");
+	let (first, second) = (s.result(2, 0), s.result(2, 1));
+	assert_eq!(format!("{}{}", first["stdout"].as_str().unwrap(), second["stdout"].as_str().unwrap()), "late\n");
+	assert_eq!(second["state"], json!({ "ended": "done" }), "{second}");
+}
+
+/// Signing out ends a running cell, its session with it: the next cell is told its state is gone.
+#[tokio::test]
+async fn signing_out_ends_the_session() {
+	let mut s = Stack::new(vec![
+		round(vec![execute(
+			"e1",
+			"const kept = 1;\nfor (;;) { await api.GET(\"/api/v1/me\"); await new Promise((r) => setTimeout(r, 100)); }",
+		)]),
+		end("It runs."),
+		round(vec![execute("e2", "console.log(kept);")]),
+		end("Gone."),
+	])
+	.await;
+	s.ask("ask").await;
+	assert_eq!(s.result(1, 0)["state"], "running");
+	let (status, _) = s.b.call(&s.app, Method::POST, "/auth/logout", None).await;
+	assert_eq!(status, 204);
+	tokio::time::sleep(Duration::from_millis(500)).await;
+	s.b.sign_in(&s.app).await;
+	s.ask("ask").await;
+	let gone = s.result(3, 0);
+	assert!(gone["error"].as_str().unwrap().contains("no longer holds this session"), "{gone}");
+}
+
+/// A held call waits in its cell: the person's agreeing from the answer runs it there, and the answer
+/// resumes with what the code did next.
+#[tokio::test]
+async fn a_paused_cell_goes_on_once_the_person_agrees() {
+	let mut s = Stack::new(vec![round(vec![execute("e1", REMOVES)]), end("Agree to remove it?"), end("It is removed.")]).await;
+	let said = s.ask("ask").await;
+	assert_eq!(Stack::actions(&said), pairs(&[("delete_trade", "proposed")]));
+	let act = json!({ "turn": said["id"], "action": said["actions"][0]["id"] });
+	let (status, chat) = s.b.call(&s.app, Method::POST, &format!("/api/v1/assistant/chats/{}/act", s.chat), Some(act)).await;
+	assert_eq!(status, 200, "{chat}");
+	let turns = chat["turns"].as_array().unwrap();
+	assert_eq!(turns[1]["actions"][0]["state"], "done");
+	assert_eq!(turns.last().unwrap()["text"], "It is removed.", "the answer resumed");
+	let sent = s.sent.lock().unwrap();
+	let resumed = sent[2]["messages"].as_array().unwrap().last().unwrap()["content"].as_str().unwrap().to_owned();
+	assert!(resumed.contains("<resumed>"), "the call ran in the code: {resumed}");
+	assert!(resumed.contains("removed not_found"), "the call ran in the code: {resumed}");
+}
+
+/// An MCP client that elicits is asked through its stream, and the cell goes on with its user's yes;
+/// one that cannot sees the held call refused at once, its proposal in the error.
+#[tokio::test]
+async fn an_mcp_cell_waits_for_the_users_word() {
+	let s = Stack::new(vec![]).await;
+	let (bearer, _, _) = mcp_grant(&s.app, "ask").await;
+	let (_, asks) = Mcp::initialize(&s.app, &bearer, json!({ "elicitation": {} })).await;
+	let mut events = asks.tool_streamed(&s.app, "execute", json!({ "code": REMOVES })).await;
+	let asked = events.next().await.unwrap();
+	assert_eq!(asked["method"], "elicitation/create", "{asked}");
+	assert_eq!(asks.answer(&s.app, &asked["id"], json!({ "action": "accept", "content": { "approve": true } })).await, 202);
+	let (ran, _) = tool_result(&events.next().await.unwrap());
+	assert_eq!((&ran["state"], &ran["stdout"]), (&json!({ "ended": "done" }), &json!("removed not_found\n")), "{ran}");
+
+	let (_, cannot) = Mcp::initialize(&s.app, &bearer, json!({})).await;
+	let (refused, _) = cannot.tool(&s.app, "execute", json!({ "code": REMOVES })).await;
+	assert_eq!(refused["stdout"], "removed refused\n", "{refused}");
+	assert!(refused["stderr"].as_str().unwrap().contains("\"confirmed\": true"), "{refused}");
 }

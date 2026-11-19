@@ -5155,7 +5155,7 @@
         "tags": [
           "ask"
         ],
-        "summary": "Does an answer's proposed operation, as the caller and through the same gate as their own request; the action is marked done in the chat.",
+        "summary": "Does an answer's proposed operation, as the caller and through the same gate as their own request; the action is marked done in the chat. One a cell of the chat's session waits on goes on there, and the answer resumes: a new one, the model told what the code did next.",
         "description": "409 the action is not a proposed operation; the operation's own refusal answers with its code, or\n`bad_gateway` for a service's word the conductor has none of.",
         "operationId": "act",
         "parameters": [
@@ -5331,7 +5331,13 @@
           "unauthenticated": 401,
           "unavailable": 503,
           "unstudied": 422
-        }
+        },
+        "x-spends": [
+          "claude.input",
+          "claude.cache_write",
+          "claude.cache_read",
+          "claude.output"
+        ]
       }
     },
     "/assistant/chats/{id}/archived": {
@@ -5512,7 +5518,7 @@
     },
     "/assistant/chats/{id}/ask": {
       "post": {
-        "summary": "Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done. It runs on the asker's own Claude if they connected one, else on the panel's, each round charged to them at its prices.",
+        "summary": "Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done. It runs on the asker's own Claude if they connected one, else on the panel's, each round charged to them at its prices. A call a cell of the chat's session waits on is declined: the person moved on.",
         "description": "503 without either Claude, or when the model does not answer.",
         "operationId": "ask",
         "parameters": [
@@ -24696,6 +24702,15 @@
           "stopped"
         ]
       },
+      "Approval": {
+        "description": "What an agent does without asking its person first; each level runs what the one before it does.\nWhat neither destroys nor spends always runs.\n\n- `ask`: Everything that destroys or spends is proposed.\n- `spend`: What spends runs; what destroys is proposed.\n- `act`: What spends and what destroys run.",
+        "type": "string",
+        "enum": [
+          "ask",
+          "spend",
+          "act"
+        ]
+      },
       "Area": {
         "type": "object",
         "properties": {
@@ -29206,6 +29221,14 @@
       "Question": {
         "type": "object",
         "properties": {
+          "approval": {
+            "description": "What the assistant does without asking first.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Approval"
+              }
+            ]
+          },
           "bindings": {
             "type": "array",
             "items": {
@@ -29245,7 +29268,8 @@
           "mentions",
           "files",
           "url",
-          "bindings"
+          "bindings",
+          "approval"
         ]
       },
       "ReadInternalReads": {

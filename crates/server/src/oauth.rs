@@ -23,6 +23,7 @@ use axum::{
 };
 use jiff::Timestamp;
 use sa_auth::Own;
+use sa_core::agent::Approval;
 use sa_panel::oauth::{Client, Grant, TokenRequest};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -38,6 +39,10 @@ use crate::{
 pub const PATH: &str = "/mcp";
 const RESOURCE_METADATA: &str = "/.well-known/oauth-protected-resource/mcp";
 const SERVER_METADATA: &str = "/.well-known/oauth-authorization-server/mcp";
+
+/// A grant's level as its scope: `spend` lets the client spend without asking, `act` spend and
+/// remove too; neither, it asks for both.
+const SCOPES: [&str; 2] = ["spend", "act"];
 
 const MAX_REDIRECT_URIS: usize = 8;
 const MAX_URI: usize = 512;
@@ -64,7 +69,7 @@ pub(crate) fn challenge(s: &SignIn) -> String {
 
 async fn resource_metadata(State(s): State<SignIn>) -> Json<Value> {
 	let base = format!("{}{PATH}", s.panel_origin());
-	Json(json!({ "resource": base, "authorization_servers": [base], "bearer_methods_supported": ["header"] }))
+	Json(json!({ "resource": base, "authorization_servers": [base], "bearer_methods_supported": ["header"], "scopes_supported": SCOPES }))
 }
 
 async fn server_metadata(State(s): State<SignIn>) -> Json<Value> {
@@ -78,6 +83,7 @@ async fn server_metadata(State(s): State<SignIn>) -> Json<Value> {
 		"grant_types_supported": ["authorization_code"],
 		"code_challenge_methods_supported": ["S256"],
 		"token_endpoint_auth_methods_supported": ["none"],
+		"scopes_supported": SCOPES,
 	}))
 }
 
@@ -126,6 +132,8 @@ struct AuthorizeQuery {
 	code_challenge_method: String,
 	state: Option<String>,
 	resource: Option<String>,
+	/// What the consent page offers first: the widest of [`SCOPES`] asked; any other scope is not ours to grant.
+	scope: Option<String>,
 	decision: Option<Decision>,
 }
 
@@ -180,14 +188,26 @@ async fn authorize(State(s): State<SignIn>, uri: Uri, headers: HeaderMap, q: Res
 		field("csrf", csrf),
 	]
 	.concat();
+	let asked = q.scope.as_deref().unwrap_or_default().split(' ').filter_map(|s| s.parse::<Approval>().ok()).filter(|a| *a != Approval::Ask).max().unwrap_or(Approval::Ask); // no scope of ours asked: the narrowest
+	let levels = [
+		(Approval::Ask, "Ask me first", "it proposes whatever removes or spends, and waits for me"),
+		(Approval::Spend, "Spend on its own", "it spends tokens without asking, and asks before it removes anything"),
+		(Approval::Act, "Act on its own", "it removes and spends without asking"),
+	]
+	.map(|(level, name, hint)| {
+		let value: &str = level.into();
+		let checked = if level == asked { " checked" } else { "" };
+		format!("<label><input type=\"radio\" name=\"approval\" value=\"{value}\"{checked}> <b>{name}</b>: {hint}</label><br>")
+	})
+	.concat();
 	let client_name = escape(client.name.as_deref().unwrap_or("An MCP client"));
 	let body = format!(
 		"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
 		 <title>Connect {client_name}</title></head><body><main><h1>{client_name} wants to act as you on Service-Arb</h1>\
 		 <p>Signed in as <b>{email}</b>.</p>\
-		 <p>It will read and change what you can in the panel. It asks you before anything that removes or spends.</p>\
+		 <p>It will read and change what you can in the panel.</p>\
 		 <p>You will be returned to <code>{redirect}</code>.</p>\
-		 <form method=\"post\" action=\"{PATH}/authorize\">{fields}<button>Allow</button> <a href=\"{cancel}\">Cancel</a></form>\
+		 <form method=\"post\" action=\"{PATH}/authorize\">{fields}<fieldset><legend>Before it acts</legend>{levels}</fieldset><button>Allow</button> <a href=\"{cancel}\">Cancel</a></form>\
 		 </main></body></html>",
 		email = escape(&caller.email),
 		redirect = escape(&q.link.redirect_uri),
@@ -212,6 +232,7 @@ struct ConsentForm {
 	link: Link,
 	state: Option<String>,
 	csrf: String,
+	approval: Approval,
 }
 
 /// The consent page's POST: concierge signs the user in again, for the client.
@@ -246,6 +267,7 @@ async fn consent(State(s): State<SignIn>, mut headers: HeaderMap, Form(f): Form<
 		redirect_uri: f.link.redirect_uri,
 		challenge: f.link.code_challenge,
 		state: f.state,
+		approval: f.approval,
 	};
 	// Dev sign-in signs in whoever its configuration names: this user, by name.
 	let dev_as = s.concierge.is_dev().then_some(caller.email);
@@ -302,7 +324,13 @@ async fn token(State(s): State<SignIn>, Form(f): Form<TokenForm>) -> Response {
 		verifier: &verifier,
 	};
 	match s.panel.redeem(request, Timestamp::now()).await {
-		Ok(Some(bearer)) => private(Json(json!({ "access_token": bearer.as_str(), "token_type": "Bearer" })).into_response()),
+		Ok(Some((bearer, approval))) => {
+			let mut granted = json!({ "access_token": bearer.as_str(), "token_type": "Bearer" });
+			if approval != Approval::Ask {
+				granted["scope"] = json!(<&str>::from(approval));
+			}
+			private(Json(granted).into_response())
+		}
 		Ok(None) => oauth_error(OauthError::InvalidGrant, "the code is spent, expired, or not this client's"),
 		Err(e) => internal(&e, "redeeming an MCP code"),
 	}

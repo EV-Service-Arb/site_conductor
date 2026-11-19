@@ -169,7 +169,7 @@
           auditable = false;
           meta.description = "the runner of the agents' code";
         };
-        # what a run imports (crates/sandbox/js): the prelude, the catalog and its types, @evinvest/api installed
+        # what a session runs (crates/sandbox/js): the host, the prelude, the catalog and its types, @evinvest/api and typescript installed
         sandboxJs = pkgs.buildNpmPackage {
           pname = "${pname}-sandbox-js";
           version = manifest.version;
@@ -177,7 +177,7 @@
             src = lib.cleanSource ./crates/sandbox/js;
             filter = path: _type: baseNameOf path != "node_modules";
           };
-          npmDepsHash = "sha256-dwu/lQeOn2Lh03/7W8RMMX90E0vIstOF9dXaafdk4lQ=";
+          npmDepsHash = "sha256-5AWfHRXALyxr0HUUZhdRwSGd8g9/URACBbnq1DUIvO8=";
           dontNpmBuild = true;
           installPhase = ''
             runHook preInstall
@@ -349,14 +349,17 @@
             # the build, or a tag whose catalog changed boots on the previous epoch and is refused
             imageEnv = [ "PANEL_WEB_DIR=${frontend}" "PANEL_GRAFANA_SERVER=${grafanaServer}" "PANEL_BUILD_EPOCH=${toString self.lastModified}" ];
           };
-          # the agents' code (docs/ARCHITECTURE.md, Code mode): stateless, reached by the conductor alone
+          # the agents' code (docs/ARCHITECTURE.md, Code mode), reached by the conductor alone. Its sessions are held in
+          # memory, and the conductor names them by the runner's id: one replica (v_flakes' Deployment), and a rollout
+          # ends every session, each answered as gone
           containers.sandbox = {
             port = sandboxPort;
             healthPath = "/health";
             criticality = "normal";
             withCacert = false; # it dials the conductor alone, in plain http
             entrypoint = [ "${sandboxBin}/bin/sa_sandbox" "serve" "--bind" "0.0.0.0:${toString sandboxPort}" ];
-            # each run's type check holds ~300 MB: the pod's memory is this many of them
+            # sessions held at once, each a Deno process (its heap capped at 256 MB) and, while a cell is checked,
+            # ~300 MB more: the pod's memory is this many of both; past it the idlest session is let go
             env.SANDBOX_MAX = "2";
             imageEnv = [ "SANDBOX_DENO=${pkgs.deno}/bin/deno" "SANDBOX_JS=${sandboxJs}" ];
           };
