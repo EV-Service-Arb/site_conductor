@@ -3227,10 +3227,6 @@
     "en": "This backend signs people in without concierge. It is for local work only.",
     "t": "Этот бэкенд пускает без concierge. Только для локальной работы."
   },
-  "session.members.acting": {
-    "en": "You are viewing {name}'s account as {email}.",
-    "t": "Вы просматриваете аккаунт пользователя {name} как {email}."
-  },
   "session.members.description": {
     "en": "Their account, as they see it, with your permissions. Their payments and sign-ins stay theirs.",
     "t": "Их аккаунт в том виде, в котором его видят они, но с вашими правами. Их платежи и входы остаются за ними."
@@ -3238,10 +3234,6 @@
   "session.members.search": {
     "en": "Name or email",
     "t": "Имя или электронная почта"
-  },
-  "session.members.stop": {
-    "en": "Stop viewing as {name}",
-    "t": "Прекратить просмотр аккаунта пользователя {name}"
   },
   "session.members.title": {
     "en": "View as member",

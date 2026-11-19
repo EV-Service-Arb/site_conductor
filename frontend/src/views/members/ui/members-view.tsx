@@ -3,32 +3,25 @@
 import { useResource } from "@evinvest/api/react";
 import { Button, Card, InputGroup, InputGroupAddon, InputGroupInput, PageFrame, Settled, Skeleton } from "@evinvest/uikit";
 import { Search } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { session, stopActing, useMe } from "@/entities/session";
 import { api, ok } from "@/shared/api";
 import { useT } from "@/shared/i18n";
 import { ErrorState } from "@/shared/ui/error-state";
 
-/** Everyone, to view the panel as; while acting, the way back. */
+/** Everyone, to view the panel as; while acting, opening it is the way back. */
 export function MembersView() {
   const t = useT();
   const me = useMe();
   const members = useResource(api, "/members");
   const [query, setQuery] = useState("");
 
-  if (me.acting) {
-    return (
-      <PageFrame breakpoint="md" title={t(session.members.title, "View as member")}>
-        <p className="text-sm text-ink-mid">{t(session.members.acting, "You are viewing {name}'s account as {email}.", { name: me.preferred_name || me.email, email: me.acting.email })}</p>
-        <div>
-          <Button type="button" onClick={() => void stopActing()}>
-            {t(session.members.stop, "Stop viewing as {name}", { name: me.preferred_name || me.email })}
-          </Button>
-        </div>
-      </PageFrame>
-    );
-  }
+  const acting = me.acting !== null;
+  useEffect(() => {
+    if (acting) void stopActing();
+  }, [acting]);
+  if (acting) return null;
 
   const q = query.trim().toLowerCase();
   return (
