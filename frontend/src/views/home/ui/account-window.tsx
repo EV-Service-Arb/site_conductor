@@ -5,6 +5,7 @@ import { Mail } from "lucide-react";
 
 import { openWindow } from "@/entities/gmb";
 import { BrowserSession } from "@/features/browser-session";
+import { BusinessCard } from "@/features/connect-business";
 import { ImapCard } from "@/features/connect-imap";
 import { BrowserCard } from "@/features/set-browser";
 import { MapsKeyCard } from "@/features/set-maps-key";
@@ -62,6 +63,7 @@ function Connections({ gmail }: { gmail: Gmail }) {
         <div className="grid gap-4 lg:grid-cols-2">
           <ImapCard gmail={gmail} imap={connections.data.imap} onChanged={connections.reload} />
           <MapsKeyCard gmail={gmail.id} mapsKey={connections.data.maps_key} prices={connections.data.prices} onChanged={connections.reload} />
+          <BusinessCard gmail={gmail} business={connections.data.business} redirectUri={connections.data.business_redirect_uri} onChanged={connections.reload} />
           <BrowserCard gmail={gmail.id} browser={connections.data.browser} onChanged={connections.reload} />
         </div>
       )}

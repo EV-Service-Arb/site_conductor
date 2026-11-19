@@ -513,6 +513,26 @@ impl IntoResponse for Page {
 	}
 }
 
+/// [`Page`] with a message of ours that may quote Google: escaped, never the request's.
+pub(crate) struct Said {
+	pub(crate) title: &'static str,
+	pub(crate) message: String,
+}
+
+impl IntoResponse for Said {
+	fn into_response(self) -> Response {
+		let message = self.message.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
+		let body = format!(
+			"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
+			 <title>{t}</title></head><body><main><h1>{t}</h1><p>{message}</p><p><a href=\"/\">Back</a></p></main></body></html>",
+			t = self.title
+		);
+		let mut res = (StatusCode::BAD_REQUEST, Html(body)).into_response();
+		res.headers_mut().insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(PAGE_CSP));
+		res
+	}
+}
+
 /// The sign-in's answers carry a code or a token in their URLs: kept out of caches and out
 /// of the `Referer` of whatever the page loads next.
 pub(crate) fn private(mut res: Response) -> Response {

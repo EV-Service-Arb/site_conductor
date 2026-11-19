@@ -4,6 +4,7 @@ use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_core::gbp::State;
 use sqlx::SqliteConnection;
+use strum::VariantArray;
 use uuid::Uuid;
 
 use super::{
@@ -234,7 +235,7 @@ pub(crate) async fn purge(conn: &mut SqliteConnection, now: Timestamp, keep_by_d
 
 async fn disconnect(conn: &mut SqliteConnection, gmails: Vec<i64>) -> eyre::Result<()> {
 	for g in gmails {
-		for which in [Connection::Imap, Connection::MapsKey] {
+		for &which in Connection::VARIANTS {
 			connections::delete(conn, g, which).await?;
 		}
 	}

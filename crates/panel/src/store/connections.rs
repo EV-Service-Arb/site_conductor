@@ -29,18 +29,31 @@ pub struct MapsKey {
 	pub checked: Checked,
 }
 
+/// A gmail's Business Profile client and its grant to it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Business {
+	pub client_id: String,
+	pub set_at: Timestamp,
+	/// `None`: the gmail has not granted `business.manage` yet.
+	pub granted_at: Option<Timestamp>,
+	/// `None`: Google not asked since it was set.
+	pub checked: Option<Checked>,
+}
+
 /// Which connection of a gmail's.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::Display, strum::EnumString)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::Display, strum::EnumString, strum::VariantArray)]
 #[strum(serialize_all = "snake_case")]
 pub enum Connection {
 	Imap,
 	MapsKey,
+	Business,
 }
 impl Connection {
 	fn table(self) -> &'static str {
 		match self {
 			Self::Imap => "gmail_imap",
 			Self::MapsKey => "gmail_maps_keys",
+			Self::Business => "gmail_business",
 		}
 	}
 }
@@ -93,6 +106,68 @@ pub(crate) async fn maps_key(conn: &mut SqliteConnection, gmail_id: i64) -> eyre
 		Ok((key, Sealed { blob, data_key_fp }))
 	})
 	.transpose()
+}
+
+/// The gmail's Business Profile client, its sealed secret, and its sealed grant once given.
+pub(crate) async fn business(conn: &mut SqliteConnection, gmail_id: i64) -> eyre::Result<Option<(Business, Sealed, Option<Sealed>)>> {
+	type Row = (String, Vec<u8>, Option<Vec<u8>>, Vec<u8>, i64, Option<i64>, Option<i64>, Option<String>);
+	let row: Option<Row> = sqlx::query_as("SELECT client_id, secret_sealed, grant_sealed, data_key_fp, set_at, granted_at, checked_at, check_error FROM gmail_business WHERE gmail_id = $1")
+		.bind(gmail_id)
+		.fetch_optional(&mut *conn)
+		.await
+		.wrap_err("loading a gmail's Business Profile client")?;
+	row.map(|(client_id, secret, grant, data_key_fp, set_at, granted_at, checked_at, error)| {
+		let business = Business {
+			client_id,
+			set_at: from_db(set_at)?,
+			granted_at: granted_at.map(from_db).transpose()?,
+			checked: checked_at.map(|at| eyre::Ok(Checked { at: from_db(at)?, error })).transpose()?,
+		};
+		let grant = grant.map(|blob| Sealed {
+			blob,
+			data_key_fp: data_key_fp.clone(),
+		});
+		Ok((business, Sealed { blob: secret, data_key_fp }, grant))
+	})
+	.transpose()
+}
+
+pub(crate) async fn address(conn: &mut SqliteConnection, gmail_id: i64) -> eyre::Result<String> {
+	sqlx::query_scalar("SELECT gmail FROM gmails WHERE id = $1")
+		.bind(gmail_id)
+		.fetch_one(&mut *conn)
+		.await
+		.wrap_err("loading a gmail's address")
+}
+
+/// A client set anew drops the grant given to the one before.
+pub(crate) async fn set_business(conn: &mut SqliteConnection, gmail_id: i64, client_id: &str, secret: &Sealed, now: Timestamp) -> eyre::Result<()> {
+	sqlx::query(
+		"INSERT INTO gmail_business (gmail_id, client_id, secret_sealed, grant_sealed, data_key_fp, set_at, granted_at, checked_at, check_error) 		 VALUES ($1, $2, $3, NULL, $4, $5, NULL, NULL, NULL) 		 ON CONFLICT (gmail_id) DO UPDATE SET client_id = excluded.client_id, secret_sealed = excluded.secret_sealed, grant_sealed = NULL, 		 data_key_fp = excluded.data_key_fp, set_at = excluded.set_at, granted_at = NULL, checked_at = NULL, check_error = NULL",
+	)
+	.bind(gmail_id)
+	.bind(client_id)
+	.bind(&secret.blob)
+	.bind(&secret.data_key_fp)
+	.bind(to_db(now))
+	.execute(&mut *conn)
+	.await
+	.wrap_err("setting a gmail's Business Profile client")?;
+	Ok(())
+}
+
+/// `false`: the client is not `client_id` any more, or its secret was sealed under another key.
+pub(crate) async fn set_business_grant(conn: &mut SqliteConnection, gmail_id: i64, client_id: &str, grant: &Sealed, now: Timestamp) -> eyre::Result<bool> {
+	let done = sqlx::query("UPDATE gmail_business SET grant_sealed = $3, granted_at = $5 WHERE gmail_id = $1 AND client_id = $2 AND data_key_fp = $4")
+		.bind(gmail_id)
+		.bind(client_id)
+		.bind(&grant.blob)
+		.bind(&grant.data_key_fp)
+		.bind(to_db(now))
+		.execute(&mut *conn)
+		.await
+		.wrap_err("setting a gmail's Business Profile grant")?;
+	Ok(done.rows_affected() > 0)
 }
 
 /// Checked when set: a refused one is never stored.

@@ -113,7 +113,8 @@ pub fn app(
 	let auth = Router::new()
 		.route("/auth/login", get(signin::login))
 		.route("/auth/callback", get(signin::callback))
-		.route("/auth/logout", post(signin::logout));
+		.route("/auth/logout", post(signin::logout))
+		.route(connections::BUSINESS_CALLBACK, get(connections::business_callback));
 	let auth = bounded(auth, limits.auth_concurrent, limits.auth_timeout).with_state(sign_in.clone());
 	let catalog = forward.as_ref().map_or_else(|| Catalog::new(document()), |f| f.catalog().clone());
 	let runs = sandbox.is_some();

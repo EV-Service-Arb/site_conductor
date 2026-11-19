@@ -3,10 +3,9 @@
 
 use eyre::WrapErr;
 use jiff::Timestamp;
+use sa_core::agent::Approval;
 use sqlx::SqliteConnection;
 use uuid::Uuid;
-
-use sa_core::agent::Approval;
 
 use super::{from_db, to_db};
 

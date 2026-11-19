@@ -21,6 +21,7 @@ pub mod areas;
 pub mod assistant;
 pub mod brands;
 pub mod browsers;
+mod business;
 pub mod claude;
 pub mod connections;
 pub mod gmbs;

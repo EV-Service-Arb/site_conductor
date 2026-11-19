@@ -1,4 +1,5 @@
-//! A gmail's connections: its inbox over IMAP and its own Maps key, each checked before it is
+//! A gmail's connections: its inbox over IMAP, its own Maps key and its Business Profile client
+//! and grant ([`crate::business`]), each checked before it is
 //! stored, sealed, and never read back out but by the conductor's own use. And who a Places
 //! request is made for: the gmail's key, its owner's other gmails', then the shared rotation, paid
 //! in tokens at the price an admin sets ([`sa_places::Payer`]).
@@ -17,10 +18,10 @@ use sa_places::{Bought, Hold, Payer, Pending, Purse};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
-pub use crate::store::connections::{Checked, Connection, Imap, MapsKey};
+pub use crate::store::connections::{Business, Checked, Connection, Imap, MapsKey};
 use crate::{
-	Panel, Refused, imap,
-	seal::{gmail_imap_aad, gmail_maps_key_aad},
+	Panel, Refused, business, imap,
+	seal::{BUSINESS_STATE_AAD, gmail_business_grant_aad, gmail_business_secret_aad, gmail_imap_aad, gmail_maps_key_aad},
 	store::{
 		browsers as browsers_db,
 		connections::{self as db, Inbox, Sealed},
@@ -32,6 +33,9 @@ use crate::{
 
 /// The ledger's name for what the shared Places keys charge.
 const PLACES: &str = "places";
+
+/// How long a Business Profile consent may take, from its URL handed out to Google's redirect.
+const CONSENT_WITHIN: jiff::SignedDuration = jiff::SignedDuration::from_mins(15);
 
 /// One lock per person whose buys reach the rotation; see [`Held`].
 pub(crate) type Purses = Arc<Mutex<std::collections::HashMap<Uuid, Arc<tokio::sync::Mutex<()>>>>>;
@@ -45,6 +49,7 @@ pub struct Connections {
 	/// What a request on the shared keys costs, per [`Item::Places`].
 	pub prices: Vec<crate::tokens::Priced>,
 	pub browser: Option<crate::browsers::Browser>,
+	pub business: Option<Business>,
 }
 
 /// An inbox's credentials, as typed.
@@ -74,7 +79,14 @@ impl Panel {
 		};
 		let prices = self.prices().await?.into_iter().filter(|p| matches!(p.item, Item::Places(_))).collect();
 		let browser = browsers_db::browser(&mut conn, id).await?.map(|(b, _)| b);
-		Ok(Ok(Connections { imap, maps_key, prices, browser }))
+		let business = db::business(&mut conn, id).await?.map(|(b, ..)| b);
+		Ok(Ok(Connections {
+			imap,
+			maps_key,
+			prices,
+			browser,
+			business,
+		}))
 	}
 
 	/// The gmail's inbox, stored once it logs in; a refusal stores nothing.
@@ -127,6 +139,105 @@ impl Panel {
 		self.connections(owner, id).await
 	}
 
+	/// The gmail's Business Profile client, stored once Google knows it; its grant to the one before
+	/// is dropped.
+	pub async fn set_business(&self, owner: Uuid, id: i64, client_id: &str, secret: Zeroizing<String>, redirect_uri: &str, now: Timestamp) -> eyre::Result<Result<Connections, Refused>> {
+		let client_id = client_id.trim();
+		let secret = Zeroizing::new(secret.trim().to_owned());
+		if !client_id.ends_with(".apps.googleusercontent.com") || client_id.contains(char::is_whitespace) {
+			return Ok(Err(Refused::Invalid("a client ID ends in .apps.googleusercontent.com".to_owned())));
+		}
+		if secret.is_empty() {
+			return Ok(Err(Refused::Invalid("a client has a secret".to_owned())));
+		}
+		if let Err(r) = self.gmail_of(owner, id).await? {
+			return Ok(Err(r));
+		}
+		let client = business::Client { id: client_id, secret: &secret };
+		if let Err(said) = business::probe(&client, redirect_uri).await? {
+			return Ok(Err(Refused::Invalid(format!("Google refuses this client: {said}"))));
+		}
+		let sealed = self.seal(&gmail_business_secret_aad(id), &secret)?;
+		let mut tx = self.store.begin_write().await?;
+		if gmbs_db::gmail_owner(&mut tx, id).await? != Some(owner) {
+			return Ok(Err(Refused::NotFound));
+		}
+		db::set_business(&mut tx, id, client_id, &sealed, now).await?;
+		tx.commit().await.wrap_err("committing a gmail's Business Profile client")?;
+		self.connections(owner, id).await
+	}
+
+	/// Where the gmail grants its client `business.manage`: Google's consent, coming back to
+	/// `redirect_uri` with a state only [`Self::grant_business`] opens, for this owner, a while.
+	pub async fn business_consent(&self, owner: Uuid, id: i64, redirect_uri: &str, now: Timestamp) -> eyre::Result<Result<String, Refused>> {
+		if let Err(r) = self.gmail_of(owner, id).await? {
+			return Ok(Err(r));
+		}
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a consent")?;
+		let Some((b, ..)) = db::business(&mut conn, id).await? else {
+			return Ok(Err(Refused::NotFound));
+		};
+		let gmail = db::address(&mut conn, id).await?;
+		let until = (now + CONSENT_WITHIN).as_second();
+		let state = [owner.as_bytes().as_slice(), &id.to_be_bytes(), &until.to_be_bytes()].concat();
+		let state = base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, self.key.seal(BUSINESS_STATE_AAD, &state)?);
+		Ok(Ok(business::consent(&b.client_id, redirect_uri, &gmail, &state)))
+	}
+
+	/// Google's redirect after a consent: the code exchanged for the gmail's grant, kept only when
+	/// the gmail itself gave it, then the APIs asked. Answers the gmail it was for.
+	pub async fn grant_business(&self, owner: Uuid, state: &str, code: &str, redirect_uri: &str, now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
+		let stale = || {
+			Ok(Err(Refused::Invalid(
+				"this consent is stale or not yours: start it again from the gmail's Connections".to_owned(),
+			)))
+		};
+		let Ok(sealed) = base64::Engine::decode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, state) else {
+			return stale();
+		};
+		let Ok(open) = self.key.open(BUSINESS_STATE_AAD, &sealed) else {
+			return stale();
+		};
+		assert_eq!(open.len(), 32, "sealed as 16 + 8 + 8 bytes");
+		let (user, rest) = open.split_at(16);
+		let (id, until) = rest.split_at(8);
+		let id = i64::from_be_bytes(id.try_into().expect("sealed as 16 + 8 + 8 bytes"));
+		let until = i64::from_be_bytes(until.try_into().expect("sealed as 16 + 8 + 8 bytes"));
+		if Uuid::from_slice(user).expect("sealed as 16 + 8 + 8 bytes") != owner || now.as_second() > until {
+			return stale();
+		}
+		if let Err(r) = self.gmail_of(owner, id).await? {
+			return Ok(Err(r));
+		}
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a grant")?;
+		let Some((b, secret, _)) = db::business(&mut conn, id).await? else {
+			return Ok(Err(Refused::NotFound));
+		};
+		let gmail = db::address(&mut conn, id).await?;
+		drop(conn);
+		let secret = self.unseal(&gmail_business_secret_aad(id), &secret)?;
+		let client = business::Client { id: &b.client_id, secret: &secret };
+		let granted = match business::exchange(&client, code, redirect_uri).await? {
+			Ok(g) => g,
+			Err(said) => return Ok(Err(Refused::Invalid(format!("Google refuses the grant: {said}")))),
+		};
+		if !granted.email.eq_ignore_ascii_case(&gmail) {
+			return Ok(Err(Refused::Invalid(format!(
+				"{} granted, not {gmail}: sign in to Google as {gmail} and start again",
+				granted.email
+			))));
+		}
+		let error = business::check(&client, &granted.refresh).await?;
+		let sealed = self.seal(&gmail_business_grant_aad(id), &granted.refresh)?;
+		let mut tx = self.store.begin_write().await?;
+		if !db::set_business_grant(&mut tx, id, &b.client_id, &sealed, now).await? {
+			return Ok(Err(Refused::Conflict("the gmail's client changed during the consent: start it again".to_owned())));
+		}
+		db::checked(&mut tx, id, Connection::Business, &Checked { at: now, error }).await?;
+		tx.commit().await.wrap_err("committing a gmail's Business Profile grant")?;
+		Ok(Ok(id))
+	}
+
 	/// The gmail's `which` asked again, and what it said recorded.
 	pub async fn check(&self, owner: Uuid, id: i64, which: Connection, now: Timestamp) -> eyre::Result<Result<Connections, Refused>> {
 		if let Err(r) = self.gmail_of(owner, id).await? {
@@ -134,6 +245,15 @@ impl Panel {
 		}
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a gmail's connection")?;
 		let error = match which {
+			Connection::Business => {
+				let Some((b, secret, Some(grant))) = db::business(&mut conn, id).await? else {
+					return Ok(Err(Refused::NotFound));
+				};
+				drop(conn);
+				let secret = self.unseal(&gmail_business_secret_aad(id), &secret)?;
+				let refresh = self.unseal(&gmail_business_grant_aad(id), &grant)?;
+				business::check(&business::Client { id: &b.client_id, secret: &secret }, &refresh).await?
+			}
 			Connection::Imap => {
 				let Some((imap, sealed)) = db::imap(&mut conn, id).await? else {
 					return Ok(Err(Refused::NotFound));

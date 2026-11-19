@@ -50,7 +50,7 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          (the hub: access, destinations, rules, the feeds fanned out; the
                          Directory and Feeds ports), `telegram` (the method: links, chats, outbox,
                          delivery, buttons; the Bot port), `live` (the in-process bus), `gmbs`,
-                         `connections` (a gmail's inbox and Maps key; who pays a Places request), `inbox` (its mail
+                         `connections` (a gmail's inbox, Maps key and Business Profile client and grant; who pays a Places request), `inbox` (its mail
                          with Google followed into its GBPs' logs; the Mailbox port), `claude` (a person's own
                          Claude),
                          `browsers` (a gmail's browser: its proxy checked and sealed, Multilogin and
@@ -976,7 +976,7 @@ priced in money, so an account overshoots by its hours behind.
   at its `removed_at`) until purged: `keep_days` after its removal (30 unsaid; 1, 7, 30 or 90), never with
   `never_purge` (an admin's say; unsaid, on under dev sign-in); `never_purge` turned off counts
   the kept days from then, so nothing goes the moment it may. The owner may purge one at once: a
-  gmail with every GBP of it in the trash. Purged is gone for good: its gmail's IMAP and Maps key
+  gmail with every GBP of it in the trash. Purged is gone for good: its gmail's connections
   deleted, its row kept.
 
 ```text
@@ -1199,7 +1199,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **A source is only ever revoked.** `sources` refuses DELETE and any UPDATE but of `revoked_at`
   and a site's `origin` set once from NULL (only a `site` has one); a key id is never reused.
 - **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, an MCP code's bearer, queued Telegram
-  texts, a gmail's IMAP password, Maps key and proxy, and a person's Claude token are sealed (XChaCha20-Poly1305, what they belong
+  texts, a gmail's IMAP password, Maps key, proxy and Business Profile client secret and grant, and a person's Claude token are sealed (XChaCha20-Poly1305, what they belong
   to as associated data) under `PANEL_DATA_KEY`, whose fingerprint is stored beside each. A
   person's are never read back out: the browser sees a key's last four.
 - **No price beside its use.** What a person is charged is an item of `sa_core::prices` at its
@@ -1249,7 +1249,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOLOGIN_TOKEN`,
   `MULTILOGIN_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`), through
   `ev_lib::settings`, and the Google accounts' keys and readers, which the config file names
-  (`{ env = "…" }`); a person's (a gmail's IMAP password, its Maps key, its proxy, their Claude token) through the API, sealed at
+  (`{ env = "…" }`); a person's (a gmail's IMAP password, its Maps key, its proxy, its Business Profile client and grant, their Claude token) through the API, sealed at
   once; with `APP_ENV=production` the database, the data key, the four sign-in
   variables, the forward's four and `TOKENS_START_CAP_MULTIPLE` are required at boot
   (`panel --print-required-vars` lists them), and `serve` a Google account in the config file.

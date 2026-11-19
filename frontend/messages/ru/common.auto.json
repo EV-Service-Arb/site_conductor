@@ -111,6 +111,110 @@
     "en": "Where your alerts go: your Telegram, channels and groups.",
     "t": "Куда приходят оповещения: ваш Telegram, каналы и группы."
   },
+  "account.business.client": {
+    "en": "Client",
+    "t": "Клиент"
+  },
+  "account.business.clientId": {
+    "en": "Client ID",
+    "t": "ID клиента"
+  },
+  "account.business.connect": {
+    "en": "Connect",
+    "t": "Подключить"
+  },
+  "account.business.failing": {
+    "en": "Failing",
+    "t": "Не работает"
+  },
+  "account.business.grant": {
+    "en": "Grant as {gmail}",
+    "t": "Разрешить как {gmail}"
+  },
+  "account.business.granted": {
+    "en": "Granted",
+    "t": "Доступ предоставлен"
+  },
+  "account.business.help.apply": {
+    "en": "Open this link. Pick Application for Basic API Access. Paste the project number. Send it from {gmail}. Wait for Google's email; then press Test.",
+    "t": "Откройте эту ссылку. Выберите Application for Basic API Access. Вставьте номер проекта. Отправьте заявку от имени {gmail}. Дождитесь письма от Google, затем нажмите «Проверить»."
+  },
+  "account.business.help.branding": {
+    "en": "Open this link. Press Get started. App name: gbp. Support email: {gmail}. Audience: External. Contact email: {gmail}. Press Create.",
+    "t": "Откройте эту ссылку. Нажмите «Get started». Название приложения: gbp. Почта поддержки: {gmail}. Аудитория: External. Контактная почта: {gmail}. Нажмите «Create»."
+  },
+  "account.business.help.client": {
+    "en": "Open this link. Press Create client. Type: Web application. Under Authorized redirect URIs press Add URI and paste:",
+    "t": "Откройте эту ссылку. Нажмите «Create client». Тип: Web application. В разделе Authorized redirect URIs нажмите «Add URI» и вставьте:"
+  },
+  "account.business.help.clientCreate": {
+    "en": "Press Create.",
+    "t": "Нажмите «Create»."
+  },
+  "account.business.help.enableAccounts": {
+    "en": "Open this link. Press Enable.",
+    "t": "Откройте эту ссылку. Нажмите «Enable»."
+  },
+  "account.business.help.enableInfo": {
+    "en": "Open this link. Press Enable.",
+    "t": "Откройте эту ссылку. Нажмите «Enable»."
+  },
+  "account.business.help.grant": {
+    "en": "Press Grant as {gmail}. Pick {gmail}. Tick every box. Press Continue.",
+    "t": "Нажмите «Разрешить как {gmail}». Выберите {gmail}. Отметьте все флажки. Нажмите «Продолжить»."
+  },
+  "account.business.help.number": {
+    "en": "Open this link. Copy Project number.",
+    "t": "Откройте эту ссылку. Скопируйте Project number."
+  },
+  "account.business.help.paste": {
+    "en": "Copy Client ID and Client secret from the window Google shows into the form above. Press Connect.",
+    "t": "Скопируйте Client ID и Client secret из окна Google в форму выше. Нажмите «Подключить»."
+  },
+  "account.business.help.project": {
+    "en": "Open this link. Name: gbp. Press Create.",
+    "t": "Откройте эту ссылку. Название: gbp. Нажмите «Create»."
+  },
+  "account.business.help.signIn": {
+    "en": "In Chrome, sign in to Google as {gmail}.",
+    "t": "В Chrome войдите в Google как {gmail}."
+  },
+  "account.business.help.testUser": {
+    "en": "Open this link. Under Test users press Add users, type {gmail}, press Save.",
+    "t": "Откройте эту ссылку. В разделе Test users нажмите «Add users», введите {gmail}, нажмите «Save»."
+  },
+  "account.business.help.title": {
+    "en": "Business Profile client, step by step",
+    "t": "Клиент Business Profile: пошаговая инструкция"
+  },
+  "account.business.pending": {
+    "en": "Not granted",
+    "t": "Доступ не предоставлен"
+  },
+  "account.business.regrant": {
+    "en": "Grant again",
+    "t": "Разрешить заново"
+  },
+  "account.business.secret": {
+    "en": "Client secret",
+    "t": "Секрет клиента"
+  },
+  "account.business.set": {
+    "en": "Set",
+    "t": "Задан"
+  },
+  "account.business.title": {
+    "en": "Google Business Profile",
+    "t": "Google Business Profile"
+  },
+  "account.business.why": {
+    "en": "Opens this gmail's own GBPs to the Business Profile APIs: categories as configured, owner's photos, reviews. Google answers 0 requests until it approves the project.",
+    "t": "Открывает API Business Profile к собственным GBP этого gmail: категории как настроены, фото владельца, отзывы. Google отвечает на 0 запросов, пока не одобрит проект."
+  },
+  "account.business.works": {
+    "en": "Works",
+    "t": "Работает"
+  },
   "account.cancel": {
     "en": "Cancel",
     "t": "Отмена"
@@ -122,6 +226,14 @@
   "account.gbps": {
     "en": "{n} GBP",
     "t": "{n} GBP"
+  },
+  "account.help.copy": {
+    "en": "Copy",
+    "t": "Копировать"
+  },
+  "account.help.how": {
+    "en": "How to get it",
+    "t": "Как получить"
   },
   "account.imap.appPassword": {
     "en": "App password",
@@ -4123,6 +4235,10 @@
     "en": "name",
     "t": "название"
   },
+  "window.log.field.ownerGmail": {
+    "en": "owner gmail",
+    "t": "gmail владельца"
+  },
   "window.log.field.phone": {
     "en": "phone",
     "t": "телефон"
@@ -4138,6 +4254,10 @@
   "window.log.field.point": {
     "en": "point",
     "t": "точка"
+  },
+  "window.log.field.role": {
+    "en": "role",
+    "t": "роль"
   },
   "window.log.field.spots": {
     "en": "spots",
@@ -4323,6 +4443,10 @@
     "en": "what Google does not hold",
     "t": "то, чего нет в Google"
   },
+  "window.profile.ownerGmail": {
+    "en": "Owner gmail",
+    "t": "Gmail владельца"
+  },
   "window.profile.pinByHand": {
     "en": "pin placed by hand",
     "t": "метка поставлена вручную"
@@ -4334,6 +4458,14 @@
   "window.profile.reviews": {
     "en": "Reviews",
     "t": "Отзывы"
+  },
+  "window.profile.role": {
+    "en": "Role of {gmail} on it",
+    "t": "Роль {gmail} в нём"
+  },
+  "window.profile.role.hint": {
+    "en": "{gmail} owns {owned} of usually up to 3 GBPs, manages {managed} of 6",
+    "t": "{gmail} владеет {owned} из обычно максимум 3 GBP, управляет {managed} из 6"
   },
   "window.profile.role.pick": {
     "en": "No role",

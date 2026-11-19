@@ -122,6 +122,9 @@ impl Panel {
 		};
 		eyre::ensure!(row.data_key_fp == self.key.fingerprint(), "an MCP code was sealed under another PANEL_DATA_KEY");
 		let bearer = self.key.open(&bearer_aad(&hash), &row.bearer_sealed)?;
-		Ok(Some((Zeroizing::new(String::from_utf8(bearer.to_vec()).wrap_err("a sealed bearer is not UTF-8")?), granted.approval)))
+		Ok(Some((
+			Zeroizing::new(String::from_utf8(bearer.to_vec()).wrap_err("a sealed bearer is not UTF-8")?),
+			granted.approval,
+		)))
 	}
 }

@@ -22,13 +22,13 @@ use subtle::ConstantTimeEq;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
+pub use crate::store::sessions::Granted;
 use crate::{
 	Panel,
 	live::{Ended, Signal},
 	oauth::Grant,
 	store::sessions::{self, SealedTokens, SessionRow},
 };
-pub use crate::store::sessions::Granted;
 
 /// How long a pre-login lives: the time to sign in at concierge (Google included).
 pub const PRELOGIN_TTL: SignedDuration = SignedDuration::from_mins(10);

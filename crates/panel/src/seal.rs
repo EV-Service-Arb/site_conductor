@@ -1,5 +1,6 @@
 //! Encryption at rest for what the database must not hold in the clear: a source's HMAC secret,
-//! a session's tokens, a queued Telegram message, a gmail's IMAP password, Maps key and proxy.
+//! a session's tokens, a queued Telegram message, a gmail's IMAP password, Maps key, proxy and
+//! Business Profile client and grant.
 //!
 //! XChaCha20-Poly1305 with a random 24-byte nonce per seal, so there is no nonce
 //! bookkeeping to get wrong (the same construction as banking's signer `key_vault`). What a
@@ -19,6 +20,9 @@ use chacha20poly1305::{
 };
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
+
+/// Associated data of a Business Profile consent's `state`.
+pub const BUSINESS_STATE_AAD: &[u8] = b"sa-panel/business-state/v1";
 
 const NONCE_LEN: usize = 24;
 
@@ -134,6 +138,16 @@ pub fn gmail_imap_aad(gmail_id: i64) -> Vec<u8> {
 /// Associated data of a gmail's Maps key.
 pub fn gmail_maps_key_aad(gmail_id: i64) -> Vec<u8> {
 	[b"sa-panel/gmail-maps-key/v1/".as_slice(), &gmail_id.to_be_bytes()].concat()
+}
+
+/// Associated data of a gmail's Business Profile OAuth client secret.
+pub fn gmail_business_secret_aad(gmail_id: i64) -> Vec<u8> {
+	[b"sa-panel/gmail-business-secret/v1/".as_slice(), &gmail_id.to_be_bytes()].concat()
+}
+
+/// Associated data of a gmail's Business Profile refresh token.
+pub fn gmail_business_grant_aad(gmail_id: i64) -> Vec<u8> {
+	[b"sa-panel/gmail-business-grant/v1/".as_slice(), &gmail_id.to_be_bytes()].concat()
 }
 
 /// Associated data of a person's own Claude token.
