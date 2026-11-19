@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["dom", "dom.iterable", "ES2023"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "ES2023"
+    ],
     "allowJs": false,
     "skipLibCheck": true,
     "strict": true,
@@ -16,9 +20,36 @@
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "incremental": false,
-    "plugins": [{ "name": "next" }],
-    "paths": { "@/*": ["./src/*"], "@config": ["./panel.config.ts"] }
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@config": [
+        "./panel.config.ts"
+      ]
+    }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", ".next/dev/types/**/*.ts", ".next/port-*/types/**/*.ts", ".next/port-*/dev/types/**/*.ts"],
-  "exclude": ["node_modules", "out", "tests/e2e"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    ".next/port-*/types/**/*.ts",
+    ".next/port-*/dev/types/**/*.ts",
+    ".next/port-52807/types/**/*.ts",
+    ".next/port-52807/dev/types/**/*.ts",
+    ".next/port-52880/types/**/*.ts",
+    ".next/port-52880/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "out",
+    "tests/e2e"
+  ]
 }

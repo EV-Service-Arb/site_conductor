@@ -15,7 +15,8 @@
 #                                          a peer started unless it already serves, a conductor already
 #                                          serving stopped and replaced; the conductor on n
 #   nix run .#dev -- --fixed [<rev>]       the same unwatched, the conductor as this checkout is now, or at <rev>;
-#                                          beside the watched one, on the first free pair down from SA_PORT_RANGE's top
+#                                          beside the watched one, on the first free pair down from SA_PORT_RANGE's top;
+#                                          opened in a Chrome window of its own, whose closing stops the run
 #
 # The conductor and its front end come from `nix build .#bin` / `.#frontend` of this checkout,
 # unless PANEL_BIN / PANEL_WEB_DIR name others (PANEL_BIN=target/debug/panel for a cargo build);
@@ -119,6 +120,7 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [-
   --fixed [<rev>]: nothing watched; the conductor and its static front end built once from a copy of this checkout
   as it is now, or at <rev> (a commit, a tag), into this checkout's build dir: only what differs compiles. Without --port,
   on the first free pair down from SA_PORT_RANGE's top, beside a watched dev and other --fixed runs, never replacing them.
+  Opened in a Chrome window of its own (google-chrome-stable, its profile in the state): closing it stops the run.
 EOF
 		exit 0
 		;;
@@ -144,6 +146,10 @@ if [ "$fixed" = 1 ]; then
 	[ "$dev" = 1 ] || {
 		echo "--fixed is dev's" >&2
 		exit 2
+	}
+	command -v google-chrome-stable >/dev/null || {
+		echo "--fixed opens the conductor in google-chrome-stable: not on PATH" >&2
+		exit 1
 	}
 	watch=0
 fi
@@ -1089,6 +1095,16 @@ if [ "$sites" = 1 ]; then
 	done
 fi
 
+# --fixed: a browser of its own profile, so its last tab closed ends its process, and this run with it; extensions and
+# background mode would keep it alive past that
+browser_pid=""
+if [ "$fixed" = 1 ]; then
+	google-chrome-stable --user-data-dir="$state/browser" --no-first-run --no-default-browser-check \
+		--disable-extensions --disable-background-mode --new-window "$public_origin" >"$state/logs/browser.log" 2>&1 &
+	browser_pid=$!
+	essential+=("$browser_pid")
+fi
+
 {
 	echo
 	echo "────────────────────────────────────────────────────────────────────────"
@@ -1109,7 +1125,7 @@ fi
 	echo " state    $state   (--reset wipes it)   logs $state/logs/"
 	[ "$watch" = 1 ] && echo " watch    every part is rebuilt and restarted as its checkout is edited"
 	[ "$fixed" = 1 ] && echo " fixed    the conductor at $fixed_at, from $src: nothing is rebuilt"
-	echo " stop     Ctrl-C stops what this run started"
+	echo " stop     Ctrl-C stops what this run started${browser_pid:+, as does closing its browser window}"
 	echo "────────────────────────────────────────────────────────────────────────"
 } >&2
 
@@ -1120,4 +1136,8 @@ running() {
 	for pid in "${essential[@]}"; do kill -0 "$pid" 2>/dev/null || return 1; done
 }
 while running; do sleep 1; done
-say "a part stopped — see $state/logs/"
+if [ -n "${browser_pid:-}" ] && ! kill -0 "$browser_pid" 2>/dev/null; then
+	say "its browser window closed"
+else
+	say "a part stopped — see $state/logs/"
+fi
