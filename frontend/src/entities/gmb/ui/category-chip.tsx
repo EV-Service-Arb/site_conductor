@@ -20,7 +20,7 @@ export function CategoryChip({ gmb }: { gmb: Gmb }) {
   return (
     <button
       type="button"
-      onClick={() => openWindow({ kind: "trade", trade: placed.trade.id, country: country ?? null, brand: null })}
+      onClick={() => openWindow({ kind: "trade", trade: placed.trade.id, country: country ?? null })}
       title={t(windowKeys.category.open, "Open its trade")}
       className={cn(
         "shrink-0 rounded-full border px-2 py-0.5 text-xs outline-none hover:bg-hover/50 focus-visible:ring-2 focus-visible:ring-ring",

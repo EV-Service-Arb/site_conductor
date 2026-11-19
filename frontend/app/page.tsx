@@ -64,6 +64,7 @@ function framed(at: Exclude<At, { view: "access" | "kit_qr" }>): ReactNode {
     case "gbp":
     case "gmail":
     case "category":
+    case "brand":
     case "categories":
     case "trash":
     case "adding":

@@ -1,10 +1,10 @@
 "use client";
 
 import { Popover, PopoverContent, PopoverTrigger, Switch, cn } from "@evinvest/uikit";
-import { ArrowUpRight, Check, ChevronDown, ChevronRight, ListFilter, Plug, Settings } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, ChevronRight, ListFilter, Plug, Plus, Settings } from "lucide-react";
 import { type MouseEvent, useEffect, useState } from "react";
 
-import { chooseCategoryScope, chooseGmailScope, covers, inCategories, openWindow, type Pattern, type Selection, under, useScope, useTrades, scopeKeys, gmbs as gmbsKeys } from "@/entities/gmb";
+import { BrandMark, NewBrand, brandKeys, chooseBrandScope, chooseCategoryScope, chooseGmailScope, covers, inCategories, openWindow, type Pattern, type Selection, under, useBrands, useScope, useTrades, scopeKeys, gmbs as gmbsKeys } from "@/entities/gmb";
 import { AddGmailButton } from "@/features/add-gmail";
 import { AddGmbButton } from "@/features/add-gmb";
 import { api, ok } from "@/shared/api";
@@ -23,7 +23,7 @@ const META = "font-normal tracking-normal normal-case";
 /**
  * What the outline is scoped to, one picker over three facets that narrow each other's counts: the categories as a matrix of
  * trades by country (a cell a category, a row header the trade everywhere, a column header the country across trades), then the
- * managing gmails. A gmail toggles among the filters (or, after a move, all its GBPs), a GBP opened under it toggles alone.
+ * managing gmails, then the brands under both. A gmail toggles among the filters (or, after a move, all its GBPs), a GBP opened under it toggles alone.
  */
 export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmails; selection: Selection; onFlip: (gmbs: Gmb[], enabled: boolean) => Promise<void>; onChanged: () => void }) {
   const t = useT();
@@ -33,7 +33,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
   const [opened, setOpened] = useState<ReadonlySet<number>>(new Set());
   const openSettings = (trade: number, country: Country | undefined) => {
     setOpen(false);
-    openWindow({ kind: "trade", trade, country: country ?? null, brand: null });
+    openWindow({ kind: "trade", trade, country: country ?? null });
   };
   const { scoped, chosen, edited, isSelected, move } = selection;
   const { gmails } = data;
@@ -67,10 +67,15 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
     return [trade, p.country === "*" ? null : p.country].filter(Boolean).join(" · ");
   };
   const holding = gmails.filter((g) => under(data, g.id).some(byCategory));
+  const brands = useBrands();
+  const brandName = (id: number) => (brands.status === "ok" ? brands.data.find((b) => b.id === id)?.name : undefined) ?? "…";
   const summary = [
     scope.categories === null ? t(scopeKeys.categories.all, "All categories") : scope.categories.length === 1 ? name(scope.categories[0]!) : t(scopeKeys.categories.many, "{n} categories", { n: scope.categories.length }),
     scoped.length === 1 ? scoped[0]!.gmail : scoped.length === 0 && holding.length === 1 ? holding[0]!.gmail : t(gmbsKeys.scope.many, "{n} gmails", { n: scoped.length === 0 ? holding.length : scoped.length }),
-  ].join(" · ");
+    scope.brands === null ? null : scope.brands.size === 1 ? brandName([...scope.brands][0]!) : t(brandKeys.scope.many, "{n} brands", { n: scope.brands.size }),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -184,6 +189,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
             );
           })}
         </ul>
+        <Brands data={data} onOpened={() => setOpen(false)} />
         <div className="flex items-center gap-1 border-t border-border pt-1">
           <AddGmailButton onAdded={onChanged} />
           <span className="text-xs text-ink-soft">{t(scopeKeys.everyApp, "scope applies in every app")}</span>
@@ -340,4 +346,106 @@ function OpenAccount({ gmail, onOpened }: { gmail: Gmail; onOpened: () => void }
 function Room({ n }: { n: number }) {
   const t = useT();
   return <span className="block truncate text-xs text-ink-soft tabular-nums">{t(account.gbps, "{n} GBP", { n })}</span>;
+}
+
+/**
+ * The brands under the gmails and categories picked: a brand is one gmail's in one category, so a new one needs exactly one of
+ * each picked. A brand toggles in the scope; its arrow opens it.
+ */
+function Brands({ data, onOpened }: { data: Gmails; onOpened: () => void }) {
+  const t = useT();
+  const scope = useScope();
+  const brands = useBrands();
+  const trades = useTrades();
+  const [adding, setAdding] = useState(false);
+  const known = brands.status === "ok" ? brands.data : null;
+
+  // a scoped brand removed, here or in another tab: out of the scope
+  useEffect(() => {
+    if (known !== null && scope.brands !== null && [...scope.brands].some((id) => !known.some((b) => b.id === id))) chooseBrandScope([...scope.brands].filter((id) => known.some((b) => b.id === id)));
+  }, [known, scope.brands]);
+
+  if (known === null) return null;
+  const shown = known.filter((b) => (scope.gmails === null || scope.gmails.has(b.gmail_id)) && (scope.categories === null || scope.categories.some((p) => covers(p, b.trade_id, b.country))));
+  const gmail = scope.gmails?.size === 1 ? [...scope.gmails][0]! : null;
+  const one = scope.categories?.length === 1 ? scope.categories[0]! : null;
+  const category = one !== null && one.trade !== "*" && one.country !== "*" ? { trade: one.trade, country: one.country } : null;
+  const tradeName = (id: number) => (trades.status === "ok" ? trades.data.find((tr) => tr.id === id)?.name : undefined) ?? "…";
+  const gmailName = (id: number) => data.gmails.find((g) => g.id === id)?.gmail ?? "…";
+  const toggle = (id: number) => {
+    const next = new Set(scope.brands ?? []);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    chooseBrandScope(next);
+  };
+  return (
+    <>
+      <div className={cn(HEADING, "mt-1 border-t border-border pt-2")}>
+        {t(brandKeys.scope, "Brands")}
+        <span className="flex-1" />
+        <span className={META}>{t(brandKeys.scope.what, "one gmail's, in one category")}</span>
+      </div>
+      {shown.length > 0 && (
+        <button type="button" onClick={() => chooseBrandScope(null)} aria-pressed={scope.brands === null} className={cn(ROW, "w-full py-1.5 pl-2", scope.brands === null && PICKED)}>
+          <span className="flex-1 text-left">{t(brandKeys.scope.all, "Any brand, or none")}</span>
+        </button>
+      )}
+      <ul className="flex flex-col">
+        {shown.map((b) => {
+          const picked = scope.brands?.has(b.id) === true;
+          return (
+            <li key={b.id} className={cn(ROW, picked && PICKED)}>
+              <button type="button" onClick={() => toggle(b.id)} aria-pressed={picked} className="flex min-w-0 flex-1 items-center gap-2 py-1 pl-1 text-left">
+                <BrandMark brand={b} className="size-5 text-xs" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-ink">{b.name}</span>
+                  <span className="block truncate text-xs text-ink-soft">{[gmailName(b.gmail_id), `${tradeName(b.trade_id)} · ${b.country}`].join(" · ")}</span>
+                </span>
+              </button>
+              <span className={cn("flex items-center", ON_HOVER)}>
+                <button
+                  type="button"
+                  aria-label={t(brandKeys.open, "Open {brand}", { brand: b.name })}
+                  title={t(brandKeys.open, "Open {brand}", { brand: b.name })}
+                  onClick={() => {
+                    onOpened();
+                    openWindow({ kind: "brand", brand: b.id });
+                  }}
+                  className="rounded p-1 text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ArrowUpRight aria-hidden className="size-3.5" />
+                </button>
+              </span>
+              <span className="text-xs text-ink-soft tabular-nums">{b.gmbs}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {gmail !== null && category !== null ? (
+        adding ? (
+          <div className="px-1 py-1">
+            <NewBrand
+              gmail={gmail}
+              trade={category.trade}
+              country={category.country}
+              onDone={(added) => {
+                setAdding(false);
+                if (added !== null) {
+                  onOpened();
+                  openWindow({ kind: "brand", brand: added.id });
+                }
+              }}
+            />
+          </div>
+        ) : (
+          <button type="button" onClick={() => setAdding(true)} className={cn(ROW, "w-full gap-1.5 py-1.5 pl-2 text-ink-soft hover:text-ink")}>
+            <Plus aria-hidden className="size-3.5" />
+            {t(brandKeys.add.under, "Brand under {gmail} · {category}", { gmail: gmailName(gmail), category: `${tradeName(category.trade)} · ${category.country}` })}
+          </button>
+        )
+      ) : (
+        <p className="px-2 py-1 text-xs text-ink-soft">{t(brandKeys.add.how, "Pick one gmail and one category to add a brand under them")}</p>
+      )}
+    </>
+  );
 }

@@ -44,7 +44,7 @@ export function RankingTab({ listed: { gmb } }: { listed: Listed }) {
           {placed?.status === "not_set_up" && (
             <p className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
               {t(windowKeys.ranking.notSetUp, "{category} is not set up: it has no keywords.", { category: categoryName(placed.trade, placed.country) })}
-              <Button variant="outline" size={button("sm")} onClick={() => openWindow({ kind: "trade", trade: placed.trade.id, country: placed.country, brand: null })}>
+              <Button variant="outline" size={button("sm")} onClick={() => openWindow({ kind: "trade", trade: placed.trade.id, country: placed.country })}>
                 {t(windowKeys.ranking.setUp, "Set it up")}
               </Button>
             </p>

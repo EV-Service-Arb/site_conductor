@@ -15,7 +15,8 @@ export type Adding = NonNullable<Home["add"]>;
 export type WinKey =
   | { kind: "gbp"; gmb: number; tab: Tab }
   | { kind: "account"; gmail: number; tab: Tab }
-  | { kind: "trade"; trade: number; country: Country | null; brand: number | null }
+  | { kind: "trade"; trade: number; country: Country | null }
+  | { kind: "brand"; brand: number }
   | { kind: "categories" }
   | { kind: "trash" }
   | { kind: "add"; at: Adding }
@@ -31,7 +32,7 @@ interface Route<K extends Kind> {
   toHome(k: KeyOf<K>): { [P in keyof Home]?: Home[P] | undefined };
   page(k: KeyOf<K>): At;
   fromPage(at: At): KeyOf<K> | null;
-  /** Its entry in the open set: one per GBP, gmail, trade, kit. */
+  /** Its entry in the open set: one per GBP, gmail, trade, brand, kit. */
   subject(k: KeyOf<K>): string;
 }
 
@@ -66,19 +67,18 @@ export const WINDOWS = {
     subject: (k) => `account:${k.gmail}`,
   },
   trade: {
-    fromHome: (h) => {
-      if (h.trade === undefined) return null;
-      if (h.brand !== undefined && h.country === undefined) throw new Error(`?brand=${h.brand}: its page sits under a country's tab`);
-      return { kind: "trade", trade: h.trade, country: h.country ?? null, brand: h.brand ?? null };
-    },
-    toHome: (k) => ({ trade: k.trade, country: k.country ?? undefined, brand: k.brand ?? undefined }),
-    page: (k) => ({ view: "category", params: { trade: k.trade, ...(k.country !== null && { country: k.country }), ...(k.brand !== null && { brand: k.brand }) } }),
-    fromPage: (at) => {
-      if (at.view !== "category") return null;
-      if (at.params.brand !== undefined && at.params.country === undefined) throw new Error(`?brand=${at.params.brand}: its page sits under a country's tab`);
-      return { kind: "trade", trade: at.params.trade, country: at.params.country ?? null, brand: at.params.brand ?? null };
-    },
+    fromHome: (h) => (h.trade === undefined ? null : { kind: "trade", trade: h.trade, country: h.country ?? null }),
+    toHome: (k) => ({ trade: k.trade, country: k.country ?? undefined }),
+    page: (k) => ({ view: "category", params: { trade: k.trade, ...(k.country !== null && { country: k.country }) } }),
+    fromPage: (at) => (at.view === "category" ? { kind: "trade", trade: at.params.trade, country: at.params.country ?? null } : null),
     subject: (k) => `trade:${k.trade}`,
+  },
+  brand: {
+    fromHome: (h) => (h.brand === undefined ? null : { kind: "brand", brand: h.brand }),
+    toHome: (k) => ({ brand: k.brand }),
+    page: (k) => ({ view: "brand", params: { brand: k.brand } }),
+    fromPage: (at) => (at.view === "brand" ? { kind: "brand", brand: at.params.brand } : null),
+    subject: (k) => `brand:${k.brand}`,
   },
   categories: {
     fromHome: (h) => (h.categories === true ? { kind: "categories" } : null),

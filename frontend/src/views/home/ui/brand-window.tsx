@@ -1,10 +1,10 @@
 "use client";
 
 import { Button, ConfirmDialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, cn, toast } from "@evinvest/uikit";
-import { Ellipsis, ImagePlus, ListFilter, MapPin, Plus, Tag, Trash2, Upload as UploadIcon } from "lucide-react";
+import { Ellipsis, ImagePlus, ListFilter, Mail, MapPin, Plus, Tag, Trash2, Upload as UploadIcon } from "lucide-react";
 import { useState } from "react";
 
-import { brandKeys, chooseCategoryScope, chooseGmailScope, kit, logoSrc, move, openWindow, photoMax, photoSrc, scopeKeys, trades as tradesKeys, uploadLogo, uploadPhoto, useBrands, useGmails, useGmbTags } from "@/entities/gmb";
+import { BrandMark, brandKeys, chooseBrandScope, closeWindow, kit, useSites, move, openWindow, photoMax, photoSrc, trades as tradesKeys, uploadLogo, uploadPhoto, useBrands, useGmails } from "@/entities/gmb";
 import { Refused, api, ok } from "@/shared/api";
 import type { Brand, Gmail, Gmb, KitPhoto, Trade } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
@@ -17,21 +17,7 @@ const SECTION = "flex flex-col gap-2";
 const SECTION_HEAD = "flex items-baseline gap-2 text-xs font-semibold tracking-wide text-ink-soft uppercase";
 const HINT = "font-normal tracking-normal normal-case";
 
-/** A brand's logo, or its initial while it has none. */
-export function BrandMark({ brand, className }: { brand: Brand; className?: string }) {
-  if (brand.logo !== null)
-    // eslint-disable-next-line @next/next/no-img-element -- the API's own PNG, behind the session
-    return <img src={logoSrc(brand.id, brand.logo)} alt="" className={cn("size-6 shrink-0 rounded-md object-contain", className)} />;
-  return <span className={cn("flex size-6 shrink-0 items-center justify-center rounded-md bg-accent-info font-semibold text-white", className)}>{brand.name.slice(0, 1).toUpperCase()}</span>;
-}
-
-/** The sites the caller's GBPs' pages are on, as sites' places name them: what a brand's site is picked from. */
-export function useSites(): string[] {
-  const { sites } = useGmbTags();
-  return sites.status === "ok" ? [...new Set(Object.values(sites.data).map((p) => p.brand))].sort() : [];
-}
-
-/** A brand's page (09h), under its category's tab: what every GBP of it shares, its photos, its GBPs. */
+/** A brand's window: what every GBP of it shares, its photos, its GBPs; it sits under one gmail and one category. */
 export function BrandWindow({ trade, brand, gmbs, gmails }: { trade: Trade; brand: Brand; gmbs: readonly Gmb[]; gmails: readonly Gmail[] }) {
   const t = useT();
   const button = useButtonSize();
@@ -44,27 +30,24 @@ export function BrandWindow({ trade, brand, gmbs, gmails }: { trade: Trade; bran
       <header className="flex items-start gap-3 px-6 pt-4">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <h2 className="flex min-w-0 items-center gap-2 text-lg font-semibold text-ink">
-            <Tag aria-hidden className="size-4 shrink-0 text-ink-soft" />
-            <button type="button" onClick={() => openWindow({ kind: "categories" })} className="shrink-0 rounded font-medium text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
-              {t(scopeKeys.categories, "Categories")}
-            </button>
-            <span aria-hidden className="text-ink-soft/60">/</span>
-            <button type="button" onClick={() => openWindow({ kind: "trade", trade: trade.id, country: brand.country, brand: null })} className="shrink-0 rounded font-medium text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
-              {category}
-            </button>
-            <span aria-hidden className="text-ink-soft/60">/</span>
+            <BrandMark brand={brand} />
             <span className="truncate">{brand.name}</span>
           </h2>
-          <p className="text-sm text-ink-soft tabular-nums">{t(brandKeys.counts, "{gmail} · {gbps} GBPs", { gmail: gmail?.gmail ?? "", gbps: held.length })}</p>
+          <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-ink-soft tabular-nums">
+            <button type="button" onClick={() => openWindow({ kind: "account", gmail: brand.gmail_id, tab: "connections" })} className="flex items-center gap-1 rounded outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+              <Mail aria-hidden className="size-3.5" />
+              {gmail?.gmail}
+            </button>
+            <span aria-hidden>·</span>
+            <button type="button" onClick={() => openWindow({ kind: "trade", trade: trade.id, country: brand.country })} className="flex items-center gap-1 rounded outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+              <Tag aria-hidden className="size-3.5" />
+              {category}
+            </button>
+            <span aria-hidden>·</span>
+            {t(brandKeys.gbpsCount, "{gbps} GBPs", { gbps: held.length })}
+          </p>
         </div>
-        <Button
-          variant="outline"
-          size={button("sm")}
-          onClick={() => {
-            chooseCategoryScope([{ trade: trade.id, country: brand.country }]);
-            chooseGmailScope([brand.gmail_id]);
-          }}
-        >
+        <Button variant="outline" size={button("sm")} onClick={() => chooseBrandScope([brand.id])}>
           <ListFilter aria-hidden />
           {t(tradesKeys.window.scope, "Scope the outline to it")}
         </Button>
@@ -134,7 +117,7 @@ function More({ brand }: { brand: Brand }) {
         labels={{ cancel: t(move.cancel, "Cancel") }}
         onConfirm={async () => {
           await ok(api.DELETE("/brands/{id}", { params: { path: { id: brand.id } } }));
-          openWindow({ kind: "trade", trade: brand.trade_id, country: brand.country, brand: null });
+          closeWindow({ kind: "brand", brand: brand.id });
           brands.reload();
         }}
       />

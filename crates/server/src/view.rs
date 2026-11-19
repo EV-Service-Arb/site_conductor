@@ -22,7 +22,7 @@ pub enum View {
 		/// The trade whose window is open, on `country`'s tab.
 		trade: Option<i64>,
 		country: Option<Country>,
-		/// The brand whose page is open, under `trade` · `country`.
+		/// The brand whose window is open.
 		brand: Option<i64>,
 		/// The gmail whose window is open.
 		account: Option<i64>,
@@ -126,9 +126,12 @@ pub enum View {
 	/// Every trade by country, as a page.
 	#[view("/categories")]
 	Categories,
-	/// A trade's window as its own page, on `country`'s tab; `brand`, a brand's under it.
+	/// A trade's window as its own page, on `country`'s tab.
 	#[view("/category/{trade}")]
-	Category { trade: i64, country: Option<Country>, brand: Option<i64> },
+	Category { trade: i64, country: Option<Country> },
+	/// A brand's window as its own page.
+	#[view("/brand/{brand}")]
+	Brand { brand: i64 },
 	/// What the caller removed, as a page.
 	#[view("/trash")]
 	Trash,
@@ -152,6 +155,8 @@ pub struct Outline {
 	gmail: Option<Vec<i64>>,
 	/// The categories in scope: `<trade id|*>.<country|*>`.
 	category: Option<Vec<String>>,
+	/// The brands in scope.
+	brands: Option<Vec<i64>>,
 	/// What the outline's list is filtered by.
 	find: Option<String>,
 	/// The GBPs needing this, first.

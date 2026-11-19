@@ -345,7 +345,7 @@ function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: 
         {t(launch.category.in, "in {country} →", { country: region(country) })}
         <CategoryChip gmb={gmb} />
         {lacking !== null && (
-          <Button variant={placed.status === "not_set_up" ? "primary" : "outline"} size={button("sm")} onClick={() => openWindow({ kind: "trade", trade: placed.trade.id, country, brand: null })}>
+          <Button variant={placed.status === "not_set_up" ? "primary" : "outline"} size={button("sm")} onClick={() => openWindow({ kind: "trade", trade: placed.trade.id, country })}>
             {(placed.status === "not_set_up" ? t(launch.category.setUp, "Set up {category}", { category: name }) : t(launch.category.open, "Open {category}", { category: name }))}
           </Button>
         )}

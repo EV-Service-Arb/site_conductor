@@ -1191,17 +1191,17 @@
     "en": "Worked for {time}",
     "t": "Работал {time}"
   },
-  "brand.add": {
-    "en": "Brand",
-    "t": "Бренд"
+  "brand.add.how": {
+    "en": "Pick one gmail and one category to add a brand under them",
+    "t": "Выберите один gmail и одну категорию, чтобы добавить под ними бренд"
+  },
+  "brand.add.under": {
+    "en": "Brand under {gmail} · {category}",
+    "t": "Бренд для {gmail} · {category}"
   },
   "brand.brandless": {
     "en": "{gbp} is {gmail}'s and {category}, without a brand",
     "t": "{gbp} — {category} у {gmail}, без бренда"
-  },
-  "brand.counts": {
-    "en": "{gmail} · {gbps} GBPs",
-    "t": "{gmail} · {gbps} GBP"
   },
   "brand.gbps": {
     "en": "GBPs",
@@ -1214,6 +1214,10 @@
   "brand.gbps.whose": {
     "en": "{gmail}'s {category} GBPs",
     "t": "GBP {category} у {gmail}"
+  },
+  "brand.gbpsCount": {
+    "en": "{gbps} GBPs",
+    "t": "GBP: {gbps}"
   },
   "brand.give": {
     "en": "Give it {brand}",
@@ -1267,6 +1271,10 @@
     "en": "its site: aquafix",
     "t": "его сайт: aquafix"
   },
+  "brand.open": {
+    "en": "Open {brand}",
+    "t": "Открыть {brand}"
+  },
   "brand.photos.order": {
     "en": "least used first · a GBP gets each at most once",
     "t": "сначала наименее используемые · каждое фото достаётся GBP не более одного раза"
@@ -1295,9 +1303,21 @@
     "en": "{n} GBPs hold it: give them another first",
     "t": "{n} GBP используют его: сначала назначьте им другой"
   },
-  "brand.row": {
-    "en": "{gbps} GBPs · {photos} photos",
-    "t": "{gbps} GBP · {photos} фото"
+  "brand.scope": {
+    "en": "Brands",
+    "t": "Бренды"
+  },
+  "brand.scope.all": {
+    "en": "Any brand, or none",
+    "t": "Любой бренд или без бренда"
+  },
+  "brand.scope.many": {
+    "en": "{n} brands",
+    "t": "Брендов: {n}"
+  },
+  "brand.scope.what": {
+    "en": "one gmail's, in one category",
+    "t": "одного gmail, в одной категории"
   },
   "brand.site": {
     "en": "Site",
@@ -2174,6 +2194,10 @@
   "keys.assistant": {
     "en": "Assistant: show or hide",
     "t": "Ассистент: показать или скрыть"
+  },
+  "keys.floatie": {
+    "en": "Window: over the page or its own page",
+    "t": "Окно: над страницей или на отдельной странице"
   },
   "keys.go": {
     "en": "Go to",
@@ -3807,21 +3831,17 @@
     "en": "Off Google's own list. Every {category} draft's Launch tab shows them to type in.",
     "t": "Из списка самого Google. Вкладка запуска каждого черновика {category} показывает их для ввода."
   },
-  "trades.heldBy.brandless": {
-    "en": "{n} without a brand",
-    "t": "{n} без бренда"
-  },
-  "trades.heldBy.brands": {
-    "en": "Gmails · Brands",
-    "t": "Gmail-аккаунты · Бренды"
-  },
-  "trades.heldBy.brands.what": {
-    "en": "a brand is one gmail's, in one category · logo, name, site, photos",
-    "t": "бренд принадлежит одному gmail-аккаунту, в одной категории · логотип, название, сайт, фото"
+  "trades.heldBy": {
+    "en": "Held by",
+    "t": "Принадлежит"
   },
   "trades.heldBy.none": {
     "en": "No GBP holds it yet.",
     "t": "Ни один GBP её пока не держит."
+  },
+  "trades.heldBy.what": {
+    "en": "one category, several gmails · click narrows the outline",
+    "t": "одна категория, несколько gmail · клик сужает контур"
   },
   "trades.keywords": {
     "en": "Keywords",
@@ -4491,10 +4511,6 @@
     "en": "{n} of {of} ready",
     "t": "{n} из {of} готово"
   },
-  "window.flip": {
-    "en": "Window: over the map or its own page",
-    "t": "Окно: поверх карты или на отдельной странице"
-  },
   "window.header.email": {
     "en": "Google: {subject} · {ago}",
     "t": "Google: {subject} · {ago}"
@@ -4786,6 +4802,14 @@
   "window.profile.kit": {
     "en": "Review kit",
     "t": "Набор для отзывов"
+  },
+  "window.profile.newBrand": {
+    "en": "New brand…",
+    "t": "Новый бренд…"
+  },
+  "window.profile.noBrand": {
+    "en": "No brand: no logo, no kit photos",
+    "t": "Без бренда: ни логотипа, ни фото комплектов"
   },
   "window.profile.noGmail": {
     "en": "No gmail yet",

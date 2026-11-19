@@ -62,7 +62,7 @@ describe("the outline's GMBs", () => {
       [null, "part-dieu", [30]],
       [new Set([1]), "same day", []],
     ] as const) {
-      expect(ids(narrowed(gmails, scope && { gmails: scope, categories: null }, filter)), `${scope && [...scope]} ${filter}`).toEqual(want);
+      expect(ids(narrowed(gmails, scope && { gmails: scope, categories: null, brands: null }, filter)), `${scope && [...scope]} ${filter}`).toEqual(want);
     }
   });
 
@@ -74,7 +74,7 @@ describe("the outline's GMBs", () => {
       [[{ trade: 1, country: "FR" }, { trade: 2, country: "FR" }, { trade: 1, country: "US" }], null, [10, 11, 20]],
       [[{ trade: 1, country: "*" }], new Set([2]), [20]],
     ] as const) {
-      expect(ids(narrowed(gmails, { gmails: scope, categories }, "")), JSON.stringify(categories)).toEqual(want);
+      expect(ids(narrowed(gmails, { gmails: scope, categories, brands: null }, "")), JSON.stringify(categories)).toEqual(want);
     }
   });
 

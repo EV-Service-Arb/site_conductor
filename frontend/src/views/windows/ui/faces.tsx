@@ -2,10 +2,10 @@
 
 import { useResource } from "@evinvest/api/react";
 import { Skeleton } from "@evinvest/uikit";
-import { type LucideIcon, Mail, MapPin, Plus, QrCode, Tag, Trash2 } from "lucide-react";
+import { type LucideIcon, Mail, MapPin, Plus, QrCode, Store, Tag, Trash2 } from "lucide-react";
 import { type ComponentType, useEffect } from "react";
 
-import { type KeyOf, type Kind, type WinKey, closeWindow, gmbs as gmbsKeys, kit as kitKeys, narrowed, openWindow, scopeKeys, trash as trashKeys, under, useBrands, useGmails, useTrades, useTrash } from "@/entities/gmb";
+import { type KeyOf, type Kind, type WinKey, closeWindow, gmbs as gmbsKeys, kit as kitKeys, narrowed, scopeKeys, trash as trashKeys, under, useBrands, useGmails, useTrades, useTrash } from "@/entities/gmb";
 import { AddPanel } from "@/features/add-gmb";
 import { api } from "@/shared/api";
 import { type T, useT } from "@/shared/i18n";
@@ -43,22 +43,30 @@ function AccountBody({ k }: { k: KeyOf<"account"> }) {
 function TradeBody({ k }: { k: KeyOf<"trade"> }) {
   const gmails = useGmails();
   const trades = useTrades();
-  const brands = useBrands();
   const trade = trades.status === "ok" ? (trades.data.find((tr) => tr.id === k.trade) ?? null) : undefined;
-  const brand = k.brand === null ? null : brands.status === "ok" ? (brands.data.find((b) => b.id === k.brand) ?? null) : undefined;
   // deleted, here or in another tab
   useEffect(() => {
     if (trade === null) closeWindow(k);
   }, [trade, k]);
-  // a brand removed: its category's tab
-  const brandGone = k.brand !== null && brand === null;
-  useEffect(() => {
-    if (brandGone) openWindow({ ...k, brand: null });
-  }, [brandGone, k]);
-  if (gmails.status !== "ok" || trade === undefined || brand === undefined) return <Loading />;
-  if (trade === null || brandGone) return null;
-  if (brand !== null) return <BrandWindow trade={trade} brand={brand} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />;
+  if (gmails.status !== "ok" || trade === undefined) return <Loading />;
+  if (trade === null) return null;
   return <TradeWindow trade={trade} country={k.country} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />;
+}
+
+function BrandBody({ k }: { k: KeyOf<"brand"> }) {
+  const gmails = useGmails();
+  const trades = useTrades();
+  const brands = useBrands();
+  const brand = brands.status === "ok" ? (brands.data.find((b) => b.id === k.brand) ?? null) : undefined;
+  // removed, here or in another tab
+  useEffect(() => {
+    if (brand === null) closeWindow(k);
+  }, [brand, k]);
+  if (gmails.status !== "ok" || trades.status !== "ok" || brand === undefined) return <Loading />;
+  if (brand === null) return null;
+  const trade = trades.data.find((tr) => tr.id === brand.trade_id);
+  if (trade === undefined) throw new Error(`brand ${brand.id}'s trade ${brand.trade_id} is not read: a trade holding a live brand is not deleted`);
+  return <BrandWindow trade={trade} brand={brand} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />;
 }
 
 function CategoriesBody() {
@@ -96,6 +104,14 @@ export const FACES = {
       return <Named text={useWindowLabel()(k)} />;
     },
     Body: TradeBody,
+  },
+  brand: {
+    icon: Store,
+    width: 768,
+    Title: function BrandTitle({ k }) {
+      return <Named text={useWindowLabel()(k)} />;
+    },
+    Body: BrandBody,
   },
   categories: {
     icon: Tag,
@@ -155,11 +171,10 @@ export function useWindowLabel(): (k: WinKey) => string {
       }
       case "account":
         return (gmails.status === "ok" ? gmails.data.gmails.find((g) => g.id === k.gmail)?.gmail : undefined) ?? `gmail ${k.gmail}`;
-      case "trade": {
-        const trade = trades.status === "ok" ? trades.data.find((tr) => tr.id === k.trade)?.name : undefined;
-        const brand = k.brand === null || brands.status !== "ok" ? undefined : brands.data.find((b) => b.id === k.brand)?.name;
-        return brand ?? [trade ?? `trade ${k.trade}`, k.country].filter(Boolean).join(" · ");
-      }
+      case "trade":
+        return [(trades.status === "ok" ? trades.data.find((tr) => tr.id === k.trade)?.name : undefined) ?? `trade ${k.trade}`, k.country].filter(Boolean).join(" · ");
+      case "brand":
+        return (brands.status === "ok" ? brands.data.find((b) => b.id === k.brand)?.name : undefined) ?? `brand ${k.brand}`;
       case "categories":
       case "trash":
       case "add":

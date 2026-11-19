@@ -9,10 +9,11 @@ export interface Pattern {
   country: Country | "*";
 }
 
-/** What the outline is scoped to: the gmails and the category patterns, each `null` for all; a GBP is in when both facets take it. */
+/** What the outline is scoped to: the gmails, the category patterns and the brands, each `null` for all; a GBP is in when every facet takes it. */
 export interface Scope {
   gmails: ReadonlySet<number> | null;
   categories: readonly Pattern[] | null;
+  brands: ReadonlySet<number> | null;
 }
 
 function parsePattern(raw: string): Pattern {
@@ -27,8 +28,8 @@ function parsePattern(raw: string): Pattern {
 export const patternText = (p: Pattern) => `${p.trade}.${p.country}`;
 
 export function useScope(): Scope {
-  const { gmail, category } = useCarried();
-  return { gmails: gmail === undefined ? null : new Set(gmail), categories: category === undefined ? null : category.map(parsePattern) };
+  const { gmail, category, brands } = useCarried();
+  return { gmails: gmail === undefined ? null : new Set(gmail), categories: category === undefined ? null : category.map(parsePattern), brands: brands === undefined ? null : new Set(brands) };
 }
 
 /** Whether `p` takes `trade` in `country` (`null`: none yet, which only a `*` takes). */
@@ -43,12 +44,21 @@ export function inCategories(gmb: Gmb, patterns: readonly Pattern[]): boolean {
 }
 
 export function inScope(gmb: Gmb, scope: Scope): boolean {
-  return (scope.gmails === null || (gmb.gmail_id !== null && scope.gmails.has(gmb.gmail_id))) && (scope.categories === null || inCategories(gmb, scope.categories));
+  return (
+    (scope.gmails === null || (gmb.gmail_id !== null && scope.gmails.has(gmb.gmail_id))) &&
+    (scope.categories === null || inCategories(gmb, scope.categories)) &&
+    (scope.brands === null || (gmb.brand_id !== null && scope.brands.has(gmb.brand_id)))
+  );
 }
 
 export function chooseGmailScope(gmails: Iterable<number> | null): void {
   const ids = gmails === null ? [] : [...gmails].sort((a, b) => a - b);
   setCarried({ gmail: ids.length === 0 ? undefined : ids, gmbs: undefined });
+}
+
+export function chooseBrandScope(brands: Iterable<number> | null): void {
+  const ids = brands === null ? [] : [...new Set(brands)].sort((a, b) => a - b);
+  setCarried({ brands: ids.length === 0 ? undefined : ids, gmbs: undefined });
 }
 
 export function chooseCategoryScope(patterns: readonly Pattern[] | null): void {

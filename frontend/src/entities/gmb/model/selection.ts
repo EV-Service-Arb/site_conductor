@@ -44,7 +44,7 @@ const sorted = (gmbs: Iterable<number>) => [...gmbs].sort((a, b) => a - b);
 
 /** Selects exactly `gmbs` (`null`: every GMB); the filters no longer say what is selected, so they go. */
 export function select(gmbs: Iterable<number> | null): void {
-  setCarried({ gmbs: gmbs === null ? undefined : sorted(gmbs), gmail: undefined, category: undefined, find: undefined, issue: undefined });
+  setCarried({ gmbs: gmbs === null ? undefined : sorted(gmbs), gmail: undefined, category: undefined, brands: undefined, find: undefined, issue: undefined });
 }
 
 /** The selection, and the outline's rows beside it; `null` while the gmails load. */
@@ -64,7 +64,7 @@ export function useSelection(): Selection | null {
     return issue === null ? ISSUES.length : ISSUES.indexOf(issue);
   };
   const rows = narrowed(gmails.data, null, "").sort((a, b) => rank(a) - rank(b));
-  const filtered = scope.gmails !== null || scope.categories !== null || filter.trim() !== "" || only !== null;
+  const filtered = scope.gmails !== null || scope.categories !== null || scope.brands !== null || filter.trim() !== "" || only !== null;
   const chosen = edit ?? (filtered ? new Set(found.filter((l) => only === null || issuesOf(l.gmb, tags).includes(only as Issue)).map((l) => l.gmb.id)) : null);
   const isSelected = (gmb: number) => chosen === null || chosen.has(gmb);
   const move = (gmbs: readonly number[], into: boolean) => {

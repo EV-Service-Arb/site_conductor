@@ -14,6 +14,17 @@ export const VIEWS = {
           "null"
         ]
       },
+      "brands": {
+        "description": "The brands in scope.",
+        "items": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "type": [
+          "array",
+          "null"
+        ]
+      },
       "category": {
         "description": "The categories in scope: `<trade id|*>.<country|*>`.",
         "items": {
@@ -206,6 +217,27 @@ export const VIEWS = {
         "type": "object"
       }
     },
+    "brand": {
+      "path": "/brand/{brand}",
+      "description": "A brand's window as its own page.",
+      "params": {
+        "properties": {
+          "brand": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "brand"
+        ],
+        "type": "object"
+      },
+      "query": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      }
+    },
     "categories": {
       "path": "/categories",
       "description": "Every trade by country, as a page.",
@@ -222,7 +254,7 @@ export const VIEWS = {
     },
     "category": {
       "path": "/category/{trade}",
-      "description": "A trade's window as its own page, on `country`'s tab; `brand`, a brand's under it.",
+      "description": "A trade's window as its own page, on `country`'s tab.",
       "params": {
         "properties": {
           "trade": {
@@ -237,13 +269,6 @@ export const VIEWS = {
       },
       "query": {
         "properties": {
-          "brand": {
-            "format": "int64",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
           "country": {
             "description": "ISO 3166-1 alpha-2, of the countries GBPs are in.",
             "enum": [
@@ -427,7 +452,7 @@ export const VIEWS = {
             ]
           },
           "brand": {
-            "description": "The brand whose page is open, under `trade` · `country`.",
+            "description": "The brand whose window is open.",
             "format": "int64",
             "type": [
               "integer",

@@ -196,7 +196,7 @@ function CategoryButton({ picked }: { picked: { trade: number; country: Country;
   const t = useT();
   const label = picked === null ? t(placementKeys.categories, "Categories: where a study is linked") : t(placementKeys.category, "{category}: keywords, Google's categories, study", { category: picked.label });
   return (
-    <Button variant="ghost" size="sm" icon aria-label={label} title={label} onClick={() => openWindow(picked === null ? { kind: "categories" } : { kind: "trade", trade: picked.trade, country: picked.country, brand: null })}>
+    <Button variant="ghost" size="sm" icon aria-label={label} title={label} onClick={() => openWindow(picked === null ? { kind: "categories" } : { kind: "trade", trade: picked.trade, country: picked.country })}>
       <Settings2 aria-hidden />
     </Button>
   );

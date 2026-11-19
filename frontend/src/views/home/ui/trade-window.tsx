@@ -23,12 +23,12 @@ import {
   buttonVariants,
   cn,
 } from "@evinvest/uikit";
-import { ChevronRight, Ellipsis, ListFilter, Mail, Pencil, Plus, Tag, Trash2, X } from "lucide-react";
+import { Ellipsis, ListFilter, Mail, Pencil, Plus, Tag, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import { brandKeys, chooseCategoryScope, chooseGmailScope, closeWindow, kit, googleName, openWindow, setOnly, useBrands, useTrades, scopeKeys, trades as tradesKeys, gmbs as gmbsKeys, move } from "@/entities/gmb";
+import { chooseCategoryScope, chooseGmailScope, closeWindow, kit, googleName, openWindow, setOnly, useTrades, scopeKeys, trades as tradesKeys, gmbs as gmbsKeys, move } from "@/entities/gmb";
 import { usePlacement } from "@/features/placement-overlay";
-import { type Brand, type Category, type Country, type Gmail, type Gmb, type Trade, countryValues } from "@/shared/api/schema";
+import { type Category, type Country, type Gmail, type Gmb, type Trade, countryValues } from "@/shared/api/schema";
 import { Refused, api, ok } from "@/shared/api";
 import { useLocale, useT, state, placement as placementKeys } from "@/shared/i18n";
 import { useResource } from "@evinvest/api/react";
@@ -36,7 +36,6 @@ import { failureText } from "@/shared/ui/failure-text";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
-import { BrandMark, useSites } from "./brand-window";
 import { GoogleCategories } from "./google-categories";
 import { categories } from "../model/i18n";
 import { KitPool } from "@/views/kit";
@@ -95,7 +94,7 @@ export function TradeWindow({ trade, country: tab, gmbs, gmails }: { trade: Trad
               type="button"
               role="tab"
               aria-selected={c === tab}
-              onClick={() => openWindow({ kind: "trade", trade: trade.id, country: c, brand: null })}
+              onClick={() => openWindow({ kind: "trade", trade: trade.id, country: c })}
               className={cn(
                 "-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 c === tab ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink",
@@ -116,7 +115,7 @@ export function TradeWindow({ trade, country: tab, gmbs, gmails }: { trade: Trad
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {rest.map((c) => (
-                <DropdownMenuItem key={c} onClick={() => openWindow({ kind: "trade", trade: trade.id, country: c, brand: null })}>
+                <DropdownMenuItem key={c} onClick={() => openWindow({ kind: "trade", trade: trade.id, country: c })}>
                   {c}
                 </DropdownMenuItem>
               ))}
@@ -142,7 +141,6 @@ export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; g
   const t = useT();
   const locale = useLocale();
   const button = useButtonSize();
-  const brands = useBrands();
   const [added, setAdded] = useState<readonly Country[]>([]);
   const [renaming, setRenaming] = useState<number | null>(null);
   const traded = gmbs.filter((b) => b.trade_id !== null);
@@ -205,7 +203,7 @@ export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; g
                             type="button"
                             title={t(categories.open, "Open {trade}", { trade: tr.name })}
                             // shortcut: the first country column it is set up in, else the first column; upgrade once a trade has a view of its own
-                            onClick={() => openWindow({ kind: "trade", trade: tr.id, country: countries.find((c) => tr.categories.some((k) => k.country === c)) ?? countries[0] ?? null, brand: null })}
+                            onClick={() => openWindow({ kind: "trade", trade: tr.id, country: countries.find((c) => tr.categories.some((k) => k.country === c)) ?? countries[0] ?? null })}
                             className="-mx-1 flex flex-col rounded px-1 text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <span className="font-medium text-ink">{tr.name}</span>
@@ -220,17 +218,14 @@ export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; g
                         return (
                           <td key={c} className="p-1">
                             {category !== undefined ? (
-                              <button type="button" title={t(scopeKeys.matrix.open, "Open {category}", { category: name })} onClick={() => openWindow({ kind: "trade", trade: tr.id, country: c, brand: null })} className={cn(cell, "hover:bg-hover")}>
+                              <button type="button" title={t(scopeKeys.matrix.open, "Open {category}", { category: name })} onClick={() => openWindow({ kind: "trade", trade: tr.id, country: c })} className={cn(cell, "hover:bg-hover")}>
                                 <span className={cn("font-semibold tabular-nums", n === 0 ? "text-ink-soft" : "text-ink")}>{n}</span>
                                 <span className="max-w-full truncate text-xs text-ink-soft">
-                                  {[
-                                    t(categories.brands, "{n} brands", { n: brands.status === "ok" ? brands.data.filter((b) => b.trade_id === tr.id && b.country === c).length : 0 }),
-                                    t(categories.keywords, "{n} keywords", { n: category.keywords.length }),
-                                    category.google_primary === null ? t(categories.noGoogle, "no Google category") : googleName(category.google_primary, locale)].join(" · ")}
+                                  {[t(categories.keywords, "{n} keywords", { n: category.keywords.length }), category.google_primary === null ? t(categories.noGoogle, "no Google category") : googleName(category.google_primary, locale)].join(" · ")}
                                 </span>
                               </button>
                             ) : n > 0 ? (
-                              <button type="button" title={t(scopeKeys.matrix.notSetUp, "{category}: GBPs there, not set up", { category: name })} onClick={() => openWindow({ kind: "trade", trade: tr.id, country: c, brand: null })} className={cn(cell, "border border-dashed border-accent-warn text-accent-warn hover:bg-accent-warn/10")}>
+                              <button type="button" title={t(scopeKeys.matrix.notSetUp, "{category}: GBPs there, not set up", { category: name })} onClick={() => openWindow({ kind: "trade", trade: tr.id, country: c })} className={cn(cell, "border border-dashed border-accent-warn text-accent-warn hover:bg-accent-warn/10")}>
                                 <span className="font-semibold tabular-nums">{t(tradesKeys.window.tab.notSetUp, "{n} · not set up", { n })}</span>
                                 <span className="flex items-center gap-1 text-xs">
                                   <Plus aria-hidden className="size-3" />
@@ -238,7 +233,7 @@ export function CategoriesWindow({ trades, gmbs }: { trades: readonly Trade[]; g
                                 </span>
                               </button>
                             ) : (
-                              <button type="button" aria-label={t(tradesKeys.window.setUp, "Set up {category}", { category: name })} onClick={() => openWindow({ kind: "trade", trade: tr.id, country: c, brand: null })} className={cn(cell, "group/cell text-ink-soft hover:bg-hover hover:text-ink focus-visible:text-ink")}>
+                              <button type="button" aria-label={t(tradesKeys.window.setUp, "Set up {category}", { category: name })} onClick={() => openWindow({ kind: "trade", trade: tr.id, country: c })} className={cn(cell, "group/cell text-ink-soft hover:bg-hover hover:text-ink focus-visible:text-ink")}>
                                 <span className="group-hover/cell:hidden group-focus-visible/cell:hidden">—</span>
                                 <span className="hidden items-center gap-1.5 text-xs font-medium group-hover/cell:flex group-focus-visible/cell:flex">
                                   <Plus aria-hidden className="size-3.5" />
@@ -394,7 +389,7 @@ function More({ trade, tab, holders, onRename }: { trade: Trade; tab: Country | 
             <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t(move.cancel, "Cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className={buttonVariants({ variant: "destructive", size: button() })}
-              onClick={() => void act(() => ok(api.DELETE("/trades/{id}", { params: { path: { id: trade.id } } })), () => closeWindow({ kind: "trade", trade: trade.id, country: null, brand: null }))()}
+              onClick={() => void act(() => ok(api.DELETE("/trades/{id}", { params: { path: { id: trade.id } } })), () => closeWindow({ kind: "trade", trade: trade.id, country: null }))()}
             >
               {t(gmbsKeys.remove, "Remove")}
             </AlertDialogAction>
@@ -479,6 +474,7 @@ function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; categ
     }
   };
   const studies = placement.status === "ok" ? placement.trades : null;
+  const held = [...new Set(here.map((b) => b.gmail_id))].map((id) => ({ id, gmail: id === null ? null : gmails.find((g) => g.id === id), n: here.filter((b) => b.gmail_id === id).length }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -557,121 +553,35 @@ function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; categ
         </p>
       </section>
 
-      <HeldBy trade={trade} country={category.country} here={here} gmails={gmails} />
+      <section className={SECTION}>
+        <h3 className={SECTION_HEAD}>
+          {t(tradesKeys.heldBy, "Held by")}
+          <span className="flex-1" />
+          <span className="font-normal tracking-normal normal-case">{t(tradesKeys.heldBy.what, "one category, several gmails · click narrows the outline")}</span>
+        </h3>
+        {held.length === 0 ? (
+          <p className="text-xs text-ink-soft">{t(tradesKeys.heldBy.none, "No GBP holds it yet.")}</p>
+        ) : (
+          <span className="flex flex-wrap gap-1.5">
+            {held.map(({ id, gmail, n }) => (
+              <button
+                key={id ?? "none"}
+                type="button"
+                disabled={id === null}
+                onClick={() => {
+                  chooseCategoryScope([{ trade: trade.id, country: category.country }]);
+                  if (id !== null) chooseGmailScope([id]);
+                }}
+                className="flex items-center gap-1.5 rounded-md bg-hover px-2 py-1 text-xs text-ink outline-none enabled:hover:bg-hover/70 disabled:text-ink-soft focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Mail aria-hidden className="size-3.5 text-ink-soft" />
+                {gmail?.gmail ?? t(gmbsKeys.gbp.gmail.none, "No gmail yet")}
+                <span className="text-ink-soft tabular-nums">{n}</span>
+              </button>
+            ))}
+          </span>
+        )}
+      </section>
     </div>
-  );
-}
-
-/** The gmails holding the category, each with its brands under it (09b): a brand is one gmail's, in one category. */
-function HeldBy({ trade, country, here, gmails }: { trade: Trade; country: Country; here: readonly Gmb[]; gmails: readonly Gmail[] }) {
-  const t = useT();
-  const brands = useBrands();
-  const [adding, setAdding] = useState<number | null>(null);
-  const ours = brands.status === "ok" ? brands.data.filter((b) => b.trade_id === trade.id && b.country === country) : [];
-  const ids = [...new Set([...here.map((b) => b.gmail_id), ...ours.map((b) => b.gmail_id)])];
-  const narrow = (gmail: number | null) => {
-    chooseCategoryScope([{ trade: trade.id, country }]);
-    if (gmail !== null) chooseGmailScope([gmail]);
-  };
-  return (
-    <section className={SECTION}>
-      <h3 className={SECTION_HEAD}>
-        {t(tradesKeys.heldBy.brands, "Gmails · Brands")}
-        <span className="flex-1" />
-        <span className="font-normal tracking-normal normal-case">{t(tradesKeys.heldBy.brands.what, "a brand is one gmail's, in one category · logo, name, site, photos")}</span>
-      </h3>
-      {ids.length === 0 ? (
-        <p className="text-xs text-ink-soft">{t(tradesKeys.heldBy.none, "No GBP holds it yet.")}</p>
-      ) : (
-        <ul className="flex flex-col divide-y divide-border border-y border-border">
-          {ids.map((id) => {
-            const gmail = id === null ? undefined : gmails.find((g) => g.id === id);
-            const mine = here.filter((b) => b.gmail_id === id);
-            const brandless = mine.filter((b) => b.brand_id === null).length;
-            const theirs = ours.filter((b) => b.gmail_id === id);
-            return (
-              <li key={id ?? "none"} className="flex flex-col gap-1 py-2">
-                <span className="flex items-center gap-2 text-sm">
-                  <button type="button" onClick={() => narrow(id)} className="flex min-w-0 items-center gap-1.5 rounded text-ink outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
-                    <Mail aria-hidden className="size-3.5 shrink-0 text-ink-soft" />
-                    <span className="truncate">{gmail?.gmail ?? t(gmbsKeys.gbp.gmail.none, "No gmail yet")}</span>
-                    <span className="text-ink-soft tabular-nums">{mine.length}</span>
-                  </button>
-                  <span className="flex-1" />
-                  {id !== null && theirs.length > 0 && brandless > 0 && <span className="text-xs text-accent-warn tabular-nums">{t(tradesKeys.heldBy.brandless, "{n} without a brand", { n: brandless })}</span>}
-                  {id !== null && (
-                    <button type="button" onClick={() => setAdding(adding === id ? null : id)} className="flex items-center gap-1 rounded px-1 text-xs text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
-                      <Plus aria-hidden className="size-3.5" />
-                      {t(brandKeys.add, "Brand")}
-                    </button>
-                  )}
-                </span>
-                {theirs.map((b) => (
-                  <BrandRow key={b.id} brand={b} />
-                ))}
-                {adding === id && id !== null && <NewBrand trade={trade.id} country={country} gmail={id} onDone={() => setAdding(null)} />}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function BrandRow({ brand }: { brand: Brand }) {
-  const t = useT();
-  return (
-    <button
-      type="button"
-      onClick={() => openWindow({ kind: "trade", trade: brand.trade_id, country: brand.country, brand: brand.id })}
-      className="ml-5 flex items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <BrandMark brand={brand} />
-      <span className="truncate text-sm font-medium text-ink">{brand.name}</span>
-      <span className="truncate font-mono text-xs text-ink-soft">{brand.site}</span>
-      <span className="flex-1" />
-      <span className="shrink-0 text-xs text-ink-soft tabular-nums">{t(brandKeys.row, "{gbps} GBPs · {photos} photos", { gbps: brand.gmbs, photos: brand.photos })}</span>
-      <ChevronRight aria-hidden className="size-4 shrink-0 text-ink-soft" />
-    </button>
-  );
-}
-
-function NewBrand({ trade, country, gmail, onDone }: { trade: number; country: Country; gmail: number; onDone: () => void }) {
-  const t = useT();
-  const size = useControlSize();
-  const button = useButtonSize();
-  const brands = useBrands();
-  const sites = useSites();
-  const [name, setName] = useState("");
-  const [site, setSite] = useState("");
-  const [busy, setBusy] = useState(false);
-  return (
-    <form
-      className="ml-5 flex items-center gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setBusy(true);
-        void ok(api.POST("/brands", { body: { gmail, trade, country, name: name.trim(), site: site.trim() } }))
-          .then(() => {
-            brands.reload();
-            onDone();
-          })
-          .catch((err: unknown) => notifyFailure(err, t))
-          .finally(() => setBusy(false));
-      }}
-    >
-      <Input size={size} autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t(brandKeys.new.name, "A brand's name: Aquafix")} aria-label={t(brandKeys.new.name, "A brand's name: Aquafix")} className="min-w-0 flex-1" />
-      <Input size={size} list={`sites-new-${gmail}`} value={site} onChange={(e) => setSite(e.target.value)} placeholder={t(brandKeys.new.site, "its site: aquafix")} aria-label={t(brandKeys.new.site, "its site: aquafix")} className="w-40 font-mono" />
-      <datalist id={`sites-new-${gmail}`}>
-        {sites.map((s) => (
-          <option key={s} value={s} />
-        ))}
-      </datalist>
-      <Button type="submit" variant="outline" size={button("sm")} disabled={busy || name.trim() === "" || site.trim() === ""}>
-        <Plus aria-hidden />
-        {t(brandKeys.new.add, "Add the brand")}
-      </Button>
-    </form>
   );
 }

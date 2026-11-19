@@ -272,7 +272,7 @@ second block below to it.
   decoded, is a 400.
 - **The outline.** Every signed-in page sits beside it: the open service's own views (the sites:
   `<mfe-sites-nav>`, mounted on every page and shown on theirs; the review archive: its places,
-  Telegram and settings), then the caller's GMBs under a gmail scope every app shares (kept in the
+  Telegram and settings), then the caller's GMBs under a scope every app shares (gmails × categories × brands, kept in the
   browser), with their switches, each row, pin and card with what needs the operator, from the
   services' tags on the GMBs (review_archive `/me/gmbs`, sites `/gmbs`). `/` is the map of them:
   one Google map per page session, kept while the page is away (each built is a billed load), its
@@ -284,7 +284,7 @@ second block below to it.
   nested under their pages) is the front end's one page, which shows the view the location
   parses as; below a nest the path is the element's to route. The bundles run on this origin:
   their builds are trusted as the conductor's own code is.
-- **Windows are routes, pages and hotbar entries.** Every window (a GBP, a gmail, a trade or brand,
+- **Windows are routes, pages and hotbar entries.** Every window (a GBP, a gmail, a trade, a brand,
   the categories, the trash, Add a GBP, a review kit) is a key of one closed union (`WinKey`,
   `entities/gmb/model/windows.ts`: how it reads from and writes to Home's params, its page, its
   entry), drawn by one registry (`views/windows`: title, icon, body, the same over the map and as
@@ -949,7 +949,8 @@ priced in money, so an account overshoots by its hours behind.
   trade is deleted only once no live GBP holds it; no service stores its id.
 - **A GBP's brand** is under its gmail and its category, at most one, optional: no brand, no kit
   photos and no logo. A gmail, trade or country moved drops it in the same write; the schema
-  refuses any other. Removed, never deleted, and only while no live GBP holds it.
+  refuses any other. Removed, never deleted, and only while no live GBP holds it. Its own scope
+  facet and window, never a setting of its gmail's or category's.
 
   ```text
   user ─┬─ trade ── category (trade × country) ─┐
