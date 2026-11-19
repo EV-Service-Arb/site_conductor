@@ -228,7 +228,7 @@
         # The same into the checkout, unoptimised: next dev imports it (local-stack --dev).
         placementOverlayDev = pkgs.writeShellApplication {
           name = "placement-overlay";
-          runtimeInputs = [ rust wasm-bindgen-cli pkgs.git ];
+          runtimeInputs = [ wasm-bindgen-cli pkgs.gitMinimal ]; # the shell's cargo
           text = ''
             cd "$(git rev-parse --show-toplevel)"
             cargo build -q -p placement_overlay --target wasm32-unknown-unknown
@@ -451,6 +451,14 @@
               peers)
             + "fi\n")
           devUsers);
+        # what local-stack builds and runs with, in either dev shell
+        stackPackages = with pkgs; [
+          mold
+          pkg-config
+          openssl # sentry's native-tls
+          deno # sa_sandbox's runs
+          placementOverlayDev
+        ];
         dev = pkgs.writeShellApplication {
           name = "dev";
           runtimeInputs = [ pkgs.coreutils ];
@@ -479,6 +487,13 @@
 
         containers = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux containers;
 
+        # local-stack's under GITHUB_ACTIONS: CI builds and serves the stack, never develops it
+        devShells.ci = pkgs.mkShell {
+          inherit stdenv;
+          inherit (rs.ciShell) shellHook;
+          packages = rs.ciShell.packages ++ stackPackages ++ js.enabledPackages;
+          env = localEnv;
+        };
         devShells.default =
           with pkgs;
           mkShell {
@@ -491,15 +506,10 @@
                 cp -f ${(v_flakes.files.gitattributes) { inherit pkgs; lfs = false; }} ./.gitattributes
               '';
 
-            packages = [
-              mold
-              pkg-config
-              openssl # sentry's native-tls
+            packages = stackPackages ++ [
               sqlite # inspecting the database
-              deno # sa_sandbox's runs
               rust
               testTimeline
-              placementOverlayDev
             ] ++ pre-commit-check.enabledPackages ++ combined.enabledPackages;
 
             env = localEnv // {

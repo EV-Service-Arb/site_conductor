@@ -170,7 +170,9 @@ root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "run this from inside
 # the root's dev shell entered once for the whole run, not per command: each entry costs seconds
 if [ "${LOCAL_STACK_SHELL:-}" != "$root" ]; then
 	cd "$root" # its shellHook writes into the working directory
-	exec nix develop "$root" -c env LOCAL_STACK_SHELL="$root" "$0" ${argv[@]+"${argv[@]}"}
+	shell=default
+	[ -z "${GITHUB_ACTIONS:-}" ] || shell=ci # no dev tools
+	exec nix develop "$root#$shell" -c env LOCAL_STACK_SHELL="$root" "$0" ${argv[@]+"${argv[@]}"}
 fi
 # The others sit beside the conductor's main checkout (_sa/{site_conductor,review_archive,
 # sites/{panel,aquafix,vifnet,debouchage}}), also when this is one of its worktrees.
