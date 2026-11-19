@@ -539,6 +539,11 @@ fi
 # The gmails' browsers only with the caller's GOLOGIN_TOKEN or MULTILOGIN_TOKEN: neither runs without a plan's.
 browsers_origin=""
 [ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ] || [ "$run_panel" = 0 ] || browsers_origin="http://127.0.0.1:$BROWSERS_PORT"
+# a runner answers one conductor: under dev, another stack's (a --port one beside it) leaves this one without
+if [ -n "$browsers_origin" ] && [ "$dev" = 1 ] && busy "$BROWSERS_PORT"; then
+	warn "port $BROWSERS_PORT is another stack's browsers' runner: none here, the gmails' browsers say they are not connected"
+	browsers_origin=""
+fi
 # The agents' `execute` once crates/sandbox/js has its packages: @evinvest/api comes through its _.js-local.json until published.
 sandbox_origin=""
 if [ "$run_panel" = 1 ]; then
@@ -546,6 +551,10 @@ if [ "$run_panel" = 1 ]; then
 	[ "$sandbox_js/node_modules/.package-lock.json" -nt "$sandbox_js/package.json" ] || in_shell "$root" bash -c "cd crates/sandbox/js && npm install --no-audit --no-fund >&2"
 	if [ -d "$sandbox_js/node_modules/@evinvest/api" ]; then
 		sandbox_origin="http://127.0.0.1:$SANDBOX_PORT"
+	fi
+	if [ -n "$sandbox_origin" ] && [ "$dev" = 1 ] && busy "$SANDBOX_PORT"; then
+		warn "port $SANDBOX_PORT is another stack's sandbox runner: none here, the agents have no execute"
+		sandbox_origin=""
 	fi
 fi
 # The Google accounts, their keys named in it from the environment (docs/ARCHITECTURE.md, Google accounts).
@@ -805,7 +814,7 @@ if [ -n "$browsers_origin" ]; then
 	in_shell "$root" bash -c "$own_cargo b -q -p sa_browsers"
 	serving browsers "$root" "$own_cargo b -q -p sa_browsers" "browsers serve" -e rs,toml,lock &
 	essential+=("$!")
-else
+elif [ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ]; then
 	say "GOLOGIN_TOKEN and MULTILOGIN_TOKEN unset: no browsers' runner; the gmails' browsers say they are not connected"
 fi
 
