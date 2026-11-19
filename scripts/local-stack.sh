@@ -620,7 +620,7 @@ fi
 [ -s "$state/data-key" ] || "$PANEL_BIN" gen-data-key >"$state/data-key"
 origin="http://127.0.0.1:$PANEL_PORT"
 # The browser's origin: the sign-in sends it back there, and the live socket must come from it.
-public_origin="$origin"
+public_origin="http://localhost:$PANEL_PORT" # localhost as under --watch: one host for the Maps key's referrers
 if [ "$watch" = 1 ] && { [ "$run_panel" = 1 ] || busy "$WEB_DEV_PORT"; }; then
 	public_origin="http://localhost:$WEB_DEV_PORT"
 fi
