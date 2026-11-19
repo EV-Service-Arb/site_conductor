@@ -289,6 +289,13 @@ the same way (in memory, 600 s): a plain reload keeps the old number. To see a c
 
 Production has no such bypass: there, wait out the 600 s.
 
+## The front end's specs: `nix run .#e2e`
+
+Over a `dev --port $E2E_STACK_PORT --no-peers` stack of its own, which outlives the run: the next run reuses it
+(seconds), waiting first for its watched conductor build when a crate is newer (`rebuild` in the chart). It
+holds ~1–2 GB and rebuilds on every save until `nix run .#e2e -- --stop`; `-- --restart` starts the run on a new
+one. `nix run .#figma`'s stack (`--from-prod`, the peers) stops with its run.
+
 ## Troubleshooting
 
 - **`port … is taken`**: another stack's part, or something else —
