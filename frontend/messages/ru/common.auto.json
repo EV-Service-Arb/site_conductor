@@ -292,8 +292,8 @@
     "t": "Ошибка"
   },
   "account.mapsKey.help.billing": {
-    "en": "Open this link. Press Link a billing account, pick or make one, press Set account.",
-    "t": "Откройте эту ссылку. Нажмите «Привязать платёжный аккаунт», выберите существующий или создайте новый, нажмите «Установить аккаунт»."
+    "en": "Open this link. Press Link a billing account, pick or make one, press Set account. If Google asks to verify the account, give it a phone and a card: nothing is charged until you upgrade.",
+    "t": "Откройте эту ссылку. Нажмите «Привязать платёжный аккаунт», выберите существующий или создайте новый, затем нажмите «Установить аккаунт». Если Google попросит подтвердить аккаунт, укажите телефон и банковскую карту: пока вы не перейдёте на платный тариф, ничего не списывается."
   },
   "account.mapsKey.help.geocoding": {
     "en": "Open this link. Press Enable.",

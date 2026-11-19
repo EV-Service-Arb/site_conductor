@@ -109,7 +109,7 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
           steps={[
             { text: t(account.mapsKey.help.signIn, "In Chrome, sign in to Google as this gmail.") },
             { text: t(account.mapsKey.help.project, "Open this link. Name: maps. Press Create."), href: "https://console.cloud.google.com/projectcreate" },
-            { text: t(account.mapsKey.help.billing, "Open this link. Press Link a billing account, pick or make one, press Set account."), href: "https://console.cloud.google.com/billing/linkedaccount" },
+            { text: t(account.mapsKey.help.billing, "Open this link. Press Link a billing account, pick or make one, press Set account. If Google asks to verify the account, give it a phone and a card: nothing is charged until you upgrade."), href: "https://console.cloud.google.com/billing/linkedaccount" },
             { text: t(account.mapsKey.help.places, "Open this link. Press Enable."), href: "https://console.cloud.google.com/apis/library/places.googleapis.com" },
             { text: t(account.mapsKey.help.geocoding, "Open this link. Press Enable."), href: "https://console.cloud.google.com/apis/library/geocoding-backend.googleapis.com" },
             {

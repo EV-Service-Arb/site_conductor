@@ -105,6 +105,7 @@ function BusinessHelp({ gmail, redirectUri }: { gmail: string; redirectUri: stri
   return (
     <ConnectHelp
       title={t(account.business.help.title, "Business Profile client, step by step")}
+      video="/tutorials/business-profile.webm"
       steps={[
         { text: t(account.business.help.signIn, "In Chrome, sign in to Google as {gmail}.", { gmail }) },
         { text: t(account.business.help.project, "Open this link. Name: gbp. Press Create."), href: `${CONSOLE}/projectcreate` },

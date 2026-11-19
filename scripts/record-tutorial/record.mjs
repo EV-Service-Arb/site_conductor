@@ -9,6 +9,7 @@
 //   {nav: url} {wait: ms} {click: Find} {point: Find} {type: text, clear?: true} {enter: true}
 //   {pause: true} {resume: true}            capture off / on (capture starts on)
 //   {say: text}                             a caption pinned to the bottom until the next one; "" clears
+// {optional: true} on a click or point: skipped when nothing matches.
 // Find: {css?, tag?, text?, exact?, aria?, ph?, nth?}: the visible element matching, shortest text first.
 // "{name}" in any string is replaced by the name=value arguments.
 import { execFileSync } from "node:child_process";
@@ -42,8 +43,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ctx = opt("context");
 const pages = (await send("Target.getTargets")).result.targetInfos.filter((t) => t.type === "page" && t.browserContextId.startsWith(ctx));
 if (pages.length === 0) throw new Error(`no page in a browser context starting ${ctx}: open a tab in that profile`);
-sess = (await send("Target.attachToTarget", { targetId: pages[0].targetId, flatten: true })).result.sessionId;
+for (const p of pages) {
+  const s = (await send("Target.attachToTarget", { targetId: p.targetId, flatten: true })).result.sessionId;
+  const r = await send("Runtime.evaluate", { expression: "document.visibilityState", returnByValue: true }, s);
+  if (r.result.result.value === "visible") { sess = s; break; }
+}
+if (!sess) throw new Error("no tab of that profile is the one shown in its window");
 await send("Page.enable", {}, sess);
+await send("Emulation.setFocusEmulationEnabled", { enabled: true }, sess); // the window is parked off-screen, never focused
 const ev = async (expression) => {
   const r = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sess);
   if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description ?? JSON.stringify(r.result.exceptionDetails));
@@ -71,16 +78,17 @@ for (const s of steps) {
   if (q) {
     let p = null;
     for (let i = 0; i < 30 && !p; i++) { p = await ev(find(q)); if (!p) await sleep(500); }
+    if (!p && s.optional) continue;
     if (!p) throw new Error(`not found: ${JSON.stringify(q)}`);
     await sleep(300);
     await ring(p);
     await sleep(900);
-    if (s.click) for (const type of ["mouseMoved", "mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: p.x, y: p.y, button: "left", clickCount: 1 }, sess);
+    if (s.click) for (const type of ["mouseMoved", "mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: p.x, y: p.y, button: type === "mouseMoved" ? "none" : "left", clickCount: 1 }, sess);
     await sleep(s.after ?? 1500);
     await showCaption();
   }
   if (s.type !== undefined) {
-    if (s.clear) { await key("a", "KeyA", 65, 2); await key("Backspace", "Backspace", 8); }
+    if (s.clear) { await ev("document.activeElement.select?.()"); await key("Backspace", "Backspace", 8); }
     for (const ch of s.type) { await send("Input.insertText", { text: ch }, sess); await sleep(60); }
     await sleep(500);
   }

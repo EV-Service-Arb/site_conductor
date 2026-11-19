@@ -1,0 +1,331 @@
+[
+ {
+  "say": "1. Signed in to Google as {gmail}. New project: name it, press Create."
+ },
+ {
+  "nav": "https://console.cloud.google.com/projectcreate"
+ },
+ {
+  "wait": 1500
+ },
+ {
+  "click": {
+   "css": "#p6ntest-name-input"
+  },
+  "after": 300
+ },
+ {
+  "type": "gbp api",
+  "clear": true
+ },
+ {
+  "pause": true
+ },
+ {
+  "click": {
+   "text": "Edit",
+   "exact": true,
+   "tag": "button, a"
+  },
+  "after": 600
+ },
+ {
+  "click": {
+   "css": "#p6ntest-id-input"
+  },
+  "after": 300
+ },
+ {
+  "type": "{project}",
+  "clear": true
+ },
+ {
+  "resume": true
+ },
+ {
+  "click": {
+   "text": "Create",
+   "exact": true,
+   "tag": "button"
+  },
+  "after": 12000
+ },
+ {
+  "say": "2. Enable the Business Profile APIs."
+ },
+ {
+  "nav": "https://console.cloud.google.com/apis/library/mybusinessaccountmanagement.googleapis.com?project={project}"
+ },
+ {
+  "wait": 2000
+ },
+ {
+  "click": {
+   "text": "Enable",
+   "exact": true,
+   "tag": "button"
+  },
+  "after": 9000
+ },
+ {
+  "nav": "https://console.cloud.google.com/apis/library/mybusinessbusinessinformation.googleapis.com?project={project}"
+ },
+ {
+  "wait": 2000
+ },
+ {
+  "click": {
+   "text": "Enable",
+   "exact": true,
+   "tag": "button"
+  },
+  "after": 9000
+ },
+ {
+  "say": "3. Consent screen: Get started, app name, your email, External."
+ },
+ {
+  "nav": "https://console.cloud.google.com/auth/overview?project={project}"
+ },
+ {
+  "wait": 2000
+ },
+ {
+  "click": {
+   "text": "Get started",
+   "exact": true,
+   "tag": "button, a"
+  },
+  "after": 3000
+ },
+ {
+  "click": {
+   "css": "input[formcontrolname=displayName]"
+  },
+  "after": 300
+ },
+ {
+  "type": "gbp"
+ },
+ {
+  "click": {
+   "css": "cfc-select[formcontrolname=userSupportEmail]"
+  },
+  "after": 1200
+ },
+ {
+  "click": {
+   "text": "{gmail}",
+   "tag": "[role=option], mat-option, cfc-option"
+  },
+  "after": 800
+ },
+ {
+  "click": {
+   "text": "Next",
+   "exact": true,
+   "tag": "button"
+  },
+  "after": 1500
+ },
+ {
+  "click": {
+   "text": "External",
+   "exact": true,
+   "tag": "label, mat-radio-button, span"
+  },
+  "after": 600
+ },
+ {
+  "click": {
+   "text": "Next",
+   "exact": true,
+   "tag": "button"
+  },
+  "after": 1500
+ },
+ {
+  "click": {
+   "css": "input[aria-label=\"Text field for emails\"]"
+  },
+  "after": 300
+ },
+ {
+  "type": "{gmail}"
+ },
+ {
+  "enter": true
+ },
+ {
+  "click": {
+   "text": "Next",
+   "exact": true,
+   "tag": "button"
+  },
+  "after": 1500
+ },
+ {
+  "click": {
+   "css": "mat-checkbox .mdc-checkbox"
+  },
+  "after": 600
+ },
+ {
+  "click": {
+   "text": "Continue",
+   "exact": true,
+   "tag": "button"
+  },
+  "after": 1200
+ },
+ {
+  "click": {
+   "text": "Create",
+   "exact": true,
+   "tag": "button"
+  },
+  "after": 7000
+ },
+ {
+  "say": "4. Audience: add yourself as a test user."
+ },
+ {
+  "nav": "https://console.cloud.google.com/auth/audience?project={project}"
+ },
+ {
+  "wait": 2000
+ },
+ {
+  "click": {
+   "text": "Add users",
+   "exact": true,
+   "tag": "button"
+  },
+  "after": 1500
+ },
+ {
+  "click": {
+   "css": "input[aria-label=\"Text field for emails\"]"
+  },
+  "after": 300
+ },
+ {
+  "type": "{gmail}"
+ },
+ {
+  "enter": true
+ },
+ {
+  "wait": 1500
+ },
+ {
+  "click": {
+   "text": "Save",
+   "exact": true,
+   "tag": "button"
+  },
+  "after": 4000
+ },
+ {
+  "say": "5. New client: Web application, paste the redirect URI from the panel, Create."
+ },
+ {
+  "nav": "https://console.cloud.google.com/auth/clients/create?project={project}"
+ },
+ {
+  "wait": 3000
+ },
+ {
+  "click": {
+   "css": "cfc-select[formcontrolname=typeControl]"
+  },
+  "after": 1200
+ },
+ {
+  "click": {
+   "text": "Web application",
+   "exact": true,
+   "tag": "[role=option], mat-option, cfc-option"
+  },
+  "after": 2000
+ },
+ {
+  "click": {
+   "aria": "Add URI",
+   "tag": "button",
+   "nth": 1
+  },
+  "after": 1000
+ },
+ {
+  "click": {
+   "css": "input[formcontrolname=uri]"
+  },
+  "after": 300
+ },
+ {
+  "type": "{redirect}"
+ },
+ {
+  "click": {
+   "text": "Create",
+   "exact": true,
+   "tag": "button"
+  },
+  "after": 3000
+ },
+ {
+  "say": "6. Copy Client ID and Client secret into the panel, press Connect."
+ },
+ {
+  "point": {
+   "text": "Client ID",
+   "exact": true,
+   "tag": "dt"
+  },
+  "after": 1500
+ },
+ {
+  "point": {
+   "text": "Client secret",
+   "exact": true,
+   "tag": "dt"
+  },
+  "after": 2500
+ },
+ {
+  "click": {
+   "text": "OK",
+   "exact": true,
+   "tag": "button"
+  },
+  "after": 800
+ },
+ {
+  "say": "7. Copy the project number, then apply for API access from {gmail}."
+ },
+ {
+  "nav": "https://console.cloud.google.com/home/dashboard?project={project}"
+ },
+ {
+  "wait": 3000
+ },
+ {
+  "point": {
+   "text": "Project number",
+   "exact": true,
+   "tag": "div"
+  },
+  "optional": true,
+  "after": 2500
+ },
+ {
+  "nav": "https://support.google.com/business/contact/api_default"
+ },
+ {
+  "wait": 3000
+ },
+ {
+  "wait": 2500
+ }
+]

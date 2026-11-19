@@ -72,7 +72,7 @@
   "account.mapsKey.add": "Check and keep",
   "account.mapsKey.cost": "On the shared keys, in tokens: {list}.",
   "account.mapsKey.failing": "Failing",
-  "account.mapsKey.help.billing": "Open this link. Press Link a billing account, pick or make one, press Set account.",
+  "account.mapsKey.help.billing": "Open this link. Press Link a billing account, pick or make one, press Set account. If Google asks to verify the account, give it a phone and a card: nothing is charged until you upgrade.",
   "account.mapsKey.help.geocoding": "Open this link. Press Enable.",
   "account.mapsKey.help.key": "Open this link. Press Create credentials → API key. Press Edit API key. API restrictions: Restrict key, tick Places API (New) and Geocoding API. Press Save.",
   "account.mapsKey.help.paste": "Press Show key, copy it into the form above, press Save.",
