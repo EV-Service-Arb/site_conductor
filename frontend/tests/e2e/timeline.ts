@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 import type { Reporter, TestCase, TestResult } from "@playwright/test/reporter";
@@ -83,20 +83,34 @@ export function gantt(rows: Row[], width: number, axisEnd: number): string[] {
 }
 
 type Test = Span & { project: string };
+type Write = typeof process.stdout.write;
 
-/** The stack's spans (`local-stack`'s `$STACK_TIMELINE`) and the tests on one axis: redrawn in place under the output on a terminal, a line every 30s elsewhere; at the end, the whole chart into `out` and a mermaid gantt into the job's summary. */
+/** The last `n` lines of `file` as a terminal would leave them: colours dropped, a `\r` overwriting what preceded it. */
+function tail(file: string, n: number): string[] {
+  const fd = openSync(file, "r");
+  const size = fstatSync(fd).size;
+  const buf = Buffer.alloc(Math.min(size, 64 * 1024));
+  readSync(fd, buf, 0, buf.length, size - buf.length);
+  closeSync(fd);
+  return buf
+    .toString("utf8")
+    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")
+    .split("\n")
+    .map((l) => l.slice(l.lastIndexOf("\r", l.length - 2) + 1).replace(/\r$/, ""))
+    .slice(-n - 1, -1);
+}
+
+/** The stack's spans (`local-stack`'s `$STACK_TIMELINE`) and the tests on one axis. On a terminal the chart owns the screen, the run's own output going to `playwright.log` beside the stack's timeline (its tail shown under the chart); elsewhere a line every 30s. At the end (Ctrl-C too), the whole chart into `out` and a mermaid gantt into the job's summary. */
 export default class Timeline implements Reporter {
   private readonly out: string;
   private readonly file: string;
   private readonly loaded = Date.now();
   private readonly tests = new Map<string, Test>();
-  private readonly tty = process.stdout.isTTY === true;
   private timer: ReturnType<typeof setInterval> | undefined;
-  private drawn = 0;
+  /** on a terminal: where the output goes instead, and the terminal's own writes, restored at the end */
+  private screen: { log: string; stdout: Write; stderr: Write } | undefined;
   private failure: unknown;
-  private atLineStart = true;
-  private readonly restore: (() => void)[] = [];
-  private readonly write = process.stdout.write.bind(process.stdout);
+  private ended = false;
 
   /** v2: a v1 reporter is not told onConfigure, and its onBegin comes only after the webServer is up */
   version() {
@@ -115,24 +129,35 @@ export default class Timeline implements Reporter {
   }
 
   onConfigure() {
+    if (this.timer !== undefined) throw new Error("timeline: configured twice");
     mkdirSync(dirname(this.file), { recursive: true });
     writeFileSync(this.file, ""); // a previous run's spans are not this one's
-    if (this.tty) {
-      for (const stream of [process.stdout, process.stderr]) {
-        const own = stream.write;
-        stream.write = ((chunk: string | Uint8Array, ...rest: never[]) => {
-          this.erase();
-          const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString();
-          if (text.length > 0) this.atLineStart = text.endsWith("\n");
-          return own.call(stream, chunk, ...rest);
-        }) as typeof stream.write;
-        this.restore.push(() => (stream.write = own));
-      }
+    if (process.stdout.isTTY) {
+      const log = this.file.replace(/[^/]*$/, "playwright.log"); // not beside `out`: playwright empties its outputDir after configuring the reporters
+      mkdirSync(dirname(log), { recursive: true });
+      writeFileSync(log, "");
+      this.screen = { log, stdout: process.stdout.write.bind(process.stdout), stderr: process.stderr.write.bind(process.stderr) };
+      // every writer in this process (the list reporter, the webServer's lines, the workers' relayed output) into the log: the chart is the terminal's only writer
+      const sink = (chunk: string | Uint8Array, encoding?: unknown, done?: unknown) => {
+        appendFileSync(log, chunk);
+        const callback = typeof encoding === "function" ? encoding : done;
+        if (typeof callback === "function") callback();
+        return true;
+      };
+      process.stdout.write = sink as Write;
+      process.stderr.write = sink as Write;
+      this.screen.stdout("\x1b[?1049h\x1b[?25l");
       this.timer = setInterval(() => this.live(() => this.draw()), 250);
     } else {
-      this.timer = setInterval(() => this.live(() => this.write(this.snapshot() + "\n")), 30_000);
+      this.timer = setInterval(() => this.live(() => process.stdout.write(this.snapshot() + "\n")), 30_000);
     }
     this.timer.unref();
+    // a second Ctrl-C ends the runner before onEnd: the terminal and the chart still
+    process.once("exit", () => {
+      if (this.ended) return;
+      this.stop();
+      console.log(`\n${this.save()}\n(${this.out})`);
+    });
   }
 
   onTestBegin(test: TestCase, result: TestResult) {
@@ -146,21 +171,14 @@ export default class Timeline implements Reporter {
   }
 
   onEnd() {
+    this.ended = true;
+    const log = this.screen?.log;
     this.stop();
     if (this.failure !== undefined) throw this.failure;
+    const text = this.save();
     const now = Date.now();
     const stack = this.stack();
-    const tests = [...this.tests.values()].map((t) => ({ name: `${t.project}: ${t.name}`, start: t.start, end: t.end }));
     const t0 = Math.min(...stack.map((s) => s.start));
-    const row = (s: Span): Row => {
-      const parts = s.name.split("/");
-      return { label: parts.at(-1)! + (s.end === undefined ? " (unfinished)" : ""), depth: parts.length - 1, start: s.start - t0, end: (s.end ?? now) - t0, open: s.end === undefined };
-    };
-    const total = now - t0;
-    const width = this.tty ? process.stdout.columns - 1 : 160;
-    const text = [`total ${duration(total)} from the e2e's start`, ...gantt([...tree(stack), ...tests.sort((a, b) => a.start - b.start)].map(row), width, total)].join("\n");
-    mkdirSync(dirname(this.out), { recursive: true });
-    writeFileSync(this.out, text + "\n");
     // GitHub renders a mermaid block in a job's summary; mermaid takes no ":" or ";" inside a task's name
     const task = (s: Span) => `  ${s.name.replace(/[:;#]/g, " ")}${s.end === undefined ? " unfinished" : ""} :${s.start - t0}, ${(s.end ?? now) - t0}`;
     const summary = [
@@ -173,7 +191,7 @@ export default class Timeline implements Reporter {
       "  section stack",
       ...tree(stack).map(task),
       "  section tests",
-      ...tests.map(task),
+      ...[...this.tests.values()].map((t) => task({ ...t, name: `${t.project}: ${t.name}` })),
       "```",
       "</details>",
       "",
@@ -181,6 +199,24 @@ export default class Timeline implements Reporter {
     writeFileSync(this.out.replace(/\.txt$/, ".md"), summary);
     if (process.env.GITHUB_STEP_SUMMARY !== undefined) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
     console.log(`\n${text}\n(${this.out})`);
+    if (log !== undefined) console.log(`\n${tail(log, 20).join("\n")}\n(the run's output: ${log})`);
+  }
+
+  /** The whole chart, every span and test, into `out`; what is still running is marked unfinished. */
+  private save(): string {
+    const now = Date.now();
+    const stack = this.stack();
+    const tests = [...this.tests.values()].sort((a, b) => a.start - b.start).map((t) => ({ ...t, name: `${t.project}: ${t.name}` }));
+    const t0 = Math.min(...stack.map((s) => s.start));
+    const row = (s: Span): Row => {
+      const parts = s.name.split("/");
+      return { label: parts.at(-1)! + (s.end === undefined ? " (unfinished)" : ""), depth: parts.length - 1, start: s.start - t0, end: (s.end ?? now) - t0, open: s.end === undefined };
+    };
+    const width = process.stdout.isTTY ? process.stdout.columns - 1 : 160;
+    const text = [`total ${duration(now - t0)} from the e2e's start`, ...gantt([...tree(stack), ...tests].map(row), width, now - t0)].join("\n");
+    mkdirSync(dirname(this.out), { recursive: true });
+    writeFileSync(this.out, text + "\n");
+    return text;
   }
 
   /** What the stack wrote so far, and the runner's own load. */
@@ -209,20 +245,20 @@ export default class Timeline implements Reporter {
     }
   }
 
+  /** The terminal back as it was: its own screen, cursor and writers. */
   private stop() {
     clearInterval(this.timer);
-    this.erase();
-    for (const restore of this.restore.splice(0)) restore();
+    if (this.screen === undefined) return;
+    this.screen.stdout("\x1b[?25h\x1b[?1049l");
+    process.stdout.write = this.screen.stdout;
+    process.stderr.write = this.screen.stderr;
+    this.screen = undefined;
   }
 
-  private erase() {
-    if (this.drawn > 0) this.write(`\x1b[${this.drawn}A\r\x1b[J`);
-    this.drawn = 0;
-  }
-
-  /** Finished nested spans, then finished tests (one row per project), then the oldest finished rows give way to the terminal's height. */
+  /** The chart from the top of the screen, the log's tail under it. Finished nested spans, then finished tests (one row per project), then the oldest finished rows give way to its height. */
   private draw() {
-    if (!this.atLineStart) return;
+    const screen = this.screen;
+    if (screen === undefined) throw new Error("timeline: drawn off a terminal");
     const now = Date.now();
     const stack = tree(this.stack());
     const t0 = Math.min(...stack.map((s) => s.start));
@@ -238,7 +274,8 @@ export default class Timeline implements Reporter {
       const fold: Row[] = done.length === 0 ? [] : [{ label: `${p}: ${done.length}/${of.length} done`, depth: 0, start: done[0]!.start - t0, end: Math.max(...done.map((t) => t.end!)) - t0, open: false }];
       return [...fold, ...of.filter((t) => t.end === undefined).map((t) => ({ label: `${p}: ${t.name}`, depth: 1, start: t.start - t0, end: now - t0, open: true }))];
     });
-    const room = process.stdout.rows - 3; // the header, the axis, and the line the cursor rests on
+    const { columns, rows: height } = process.stdout;
+    const room = Math.floor(height * 0.7) - 2; // the header and the axis; the rest shows the log's tail
     let hidden = 0;
     if (rows.length + testRows.length > room) {
       const before = rows.length;
@@ -251,11 +288,9 @@ export default class Timeline implements Reporter {
       rows.splice(i, 1);
       hidden++;
     }
-    const all = [...rows, ...testRows].slice(-room);
-    const header = `\x1b[1m▶ e2e ${duration(now - t0)}\x1b[0m${hidden > 0 ? ` (${hidden} finished hidden)` : ""}`;
-    const lines = [header, ...gantt(all, process.stdout.columns - 1, now - t0)];
-    this.erase();
-    this.write(lines.join("\n") + "\n");
-    this.drawn = lines.length;
+    const header = `\x1b[1m▶ e2e ${duration(now - t0)}\x1b[0m${hidden > 0 ? ` (${hidden} finished hidden)` : ""}   output: ${screen.log}`;
+    const chart = [header, ...gantt([...rows, ...testRows].slice(-room), columns - 1, now - t0), "─".repeat(columns - 1)];
+    const lines = [...chart, ...tail(screen.log, Math.max(0, height - chart.length))].slice(0, height);
+    screen.stdout("\x1b[H" + lines.map((l) => l.slice(0, columns - 1) + "\x1b[K").join("\r\n") + "\x1b[J");
   }
 }
