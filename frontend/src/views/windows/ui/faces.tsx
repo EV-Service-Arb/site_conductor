@@ -79,8 +79,8 @@ function Named({ text }: { text: string }) {
 }
 
 export const FACES = {
-  // the operational tabs (02) lay out side by side; Profile and Log read as a column
-  gbp: { icon: MapPin, width: (k) => (k.tab === "profile" || k.tab === "log" ? 560 : 1000), Title: GbpTitle, Body: GbpBody },
+  // the operational tabs (02) lay out side by side; Profile and Log read as a column, as wide as the tab strip
+  gbp: { icon: MapPin, width: (k) => (k.tab === "profile" || k.tab === "log" ? 760 : 1000), Title: GbpTitle, Body: GbpBody },
   account: {
     icon: Mail,
     width: 768,
