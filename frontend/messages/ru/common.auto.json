@@ -1127,6 +1127,14 @@
     "en": "least used first · a GBP gets each at most once",
     "t": "сначала наименее используемые · каждое фото достаётся GBP не более одного раза"
   },
+  "brand.photos.shows": {
+    "en": "shows…",
+    "t": "показывает…"
+  },
+  "brand.photos.showsLabel": {
+    "en": "What it shows: its caption for the reviewer",
+    "t": "Что это показывает: подпись для рецензента"
+  },
   "brand.photos.why": {
     "en": "The review kit offers them with {category}'s drafts. A GBP without a brand is offered drafts only.",
     "t": "Набор для отзывов предлагает их вместе с черновиками {category}. GBP без бренда получает только черновики."
@@ -2027,6 +2035,10 @@
     "en": "Hide from hotbar",
     "t": "Убрать с панели"
   },
+  "hotbar.kits": {
+    "en": "Review kits",
+    "t": "Наборы для проверки"
+  },
   "hotbar.places": {
     "en": "Google's places",
     "t": "Места Google"
@@ -2055,6 +2067,254 @@
     "en": "Sidebar: fold or unfold",
     "t": "Боковая панель: свернуть или развернуть"
   },
+  "kit.area": {
+    "en": "area {area}",
+    "t": "район {area}"
+  },
+  "kit.block.draft": {
+    "en": "not on Google yet",
+    "t": "ещё нет в Google"
+  },
+  "kit.block.noPage": {
+    "en": "no landing page: Google's form only",
+    "t": "нет посадочной страницы: только форма Google"
+  },
+  "kit.block.suspended": {
+    "en": "no kit while suspended",
+    "t": "нет набора, пока профиль приостановлен"
+  },
+  "kit.block.verifying": {
+    "en": "kit waits for Verified",
+    "t": "набор ждёт статуса «Подтверждён»"
+  },
+  "kit.close": {
+    "en": "Close the kit",
+    "t": "Закрыть набор"
+  },
+  "kit.copied": {
+    "en": "Link copied",
+    "t": "Ссылка скопирована"
+  },
+  "kit.copy": {
+    "en": "Copy link",
+    "t": "Копировать ссылку"
+  },
+  "kit.drafts.offerOrder": {
+    "en": "least used first · the pool is the category's",
+    "t": "сначала наименее используемые · пул принадлежит категории"
+  },
+  "kit.edit": {
+    "en": "Edit the kit",
+    "t": "Изменить набор"
+  },
+  "kit.edit.byHand": {
+    "en": "By hand",
+    "t": "Вручную"
+  },
+  "kit.edit.create": {
+    "en": "Create · {n} GBPs",
+    "t": "Создать · {n} GBP"
+  },
+  "kit.edit.delete": {
+    "en": "Delete",
+    "t": "Удалить"
+  },
+  "kit.edit.deleteBody": {
+    "en": "Only the selection goes: drafts, photos and what was collected stay.",
+    "t": "Удаляется только выборка: черновики, фото и собранное остаются."
+  },
+  "kit.edit.deleteTitle": {
+    "en": "Delete {name}?",
+    "t": "Удалить {name}?"
+  },
+  "kit.edit.draft": {
+    "en": "not on Google yet: joins once it is",
+    "t": "ещё нет в Google: добавится, когда появится"
+  },
+  "kit.edit.draw": {
+    "en": "Draw one",
+    "t": "Нарисовать"
+  },
+  "kit.edit.find": {
+    "en": "A GBP's name or address",
+    "t": "Название или адрес GBP"
+  },
+  "kit.edit.fromArea": {
+    "en": "An area",
+    "t": "Район"
+  },
+  "kit.edit.fromOutline": {
+    "en": "The outline's {n} selected",
+    "t": "Выбранные в контуре: {n}"
+  },
+  "kit.edit.gbps": {
+    "en": "GBPs",
+    "t": "GBP"
+  },
+  "kit.edit.inArea": {
+    "en": "{n} of your GBPs in it or next to it",
+    "t": "{n} ваших GBP в нём или рядом"
+  },
+  "kit.edit.inIt": {
+    "en": "in it",
+    "t": "внутри"
+  },
+  "kit.edit.link": {
+    "en": "Link",
+    "t": "Ссылка"
+  },
+  "kit.edit.linkHint": {
+    "en": "the operator's page; a reviewer never sees it (their QR goes to the brand's site)",
+    "t": "страница оператора; рецензент её не видит (его QR ведёт на сайт бренда)"
+  },
+  "kit.edit.name": {
+    "en": "Name",
+    "t": "Название"
+  },
+  "kit.edit.namePlaceholder": {
+    "en": "Lyon · Saturday",
+    "t": "Лион · суббота"
+  },
+  "kit.edit.new": {
+    "en": "New kit",
+    "t": "Новый набор"
+  },
+  "kit.edit.nextTo": {
+    "en": "next to it · {d}",
+    "t": "рядом · {d}"
+  },
+  "kit.edit.noneYet": {
+    "en": "None picked yet.",
+    "t": "Пока ничего не выбрано."
+  },
+  "kit.edit.save": {
+    "en": "Save · {n} GBPs",
+    "t": "Сохранить · {n} GBP"
+  },
+  "kit.edit.suspended": {
+    "en": "Suspended: no kit while suspended",
+    "t": "Приостановлен: нет набора, пока профиль приостановлен"
+  },
+  "kit.edit.title": {
+    "en": "Edit {name}",
+    "t": "Изменить {name}"
+  },
+  "kit.edit.verifying": {
+    "en": "Verifying: joins when Verified",
+    "t": "Проверяется: добавится после подтверждения"
+  },
+  "kit.edit.waiting": {
+    "en": "{n} wait in it, counted once Verified",
+    "t": "{n} ждут в нём, учтутся после подтверждения"
+  },
+  "kit.editGbps": {
+    "en": "Add or drop GBPs",
+    "t": "Добавить или убрать GBP"
+  },
+  "kit.gbps": {
+    "en": "{n} GBPs",
+    "t": "{n} GBP"
+  },
+  "kit.gbps.hint": {
+    "en": "a row opens it · q in it shows its QR",
+    "t": "строка открывает его · q в ней показывает QR"
+  },
+  "kit.gbps.name": {
+    "en": "GBP",
+    "t": "GBP"
+  },
+  "kit.gbps.qrOpens": {
+    "en": "QR opens",
+    "t": "QR открывает"
+  },
+  "kit.gbps.title": {
+    "en": "GBPs",
+    "t": "GBP"
+  },
+  "kit.gmb.noCategory": {
+    "en": "No category: nothing to offer but Google's form.",
+    "t": "Нет категории: можно предложить только форму Google."
+  },
+  "kit.gmb.notIn": {
+    "en": "Not in this kit any more.",
+    "t": "Больше не входит в этот набор."
+  },
+  "kit.latest": {
+    "en": "Latest",
+    "t": "Последние"
+  },
+  "kit.latest.copied": {
+    "en": "copied a draft",
+    "t": "скопировал черновик"
+  },
+  "kit.latest.gone": {
+    "en": "a review from a draft gone",
+    "t": "отзыв из черновика удалён"
+  },
+  "kit.latest.hint": {
+    "en": "every scan, copy and review, newest first",
+    "t": "каждое сканирование, копирование и отзыв, сначала новые"
+  },
+  "kit.latest.opened": {
+    "en": "opened its page",
+    "t": "открыл свою страницу"
+  },
+  "kit.latest.posted": {
+    "en": "on Google, from a draft",
+    "t": "в Google, из черновика"
+  },
+  "kit.latest.reviewed": {
+    "en": "on Google, not from a draft",
+    "t": "в Google, не из черновика"
+  },
+  "kit.latest.saved": {
+    "en": "saved a photo",
+    "t": "сохранил фото"
+  },
+  "kit.latest.scanned": {
+    "en": "scanned",
+    "t": "отсканировал"
+  },
+  "kit.latest.shown": {
+    "en": "QR shown",
+    "t": "QR показан"
+  },
+  "kit.left": {
+    "en": "left",
+    "t": "осталось"
+  },
+  "kit.left.counts": {
+    "en": "{d} drafts · {p} photos",
+    "t": "черновиков: {d} · фото: {p}"
+  },
+  "kit.left.google": {
+    "en": "no drafts needed",
+    "t": "черновики не нужны"
+  },
+  "kit.list": {
+    "en": "Review kits",
+    "t": "Наборы отзывов"
+  },
+  "kit.list.members": {
+    "en": "{n} GBPs",
+    "t": "{n} GBP"
+  },
+  "kit.list.new": {
+    "en": "New",
+    "t": "Новый"
+  },
+  "kit.list.none": {
+    "en": "No kit yet: a kit is GBPs you collect reviews for together, from an area, the outline or by hand.",
+    "t": "Наборов пока нет: набор — это GBP, для которых вы собираете отзывы вместе, по району, контуру или вручную."
+  },
+  "kit.list.title": {
+    "en": "Kits",
+    "t": "Наборы"
+  },
+  "kit.next": {
+    "en": "Next GBP",
+    "t": "Следующий GBP"
+  },
   "kit.pane.drafts": {
     "en": "Drafts",
     "t": "Черновики"
@@ -2062,6 +2322,186 @@
   "kit.pane.draftsCounted": {
     "en": "Drafts {drafts}",
     "t": "Черновики {drafts}"
+  },
+  "kit.period": {
+    "en": "Period",
+    "t": "Период"
+  },
+  "kit.period.all": {
+    "en": "All",
+    "t": "Всё"
+  },
+  "kit.period.month": {
+    "en": "30 d",
+    "t": "30 д"
+  },
+  "kit.period.today": {
+    "en": "Today",
+    "t": "Сегодня"
+  },
+  "kit.period.week": {
+    "en": "7 d",
+    "t": "7 д"
+  },
+  "kit.phone.info": {
+    "en": "Its drafts and tally",
+    "t": "Его черновики и счёт"
+  },
+  "kit.phone.locationOff": {
+    "en": "location off",
+    "t": "геолокация выключена"
+  },
+  "kit.phone.order": {
+    "en": "In the kit's order",
+    "t": "В порядке набора"
+  },
+  "kit.pickOne": {
+    "en": "Pick a kit, or make one with New.",
+    "t": "Выберите набор или создайте кнопкой «Новый»."
+  },
+  "kit.pool.about": {
+    "en": "About",
+    "t": "О нём"
+  },
+  "kit.pool.all": {
+    "en": "All {n}",
+    "t": "Все {n}"
+  },
+  "kit.pool.copied": {
+    "en": "copied already: its text stays; add another draft",
+    "t": "уже скопирован: его текст остаётся; добавьте другой черновик"
+  },
+  "kit.pool.discard": {
+    "en": "Discard",
+    "t": "Отменить"
+  },
+  "kit.pool.dots": {
+    "en": "dots: this kit's {n} GBPs, filled = went there",
+    "t": "точки: {n} GBP этого набора, закрашенная — туда ходили"
+  },
+  "kit.pool.draft": {
+    "en": "Draft #{id} · {n} uses",
+    "t": "Черновик №{id} · использований: {n}"
+  },
+  "kit.pool.everywhere": {
+    "en": "none: any GBP of the category",
+    "t": "нет: любой GBP категории"
+  },
+  "kit.pool.leastUsed": {
+    "en": "Least used first",
+    "t": "Сначала наименее используемые"
+  },
+  "kit.pool.length": {
+    "en": "{n} / 4000",
+    "t": "{n} / 4000"
+  },
+  "kit.pool.misses": {
+    "en": "mentions none of: {k}",
+    "t": "не упоминает ничего из: {k}"
+  },
+  "kit.pool.names": {
+    "en": "names {n}: offered everywhere",
+    "t": "называет {n}: предлагается везде"
+  },
+  "kit.pool.newDraft": {
+    "en": "A new draft",
+    "t": "Новый черновик"
+  },
+  "kit.pool.noAreas": {
+    "en": "No area of this country drawn yet: a kit's editor draws one on the map.",
+    "t": "В этой стране ещё не нарисовано ни одного района: редактор набора рисует его на карте."
+  },
+  "kit.pool.only": {
+    "en": "Only for GBPs in",
+    "t": "Только для GBP в"
+  },
+  "kit.pool.pick": {
+    "en": "Pick a draft to edit it, or add one.",
+    "t": "Выберите черновик для правки или добавьте новый."
+  },
+  "kit.pool.unmentioned": {
+    "en": "no draft mentions: {k}",
+    "t": "ни один черновик не упоминает: {k}"
+  },
+  "kit.pool.untagged": {
+    "en": "no tag {n}",
+    "t": "без тега {n}"
+  },
+  "kit.pools": {
+    "en": "Pools",
+    "t": "Пулы"
+  },
+  "kit.pools.drafts": {
+    "en": "{d} drafts",
+    "t": "черновиков: {d}"
+  },
+  "kit.pools.hint": {
+    "en": "what the GBPs draw from · each draft and photo once per GBP",
+    "t": "откуда берут GBP · каждый черновик и фото один раз на GBP"
+  },
+  "kit.pools.open": {
+    "en": "Open pool →",
+    "t": "Открыть пул →"
+  },
+  "kit.prev": {
+    "en": "Previous GBP",
+    "t": "Предыдущий GBP"
+  },
+  "kit.showQr": {
+    "en": "Show QR",
+    "t": "Показать QR"
+  },
+  "kit.tally.copied": {
+    "en": "copied a draft",
+    "t": "скопировал черновик"
+  },
+  "kit.tally.gone": {
+    "en": "gone since",
+    "t": "удалено с тех пор"
+  },
+  "kit.tally.onGoogle": {
+    "en": "on Google",
+    "t": "в Google"
+  },
+  "kit.tally.other": {
+    "en": "+{n} reviews not from drafts",
+    "t": "+{n} отзывов не из черновиков"
+  },
+  "kit.tally.scanned": {
+    "en": "scanned",
+    "t": "отсканировано"
+  },
+  "kit.tally.scansShort": {
+    "en": "scans",
+    "t": "сканов"
+  },
+  "kit.tally.shown": {
+    "en": "QR shown",
+    "t": "QR показан"
+  },
+  "kit.tally.shownShort": {
+    "en": "shown",
+    "t": "показов"
+  },
+  "kit.tally.title": {
+    "en": "Collected",
+    "t": "Собрано"
+  },
+  "kit.toMap": {
+    "en": "Over the map",
+    "t": "Над картой"
+  },
+  "kit.toPage": {
+    "en": "Its own page",
+    "t": "Своя страница"
+  },
+  "kit.up": {
+    "en": "Up",
+    "t": "Вверх"
+  },
+  "kit.window": {
+    "en": "Review kit · {name}",
+    "t": "Набор отзывов · {name}"
   },
   "launch.areas.add": {
     "en": "Add an area, Enter",
@@ -2354,6 +2794,10 @@
   "nav.home.description": {
     "en": "Every GBP on one map",
     "t": "Все GBP на одной карте"
+  },
+  "nav.kits": {
+    "en": "Review kits",
+    "t": "Наборы для проверки"
   },
   "nav.language": {
     "en": "Language",
