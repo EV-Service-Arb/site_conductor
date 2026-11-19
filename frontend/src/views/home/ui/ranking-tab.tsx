@@ -55,8 +55,8 @@ export function RankingTab({ listed: { gmb } }: { listed: Listed }) {
             ) : (
               <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
                 {placed.category.keywords.map((k) => (
-                  <li key={k} className="px-3 py-2 text-sm text-ink">
-                    {k}
+                  <li key={k.text} className="px-3 py-2 text-sm text-ink">
+                    {k.text}
                   </li>
                 ))}
               </ul>

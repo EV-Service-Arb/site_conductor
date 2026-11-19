@@ -19,8 +19,6 @@ export type Placement =
   | { status: "error"; message: string }
   | {
       status: "ok";
-      /** The trade files gop serves, a category's `study` one of them. */
-      trades: readonly string[];
       /** The countries gop has a grid for. */
       countries: readonly string[];
       data: Data | null;
@@ -66,7 +64,7 @@ export function attach(map: google.maps.Map): Promise<Overlay | null> {
     }
     const drawing = await import("@/shared/placement_overlay/placement_overlay");
     await drawing.default();
-    set({ status: "ok", trades: answer.data.trades, countries: answer.data.countries, data: null, legend: null, notice: null, pulling: false, pullFailed: null, refused: null });
+    set({ status: "ok", countries: answer.data.countries, data: null, legend: null, notice: null, pulling: false, pullFailed: null, refused: null });
     return new drawing.Overlay(map, (e: Event) => {
       switch (e.kind) {
         case "data":
@@ -105,7 +103,7 @@ export const categoryKey = (trade: number, country: string): CategoryKey => `${t
 
 export interface MapView {
   heat: string | null;
-  /** The category whose study is drawn: the one picked, else the one category in the outline's scope that has a study. */
+  /** The category whose study is drawn: the one picked, else the one studiable category in the outline's scope. */
   study: CategoryKey | null;
   /** Where `study` comes from. */
   from: "pick" | "scope" | null;
@@ -139,12 +137,17 @@ export function useMapView(): MapView {
   };
 }
 
-/** The one category in the outline's scope that has a study. */
+/** A category placement can study: one with a primary Google category, in a country it has a grid for. */
+export const studiable = (c: Category, countries: readonly string[]) => c.google_primary !== null && countries.includes(c.country);
+
+/** The one studiable category in the outline's scope. */
 function useScopedStudy(): CategoryKey | null {
   const { categories: scope } = useScope();
   const trades = useTrades();
-  if (scope === null || trades.status !== "ok") return null;
-  const studied = trades.data.flatMap((tr) => tr.categories.filter((c) => c.study !== null && scope.some((p) => covers(p, tr.id, c.country))).map((c) => categoryKey(tr.id, c.country)));
+  const placement = usePlacement();
+  if (scope === null || trades.status !== "ok" || placement.status !== "ok") return null;
+  const { countries } = placement;
+  const studied = trades.data.flatMap((tr) => tr.categories.filter((c) => studiable(c, countries) && scope.some((p) => covers(p, tr.id, c.country))).map((c) => categoryKey(tr.id, c.country)));
   return studied.length === 1 ? studied[0]! : null;
 }
 
@@ -162,8 +165,8 @@ export function setMapView(change: Partial<MapView>): void {
 }
 
 /** Why the conductor would not build a study: its own words for it. */
-export type Refusal = "no_study" | "no_google_category" | "no_keywords" | "another_country" | "unstudied";
-const REFUSALS: readonly string[] = ["no_study", "no_google_category", "no_keywords", "another_country", "unstudied"] satisfies Refusal[];
+export type Refusal = "no_google_category" | "another_country" | "unstudied";
+const REFUSALS: readonly string[] = ["no_google_category", "another_country", "unstudied"] satisfies Refusal[];
 
 export type Studied =
   | { status: "loading" }

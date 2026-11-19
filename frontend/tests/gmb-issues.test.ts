@@ -41,7 +41,7 @@ const site = (overdue: number): SiteTag => ({ brand: "aquafix", location: "lyon-
 const PLUMBING = 7;
 /** Plumbing, set up in FR with Google's primary category unless `primary` is null. */
 const plumbing = (primary: GoogleCategory | null = { id: "gcid:plumber", names: { en: "Plumber", fr: "Plombier", ru: "Сантехник" } }): Trade[] => [
-  { id: PLUMBING, name: "Plumbing", created_at: "2026-11-09T00:00:00Z", categories: [{ country: "FR", lang: "fr", keywords: ["plombier"], google_primary: primary, google_additional: [], study: null }] },
+  { id: PLUMBING, name: "Plumbing", created_at: "2026-11-09T00:00:00Z", categories: [{ country: "FR", lang: "fr", keywords: [{ text: "plombier", weight: 1 }], google_primary: primary, google_additional: [], excluded: { words: [], types: [] }, demand: null }] },
 ];
 
 /** Each GMB's issue under `tags`, by id. */

@@ -3031,14 +3031,6 @@
     "en": "Schematic",
     "t": "Схема"
   },
-  "placement.categories": {
-    "en": "Categories: where a study is linked",
-    "t": "Категории: где связано исследование"
-  },
-  "placement.category": {
-    "en": "{category}: keywords, Google's categories, study",
-    "t": "{category}: ключевые слова, категории Google, исследование"
-  },
   "placement.competitors": {
     "en": "Competitors",
     "t": "Конкуренты"
@@ -3078,10 +3070,6 @@
   "placement.imputed": {
     "en": "Imputed cells · {n} of {cells}",
     "t": "Расчётные ячейки · {n} из {cells}"
-  },
-  "placement.keywords": {
-    "en": "Keywords · by search volume",
-    "t": "Ключевые слова · по объёму поиска"
   },
   "placement.legend.linear": {
     "en": "{n} cells in view · colour by magnitude",
@@ -3175,21 +3163,9 @@
     "en": "The category has no Google category: it names the competitors",
     "t": "У категории нет категории Google: она обозначает конкурентов"
   },
-  "placement.refused.keywords": {
-    "en": "The category has no keywords: they weigh the competitors",
-    "t": "У категории нет ключевых слов: они определяют вес конкурентов"
-  },
-  "placement.refused.study": {
-    "en": "The category links no study",
-    "t": "С категорией не связано ни одного исследования"
-  },
   "placement.refused.unstudied": {
     "en": "Placement does not study this category here",
     "t": "Placement не изучает эту категорию здесь"
-  },
-  "placement.studies.category": {
-    "en": "Categories with a study",
-    "t": "Категории с исследованием"
   },
   "placement.studies.scope": {
     "en": "In scope",
@@ -3218,10 +3194,6 @@
   "placement.unconnected": {
     "en": "Placement not connected",
     "t": "Размещение не подключено"
-  },
-  "placement.unweighted": {
-    "en": "No search volume for it: left out of the ranking",
-    "t": "Нет данных об объёме поиска: исключено из рейтинга"
   },
   "prices.cost.label": {
     "en": "{item}: cost in tokens {per}",
@@ -3767,14 +3739,6 @@
     "en": "Worth {usd}: a token is {rate} of what we spend for you",
     "t": "Стоимость {usd}: один токен равен {rate} от суммы, которую мы тратим на вас"
   },
-  "trades.google": {
-    "en": "Google's primary category",
-    "t": "Основная категория Google"
-  },
-  "trades.google.additional": {
-    "en": "Additional categories",
-    "t": "Дополнительные категории"
-  },
   "trades.google.additional.add": {
     "en": "Add",
     "t": "Добавить"
@@ -3794,10 +3758,6 @@
   "trades.google.additional.needPrimary": {
     "en": "Pick the primary category first",
     "t": "Сначала выберите основную категорию"
-  },
-  "trades.google.additional.order": {
-    "en": "Typed into Google's form in this order after the primary, and the order matters. Drag a chip, or move it with ‹ ›.",
-    "t": "Вводятся в форму Google в этом порядке после основной, и порядок важен. Перетащите чип или сдвиньте его ‹ ›."
   },
   "trades.google.additional.remove": {
     "en": "Remove {category}",
@@ -3823,41 +3783,9 @@
     "en": "Search Google's categories",
     "t": "Поиск по категориям Google"
   },
-  "trades.google.where": {
-    "en": "copied in {lang}, as Google's form in {country} names it",
-    "t": "копируется на языке: {lang} — так её называет форма Google, {country}"
-  },
-  "trades.google.why": {
-    "en": "Off Google's own list. Every {category} draft's Launch tab shows them to type in.",
-    "t": "Из списка самого Google. Вкладка запуска каждого черновика {category} показывает их для ввода."
-  },
-  "trades.heldBy": {
-    "en": "Held by",
-    "t": "Принадлежит"
-  },
-  "trades.heldBy.none": {
-    "en": "No GBP holds it yet.",
-    "t": "Ни один GBP её пока не держит."
-  },
-  "trades.heldBy.what": {
-    "en": "one category, several gmails · click narrows the outline",
-    "t": "одна категория, несколько gmail · клик сужает контур"
-  },
-  "trades.keywords": {
-    "en": "Keywords",
-    "t": "Ключевые слова"
-  },
-  "trades.keywords.add": {
-    "en": "Add keywords, comma-separated — no city: the grid point is the place",
-    "t": "Ключевые слова через запятую — без города: точка сетки и есть место"
-  },
   "trades.keywords.remove": {
     "en": "Remove {keyword}",
     "t": "Убрать {keyword}"
-  },
-  "trades.keywords.why": {
-    "en": "Every GBP of the category is ranked and compared on these. A term one study or one location adds stays its own.",
-    "t": "По ним ранжируются и сравниваются все GBP категории. Слово отдельного исследования или точки остаётся их собственным."
   },
   "trades.new": {
     "en": "New trade…",
@@ -3903,22 +3831,6 @@
     "en": "all {n} already have no trade",
     "t": "у всех {n} ниши нет"
   },
-  "trades.study": {
-    "en": "Study",
-    "t": "Исследование"
-  },
-  "trades.study.none": {
-    "en": "None",
-    "t": "Нет"
-  },
-  "trades.study.what": {
-    "en": "which placement trade studies it",
-    "t": "какая ниша placement её изучает"
-  },
-  "trades.study.why": {
-    "en": "With the scope on {category}, the Map panel shows this study. None: the category has no study.",
-    "t": "Когда outline на {category}, панель карты показывает это исследование. Нет: у категории нет исследования."
-  },
   "trades.trade": {
     "en": "Trade",
     "t": "Ниша"
@@ -3930,10 +3842,6 @@
   "trades.window.country": {
     "en": "Country",
     "t": "Страна"
-  },
-  "trades.window.counts": {
-    "en": "{gbps} GBPs · {gmails} gmails",
-    "t": "{gbps} GBP · {gmails} gmail"
   },
   "trades.window.delete": {
     "en": "Delete {trade}",
@@ -3975,10 +3883,6 @@
     "en": "{n} · not set up",
     "t": "{n} · не настроена"
   },
-  "trades.window.trade": {
-    "en": "trade: {gbps} GBPs in {countries} countries",
-    "t": "ниша: {gbps} GBP в {countries} странах"
-  },
   "trades.window.unset": {
     "en": "No longer set up {category}",
     "t": "Снять настройку {category}"
@@ -3986,10 +3890,6 @@
   "trades.window.waiting": {
     "en": "{n} GBPs wait for {category}.",
     "t": "{n} GBP ждут {category}."
-  },
-  "trades.window.willAsk": {
-    "en": "It will ask: keywords in its language · Google's category · the study, if a grid covers it.",
-    "t": "Спросит: ключевые слова на её языке · категорию Google · исследование, если есть сетка."
   },
   "trash.address": {
     "en": "Address",

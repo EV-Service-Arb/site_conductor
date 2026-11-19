@@ -24,6 +24,7 @@ import { ConnectionsTab } from "./connections-tab";
 import { Launch, TextEditor } from "./launch";
 import { RankingTab } from "./ranking-tab";
 import { ReviewsTab } from "./reviews-tab";
+import { useSplit } from "./split";
 import { StatsTab } from "./stats-tab";
 import { TAB_ICON, TAB_NAME } from "./tabs";
 import { VerificationTab } from "./verification-tab";
@@ -95,8 +96,7 @@ export function GbpTitle({ k, page }: { k: Key; page: boolean }) {
 /** A GBP's window: Google's profile as Sync pulled it and what the conductor holds of it, its log, and its state's own tabs; a page wide enough splits Profile beside the tab open (15c). */
 export function GbpBody({ k, page }: { k: Key; page: boolean }) {
   const listed = useListed(k.gmb);
-  const [box, setBox] = useState<HTMLDivElement | null>(null);
-  const wide = useWidth(box) >= SPLIT_PX && page;
+  const [setBox, wide] = useSplit(page);
   const tabs = listed?.gmb.tabs;
   // removed, here or in another tab
   useEffect(() => {
@@ -116,20 +116,6 @@ export function GbpBody({ k, page }: { k: Key; page: boolean }) {
       {wide ? <Split k={k} listed={listed} page={page} /> : <Tabbed k={k} listed={listed} page={page} />}
     </div>
   );
-}
-
-/** Wide enough to hold Profile beside another tab (15c). */
-const SPLIT_PX = 1024;
-
-function useWidth(box: HTMLElement | null): number {
-  const [width, setWidth] = useState(0);
-  useEffect(() => {
-    if (box === null) return;
-    const seen = new ResizeObserver(([e]) => setWidth(e!.contentRect.width));
-    seen.observe(box);
-    return () => seen.disconnect();
-  }, [box]);
-  return width;
 }
 
 function Split({ k, listed, page }: { k: Key; listed: Listed; page: boolean }) {

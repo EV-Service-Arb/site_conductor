@@ -361,7 +361,7 @@ function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: 
               <span className="flex flex-col gap-1 text-xs text-ink-soft">
                 {t(launch.category.then, "then the additional ones, in this order:")}
                 <ol className="flex flex-col gap-0.5">
-                  {placed.category.google_additional.map((g, i) => (
+                  {placed.category.google_additional.map(({ google: g }, i) => (
                     <li key={g.id} className="flex items-center gap-2">
                       <span className="w-4 text-right font-mono tabular-nums">{i + 1}</span>
                       <Copyable category={g} lang={placed.category.lang} />

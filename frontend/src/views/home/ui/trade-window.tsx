@@ -16,47 +16,37 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Input,
-  NativeSelect,
-  NativeSelectOption,
-  ToggleGroup,
-  ToggleGroupItem,
   buttonVariants,
   cn,
 } from "@evinvest/uikit";
-import { Ellipsis, ListFilter, Mail, Pencil, Plus, Tag, Trash2, X } from "lucide-react";
+import { Ellipsis, ListFilter, Pencil, Plus, Tag, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import { chooseCategoryScope, chooseGmailScope, closeWindow, kit, googleName, openWindow, setOnly, useTrades, scopeKeys, trades as tradesKeys, gmbs as gmbsKeys, move } from "@/entities/gmb";
-import { usePlacement } from "@/features/placement-overlay";
-import { type Category, type Country, type Gmail, type Gmb, type Trade, countryValues } from "@/shared/api/schema";
-import { Refused, api, ok } from "@/shared/api";
-import { useLocale, useT, state, placement as placementKeys } from "@/shared/i18n";
-import { useResource } from "@evinvest/api/react";
-import { failureText } from "@/shared/ui/failure-text";
+import { chooseCategoryScope, closeWindow, googleName, openWindow, setOnly, useTrades, scopeKeys, trades as tradesKeys, gmbs as gmbsKeys, move } from "@/entities/gmb";
+import { type Country, type Gmb, type Trade, countryValues } from "@/shared/api/schema";
+import { api, ok } from "@/shared/api";
+import { useLocale, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
-import { GoogleCategories } from "./google-categories";
+import { CategoryTab } from "./category-tab";
 import { categories } from "../model/i18n";
-import { KitPool } from "@/views/kit";
-
-const MAX_KEYWORDS = 50;
 
 /** A trade's window over the map, shaped as a GBP's: its countries as tabs, side by side; the outline stays the one list of its GBPs. */
-export function TradeWindow({ trade, country: tab, gmbs, gmails }: { trade: Trade; country: Country | null; gmbs: readonly Gmb[]; gmails: readonly Gmail[] }) {
+export function TradeWindow({ trade, country: tab, gmbs, page }: { trade: Trade; country: Country | null; gmbs: readonly Gmb[]; page: boolean }) {
   const t = useT();
   const button = useButtonSize();
   const [renaming, setRenaming] = useState(false);
   const held = gmbs.filter((b) => b.trade_id === trade.id);
   const here = tab === null ? held : held.filter((b) => b.country?.code === tab);
-  const holders = new Set(here.map((b) => b.gmail_id));
   const tabs = countryValues.filter((c) => c === tab || trade.categories.some((k) => k.country === c) || held.some((b) => b.country?.code === c));
   const rest = countryValues.filter((c) => !tabs.includes(c));
   const category = tab === null ? undefined : trade.categories.find((c) => c.country === tab);
   const countries = new Set(held.flatMap((b) => (b.country === null ? [] : [b.country.code]))).size;
+  const whole = t(tradesKeys.window.trade, "the trade: {gbps} GBPs in {countries} countries", { gbps: held.length, countries });
 
   return (
-    <section aria-label={trade.name} className="flex flex-col">
+    <section aria-label={trade.name} className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-start gap-3 px-6 pt-4">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           {renaming ? (
@@ -74,8 +64,8 @@ export function TradeWindow({ trade, country: tab, gmbs, gmails }: { trade: Trad
             </h2>
           )}
           <p className="flex flex-wrap gap-x-3 text-sm text-ink-soft tabular-nums">
-            <span>{t(tradesKeys.window.counts, "{gbps} GBPs · {gmails} gmails", { gbps: here.length, gmails: [...holders].filter((g) => g !== null).length })}</span>
-            {tab !== null && <span className="text-ink-soft/70">{t(tradesKeys.window.trade, "trade: {gbps} GBPs in {countries} countries", { gbps: held.length, countries })}</span>}
+            <span>{t(tradesKeys.window.gbps, "{gbps} GBPs", { gbps: here.length })}</span>
+            {tab !== null && <span className="text-ink-soft/70">{whole}</span>}
           </p>
         </div>
         <Button variant="outline" size={button("sm")} onClick={() => chooseCategoryScope([{ trade: trade.id, country: tab ?? "*" }])}>
@@ -123,13 +113,13 @@ export function TradeWindow({ trade, country: tab, gmbs, gmails }: { trade: Trad
           </DropdownMenu>
         )}
       </nav>
-      <div role="tabpanel" className="max-w-3xl p-6">
+      <div role="tabpanel" className="flex min-h-0 flex-1 flex-col">
         {tab === null ? (
-          <p className="text-sm text-ink-soft">{t(tradesKeys.window.pickCountry, "Not set up anywhere yet: add a country.")}</p>
+          <p className="p-6 text-sm text-ink-soft">{t(tradesKeys.window.pickCountry, "Not set up anywhere yet: add a country.")}</p>
         ) : category === undefined ? (
           <NotSetUp trade={trade} country={tab} waiting={here.length} />
         ) : (
-          <CategoryTab key={`${trade.id}.${tab}`} trade={trade} category={category} here={here} gmails={gmails} />
+          <CategoryTab key={`${trade.id}.${tab}`} trade={trade} category={category} here={here} page={page} />
         )}
       </div>
     </section>
@@ -407,181 +397,23 @@ function NotSetUp({ trade, country, waiting }: { trade: Trade; country: Country;
   const name = `${trade.name} · ${country}`;
   const setUp = async () => {
     try {
-      await ok(api.PUT("/trades/{id}/{country}", { params: { path: { id: trade.id, country } }, body: { keywords: [], google_primary: null, google_additional: [], study: null } }));
+      await ok(api.PUT("/trades/{id}/{country}", { params: { path: { id: trade.id, country } }, body: { keywords: [], google_primary: null, google_additional: [], excluded: { words: [], types: [] }, demand: null } }));
       trades.reload();
     } catch (e) {
       notifyFailure(e, t);
     }
   };
   return (
-    <div className="flex max-w-3xl flex-col items-start gap-3 rounded-lg border border-accent-warn/40 bg-accent-warn/5 px-4 py-3">
+    <div className="m-6 flex max-w-3xl flex-col items-start gap-3 rounded-lg border border-accent-warn/40 bg-accent-warn/5 px-4 py-3">
       <p className="text-sm text-ink">{waiting > 0 ? t(tradesKeys.window.waiting, "{n} GBPs wait for {category}.", { n: waiting, category: name }) : t(tradesKeys.window.notSetUp, "{category} is not set up.", { category: name })}</p>
       <Button size={button("sm")} onClick={() => void setUp()}>
         <Plus aria-hidden />
         {t(tradesKeys.window.setUp, "Set up {category}", { category: name })}
       </Button>
-      <p className="text-xs text-ink-soft">{t(tradesKeys.window.willAsk, "It will ask: keywords in its language · Google's category · the study, if a grid covers it.")}</p>
+      <p className="text-xs text-ink-soft">{t(tradesKeys.window.willAsk, "It will ask: Google's categories · keywords in its language, weighed · what is never a competitor · its demand.")}</p>
     </div>
   );
 }
 
 const SECTION = "flex flex-col gap-2";
 const SECTION_HEAD = "flex items-baseline gap-2 text-xs font-semibold tracking-wide text-ink-soft uppercase";
-
-/** A set-up category: what its GBPs rank on and are filed under, or its review kit. */
-function CategoryTab({ trade, category, here, gmails }: { trade: Trade; category: Category; here: readonly Gmb[]; gmails: readonly Gmail[] }) {
-  const t = useT();
-  const [pane, setPane] = useState<"category" | "kit">("category");
-  const pool = useResource(api, "/trades/{id}/{country}/kit", { params: { path: { id: trade.id, country: category.country } } });
-  return (
-    <div className="flex flex-col gap-6">
-      <ToggleGroup type="single" variant="outline" size="sm" className="w-full" value={pane} onValueChange={(v) => (v === "category" || v === "kit") && setPane(v)}>
-        <ToggleGroupItem value="category" className="flex-1">
-          {t(kit.pane.category, "Keywords · category · study")}
-        </ToggleGroupItem>
-        <ToggleGroupItem value="kit" className="flex-1 tabular-nums">
-          {pool.status === "ok" ? t(kit.pane.draftsCounted, "Drafts {drafts}", { drafts: pool.data.drafts.length }) : t(kit.pane.drafts, "Drafts")}
-        </ToggleGroupItem>
-      </ToggleGroup>
-      {pane === "category" ? <CategoryEditor trade={trade} category={category} here={here} gmails={gmails} /> : <KitPool trade={trade.id} country={category.country} />}
-    </div>
-  );
-}
-
-/** A category's keywords, Google's categories and placement's study, and the gmails holding it; each change writes the whole category. */
-function CategoryEditor({ trade, category, here, gmails }: { trade: Trade; category: Category; here: readonly Gmb[]; gmails: readonly Gmail[] }) {
-  const t = useT();
-  const locale = useLocale();
-  const size = useControlSize();
-  const trades = useTrades();
-  const placement = usePlacement();
-  const [typed, setTyped] = useState("");
-  const [failed, setFailed] = useState<{ at: "keywords" | "google"; text: string } | null>(null);
-  const name = `${trade.name} · ${category.country}`;
-  const lang = new Intl.DisplayNames([locale], { type: "language" }).of(category.lang) ?? category.lang;
-  const country = new Intl.DisplayNames([locale], { type: "region" }).of(category.country) ?? category.country;
-  const write = async (change: Partial<Pick<Category, "keywords" | "google_primary" | "google_additional" | "study">>, at: "keywords" | "google" = "keywords") => {
-    const c = { ...category, ...change };
-    try {
-      await ok(api.PUT("/trades/{id}/{country}", { params: { path: { id: trade.id, country: category.country } }, body: { keywords: c.keywords, google_primary: c.google_primary?.id ?? null, google_additional: c.google_additional.map((g) => g.id), study: c.study } }));
-      setFailed(null);
-      trades.reload();
-      return true;
-    } catch (e) {
-      if (!(e instanceof Refused)) throw e;
-      if (e.failure.code !== "unauthenticated") setFailed({ at, text: failureText(e.failure, t) });
-      return false;
-    }
-  };
-  const studies = placement.status === "ok" ? placement.trades : null;
-  const held = [...new Set(here.map((b) => b.gmail_id))].map((id) => ({ id, gmail: id === null ? null : gmails.find((g) => g.id === id), n: here.filter((b) => b.gmail_id === id).length }));
-
-  return (
-    <div className="flex flex-col gap-6">
-      <section className={SECTION}>
-        <h3 className={SECTION_HEAD}>
-          {t(tradesKeys.keywords, "Keywords")}
-          <span className="flex-1" />
-          <span className="font-mono font-normal tabular-nums">
-            {category.keywords.length} / {MAX_KEYWORDS}
-          </span>
-        </h3>
-        {category.keywords.length > 0 && (
-          <span className="flex flex-wrap gap-1.5">
-            {category.keywords.map((k) => (
-              <span key={k} className="flex items-center gap-1 rounded-full border border-border py-0.5 pr-1 pl-2.5 text-xs text-ink">
-                {k}
-                <button type="button" aria-label={t(tradesKeys.keywords.remove, "Remove {keyword}", { keyword: k })} onClick={() => void write({ keywords: category.keywords.filter((x) => x !== k) })} className="rounded-full text-ink-soft hover:text-ink">
-                  <X aria-hidden className="size-3" />
-                </button>
-              </span>
-            ))}
-          </span>
-        )}
-        <form
-          className="flex items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const added = typed.split(",").filter((k) => k.trim() !== "");
-            if (added.length > 0) void write({ keywords: [...category.keywords, ...added] }).then((ok) => ok && setTyped(""));
-          }}
-        >
-          <Input size={size} value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={t(tradesKeys.keywords.add, "Add keywords, comma-separated — no city: the grid point is the place")} aria-label={t(tradesKeys.keywords.add, "Add keywords, comma-separated — no city: the grid point is the place")} className="min-w-0 flex-1" />
-        </form>
-        {failed?.at === "keywords" ? <p className="text-xs text-accent-error">{failed.text}</p> : <p className="text-xs text-ink-soft">{t(tradesKeys.keywords.why, "Every GBP of the category is ranked and compared on these. A term one study or one location adds stays its own.")}</p>}
-      </section>
-
-      <section className={SECTION}>
-        <h3 className={SECTION_HEAD}>
-          {t(tradesKeys.google, "Google's primary category")}
-          <span className="flex-1" />
-          <span className="font-normal tracking-normal normal-case">{t(tradesKeys.google.where, "copied in {lang}, as Google's form in {country} names it", { country, lang })}</span>
-        </h3>
-        <GoogleCategories category={category} write={(change) => void write(change, "google")} />
-        {failed?.at === "google" ? <p className="text-xs text-accent-error">{failed.text}</p> : <p className="text-xs text-ink-soft">{t(tradesKeys.google.why, "Off Google's own list. Every {category} draft's Launch tab shows them to type in.", { category: name })}</p>}
-      </section>
-
-      <section className={SECTION}>
-        <h3 className={SECTION_HEAD}>
-          {t(tradesKeys.study, "Study")}
-          <span className="flex-1" />
-          <span className="font-normal tracking-normal normal-case">{t(tradesKeys.study.what, "which placement trade studies it")}</span>
-        </h3>
-        <NativeSelect
-          size="sm"
-          wrapperClassName="w-full"
-          aria-label={t(tradesKeys.study, "Study")}
-          disabled={studies === null}
-          value={category.study ?? ""}
-          onChange={(e) => void write({ study: e.target.value === "" ? null : e.target.value })}
-        >
-          <NativeSelectOption value="">{t(tradesKeys.study.none, "None")}</NativeSelectOption>
-          {[...new Set([...(studies ?? []), ...(category.study === null ? [] : [category.study])])].map((s) => (
-            <NativeSelectOption key={s} value={s}>
-              {s}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
-        <p className={cn("text-xs text-ink-soft", placement.status === "error" && "text-accent-error")}>
-          {placement.status === "ok"
-            ? t(tradesKeys.study.why, "With the scope on {category}, the Map panel shows this study. None: the category has no study.", { category: name })
-            : placement.status === "loading"
-              ? t(state.loading, "Loading…")
-              : placement.status === "unconnected"
-                ? t(placementKeys.unconnected, "Placement not connected")
-                : placement.message}
-        </p>
-      </section>
-
-      <section className={SECTION}>
-        <h3 className={SECTION_HEAD}>
-          {t(tradesKeys.heldBy, "Held by")}
-          <span className="flex-1" />
-          <span className="font-normal tracking-normal normal-case">{t(tradesKeys.heldBy.what, "one category, several gmails · click narrows the outline")}</span>
-        </h3>
-        {held.length === 0 ? (
-          <p className="text-xs text-ink-soft">{t(tradesKeys.heldBy.none, "No GBP holds it yet.")}</p>
-        ) : (
-          <span className="flex flex-wrap gap-1.5">
-            {held.map(({ id, gmail, n }) => (
-              <button
-                key={id ?? "none"}
-                type="button"
-                disabled={id === null}
-                onClick={() => {
-                  chooseCategoryScope([{ trade: trade.id, country: category.country }]);
-                  if (id !== null) chooseGmailScope([id]);
-                }}
-                className="flex items-center gap-1.5 rounded-md bg-hover px-2 py-1 text-xs text-ink outline-none enabled:hover:bg-hover/70 disabled:text-ink-soft focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Mail aria-hidden className="size-3.5 text-ink-soft" />
-                {gmail?.gmail ?? t(gmbsKeys.gbp.gmail.none, "No gmail yet")}
-                <span className="text-ink-soft tabular-nums">{n}</span>
-              </button>
-            ))}
-          </span>
-        )}
-      </section>
-    </div>
-  );
-}

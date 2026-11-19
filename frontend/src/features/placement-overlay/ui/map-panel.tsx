@@ -6,14 +6,14 @@ import { type ComponentType, type ReactNode, useState } from "react";
 import { PANEL } from "@config";
 
 import { covers, openWindow, useScope, useTrades } from "@/entities/gmb";
-import type { Country } from "@/shared/api/schema";
+import type { Category, Country } from "@/shared/api/schema";
 import { useMe } from "@/entities/session";
 import { api } from "@/shared/api";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { type T, useT, placement as placementKeys, state, hotbar } from "@/shared/i18n";
 import { type Base, setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
 
-import { type CategoryKey, type Data, type Layer, type Legend, type MapView, type Query, type Refusal, type Studied, categoryKey, pull, setMapView, useMapView, usePlacement, useStudied } from "../model/placement";
+import { type CategoryKey, type Data, type Layer, type Legend, type MapView, type Query, type Refusal, type Studied, categoryKey, pull, setMapView, studiable, useMapView, usePlacement, useStudied } from "../model/placement";
 
 const LAYOUT = {
   column: "flex w-80 flex-col",
@@ -46,13 +46,11 @@ const FROM_NAME = {
 
 const STUDIES_NAME = {
   scope: (t) => t(placementKeys.studies.scope, "In scope"),
-  category: (t) => t(placementKeys.studies.category, "Categories with a study"),
+  category: (t) => t(placementKeys.studies.category, "Other categories"),
 } satisfies Record<"scope" | "category", (t: T) => string>;
 
 const REFUSAL = {
-  no_study: (t) => t(placementKeys.refused.study, "The category links no study"),
   no_google_category: (t) => t(placementKeys.refused.google, "The category has no Google category: it names the competitors"),
-  no_keywords: (t) => t(placementKeys.refused.keywords, "The category has no keywords: they weigh the competitors"),
   another_country: (t) => t(placementKeys.refused.country, "The area is in another country than the category"),
   unstudied: (t) => t(placementKeys.refused.unstudied, "Placement does not study this category here"),
 } satisfies Record<Refusal, (t: T) => string>;
@@ -93,7 +91,7 @@ export function MapPanel() {
           {ok && studied.status === "ok" && (
             <>
               <Section title={t(placementKeys.study, "Study")}>
-                <StudyPicker view={view} studied={studied} trades={ok.trades} />
+                <StudyPicker view={view} studied={studied} countries={ok.countries} />
                 <AreaPicker view={view} studied={studied} />
                 {refused !== null && ("refused" in refused ? <Note tone="warn">{REFUSAL[refused.refused](t)}</Note> : <Note tone="error">{refused.failed}</Note>)}
                 {studied.area === null && view.area !== "" && <Note tone="warn">{t(placementKeys.pickArea, "Pick an area, or draw one: a study is bought and kept per area")}</Note>}
@@ -126,7 +124,7 @@ export function MapPanel() {
               <Row icon={MapPin} label={t(hotbar.places, "Google's places")} on={places} onToggle={() => showPlaces(!places)} />
             </Section>
           )}
-          {ok && data !== null && <DataSection view={view} data={data} notice={ok.notice} pulling={ok.pulling} pullFailed={ok.pullFailed} drawn={studied.status === "ok" ? studied.drawn : null} />}
+          {ok && data !== null && <DataSection view={view} data={data} notice={ok.notice} pulling={ok.pulling} pullFailed={ok.pullFailed} drawn={studied.status === "ok" ? studied.drawn : null} picked={studied.status === "ok" ? (studied.picked?.category ?? null) : null} />}
           {ok && data === null && ok.notice !== null && <Note tone="warn">{ok.notice.text}</Note>}
           <Section title={t(placementKeys.base, "Base")}>
             <ToggleGroup type="single" size="sm" value={base} onValueChange={(v) => typeof v === "string" && v !== "" && setBase(v as Base)} className="px-2">
@@ -142,14 +140,14 @@ export function MapPanel() {
 
 type Option = { key: CategoryKey; label: string; group: "scope" | "category" };
 
-/** Categories whose study gop serves, those in the outline's scope first; none: the area's grid alone. */
-function StudyPicker({ view, studied, trades: served }: { view: MapView; studied: Extract<Studied, { status: "ok" }>; trades: readonly string[] }) {
+/** Categories placement can study, those in the outline's scope first; none: the area's grid alone. */
+function StudyPicker({ view, studied, countries }: { view: MapView; studied: Extract<Studied, { status: "ok" }>; countries: readonly string[] }) {
   const t = useT();
   const trades = useTrades();
   const { categories: scope } = useScope();
   const options: Option[] = (trades.status === "ok" ? trades.data : []).flatMap((tr) =>
     tr.categories.flatMap((c) =>
-      c.study !== null && served.includes(c.study)
+      studiable(c, countries)
         ? [{ key: categoryKey(tr.id, c.country), label: `${tr.name} · ${c.country}`, group: scope !== null && scope.some((p) => covers(p, tr.id, c.country)) ? ("scope" as const) : ("category" as const) }]
         : [],
     ),
@@ -191,10 +189,10 @@ function StudyPicker({ view, studied, trades: served }: { view: MapView; studied
   );
 }
 
-/** Where a study is defined: the picked category (its keywords, Google's categories, its study), else every category. */
+/** Where a study is defined: the picked category, else every category. */
 function CategoryButton({ picked }: { picked: { trade: number; country: Country; label: string } | null }) {
   const t = useT();
-  const label = picked === null ? t(placementKeys.categories, "Categories: where a study is linked") : t(placementKeys.category, "{category}: keywords, Google's categories, study", { category: picked.label });
+  const label = picked === null ? t(placementKeys.categories, "Categories: each defines its studies") : t(placementKeys.category, "{category}: its definition", { category: picked.label });
   return (
     <Button variant="ghost" size="sm" icon aria-label={label} title={label} onClick={() => openWindow(picked === null ? { kind: "categories" } : { kind: "trade", trade: picked.trade, country: picked.country })}>
       <Settings2 aria-hidden />
@@ -307,7 +305,7 @@ function PullButton({ searches, pulling, drawn }: { searches: number; pulling: b
   );
 }
 
-function DataSection({ view, data, notice, pulling, pullFailed, drawn }: { view: MapView; data: Data; notice: { text: string; missing: number | null } | null; pulling: boolean; pullFailed: string | null; drawn: Query | null }) {
+function DataSection({ view, data, notice, pulling, pullFailed, drawn, picked }: { view: MapView; data: Data; notice: { text: string; missing: number | null } | null; pulling: boolean; pullFailed: string | null; drawn: Query | null; picked: Category | null }) {
   const t = useT();
   const me = useMe();
   const [now] = useState(() => Date.now() / 1000);
@@ -353,20 +351,22 @@ function DataSection({ view, data, notice, pulling, pullFailed, drawn }: { view:
           ))}
         </Fold>
       )}
-      {trade !== null && (trade.terms.length > 0 || trade.unweighted.length > 0) && (
-        <Fold title={t(placementKeys.keywords, "Keywords · by search volume")}>
-          {trade.terms.map((k) => (
-            <span key={k.text} className="flex items-center gap-2 px-2 py-0.5">
-              <span className="w-28 shrink-0 truncate">{k.text}</span>
-              <span className="h-1.5 rounded-full bg-ink-soft" style={{ width: `${k.weight * 6}rem` }} />
-            </span>
-          ))}
-          {trade.unweighted.map((k) => (
-            <span key={k} className="flex items-center gap-2 px-2 py-0.5 text-accent-warn" title={t(placementKeys.unweighted, "No search volume for it: left out of the ranking")}>
-              <TriangleAlert className="size-3.5 shrink-0" />
-              <span className="truncate">{k}</span>
-            </span>
-          ))}
+      {picked !== null && picked.keywords.length > 0 && (
+        <Fold title={t(placementKeys.keywords, "Keywords · weight")}>
+          {picked.keywords.map((k) =>
+            k.weight === null ? (
+              <span key={k.text} className="flex items-center gap-2 px-2 py-0.5 text-accent-warn" title={t(placementKeys.unweighted, "Scanned, not scored: no weight")}>
+                <TriangleAlert className="size-3.5 shrink-0" />
+                <span className="truncate">{k.text}</span>
+              </span>
+            ) : (
+              <span key={k.text} className="flex items-center gap-2 px-2 py-0.5">
+                <span className="w-28 shrink-0 truncate">{k.text}</span>
+                <span className="h-1.5 rounded-full bg-ink-soft" style={{ width: `${k.weight * 3}rem` }} />
+                <span className="tabular-nums text-ink-soft">{k.weight.toFixed(2)}</span>
+              </span>
+            ),
+          )}
         </Fold>
       )}
       <button

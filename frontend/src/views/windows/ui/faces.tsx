@@ -40,7 +40,7 @@ function AccountBody({ k }: { k: KeyOf<"account"> }) {
   return <AccountWindow gmail={gmail} tab={k.tab} gbps={under(gmails.data, gmail.id).length} />;
 }
 
-function TradeBody({ k }: { k: KeyOf<"trade"> }) {
+function TradeBody({ k, page }: { k: KeyOf<"trade">; page: boolean }) {
   const gmails = useGmails();
   const trades = useTrades();
   const trade = trades.status === "ok" ? (trades.data.find((tr) => tr.id === k.trade) ?? null) : undefined;
@@ -50,7 +50,7 @@ function TradeBody({ k }: { k: KeyOf<"trade"> }) {
   }, [trade, k]);
   if (gmails.status !== "ok" || trade === undefined) return <Loading />;
   if (trade === null) return null;
-  return <TradeWindow trade={trade} country={k.country} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />;
+  return <TradeWindow trade={trade} country={k.country} gmbs={gmails.data.gmbs} page={page} />;
 }
 
 function BrandBody({ k }: { k: KeyOf<"brand"> }) {
