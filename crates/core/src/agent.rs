@@ -3,10 +3,12 @@
 //! takes [`Tool`].
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "api")]
+pub use tool::Tool;
 
 /// What an agent does without asking its person first; each level runs what the one before it does.
 /// What neither destroys nor spends always runs.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, schemars::JsonSchema, strum::EnumString, strum::IntoStaticStr)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum Approval {
@@ -17,9 +19,6 @@ pub enum Approval {
 	/// What spends and what destroys run.
 	Act,
 }
-
-#[cfg(feature = "api")]
-pub use tool::Tool;
 
 #[cfg(feature = "api")]
 mod tool {

@@ -1,3 +1,4 @@
+use std::path::Path;
 mod execute;
 mod runner;
 
@@ -7,7 +8,7 @@ fn js() -> &'static str {
 	static INSTALLED: std::sync::Once = std::sync::Once::new();
 	let js = concat!(env!("CARGO_MANIFEST_DIR"), "/js");
 	INSTALLED.call_once(|| {
-		if !std::path::Path::new(js).join("node_modules").exists() {
+		if !Path::new(js).join("node_modules").exists() {
 			let deno = std::env::split_paths(&std::env::var_os("PATH").unwrap())
 				.map(|d| d.join("deno"))
 				.find(|p| p.is_file())

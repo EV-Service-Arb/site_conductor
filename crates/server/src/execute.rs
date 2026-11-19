@@ -35,15 +35,6 @@ pub const PREFIX: &str = "/api/run";
 /// How long a held call waits for the person before it fails in the code.
 pub const PAUSE: Duration = Duration::from_secs(10 * 60);
 
-/// Whose a session is.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(crate) enum Key {
-	/// The in-page assistant's: a chat, as one person asks in it (acting as another, as that pair).
-	Chat { chat: Uuid, asker: Uuid, actor: Option<String> },
-	/// An MCP session's.
-	Mcp(String),
-}
-
 /// The runner, and the sessions it holds for whom.
 #[derive(Clone)]
 pub struct Sandbox {
@@ -54,78 +45,6 @@ pub struct Sandbox {
 	/// Each live cell's token, and whose session it runs in.
 	tokens: Arc<Mutex<HashMap<String, Key>>>,
 }
-
-/// A session the runner holds.
-struct Live {
-	/// The runner's id of it.
-	runner: String,
-	state: Mutex<LiveState>,
-	/// A call was held.
-	paused: Notify,
-}
-
-struct LiveState {
-	/// The caller's, as of their latest request about this session.
-	credentials: HeaderMap,
-	cell: Option<LiveCell>,
-}
-
-struct LiveCell {
-	n: usize,
-	token: String,
-	approval: Approval,
-	/// Whether a held call may wait for the person; else it fails at once, its proposal in the error.
-	pause: bool,
-	calls: usize,
-	seen: Seen,
-	ended: Option<Ended>,
-	held: Option<Held>,
-	/// What destroys or spends and ran on its own, since it was last told.
-	done: Vec<Call>,
-}
-
-/// A call waiting for the person.
-struct Held {
-	call: Call,
-	/// The in-page answer's action proposing it.
-	action: Option<String>,
-	decide: oneshot::Sender<bool>,
-}
-
-/// A cell as an agent is told it: what it printed since it was last told.
-#[derive(Serialize)]
-pub struct Told {
-	pub cell: usize,
-	pub state: CellState,
-	pub stdout: String,
-	pub stderr: String,
-	pub truncated: bool,
-	/// What destroys or spends and ran on its own since it was last told.
-	pub ran_on_its_own: Vec<Call>,
-}
-
-impl Told {
-	/// What was told, then `next`: one telling of both.
-	pub(crate) fn then(self, next: Told) -> Told {
-		Told {
-			stdout: self.stdout + &next.stdout,
-			stderr: self.stderr + &next.stderr,
-			truncated: self.truncated || next.truncated,
-			ran_on_its_own: [self.ran_on_its_own, next.ran_on_its_own].concat(),
-			..next
-		}
-	}
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CellState {
-	Running,
-	/// Waiting for the person on this call.
-	Paused(Call),
-	Ended(Ended),
-}
-
 impl Sandbox {
 	pub fn try_new(runner: &str, signer: Signer) -> eyre::Result<Self> {
 		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
@@ -133,7 +52,10 @@ impl Sandbox {
 			base: runner.trim_end_matches('/').to_owned(),
 			signer: Arc::new(signer),
 			// past the runner's own bounds: its answer comes first
-			http: reqwest::Client::builder().timeout(CHECK + WAIT + Duration::from_secs(15)).build().wrap_err("the sandbox's client")?,
+			http: reqwest::Client::builder()
+				.timeout(CHECK + WAIT + Duration::from_secs(15))
+				.build()
+				.wrap_err("the sandbox's client")?,
 			sessions: Arc::default(),
 			tokens: Arc::default(),
 		})
@@ -199,14 +121,23 @@ impl Sandbox {
 				};
 				let live = Arc::new(Live {
 					runner: opened.session,
-					state: Mutex::new(LiveState { credentials: HeaderMap::new(), cell: None }),
+					state: Mutex::new(LiveState {
+						credentials: HeaderMap::new(),
+						cell: None,
+					}),
 					paused: Notify::new(),
 				});
 				self.sessions.lock().expect("never held across a panic").insert(key.clone(), live.clone());
 				live
 			}
 		};
-		let running = live.state.lock().expect("never held across a panic").cell.as_ref().is_some_and(|c| c.ended.is_none() && c.held.is_none());
+		let running = live
+			.state
+			.lock()
+			.expect("never held across a panic")
+			.cell
+			.as_ref()
+			.is_some_and(|c| c.ended.is_none() && c.held.is_none());
 		if running {
 			// the record may be behind the runner: a cell that ended since is told now
 			let empty = Told {
@@ -245,7 +176,9 @@ impl Sandbox {
 			self.tokens.lock().expect("never held across a panic").insert(token.clone(), key.clone());
 			token
 		};
-		let started = self.send(reqwest::Method::POST, &format!("/sessions/{}/cells", live.runner), None, Some(&Cell { code, token })).await;
+		let started = self
+			.send(reqwest::Method::POST, &format!("/sessions/{}/cells", live.runner), None, Some(&Cell { code, token }))
+			.await;
 		let ran = match started.and_then(|answer| self.read(&key, &live, answer)) {
 			Ok(ran) => ran,
 			Err(e) => {
@@ -269,7 +202,13 @@ impl Sandbox {
 
 	/// Cell `n` of `key`'s session past what was told, once `until` holds, it paused, or [`WAIT`] passed.
 	pub(crate) async fn poll(&self, key: Key, credentials: HeaderMap, n: usize, until: Until) -> Result<Told, String> {
-		let live = self.sessions.lock().expect("never held across a panic").get(&key).cloned().ok_or("no session here holds a cell: execute starts one")?;
+		let live = self
+			.sessions
+			.lock()
+			.expect("never held across a panic")
+			.get(&key)
+			.cloned()
+			.ok_or("no session here holds a cell: execute starts one")?;
 		{
 			let mut st = live.state.lock().expect("never held across a panic");
 			st.credentials = credentials;
@@ -389,6 +328,85 @@ impl Sandbox {
 	}
 }
 
+/// A cell as an agent is told it: what it printed since it was last told.
+#[derive(Serialize)]
+pub struct Told {
+	pub cell: usize,
+	pub state: CellState,
+	pub stdout: String,
+	pub stderr: String,
+	pub truncated: bool,
+	/// What destroys or spends and ran on its own since it was last told.
+	pub ran_on_its_own: Vec<Call>,
+}
+impl Told {
+	/// What was told, then `next`: one telling of both.
+	pub(crate) fn then(self, next: Told) -> Told {
+		Told {
+			stdout: self.stdout + &next.stdout,
+			stderr: self.stderr + &next.stderr,
+			truncated: self.truncated || next.truncated,
+			ran_on_its_own: [self.ran_on_its_own, next.ran_on_its_own].concat(),
+			..next
+		}
+	}
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CellState {
+	Running,
+	/// Waiting for the person on this call.
+	Paused(Call),
+	Ended(Ended),
+}
+
+/// Whose a session is.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum Key {
+	/// The in-page assistant's: a chat, as one person asks in it (acting as another, as that pair).
+	Chat { chat: Uuid, asker: Uuid, actor: Option<String> },
+	/// An MCP session's.
+	Mcp(String),
+}
+
+/// A session the runner holds.
+struct Live {
+	/// The runner's id of it.
+	runner: String,
+	state: Mutex<LiveState>,
+	/// A call was held.
+	paused: Notify,
+}
+
+struct LiveState {
+	/// The caller's, as of their latest request about this session.
+	credentials: HeaderMap,
+	cell: Option<LiveCell>,
+}
+
+struct LiveCell {
+	n: usize,
+	token: String,
+	approval: Approval,
+	/// Whether a held call may wait for the person; else it fails at once, its proposal in the error.
+	pause: bool,
+	calls: usize,
+	seen: Seen,
+	ended: Option<Ended>,
+	held: Option<Held>,
+	/// What destroys or spends and ran on its own, since it was last told.
+	done: Vec<Call>,
+}
+
+/// A call waiting for the person.
+struct Held {
+	call: Call,
+	/// The in-page answer's action proposing it.
+	action: Option<String>,
+	decide: oneshot::Sender<bool>,
+}
+
 /// 256 random bits, as hex.
 fn random() -> String {
 	let mut bytes = [0; 32];
@@ -463,7 +481,9 @@ async fn relay(State(tools): State<Tools>, req: Request) -> Response {
 		if hints.held_by(approval) {
 			if !pause {
 				let proposal = tools.proposal(&call).map_or_else(|| id.clone(), |p| p.to_string());
-				return refused(format!("not run: the person agrees to it first, and this client cannot ask them from within the code. `call` it with \"confirmed\": true once they agree: {proposal}"));
+				return refused(format!(
+					"not run: the person agrees to it first, and this client cannot ask them from within the code. `call` it with \"confirmed\": true once they agree: {proposal}"
+				));
 			}
 			let (decide, decided) = oneshot::channel();
 			{
@@ -474,7 +494,11 @@ async fn relay(State(tools): State<Tools>, req: Request) -> Response {
 				if c.held.is_some() {
 					return refused("another call of this cell waits for the person: one at a time".into());
 				}
-				c.held = Some(Held { call: call.clone(), action: None, decide });
+				c.held = Some(Held {
+					call: call.clone(),
+					action: None,
+					decide,
+				});
 			}
 			live.paused.notify_waiters();
 			let decided = tokio::time::timeout(PAUSE, decided).await;
@@ -488,8 +512,7 @@ async fn relay(State(tools): State<Tools>, req: Request) -> Response {
 				Ok(Err(_)) => return gone(),
 				Err(_) => return refused(format!("no one agreed to {id} within {} s: it did not run", PAUSE.as_secs())),
 			}
-		}
-		else if let Some(c) = live.state.lock().expect("never held across a panic").cell.as_mut().filter(|c| Some(&c.token) == token.as_ref()) {
+		} else if let Some(c) = live.state.lock().expect("never held across a panic").cell.as_mut().filter(|c| Some(&c.token) == token.as_ref()) {
 			c.done.push(call);
 		}
 		body = Body::from(bytes);

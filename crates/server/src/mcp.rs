@@ -53,36 +53,6 @@ pub(crate) struct Mcp {
 /// The MCP sessions open, by id.
 #[derive(Clone, Default)]
 pub(crate) struct Sessions(Arc<Mutex<HashMap<String, Arc<Session>>>>);
-
-struct Session {
-	id: String,
-	/// The grant's user: no other bearer names this session.
-	user: Uuid,
-	version: &'static str,
-	/// The client declared `elicitation`: it asks its user what the level holds.
-	elicit: bool,
-	used: Mutex<Instant>,
-	/// What was asked of the client, by the request's id, until it answers.
-	asked: Mutex<HashMap<String, oneshot::Sender<bool>>>,
-}
-
-pub(crate) fn routes(mcp: Mcp) -> Router {
-	let no_stream = || async { (StatusCode::METHOD_NOT_ALLOWED, [(header::ALLOW, "POST, DELETE")]) };
-	Router::new().route(oauth::PATH, post(endpoint).get(no_stream).delete(end)).with_state(mcp)
-}
-
-/// The caller, else the answer refusing them.
-async fn caller(m: &Mcp, headers: &HeaderMap) -> Result<Caller, Box<Response>> {
-	match signin::bearer(&m.sign_in, headers, Freshness::Cached).await {
-		Ok(c) => Ok(c),
-		Err(r) if r.code() == Code::Unauthenticated => {
-			let challenge = HeaderValue::from_str(&oauth::challenge(&m.sign_in)).expect("the origin is visible ASCII");
-			Err(Box::new((StatusCode::UNAUTHORIZED, [(header::WWW_AUTHENTICATE, challenge)]).into_response()))
-		}
-		Err(r) => Err(Box::new(signin::refused(&m.sign_in, r))),
-	}
-}
-
 impl Sessions {
 	/// The session the request names, the caller's; else the answer refusing it.
 	fn of(&self, headers: &HeaderMap, caller: &Caller) -> Result<Arc<Session>, Box<Response>> {
@@ -133,6 +103,35 @@ impl Sessions {
 		};
 		self.0.lock().expect("never held across a panic").insert(id.clone(), Arc::new(s));
 		id
+	}
+}
+
+struct Session {
+	id: String,
+	/// The grant's user: no other bearer names this session.
+	user: Uuid,
+	version: &'static str,
+	/// The client declared `elicitation`: it asks its user what the level holds.
+	elicit: bool,
+	used: Mutex<Instant>,
+	/// What was asked of the client, by the request's id, until it answers.
+	asked: Mutex<HashMap<String, oneshot::Sender<bool>>>,
+}
+
+pub(crate) fn routes(mcp: Mcp) -> Router {
+	let no_stream = || async { (StatusCode::METHOD_NOT_ALLOWED, [(header::ALLOW, "POST, DELETE")]) };
+	Router::new().route(oauth::PATH, post(endpoint).get(no_stream).delete(end)).with_state(mcp)
+}
+
+/// The caller, else the answer refusing them.
+async fn caller(m: &Mcp, headers: &HeaderMap) -> Result<Caller, Box<Response>> {
+	match signin::bearer(&m.sign_in, headers, Freshness::Cached).await {
+		Ok(c) => Ok(c),
+		Err(r) if r.code() == Code::Unauthenticated => {
+			let challenge = HeaderValue::from_str(&oauth::challenge(&m.sign_in)).expect("the origin is visible ASCII");
+			Err(Box::new((StatusCode::UNAUTHORIZED, [(header::WWW_AUTHENTICATE, challenge)]).into_response()))
+		}
+		Err(r) => Err(Box::new(signin::refused(&m.sign_in, r))),
 	}
 }
 
@@ -375,13 +374,12 @@ fn stream(m: Mcp, s: Arc<Session>, headers: HeaderMap, work: Work, id: Value) ->
 /// Does `work`, asking the user through `out` what the level holds: the tool's result.
 async fn converse(m: &Mcp, s: &Session, headers: &HeaderMap, work: Work, mut out: mpsc::Sender<Value>) -> Value {
 	match work {
-		Work::Call { call, own } => {
+		Work::Call { call, own } =>
 			if ask(m, s, &call, &mut out).await {
 				run(m, headers, call, own).await
 			} else {
 				text(&json!({ "declined": format!("the user did not agree to {}: it did not run", call.operation) }), false)
-			}
-		}
+			},
 		Work::Cell(mut so_far) => {
 			let key = Key::Mcp(s.id.clone());
 			let sandbox = m.tools.sandbox().expect("a cell ran there");

@@ -55,7 +55,9 @@ async fn a_client_signs_in_and_acts_as_its_user() {
 	assert_eq!(proposal["proposed"]["method"], "DELETE", "{proposal}");
 	let (trades, _) = client.tool(&app, "call", json!({ "operation": "trades" })).await;
 	assert_eq!(trades["body"]["trades"].as_array().unwrap().len(), 1, "nothing ran: {trades}");
-	let (deleted, error) = client.tool(&app, "call", json!({ "operation": "delete_trade", "path": { "id": trade }, "confirmed": true })).await;
+	let (deleted, error) = client
+		.tool(&app, "call", json!({ "operation": "delete_trade", "path": { "id": trade }, "confirmed": true }))
+		.await;
 	assert!(!error, "{deleted}");
 	let (trades, _) = client.tool(&app, "call", json!({ "operation": "trades" })).await;
 	assert_eq!(trades["body"]["trades"].as_array().unwrap().len(), 0);
@@ -67,7 +69,12 @@ async fn a_client_signs_in_and_acts_as_its_user() {
 	assert_eq!(gate(format!("Bearer {bearer}")).await, StatusCode::OK);
 	assert_eq!(gate("Bearer nope".to_owned()).await, StatusCode::UNAUTHORIZED);
 	assert_eq!(gate(format!("Bearer {session}")).await, StatusCode::UNAUTHORIZED, "a browser's session is no bearer");
-	let (status, _) = Mcp { bearer: "nope".into(), session: client.session.clone() }.rpc(&app, "tools/list", json!({})).await;
+	let (status, _) = Mcp {
+		bearer: "nope".into(),
+		session: client.session.clone(),
+	}
+	.rpc(&app, "tools/list", json!({}))
+	.await;
 	assert_eq!(status, StatusCode::UNAUTHORIZED);
 	let (status, headers) = Browser::default().send(&app, Method::POST, "/mcp", &[], false).await;
 	assert_eq!(status, StatusCode::UNAUTHORIZED);
@@ -149,7 +156,9 @@ async fn a_grant_with_the_spend_scope_spends_on_its_own() {
 	let panel = panel(&db).await;
 	let (base, _) = testing::upstream(Router::new()).await;
 	let app = testing::app(panel.clone(), operator(), &base);
-	let (status, _, body) = Browser::default().send_body(&app, Method::GET, "/.well-known/oauth-protected-resource/mcp", &[], false, Body::empty()).await;
+	let (status, _, body) = Browser::default()
+		.send_body(&app, Method::GET, "/.well-known/oauth-protected-resource/mcp", &[], false, Body::empty())
+		.await;
 	assert_eq!(status, StatusCode::OK);
 	assert_eq!(serde_json::from_slice::<Value>(&body).unwrap()["scopes_supported"], json!(["spend", "act"]));
 	let (bearer, _, _) = mcp_grant(&app, "spend").await;
@@ -159,7 +168,8 @@ async fn a_grant_with_the_spend_scope_spends_on_its_own() {
 	let call = listed["result"]["tools"].as_array().unwrap().iter().find(|t| t["name"] == "call").cloned().unwrap();
 	assert!(call["description"].as_str().unwrap().contains("spends runs"), "{call}");
 	let (spent, _) = client.tool(&app, "call", json!({ "operation": "buy_map", "body": { "account": "nope" } })).await;
-	assert!(spent.get("proposed").is_none() && spent.get("status").is_some(), "ran: {spent}");
+	assert!(spent.get("proposed").is_none(), "ran: {spent}");
+	assert!(spent.get("status").is_some(), "ran: {spent}");
 	let (removed, _) = client.tool(&app, "call", json!({ "operation": "delete_trade", "path": { "id": 7 } })).await;
 	assert_eq!(removed["proposed"]["method"], "DELETE", "{removed}");
 }
@@ -183,7 +193,14 @@ async fn a_client_works_in_the_session_it_opened() {
 	let (_, other) = Mcp::initialize(&app, &bearer, json!({})).await;
 	assert_ne!(other.session, client.session);
 	let (status, ..) = Browser::default()
-		.send_body(&app, Method::DELETE, "/mcp", &[("authorization", &auth), ("mcp-session-id", &client.session)], false, Body::empty())
+		.send_body(
+			&app,
+			Method::DELETE,
+			"/mcp",
+			&[("authorization", &auth), ("mcp-session-id", &client.session)],
+			false,
+			Body::empty(),
+		)
 		.await;
 	assert_eq!(status, StatusCode::NO_CONTENT);
 	assert_eq!(client.rpc(&app, "ping", json!({})).await.0, StatusCode::NOT_FOUND, "ended: initialize anew");
@@ -215,7 +232,9 @@ async fn a_client_that_elicits_asks_its_user_before_what_the_grant_holds() {
 	let (_, listed) = client.rpc(&app, "tools/list", json!({})).await;
 	let call = listed["result"]["tools"].as_array().unwrap().iter().find(|t| t["name"] == "call").cloned().unwrap();
 	assert!(call["inputSchema"]["properties"].get("confirmed").is_none(), "{call}");
-	let (_, refused) = client.rpc(&app, "tools/call", json!({ "name": "call", "arguments": { "operation": "trades", "confirmed": true } })).await;
+	let (_, refused) = client
+		.rpc(&app, "tools/call", json!({ "name": "call", "arguments": { "operation": "trades", "confirmed": true } }))
+		.await;
 	assert!(refused["error"]["message"].as_str().unwrap().contains("asks its user itself"), "{refused}");
 
 	let (added, _) = client.tool(&app, "call", json!({ "operation": "add_trade", "body": { "name": "Plumbing" } })).await;
@@ -234,9 +253,13 @@ async fn a_client_that_elicits_asks_its_user_before_what_the_grant_holds() {
 
 	let mut events = client.tool_streamed(&app, "call", json!({ "operation": "delete_trade", "path": { "id": trade } })).await;
 	let asked = events.next().await.unwrap();
-	assert_eq!(client.answer(&app, &asked["id"], json!({ "action": "accept", "content": { "approve": true } })).await, StatusCode::ACCEPTED);
+	assert_eq!(
+		client.answer(&app, &asked["id"], json!({ "action": "accept", "content": { "approve": true } })).await,
+		StatusCode::ACCEPTED
+	);
 	let (deleted, error) = testing::tool_result(&events.next().await.unwrap());
-	assert!(!error && deleted["status"] == 204, "{deleted}");
+	assert!(!error, "{deleted}");
+	assert!(deleted["status"] == 204, "{deleted}");
 	let (trades, _) = client.tool(&app, "call", json!({ "operation": "trades" })).await;
 	assert_eq!(trades["body"]["trades"].as_array().unwrap().len(), 0);
 }

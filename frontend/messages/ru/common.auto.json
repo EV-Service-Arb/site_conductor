@@ -580,16 +580,24 @@
     "t": "Действовать сам"
   },
   "assistant.approval.act.hint": {
-    "en": "Takes the first action at once",
-    "t": "Сразу выполняет первое действие"
+    "en": "Spends and removes without asking",
+    "t": "Тратит и удаляет без запроса"
   },
   "assistant.approval.ask": {
     "en": "Ask first",
     "t": "Спрашивать"
   },
   "assistant.approval.ask.hint": {
-    "en": "Proposes actions; you press to take one",
-    "t": "Предлагает действия, вы нажимаете"
+    "en": "Proposes what spends or removes; you press to take it",
+    "t": "Предлагает то, что тратит или удаляет; вы нажимаете, чтобы принять"
+  },
+  "assistant.approval.spend": {
+    "en": "Spend on its own",
+    "t": "Тратить самостоятельно"
+  },
+  "assistant.approval.spend.hint": {
+    "en": "Spends tokens without asking; proposes what removes",
+    "t": "Тратит токены без запроса; предлагает то, что удаляет"
   },
   "assistant.archive": {
     "en": "Archive",

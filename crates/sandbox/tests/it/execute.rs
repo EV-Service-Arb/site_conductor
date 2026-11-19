@@ -217,12 +217,18 @@ fn pairs(of: &[(&str, &str)]) -> Vec<(String, String)> {
 #[tokio::test]
 async fn code_reaches_only_operations_as_the_asker() {
 	let mut s = Stack::new(vec![
-		round(vec![execute("e1", "const me = await api.GET(\"/api/v1/me\");\nconsole.log(me.data!.email);"), execute("e2", ESCAPES)]),
+		round(vec![
+			execute("e1", "const me = await api.GET(\"/api/v1/me\");\nconsole.log(me.data!.email);"),
+			execute("e2", ESCAPES),
+		]),
 		end("Done."),
 	])
 	.await;
 	s.ask("ask").await;
-	assert!(s.sent.lock().unwrap()[0]["tools"].as_array().unwrap().iter().any(|t| t["name"] == "poll"), "offered with a sandbox");
+	assert!(
+		s.sent.lock().unwrap()[0]["tools"].as_array().unwrap().iter().any(|t| t["name"] == "poll"),
+		"offered with a sandbox"
+	);
 	let read = s.result(1, 0);
 	assert_eq!((&read["state"], &read["stdout"]), (&json!({ "ended": "done" }), &json!("asker@x.com\n")), "{read}");
 	let escaped = s.result(1, 1);
@@ -296,7 +302,10 @@ async fn a_session_keeps_what_its_cells_declared() {
 #[tokio::test]
 async fn signing_out_ends_the_session() {
 	let mut s = Stack::new(vec![
-		round(vec![execute("e1", "const kept = 1;\nfor (;;) { await api.GET(\"/api/v1/me\"); await new Promise((r) => setTimeout(r, 100)); }")]),
+		round(vec![execute(
+			"e1",
+			"const kept = 1;\nfor (;;) { await api.GET(\"/api/v1/me\"); await new Promise((r) => setTimeout(r, 100)); }",
+		)]),
 		end("It runs."),
 		round(vec![execute("e2", "console.log(kept);")]),
 		end("Gone."),
@@ -328,7 +337,8 @@ async fn a_paused_cell_goes_on_once_the_person_agrees() {
 	assert_eq!(turns.last().unwrap()["text"], "It is removed.", "the answer resumed");
 	let sent = s.sent.lock().unwrap();
 	let resumed = sent[2]["messages"].as_array().unwrap().last().unwrap()["content"].as_str().unwrap().to_owned();
-	assert!(resumed.contains("<resumed>") && resumed.contains("removed not_found"), "the call ran in the code: {resumed}");
+	assert!(resumed.contains("<resumed>"), "the call ran in the code: {resumed}");
+	assert!(resumed.contains("removed not_found"), "the call ran in the code: {resumed}");
 }
 
 /// An MCP client that elicits is asked through its stream, and the cell goes on with its user's yes;

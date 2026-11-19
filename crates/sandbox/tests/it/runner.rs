@@ -99,7 +99,8 @@ impl Runner {
 	}
 
 	async fn try_cell(&self, session: &str, code: &str) -> (u16, String) {
-		self.send(reqwest::Method::POST, &format!("/sessions/{session}/cells"), Some(json!({ "code": code, "token": "the-cell" }))).await
+		self.send(reqwest::Method::POST, &format!("/sessions/{session}/cells"), Some(json!({ "code": code, "token": "the-cell" })))
+			.await
 	}
 
 	async fn cell(&self, session: &str, code: &str) -> Ran {
@@ -202,7 +203,9 @@ for (const [what, attempt] of Object.entries(tries)) {{
 async fn a_cell_sees_what_the_cells_before_it_declared() {
 	let r = Runner::start(1).await;
 	let s = r.open().await;
-	let ran = r.end(&s, r.cell(&s, "const n = 41;\ninterface P { x: number }\nfunction twice(v: number) { return v * 2; }").await).await;
+	let ran = r
+		.end(&s, r.cell(&s, "const n = 41;\ninterface P { x: number }\nfunction twice(v: number) { return v * 2; }").await)
+		.await;
 	assert_eq!(ran.ended, Some(Ended::Done), "{}", ran.stderr);
 	let ran = r.end(&s, r.cell(&s, "const p: P = { x: n + 1 };\nconsole.log(p.x, twice(p.x));").await).await;
 	assert_eq!((ran.ended, ran.stdout.as_str()), (Some(Ended::Done), "42 84\n"), "{}", ran.stderr);
@@ -212,7 +215,8 @@ async fn a_cell_sees_what_the_cells_before_it_declared() {
 	assert!(ran.stderr.contains("on purpose"), "{}", ran.stderr);
 	let ran = r.cell(&s, &format!("{HELLO};\nconsole.log(lost);")).await;
 	assert_eq!(ran.ended, Some(Ended::Rejected), "what a cell that threw declared is not seen");
-	assert!(ran.stderr.contains("TS2304") && ran.stderr.contains("cell_3.ts:2"), "{}", ran.stderr);
+	assert!(ran.stderr.contains("TS2304"), "{}", ran.stderr);
+	assert!(ran.stderr.contains("cell_3.ts:2"), "{}", ran.stderr);
 	assert_eq!(r.heard.load(Ordering::SeqCst), 0, "a type error runs nothing");
 
 	let ran = r.end(&s, r.cell(&s, "const n = 1;\nconsole.log(n, twice(n));").await).await;
@@ -231,7 +235,9 @@ async fn output_is_kept_up_to_its_cap() {
 async fn a_long_cell_is_answered_as_it_runs_and_holds_its_session() {
 	let r = Runner::start(1).await;
 	let s = r.open().await;
-	let ran = r.cell(&s, "console.log(\"early\");\nawait new Promise((r) => setTimeout(r, 2500));\nconsole.log(\"late\");").await;
+	let ran = r
+		.cell(&s, "console.log(\"early\");\nawait new Promise((r) => setTimeout(r, 2500));\nconsole.log(\"late\");")
+		.await;
 	assert_eq!(ran.ended, None, "{}", ran.stderr);
 	let mid = r.poll(&s, &ran, "more").await;
 	assert_eq!((mid.ended, format!("{}{}", ran.stdout, mid.stdout).as_str()), (None, "early\n"), "{}", mid.stderr);

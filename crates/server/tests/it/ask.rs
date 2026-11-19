@@ -171,7 +171,17 @@ async fn the_approval_level_holds_only_what_it_does_not_cover() {
 		concierge_origin: ORIGIN.to_owned(),
 	};
 	let model = Model::new(Origins { api: base.clone(), oauth: base }, Some("owner".to_owned().into()));
-	let app = http::app(SignIn::new(p.clone(), Concierge::dev(who), config), None, None, Default::default(), None, None, None, Some(model), None);
+	let app = http::app(
+		SignIn::new(p.clone(), Concierge::dev(who), config),
+		None,
+		None,
+		Default::default(),
+		None,
+		None,
+		None,
+		Some(model),
+		None,
+	);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let json = [("content-type", "application/json")];
@@ -204,10 +214,18 @@ async fn the_approval_level_holds_only_what_it_does_not_cover() {
 	let sent = sent.lock().unwrap().clone();
 	let result = |n: usize, i: usize| sent[n]["messages"].as_array().unwrap().last().unwrap()["content"][i]["content"].as_str().unwrap().to_owned();
 	let proposed = |s: &str| s.contains("\"proposed\"");
-	assert!(proposed(&result(1, 0)) && proposed(&result(1, 1)), "asking first, both wait: {} {}", result(1, 0), result(1, 1));
-	assert!(!proposed(&result(3, 0)) && result(3, 0).contains("\"status\""), "spending on its own, the map's answer is the model's: {}", result(3, 0));
+	assert!(proposed(&result(1, 0)), "asking first, both wait: {} {}", result(1, 0), result(1, 1));
+	assert!(proposed(&result(1, 1)), "asking first, both wait: {} {}", result(1, 0), result(1, 1));
+	assert!(!proposed(&result(3, 0)), "spending on its own, the map's answer is the model's: {}", result(3, 0));
+	assert!(result(3, 0).contains("\"status\""), "spending on its own, the map's answer is the model's: {}", result(3, 0));
 	assert!(proposed(&result(3, 1)), "and what destroys still waits: {}", result(3, 1));
-	assert!(!proposed(&result(5, 0)) && !proposed(&result(5, 1)), "acting on its own, both ran: {} {}", result(5, 0), result(5, 1));
-	let call = |n: usize| sent[n]["tools"].as_array().unwrap().iter().find(|t| t["name"] == "call").unwrap()["description"].as_str().unwrap().to_owned();
+	assert!(!proposed(&result(5, 0)), "acting on its own, both ran: {} {}", result(5, 0), result(5, 1));
+	assert!(!proposed(&result(5, 1)), "acting on its own, both ran: {} {}", result(5, 0), result(5, 1));
+	let call = |n: usize| {
+		sent[n]["tools"].as_array().unwrap().iter().find(|t| t["name"] == "call").unwrap()["description"]
+			.as_str()
+			.unwrap()
+			.to_owned()
+	};
 	assert_ne!(call(0), call(4), "the tool says what the level holds");
 }

@@ -30,6 +30,11 @@ use crate::{
 pub const ORIGIN: &str = "http://127.0.0.1:59120";
 pub const SEED: &str = "k1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
 
+const MCP_VERIFIER: &str = "a-verifier-of-forty-three-or-more-characters-0123456789";
+
+const MCP_REDIRECT: &str = "http://127.0.0.1/callback";
+/// The client listens on a port of its own (RFC 8252 §7.3).
+const MCP_LISTENING: &str = "http://127.0.0.1:43117/callback";
 pub type Log = Arc<Mutex<Vec<Seen>>>;
 
 /// What a service behind the conductor was sent.
@@ -203,16 +208,6 @@ impl Browser {
 	}
 }
 
-
-const MCP_VERIFIER: &str = "a-verifier-of-forty-three-or-more-characters-0123456789";
-const MCP_REDIRECT: &str = "http://127.0.0.1/callback";
-/// The client listens on a port of its own (RFC 8252 §7.3).
-const MCP_LISTENING: &str = "http://127.0.0.1:43117/callback";
-
-fn path_of(location: &str) -> String {
-	location.strip_prefix(ORIGIN).unwrap_or(location).to_owned()
-}
-
 /// An MCP client registered and authorized through the whole OAuth dance, its user consenting to
 /// `approval`: its bearer, the browser of the user who consented, and that browser's own session.
 pub async fn mcp_grant(app: &Router, approval: &str) -> (String, Browser, String) {
@@ -301,20 +296,25 @@ pub async fn mcp_grant(app: &Router, approval: &str) -> (String, Browser, String
 	(bearer, user, session)
 }
 
-
 /// An MCP client's session at `/mcp`.
 pub struct Mcp {
 	pub bearer: String,
 	pub session: String,
 }
-
 impl Mcp {
 	/// Initializes as the client holding `bearer`, declaring `capabilities`: what `/mcp` answered, and the session.
 	pub async fn initialize(app: &Router, bearer: &str, capabilities: serde_json::Value) -> (serde_json::Value, Self) {
 		let body = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2025-06-18", "capabilities": capabilities, "clientInfo": { "name": "t", "version": "0" } } });
 		let auth = format!("Bearer {bearer}");
 		let (status, headers, body) = Browser::default()
-			.send_body(app, Method::POST, "/mcp", &[("authorization", &auth), ("content-type", "application/json")], false, Body::from(body.to_string()))
+			.send_body(
+				app,
+				Method::POST,
+				"/mcp",
+				&[("authorization", &auth), ("content-type", "application/json")],
+				false,
+				Body::from(body.to_string()),
+			)
 			.await;
 		assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
 		let session = headers["mcp-session-id"].to_str().unwrap().to_owned();
@@ -376,7 +376,10 @@ impl Mcp {
 /// A tool's result, its text parsed, and whether it is an error.
 pub fn tool_result(res: &serde_json::Value) -> (serde_json::Value, bool) {
 	let result = &res["result"];
-	(serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap(), result["isError"].as_bool().unwrap())
+	(
+		serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap(),
+		result["isError"].as_bool().unwrap(),
+	)
 }
 
 /// An answer's SSE stream.
@@ -384,7 +387,6 @@ pub struct Events {
 	body: Body,
 	read: String,
 }
-
 impl Events {
 	/// Its next event's data; `None` once it ended.
 	pub async fn next(&mut self) -> Option<serde_json::Value> {
@@ -416,4 +418,8 @@ pub fn conductor(panel: Panel, permissions: PermissionSet, email: &str, base: &U
 	let sign_in = SignIn::new(panel, Concierge::dev(who), config);
 	let forward = Forward::new(sign_in.clone(), services(base));
 	(sign_in, forward)
+}
+
+fn path_of(location: &str) -> String {
+	location.strip_prefix(ORIGIN).unwrap_or(location).to_owned()
 }

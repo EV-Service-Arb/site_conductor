@@ -99,7 +99,7 @@ async fn main() -> eyre::Result<()> {
 	let prelude = Url::from_file_path(js.join("prelude.ts")).expect("canonical paths are absolute");
 	let cache = std::env::temp_dir().join("sa_sandbox-deno");
 	std::fs::create_dir_all(&cache).wrap_err_with(|| format!("creating {}", cache.display()))?;
-	let (supervise, watched) = mpsc::unbounded_channel();
+	let (supervise, watched) = mpsc::channel(max);
 	let runner = Runner(Arc::new(Inner {
 		max,
 		deno,
@@ -125,8 +125,9 @@ async fn main() -> eyre::Result<()> {
 }
 
 /// Drives every session's process until it ends.
-async fn watch(mut watched: mpsc::UnboundedReceiver<BoxFuture<'static, ()>>) {
+async fn watch(mut watched: mpsc::Receiver<BoxFuture<'static, ()>>) {
 	let mut sessions = FuturesUnordered::new();
+	//LOOP: the runner's whole life; it ends with the server
 	loop {
 		tokio::select! {
 			Some(session) = watched.recv() => sessions.push(session),
@@ -137,98 +138,6 @@ async fn watch(mut watched: mpsc::UnboundedReceiver<BoxFuture<'static, ()>>) {
 
 #[derive(Clone)]
 struct Runner(Arc<Inner>);
-
-struct Inner {
-	max: usize,
-	deno: PathBuf,
-	/// `SANDBOX_JS`, canonical.
-	js: PathBuf,
-	prelude: Url,
-	/// `--allow-net`'s one `host:port`.
-	net: String,
-	/// `SA_RUN_URL`: where the prelude's client sends.
-	origin: String,
-	/// `DENO_DIR`, shared: the code cannot write, only Deno's own caches do.
-	cache: PathBuf,
-	keys: Keys,
-	limit: Duration,
-	wait: Duration,
-	sessions: Mutex<HashMap<String, Arc<Session>>>,
-	supervise: mpsc::UnboundedSender<BoxFuture<'static, ()>>,
-}
-
-struct Session {
-	id: String,
-	/// The cells' modules, and nothing else the session may read.
-	dir: tempfile::TempDir,
-	stdin: tokio::sync::Mutex<ChildStdin>,
-	state: Mutex<SessionState>,
-	/// A cell said more, or ended.
-	changed: Notify,
-	/// Asks its watcher to kill it.
-	kill: Notify,
-}
-
-struct SessionState {
-	cells: Vec<CellState>,
-	/// Each name a cell that ran to its end declared: the latest such cell, and whether it is a type.
-	names: BTreeMap<String, (usize, bool)>,
-	/// A cell being checked or running; none other starts until it ends.
-	busy: Option<usize>,
-	/// When the running cell is killed.
-	deadline: Option<tokio::time::Instant>,
-	/// Why it ended; then it is no longer held.
-	gone: Option<Ended>,
-	used: Instant,
-}
-
-#[derive(Default)]
-struct CellState {
-	stdout: Kept,
-	stderr: Kept,
-	ended: Option<Ended>,
-	declares: Vec<Name>,
-}
-
-/// A top-level declaration of a cell, as `js/names.ts` reads it.
-#[derive(Clone, Deserialize)]
-struct Name {
-	name: String,
-	#[serde(rename = "type")]
-	is_type: bool,
-	exported: bool,
-}
-
-/// Why a request about a session was refused.
-enum Refused {
-	Gone,
-	Busy(usize),
-	NoCell(usize),
-	Full,
-	Failed(eyre::Report),
-}
-
-impl IntoResponse for Refused {
-	fn into_response(self) -> Response {
-		match self {
-			Self::Gone => (StatusCode::GONE, "the runner holds no such session: its state is gone").into_response(),
-			Self::Busy(cell) => (StatusCode::CONFLICT, format!("cell {cell} still runs: poll it to its end first")).into_response(),
-			Self::NoCell(cell) => (StatusCode::NOT_FOUND, format!("the session has no cell {cell}")).into_response(),
-			Self::Full => (StatusCode::SERVICE_UNAVAILABLE, "every session's slot runs a cell: ask again shortly").into_response(),
-			Self::Failed(e) => {
-				tracing::error!("a session: {e:?}");
-				(StatusCode::INTERNAL_SERVER_ERROR, format!("{e:#}")).into_response()
-			}
-		}
-	}
-}
-
-impl From<eyre::Report> for Refused {
-	fn from(e: eyre::Report) -> Self {
-		Self::Failed(e)
-	}
-}
-
 impl Runner {
 	fn deno(&self, dir: &Path) -> tokio::process::Command {
 		let r = &self.0;
@@ -313,7 +222,8 @@ impl Runner {
 		r.sessions.lock().expect("never held across a panic").insert(id.clone(), s.clone());
 		r.supervise
 			.send(supervise(self.clone(), s, child, format!("\0SA:{nonce}:")).boxed())
-			.expect("the watcher lives as long as the server");
+			.await
+			.map_err(|_| eyre::eyre!("the watcher lives as long as the server"))?;
 		Ok(Opened { session: id })
 	}
 
@@ -385,7 +295,10 @@ impl Runner {
 		let mut stdin = reading.stdin.take().expect("piped");
 		stdin.write_all(code.as_bytes()).await.wrap_err("handing names.ts the code")?;
 		drop(stdin);
-		let read = tokio::time::timeout(CHECK, reading.wait_with_output()).await.wrap_err("names.ts past CHECK")?.wrap_err("names.ts")?;
+		let read = tokio::time::timeout(CHECK, reading.wait_with_output())
+			.await
+			.wrap_err("names.ts past CHECK")?
+			.wrap_err("names.ts")?;
 		eyre::ensure!(read.status.success(), "names.ts: {}", String::from_utf8_lossy(&read.stderr));
 		let mut declares: Vec<Name> = serde_json::from_slice(&read.stdout).wrap_err("names.ts's answer")?;
 		declares.dedup_by(|a, b| a.name == b.name);
@@ -468,7 +381,108 @@ impl Runner {
 		if n >= s.state.lock().expect("never held across a panic").cells.len() {
 			return Err(Refused::NoCell(n));
 		}
-		Ok(self.answer(&s, n, Seen { stdout: poll.stdout, stderr: poll.stderr }, poll.until).await)
+		Ok(self
+			.answer(
+				&s,
+				n,
+				Seen {
+					stdout: poll.stdout,
+					stderr: poll.stderr,
+				},
+				poll.until,
+			)
+			.await)
+	}
+}
+
+struct Inner {
+	max: usize,
+	deno: PathBuf,
+	/// `SANDBOX_JS`, canonical.
+	js: PathBuf,
+	prelude: Url,
+	/// `--allow-net`'s one `host:port`.
+	net: String,
+	/// `SA_RUN_URL`: where the prelude's client sends.
+	origin: String,
+	/// `DENO_DIR`, shared: the code cannot write, only Deno's own caches do.
+	cache: PathBuf,
+	keys: Keys,
+	limit: Duration,
+	wait: Duration,
+	sessions: Mutex<HashMap<String, Arc<Session>>>,
+	supervise: mpsc::Sender<BoxFuture<'static, ()>>,
+}
+
+struct Session {
+	id: String,
+	/// The cells' modules, and nothing else the session may read.
+	dir: tempfile::TempDir,
+	stdin: tokio::sync::Mutex<ChildStdin>,
+	state: Mutex<SessionState>,
+	/// A cell said more, or ended.
+	changed: Notify,
+	/// Asks its watcher to kill it.
+	kill: Notify,
+}
+
+struct SessionState {
+	cells: Vec<CellState>,
+	/// Each name a cell that ran to its end declared: the latest such cell, and whether it is a type.
+	names: BTreeMap<String, (usize, bool)>,
+	/// A cell being checked or running; none other starts until it ends.
+	busy: Option<usize>,
+	/// When the running cell is killed.
+	deadline: Option<tokio::time::Instant>,
+	/// Why it ended; then it is no longer held.
+	gone: Option<Ended>,
+	used: Instant,
+}
+
+#[derive(Default)]
+struct CellState {
+	stdout: Kept,
+	stderr: Kept,
+	ended: Option<Ended>,
+	declares: Vec<Name>,
+}
+
+/// A top-level declaration of a cell, as `js/names.ts` reads it.
+#[derive(Clone, Deserialize)]
+struct Name {
+	name: String,
+	#[serde(rename = "type")]
+	is_type: bool,
+	exported: bool,
+}
+
+/// Why a request about a session was refused.
+enum Refused {
+	Gone,
+	Busy(usize),
+	NoCell(usize),
+	Full,
+	Failed(eyre::Report),
+}
+
+impl IntoResponse for Refused {
+	fn into_response(self) -> Response {
+		match self {
+			Self::Gone => (StatusCode::GONE, "the runner holds no such session: its state is gone").into_response(),
+			Self::Busy(cell) => (StatusCode::CONFLICT, format!("cell {cell} still runs: poll it to its end first")).into_response(),
+			Self::NoCell(cell) => (StatusCode::NOT_FOUND, format!("the session has no cell {cell}")).into_response(),
+			Self::Full => (StatusCode::SERVICE_UNAVAILABLE, "every session's slot runs a cell: ask again shortly").into_response(),
+			Self::Failed(e) => {
+				tracing::error!("a session: {e:?}");
+				(StatusCode::INTERNAL_SERVER_ERROR, format!("{e:#}")).into_response()
+			}
+		}
+	}
+}
+
+impl From<eyre::Report> for Refused {
+	fn from(e: eyre::Report) -> Self {
+		Self::Failed(e)
 	}
 }
 
@@ -479,6 +493,7 @@ async fn supervise(runner: Runner, s: Arc<Session>, mut child: Child, marker: St
 	let (mut out_buf, mut err_buf) = ([0u8; 8192], [0u8; 8192]);
 	let (mut out_open, mut err_open) = (true, true);
 	let mut pending: Vec<u8> = Vec::new();
+	//LOOP: the session's whole life; it breaks when its process ends or is killed
 	let ended = loop {
 		let changed = s.changed.notified();
 		tokio::pin!(changed);
@@ -540,6 +555,7 @@ async fn supervise(runner: Runner, s: Arc<Session>, mut child: Child, marker: St
 fn sort(s: &Session, pending: &mut Vec<u8>, marker: &str) {
 	let marker = marker.as_bytes();
 	let mut st = s.state.lock().expect("never held across a panic");
+	//LOOP: once per marker read, then once more for what follows the last
 	loop {
 		let at = pending.windows(marker.len()).position(|w| w == marker);
 		// what may be a marker's start waits for the rest
@@ -603,7 +619,19 @@ fn routes(runner: Runner) -> Router {
 async fn conductor_only(State(runner): State<Runner>, req: Request, next: Next) -> Response {
 	let token = req.headers().get(sa_auth::HEADER).and_then(|v| v.to_str().ok());
 	let now = jiff::Timestamp::now().as_second();
-	let verified = token.map(|t| sa_auth::verify(&runner.0.keys, t, Service::Sandbox, sa_auth::Request { method: req.method().as_str(), path: req.uri().path(), body: None }, now));
+	let verified = token.map(|t| {
+		sa_auth::verify(
+			&runner.0.keys,
+			t,
+			Service::Sandbox,
+			sa_auth::Request {
+				method: req.method().as_str(),
+				path: req.uri().path(),
+				body: None,
+			},
+			now,
+		)
+	});
 	match verified {
 		Some(Ok(a)) if a.principal == Principal::Conductor => next.run(req).await,
 		refused => {
