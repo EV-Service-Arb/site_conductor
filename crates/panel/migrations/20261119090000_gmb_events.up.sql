@@ -9,7 +9,7 @@ CREATE TABLE gmb_events (
 	-- none: Google, or a run
 	by BLOB REFERENCES users (user_id),
 	-- sa_panel::store::gmbs::Event's tag
-	kind TEXT NOT NULL CHECK (kind IN ('added', 'state', 'edited', 'synced', 'gmail', 'trade', 'brand', 'film', 'switched', 'removed', 'restored', 'launched', 'stopped')),
+	kind TEXT NOT NULL CHECK (kind IN ('added', 'state', 'edited', 'synced', 'gmail', 'trade', 'brand', 'film', 'switched', 'removed', 'restored', 'launched', 'stopped', 'email')),
 	-- the Event, its kind among it
 	data TEXT NOT NULL CHECK (json_valid(data) AND data ->> 'kind' = kind),
 	CHECK (gmb_id IS NOT NULL OR gmail_id IS NOT NULL)
