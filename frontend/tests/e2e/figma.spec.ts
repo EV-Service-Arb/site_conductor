@@ -1,19 +1,32 @@
 import { test } from "@playwright/test";
-import { defineFigmaSuite } from "@evinvest/figma-render";
+import { defineFigmaSuite, type Section } from "@evinvest/figma-render";
+import { href } from "@evinvest/views";
 
-// Where the crawl starts: the pages no link reaches. `nextjs-portal` is `next dev`'s indicator.
+import { VIEWS } from "../../src/shared/api/views";
+
+// Where the crawl starts: every view a URL alone opens, each window Home opens by a flag, and the states no link reaches.
+const table = VIEWS as unknown as Parameters<typeof href>[0];
+const at = (view: string, params: Record<string, unknown>) => href(table, { view, params } as never);
+const views: Section[] = Object.entries(VIEWS.views).flatMap(([view, v]) =>
+  v.params.required.length > 0 || v.query.required.length > 0 ? [] : [{ name: view, url: at(view, {}), selector: "main" }],
+);
+const windows: Section[] = Object.entries(VIEWS.views.home.query.properties).flatMap(([key, p]) =>
+  "type" in p && p.type === "boolean" ? [{ name: `home ${key}`, url: at("home", { [key]: true }), selector: "main" }] : [],
+);
 const ASSISTANT = '[aria-label="Assistant"]';
 defineFigmaSuite(
   { test },
   [
-    { name: "home", url: "/", selector: "main" },
+    ...views,
+    ...windows,
     { name: "assistant", url: "/?assistant=sidebar", selector: ASSISTANT },
     { name: "assistant floating", url: "/?assistant=floating", selector: ASSISTANT },
     { name: "access", url: "/access?continue=%2F&need=sa%3Aoperator", selector: "main" },
   ],
   {
-    hide: ["nextjs-portal"],
-    // `/account`, `/wallet`: the platform's, which refuses a localhost origin; the rest are no pages
-    exclude: [/^\/(account|wallet)\b/, /^\/(auth|api|mcp|grafana)\//],
+    hide: ["nextjs-portal"], // `next dev`'s indicator
+    // `/account`, `/wallet`: the platform's, which refuses a localhost origin; `assistant=`: carried into every link from
+    // a page that shows it; the rest are no pages
+    exclude: [/^\/(account|wallet)\b/, /[?&]assistant=/, /^\/(auth|api|mcp|grafana)\//],
   },
 );

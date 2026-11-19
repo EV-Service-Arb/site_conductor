@@ -9,7 +9,7 @@ const port = (name: string): number => {
 // The real stack on ports of its own (`dev --port`: its conductor, dev sign-in as an admin, and its
 // `next dev`), never a running one's servers: those may face the real backend, as an operator. Run
 // through the flake, which supplies `@playwright/test` with its pinned browsers.
-export function stackConfig({ ports, args, specs }: { ports: [stack: string, web: string]; args: string; specs: { testMatch: string } | { testIgnore: string } }) {
+export function stackConfig({ ports, args, specs, env }: { ports: [stack: string, web: string]; args: string; specs: { testMatch: string } | { testIgnore: string }; env: Record<string, string> }) {
   const STACK = port(ports[0]);
   const WEB = port(ports[1]);
   if (WEB !== STACK + 1) throw new Error(`${ports[1]} ${WEB}: \`dev --port ${STACK}\` serves its next dev on ${STACK + 1}`);
@@ -36,11 +36,12 @@ export function stackConfig({ ports, args, specs }: { ports: [stack: string, web
       cwd: "../../..",
       url: `http://localhost:${WEB}/`,
       reuseExistingServer: false,
-      env: { SA_CONDUCTOR_CONFIG: new URL("./conductor.nix", import.meta.url).pathname }, // no Google accounts: never spends on, nor reads, a person's
+      env,
       timeout: 30 * 60_000, // the conductor's and its peers' builds; with --from-prod, the restore too
+      gracefulShutdown: { signal: "SIGTERM", timeout: 15_000 }, // its default SIGKILL skips local-stack's stop_all: the watched servers, in groups of their own, serve on and hold the output open
     },
   });
 }
 
 // the specs touch the conductor's own screens alone
-export default stackConfig({ ports: ["E2E_STACK_PORT", "E2E_WEB_PORT"], args: "--no-peers", specs: { testIgnore: "figma.spec.ts" } });
+export default stackConfig({ ports: ["E2E_STACK_PORT", "E2E_WEB_PORT"], args: "--no-peers", specs: { testIgnore: "figma.spec.ts" }, env: { SA_CONDUCTOR_CONFIG: new URL("./conductor.nix", import.meta.url).pathname } }); // no Google accounts: never spends on, nor reads, a person's
