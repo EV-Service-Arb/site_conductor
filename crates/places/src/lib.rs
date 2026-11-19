@@ -11,7 +11,7 @@ mod queries_cache;
 
 use std::{sync::Arc, time::Duration};
 
-pub use accounts::{Account, Accounts, Business, Export, Key, Provides};
+pub use accounts::{Account, Accounts, Export, Key, Provides};
 pub use keys::{Keys, Spent};
 use parse::Parsed;
 use queries_cache::Request;
