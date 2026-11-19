@@ -49,8 +49,6 @@ export function KitBody({ at, page }: { at: KitAt; page: boolean }) {
   );
 }
 
-/** One level up: a GBP or a pool to its kit, a kit to the list. */
-const up = (at: KitAt): KitAt => (at.gmb !== undefined || at.pool !== undefined ? { kit: at.kit } : { kit: "" });
 
 export function KitTitle({ at }: { at: KitAt }) {
   const t = useT();
@@ -58,8 +56,8 @@ export function KitTitle({ at }: { at: KitAt }) {
   const name = useKitName(at.kit);
   return (
     <span className="flex min-w-0 items-center gap-1">
-      {at.kit !== "" && (
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(kitKeys.up, "Up")} onClick={() => go(up(at))}>
+      {(at.gmb !== undefined || at.pool !== undefined) && (
+        <Button variant="ghost" size={button("sm")} icon aria-label={t(kitKeys.up, "Up")} onClick={() => go({ kit: at.kit })}>
           <ChevronLeft aria-hidden />
         </Button>
       )}

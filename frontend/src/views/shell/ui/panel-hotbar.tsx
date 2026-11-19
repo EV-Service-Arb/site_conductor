@@ -2,6 +2,8 @@
 
 import { Hotbar, type HotbarAction, StatusItem, type StatusTone, useBinding } from "@evinvest/uikit";
 import { Layers, MapPin, Maximize2, QrCode, Satellite } from "lucide-react";
+import { useState } from "react";
+
 import { closeWindow, floatWindow, hideWindow, openWindow, subjectOf, useOpenWindows, useShown } from "@/entities/gmb";
 import { useAt } from "@/shared/lib/location";
 
@@ -11,6 +13,7 @@ import { type LiveStatus, useLiveStatus } from "@evinvest/api/react";
 import { RunningBrowsers } from "@/features/browser-session";
 import { MapPanel, MapPreview } from "@/features/placement-overlay";
 import { setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
+import { KitsList } from "@/views/kit";
 import { FACES, useTrackOpen, useWindowLabel } from "@/views/windows";
 
 const LIVE_NAME = {
@@ -35,14 +38,13 @@ export function PanelHotbar() {
   const open = useOpenWindows();
   const label = useWindowLabel();
   useTrackOpen();
-  const kitList = shown?.key.kind === "kit" && shown.key.at.kit === "";
-  const openKits = () => openWindow({ kind: "kit", at: { kit: "" } });
+  const [kits, showKits] = useState(false);
   const satellite = useBase() === "satellite";
   const togglePlaces = () => showPlaces(!places);
   const toggleBase = () => setBase(satellite ? "schematic" : "satellite");
   useBinding({ on: { key: "p" }, id: "places", run: { label: t(hotbar.places, "Google's places"), run: onMap ? togglePlaces : null } });
   useBinding({ on: { key: "b" }, id: "base", run: { label: t(hotbar.base, "Satellite"), run: onMap ? toggleBase : null } });
-  useBinding({ on: { key: "k" }, id: "kit-list", run: { label: t(hotbar.kits, "Review kits"), run: openKits } });
+  useBinding({ on: { key: "k" }, id: "kit-list", run: { label: t(hotbar.kits, "Review kits"), run: () => showKits(!kits) } });
   // shown over the map: pressed, a click hides it; hidden: a click shows it again; as its page: a click floats it back
   const windows: HotbarAction[] = open.map((k) => {
     const here = shown !== null && subjectOf(shown.key) === subjectOf(k) ? shown : null;
@@ -63,7 +65,20 @@ export function PanelHotbar() {
           { id: "places", label: t(hotbar.places, "Google's places"), icon: MapPin, binding: "places", pressed: places, onSelect: togglePlaces },
         ]
       : []),
-    { id: "kit-list", label: t(hotbar.kits, "Review kits"), icon: QrCode, binding: "kit-list", pressed: kitList, onSelect: openKits },
+    {
+      id: "kit-list",
+      label: t(hotbar.kits, "Review kits"),
+      icon: QrCode,
+      binding: "kit-list",
+      open: kits,
+      onOpenChange: showKits,
+      panel: (
+        // every button in the list picks: a kit, or New
+        <div className="max-h-[60vh] w-80 overflow-y-auto" onClick={(e) => (e.target as Element).closest("button") !== null && showKits(false)}>
+          <KitsList go={(at) => openWindow({ kind: "kit", at })} />
+        </div>
+      ),
+    },
     ...windows.filter((w) => w.id !== "window:kit:"),
   ];
   return (

@@ -5,7 +5,7 @@ import { Button, ConfirmDialog, Input, ToggleGroup, ToggleGroupItem, cn } from "
 import { Check, Map as MapIcon, Pencil, Search, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { AreaDraw, CategoryChip, editKit, isSlug, openWindow, kit as kitKeys, move, slugOf, useGmails, useOutline, useSelection, windowKeys } from "@/entities/gmb";
+import { AreaDraw, CategoryChip, closeWindow, editKit, isSlug, openWindow, kit as kitKeys, move, slugOf, useGmails, useOutline, useSelection, windowKeys } from "@/entities/gmb";
 import { Refused, api, ok } from "@/shared/api";
 import type { AreaGmbs, Gmb } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
@@ -221,7 +221,7 @@ function Delete({ slug, name }: { slug: string; name: string }) {
       labels={{ cancel: t(move.cancel, "Cancel") }}
       onConfirm={async () => {
         await ok(api.DELETE("/kits/{slug}", { params: { path: { slug } } }));
-        openWindow({ kind: "kit", at: { kit: "" } });
+        closeWindow({ kind: "kit", at: { kit: slug } });
       }}
     />
   );
