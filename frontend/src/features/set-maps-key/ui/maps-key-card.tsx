@@ -8,6 +8,7 @@ import { api, ok } from "@/shared/api";
 import type { MapsKey, Price } from "@/shared/api/schema";
 import { useLocale, useT, account } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
+import { ConnectHelp } from "@/shared/ui/connect-help";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
@@ -103,6 +104,21 @@ export function MapsKeyCard({ gmail, mapsKey, prices, onChanged }: { gmail: numb
             </div>
           </form>
         )}
+        <ConnectHelp
+          title={t(account.mapsKey.help.title, "Maps key, step by step")}
+          steps={[
+            { text: t(account.mapsKey.help.signIn, "In Chrome, sign in to Google as this gmail.") },
+            { text: t(account.mapsKey.help.project, "Open this link. Name: maps. Press Create."), href: "https://console.cloud.google.com/projectcreate" },
+            { text: t(account.mapsKey.help.billing, "Open this link. Press Link a billing account, pick or make one, press Set account."), href: "https://console.cloud.google.com/billing/linkedaccount" },
+            { text: t(account.mapsKey.help.places, "Open this link. Press Enable."), href: "https://console.cloud.google.com/apis/library/places.googleapis.com" },
+            { text: t(account.mapsKey.help.geocoding, "Open this link. Press Enable."), href: "https://console.cloud.google.com/apis/library/geocoding-backend.googleapis.com" },
+            {
+              text: t(account.mapsKey.help.key, "Open this link. Press Create credentials → API key. Press Edit API key. API restrictions: Restrict key, tick Places API (New) and Geocoding API. Press Save."),
+              href: "https://console.cloud.google.com/apis/credentials",
+            },
+            { text: t(account.mapsKey.help.paste, "Press Show key, copy it into the form above, press Save.") },
+          ]}
+        />
         <p className="text-xs text-ink-soft">{t(account.mapsKey.order, "Tried first for this gmail's GBPs, then for your other gmails', before the shared keys. Your own key costs no tokens.")}</p>
         <p className="text-xs text-ink-soft">{cost}</p>
       </CardContent>

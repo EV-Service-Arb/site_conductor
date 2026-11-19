@@ -291,6 +291,38 @@
     "en": "Failing",
     "t": "Ошибка"
   },
+  "account.mapsKey.help.billing": {
+    "en": "Open this link. Press Link a billing account, pick or make one, press Set account.",
+    "t": "Откройте эту ссылку. Нажмите «Привязать платёжный аккаунт», выберите существующий или создайте новый, нажмите «Установить аккаунт»."
+  },
+  "account.mapsKey.help.geocoding": {
+    "en": "Open this link. Press Enable.",
+    "t": "Откройте эту ссылку. Нажмите «Включить»."
+  },
+  "account.mapsKey.help.key": {
+    "en": "Open this link. Press Create credentials → API key. Press Edit API key. API restrictions: Restrict key, tick Places API (New) and Geocoding API. Press Save.",
+    "t": "Откройте эту ссылку. Нажмите «Создать учётные данные» → «Ключ API». Нажмите «Изменить ключ API». Ограничения API: «Ограничить ключ», отметьте Places API (New) и Geocoding API. Нажмите «Сохранить»."
+  },
+  "account.mapsKey.help.paste": {
+    "en": "Press Show key, copy it into the form above, press Save.",
+    "t": "Нажмите «Показать ключ», скопируйте его в форму выше, нажмите «Сохранить»."
+  },
+  "account.mapsKey.help.places": {
+    "en": "Open this link. Press Enable.",
+    "t": "Откройте эту ссылку. Нажмите «Включить»."
+  },
+  "account.mapsKey.help.project": {
+    "en": "Open this link. Name: maps. Press Create.",
+    "t": "Откройте эту ссылку. Название: maps. Нажмите «Создать»."
+  },
+  "account.mapsKey.help.signIn": {
+    "en": "In Chrome, sign in to Google as this gmail.",
+    "t": "В Chrome войдите в Google под этим gmail-аккаунтом."
+  },
+  "account.mapsKey.help.title": {
+    "en": "Maps key, step by step",
+    "t": "Ключ Карт: пошаговая инструкция"
+  },
   "account.mapsKey.key": {
     "en": "Key",
     "t": "Ключ"

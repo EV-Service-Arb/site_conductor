@@ -29,6 +29,9 @@ use crate::{
 /// Each inbox is read this often.
 const FOLLOW_EVERY: Duration = Duration::from_secs(60);
 
+/// Where Google sends a Business Profile consent back to.
+pub(crate) const BUSINESS_CALLBACK: &str = "/auth/google/business";
+
 /// Reads every gmail's inbox past its cursor until `shutdown` turns true. Nothing here ends `serve`.
 pub async fn follow(panel: Panel, mut shutdown: watch::Receiver<bool>) {
 	// an inbox failing every pass (its app password revoked) is said when it starts and ends
@@ -188,9 +191,6 @@ pub(crate) struct ConsentDto {
 	/// Google's consent page, for the gmail to grant `business.manage` on.
 	url: String,
 }
-
-/// Where Google sends a Business Profile consent back to.
-pub(crate) const BUSINESS_CALLBACK: &str = "/auth/google/business";
 
 fn redirect_uri(s: &crate::signin::SignIn) -> String {
 	format!("{}{BUSINESS_CALLBACK}", s.panel_origin())
