@@ -1,14 +1,14 @@
 "use client";
 
 import { useResource } from "@evinvest/api/react";
-import { Badge, Button, Skeleton, cn, toast } from "@evinvest/uikit";
-import { CalendarClock, Copy, ExternalLink, Globe, Hash, History, ImageIcon, Mail, MapPin, MonitorSmartphone, Pencil, Phone, QrCode, RefreshCw, ShieldAlert, ShieldCheck, Star, Tag, Video } from "lucide-react";
+import { Badge, Button, NativeSelect, NativeSelectOption, Skeleton, cn, toast } from "@evinvest/uikit";
+import { CalendarClock, Copy, ExternalLink, Globe, Hash, History, ImageIcon, Mail, MapPin, MonitorSmartphone, Pencil, Phone, QrCode, RefreshCw, ShieldAlert, ShieldCheck, Star, Tag, UserCog, Video } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
-import { CategoryChip, type KeyOf, type Listed, LiveReviews, STATE_NAME, STATE_TONE, closeWindow, gmbPhotoSrc, googleName, narrowed, openWindow, syncGmb, useBrands, useGmails, useGmbTags, gmbs as gmbsKeys, windowKeys } from "@/entities/gmb";
+import { CategoryChip, type KeyOf, type Listed, LiveReviews, ROLE_NAME, STATE_NAME, STATE_TONE, closeWindow, gmbPhotoSrc, googleName, narrowed, openWindow, under, syncGmb, useBrands, useGmails, useGmbTags, gmbs as gmbsKeys, windowKeys } from "@/entities/gmb";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { api, ok, reviewArchive } from "@/shared/api";
-import type { Changed, Country, LogDto, LoggedDto, Tab } from "@/shared/api/schema";
+import { type Changed, type Country, type GbpRole, type Gmail, type Gmb, type GmbEdit, type LogDto, type LoggedDto, type Tab, gbpRoleValues } from "@/shared/api/schema";
 import type { GmbEvent } from "@/shared/api/services/review_archive";
 import { type T, useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
@@ -19,7 +19,7 @@ import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
 
 import { BrowserTab } from "./browser-tab";
-import { Launch } from "./launch";
+import { Launch, TextEditor } from "./launch";
 import { TAB_ICON, TAB_NAME } from "./tabs";
 
 type Key = KeyOf<"gbp">;
@@ -253,11 +253,48 @@ function Profile({ listed }: { listed: Listed }) {
           {t(windowKeys.profile.ours, "Ours")} <span className="normal-case text-ink-faint">{t(windowKeys.profile.ours.what, "what Google does not hold")}</span>
         </dt>
         <Fact icon={<Mail aria-hidden />} value={gmail?.gmail ?? t(windowKeys.profile.noGmail, "No gmail yet")} action={gmail && <Go label={t(windowKeys.profile.connections, "Connections")} onClick={() => openWindow({ kind: "account", gmail: gmail.id, tab: "connections" })} />} />
+        {gmail && <Fact icon={<UserCog aria-hidden />} value={<RoleEditor gmb={gmb} gmail={gmail} />} />}
         <Fact icon={<Tag aria-hidden />} value={<CategoryChip gmb={gmb} />} />
         {brand && <Fact icon={<ImageIcon aria-hidden />} value={brand.name} action={<Go label={t(windowKeys.profile.brand, "Brand")} onClick={() => openWindow({ kind: "trade", trade: brand.trade_id, country: brand.country, brand: brand.id })} />} />}
         <Fact icon={<History aria-hidden />} value={t(windowKeys.profile.added, "Added {at}", { at: formatDateTime(gmb.created_at, locale) })} note={[gmb.synced_at !== null && t(windowKeys.profile.synced, "synced from Google {ago}", { ago: ago(gmb.synced_at, locale) })]} />
       </dl>
     </div>
+  );
+}
+
+/** Its gmail's role on it; a manager's owner gmail beside, for reference. A gmail usually owns up to 3 GBPs and manages up to 6. */
+function RoleEditor({ gmb, gmail }: { gmb: Gmb; gmail: Gmail }) {
+  const t = useT();
+  const gmails = useGmails();
+  const save = async (edit: GmbEdit) => {
+    try {
+      await ok(api.PATCH("/gmbs/{id}", { params: { path: { id: gmb.id } }, body: edit }));
+      gmails.reload();
+    } catch (e) {
+      notifyFailure(e, t);
+    }
+  };
+  const held = gmails.status === "ok" ? under(gmails.data, gmail.id) : [];
+  const count = (r: GbpRole) => held.filter((b) => b.role === r).length;
+  return (
+    <span className="flex flex-col gap-2">
+      <NativeSelect
+        size="sm"
+        wrapperClassName="w-32"
+        aria-label={t(windowKeys.profile.role, "Role of {gmail} on it", { gmail: gmail.gmail })}
+        title={t(windowKeys.profile.role.hint, "{gmail} owns {owned} of usually up to 3 GBPs, manages {managed} of 6", { gmail: gmail.gmail, owned: count("owner"), managed: count("manager") })}
+        value={gmb.role ?? ""}
+        onChange={(e) => void save({ role: e.target.value === "" ? null : (e.target.value as GbpRole) })}
+      >
+        <NativeSelectOption value="">{t(windowKeys.profile.role.pick, "No role")}</NativeSelectOption>
+        {gbpRoleValues.map((r) => (
+          <NativeSelectOption key={r} value={r}>
+            {ROLE_NAME[r](t)}
+          </NativeSelectOption>
+        ))}
+      </NativeSelect>
+      {gmb.role === "manager" && <TextEditor key={gmb.owner_gmail} value={gmb.owner_gmail} type="email" label={t(windowKeys.profile.ownerGmail, "Owner gmail")} onSave={(v) => save({ owner_gmail: v })} />}
+    </span>
   );
 }
 
@@ -577,6 +614,8 @@ const FIELD = {
   hidden_address: (t) => t(windowKeys.log.field.hiddenAddress, "hidden address"),
   customers_visit: (t) => t(windowKeys.log.field.customersVisit, "customers visit"),
   spots: (t) => t(windowKeys.log.field.spots, "spots"),
+  role: (t) => t(windowKeys.log.field.role, "role"),
+  owner_gmail: (t) => t(windowKeys.log.field.ownerGmail, "owner gmail"),
 } satisfies Record<Field, (t: T) => string>;
 const FIELD_NAME = (t: T, field: Field): string => FIELD[field](t);
 

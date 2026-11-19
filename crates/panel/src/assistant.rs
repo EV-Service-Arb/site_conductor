@@ -88,7 +88,7 @@ async fn access(conn: &mut SqliteConnection, chat: Summary) -> eyre::Result<Acce
 }
 
 /// `q` as a whole address, which finds its person even outside the caller's chats.
-fn is_email(q: &str) -> bool {
+pub(crate) fn is_email(q: &str) -> bool {
 	q.split_once('@')
 		.is_some_and(|(local, domain)| !local.is_empty() && !domain.contains('@') && domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.'))
 }

@@ -1,16 +1,16 @@
 import type { Tone } from "@evinvest/uikit";
 
-import type { GmailRole, GoogleCategory, State } from "@/shared/api/schema";
+import type { GbpRole, GoogleCategory, State } from "@/shared/api/schema";
 import type { GmbReviews } from "@/shared/api/services/review_archive";
 import type { GmbPlace } from "@/shared/api/services/sites";
 import type { T } from "@/shared/i18n";
 
 import { gmbs } from "./i18n";
 
-export const GMAIL_ROLE_NAME = {
-  owner: (t) => t(gmbs.gmail.role.owner, "Owner"),
-  manager: (t) => t(gmbs.gmail.role.manager, "Manager"),
-} satisfies Record<GmailRole, (t: T) => string>;
+export const ROLE_NAME = {
+  owner: (t) => t(gmbs.role.owner, "Owner"),
+  manager: (t) => t(gmbs.role.manager, "Manager"),
+} satisfies Record<GbpRole, (t: T) => string>;
 
 export const STATE_NAME = {
   draft: (t) => t(gmbs.state.draft, "Draft"),

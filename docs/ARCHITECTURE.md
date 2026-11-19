@@ -937,8 +937,10 @@ priced in money, so an account overshoots by its hours behind.
   customers visit, the verification film, the managing gmail, its browser (Browsers: set up, its last check
   through). The film is a reference set by hand until verif_vid fills it. How many are ready
   is advice the front end computes; the move onto Google never checks it.
-- **A gmail's role** on its GBPs, owner or manager, unknown until said, caps what it holds before
-  Google grows wary (`sa_core::gbp::GmailRole::cap`): room shown, never refused.
+- **A GBP's role** is its gmail's on it (`sa_core::gbp::Role`): owner, created on or transferred to
+  it, or manager, with its owner gmail an address recorded for reference only; none without a gmail,
+  unknown until said, cleared by a transfer. A gmail usually owns up to 3 GBPs and manages up to 6
+  before Google grows wary: its count shown, never refused.
 - **A GBP's category** is its trade (its owner's: Plumbing) in its own country, derived, never
   stored: Plumbing · FR. The trade set up for a country holds its Google categories there, placement's
   study of it, and its keywords (`sa_core::gbp::keywords`), the terms every GBP of the category is

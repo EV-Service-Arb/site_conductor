@@ -98,15 +98,16 @@ pub fn keywords(raw: &[String]) -> Result<Vec<String>, Invalid> {
 	}
 }
 
-/// What a gmail is on the GBPs it manages.
+/// What a GBP's gmail is on it: created on or transferred to it, or managing it.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
-pub enum GmailRole {
+#[schemars(rename = "GbpRole")]
+pub enum Role {
 	Owner,
 	Manager,
 }
 
-impl GmailRole {
+impl Role {
 	pub fn as_str(self) -> &'static str {
 		match self {
 			Self::Owner => "owner",
@@ -115,7 +116,7 @@ impl GmailRole {
 	}
 }
 
-impl FromStr for GmailRole {
+impl FromStr for Role {
 	type Err = Invalid;
 
 	fn from_str(raw: &str) -> Result<Self, Invalid> {

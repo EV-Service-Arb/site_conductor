@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_core::{
-	gbp::{Country, GmailRole, OnGoogle, State},
+	gbp::{Country, OnGoogle, Role, State},
 	prices::{PlacesRequest, Spender},
 };
 use sa_places::{Ask, LatLng, Place, Suggestion};
@@ -78,6 +78,10 @@ pub struct Edit {
 	pub hidden_address: Option<Option<String>>,
 	pub customers_visit: Option<Option<bool>>,
 	pub film: Option<Option<String>>,
+	/// Needs a gmail; moving to another clears it.
+	pub role: Option<Option<Role>>,
+	/// A manager's, an address.
+	pub owner_gmail: Option<Option<String>>,
 }
 
 impl Edit {
@@ -102,6 +106,11 @@ impl Edit {
 			hidden_address: each(self.hidden_address, text("hidden address"))?,
 			customers_visit: self.customers_visit,
 			film: each(self.film, text("film"))?,
+			role: self.role,
+			owner_gmail: each(self.owner_gmail, |raw| match address(&raw) {
+				Ok(a) if crate::assistant::is_email(&a) => Ok(a),
+				_ => Err(Refused::Invalid(format!("owner gmail {raw:?} is not an address"))),
+			})?,
 		})
 	}
 }
@@ -220,20 +229,6 @@ impl Panel {
 		tx.commit().await.wrap_err("committing a gmail")?;
 		self.snapshot_due.notify_one();
 		Ok(Ok(added))
-	}
-
-	/// The owner's gmail `id` in `role`, or in none said.
-	pub async fn set_gmail_role(&self, owner: Uuid, id: i64, role: Option<GmailRole>) -> eyre::Result<Result<Gmail, Refused>> {
-		let mut tx = self.store.begin_write().await?;
-		if !is_open(&mut tx).await? {
-			return Ok(Err(Refused::Closed));
-		}
-		if !db::set_role(&mut tx, owner, id, role).await? {
-			return Ok(Err(Refused::NotFound));
-		}
-		let set = db::gmails(&mut tx, owner).await?.into_iter().find(|g| g.id == id).expect("set in this transaction");
-		tx.commit().await.wrap_err("committing a gmail's role")?;
-		Ok(Ok(set))
 	}
 
 	pub async fn remove_gmail(&self, owner: Uuid, id: i64, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
@@ -473,6 +468,14 @@ impl Panel {
 		}
 		if !trade_is(&mut tx, owner, edit.trade.flatten()).await? {
 			return Ok(Err(Refused::NotFound));
+		}
+		let moved = edit.gmail_id.is_some_and(|g| gbp.gmail_id != Some(g));
+		let role = edit.role.unwrap_or(if moved { None } else { gbp.role });
+		if role.is_some() && edit.gmail_id.or(gbp.gmail_id).is_none() {
+			return Ok(Err(Refused::Invalid(format!("GBP {id} has no gmail to have a role on"))));
+		}
+		if edit.owner_gmail.as_ref().is_some_and(Option::is_some) && role != Some(Role::Manager) {
+			return Ok(Err(Refused::Invalid(format!("GBP {id}'s gmail is not its manager: no owner gmail"))));
 		}
 		if let Some(gmail) = edit.gmail_id {
 			if db::gmail_owner(&mut tx, gmail).await? != Some(owner) {

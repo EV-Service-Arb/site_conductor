@@ -4,7 +4,7 @@ import { Button, Input, NativeSelect, NativeSelectOption, ToggleGroup, ToggleGro
 import { Check, Copy, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { CategoryChip, categoryName, categoryOf, GMAIL_ROLE_NAME, gmbs, googleName, type Listed, openWindow, type Placed, TradeSelect, under, useGmails, useGmbTags } from "@/entities/gmb";
+import { CategoryChip, categoryName, categoryOf, gmbs, googleName, type Listed, openWindow, type Placed, TradeSelect, under, useGmails, useGmbTags } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
 import { LinkPlaceButton } from "@/features/link-gmb-place";
 import { SpotsEditor } from "@/features/add-gmb";
@@ -66,7 +66,7 @@ export function Launch({ listed: { gmb, gmail }, page }: { listed: Listed; page:
   const room = (id: number) => {
     const g = gmailList.find((g) => g.id === id);
     if (g === undefined || gmails.status !== "ok") return null;
-    return [g.role && GMAIL_ROLE_NAME[g.role](t), t(account.gbps, "{n} GBP", { n: under(gmails.data, id).length })].filter(Boolean).join(" · ");
+    return t(account.gbps, "{n} GBP", { n: under(gmails.data, id).length });
   };
 
   const parts: Record<MustHave, { value: ReactNode; editor: ReactNode; why: string | null }> = {
@@ -213,7 +213,7 @@ function MustRow({ n, label, ready, value, editor, why, failed }: { n: number; l
 }
 
 /** A text field saved on Enter or its button: empty clears it. */
-function TextEditor({ value, type, onSave }: { value: string | null; type?: "tel"; onSave: (v: string | null) => Promise<void> }) {
+export function TextEditor({ value, type, label, onSave }: { value: string | null; type?: "tel" | "email"; label?: string; onSave: (v: string | null) => Promise<void> }) {
   const t = useT();
   const size = useControlSize();
   const button = useButtonSize();
@@ -229,7 +229,7 @@ function TextEditor({ value, type, onSave }: { value: string | null; type?: "tel
         void onSave(next).finally(() => setBusy(false));
       }}
     >
-      <Input size={size} type={type ?? "text"} value={typed} onChange={(e) => setTyped(e.target.value)} className="min-w-0 flex-1" />
+      <Input size={size} type={type ?? "text"} aria-label={label} placeholder={label} value={typed} onChange={(e) => setTyped(e.target.value)} className="min-w-0 flex-1" />
       <Button type="submit" variant="outline" size={button("sm")} disabled={busy || next === value}>
         {t(gmbs.gbp.save, "Save")}
       </Button>

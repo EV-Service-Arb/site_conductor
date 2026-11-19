@@ -3,7 +3,7 @@ export { linkPlace } from "./api/sites";
 export { browsersUnconnected, uploadFilm } from "./api/connections";
 export { type Placed, categoryName, categoryOf } from "./model/category";
 export { GmailsProvider, useBrands, useGmails, useGmbTags, useTrades, useTrash, useUndoable } from "./model/gmails-context";
-export { GMAIL_ROLE_NAME, STATE_NAME, STATE_TONE, googleName } from "./model/gmb";
+export { ROLE_NAME, STATE_NAME, STATE_TONE, googleName } from "./model/gmb";
 export type { ArchiveTag, SiteTag } from "./model/gmb";
 export { ISSUES, ISSUE_NAME, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";
 export { type Listed, byView, narrowed, under } from "./model/narrow";

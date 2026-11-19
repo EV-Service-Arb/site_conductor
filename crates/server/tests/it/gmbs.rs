@@ -625,8 +625,9 @@ async fn a_drafts_must_haves_are_patched_and_a_phone_is_one_gbps() {
 	assert_eq!(status, StatusCode::CONFLICT, "{body}");
 }
 
+/// A GBP's role is its gmail's on it: none without one, a transfer clears it, an owner gmail only a manager's.
 #[tokio::test]
-async fn a_gmails_role_is_optional() {
+async fn a_gbps_role_is_its_gmails() {
 	let db = TestDb::create().await;
 	let p = panel(&db, None).await;
 	opened(&p).await;
@@ -634,20 +635,30 @@ async fn a_gmails_role_is_optional() {
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, gmail) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "a@gmail.com" }))).await;
-	assert_eq!(gmail["role"], Value::Null, "unknown until said");
-	let uri = format!("/api/v1/gmails/{}", gmail["id"]);
-	for role in [json!("owner"), json!("manager"), Value::Null] {
-		let (status, set) = call(&mut b, &app, Method::PATCH, &uri, Some(json!({ "role": role }))).await;
-		assert_eq!((status, &set["role"]), (StatusCode::OK, &role));
-	}
-	let (_, listed) = call(&mut b, &app, Method::GET, "/api/v1/gmails", None).await;
-	assert_eq!(listed["gmails"][0]["role"], Value::Null, "{listed}");
-	for bad in [json!({ "role": "admin" }), json!({})] {
-		let (status, _) = call(&mut b, &app, Method::PATCH, &uri, Some(bad)).await;
-		assert_eq!(status, StatusCode::BAD_REQUEST);
-	}
-	let (status, _) = call(&mut b, &app, Method::PATCH, "/api/v1/gmails/999", Some(json!({ "role": "owner" }))).await;
-	assert_eq!(status, StatusCode::NOT_FOUND);
+	let (_, other) = call(&mut b, &app, Method::POST, "/api/v1/gmails", Some(json!({ "gmail": "b@gmail.com" }))).await;
+	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
+	let new = json!({ "name": "Café de Flore", "trade": trade["id"], "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] });
+	let (_, draft) = call(&mut b, &app, Method::POST, "/api/v1/gmbs", Some(new)).await;
+	let uri = format!("/api/v1/gmbs/{}", draft["id"]);
+	assert_eq!(draft["role"], Value::Null, "unknown until said");
+	let (status, _) = call(&mut b, &app, Method::PATCH, &uri, Some(json!({ "role": "owner" }))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "no gmail to have a role on");
+
+	let (_, owned) = call(&mut b, &app, Method::PATCH, &uri, Some(json!({ "gmail_id": gmail["id"], "role": "owner" }))).await;
+	assert_eq!(owned["role"], "owner", "{owned}");
+	let (status, _) = call(&mut b, &app, Method::PATCH, &uri, Some(json!({ "owner_gmail": "c@gmail.com" }))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "an owner's gmail is its own");
+	let (_, managed) = call(&mut b, &app, Method::PATCH, &uri, Some(json!({ "role": "manager", "owner_gmail": " C@gmail.com " }))).await;
+	assert_eq!((&managed["role"], &managed["owner_gmail"]), (&json!("manager"), &json!("c@gmail.com")), "{managed}");
+	let (status, _) = call(&mut b, &app, Method::PATCH, &uri, Some(json!({ "owner_gmail": "not an address" }))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST);
+	let (_, owned) = call(&mut b, &app, Method::PATCH, &uri, Some(json!({ "role": "owner" }))).await;
+	assert_eq!((&owned["role"], &owned["owner_gmail"]), (&json!("owner"), &Value::Null), "{owned}");
+
+	let (_, moved) = call(&mut b, &app, Method::PATCH, &uri, Some(json!({ "gmail_id": other["id"] }))).await;
+	assert_eq!((&moved["gmail_id"], &moved["role"]), (&other["id"], &Value::Null), "{moved}");
+	let (status, _) = call(&mut b, &app, Method::PATCH, &uri, Some(json!({ "role": "admin" }))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST);
 }
 
 /// Signed in as dev@localhost, beside a trade and a GBP of other@localhost's.

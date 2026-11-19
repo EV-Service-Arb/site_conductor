@@ -9,7 +9,7 @@ use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
 use ev_lib::api::{Body, Created, Ids, JsonSchema, Params, Refusal};
 use jiff::Timestamp;
 use sa_core::{
-	gbp::{Country, GmailRole, OnGoogle, State as GbpState},
+	gbp::{Country, OnGoogle, Role, State as GbpState},
 	prices::{PlacesRequest, Spends, StreetViewLoad},
 };
 use sa_panel::{
@@ -65,6 +65,10 @@ pub struct GmbDto {
 	pub customers_visit: Option<bool>,
 	/// verif_vid's film, recorded by hand.
 	pub film: Option<String>,
+	/// Its gmail's on it; `null` until said, and without a gmail.
+	pub role: Option<Role>,
+	/// A manager's: who owns it, for reference only.
+	pub owner_gmail: Option<String>,
 	/// RFC 3339.
 	pub created_at: String,
 	/// The caller's switch; review_archive inherits it.
@@ -178,8 +182,6 @@ pub struct TradesDto {
 pub struct GmailDto {
 	pub id: i64,
 	pub gmail: String,
-	/// Optional, the caller's say: nothing here judges it.
-	pub role: Option<GmailRole>,
 	/// RFC 3339.
 	pub created_at: String,
 	/// Its browser set up, its last check through: the GBPs' `profile` must-have.
@@ -283,7 +285,6 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 	vec![
 		ApiRoute::new(M::GET, "/gmails", USER, gmails),
 		ApiRoute::new(M::POST, "/gmails", USER, add_gmail),
-		ApiRoute::new(M::PATCH, "/gmails/{id}", USER, set_gmail_role),
 		ApiRoute::new(M::DELETE, "/gmails/{id}", USER, remove_gmail),
 		ApiRoute::new(M::GET, "/gmbs/resolve", USER, resolve_place),
 		ApiRoute::new(M::GET, "/gmbs/suggest", USER, suggest_places),
@@ -361,6 +362,8 @@ impl Around {
 			hidden_address: b.hidden_address,
 			customers_visit: b.customers_visit,
 			film: b.film,
+			role: b.role,
+			owner_gmail: b.owner_gmail,
 			created_at: b.created_at.to_string(),
 			enabled: b.enabled,
 			location: b.location,
@@ -413,7 +416,6 @@ impl From<Gmail> for GmailDto {
 		Self {
 			id: g.id,
 			gmail: g.gmail,
-			role: g.role,
 			created_at: g.created_at.to_string(),
 			browser: g.browser,
 			tabs: vec![Tab::Connections, Tab::Browser],
@@ -458,8 +460,7 @@ pub(crate) struct In {
 
 /// The caller's gmails and their GBPs, the removed left out.
 ///
-/// A draft's `gmail_id` may be null; only a verified one's `place_id` is certain; a gmail's `cap`
-/// is null while its role is unknown.
+/// A draft's `gmail_id` may be null; only a verified one's `place_id` is certain.
 async fn gmails(State(s): State<ApiState>, Extension(caller): Extension<Caller>) -> ApiResult<Json<GmailsDto>> {
 	let (gmails, gmbs) = s.sign_in.panel.gmails(caller.user_id).await?;
 	let around = Around::read(&s, &caller, Some(&gmails)).await?;
@@ -480,22 +481,6 @@ async fn add_gmail(State(panel): State<Panel>, Extension(caller): Extension<Call
 	let added = panel.add_gmail(caller.user_id, &b.gmail, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmail_id = added.id, "gmail added");
 	Ok(Created(GmailDto::from(added)))
-}
-
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct SetRole {
-	/// Required: `null` clears it.
-	#[serde(deserialize_with = "Option::deserialize")] // required: `null` clears, a missing field is refused
-	role: Option<GmailRole>,
-}
-
-/// Sets the gmail's role on its GBPs: owner or manager, which caps how many it holds.
-async fn set_gmail_role(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>, Body(b): Body<SetRole>) -> ApiResult<Json<GmailDto>> {
-	let role = b.role;
-	let set = panel.set_gmail_role(caller.user_id, gmail, role).await??;
-	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, role = role.map(GmailRole::as_str), "gmail's role set");
-	Ok(Json(GmailDto::from(set)))
 }
 
 /// Removes the gmail to the trash, its GBPs with it. 409 while it has a browser.
@@ -698,6 +683,12 @@ pub(crate) struct EditBody {
 	customers_visit: Option<Option<bool>>,
 	#[serde(default, deserialize_with = "present")]
 	film: Option<Option<String>>,
+	/// Its gmail's on it; needs a gmail, and a transfer clears it.
+	#[serde(default, deserialize_with = "present")]
+	role: Option<Option<Role>>,
+	/// A manager's only: who owns it, an address.
+	#[serde(default, deserialize_with = "present")]
+	owner_gmail: Option<Option<String>>,
 }
 
 /// Edits a GBP.
@@ -713,6 +704,8 @@ async fn edit_gmb(State(s): State<ApiState>, Extension(caller): Extension<Caller
 		hidden_address,
 		customers_visit,
 		film,
+		role,
+		owner_gmail,
 	} = b;
 	let edit = Edit {
 		name,
@@ -723,6 +716,8 @@ async fn edit_gmb(State(s): State<ApiState>, Extension(caller): Extension<Caller
 		hidden_address,
 		customers_visit,
 		film,
+		role,
+		owner_gmail,
 	};
 	let edited = s.sign_in.panel.edit_gmb(caller.user_id, gmb, edit).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = gmb, "GBP edited");

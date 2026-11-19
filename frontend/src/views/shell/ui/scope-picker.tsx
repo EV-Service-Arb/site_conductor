@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger, Switch, cn } from "@evinvest/u
 import { ArrowUpRight, Check, ChevronDown, ChevronRight, ListFilter, Plug, Settings } from "lucide-react";
 import { type MouseEvent, useEffect, useState } from "react";
 
-import { chooseCategoryScope, chooseGmailScope, covers, GMAIL_ROLE_NAME, inCategories, openWindow, type Pattern, type Selection, under, useScope, useTrades, scopeKeys, gmbs as gmbsKeys } from "@/entities/gmb";
+import { chooseCategoryScope, chooseGmailScope, covers, inCategories, openWindow, type Pattern, type Selection, under, useScope, useTrades, scopeKeys, gmbs as gmbsKeys } from "@/entities/gmb";
 import { AddGmailButton } from "@/features/add-gmail";
 import { AddGmbButton } from "@/features/add-gmb";
 import { api, ok } from "@/shared/api";
@@ -142,7 +142,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
                     title={g.gmail}
                   >
                     <span className="block truncate">{g.gmail}</span>
-                    <Room gmail={g} n={gmbs.length} />
+                    <Room n={gmbs.length} />
                   </button>
                   <span className={cn("flex items-center", ON_HOVER)}>
                     <OpenAccount gmail={g} onOpened={() => setOpen(false)} />
@@ -338,7 +338,7 @@ function OpenAccount({ gmail, onOpened }: { gmail: Gmail; onOpened: () => void }
   );
 }
 
-function Room({ gmail, n }: { gmail: Gmail; n: number }) {
+function Room({ n }: { n: number }) {
   const t = useT();
-  return <span className="block truncate text-xs text-ink-soft tabular-nums">{[gmail.role && GMAIL_ROLE_NAME[gmail.role](t), t(account.gbps, "{n} GBP", { n })].filter(Boolean).join(" · ")}</span>;
+  return <span className="block truncate text-xs text-ink-soft tabular-nums">{t(account.gbps, "{n} GBP", { n })}</span>;
 }

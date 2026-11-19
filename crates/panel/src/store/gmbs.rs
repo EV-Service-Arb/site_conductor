@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::gbp::{Country, GmailRole, Managed, State};
+use sa_core::gbp::{Country, Managed, Role, State};
 use sa_places::LatLng;
 use sqlx::SqliteConnection;
 use uuid::Uuid;
@@ -14,14 +14,14 @@ use super::{from_db, to_db};
 use crate::google_categories::GoogleCategory;
 
 const GMB: &str = "SELECT b.id, b.gmail_id, b.place_id, b.name, b.address, b.state, b.country, b.country_by IS NOT NULL AS country_by_hand, b.phone, \
-	b.trade_id, b.brand_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, b.website, b.hours, b.google_primary, b.synced_at, \
+	b.trade_id, b.brand_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.role, b.owner_gmail, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, b.website, b.hours, b.google_primary, b.synced_at, \
 	(SELECT json_group_array(json_object('id', p.id, 'author', p.author)) FROM (SELECT * FROM gmb_photos p WHERE p.gmb_id = b.id ORDER BY p.n) p) AS photos, NOT EXISTS (SELECT 1 FROM gmbs_off o WHERE o.gmb_id = b.id) AS enabled, \
 	(SELECT json_group_array(json_object('lat', s.lat, 'lng', s.lng, 'label', s.label, 'note', s.note)) FROM (SELECT * FROM gmb_spots s WHERE s.gmb_id = b.id ORDER BY s.pos) s) AS spots FROM gmbs b";
 
 /// Whether the gmail's browser's last check went through.
 const BROWSER: &str = "EXISTS (SELECT 1 FROM gmail_browsers w WHERE w.gmail_id = gmails.id AND w.check_error IS NULL)";
 
-type GmailRow = (i64, Uuid, String, Option<String>, i64, bool);
+type GmailRow = (i64, Uuid, String, i64, bool);
 
 /// A GBP, by its id.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,8 +40,6 @@ pub struct Gmail {
 	pub id: i64,
 	pub owner: Uuid,
 	pub gmail: String,
-	/// `None` until its owner says.
-	pub role: Option<GmailRole>,
 	pub created_at: Timestamp,
 	/// Its browser set up, its last check through.
 	pub browser: bool,
@@ -71,6 +69,10 @@ pub struct Gmb {
 	pub customers_visit: Option<bool>,
 	/// verif_vid's film, recorded by hand.
 	pub film: Option<String>,
+	/// Its gmail's on it; `None` until said, and without a gmail.
+	pub role: Option<Role>,
+	/// A manager's: who owns it, for reference.
+	pub owner_gmail: Option<String>,
 	pub created_at: Timestamp,
 	/// Its owner's switch.
 	pub enabled: bool,
@@ -252,6 +254,8 @@ pub enum Field {
 	HiddenAddress,
 	CustomersVisit,
 	Spots,
+	Role,
+	OwnerGmail,
 }
 
 /// `event` in the log of GBP `gmb` (none: of gmail `gmail`'s every GBP), `gmail` the one it was under.
@@ -355,7 +359,7 @@ pub async fn events(conn: &mut SqliteConnection, owner: Uuid, gmb: i64, before: 
 /// The owner's gmails not removed, by address.
 pub async fn gmails(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<Gmail>> {
 	let rows: Vec<GmailRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-		"SELECT id, owner, gmail, role, created_at, {BROWSER} FROM gmails WHERE owner = $1 AND removed_at IS NULL ORDER BY gmail"
+		"SELECT id, owner, gmail, created_at, {BROWSER} FROM gmails WHERE owner = $1 AND removed_at IS NULL ORDER BY gmail"
 	)))
 	.bind(owner)
 	.fetch_all(&mut *conn)
@@ -389,7 +393,7 @@ pub async fn gmb_of(conn: &mut SqliteConnection, owner: Option<Uuid>, id: i64) -
 pub async fn add_gmail(conn: &mut SqliteConnection, id: Option<i64>, owner: Uuid, address: &str, now: Timestamp) -> eyre::Result<Option<Gmail>> {
 	let row: Option<GmailRow> = sqlx::query_as(
 		"INSERT INTO gmails (id, owner, gmail, created_at) VALUES ($1, $2, $3, $4) \
-		 ON CONFLICT DO NOTHING RETURNING id, owner, gmail, role, created_at, FALSE",
+		 ON CONFLICT DO NOTHING RETURNING id, owner, gmail, created_at, FALSE",
 	)
 	.bind(id)
 	.bind(owner)
@@ -422,18 +426,6 @@ pub async fn remove_gmail(conn: &mut SqliteConnection, owner: Uuid, id: i64, now
 		.await
 		.wrap_err("removing a gmail's GMBs")?;
 	Ok(true)
-}
-
-/// The owner's gmail `id` in `role`, or in none said. `false`: no such gmail of theirs, or it is removed.
-pub async fn set_role(conn: &mut SqliteConnection, owner: Uuid, id: i64, role: Option<GmailRole>) -> eyre::Result<bool> {
-	let done = sqlx::query("UPDATE gmails SET role = $3 WHERE id = $1 AND owner = $2 AND removed_at IS NULL")
-		.bind(id)
-		.bind(owner)
-		.bind(role.map(GmailRole::as_str))
-		.execute(&mut *conn)
-		.await
-		.wrap_err("setting a gmail's role")?;
-	Ok(done.rows_affected() == 1)
 }
 
 /// The owner of a gmail not removed.
@@ -513,26 +505,31 @@ pub async fn rename(conn: &mut SqliteConnection, id: i64, name: &str) -> eyre::R
 	Ok(())
 }
 
-/// To another gmail of its owner's: the schema refuses anyone else's. Its brand stays its old gmail's.
+/// To another gmail of its owner's: the schema refuses anyone else's. Its brand and its role stay its old gmail's.
 pub async fn move_to(conn: &mut SqliteConnection, id: GmbId, gmail_id: i64) -> eyre::Result<()> {
-	sqlx::query("UPDATE gmbs SET gmail_id = $2, brand_id = CASE WHEN gmail_id IS $2 THEN brand_id END WHERE id = $1")
-		.bind(id.v)
-		.bind(gmail_id)
-		.execute(&mut *conn)
-		.await
-		.wrap_err("moving a GMB")?;
+	sqlx::query(
+		"UPDATE gmbs SET gmail_id = $2, brand_id = CASE WHEN gmail_id IS $2 THEN brand_id END, role = CASE WHEN gmail_id IS $2 THEN role END, \
+		 owner_gmail = CASE WHEN gmail_id IS $2 THEN owner_gmail END WHERE id = $1",
+	)
+	.bind(id.v)
+	.bind(gmail_id)
+	.execute(&mut *conn)
+	.await
+	.wrap_err("moving a GMB")?;
 	Ok(())
 }
 
 /// `e`'s fields but the name and the gmail, which move by their own rules; the phone free
-/// ([`taken`]), the trade the owner's, another one dropping the brand.
+/// ([`taken`]), the trade the owner's, another one dropping the brand, a role but manager the owner gmail.
 pub async fn set_fields(conn: &mut SqliteConnection, id: i64, e: &crate::gmbs::Edit) -> eyre::Result<()> {
 	let areas = e.areas.as_ref().map(|a| a.as_ref().map(|a| serde_json::to_string(a).expect("strings serialize")));
 	sqlx::query(
 		"UPDATE gmbs SET phone = CASE WHEN $2 THEN $3 ELSE phone END, trade_id = CASE WHEN $4 THEN $5 ELSE trade_id END, \
 		 brand_id = CASE WHEN $4 AND trade_id IS NOT $5 THEN NULL ELSE brand_id END, \
 		 areas = CASE WHEN $6 THEN $7 ELSE areas END, hidden_address = CASE WHEN $8 THEN $9 ELSE hidden_address END, \
-		 customers_visit = CASE WHEN $10 THEN $11 ELSE customers_visit END, film = CASE WHEN $12 THEN $13 ELSE film END WHERE id = $1",
+		 customers_visit = CASE WHEN $10 THEN $11 ELSE customers_visit END, film = CASE WHEN $12 THEN $13 ELSE film END, \
+		 role = CASE WHEN $14 THEN $15 ELSE role END, \
+		 owner_gmail = CASE WHEN $16 THEN $17 WHEN $14 AND $15 IS NOT 'manager' THEN NULL ELSE owner_gmail END WHERE id = $1",
 	)
 	.bind(id)
 	.bind(e.phone.is_some())
@@ -547,6 +544,10 @@ pub async fn set_fields(conn: &mut SqliteConnection, id: i64, e: &crate::gmbs::E
 	.bind(e.customers_visit.flatten())
 	.bind(e.film.is_some())
 	.bind(e.film.clone().flatten())
+	.bind(e.role.is_some())
+	.bind(e.role.flatten().map(Role::as_str))
+	.bind(e.owner_gmail.is_some())
+	.bind(e.owner_gmail.clone().flatten())
 	.execute(&mut *conn)
 	.await
 	.wrap_err("editing a GMB")?;
@@ -1089,6 +1090,8 @@ fn diff(before: &Gmb, after: &Gmb, synced: bool) -> Vec<Event> {
 	field(Field::HiddenAddress, json(&before.hidden_address), json(&after.hidden_address));
 	field(Field::CustomersVisit, json(&before.customers_visit), json(&after.customers_visit));
 	field(Field::Spots, json(&before.spots), json(&after.spots));
+	field(Field::Role, json(&before.role), json(&after.role));
+	field(Field::OwnerGmail, json(&before.owner_gmail), json(&after.owner_gmail));
 	match synced {
 		true => events.push(Event::Synced { changes }),
 		false if !changes.is_empty() => events.push(Event::Edited { changes }),
@@ -1124,6 +1127,8 @@ struct GmbRow {
 	hidden_address: Option<String>,
 	customers_visit: Option<bool>,
 	film: Option<String>,
+	role: Option<String>,
+	owner_gmail: Option<String>,
 	lat: Option<f64>,
 	lng: Option<f64>,
 	placed: bool,
@@ -1137,12 +1142,11 @@ struct GmbRow {
 	spots: String,
 }
 
-fn gmail((id, owner, gmail, role, created_at, browser): GmailRow) -> eyre::Result<Gmail> {
+fn gmail((id, owner, gmail, created_at, browser): GmailRow) -> eyre::Result<Gmail> {
 	Ok(Gmail {
 		id,
 		owner,
 		gmail,
-		role: role.as_deref().map(str::parse).transpose()?,
 		created_at: from_db(created_at)?,
 		browser,
 	})
@@ -1178,6 +1182,8 @@ fn gmb(r: GmbRow) -> eyre::Result<Gmb> {
 		hidden_address: r.hidden_address,
 		customers_visit: r.customers_visit,
 		film: r.film,
+		role: r.role.as_deref().map(str::parse).transpose()?,
+		owner_gmail: r.owner_gmail,
 		created_at: from_db(r.created_at)?,
 		enabled: r.enabled,
 		location,

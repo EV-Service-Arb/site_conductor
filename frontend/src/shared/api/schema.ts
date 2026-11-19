@@ -756,8 +756,7 @@ export interface paths {
         };
         /**
          * The caller's gmails and their GBPs, the removed left out.
-         * @description A draft's `gmail_id` may be null; only a verified one's `place_id` is certain; a gmail's `cap`
-         *     is null while its role is unknown.
+         * @description A draft's `gmail_id` may be null; only a verified one's `place_id` is certain.
          */
         get: operations["gmails"];
         put?: never;
@@ -783,8 +782,7 @@ export interface paths {
         delete: operations["remove_gmail"];
         options?: never;
         head?: never;
-        /** Sets the gmail's role on its GBPs: owner or manager, which caps how many it holds. */
-        patch: operations["set_gmail_role"];
+        patch?: never;
         trace?: never;
     };
     "/gmails/{id}/browser": {
@@ -899,6 +897,61 @@ export interface paths {
         put?: never;
         /** Opens a thread in a new tab of the gmail's own running browser, on the Google session signed in there: Gmail is never asked from here. 409 while it does not run, or on a cloud phone. */
         post: operations["open_thread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}/business": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Sets the gmail's Business Profile OAuth client, kept only once Google knows it; a grant to the one before is dropped.
+         * @description 400 refused, nothing stored.
+         */
+        put: operations["set_business"];
+        post?: never;
+        /** Forgets the gmail's Business Profile client and grant. */
+        delete: operations["remove_business"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}/business/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Google's consent page for the gmail's client, back at `/auth/google/business` within 15 minutes. 404 no client set. */
+        post: operations["business_consent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmails/{id}/business/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Asks the Business Profile APIs on the gmail's grant again, the check recorded. 404 none granted. */
+        post: operations["test_business"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2326,6 +2379,16 @@ export interface components {
             running: components["schemas"]["Running"] | null;
             set_at: string;
         };
+        Business: {
+            /** @description `null`: Google not asked since the client was set. */
+            checked: components["schemas"]["Checked"] | null;
+            client_id: string;
+            /** @description `null`: the gmail has not granted `business.manage` yet. */
+            granted_at: string | null;
+            /** @description What the client's OAuth settings must list as an authorized redirect URI. */
+            redirect_uri: string;
+            set_at: string;
+        };
         CallInput: {
             /** @description The JSON body, for an operation that takes one. */
             body?: unknown;
@@ -2458,10 +2521,17 @@ export interface components {
         };
         Connections: {
             browser: components["schemas"]["Browser"] | null;
+            business: components["schemas"]["Business"] | null;
+            /** @description What a Business Profile client's OAuth settings must list as an authorized redirect URI. */
+            business_redirect_uri: string;
             imap: components["schemas"]["Imap"] | null;
             maps_key: components["schemas"]["MapsKey"] | null;
             /** @description What a Places request on the shared keys costs. */
             prices: components["schemas"]["Price"][];
+        };
+        Consent: {
+            /** @description Google's consent page, for the gmail to grant `business.manage` on. */
+            url: string;
         };
         /** @description What an answer cost: the model's tokens, on whose Claude, and the tokens it charged its asker. */
         Cost: {
@@ -2612,7 +2682,7 @@ export interface components {
         /** @enum {string} */
         Feedback: "up" | "down";
         /** @enum {string} */
-        Field: "name" | "place_id" | "address" | "phone" | "website" | "hours" | "google_primary" | "country" | "point" | "photos" | "areas" | "hidden_address" | "customers_visit" | "spots";
+        Field: "name" | "place_id" | "address" | "phone" | "website" | "hours" | "google_primary" | "country" | "point" | "photos" | "areas" | "hidden_address" | "customers_visit" | "spots" | "role" | "owner_gmail";
         /** @description One flow: `tokens` what the balance moved by, a grant's amount for `granted`. */
         Flow: {
             /** @description RFC 3339. */
@@ -2651,6 +2721,11 @@ export interface components {
             code: components["schemas"]["Country"];
         };
         /**
+         * @description What a GBP's gmail is on it: created on or transferred to it, or managing it.
+         * @enum {string}
+         */
+        GbpRole: "owner" | "manager";
+        /**
          * @description Who beyond the owner and members may read a chat by its link.
          *
          *     - `view`: Everyone in Service-Arb: a signed-in holder of any `sa` permission.
@@ -2666,8 +2741,6 @@ export interface components {
             gmail: string;
             /** Format: int64 */
             id: number;
-            /** @description Optional, the caller's say: nothing here judges it. */
-            role: components["schemas"]["GmailRole"] | null;
             /** @description Its window's tabs, in order. */
             tabs: components["schemas"]["Tab"][];
         };
@@ -2683,11 +2756,6 @@ export interface components {
             email: string;
             gmail: string;
         };
-        /**
-         * @description What a gmail is on the GBPs it manages.
-         * @enum {string}
-         */
-        GmailRole: "owner" | "manager";
         /** @description `GET /gmails`. */
         Gmails: {
             gmails: components["schemas"]["Gmail"][];
@@ -2734,6 +2802,8 @@ export interface components {
             name: string;
             /** @description The states it may move to. */
             next: components["schemas"]["State"][];
+            /** @description A manager's: who owns it, for reference only. */
+            owner_gmail: string | null;
             /** @description `+` and digits; one live GBP's. */
             phone: string | null;
             /** @description In Google's order, each at `GET /gmbs/{id}/photos/{photo}`. */
@@ -2742,6 +2812,8 @@ export interface components {
             place_id: string | null;
             /** @description A draft's must-haves not ready; `null` past a draft. */
             readiness: components["schemas"]["Readiness"] | null;
+            /** @description Its gmail's on it; `null` until said, and without a gmail. */
+            role: components["schemas"]["GbpRole"] | null;
             /** @description A draft's candidate spots, in order, its location the first's; none past a draft. */
             spots: components["schemas"]["Spot"][];
             state: components["schemas"]["State"];
@@ -2775,10 +2847,20 @@ export interface components {
             /** @description A draft's only. */
             name?: string | null;
             /**
+             * @description A manager's only: who owns it, an address.
+             * @default null
+             */
+            owner_gmail?: string | null;
+            /**
              * @description `+` and digits.
              * @default null
              */
             phone?: string | null;
+            /**
+             * @description Its gmail's on it; needs a gmail, and a transfer clears it.
+             * @default null
+             */
+            role?: components["schemas"]["GbpRole"] | null;
             /**
              * Format: int64
              * @default null
@@ -3726,6 +3808,10 @@ export interface components {
             /** @description `socks5://` or `http://`, `user:pass@host:port`. */
             proxy: string;
         };
+        SetBusiness: {
+            client_id: string;
+            client_secret: string;
+        };
         SetCountry: {
             country: components["schemas"]["Country"];
         };
@@ -3856,10 +3942,6 @@ export interface components {
                 /** Format: double */
                 "walk.step"?: number;
             };
-        };
-        SetRole: {
-            /** @description Required: `null` clears it. */
-            role?: components["schemas"]["GmailRole"] | null;
         };
         SetSpots: {
             spots: components["schemas"]["SpotInput"][];
@@ -4512,6 +4594,7 @@ export type BrandPhotos = components['schemas']['BrandPhotos'];
 export type BrandReads = components['schemas']['BrandReads'];
 export type Brands = components['schemas']['Brands'];
 export type Browser = components['schemas']['Browser'];
+export type Business = components['schemas']['Business'];
 export type CallInput = components['schemas']['CallInput'];
 export type Caller = components['schemas']['Caller'];
 export type Candidates = components['schemas']['Candidates'];
@@ -4526,6 +4609,7 @@ export type Claude = components['schemas']['Claude'];
 export type ClaudeConnect = components['schemas']['ClaudeConnect'];
 export type ConnectedSites = components['schemas']['ConnectedSites'];
 export type Connections = components['schemas']['Connections'];
+export type Consent = components['schemas']['Consent'];
 export type Cost = components['schemas']['Cost'];
 export type Country = components['schemas']['Country'];
 export type Destination = components['schemas']['Destination'];
@@ -4547,11 +4631,11 @@ export type Flow = components['schemas']['Flow'];
 export type FlowKindDto = components['schemas']['FlowKindDto'];
 export type Flows = components['schemas']['Flows'];
 export type GbpCountry = components['schemas']['GbpCountry'];
+export type GbpRole = components['schemas']['GbpRole'];
 export type GeneralAccess = components['schemas']['GeneralAccess'];
 export type Gmail = components['schemas']['Gmail'];
 export type GmailBody = components['schemas']['GmailBody'];
 export type GmailForPerson = components['schemas']['GmailForPerson'];
-export type GmailRole = components['schemas']['GmailRole'];
 export type Gmails = components['schemas']['Gmails'];
 export type Gmb = components['schemas']['Gmb'];
 export type GmbEdit = components['schemas']['GmbEdit'];
@@ -4648,13 +4732,13 @@ export type Running = components['schemas']['Running'];
 export type Scope = components['schemas']['Scope'];
 export type SetBrands = components['schemas']['SetBrands'];
 export type SetBrowser = components['schemas']['SetBrowser'];
+export type SetBusiness = components['schemas']['SetBusiness'];
 export type SetCountry = components['schemas']['SetCountry'];
 export type SetGeneral = components['schemas']['SetGeneral'];
 export type SetImap = components['schemas']['SetImap'];
 export type SetKit = components['schemas']['SetKit'];
 export type SetMapsKey = components['schemas']['SetMapsKey'];
 export type SetPrices = components['schemas']['SetPrices'];
-export type SetRole = components['schemas']['SetRole'];
 export type SetSpots = components['schemas']['SetSpots'];
 export type SetTrades = components['schemas']['SetTrades'];
 export type SetTrashSettings = components['schemas']['SetTrashSettings'];
@@ -11799,140 +11883,6 @@ export interface operations {
             };
         };
     };
-    set_gmail_role: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetRole"];
-            };
-        };
-        responses: {
-            /** @description A gmail of the caller's. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Gmail"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     viewer: {
         parameters: {
             query?: never;
@@ -12997,6 +12947,525 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_business: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetBusiness"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connections"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    remove_business: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    business_consent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Consent"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    test_business: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connections"];
+                };
             };
             /** @description `bad_request` */
             400: {
@@ -23052,10 +23521,10 @@ export const destinationKindValues: ReadonlyArray<FlattenedDeepRequired<componen
 export const deviceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Device"]> = ["pixel_7", "galaxy_s23", "redmi_note_14"];
 export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["another_country", "bad_gateway", "bad_request", "browsers_not_connected", "conflict", "csrf", "forbidden", "internal", "no_google_category", "no_keywords", "no_study", "not_found", "too_large", "too_many", "unaffordable", "unauthenticated", "unavailable", "unstudied"];
 export const feedbackValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Feedback"]> = ["up", "down"];
-export const fieldValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Field"]> = ["name", "place_id", "address", "phone", "website", "hours", "google_primary", "country", "point", "photos", "areas", "hidden_address", "customers_visit", "spots"];
+export const fieldValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Field"]> = ["name", "place_id", "address", "phone", "website", "hours", "google_primary", "country", "point", "photos", "areas", "hidden_address", "customers_visit", "spots", "role", "owner_gmail"];
 export const flowKindDtoValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FlowKindDto"]> = ["renewal", "purchase", "set", "spend", "grant_claimed", "refund", "granted"];
+export const gbpRoleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GbpRole"]> = ["owner", "manager"];
 export const generalAccessValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GeneralAccess"]> = ["none", "view"];
-export const gmailRoleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GmailRole"]> = ["owner", "manager"];
 export const keyedSourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KeyedSourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "bot"];
 export const kitBlockValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitBlock"]> = ["suspended", "draft", "verifying", "off", "no_page"];
 export const kitHappeningValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitHappening"]> = ["shown", "scanned", "opened", "copied", "saved", "posted", "reviewed", "gone"];

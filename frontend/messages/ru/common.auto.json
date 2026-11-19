@@ -1739,26 +1739,6 @@
     "en": "Remove {gmail}?",
     "t": "Удалить {gmail}?"
   },
-  "gmbs.gmail.role": {
-    "en": "Role of {gmail} on its GBPs",
-    "t": "Роль {gmail} в его GBP"
-  },
-  "gmbs.gmail.role.hint": {
-    "en": "optional · owners usually hold up to 3 GBPs, managers 6",
-    "t": "необязательно · владелец обычно держит до 3 GBP, менеджер до 6"
-  },
-  "gmbs.gmail.role.manager": {
-    "en": "Manager",
-    "t": "Менеджер"
-  },
-  "gmbs.gmail.role.owner": {
-    "en": "Owner",
-    "t": "Владелец"
-  },
-  "gmbs.gmail.role.pick": {
-    "en": "No role",
-    "t": "Без роли"
-  },
   "gmbs.gmb.add": {
     "en": "Add a GBP",
     "t": "Добавить GBP"
@@ -1866,6 +1846,14 @@
   "gmbs.reset": {
     "en": "Reset selection",
     "t": "Сбросить выбор"
+  },
+  "gmbs.role.manager": {
+    "en": "Manager",
+    "t": "Менеджер"
+  },
+  "gmbs.role.owner": {
+    "en": "Owner",
+    "t": "Владелец"
   },
   "gmbs.scope.counts": {
     "en": "{gmails} · {gmbs} GMBs",
@@ -4346,6 +4334,10 @@
   "window.profile.reviews": {
     "en": "Reviews",
     "t": "Отзывы"
+  },
+  "window.profile.role.pick": {
+    "en": "No role",
+    "t": "Без роли"
   },
   "window.profile.serviceArea": {
     "en": "service area",
