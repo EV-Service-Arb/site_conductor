@@ -10,6 +10,7 @@ mod catalog;
 mod claude;
 mod connected_sites;
 mod connections;
+mod contract;
 mod dev_sign_in;
 mod forward;
 mod gmbs;

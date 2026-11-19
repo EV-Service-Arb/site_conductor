@@ -698,12 +698,14 @@ wait_for() {
 	for _ in $(seq "$tries"); do
 		curl -fsS -o /dev/null --max-time 5 "$url" 2>/dev/null && return 0
 		kill -0 "$pid" 2>/dev/null || {
-			echo "$name stopped before answering $url — see $state/logs/$name.log" >&2
+			echo "$name stopped before answering $url — the tail of $state/logs/$name.log:" >&2
+			tail -n 40 "$state/logs/$name.log" >&2
 			return 1
 		}
 		sleep 1
 	done
-	echo "$name did not answer $url in ${tries}s — see $state/logs/$name.log" >&2
+	echo "$name did not answer $url in ${tries}s — the tail of $state/logs/$name.log:" >&2
+	tail -n 40 "$state/logs/$name.log" >&2
 	return 1
 }
 

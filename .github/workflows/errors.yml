@@ -5,55 +5,11 @@ env:
   RUSTUP_MAX_RETRIES: "10"
   RUST_BACKTRACE: short
 jobs:
-  checks:
-    name: checks
-    needs: load_nix
-    outputs:
-      seconds: ${{ steps.particle.outputs.seconds }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Lean cache setup
-        run: |
-          mkdir -p /tmp/nix-lean-cache
-          chmod 0777 /tmp/nix-lean-cache
-          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
-          chmod 0755 /tmp/nix-lean-pbh.sh
-        shell: bash
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
-        with:
-          extra-conf: |
-            lazy-trees = true
-            post-build-hook = /tmp/nix-lean-pbh.sh
-            extra-substituters = file:///tmp/nix-lean-cache
-            extra-trusted-substituters = file:///tmp/nix-lean-cache
-            require-sigs = false
-      - if: github.ref_name != github.event.repository.default_branch
-        name: Restore lean nix cache
-        uses: actions/cache/restore@v5
-        with:
-          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
-          path: /tmp/nix-lean-cache
-          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-      - if: github.ref_name == github.event.repository.default_branch
-        name: Lean nix cache (built-only paths)
-        uses: actions/cache@v5
-        with:
-          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
-          path: /tmp/nix-lean-cache
-          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-      - run: echo "T_PARTICLE=$(date +%s)" >> "$GITHUB_ENV"
-      - run: nix run .#test -- --severity errors --serial checks
-      - id: particle
-        if: always()
-        run: 'echo "seconds=$((T_PARTICLE ? $(date +%s) - T_PARTICLE : 0))" >> "$GITHUB_OUTPUT"'
-    timeout-minutes: 45
   e2e:
     name: e2e
-    needs: load_nix
     outputs:
-      seconds: ${{ steps.particle.outputs.seconds }}
+      prepare_seconds: ${{ steps.run.outputs['e2e_prepare_seconds'] }}
+      seconds: ${{ steps.run.outputs['e2e_seconds'] }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -73,43 +29,66 @@ jobs:
             extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
-      - if: github.ref_name != github.event.repository.default_branch
-        name: Restore lean nix cache
+      - name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
           path: /tmp/nix-lean-cache
-          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-      - if: github.ref_name == github.event.repository.default_branch
-        name: Lean nix cache (built-only paths)
-        uses: actions/cache@v5
-        with:
-          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
-          path: /tmp/nix-lean-cache
-          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-      - if: github.ref_name != github.event.repository.default_branch
+          restore-keys: |-
+            nix-lean-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+            nix-lean-particle-e2e-${{ runner.os }}-
+      - id: eval-cache
+        name: Restore nix eval cache
         uses: actions/cache/restore@v5
         with:
-          key: particle-e2e-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          path: ~/.cache/nix
+      - if: github.ref_name != github.event.repository.default_branch
+        name: Restore particle's cache
+        uses: actions/cache/restore@v5
+        with:
+          key: particles-errors-e2e-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
           path: ~/.npm
-          restore-keys: particle-e2e-${{ runner.os }}-
+          restore-keys: particles-errors-e2e-${{ runner.os }}-
       - if: github.ref_name == github.event.repository.default_branch
+        name: Particle's cache
         uses: actions/cache@v5
         with:
-          key: particle-e2e-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          key: particles-errors-e2e-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
           path: ~/.npm
-          restore-keys: particle-e2e-${{ runner.os }}-
-      - run: echo "T_PARTICLE=$(date +%s)" >> "$GITHUB_ENV"
-      - run: nix run .#test -- --severity errors --serial e2e
-      - id: particle
-        if: always()
-        run: 'echo "seconds=$((T_PARTICLE ? $(date +%s) - T_PARTICLE : 0))" >> "$GITHUB_OUTPUT"'
-    timeout-minutes: 45
+          restore-keys: particles-errors-e2e-${{ runner.os }}-
+      - id: run
+        run: nix run .#test -- --severity errors e2e
+      - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Save nix eval cache
+        uses: actions/cache/save@v5
+        with:
+          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          path: ~/.cache/nix
+      - if: always() && github.ref_name == github.event.repository.default_branch
+        name: Prune lean nix cache to what this run used
+        run: |
+          cd /tmp/nix-lean-cache
+          shopt -s nullglob
+          narinfos=(*.narinfo)
+          ((${#narinfos[@]})) || exit 0
+          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
+            n=$(basename "$p") && n=${n%%-*}.narinfo
+            echo "$n" && sed -n 's/^URL: //p' "$n"
+          done | sudo xargs -r rm -f
+        shell: bash
+      - if: always() && github.ref_name == github.event.repository.default_branch
+        name: Save lean nix cache
+        uses: actions/cache/save@v5
+        with:
+          key: nix-lean-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          path: /tmp/nix-lean-cache
+    timeout-minutes: 90
   frontend-test:
     name: frontend-test
-    needs: load_nix
     outputs:
-      seconds: ${{ steps.particle.outputs.seconds }}
+      prepare_seconds: ${{ steps.run.outputs['frontend-test_prepare_seconds'] }}
+      seconds: ${{ steps.run.outputs['frontend-test_seconds'] }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -129,43 +108,66 @@ jobs:
             extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
-      - if: github.ref_name != github.event.repository.default_branch
-        name: Restore lean nix cache
+      - name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
           path: /tmp/nix-lean-cache
-          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-      - if: github.ref_name == github.event.repository.default_branch
-        name: Lean nix cache (built-only paths)
-        uses: actions/cache@v5
-        with:
-          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
-          path: /tmp/nix-lean-cache
-          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-      - if: github.ref_name != github.event.repository.default_branch
+          restore-keys: |-
+            nix-lean-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+            nix-lean-particle-frontend-test-${{ runner.os }}-
+      - id: eval-cache
+        name: Restore nix eval cache
         uses: actions/cache/restore@v5
         with:
-          key: particle-frontend-test-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          path: ~/.cache/nix
+      - if: github.ref_name != github.event.repository.default_branch
+        name: Restore particle's cache
+        uses: actions/cache/restore@v5
+        with:
+          key: particles-errors-frontend-test-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
           path: ~/.npm
-          restore-keys: particle-frontend-test-${{ runner.os }}-
+          restore-keys: particles-errors-frontend-test-${{ runner.os }}-
       - if: github.ref_name == github.event.repository.default_branch
+        name: Particle's cache
         uses: actions/cache@v5
         with:
-          key: particle-frontend-test-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          key: particles-errors-frontend-test-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
           path: ~/.npm
-          restore-keys: particle-frontend-test-${{ runner.os }}-
-      - run: echo "T_PARTICLE=$(date +%s)" >> "$GITHUB_ENV"
-      - run: nix run .#test -- --severity errors --serial frontend-test
-      - id: particle
-        if: always()
-        run: 'echo "seconds=$((T_PARTICLE ? $(date +%s) - T_PARTICLE : 0))" >> "$GITHUB_OUTPUT"'
-    timeout-minutes: 45
+          restore-keys: particles-errors-frontend-test-${{ runner.os }}-
+      - id: run
+        run: nix run .#test -- --severity errors frontend-test
+      - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Save nix eval cache
+        uses: actions/cache/save@v5
+        with:
+          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          path: ~/.cache/nix
+      - if: always() && github.ref_name == github.event.repository.default_branch
+        name: Prune lean nix cache to what this run used
+        run: |
+          cd /tmp/nix-lean-cache
+          shopt -s nullglob
+          narinfos=(*.narinfo)
+          ((${#narinfos[@]})) || exit 0
+          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
+            n=$(basename "$p") && n=${n%%-*}.narinfo
+            echo "$n" && sed -n 's/^URL: //p' "$n"
+          done | sudo xargs -r rm -f
+        shell: bash
+      - if: always() && github.ref_name == github.event.repository.default_branch
+        name: Save lean nix cache
+        uses: actions/cache/save@v5
+        with:
+          key: nix-lean-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          path: /tmp/nix-lean-cache
+    timeout-minutes: 90
   frontend-typecheck:
     name: frontend-typecheck
-    needs: load_nix
     outputs:
-      seconds: ${{ steps.particle.outputs.seconds }}
+      prepare_seconds: ${{ steps.run.outputs['frontend-typecheck_prepare_seconds'] }}
+      seconds: ${{ steps.run.outputs['frontend-typecheck_seconds'] }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -185,38 +187,61 @@ jobs:
             extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
-      - if: github.ref_name != github.event.repository.default_branch
-        name: Restore lean nix cache
+      - name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
           path: /tmp/nix-lean-cache
-          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-      - if: github.ref_name == github.event.repository.default_branch
-        name: Lean nix cache (built-only paths)
-        uses: actions/cache@v5
-        with:
-          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
-          path: /tmp/nix-lean-cache
-          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-      - if: github.ref_name != github.event.repository.default_branch
+          restore-keys: |-
+            nix-lean-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+            nix-lean-particle-frontend-typecheck-${{ runner.os }}-
+      - id: eval-cache
+        name: Restore nix eval cache
         uses: actions/cache/restore@v5
         with:
-          key: particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          path: ~/.cache/nix
+      - if: github.ref_name != github.event.repository.default_branch
+        name: Restore particle's cache
+        uses: actions/cache/restore@v5
+        with:
+          key: particles-errors-frontend-typecheck-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
           path: ~/.npm
-          restore-keys: particle-frontend-typecheck-${{ runner.os }}-
+          restore-keys: particles-errors-frontend-typecheck-${{ runner.os }}-
       - if: github.ref_name == github.event.repository.default_branch
+        name: Particle's cache
         uses: actions/cache@v5
         with:
-          key: particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          key: particles-errors-frontend-typecheck-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
           path: ~/.npm
-          restore-keys: particle-frontend-typecheck-${{ runner.os }}-
-      - run: echo "T_PARTICLE=$(date +%s)" >> "$GITHUB_ENV"
-      - run: nix run .#test -- --severity errors --serial frontend-typecheck
-      - id: particle
-        if: always()
-        run: 'echo "seconds=$((T_PARTICLE ? $(date +%s) - T_PARTICLE : 0))" >> "$GITHUB_OUTPUT"'
-    timeout-minutes: 45
+          restore-keys: particles-errors-frontend-typecheck-${{ runner.os }}-
+      - id: run
+        run: nix run .#test -- --severity errors frontend-typecheck
+      - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Save nix eval cache
+        uses: actions/cache/save@v5
+        with:
+          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          path: ~/.cache/nix
+      - if: always() && github.ref_name == github.event.repository.default_branch
+        name: Prune lean nix cache to what this run used
+        run: |
+          cd /tmp/nix-lean-cache
+          shopt -s nullglob
+          narinfos=(*.narinfo)
+          ((${#narinfos[@]})) || exit 0
+          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
+            n=$(basename "$p") && n=${n%%-*}.narinfo
+            echo "$n" && sed -n 's/^URL: //p' "$n"
+          done | sudo xargs -r rm -f
+        shell: bash
+      - if: always() && github.ref_name == github.event.repository.default_branch
+        name: Save lean nix cache
+        uses: actions/cache/save@v5
+        with:
+          key: nix-lean-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          path: /tmp/nix-lean-cache
+    timeout-minutes: 90
   load_nix:
     runs-on: ubuntu-latest
     steps:
@@ -261,7 +286,6 @@ jobs:
     if: always() && github.ref_name == github.event.repository.default_branch
     name: Report
     needs:
-      - checks
       - e2e
       - frontend-test
       - frontend-typecheck
@@ -270,7 +294,7 @@ jobs:
     steps:
       - env:
           NEEDS: ${{ toJSON(needs) }}
-          PARTICLES: '["rust-tests","frontend-typecheck","frontend-test","e2e","checks"]'
+          PARTICLES: '["rust-tests","frontend-typecheck","frontend-test","e2e"]'
           TIMED: '[{"key":"build","output":"prepare_seconds","particle":"rust-tests"},{"key":"test","output":"run_seconds","particle":"rust-tests"}]'
         name: Tally the particles
         run: |
