@@ -108,8 +108,8 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [-
   from `next dev`, whose origin is then the one to open.
   --port-offset <n>: every port moved by n, beside the stack on the usual ones.
   --from-prod: prod's panel.db, sites_panel.db and review_archive.db from their litestream replicas
-  (the keys from ../devops's sops), and review_archive's blobs over ssh (PROD_SSH), into a state
-  with none of them: with --reset.
+  (the keys from ../devops's sops), and review_archive's blobs over ssh (PROD_SSH, rsync into
+  .local-prod-blobs/, which --reset keeps), into a state with none of them; one with all of them keeps its copy.
   Dev sign-in is one user whatever --role (DEV_EMAIL, at the top of the script): prod's, when copied.
   dev (--dev): --watch without the landings. A conductor or its next dev already on their ports is
   stopped, with the run that started it, and replaced; sites_panel and review_archive are started
@@ -120,7 +120,8 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [-
   --fixed [<rev>]: nothing watched; the conductor and its static front end built once from a copy of this checkout
   as it is now, or at <rev> (a commit, a tag), into this checkout's build dir: only what differs compiles. Without --port,
   on the first free pair down from SA_PORT_RANGE's top, beside a watched dev and other --fixed runs, never replacing them.
-  Opened in a Chrome window of its own (google-chrome-stable, its profile in the state): closing it stops the run.
+  Without --port and --port-offset, opened in a Chrome window of its own (google-chrome-stable, its profile in the state):
+  closing it stops the run.
 EOF
 		exit 0
 		;;
@@ -147,15 +148,18 @@ if [ "$fixed" = 1 ]; then
 		echo "--fixed is dev's" >&2
 		exit 2
 	}
-	command -v google-chrome-stable >/dev/null || {
-		echo "--fixed opens the conductor in google-chrome-stable: not on PATH" >&2
-		exit 1
-	}
 	watch=0
 fi
 [ -z "$own_port" ] || [ "$dev" = 1 ] || {
 	echo "--port is dev's: local-stack moves every port with --port-offset" >&2
 	exit 2
+}
+# --fixed as a person runs it, in a window of its own; with --port or --port-offset, a harness's, on the ports it gave
+window=0
+[ "$fixed" = 0 ] || [ -n "$own_port" ] || [ "$offset" != 0 ] || window=1
+[ "$window" = 0 ] || command -v google-chrome-stable >/dev/null || {
+	echo "--fixed opens the conductor in google-chrome-stable: not on PATH" >&2
+	exit 1
 }
 
 say() { printf '\033[1m▶ %s\033[0m\n' "$*" >&2; }
@@ -189,7 +193,7 @@ if [ "$fixed" = 1 ]; then
 	else
 		fixed_at="this checkout's state at the start"
 		commit="$(git -C "$root" rev-parse HEAD)"
-		src="$root/.local/fixed/$(worktree_files | (cd "$root" && xargs -0 sha256sum) | sha256sum | cut -c1-12)"
+		src="$root/.local/fixed/$(worktree_files | (cd "$root" && xargs -0 sha256sum) | sha256sum | cut -c1-12)" # frontend/tests/e2e/stack.ts hashes the same way
 	fi
 	if [ ! -e "$src/.copied" ]; then
 		say "copying the conductor at $fixed_at into $src"
@@ -232,8 +236,8 @@ VIFNET_DIR="${VIFNET_DIR:-$service_arb/sites/vifnet}"
 DEBOUCHAGE_DIR="${DEBOUCHAGE_DIR:-$service_arb/sites/debouchage}"
 
 busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
-# --fixed beside the watched dev, never on its ports: without --port, the first free pair down from the range's top, one not claimed by a starting run's pid
-if [ "$fixed" = 1 ] && [ -z "$own_port" ]; then
+# --fixed beside the watched dev, never on its ports: in a window, the first free pair down from the range's top, one not claimed by a starting run's pid
+if [ "$window" = 1 ]; then
 	range="${SA_PORT_RANGE:?$need}"
 	own_port=$((${range#*-} - 1))
 	while busy "$own_port" || busy "$((own_port + 1))" || kill -0 "$(cat "$root/.local-port-$own_port/pid" 2>/dev/null)" 2>/dev/null; do
@@ -403,42 +407,57 @@ done
 # whose stack this is, for e2e's stack.ts: reused while these match, stopped by the pid; before the builds, so a second run finds it starting
 printf '%s\n' ${argv[@]+"${argv[@]}"} "SA_CONDUCTOR_CONFIG=${SA_CONDUCTOR_CONFIG:-}" >"$state/args"
 echo $$ >"$state/pid"
+[ "$fixed" = 0 ] || echo "$src" >"$state/src" # the copy served, named by its content: stack.ts's freshness
 rm -f "$state/panel.built" "$state/panel.failed" # a previous stack's builds
 
 # ── prod's data ──────────────────────────────────────────────────────────────────────────
 
 REVIEW_ARCHIVE_DATA_DIR="${REVIEW_ARCHIVE_DATA_DIR:-$state/review_archive}"
+copies=("$state/panel.db:panel-data/panel.db" "$state/sites_panel.db:sites-panel-data/sites_panel.db"
+	"$REVIEW_ARCHIVE_DATA_DIR/review_archive.db:review-archive-data/review_archive.db")
+restore=0
 if [ "$from_prod" = 1 ]; then
-	DEVOPS_DIR="${DEVOPS_DIR:-$(dirname "$service_arb")/devops}"
-	GITOPS_DIR="${GITOPS_DIR:-$(dirname "$service_arb")/gitops}"
-	copies=("$state/panel.db:panel-data/panel.db" "$state/sites_panel.db:sites-panel-data/sites_panel.db"
-		"$REVIEW_ARCHIVE_DATA_DIR/review_archive.db:review-archive-data/review_archive.db")
-	for c in "${copies[@]}"; do
-		[ ! -e "${c%%:*}" ] || die "--from-prod restores into a state without ${c%%:*}: add --reset"
-	done
-	say "restoring prod's databases from their litestream replicas"
-	# the replicas as gitops main configures them, not as an old checkout of it says
-	git -C "$GITOPS_DIR" fetch -q origin main
-	git -C "$GITOPS_DIR" show FETCH_HEAD:clusters/rpi5/tenants/service-arb/manifests.yaml |
-		yq eval-all '[select(.kind == "ConfigMap" and .data["litestream.yml"])][0].data["litestream.yml"]' >"$state/litestream.yml"
-	secret() { sops -d --extract "[\"$1\"]" "$DEVOPS_DIR/nix/secrets/host.json"; }
-	r2_key="$(secret r2_access_key_id)"
-	r2_secret="$(secret r2_secret_access_key)"
-	mkdir -p "$REVIEW_ARCHIVE_DATA_DIR"
-	for c in "${copies[@]}"; do
-		# the caller's AWS_* would win over litestream's own variables
-		env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY LITESTREAM_ACCESS_KEY_ID="$r2_key" LITESTREAM_SECRET_ACCESS_KEY="$r2_secret" \
-			litestream restore -config "$state/litestream.yml" -o "${c%%:*}" "/pvc/${c#*:}"
-	done
-	unset r2_key r2_secret
-	say "copying review_archive's blobs from $PROD_SSH"
-	# not replicated: read off the volume on the host
-	ssh -o BatchMode=yes "$PROD_SSH" bash -s <<'REMOTE' | tar -C "$REVIEW_ARCHIVE_DATA_DIR" -xf -
-set -euo pipefail
-pv="$(sudo -n k3s kubectl -n service-arb get pvc review-archive-data -o jsonpath='{.spec.volumeName}')"
-sudo -n tar -C "$(sudo -n k3s kubectl get pv "$pv" -o jsonpath='{.spec.local.path}')" -cf - blobs
-REMOTE
+	kept=0
+	for c in "${copies[@]}"; do [ ! -e "${c%%:*}" ] || kept=$((kept + 1)); done
+	case "$kept" in
+	0)
+		[ ! -e "$REVIEW_ARCHIVE_DATA_DIR/blobs" ] || die "--from-prod: $REVIEW_ARCHIVE_DATA_DIR has blobs but no databases: add --reset"
+		restore=1
+		;;
+	"${#copies[@]}") say "--from-prod: keeping the copy of prod's databases in $state (--reset for a fresh one)" ;;
+	*) die "--from-prod restores into a state with none of its databases, or keeps all of them: add --reset" ;;
+	esac
 fi
+# Beside the builds, waited on before the first reader. Under `timed`, so errexit is off: every step checked.
+prod_data() {
+	local devops="${DEVOPS_DIR:-$(dirname "$service_arb")/devops}" gitops="${GITOPS_DIR:-$(dirname "$service_arb")/gitops}"
+	local cache="$root/.local-prod-blobs" r2_key r2_secret volume c p pids=() failed=0
+	# the replicas as gitops main configures them, not as an old checkout of it says
+	git -C "$gitops" fetch -q origin main || return 1
+	git -C "$gitops" show FETCH_HEAD:clusters/rpi5/tenants/service-arb/manifests.yaml |
+		yq eval-all '[select(.kind == "ConfigMap" and .data["litestream.yml"])][0].data["litestream.yml"]' >"$state/litestream.yml" || return 1
+	r2_key="$(sops -d --extract '["r2_access_key_id"]' "$devops/nix/secrets/host.json")" || return 1
+	r2_secret="$(sops -d --extract '["r2_secret_access_key"]' "$devops/nix/secrets/host.json")" || return 1
+	mkdir -p "$REVIEW_ARCHIVE_DATA_DIR" "$cache"
+	printf '*\n' >"$cache/.gitignore"
+	for c in "${copies[@]}"; do
+		(
+			unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY # the caller's would win over litestream's own variables
+			export LITESTREAM_ACCESS_KEY_ID="$r2_key" LITESTREAM_SECRET_ACCESS_KEY="$r2_secret"
+			timed "restore/$(basename "${c%%:*}" .db)" litestream restore -config "$state/litestream.yml" -o "${c%%:*}" "/pvc/${c#*:}"
+		) &
+		pids+=("$!")
+	done
+	# not replicated: read off the volume on the host, into a cache outside the state (--reset keeps it), so only what
+	# changed comes again; hard-linked into the state, as review_archive replaces a blob by a rename, never in place
+	# shellcheck disable=SC2016 # expanded on the host
+	volume="$(ssh -o BatchMode=yes "$PROD_SSH" 'pv="$(sudo -n k3s kubectl -n service-arb get pvc review-archive-data -o jsonpath="{.spec.volumeName}")" && sudo -n k3s kubectl get pv "$pv" -o jsonpath="{.spec.local.path}"')" || return 1
+	{ timed blobs rsync -a --delete -e "ssh -o BatchMode=yes" --rsync-path="sudo -n rsync" "$PROD_SSH:$volume/blobs/" "$cache/blobs/" &&
+		cp -al "$cache/blobs" "$REVIEW_ARCHIVE_DATA_DIR/blobs"; } &
+	pids+=("$!")
+	for p in "${pids[@]}"; do wait "$p" || failed=1; done
+	[ "$failed" = 0 ]
+}
 
 # ── the builds ───────────────────────────────────────────────────────────────────────────
 
@@ -504,6 +523,12 @@ late() {
 	warn "$1 is not up yet: the conductor answers 502 for it until it is"
 }
 # What does not wait on the conductor's build starts beside it, and is waited for where it is first needed.
+prod_data_build=""
+if [ "$restore" = 1 ]; then
+	say "restoring prod's databases from their litestream replicas, and review_archive's blobs from $PROD_SSH, beside the builds"
+	timed prod-data prod_data &
+	prod_data_build=$!
+fi
 grafana_build=""
 if [ "$run_panel" = 1 ] && [ -z "${PANEL_GRAFANA_SERVER:-}" ]; then
 	say "building Grafana (nix build .#grafana-server)"
@@ -640,6 +665,7 @@ fi
 
 # ── the environments ─────────────────────────────────────────────────────────────────────
 
+[ -z "$prod_data_build" ] || wait "$prod_data_build" || die "prod's data did not restore (see the lines above)"
 [ -s "$state/data-key" ] || "$PANEL_BIN" gen-data-key >"$state/data-key"
 origin="http://127.0.0.1:$PANEL_PORT"
 # The browser's origin: the sign-in sends it back there, and the live socket must come from it.
@@ -772,7 +798,7 @@ set -m
 stop_all() {
 	trap - INT TERM EXIT
 	set +e # a closed terminal fails the writes below; under -e that would leave every part running
-	rm -f "$state/args" "$state/pid"
+	rm -f "$state/args" "$state/pid" "$state/src"
 	echo >&2
 	say "stopping"
 	# Every descendant, not the jobs' groups: watchexec runs its command in a group of its own, and
@@ -1100,7 +1126,7 @@ fi
 # --fixed: a browser of its own profile, so its last tab closed ends its process, and this run with it; extensions and
 # background mode would keep it alive past that
 browser_pid=""
-if [ "$fixed" = 1 ]; then
+if [ "$window" = 1 ]; then
 	google-chrome-stable --user-data-dir="$state/browser" --no-first-run --no-default-browser-check \
 		--disable-extensions --disable-background-mode --new-window "$public_origin" >"$state/logs/browser.log" 2>&1 &
 	browser_pid=$!

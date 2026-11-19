@@ -1,33 +1,32 @@
+import { basename } from "node:path";
+
 import { defineConfig, devices } from "@playwright/test";
 
 import type { Stack } from "./stack";
 
-const port = (name: string): number => {
+export const root = new URL("../../../", import.meta.url).pathname;
+export const port = (name: string): number => {
   const value = process.env[name];
   if (!value) throw new Error(`${name}: the flake's localEnv sets it; run through \`nix run .#e2e\` or \`nix run .#figma\``);
-  return Number(value);
+  return Number(value.replace(/^.*:/, ""));
 };
 
-// The real stack on ports of its own (`dev --port`: its conductor, dev sign-in as an admin, and its
-// `next dev`), never a running one's servers: those may face the real backend, as an operator. Run
-// through the flake, which supplies `@playwright/test` with its pinned browsers.
-// persistent: the stack outlives the run and is reused by the next (stack.ts); else Playwright's webServer, stopped at the end.
-export function stackConfig({ ports, args, specs, env, persistent }: { ports: [stack: string, web: string]; args: string; specs: { testMatch: string } | { testIgnore: string }; env: Record<string, string>; persistent: boolean }) {
-  const STACK = port(ports[0]);
-  const WEB = port(ports[1]);
-  if (WEB !== STACK + 1) throw new Error(`${ports[1]} ${WEB}: \`dev --port ${STACK}\` serves its next dev on ${STACK + 1}`);
-  const tmp = (path: string) => new URL(`../../tmp/playwright-${STACK}/${path}`, import.meta.url).pathname;
-  process.env.STACK_TIMELINE = new URL(`../../../.local-port-${STACK}/timeline.tsv`, import.meta.url).pathname; // where `dev --port` keeps it; read by timeline.ts, written by sign-in.ts too
+// The real stack on ports of its own (its conductor, dev sign-in as an admin), never a running one's servers: those may
+// face the real backend, as an operator. It outlives the run, reused by the next (stack.ts). Run through the flake, which
+// supplies `@playwright/test` with its pinned browsers.
+export function stackConfig({ stack, specs }: { stack: Stack; specs: { testMatch: string } | { testIgnore: string } }) {
+  const tmp = (path: string) => `${root}frontend/tmp/playwright-${basename(stack.state)}/${path}`;
+  process.env.STACK_TIMELINE = `${stack.state}/timeline.tsv`; // where local-stack keeps it; read by timeline.ts, written by sign-in.ts too
   return defineConfig({
     testDir: ".",
     ...specs,
     fullyParallel: true, // the specs share no server state: each page is its own context, over the one session
     outputDir: tmp(""),
     reporter: [["list"], ["./timeline.ts", { out: tmp("timeline.txt") }]],
-    globalSetup: persistent ? ["./stack.ts", "./sign-in.ts"] : "./sign-in.ts",
-    metadata: persistent ? { stack: { port: STACK, args: args.split(" ").filter(Boolean), env } satisfies Stack } : {},
+    globalSetup: ["./stack.ts", "./sign-in.ts"],
+    metadata: { stack },
     use: {
-      baseURL: `http://localhost:${WEB}`, // `next dev` refuses its dev resources to any other host, so the page never hydrates
+      baseURL: stack.web,
       deviceScaleFactor: 1,
       storageState: tmp("session.json"),
     },
@@ -35,17 +34,19 @@ export function stackConfig({ ports, args, specs, env, persistent }: { ports: [s
       { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
       { name: "mobile", use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 } } },
     ],
-    ...(persistent ? {} : { webServer: {
-      command: `dev --port ${STACK} --role admin ${args}`,
-      cwd: "../../..",
-      url: `http://localhost:${WEB}/`,
-      reuseExistingServer: false,
-      env,
-      timeout: 30 * 60_000, // the conductor's and its peers' builds; with --from-prod, the restore too
-      gracefulShutdown: { signal: "SIGTERM", timeout: 15_000 }, // its default SIGKILL skips local-stack's stop_all: the watched servers, in groups of their own, serve on and hold the output open
-    } }),
   });
 }
 
-// the specs touch the conductor's own screens alone
-export default stackConfig({ ports: ["E2E_STACK_PORT", "E2E_WEB_PORT"], args: "--no-peers", specs: { testIgnore: "figma.spec.ts" }, env: { SA_CONDUCTOR_CONFIG: new URL("./conductor.nix", import.meta.url).pathname }, persistent: true }); // no Google accounts: never spends on, nor reads, a person's
+// the specs touch the conductor's own screens alone; no Google accounts: never spends on, nor reads, a person's
+const E2E = port("E2E_STACK_PORT");
+export default stackConfig({
+  stack: {
+    argv: ["--port", String(E2E), "--role", "admin", "--no-peers"],
+    env: { SA_CONDUCTOR_CONFIG: new URL("./conductor.nix", import.meta.url).pathname },
+    state: `${root}.local-port-${E2E}`,
+    web: `http://localhost:${E2E + 1}`, // `next dev` refuses its dev resources to any other host, so the page never hydrates
+    health: `http://127.0.0.1:${E2E}/health`,
+    fresh: "watched",
+  },
+  specs: { testIgnore: "figma.spec.ts" },
+});

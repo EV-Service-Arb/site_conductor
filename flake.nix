@@ -36,10 +36,8 @@
           SA_PORT_RANGE = "${toString SA_PORT_RANGE.from}-${toString SA_PORT_RANGE.to}";
           PANEL_BIND = "127.0.0.1:${local 0}";
           PANEL_WEB_PORT = local 1; # the front end's `npm run dev`
-          FIGMA_STACK_PORT = local 3; # `nix run .#figma`'s own stack (`dev --port`), never a running one's
-          FIGMA_WEB_PORT = local 4; # its next dev: FIGMA_STACK_PORT + 1
-          E2E_STACK_PORT = local 7; # `nix run .#e2e`'s
-          E2E_WEB_PORT = local 8;
+          FIGMA_PORT_OFFSET = "2000"; # `nix run .#figma`'s own stack, its peers included: clear of the range and of a worktree's 1000
+          E2E_STACK_PORT = local 7; # `nix run .#e2e`'s (`dev --port`), its next dev on the next
           BROWSERS_BIND = "127.0.0.1:${local 5}"; # sa_browsers' runner
           SANDBOX_BIND = "127.0.0.1:${local 6}"; # sa_sandbox's runner
         };
@@ -387,13 +385,32 @@
         # The front end's own screens into Figma (frontend/tests/e2e), by `@evinvest/figma-render`'s bin;
         # the loop is the `figma-render` skill.
         figmaFile = "G9JfrDvGd0BKUdOKYg61Nn"; # "panel — renders"
+        # a stack outliving its run (tests/e2e/stack.ts), by its state dir: `--stop` stops it, `--restart` starts the run on a
+        # new one, on a new state when `wipe`
+        stackRun = { state, wipe ? false }: run: ''
+          stop() {
+            local pid
+            pid="$(cat "${state}/pid" 2>/dev/null)" || return 0
+            ps -o args= -p "$pid" | grep -q local-stack || return 0
+            kill -TERM "$pid"
+            for _ in $(seq 60); do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.5; done
+            echo "local-stack $pid did not stop in 30s" >&2
+            exit 1
+          }
+          case "''${1:-}" in
+          --stop) stop; exit 0 ;;
+          --restart) stop; ${lib.optionalString wipe ''rm -rf "${state}";''} shift ;;
+          esac
+          ${run}
+        '';
         figma = (js.playwright {
           name = "figma";
           package = "frontend";
           config = "tests/e2e";
           env = localEnv;
-          runtimeInputs = [ dev ];
-          run = ''exec node_modules/.bin/evinvest-figma-render "$@" -c tests/e2e/figma.config.ts --file ${figmaFile}'';
+          runtimeInputs = [ dev pkgs.procps pkgs.gnugrep ];
+          # a new state: prod's data copied anew
+          run = stackRun { state = "../.local-$FIGMA_PORT_OFFSET"; wipe = true; } ''exec node_modules/.bin/evinvest-figma-render "$@" -c tests/e2e/figma.config.ts --file ${figmaFile}'';
         }).program;
         # The front end's behaviour over the same stack: every spec in frontend/tests/e2e but the renders.
         e2e = js.playwright {
@@ -402,23 +419,7 @@
           config = "tests/e2e";
           env = localEnv;
           runtimeInputs = [ dev pkgs.procps pkgs.gnugrep ];
-          # its stack outlives the run (tests/e2e/stack.ts): --stop stops it, --restart starts the run on a new one
-          run = ''
-            stop() {
-              local pid
-              pid="$(cat "../.local-port-$E2E_STACK_PORT/pid" 2>/dev/null)" || return 0
-              ps -o args= -p "$pid" | grep -q local-stack || return 0
-              kill -TERM "$pid"
-              for _ in $(seq 60); do kill -0 "$pid" 2>/dev/null || return 0; sleep 0.5; done
-              echo "local-stack $pid did not stop in 30s" >&2
-              exit 1
-            }
-            case "''${1:-}" in
-            --stop) stop; exit 0 ;;
-            --restart) stop; shift ;;
-            esac
-            exec playwright test -c tests/e2e "$@"
-          '';
+          run = stackRun { state = "../.local-port-$E2E_STACK_PORT"; } ''exec playwright test -c tests/e2e "$@"'';
         };
         # In the devShell, not an app: built in another environment, every crate's fingerprint is stale.
         testTimeline = pkgs.writeShellApplication {

@@ -44,8 +44,8 @@ stand-in, while the bundle loads or when it cannot, opens the same entries.
 
 Checks: `nix run .#test` (from the repo root) runs them with the rest of the repo's; `npm run build` builds.
 `nix run .#figma` (run by `nix run .#publish` too) crawls the site from `tests/e2e/figma.spec.ts`'s pages and puts
-every page it reaches into Figma, both breakpoints, over a stack of its own (`dev --port`) on prod's data with the
-peers, as an admin (the loop is the `figma-render` skill); `nix run .#e2e` runs the other specs over another,
+every page it reaches into Figma, both breakpoints, over a stack of its own (`dev --fixed`, outliving the run) on prod's data with its
+own peers, as an admin (the loop is the `figma-render` skill); `nix run .#e2e` runs the other specs over another,
 data-less and peer-less.
 
 ## How it is served

@@ -1,12 +1,13 @@
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { basename } from "node:path";
 
 import type { FullConfig } from "@playwright/test";
 
 import { timed } from "./timeline";
 
-/** stackConfig's `metadata.stack` when persistent */
-export type Stack = { port: number; args: string[]; env: Record<string, string> };
+/** stackConfig's `metadata.stack`: `dev <argv>`, its state dir, where it answers, and what makes it current — its watched build catching up with the sources, or (--fixed) the copy it serves being the checkout as it is now */
+export type Stack = { argv: string[]; env: Record<string, string>; state: string; web: string; health: string; fresh: "watched" | "fixed" };
 
 const root = new URL("../../../", import.meta.url).pathname;
 const budget = 30 * 60_000; // the conductor's cold build
@@ -27,6 +28,16 @@ function alive(state: string): number | undefined {
   }
 }
 
+const gone = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ESRCH") throw e;
+    return true;
+  }
+};
+
 /** The newest mtime among what `serving panel` watches: crates' rs/toml/sql/lock but crates/gen, and the workspace's manifest and lock. */
 function newestSource(): number {
   let newest = Math.max(mtime(`${root}Cargo.toml`), mtime(`${root}Cargo.lock`));
@@ -42,16 +53,19 @@ function newestSource(): number {
   return newest;
 }
 
-/** `dev --port`'s stack, left running between runs: started when down or started with other args, then waited on until its watched build is no older than the sources. `nix run .#e2e -- --stop` stops it. */
+/** The name local-stack gives --fixed's copy of the checkout as it is now: its `worktree_files | … | sha256sum`, kept in step with it. */
+const checkoutHash = () =>
+  execFileSync("bash", ["-c", `git ls-files -z -co --exclude-standard --deduplicate | while IFS= read -rd '' f; do [ ! -e "$f" ] || printf '%s\\0' "$f"; done | xargs -0 sha256sum | sha256sum | cut -c1-12`], { cwd: root, encoding: "utf8" }).trim();
+
+/** A `dev` stack left running between runs: started when down, or stopped and started again when started with other args or no longer current; then waited on until it answers and, watched, until its build is no older than the sources. `nix run .#e2e -- --stop` / `.#figma -- --stop` stops it. */
 export default async function stack(config: FullConfig) {
-  const { port, args, env } = config.metadata.stack as Stack;
-  const state = `${root}.local-port-${port}`;
-  const argv = ["--port", String(port), "--role", "admin", ...args];
+  const { argv, env, state, web, health, fresh } = config.metadata.stack as Stack;
   const expected = [...["--dev", ...argv], `SA_CONDUCTOR_CONFIG=${env.SA_CONDUCTOR_CONFIG ?? ""}`].join("\n") + "\n";
   let pid = alive(state);
-  if (pid !== undefined && readFileSync(`${state}/args`, "utf8") !== expected) {
-    process.kill(pid, "SIGTERM"); // local-stack's stop_all
-    for (let i = 0; alive(state) !== undefined; i++) {
+  const stale = () => readFileSync(`${state}/args`, "utf8") !== expected || (fresh === "fixed" && basename(readFileSync(`${state}/src`, "utf8").trim()) !== checkoutHash());
+  if (pid !== undefined && stale()) {
+    process.kill(pid, "SIGTERM"); // local-stack's stop_all, which drops the pidfile first and exits once its parts have
+    for (let i = 0; gone(pid) === false; i++) {
       if (i === 60) throw new Error(`local-stack ${pid} did not stop in 30s`);
       await sleep(500);
     }
@@ -69,18 +83,16 @@ export default async function stack(config: FullConfig) {
     child.on("exit", () => (exited = true));
     died = () => exited;
   }
-  const newest = newestSource();
+  const newest = fresh === "watched" ? newestSource() : -Infinity; // --fixed builds once, before it answers
   const failed = () => {
     const at = mtime(`${state}/panel.failed`);
     if (at >= newest && at > mtime(`${state}/panel.built`)) throw new Error(`the conductor did not build — the tail of ${state}/logs/panel.log:\n${tail(`${state}/logs/panel.log`)}`);
   };
-  const web = `http://localhost:${port + 1}/`;
   for (const start = Date.now(); !(await answers(web)); await sleep(500)) {
     failed();
     if (died()) throw new Error(`the stack stopped before ${web} answered — the tail of ${state}/stack.log:\n${tail(`${state}/stack.log`)}`);
     if (Date.now() - start > budget) throw new Error(`${web} did not answer in ${budget / 60_000} min`);
   }
-  const health = `http://127.0.0.1:${port}/health`;
   if (mtime(`${state}/panel.built`) >= newest && (await answers(health))) return;
   await timed("rebuild", async () => {
     for (const start = Date.now(); !(mtime(`${state}/panel.built`) >= newest && (await answers(health))); await sleep(250)) {

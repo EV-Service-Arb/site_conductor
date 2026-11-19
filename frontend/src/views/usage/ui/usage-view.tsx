@@ -14,6 +14,7 @@ import { useResource } from "@evinvest/api/react";
 const SECTION: Record<string, (t: T) => string> = {
   sites: (t) => t(nav.sites, "Sites"),
   admin: (t) => t(usageKeys.access.admin, "Administration"),
+  members: (t) => t(usageKeys.access.members, "Members"),
   review_archive: (t) => t(nav.reviewArchive, "Review Archive"),
   playbook: (t) => t(account.access.playbook, "Playbook"),
 };
