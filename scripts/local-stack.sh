@@ -509,6 +509,10 @@ if [ "$run_panel" = 1 ] && { [ "$watch" = 1 ] || [ "$fixed" = 1 ]; }; then
 	timed web-prep web_prep &
 	web_prep_build=$!
 fi
+# The conductor's and its runners' binaries in one build, each watched rebuild too: another -p set unifies features
+# otherwise, a second variant of shared deps built cold under the build dir's lock.
+conductor_packages="-p sa_server -p sa_sandbox"
+[ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ] || conductor_packages+=" -p sa_browsers"
 build_sites() {
 	retried in_shell "$SITES_DIR" cargo b -q -p panel_server &&
 		(cd "$SITES_DIR/frontend" && { [ node_modules/.package-lock.json -nt package-lock.json ] || npm ci; } && npm run -s build)
@@ -523,9 +527,6 @@ if [ "$watch" = 1 ] || [ "$fixed" = 1 ]; then
 	done
 	say "building the conductor, sites_panel and review_archive from their checkouts, at once"
 	# also when another conductor serves: `panel gen-data-key` makes the state's key
-	# the runners' binaries in the same build: one dependency graph, one hold of the build dir's lock
-	conductor_packages="-p sa_server -p sa_sandbox"
-	[ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ] || conductor_packages+=" -p sa_browsers"
 	timed conductor retried in_shell "$src" bash -c "$own_cargo b -q $conductor_packages" &
 	conductor_build=$!
 	sites_build=""
@@ -922,7 +923,7 @@ if [ -n "$browsers_origin" ]; then
 	export BROWSERS_ORBITA BROWSERS_FFMPEG BROWSERS_MLX BROWSERS_ADB BROWSERS_BUSYBOX BROWSERS_ADB_KEYBOARD
 	busy "$BROWSERS_PORT" && die "port $BROWSERS_PORT is taken: the browsers' runner's"
 	[ "$watch" = 1 ] || [ "$fixed" = 1 ] || timed browsers in_shell "$root" bash -c "$own_cargo b -q -p sa_browsers" # under --watch, the conductor's build
-	serving browsers "$root" "$own_cargo b -q -p sa_browsers" "browsers serve" -e rs,toml,lock &
+	serving browsers "$root" "$own_cargo b -q $conductor_packages" "browsers serve" -e rs,toml,lock &
 	essential+=("$!")
 elif [ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ]; then
 	say "GOLOGIN_TOKEN and MULTILOGIN_TOKEN unset: no browsers' runner; the gmails' browsers say they are not connected"
@@ -932,7 +933,7 @@ if [ -n "$sandbox_origin" ]; then
 	say "starting the sandbox's runner on $sandbox_origin"
 	busy "$SANDBOX_PORT" && die "port $SANDBOX_PORT is taken: the sandbox's runner's"
 	[ "$watch" = 1 ] || [ "$fixed" = 1 ] || timed sandbox in_shell "$root" bash -c "$own_cargo b -q -p sa_sandbox" # under --watch, the conductor's build
-	serving sandbox "$root" "$own_cargo b -q -p sa_sandbox" "sandbox serve" -e rs,toml,lock &
+	serving sandbox "$root" "$own_cargo b -q $conductor_packages" "sandbox serve" -e rs,toml,lock &
 	essential+=("$!")
 elif [ "$run_panel" = 1 ] && [ ! -d "$root/crates/sandbox/js/node_modules/@evinvest/api" ]; then
 	say "crates/sandbox/js has no @evinvest/api (its _.js-local.json names the checkout until it is published): no sandbox, the agents have no execute"
@@ -941,7 +942,7 @@ fi
 if [ "$run_panel" = 1 ]; then
 	say "starting the conductor on $origin (dev sign-in: $role)"
 	# panel.built's mtime: the start of the build serving now, so no source older than it is missing (e2e's stack.ts)
-	serving panel "$root" "touch '$state/panel.building' && $own_cargo b -q -p sa_server && mv '$state/panel.building' '$state/panel.built' || { mv '$state/panel.building' '$state/panel.failed'; false; }" "panel serve --bind 127.0.0.1:$PANEL_PORT" -i 'crates/gen/**' -e rs,toml,sql,lock &
+	serving panel "$root" "touch '$state/panel.building' && $own_cargo b -q $conductor_packages && mv '$state/panel.building' '$state/panel.built' || { mv '$state/panel.building' '$state/panel.failed'; false; }" "panel serve --bind 127.0.0.1:$PANEL_PORT" -i 'crates/gen/**' -e rs,toml,sql,lock &
 	essential+=("$!")
 	timed conductor-ready wait_for panel "$origin/health" 900 "$!" || die "the conductor did not start"
 	# Dev sign-in's session, as the admin: the seeds are the conductor's own operations.

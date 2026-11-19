@@ -112,7 +112,7 @@
           figma = { on = "publish"; }; # the render needs prod's data and the peers, which only a developer's machine has
           jobs.default = true;
           jobs.errors.install.packages = [ "ffmpeg" "deno" ]; # crates/browsers/tests/runner.rs cuts its films with ffmpeg; crates/sandbox's tests run Deno
-          jobs.errors.augment = [ e2e ];
+          jobs.errors.augment = [ (e2e // { ciCache = [ e2e.ciCache rs.ciCache ]; }) ]; # local-stack's conductor build
           jobs.warnings.exclude = [ "code-duplication" ];
           jobs.warnings.augment = [{ name = "code-duplication"; args.excludePatterns = [ "frontend/src/shared/api/schema.ts" "frontend/src/shared/api/services/**" "frontend/src/shared/api/views.ts" "crates/sandbox/js/catalog.ts" ]; }]; # generated
           lfs = false;

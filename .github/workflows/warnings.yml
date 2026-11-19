@@ -75,6 +75,9 @@ jobs:
     outputs:
       prepare_seconds: ${{ steps.run.outputs['frontend-lint_prepare_seconds'] }}
       seconds: ${{ steps.run.outputs['frontend-lint_seconds'] }}
+    permissions:
+      actions: write
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -109,22 +112,28 @@ jobs:
         with:
           key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
-      - if: github.ref_name != github.event.repository.default_branch
+      - id: particle-cache-0
         name: Restore particle's cache
         uses: actions/cache/restore@v5
         with:
-          key: particles-warnings-frontend-lint-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          key: particles-warnings-frontend-lint-0-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/package-lock.json') }}
           path: ~/.npm
-          restore-keys: particles-warnings-frontend-lint-${{ runner.os }}-
-      - if: github.ref_name == github.event.repository.default_branch
-        name: Particle's cache
-        uses: actions/cache@v5
-        with:
-          key: particles-warnings-frontend-lint-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-          path: ~/.npm
-          restore-keys: particles-warnings-frontend-lint-${{ runner.os }}-
+          restore-keys: particles-warnings-frontend-lint-0-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
       - id: run
         run: nix run .#test -- --severity warnings frontend-lint
+      - if: always() && github.ref_name == github.event.repository.default_branch && steps.particle-cache-0.outputs.cache-hit != 'true'
+        name: Save particle's cache
+        uses: actions/cache/save@v5
+        with:
+          key: ${{ steps.particle-cache-0.outputs.cache-primary-key }}
+          path: ~/.npm
+      - env:
+          FAMILY: particles-warnings-frontend-lint-0-${{ runner.os }}-
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.particle-cache-0.outputs.cache-primary-key }}
+        if: always() && github.ref_name == github.event.repository.default_branch && steps.particle-cache-0.outputs.cache-hit != 'true'
+        name: Drop particle's older caches
+        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
       - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Save nix eval cache
         uses: actions/cache/save@v5
