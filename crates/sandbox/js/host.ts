@@ -1,6 +1,6 @@
 // A session: one process whose cells run in turn, each a module the runner wrote and type-checked
 // (sa_sandbox's main.rs). Its first line on stdin is a nonce; each next one a cell to run. What a
-// cell prints is the cell's; the host's own word is a line on stdout behind the nonce.
+// cell prints is the cell's; the host's own word is a line behind the nonce, on stderr and then stdout.
 import { setToken } from "./prelude.ts";
 
 const lines = Deno.stdin.readable.pipeThrough(new TextDecoderStream()).getReader();
@@ -22,7 +22,11 @@ async function line(): Promise<string | null> {
 const nonce = await line();
 if (nonce === null) Deno.exit(0);
 const said = new TextEncoder();
-const say = (word: unknown) => Deno.stdout.writeSync(said.encode(`\0SA:${nonce}:${JSON.stringify(word)}\n`));
+const say = (word: unknown) => {
+  const line = said.encode(`\0SA:${nonce}:${JSON.stringify(word)}\n`);
+  Deno.stderr.writeSync(line);
+  Deno.stdout.writeSync(line);
+};
 
 // what a cell left running throws later is told, never the end of the session
 globalThis.addEventListener("unhandledrejection", (e) => {

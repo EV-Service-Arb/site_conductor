@@ -213,6 +213,7 @@ impl Runner {
 				names: BTreeMap::new(),
 				busy: None,
 				deadline: None,
+				word: None,
 				gone: None,
 				used: Instant::now(),
 			}),
@@ -434,6 +435,8 @@ struct SessionState {
 	busy: Option<usize>,
 	/// When the running cell is killed.
 	deadline: Option<tokio::time::Instant>,
+	/// The running cell's end, as the first stream to reach the host's word told it.
+	word: Option<Ended>,
 	/// Why it ended; then it is no longer held.
 	gone: Option<Ended>,
 	used: Instant,
@@ -492,7 +495,7 @@ async fn supervise(runner: Runner, s: Arc<Session>, mut child: Child, marker: St
 	let (mut stdout, mut stderr) = (child.stdout.take().expect("piped"), child.stderr.take().expect("piped"));
 	let (mut out_buf, mut err_buf) = ([0u8; 8192], [0u8; 8192]);
 	let (mut out_open, mut err_open) = (true, true);
-	let mut pending: Vec<u8> = Vec::new();
+	let (mut pending, mut pending_err): (Vec<u8>, Vec<u8>) = (Vec::new(), Vec::new());
 	//LOOP: the session's whole life; it breaks when its process ends or is killed
 	let ended = loop {
 		let changed = s.changed.notified();
@@ -504,18 +507,14 @@ async fn supervise(runner: Runner, s: Arc<Session>, mut child: Child, marker: St
 				Ok(0) | Err(_) => out_open = false,
 				Ok(n) => {
 					pending.extend_from_slice(&out_buf[..n]);
-					sort(&s, &mut pending, &marker);
+					sort(&s, &mut pending, &marker, |c| &mut c.stdout);
 				}
 			},
 			n = stderr.read(&mut err_buf), if err_open => match n {
 				Ok(0) | Err(_) => err_open = false,
 				Ok(n) => {
-					let mut st = s.state.lock().expect("never held across a panic");
-					if let Some(c) = st.cells.last_mut() {
-						c.stderr.add(&err_buf[..n]);
-					}
-					drop(st);
-					s.changed.notify_waiters();
+					pending_err.extend_from_slice(&err_buf[..n]);
+					sort(&s, &mut pending_err, &marker, |c| &mut c.stderr);
 				}
 			},
 			() = async { tokio::time::sleep_until(deadline.expect("guarded")).await }, if deadline.is_some() => break Ended::Killed,
@@ -540,6 +539,7 @@ async fn supervise(runner: Runner, s: Arc<Session>, mut child: Child, marker: St
 	}
 	if let Some(c) = s.state.lock().expect("never held across a panic").cells.last_mut() {
 		c.stdout.add(&pending);
+		c.stderr.add(&pending_err);
 	}
 	runner.0.sessions.lock().expect("never held across a panic").remove(&s.id);
 	let mut st = s.state.lock().expect("never held across a panic");
@@ -551,8 +551,9 @@ async fn supervise(runner: Runner, s: Arc<Session>, mut child: Child, marker: St
 	s.changed.notify_waiters();
 }
 
-/// Hands what the session printed to its cell, up to its own word, which it acts on.
-fn sort(s: &Session, pending: &mut Vec<u8>, marker: &str) {
+/// Hands what the session printed on one stream to its cell, up to its own word; the cell ends on the word's second
+/// half, so neither stream holds any of its output then.
+fn sort(s: &Session, pending: &mut Vec<u8>, marker: &str, stream: fn(&mut CellState) -> &mut Kept) {
 	let marker = marker.as_bytes();
 	let mut st = s.state.lock().expect("never held across a panic");
 	//LOOP: once per marker read, then once more for what follows the last
@@ -561,7 +562,7 @@ fn sort(s: &Session, pending: &mut Vec<u8>, marker: &str) {
 		// what may be a marker's start waits for the rest
 		let printed = at.unwrap_or_else(|| pending.iter().rposition(|b| *b == 0).filter(|&p| marker.starts_with(&pending[p..])).unwrap_or(pending.len()));
 		if let Some(c) = st.cells.last_mut() {
-			c.stdout.add(&pending[..printed]);
+			stream(c).add(&pending[..printed]);
 		}
 		pending.drain(..printed);
 		let Some(_) = at else { break };
@@ -573,6 +574,9 @@ fn sort(s: &Session, pending: &mut Vec<u8>, marker: &str) {
 			Some("threw") => Ended::Threw,
 			other => panic!("the host ended a cell as {other:?}"),
 		};
+		let Some(heard) = st.word.replace(ended) else { continue };
+		assert_eq!(heard, ended, "the host says one word on both streams");
+		st.word = None;
 		let n = st.busy.take().expect("the host ends only the cell it was given");
 		st.deadline = None;
 		st.cells[n].ended = Some(ended);
