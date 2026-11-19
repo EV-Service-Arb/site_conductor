@@ -50,7 +50,8 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          (the hub: access, destinations, rules, the feeds fanned out; the
                          Directory and Feeds ports), `telegram` (the method: links, chats, outbox,
                          delivery, buttons; the Bot port), `live` (the in-process bus), `gmbs`,
-                         `connections` (a gmail's inbox and Maps key; who pays a Places request), `claude` (a person's own
+                         `connections` (a gmail's inbox and Maps key; who pays a Places request), `inbox` (its mail
+                         with Google followed into its GBPs' logs; the Mailbox port), `claude` (a person's own
                          Claude),
                          `browsers` (a gmail's browser: its proxy checked and sealed, Multilogin and
                          GoLogin, a launch),
@@ -105,8 +106,8 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
                          listener they work on, the services' dashboards; its own in dashboards.rs
   src/live.rs            GET /api/v1/live, and the follower of sites' change feed
   src/gmbs.rs            /api/v1/gmails, /api/v1/gmbs, /api/v1/trades
-  src/connections.rs     /api/v1/gmails/{id}/{connections,imap,maps_key}
-  src/browser.rs         /api/v1/gmails/{id}/browser{,/test,/start,/stop,/film}; the runner; the viewer's
+  src/connections.rs     /api/v1/gmails/{id}/{connections,imap,maps_key}; each gmail's inbox followed
+  src/browser.rs         /api/v1/gmails/{id}/browser{,/test,/start,/stop,/film,/thread}; the runner; the viewer's
                          socket, the relay between it and a browser's devtools, a phone's passed through
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
   src/trash.rs           /api/v1/trash; the hourly purge
@@ -539,7 +540,7 @@ GET    /gmails/{id}/browser                 socket: the viewer
 PUT    /gmails/{id}/{imap,maps_key,browser}
 POST   /gmails/{id}/{imap,maps_key,browser}/test
 DELETE /gmails/{id}/{imap,maps_key,browser}
-POST   /gmails/{id}/browser/{start,stop}    start: slow
+POST   /gmails/{id}/browser/{start,stop,thread}  start: slow
 PUT    /gmails/{id}/browser/film            slow
 DELETE /gmails/{id}/browser/film
 GET    /gmbs/{resolve,suggest}
@@ -984,7 +985,11 @@ push (a change, a page, 60 s)
   after (a Sync's too, one that changed nothing included), its moves, gmail, trade, brand, film,
   switch, trash, and its gmail's browser launched or stopped; written in the transaction it records,
   with the gmail it was under and who did it. A browser run for the gmail alone is the gmail's, in
-  the log of each GBP while under it. review_archive's events of the GBP (reviews appeared, gone,
+  the log of each GBP while under it. Its gmail's mail with Google (`email`): `serve` reads each
+  set inbox's All Mail over IMAP every 60 s past its cursor (account, UIDVALIDITY, last UID), a batch
+  a write with the cursor; a message is logged once, on each GBP whose name, place id or address's
+  first line it holds, else the gmail's. Its thread opens in a new tab of the gmail's own running
+  browser (`POST /gmails/{id}/browser/thread`); the conductor never reads Gmail on the web. review_archive's events of the GBP (reviews appeared, gone,
   back, appeals, failed scans) are its own (`/me/gmbs/{gmb}/events`): the page merges both by time.
 - **The review kit** is below.
 - **A GBP's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
@@ -1268,7 +1273,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   User on its project). An export starts the day it is turned on: until the next month, that
   account's baseline misses what came before.
 - **IMAP, outbound.** A gmail's inbox is dialled on :993 at a public address when it is set or
-  tested: egress to public :993. The browser loads Maps JS straight
+  tested, and read every 60 s: egress to public :993. The browser loads Maps JS straight
   from Google with the browser key `GET /map` names (referrer-restricted to the public origin); the
   server's keys never reach it.
 - **Browsers.** sa_browsers is its own pod (`PANEL_BROWSERS_URL`, in-cluster only): `BROWSERS_DIR` on

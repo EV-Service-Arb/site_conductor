@@ -420,6 +420,8 @@ function topicOfOurs(e: LoggedDto): Topic {
     case "stopped":
     case "film":
       return "verification";
+    case "email":
+      return "emails";
     case "added":
     case "edited":
     case "gmail":
@@ -517,7 +519,7 @@ function Log({ gmb, gmail }: { gmb: number; gmail: string | null }) {
           </button>
         ))}
       </div>
-      {shown.length === 0 && <p className="px-5 py-6 text-sm text-ink-soft">{topic === "emails" ? t(windowKeys.log.noEmails, "Emails with Google are not followed yet.") : t(windowKeys.log.none, "Nothing logged yet.")}</p>}
+      {shown.length === 0 && <p className="px-5 py-6 text-sm text-ink-soft">{topic === "emails" ? t(windowKeys.log.noEmails, "No emails with Google: they are read from the gmail's inbox once its IMAP is set.") : t(windowKeys.log.none, "Nothing logged yet.")}</p>}
       {[...days].map(([day, ls]) => (
         <section key={day} className="flex flex-col px-4 pt-4">
           <h4 className="pb-2 font-mono text-xs text-ink-soft uppercase">{day}</h4>
@@ -630,7 +632,41 @@ function Ours({ e, gmail }: { e: LoggedDto; gmail: string | null }) {
       return <Row mark={<Mark tone="info" icon={<MonitorSmartphone />} />} title={e.film ? t(windowKeys.log.launchedFilm, "Browser launched, playing its film") : t(windowKeys.log.launched, "Browser launched")} detail={[gmailNote, by].filter(Boolean).join(" · ")} />;
     case "stopped":
       return <Row mark={<Mark tone="muted" icon={<MonitorSmartphone />} />} title={t(windowKeys.log.stopped, "Browser stopped")} detail={[gmailNote, by].filter(Boolean).join(" · ")} />;
+    case "email":
+      return <Email e={e} gmail={gmail} />;
   }
+}
+
+function Email({ e, gmail }: { e: Extract<LoggedDto, { kind: "email" }>; gmail: string | null }) {
+  const t = useT();
+  const locale = useLocale();
+  const [busy, setBusy] = useState(false);
+  const who = e.counterparts.join(", ");
+  const open = async () => {
+    setBusy(true);
+    try {
+      if (e.gmail_id === null) throw new Error("an email is logged under its gmail");
+      await ok(api.POST("/gmails/{id}/browser/thread", { params: { path: { id: e.gmail_id } }, body: { thread: e.thread } }));
+      toast(t(windowKeys.log.threadOpened, "Opened in the gmail's browser"));
+    } catch (err) {
+      notifyFailure(err, t);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Row
+      mark={<Mark tone="info" icon={<Mail />} />}
+      title={e.subject ?? t(windowKeys.log.noSubject, "(no subject)")}
+      detail={[e.sent ? t(windowKeys.log.emailTo, "to {who}", { who }) : t(windowKeys.log.emailFrom, "from {who}", { who }), formatDateTime(e.date, locale), e.of_gmail ? t(windowKeys.log.ofGmail, "the gmail's, {gmail}", { gmail: gmail ?? "" }) : null].filter(Boolean).join(" · ")}
+    >
+      {e.snippet && <p className="line-clamp-2 text-xs text-ink-soft">{e.snippet}</p>}
+      <button type="button" disabled={busy} onClick={() => void open()} className="flex items-center gap-1 self-start text-xs text-ink-soft hover:text-ink disabled:opacity-50">
+        <ExternalLink className="size-3" />
+        {t(windowKeys.log.openThread, "Open thread")}
+      </button>
+    </Row>
+  );
 }
 
 function Archive({ e, gmb }: { e: GmbEvent; gmb: number }) {

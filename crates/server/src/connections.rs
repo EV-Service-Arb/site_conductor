@@ -1,5 +1,8 @@
 //! A gmail's connections (`sa_panel::connections`), its owner's only: its inbox and its own Maps
 //! key, checked before they are stored and never answered back; its browser is [`crate::browser`]'s.
+//! In `serve`, each inbox followed for its mail with Google (`sa_panel::inbox`).
+
+use std::{collections::BTreeSet, time::Duration};
 
 use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
 use ev_lib::api::{Body, Ids, JsonSchema};
@@ -8,8 +11,10 @@ use sa_panel::{
 	Panel,
 	browsers::Provider,
 	connections::{Checked, Connection, Connections, Imap, MapsKey, NewImap},
+	inbox::Gmail,
 };
 use serde::{Deserialize, Serialize};
+use tokio::sync::watch;
 use zeroize::Zeroizing;
 
 use crate::{
@@ -19,6 +24,45 @@ use crate::{
 	signin::Caller,
 	tokens::PriceDto,
 };
+
+/// Each inbox is read this often.
+const FOLLOW_EVERY: Duration = Duration::from_secs(60);
+
+/// Reads every gmail's inbox past its cursor until `shutdown` turns true. Nothing here ends `serve`.
+pub async fn follow(panel: Panel, mut shutdown: watch::Receiver<bool>) {
+	// an inbox failing every pass (its app password revoked) is said when it starts and ends
+	let mut failing = BTreeSet::new();
+	while !*shutdown.borrow() {
+		let pass = async {
+			let gmails = match panel.inboxes().await {
+				Ok(g) => g,
+				Err(e) => return crate::report(&e, "listing the inboxes followed"),
+			};
+			for gmail in gmails {
+				let read = async {
+					while panel.follow_inbox(gmail, &Gmail, Timestamp::now()).await? {}
+					eyre::Ok(())
+				};
+				match read.await {
+					Ok(()) =>
+						if failing.remove(&gmail) {
+							tracing::info!(gmail_id = gmail, "its inbox reads again");
+						},
+					Err(e) if failing.insert(gmail) => crate::report(&e.wrap_err(format!("gmail {gmail}'s inbox, read again every {}s", FOLLOW_EVERY.as_secs())), "following an inbox"),
+					Err(e) => tracing::debug!(gmail_id = gmail, error = %e, "its inbox still fails"),
+				}
+			}
+		};
+		tokio::select! {
+			() = pass => {}
+			_ = shutdown.changed() => return,
+		}
+		tokio::select! {
+			() = tokio::time::sleep(FOLLOW_EVERY) => {}
+			_ = shutdown.changed() => return,
+		}
+	}
+}
 
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "Checked")]

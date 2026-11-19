@@ -888,6 +888,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/gmails/{id}/browser/thread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Opens a thread in a new tab of the gmail's own running browser, on the Google session signed in there: Gmail is never asked from here. 409 while it does not run, or on a cloud phone. */
+        post: operations["open_thread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/gmails/{id}/connections": {
         parameters: {
             query?: never;
@@ -4415,6 +4432,24 @@ export interface components {
         } | {
             /** @constant */
             kind: "stopped";
+        } | {
+            /** @description Its sender; one sent, its recipients. */
+            counterparts: string[];
+            /**
+             * Format: date-time
+             * @description When Gmail took it in.
+             */
+            date: string;
+            /** @constant */
+            kind: "email";
+            /** @description Gmail's X-GM-MSGID. */
+            message: string;
+            /** @description From the gmail. */
+            sent: boolean;
+            snippet: string;
+            subject: string | null;
+            /** @description Gmail's X-GM-THRID, hex: the thread's address in Gmail. */
+            thread: string;
         });
         /**
          * @description `GET /map`: the Maps JS key this page loads on, referrer-restricted, and its account, which the
@@ -4667,6 +4702,11 @@ export interface components {
         OnGoogle: "verifying" | "verified" | "suspended";
         /** @description An OpenAPI 3.1 document. */
         OpenApi: Record<string, never>;
+        /** @description A Gmail thread for the gmail's browser to open. */
+        OpenThread: {
+            /** @description Gmail's X-GM-THRID, hex, as an `email` of a GBP's log names it. */
+            thread: string;
+        };
         Origin: {
             /** @description `https://<domain>[:port]`, no path. */
             origin: string;
@@ -7606,6 +7646,7 @@ export type NewUnplaced = components['schemas']['NewUnplaced'];
 export type On = components['schemas']['On'];
 export type OnGoogle = components['schemas']['OnGoogle'];
 export type OpenApi = components['schemas']['OpenApi'];
+export type OpenThread = components['schemas']['OpenThread'];
 export type Origin = components['schemas']['Origin'];
 export type PanoramaAt = components['schemas']['PanoramaAt'];
 export type Pasted = components['schemas']['Pasted'];
@@ -16001,6 +16042,139 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Connections"];
                 };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    open_thread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** @description A Gmail thread for the gmail's browser to open. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenThread"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description `bad_request` */
             400: {

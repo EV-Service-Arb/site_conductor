@@ -28,7 +28,8 @@ async fn opened(db: &TestDb) -> (Panel, Uuid) {
 		kickbacks: vec![],
 	})
 	.await
-	.unwrap().unwrap();
+	.unwrap()
+	.unwrap();
 	let owner = Uuid::now_v7();
 	let user = User {
 		user_id: owner,
@@ -52,7 +53,11 @@ async fn draft(p: &Panel, owner: Uuid, name: &str) -> Gmb {
 		gmail_id: None,
 		country: None,
 		at: None,
-		spots: vec![sa_panel::gmbs::Spot { at: sa_places::LatLng { lat: 45.76, lng: 4.84 }, label: None, note: None }],
+		spots: vec![sa_panel::gmbs::Spot {
+			at: sa_places::LatLng { lat: 45.76, lng: 4.84 },
+			label: None,
+			note: None,
+		}],
 	};
 	p.create_gmb(owner, unplaced, now()).await.unwrap().unwrap()
 }

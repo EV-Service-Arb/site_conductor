@@ -562,6 +562,48 @@ async fn the_viewer_sees_the_page_and_touches_it_as_a_phone_one_viewer_at_a_time
 }
 
 #[tokio::test]
+async fn a_thread_opens_in_a_new_tab_of_the_gmails_own_browser_while_it_runs() {
+	let told: Arc<Mutex<Vec<Value>>> = Arc::default();
+	let cdp_told = told.clone();
+	let running = Arc::new(Mutex::new(vec![1]));
+	let runner = runner(running.clone()).route(
+		"/profiles/{gmail}/cdp",
+		get(move |Path(g): Path<i64>, ws: axum::extract::WebSocketUpgrade| {
+			let (told, up) = (cdp_told.clone(), running.lock().unwrap().contains(&g));
+			async move {
+				match up {
+					true => ws.on_upgrade(move |s| devtools(s, told)),
+					false => StatusCode::NOT_FOUND.into_response(),
+				}
+			}
+		}),
+	);
+	let mut w = World::with_runner(runner).await;
+	let a = w.gmail("a@gmail.com").await;
+	let (status, set) = w.set(a, "pixel_7", &w.proxy("fr")).await;
+	assert_eq!(status, StatusCode::OK, "{set}");
+	let thread = format!("/api/v1/gmails/{a}/browser/thread");
+
+	let (status, _) = w.call(Method::POST, &thread, Some(json!({ "thread": "18c0000000000003" }))).await;
+	assert_eq!(status, StatusCode::NO_CONTENT);
+	let asked: Vec<Value> = told.lock().unwrap().iter().map(|m| json!([m["method"], m["params"]["url"]])).collect();
+	assert_eq!(
+		asked,
+		vec![json!(["Target.createTarget", "https://mail.google.com/mail/?authuser=a@gmail.com#all/18c0000000000003"])]
+	);
+
+	let (status, _) = w.call(Method::POST, &thread, Some(json!({ "thread": "#inbox" }))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "a thread id only, never a page of our choosing");
+	let b = w.gmail("b@gmail.com").await;
+	let (status, set) = w.set(b, "pixel_7", &w.proxy("fr-b")).await;
+	assert_eq!(status, StatusCode::OK, "{set}");
+	let (status, said) = w
+		.call(Method::POST, &format!("/api/v1/gmails/{b}/browser/thread"), Some(json!({ "thread": "18c0000000000003" })))
+		.await;
+	assert_eq!(status, StatusCode::CONFLICT, "not running: {said}");
+}
+
+#[tokio::test]
 async fn a_cloud_phone_is_made_at_its_set_up_its_model_drawn_its_proxy_replaced_and_deleted_with_its_film() {
 	let mut w = World::new().await;
 	let a = w.gmail("a@gmail.com").await;

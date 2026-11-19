@@ -376,6 +376,7 @@ async fn serve(
 			}
 		};
 		let usage = sa_server::usage::run(engine.clone(), services.clone(), browsers_followed, stopped.clone());
+		let inboxes = sa_server::connections::follow(engine.clone(), stopped.clone());
 		let tokens = async {
 			if let Some(services) = &services {
 				tokens::run(engine, services.clone(), stopped.clone()).await;
@@ -393,7 +394,7 @@ async fn serve(
 			}
 		};
 		let meters = sa_server::meters::run(metered, readers, stopped.clone());
-		tokio::join!(bot, feed, usage, tokens, grafana, purge, meters, catalog);
+		tokio::join!(bot, feed, usage, inboxes, tokens, grafana, purge, meters, catalog);
 	};
 	let (served, ()) = tokio::join!(server, hubs);
 	served

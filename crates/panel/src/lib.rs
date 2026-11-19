@@ -4,7 +4,8 @@
 //! [`Panel`] is the facade the server talks to; [`store`] is SQLite; [`seal`] encrypts what must
 //! not sit in the clear. [`session`] is signing in through concierge and the sessions that
 //! follow; [`access`] the access requests; [`gmbs`] people's gmails and the GMBs they manage;
-//! [`connections`] a gmail's inbox and Maps key, and who pays for a Places request; [`browsers`]
+//! [`connections`] a gmail's inbox and Maps key, and who pays for a Places request; [`inbox`] its mail
+//! with Google followed into its GBPs' logs; [`browsers`]
 //! a gmail's antidetect browser; [`claude`] a person's own Claude, which their assistant runs on;
 //! [`tokens`] their balances and review_archive's charges, and [`import`] both from there;
 //! [`alerts`] the hub: users' destinations and rules, the feeds fanned out to them; [`telegram`]
@@ -26,6 +27,7 @@ pub mod gmbs;
 mod google_categories;
 mod imap;
 pub mod import;
+pub mod inbox;
 pub mod kit;
 pub mod live;
 pub mod meters;

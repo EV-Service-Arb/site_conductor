@@ -210,6 +210,21 @@ pub enum Event {
 	},
 	/// Its gmail's browser stopped by its owner.
 	Stopped,
+	/// A message with Google in its gmail's inbox naming it; one naming none is the gmail's.
+	Email {
+		/// Gmail's X-GM-MSGID.
+		message: String,
+		/// Gmail's X-GM-THRID, hex: the thread's address in Gmail.
+		thread: String,
+		/// When Gmail took it in.
+		date: Timestamp,
+		subject: Option<String>,
+		/// Its sender; one sent, its recipients.
+		counterparts: Vec<String>,
+		snippet: String,
+		/// From the gmail.
+		sent: bool,
+	},
 }
 
 /// A field of a GBP, before and after.

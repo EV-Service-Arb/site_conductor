@@ -4091,6 +4091,14 @@
     "en": "Edits",
     "t": "Правки"
   },
+  "window.log.emailFrom": {
+    "en": "from {who}",
+    "t": "от {who}"
+  },
+  "window.log.emailTo": {
+    "en": "to {who}",
+    "t": "кому: {who}"
+  },
   "window.log.emails": {
     "en": "Emails",
     "t": "Письма"
@@ -4172,8 +4180,12 @@
     "t": "Браузер запущен, проигрывает свой фильм"
   },
   "window.log.noEmails": {
-    "en": "Emails with Google are not followed yet.",
-    "t": "Письма от Google пока не отслеживаются."
+    "en": "No emails with Google: they are read from the gmail's inbox once its IMAP is set.",
+    "t": "Писем от Google нет: они читаются из почтового ящика Gmail, как только настроен его IMAP."
+  },
+  "window.log.noSubject": {
+    "en": "(no subject)",
+    "t": "(без темы)"
   },
   "window.log.none": {
     "en": "Nothing logged yet.",
@@ -4190,6 +4202,10 @@
   "window.log.on": {
     "en": "Switched on",
     "t": "Включён"
+  },
+  "window.log.openThread": {
+    "en": "Open thread",
+    "t": "Открыть цепочку"
   },
   "window.log.reinstatementCleared": {
     "en": "Reinstatement withdrawn",
@@ -4242,6 +4258,10 @@
   "window.log.syncs": {
     "en": "Syncs",
     "t": "Синхронизации"
+  },
+  "window.log.threadOpened": {
+    "en": "Opened in the gmail's browser",
+    "t": "Открыто в браузере Gmail"
   },
   "window.log.trade": {
     "en": "Given another trade",
