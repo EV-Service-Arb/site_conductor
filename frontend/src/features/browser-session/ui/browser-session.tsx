@@ -25,7 +25,7 @@ export type TypeIn = ((text: string) => void) | null;
  * A gmail's browser, live: its page as frames, the operator's touches and keys sent back. `gmb`: started at that GBP's point, `null`
  * with the position blocked. `aside` sits beside the page.
  */
-export function BrowserSession({ gmail, gmb, aside }: { gmail: Gmail; gmb: number | null; aside?: (type: TypeIn) => ReactNode }) {
+export function BrowserSession({ gmail, gmb, aside }: { gmail: Gmail; gmb: number | null; aside?: (type: TypeIn, browser: Browser) => ReactNode }) {
   const t = useT();
   const button = useButtonSize();
   const connections = useResource(api, "/gmails/{id}/connections", { params: { path: { id: gmail.id } }, keep: true });
@@ -67,7 +67,7 @@ interface Page {
 }
 const BLANK: Page = { frame: null, tabs: [], active: null, dialog: null };
 
-function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: number | null; browser: Browser; reload: () => void; aside: ((type: TypeIn) => ReactNode) | undefined }) {
+function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: number | null; browser: Browser; reload: () => void; aside: ((type: TypeIn, browser: Browser) => ReactNode) | undefined }) {
   const t = useT();
   const button = useButtonSize();
   const runs: Runs = browser.running === null ? "no" : browser.running.gmb === gmb ? "here" : "elsewhere";
@@ -211,7 +211,7 @@ function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: nu
           {phase === "open" && page.dialog !== null && <Dialog dialog={page.dialog} send={send} />}
         </div>
       </div>
-      {aside?.(typeIn)}
+      {aside?.(typeIn, browser)}
     </div>
   );
 }

@@ -2603,6 +2603,10 @@
     "en": "Collected",
     "t": "Собрано"
   },
+  "kit.target.google": {
+    "en": "Google's form",
+    "t": "Форма Google"
+  },
   "kit.up": {
     "en": "Up",
     "t": "Вверх"
@@ -2767,6 +2771,14 @@
     "en": "Customers visit",
     "t": "Клиенты приходят"
   },
+  "launch.waits.title": {
+    "en": "Waits for Verified",
+    "t": "Ждёт статуса «Подтверждён»"
+  },
+  "launch.waits.what": {
+    "en": "The fields prepared on the draft that the profile applies the hour Google verifies it",
+    "t": "Поля, подготовленные в черновике, которые профиль применяет в тот час, когда Google его подтверждает"
+  },
   "launch.where": {
     "en": "Where",
     "t": "Где"
@@ -2814,6 +2826,14 @@
   "launch.why.site.noAccess": {
     "en": "linking a site page needs access to the sites",
     "t": "привязка страницы сайта требует доступа к сайтам"
+  },
+  "launch.why.study": {
+    "en": "The study the draft came from: capture, demand, nearest rival, rivals",
+    "t": "Исследование, из которого получен черновик: охват, спрос, ближайший конкурент, конкуренты"
+  },
+  "launch.why.title": {
+    "en": "Why here",
+    "t": "Почему здесь"
   },
   "links.discord": {
     "en": "Ask the other operators",
@@ -4111,17 +4131,101 @@
     "en": "Wallet is unavailable",
     "t": "Кошелёк недоступен"
   },
+  "window.appeal.banner": {
+    "en": "Google wants every document to match the profile's exact name and address.",
+    "t": "Google требует, чтобы каждый документ точно совпадал с названием и адресом профиля."
+  },
+  "window.appeal.documents": {
+    "en": "Documents",
+    "t": "Документы"
+  },
+  "window.appeal.documents.what": {
+    "en": "The documents of the appeal, each checked for the profile's exact name and address",
+    "t": "Документы апелляции, каждый проверен на точное совпадение с названием и адресом профиля"
+  },
+  "window.appeal.linked": {
+    "en": "Linked to it",
+    "t": "Связано с ним"
+  },
+  "window.appeal.linked.gmail": {
+    "en": "same gmail{gmail}",
+    "t": "тот же gmail{gmail}"
+  },
+  "window.appeal.linked.hint": {
+    "en": "The site or the gmail ties to this profile: a shared site is the risk, not the name.",
+    "t": "Сайт или gmail связывает с этим профилем: риск создаёт общий сайт, а не название."
+  },
+  "window.appeal.linked.none": {
+    "en": "No other GBP shares its site or its gmail.",
+    "t": "Ни у одного другого GBP нет общего сайта или gmail."
+  },
+  "window.appeal.linked.site": {
+    "en": "same site{host}",
+    "t": "тот же сайт{host}"
+  },
+  "window.appeal.resubmit": {
+    "en": "Replace a document and resubmit the appeal",
+    "t": "Заменить документ и подать апелляцию повторно"
+  },
+  "window.appeal.resubmit.label": {
+    "en": "Resubmit",
+    "t": "Подать повторно"
+  },
+  "window.appeal.rules": {
+    "en": "Email rules",
+    "t": "Правила почты"
+  },
+  "window.appeal.rules.what": {
+    "en": "Email rules on its gmail: re-submit the appeal, move its state on Google's decision mail",
+    "t": "Правила почты для его gmail: повторно подать апелляцию, менять состояние по письму Google с решением"
+  },
+  "window.appeal.sent": {
+    "en": "Sent",
+    "t": "Отправлено"
+  },
+  "window.appeal.sent.what": {
+    "en": "The appeals sent for this profile, one per try, and what Google answered",
+    "t": "Апелляции, отправленные по этому профилю, по одной на попытку, и ответ Google"
+  },
+  "window.browser.afterNext": {
+    "en": "After Next on step 8, it is on Google: verifying.",
+    "t": "После «Далее» на шаге 8 профиль попадает в Google: верификация."
+  },
+  "window.browser.areas": {
+    "en": "Service areas",
+    "t": "Зоны обслуживания"
+  },
+  "window.browser.callLog": {
+    "en": "Film fed · call joined",
+    "t": "Видео подано · звонок подключён"
+  },
   "window.browser.copy": {
     "en": "Copy {what}",
     "t": "Копировать: {what}"
   },
-  "window.browser.form": {
-    "en": "Google's form",
-    "t": "Форма Google"
+  "window.browser.feed": {
+    "en": "Feed as the call's camera",
+    "t": "Подать как камеру звонка"
   },
-  "window.browser.form.hint": {
-    "en": "Click the field in the page, then type its value in.",
-    "t": "Нажмите на поле на странице, затем впишите в него значение."
+  "window.browser.film": {
+    "en": "film {film}",
+    "t": "видео {film}"
+  },
+  "window.browser.films": {
+    "en": "Films",
+    "t": "Видео"
+  },
+  "window.browser.formStep": {
+    "en": "Google's form · step {n} of {of}",
+    "t": "Форма Google · шаг {n} из {of}"
+  },
+  "window.browser.hiddenAddress": {
+    "en": "Hidden address",
+    "t": "Скрытый адрес"
+  },
+  "window.browser.liveCall": {
+    "en": "Live call on the gmail's Multilogin cloud phone beside its desktop browser: a film from its library fed as the call's camera",
+    "t": "Живой звонок на облачном телефоне Multilogin этого gmail рядом с его браузером для компьютера: видео из его библиотеки подаётся как камера звонка"
   },
   "window.browser.needsGmail": {
     "en": "Needs a gmail",
@@ -4130,6 +4234,26 @@
   "window.browser.needsGmail.body": {
     "en": "A GBP's browser is its managing gmail's: pick one on the Launch tab.",
     "t": "Браузер GBP принадлежит управляющему gmail: выберите его во вкладке «Запуск»."
+  },
+  "window.browser.next": {
+    "en": "Done · next step",
+    "t": "Готово · следующий шаг"
+  },
+  "window.browser.noSessions": {
+    "en": "No session yet.",
+    "t": "Сессий пока нет."
+  },
+  "window.browser.phone": {
+    "en": "A cloud phone is for video submissions and calls: set a desktop browser on the gmail for Google's form.",
+    "t": "Облачный телефон нужен для видеоверификации и звонков: для формы Google задайте для gmail браузер для компьютера."
+  },
+  "window.browser.phoneForm": {
+    "en": "Google's form goes in the desktop browser",
+    "t": "Форма Google заполняется в браузере для компьютера"
+  },
+  "window.browser.sessions": {
+    "en": "Sessions",
+    "t": "Сессии"
   },
   "window.browser.type": {
     "en": "Type into the field",
@@ -4143,9 +4267,21 @@
     "en": "not set",
     "t": "не задано"
   },
+  "window.browser.verification": {
+    "en": "Verification · video",
+    "t": "Верификация · видео"
+  },
   "window.browser.visit": {
     "en": "Customers visit?",
     "t": "Клиенты приходят?"
+  },
+  "window.browser.website": {
+    "en": "Website",
+    "t": "Сайт"
+  },
+  "window.browser.whose": {
+    "en": "{gmail}'s browser · {provider} · {device} · one browser for every GBP of this gmail",
+    "t": "Браузер {gmail} · {provider} · {device} · один браузер для всех GBP этого gmail"
   },
   "window.category.noCountry": {
     "en": "{trade} · no country",
@@ -4174,6 +4310,186 @@
   "window.closed.untilVerified": {
     "en": "Opens once Google verifies it",
     "t": "Откроется после проверки Google"
+  },
+  "window.connections.browser.none": {
+    "en": "{gmail} has no browser yet.",
+    "t": "У {gmail} пока нет браузера."
+  },
+  "window.connections.browser.open": {
+    "en": "Open {gmail}'s browser",
+    "t": "Открыть браузер {gmail}"
+  },
+  "window.connections.browser.title": {
+    "en": "Browser · the gmail's",
+    "t": "Браузер · gmail-аккаунта"
+  },
+  "window.connections.browser.why": {
+    "en": "Every GBP of this gmail goes out through the one browser: its fingerprint, its proxy, its session.",
+    "t": "Все GBP этого gmail работают через один браузер: его отпечаток, его прокси, его сессия."
+  },
+  "window.connections.guide.ranking": {
+    "en": "Ranking",
+    "t": "Ранжирование"
+  },
+  "window.connections.guide.ranking.about": {
+    "en": "name, categories, site, what to measure",
+    "t": "название, категории, сайт, что измерять"
+  },
+  "window.connections.guide.reviews": {
+    "en": "Reviews",
+    "t": "Отзывы"
+  },
+  "window.connections.guide.reviews.about": {
+    "en": "rate, sourcing, deletion",
+    "t": "темп, источники, удаление"
+  },
+  "window.connections.guide.suspension": {
+    "en": "Suspension",
+    "t": "Блокировка"
+  },
+  "window.connections.guide.suspension.about": {
+    "en": "what links profiles, what to do once off Maps",
+    "t": "что связывает профили, что делать после исчезновения с Карт"
+  },
+  "window.connections.guide.verification": {
+    "en": "Verification",
+    "t": "Верификация"
+  },
+  "window.connections.guide.verification.about": {
+    "en": "video, live, instant",
+    "t": "видео, живая, мгновенная"
+  },
+  "window.connections.inbox.autoReply": {
+    "en": "Auto-reply to Google support",
+    "t": "Автоответ поддержке Google"
+  },
+  "window.connections.inbox.checked": {
+    "en": "Checked",
+    "t": "Проверено"
+  },
+  "window.connections.inbox.connected": {
+    "en": "Connected",
+    "t": "Подключено"
+  },
+  "window.connections.inbox.host": {
+    "en": "Host",
+    "t": "Хост"
+  },
+  "window.connections.inbox.inbox": {
+    "en": "Inbox",
+    "t": "Почта"
+  },
+  "window.connections.inbox.none": {
+    "en": "{gmail}'s inbox is not read yet: Google's emails need its IMAP.",
+    "t": "Почта {gmail} пока не читается: для писем Google нужен её IMAP."
+  },
+  "window.connections.inbox.planned": {
+    "en": "Rules on this inbox: auto-reply to Google support, re-request the verification call",
+    "t": "Правила для этой почты: автоответ поддержке Google, повторный запрос звонка для верификации"
+  },
+  "window.connections.inbox.reRequest": {
+    "en": "Re-request verification call",
+    "t": "Повторно запросить звонок для верификации"
+  },
+  "window.connections.inbox.title": {
+    "en": "Email · IMAP",
+    "t": "Почта · IMAP"
+  },
+  "window.connections.kit.brand": {
+    "en": "Brand: {name}",
+    "t": "Бренд: {name}"
+  },
+  "window.connections.kit.brandLink": {
+    "en": "Brand link",
+    "t": "Ссылка на бренд"
+  },
+  "window.connections.kit.card": {
+    "en": "Business-card name",
+    "t": "Название для визитки"
+  },
+  "window.connections.kit.directions": {
+    "en": "Directions to the door",
+    "t": "Как пройти к двери"
+  },
+  "window.connections.kit.film": {
+    "en": "Verification film",
+    "t": "Видео для верификации"
+  },
+  "window.connections.kit.name": {
+    "en": "Name",
+    "t": "Название"
+  },
+  "window.connections.kit.phone": {
+    "en": "Standardised phone",
+    "t": "Телефон в стандартном формате"
+  },
+  "window.connections.kit.planned": {
+    "en": "Directions to the door and the business-card name, which the printables need",
+    "t": "Как пройти к двери и название для визитки, которые нужны для печатных материалов"
+  },
+  "window.connections.kit.ready": {
+    "en": "{n} of {of}",
+    "t": "{n} из {of}"
+  },
+  "window.connections.kit.title": {
+    "en": "Verification kit",
+    "t": "Набор для верификации"
+  },
+  "window.connections.missing": {
+    "en": "Missing: {what}",
+    "t": "Не хватает: {what}"
+  },
+  "window.connections.needsGmail": {
+    "en": "A GBP's inbox and browser are its managing gmail's: pick one on the Launch tab.",
+    "t": "Почта и браузер GBP принадлежат управляющему им gmail: выберите его на вкладке «Запуск»."
+  },
+  "window.connections.photos.brand": {
+    "en": "Its brand's photos",
+    "t": "Фото его бренда"
+  },
+  "window.connections.photos.count": {
+    "en": "{n} photos",
+    "t": "{n} фото"
+  },
+  "window.connections.photos.kit": {
+    "en": "Kit: saved by reviewers",
+    "t": "Набор: сохранено рецензентами"
+  },
+  "window.connections.photos.noBrand": {
+    "en": "No brand: its category's photos need one.",
+    "t": "Нет бренда: для фото его категории он нужен."
+  },
+  "window.connections.photos.planned": {
+    "en": "Photos Google removed from this location, and the similar shots it pauses",
+    "t": "Фото, которые Google удалил с этой локации, и похожие снимки, которые он приостанавливает"
+  },
+  "window.connections.photos.removed": {
+    "en": "2 removed by Google this week — similar shots paused",
+    "t": "2 удалены Google на этой неделе — похожие снимки приостановлены"
+  },
+  "window.connections.photos.title": {
+    "en": "Photos from our db",
+    "t": "Фото из нашей базы"
+  },
+  "window.connections.playbook.ask": {
+    "en": "Ask",
+    "t": "Спросить"
+  },
+  "window.connections.playbook.hint": {
+    "en": "The agent answers from these guides when working on this location.",
+    "t": "Агент отвечает по этим руководствам, когда работает с этой локацией."
+  },
+  "window.connections.playbook.prompt": {
+    "en": "What does the playbook's {page} guide say to do for @{name}?",
+    "t": "Что говорится в руководстве плейбука «{page}» о том, что делать для @{name}?"
+  },
+  "window.connections.playbook.title": {
+    "en": "Playbook prompts",
+    "t": "Запросы к плейбуку"
+  },
+  "window.connections.ready": {
+    "en": "{n} of {of} ready",
+    "t": "{n} из {of} готово"
   },
   "window.header.email": {
     "en": "Google: {subject} · {ago}",
@@ -4547,6 +4863,322 @@
     "en": "customers visit",
     "t": "клиенты приходят"
   },
+  "window.ranking.history": {
+    "en": "Scans",
+    "t": "Сканирования"
+  },
+  "window.ranking.history.what": {
+    "en": "Every scan of this location, newest first, with its ARP and what is running",
+    "t": "Все сканирования этой локации, сначала новые, с их ARP и тем, что сейчас выполняется"
+  },
+  "window.ranking.keywords": {
+    "en": "Keywords",
+    "t": "Ключевые слова"
+  },
+  "window.ranking.metrics.what": {
+    "en": "What the latest scan says: average rank, average top rank, share of local voice, each against the compared scan",
+    "t": "Что показывает последнее сканирование: средняя позиция, средняя топ-позиция, доля локального голоса, каждый показатель в сравнении с выбранным сканированием"
+  },
+  "window.ranking.noCountry": {
+    "en": "No country: {trade}'s keywords are per country.",
+    "t": "Нет страны: ключевые слова для {trade} задаются по странам."
+  },
+  "window.ranking.noTrade": {
+    "en": "No trade: its keywords are its category's.",
+    "t": "Нет отрасли: его ключевые слова берутся из его категории."
+  },
+  "window.ranking.none": {
+    "en": "{category} tracks no keywords yet.",
+    "t": "Для {category} пока не отслеживаются ключевые слова."
+  },
+  "window.ranking.notSetUp": {
+    "en": "{category} is not set up: it has no keywords.",
+    "t": "{category} не настроена: у неё нет ключевых слов."
+  },
+  "window.ranking.scan.what": {
+    "en": "Geo-grid scans (#94): the grid and scan to read, a scan to compare, what a scan costs",
+    "t": "Сканирования геосетки (#94): сетка и сканирование для просмотра, сканирование для сравнения, стоимость сканирования"
+  },
+  "window.ranking.setUp": {
+    "en": "Set it up",
+    "t": "Настроить"
+  },
+  "window.ranking.suggested": {
+    "en": "Suggested keywords",
+    "t": "Предлагаемые ключевые слова"
+  },
+  "window.ranking.suggested.what": {
+    "en": "Keywords worth tracking, from the category's searches and its competitors",
+    "t": "Ключевые слова, которые стоит отслеживать, из поисковых запросов категории и её конкурентов"
+  },
+  "window.ranking.tracked": {
+    "en": "{n} tracked",
+    "t": "Отслеживается: {n}"
+  },
+  "window.ranking.trades.unread": {
+    "en": "Its category is not read yet.",
+    "t": "Его категория пока не прочитана."
+  },
+  "window.reviews.active": {
+    "en": "Active",
+    "t": "Активные"
+  },
+  "window.reviews.appealAll": {
+    "en": "Send an appeal for every suspended review",
+    "t": "Отправить апелляцию по каждому заблокированному отзыву"
+  },
+  "window.reviews.appealAllButton": {
+    "en": "Appeal {n} suspended",
+    "t": "Обжаловать заблокированные: {n}"
+  },
+  "window.reviews.appealButton": {
+    "en": "Appeal",
+    "t": "Обжаловать"
+  },
+  "window.reviews.appealDone": {
+    "en": "Appeal sent",
+    "t": "Апелляция отправлена"
+  },
+  "window.reviews.appealPlanned": {
+    "en": "Send the appeal to Google from here",
+    "t": "Отправить апелляцию в Google отсюда"
+  },
+  "window.reviews.appealSent": {
+    "en": "appeal sent {ago}",
+    "t": "апелляция отправлена {ago}"
+  },
+  "window.reviews.draft": {
+    "en": "Draft a reply with an agent",
+    "t": "Составить ответ с помощью агента"
+  },
+  "window.reviews.draftBoth": {
+    "en": "Draft a reply to each unresponded review",
+    "t": "Составить ответ на каждый отзыв без ответа"
+  },
+  "window.reviews.draftBothButton": {
+    "en": "Draft both replies",
+    "t": "Составить оба ответа"
+  },
+  "window.reviews.draftReply": {
+    "en": "Draft reply",
+    "t": "Составить ответ"
+  },
+  "window.reviews.goneAt": {
+    "en": "gone {ago}",
+    "t": "исчез {ago}"
+  },
+  "window.reviews.lastRun": {
+    "en": "last run {ago} · {status}",
+    "t": "последний запуск {ago} · {status}"
+  },
+  "window.reviews.listed": {
+    "en": "listed by Google {n}",
+    "t": "показано Google: {n}"
+  },
+  "window.reviews.liveTitle": {
+    "en": "Live reviews",
+    "t": "Живые отзывы"
+  },
+  "window.reviews.more": {
+    "en": "+ {n} more",
+    "t": "+ ещё {n}"
+  },
+  "window.reviews.needsAction": {
+    "en": "Suspended · Reinstating · To remove",
+    "t": "Заблокированные · Восстанавливаются · На удаление"
+  },
+  "window.reviews.needsActionNote": {
+    "en": "gone from Google, or flagged by us",
+    "t": "исчезли из Google или помечены нами"
+  },
+  "window.reviews.new7d": {
+    "en": "New 7d",
+    "t": "Новые за 7 д"
+  },
+  "window.reviews.nonFive": {
+    "en": "Non-5★",
+    "t": "Не 5★"
+  },
+  "window.reviews.notResponded": {
+    "en": "Not responded",
+    "t": "Без ответа"
+  },
+  "window.reviews.perDay": {
+    "en": "New reviews per day",
+    "t": "Новые отзывы в день"
+  },
+  "window.reviews.reinstating": {
+    "en": "Reinstating",
+    "t": "Восстанавливаются"
+  },
+  "window.reviews.removal": {
+    "en": "Request removal",
+    "t": "Запросить удаление"
+  },
+  "window.reviews.removalPlanned": {
+    "en": "Ask Google to remove the review",
+    "t": "Попросить Google удалить отзыв"
+  },
+  "window.reviews.removed": {
+    "en": "Removed",
+    "t": "Удалённые"
+  },
+  "window.reviews.reply": {
+    "en": "Owner",
+    "t": "Владелец"
+  },
+  "window.reviews.responded": {
+    "en": "Responded",
+    "t": "С ответом"
+  },
+  "window.reviews.run": {
+    "en": "{when} · {seen} seen, {new} new, {gone} gone",
+    "t": "{when} · {seen} увидено, {new} новых, {gone} исчезло"
+  },
+  "window.reviews.runs": {
+    "en": "Runs",
+    "t": "Запуски"
+  },
+  "window.reviews.scan": {
+    "en": "Scan now",
+    "t": "Сканировать сейчас"
+  },
+  "window.reviews.scanBusy": {
+    "en": "A scan is already under way",
+    "t": "Сканирование уже идёт"
+  },
+  "window.reviews.scanCost": {
+    "en": "· {n} tokens",
+    "t": "· {n} токенов"
+  },
+  "window.reviews.scanQueued": {
+    "en": "Scan queued",
+    "t": "Сканирование поставлено в очередь"
+  },
+  "window.reviews.scanUnpriced": {
+    "en": "No scan starts now: walks are unpriced, or the first screen is past the hour's limit",
+    "t": "Сканирование сейчас не запускается: обходы без цены или первый экран превысил часовой лимит"
+  },
+  "window.reviews.search": {
+    "en": "Text or author",
+    "t": "Текст или автор"
+  },
+  "window.reviews.shown": {
+    "en": "The rating Google shows, over time",
+    "t": "Рейтинг, который показывает Google, во времени"
+  },
+  "window.reviews.snapshot": {
+    "en": "Snapshot",
+    "t": "Снимок"
+  },
+  "window.reviews.snapshotPending": {
+    "en": "snapshot pending",
+    "t": "снимок ожидается"
+  },
+  "window.reviews.snapshotted": {
+    "en": "Snapshotted",
+    "t": "Со снимком"
+  },
+  "window.reviews.stats": {
+    "en": "Stats",
+    "t": "Статистика"
+  },
+  "window.reviews.statsPeriod": {
+    "en": "30 d",
+    "t": "30 д"
+  },
+  "window.reviews.suspended": {
+    "en": "Suspended",
+    "t": "Заблокированные"
+  },
+  "window.reviews.toRemove": {
+    "en": "To remove",
+    "t": "На удаление"
+  },
+  "window.reviews.unknown": {
+    "en": "The archive does not track this GBP",
+    "t": "Архив не отслеживает этот GBP"
+  },
+  "window.reviews.unknownWhy": {
+    "en": "Only a verified GBP on Maps has its reviews archived.",
+    "t": "Отзывы архивируются только у верифицированного GBP на Картах."
+  },
+  "window.reviews.unrated": {
+    "en": "no stars",
+    "t": "без звёзд"
+  },
+  "window.reviews.unresponded": {
+    "en": "Unresponded",
+    "t": "Без ответа"
+  },
+  "window.stats.arp": {
+    "en": "avg rank, my quadrant",
+    "t": "средняя позиция, мой квадрант"
+  },
+  "window.stats.atrp": {
+    "en": "avg rank, all points",
+    "t": "средняя позиция, все точки"
+  },
+  "window.stats.changes": {
+    "en": "Changes",
+    "t": "Изменения"
+  },
+  "window.stats.days": {
+    "en": "{n} d",
+    "t": "{n} д"
+  },
+  "window.stats.edited": {
+    "en": "Edited: {n} fields",
+    "t": "Изменено полей: {n}"
+  },
+  "window.stats.grafana": {
+    "en": "Open in Grafana",
+    "t": "Открыть в Grafana"
+  },
+  "window.stats.leads": {
+    "en": "Leads",
+    "t": "Лиды"
+  },
+  "window.stats.liveReviews": {
+    "en": "Live reviews",
+    "t": "Живые отзывы"
+  },
+  "window.stats.none": {
+    "en": "Nothing changed in this period.",
+    "t": "За этот период ничего не изменилось."
+  },
+  "window.stats.output": {
+    "en": "Output",
+    "t": "Результат"
+  },
+  "window.stats.owner": {
+    "en": "Calls · site clicks · directions: they join once a Multilogin session owns the profile",
+    "t": "Звонки · клики на сайт · маршруты: появятся, когда профиль закрепится за сессией Multilogin"
+  },
+  "window.stats.ownerTitle": {
+    "en": "Calls · site clicks · directions",
+    "t": "Звонки · клики на сайт · маршруты"
+  },
+  "window.stats.ownership": {
+    "en": "with ownership",
+    "t": "с правами владельца"
+  },
+  "window.stats.rankingWhat": {
+    "en": "Ranking: ARP, ATRP and SoLV over the period, with the profile edits and suspensions on it",
+    "t": "Ранжирование: ARP, ATRP и SoLV за период, с правками профиля и блокировками на графике"
+  },
+  "window.stats.reviewsCapped": {
+    "en": "kept 30 d: the 90 d range shows 30",
+    "t": "хранится 30 д: диапазон 90 д показывает 30"
+  },
+  "window.stats.solv": {
+    "en": "grid points in top 3",
+    "t": "точек сетки в топ-3"
+  },
+  "window.stats.versus": {
+    "en": "vs previous {n} d",
+    "t": "против предыдущих {n} д"
+  },
   "window.tab.appeal": {
     "en": "Appeal",
     "t": "Апелляция"
@@ -4598,5 +5230,89 @@
   "window.toPage": {
     "en": "Its own page",
     "t": "Своя страница"
+  },
+  "window.verification.after": {
+    "en": "After a rejected video",
+    "t": "После отклонённого видео"
+  },
+  "window.verification.after.what": {
+    "en": "The playbook's verification guide for after a rejected video, step by step, with what is done and what is next",
+    "t": "Руководство плейбука по верификации после отклонённого видео, шаг за шагом, с тем, что сделано и что дальше"
+  },
+  "window.verification.attempts": {
+    "en": "Attempts",
+    "t": "Попытки"
+  },
+  "window.verification.attempts.what": {
+    "en": "Each try at verifying it, one row per try: its kind, when, the film or the call, and Google's answer",
+    "t": "Каждая попытка верификации, по строке на попытку: её вид, когда, видео или звонок и ответ Google"
+  },
+  "window.verification.banner.email": {
+    "en": "Google wrote: {subject} · {ago}",
+    "t": "Google написал: {subject} · {ago}"
+  },
+  "window.verification.banner.hint": {
+    "en": "Google's own word: its state moves and its emails to the gmail, read from the inbox.",
+    "t": "Слово самого Google: смены его состояния и его письма на gmail, прочитанные из почты."
+  },
+  "window.verification.banner.none": {
+    "en": "Nothing from Google yet",
+    "t": "От Google пока ничего"
+  },
+  "window.verification.banner.state": {
+    "en": "{from} → {to} · {ago}",
+    "t": "{from} → {to} · {ago}"
+  },
+  "window.verification.emails": {
+    "en": "Google's emails",
+    "t": "Письма Google"
+  },
+  "window.verification.kit": {
+    "en": "Verification kit",
+    "t": "Набор для верификации"
+  },
+  "window.verification.kit.address": {
+    "en": "Address",
+    "t": "Адрес"
+  },
+  "window.verification.kit.areas": {
+    "en": "Areas",
+    "t": "Зоны"
+  },
+  "window.verification.kit.film": {
+    "en": "Film",
+    "t": "Видео"
+  },
+  "window.verification.kit.in": {
+    "en": "in Connections",
+    "t": "в «Подключениях»"
+  },
+  "window.verification.kit.phone": {
+    "en": "Phone",
+    "t": "Телефон"
+  },
+  "window.verification.read": {
+    "en": "Read Google now",
+    "t": "Прочитать Google сейчас"
+  },
+  "window.verification.read.planned": {
+    "en": "Read Google's state now: it is read every 6 h",
+    "t": "Прочитать состояние Google сейчас: оно читается каждые 6 ч"
+  },
+  "window.verification.shows": {
+    "en": "What Google shows",
+    "t": "Что показывает Google"
+  },
+  "window.verification.shows.what": {
+    "en": "What Google shows of it now, read every 6 h, and how that changed",
+    "t": "Что Google показывает о нём сейчас, читается каждые 6 ч, и как это менялось"
+  },
+  "window.verification.waits": {
+    "en": "Waits for Verified",
+    "t": "Ждёт верификации"
+  },
+  "window.verification.waits.what": {
+    "en": "The fields prepared on the draft that the profile applies the hour Google verifies it",
+    "t": "Поля, подготовленные в черновике, которые профиль применит в тот час, когда Google его верифицирует"
   }
 }

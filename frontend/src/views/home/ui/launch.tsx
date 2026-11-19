@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Input, NativeSelect, NativeSelectOption, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
+import { Button, Input, NativeSelect, NativeSelectOption, Planned, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
 import { Check, Copy, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
@@ -18,7 +18,7 @@ import { launch } from "../model/i18n";
 
 const MAX_AREAS = 20;
 
-const MUST_NAME = {
+export const MUST_NAME = {
   name: (t) => t(launch.must.name, "Name"),
   category: (t) => t(launch.must.category, "Category"),
   areas: (t) => t(launch.must.areas, "Areas"),
@@ -148,7 +148,8 @@ export function Launch({ listed: { gmb, gmail }, page }: { listed: Listed; page:
   };
 
   return (
-    <div className="flex max-w-3xl flex-col gap-4">
+    <div className="flex items-start gap-4">
+    <div className="flex max-w-3xl min-w-0 flex-1 flex-col gap-4">
       <section className={cn("flex flex-col gap-2 rounded-lg border px-4 py-3", missing.length === 0 ? "border-positive/40 bg-positive/5" : "border-accent-warn/40 bg-accent-warn/5")}>
         <div className="flex items-center gap-3">
           <span aria-hidden className="flex gap-1">
@@ -178,6 +179,45 @@ export function Launch({ listed: { gmb, gmail }, page }: { listed: Listed; page:
 
       <Behind listed={{ gmb, gmail }} page={page} />
       <OntoGoogle gmbId={gmb.id} onMoved={gmails.reload} />
+    </div>
+    <aside className="hidden w-80 shrink-0 flex-col gap-4 xl:flex">
+      <Planned what={t(launch.why.study, "The study the draft came from: capture, demand, nearest rival, rivals")}>
+        <h3 className="text-sm font-semibold text-ink">{t(launch.why.title, "Why here")}</h3>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-xs">
+          <dt className="text-ink-soft">capture</dt>
+          <dd className="text-right text-ink">0.41 · rank 1 of 10</dd>
+          <dt className="text-ink-soft">demand ≤1 / ≤3 km</dt>
+          <dd className="text-right text-ink">620 / 1.9k searches/mo</dd>
+          <dt className="text-ink-soft">nearest rival</dt>
+          <dd className="text-right text-ink">0.8 km · tier A</dd>
+          <dt className="text-ink-soft">rivals ≤2 km</dt>
+          <dd className="text-right text-ink">3 A · 5 B · 4 C</dd>
+        </dl>
+      </Planned>
+      <Planned what={t(launch.waits.what, "The fields prepared on the draft that the profile applies the hour Google verifies it")}>
+        <h3 className="flex items-baseline gap-2 text-sm font-semibold text-ink">
+          {t(launch.waits.title, "Waits for Verified")}
+          <span className="font-mono text-xs font-normal text-ink-soft">0 of 8 applied</span>
+        </h3>
+        <ul className="grid grid-cols-2 gap-2 text-xs">
+          {[
+            ["More categories", "Débouchage +3"],
+            ["Hours", "24/7 · urgences"],
+            ["Description", "agent draft · 712 ch"],
+            ["Services", "12 from template"],
+            ["Photos", "18 · 2 a day"],
+            ["Opening date", "Nov 2026"],
+            ["Reviews", "≤1/day · day 3+"],
+            ["Posts", "weekly · day 2+"],
+          ].map(([label, value]) => (
+            <li key={label} className="rounded-md bg-hover/60 px-2 py-1.5">
+              <span className="block text-ink-soft">{label}</span>
+              <span className="text-ink">{value}</span>
+            </li>
+          ))}
+        </ul>
+      </Planned>
+    </aside>
     </div>
   );
 }
@@ -421,7 +461,7 @@ function Behind({ listed: { gmb }, page }: { listed: Listed; page: boolean }) {
 }
 
 /** Once Google's form is sent, the draft is verifying: its place pasted if Maps shows it yet. */
-function OntoGoogle({ gmbId, onMoved }: { gmbId: number; onMoved: () => void }) {
+export function OntoGoogle({ gmbId, onMoved }: { gmbId: number; onMoved: () => void }) {
   const t = useT();
   const size = useControlSize();
   const button = useButtonSize();

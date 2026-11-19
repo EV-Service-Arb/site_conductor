@@ -103,6 +103,11 @@ export function openChat(id: string | null, mode?: Mode): void {
   if (mode) show(mode);
 }
 
+/** A new chat in the mode last shown. */
+export function openNew(): void {
+  openChat(null, current().mode);
+}
+
 /** Something happened in a chat: told on the toggle, and seen at once while the assistant is open. */
 export function notice(): void {
   set((s) => ({ ...s, unread: true }));

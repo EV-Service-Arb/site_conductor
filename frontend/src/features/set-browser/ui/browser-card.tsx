@@ -24,27 +24,15 @@ import {
 import { Camera, Fingerprint } from "lucide-react";
 import { useId, useRef, useState } from "react";
 
-import { browsersUnconnected, uploadFilm, browser as browserKeys } from "@/entities/gmb";
+import { DEVICE_NAME, PROVIDER_NAME, browsersUnconnected, uploadFilm, browser as browserKeys } from "@/entities/gmb";
 import { api, ok } from "@/shared/api";
 import { type Browser, type Device, type Provider, deviceValues, providerValues } from "@/shared/api/schema";
-import { type T, useLocale, useT, account } from "@/shared/i18n";
+import { useLocale, useT, account } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 /** A gmail's antidetect browser: one fingerprint and one session for every GBP it manages, out through its proxy. */
-const PROVIDER_NAME = {
-  gologin: (t) => t(browserKeys.provider.gologin, "GoLogin"),
-  multilogin: (t) => t(browserKeys.provider.multilogin, "Multilogin · cloud phone"),
-  multilogin_browser: (t) => t(browserKeys.provider.multilogin_browser, "Multilogin · browser"),
-} satisfies Record<Provider, (t: T) => string>;
-
-const DEVICE_NAME = {
-  galaxy_s23: (t) => t(browserKeys.device.galaxy_s23, "Galaxy S23"),
-  pixel_7: (t) => t(browserKeys.device.pixel_7, "Pixel 7"),
-  redmi_note_14: (t) => t(browserKeys.device.redmi_note_14, "Redmi Note 14"),
-} satisfies Record<Device, (t: T) => string>;
-
 export function BrowserCard({ gmail, browser, onChanged }: { gmail: number; browser: Browser | null; onChanged: () => void }) {
   const t = useT();
   const locale = useLocale();

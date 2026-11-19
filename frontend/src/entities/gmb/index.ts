@@ -15,6 +15,7 @@ export { PublishSelection, type Selection, select, setFilter, setOnly, useSelect
 export { TradeSelect } from "./ui/trade-select";
 export { CategoryChip } from "./ui/category-chip";
 export { LiveReviews } from "./ui/live-reviews";
+export { DEVICE_NAME, PROVIDER_NAME } from "./model/browser-names";
 export { gmbs, trades, browser, windowKeys, scopeKeys, trash, undo, move, kit, areaKeys, brandKeys } from "./model/i18n";
 export { AreaDraw, useOutline } from "./ui/area-draw";
 export { localityAt } from "./api/areas";

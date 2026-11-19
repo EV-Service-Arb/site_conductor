@@ -21,7 +21,7 @@ import { type Listed, narrowed, useGmails } from "@/entities/gmb";
 import type { Attachment, Mention } from "@/shared/api/schema";
 import { type T, useT } from "@/shared/i18n";
 
-import { type Approval, setApproval } from "../model/chat";
+import { type Approval, openNew, setApproval } from "../model/chat";
 import { assistant } from "@/entities/assistant";
 
 export interface Draft {
@@ -48,6 +48,12 @@ const EMPTY: Draft = { text: "", mentions: [], files: [], subjectOff: false };
 /** `draft` back in `chat`'s composer, the next time it is made: a question the server did not take. */
 export function keepDraft(chat: string | null, draft: Draft): void {
   drafts.set(chat ?? "", draft);
+}
+
+/** A new chat opens with `text` typed in, about `location`, for the operator to send. */
+export function startWith(text: string, location: Mention): void {
+  keepDraft(null, { text, mentions: [location], files: [], subjectOff: false });
+  openNew();
 }
 
 const COMMANDS = [

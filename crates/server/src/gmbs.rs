@@ -262,6 +262,25 @@ pub struct LoggedDto {
 	pub event: sa_panel::gmbs::Event,
 }
 
+/// A GBP's window's tab; a closed one is shown greyed with why.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+pub struct TabDto {
+	pub tab: Tab,
+	pub closed: Option<Closed>,
+}
+
+/// Why a tab of a GBP's window is closed in its state.
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Closed {
+	/// A draft has no place to measure yet.
+	UntilVerified,
+	/// Google holds it while it verifies.
+	FrozenWhileVerifying,
+	/// Suspended: it is off Maps.
+	OffMaps,
+}
+
 /// A panorama to open, on the account the page's map loaded on.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -402,25 +421,6 @@ impl Around {
 		}
 		ReadinessDto { missing, unknown }
 	}
-}
-
-/// A GBP's window's tab; a closed one is shown greyed with why.
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-pub struct TabDto {
-	pub tab: Tab,
-	pub closed: Option<Closed>,
-}
-
-/// Why a tab of a GBP's window is closed in its state.
-#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Closed {
-	/// A draft has no place to measure yet.
-	UntilVerified,
-	/// Google holds it while it verifies.
-	FrozenWhileVerifying,
-	/// Suspended: it is off Maps.
-	OffMaps,
 }
 
 /// A GBP's window's tabs: its state's work, its connections and its gmail's browser, then its profile and log.

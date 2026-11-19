@@ -24,7 +24,7 @@ export type Kind = WinKey["kind"];
 export type KeyOf<K extends Kind> = Extract<WinKey, { kind: K }>;
 
 /** Every Home key a window reads: one floats at a time, so opening one writes its own and clears the rest. */
-const NO_WINDOW = { gmb: undefined, trade: undefined, country: undefined, brand: undefined, account: undefined, tab: undefined, categories: undefined, trash: undefined, add: undefined, kit: undefined, kit_gmb: undefined, kit_pool: undefined, kit_edit: undefined } as const;
+const NO_WINDOW = { gmb: undefined, trade: undefined, country: undefined, brand: undefined, account: undefined, tab: undefined, step: undefined, categories: undefined, trash: undefined, add: undefined, kit: undefined, kit_gmb: undefined, kit_pool: undefined, kit_edit: undefined } as const;
 
 interface Route<K extends Kind> {
   fromHome(h: Home): KeyOf<K> | null;
