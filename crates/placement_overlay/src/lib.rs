@@ -115,7 +115,7 @@ impl Overlay {
 				dots: false,
 				hide_imputed: false,
 				press: Vec::new(),
-				unmet: Vec::new(),
+				unmet: None,
 				legend: None,
 				hooks: Some((on_view, on_poi)),
 			})
@@ -249,7 +249,8 @@ struct Inner {
 	hide_imputed: bool,
 	/// At `tune`. Moves only with `tune` and the model, never with the view.
 	press: Vec<f64>,
-	unmet: Vec<f64>,
+	/// None without a demand.
+	unmet: Option<Vec<f64>>,
 	legend: Option<Legend>,
 	/// Kept alive while attached: `paint.js` calls them on settle and on a dot's click.
 	hooks: Option<Hooks>,
@@ -313,9 +314,9 @@ impl Inner {
 					let unmet = t.unmet(&press);
 					(press, unmet)
 				}
-				_ => (vec![0.; m.n()], vec![0.; m.n()]),
+				_ => (vec![0.; m.n()], None),
 			},
-			None => (Vec::new(), Vec::new()),
+			None => (Vec::new(), None),
 		};
 	}
 
@@ -348,10 +349,11 @@ impl Inner {
 		let values: Vec<f64> = match spec.as_ref().map(|s| s.source) {
 			None => vec![0.; m.n()],
 			Some(LayerRef::Study(i)) => m.layer(i).to_vec(),
+			Some(LayerRef::Trade(TradeLayer::Unmet)) => self.unmet.clone().expect("the unmet layer is listed only with a demand"),
 			Some(LayerRef::Trade(t)) => {
 				let traded = m.traded().expect("a model offers trade layers only with a trade");
 				let lambda = self.lambda(&m).expect("and so a λ");
-				traded.values(t, self.focus, lambda, &self.tiers(&m), &self.unmet).into_owned()
+				traded.values(t, self.focus, lambda, &self.tiers(&m), &[]).into_owned() // unmet is read for Unmet alone, taken above
 			}
 		};
 		let heat = [values.as_slice()];

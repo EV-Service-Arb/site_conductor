@@ -959,7 +959,7 @@ if [ "$run_placement" = 1 ]; then
 	# its settings' `queries_cache`, through their environment: `serve` takes no settings flag
 	(cd "$PLACEMENT_DIR" && PANEL_ASSERTION_KEYS="$assertion_public" GMAPS_OPTIMAL_PLACEMENT_QUERIES_CACHE="$origin/api/queries_cache" \
 		prefixed placement bash -c \
-		"${DEV_COMMAND_gmaps_optimal_placement:-nix run .#conductor -- $spend_flag --port $PLACEMENT_PORT -t examples/trades --countries examples/countries}") &
+		"${DEV_COMMAND_gmaps_optimal_placement:-nix run .#conductor -- --port $PLACEMENT_PORT --countries examples/countries}") &
 	placement_pid=$!
 fi
 
