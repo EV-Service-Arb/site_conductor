@@ -14,7 +14,8 @@
 #   nix run .#dev [-- --port <n>]          the conductor, sites_panel and review_archive under --watch,
 #                                          a peer started unless it already serves, a conductor already
 #                                          serving stopped and replaced; the conductor on n
-#   nix run .#dev -- --fixed [<rev>]       the same unwatched, the conductor as this checkout is now, or at <rev>
+#   nix run .#dev -- --fixed [<rev>]       the same unwatched, the conductor as this checkout is now, or at <rev>;
+#                                          beside the watched one, on the first free pair down from SA_PORT_RANGE's top
 #
 # The conductor and its front end come from `nix build .#bin` / `.#frontend` of this checkout,
 # unless PANEL_BIN / PANEL_WEB_DIR name others (PANEL_BIN=target/debug/panel for a cargo build);
@@ -113,7 +114,8 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [-
   --port <n>: the conductor on n and its next dev on n+1, in SA_PORT_RANGE, with a state of its own.
   --no-peers: neither built nor started: sites_panel, review_archive, gmaps_optimal_placement, playbook; the conductor answers 502 for them.
   --fixed [<rev>]: nothing watched; the conductor and its static front end built once from a copy of this checkout
-  as it is now, or at <rev> (a commit, a tag), into this checkout's build dir: only what differs compiles.
+  as it is now, or at <rev> (a commit, a tag), into this checkout's build dir: only what differs compiles. Without --port,
+  on the first free pair down from SA_PORT_RANGE's top, beside a watched dev and other --fixed runs, never replacing them.
 EOF
 		exit 0
 		;;
@@ -218,6 +220,16 @@ AQUAFIX_DIR="${AQUAFIX_DIR:-$service_arb/sites/aquafix}"
 VIFNET_DIR="${VIFNET_DIR:-$service_arb/sites/vifnet}"
 DEBOUCHAGE_DIR="${DEBOUCHAGE_DIR:-$service_arb/sites/debouchage}"
 
+busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+# --fixed beside the watched dev, never on its ports: without --port, the first free pair down from the range's top, one not claimed by a starting run's pid
+if [ "$fixed" = 1 ] && [ -z "$own_port" ]; then
+	range="${SA_PORT_RANGE:?$need}"
+	own_port=$((${range#*-} - 1))
+	while busy "$own_port" || busy "$((own_port + 1))" || kill -0 "$(cat "$root/.local-port-$own_port/pid" 2>/dev/null)" 2>/dev/null; do
+		own_port=$((own_port - 2))
+		[ "$own_port" -ge "${range%-*}" ] || die "--fixed: no two free ports left in SA_PORT_RANGE $range"
+	done
+fi
 # a stack on other ports is another stack: its own databases, and its own review_archive serve.lock
 state="${LOCAL_STACK_DIR:-$root/.local}"
 [ "$offset" = 0 ] || state="${LOCAL_STACK_DIR:-$root/.local-$offset}"
@@ -269,7 +281,6 @@ if [ "$sites" = 1 ] || [ "$dev" = 0 ]; then
 	DEBOUCHAGE_PORT="$(shell_port "$DEBOUCHAGE_DIR" PORT)"
 fi
 
-busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 answers() { curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$1/health" 2>/dev/null; }
 # What this run starts: under dev, each part not already answering on its port; else all of them.
 run_panel=1

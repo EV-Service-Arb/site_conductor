@@ -57,7 +57,9 @@ nix run .#dev -- --fixed [<rev>]   # nothing watched: the conductor as the check
 `--fixed` copies the code into `.local/fixed/<content hash>/` and builds it into this checkout's build dir, so only
 crates whose sources differ compile: cargo tells sources apart by checksum (`checksum-freshness`, .cargo/config.toml),
 and a build script's `rerun-if-changed` paths stay relative to its package. The front end is the copy's static export.
-The peers run unwatched from their checkouts.
+The peers run unwatched from their checkouts. Without `--port` it takes the first free pair down from `SA_PORT_RANGE`'s
+top (52899–52900, then 52897–52898, …), with a state of its own (`.local-port-<n>`): it never replaces a watched dev,
+nor one another.
 
 A conductor or its `next dev` already listening on their ports (another run's, another
 checkout's) is stopped, together with the run that started it and whatever else that run served,
