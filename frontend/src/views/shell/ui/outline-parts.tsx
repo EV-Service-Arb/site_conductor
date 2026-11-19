@@ -1,21 +1,9 @@
 "use client";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  Button,
-  buttonVariants,
-} from "@evinvest/uikit";
+import { Button } from "@evinvest/uikit";
 import { Trash2, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
 
-import { select, useTrash, trash as trashKeys, move, gmbs } from "@/entities/gmb";
+import { select, useTrash, gmbs } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -23,59 +11,31 @@ import { useButtonSize } from "@/shared/ui/touch";
 export const ROW = "group flex min-w-0 items-center gap-1 rounded-md pr-1 text-sm hover:bg-hover/50";
 /** Shown on the row's hover or focus only, so the names keep the width. */
 export const ON_HOVER = "hidden group-hover:flex group-focus-within:flex";
-/** How long a removal waits in the trash, for a remove dialog's `{kept}`; unsaid until the trash is read. */
-export function useKept(): string {
-  const t = useT();
-  const trash = useTrash();
-  if (trash.status !== "ok") return "";
-  const { never_purge, keep_days } = trash.data.settings;
-  return never_purge ? t(trashKeys.for.ever, ", kept until you restore it") : t(trashKeys.for.days, ", restorable for {days} days", { days: keep_days });
-}
-
 export const HEADING = "flex items-center gap-1 px-2 pt-2 pb-1 text-xs font-medium tracking-wide text-ink-soft uppercase";
 
-export function Remove({ title, body, remove, onRemoved }: { title: string; body: string; remove: () => Promise<void>; onRemoved: () => void }) {
-  const button = useButtonSize();
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <Button variant="ghost" size={button("sm")} icon aria-label={title} title={title} onClick={() => setOpen(true)}>
-        <Trash2 aria-hidden />
-      </Button>
-      {open && <RemoveDialog title={title} body={body} remove={remove} onRemoved={onRemoved} onClose={() => setOpen(false)} />}
-    </>
-  );
-}
-
-/** The confirmation, open while mounted. */
-export function RemoveDialog({ title, body, remove, onRemoved, onClose }: { title: string; body: string; remove: () => Promise<void>; onRemoved: () => void; onClose: () => void }) {
+/** Removes to the trash, re-read after so its button flashes the new count. */
+export function useRemove(onRemoved: () => void): (remove: () => Promise<void>) => Promise<void> {
   const t = useT();
-  const button = useButtonSize();
-  const action = useRef<HTMLButtonElement>(null);
-  useEffect(() => action.current!.focus(), []); // after the dialog's own focus on Cancel: the trash takes it back, so Enter removes
-  const act = async () => {
+  const trash = useTrash();
+  return async (remove) => {
     try {
       await remove();
-      onRemoved();
     } catch (e) {
       notifyFailure(e, t);
+      return;
     }
+    onRemoved();
+    trash.reload();
   };
+}
+
+export function Remove({ title, remove, onRemoved }: { title: string; remove: () => Promise<void>; onRemoved: () => void }) {
+  const button = useButtonSize();
+  const run = useRemove(onRemoved);
   return (
-    <AlertDialog open onOpenChange={(o) => !o && onClose()}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>{body}</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel className={buttonVariants({ variant: "outline", size: button() })}>{t(move.cancel, "Cancel")}</AlertDialogCancel>
-          <AlertDialogAction ref={action} className={buttonVariants({ variant: "destructive", size: button() })} onClick={() => void act()}>
-            {t(gmbs.remove, "Remove")}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <Button variant="ghost" size={button("sm")} icon aria-label={title} title={title} onClick={() => void run(remove)}>
+      <Trash2 aria-hidden />
+    </Button>
   );
 }
 

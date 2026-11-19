@@ -2,7 +2,7 @@
 
 import { toast, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn, useBinding } from "@evinvest/uikit";
 import { ChevronDown, CircleMinus, CirclePlus, Link2, Pencil, RefreshCw, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, openOrFocus, openWindow, readyCount, useShown, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, syncGmb, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, trades as tradesKeys } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
@@ -19,7 +19,7 @@ import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
 
-import { HEADING, ROW, RemoveDialog, ResetSelection, useKept } from "./outline-parts";
+import { HEADING, ROW, ResetSelection, useRemove } from "./outline-parts";
 import { ScopePicker } from "./scope-picker";
 
 const SUBHEADING = "flex items-center gap-1 px-2 pt-1.5 pb-0.5 text-xs text-ink-soft";
@@ -204,8 +204,19 @@ function TrashButton() {
   const n = trash.status === "ok" ? trash.data.gmails.length + trash.data.gmbs.length : null;
   const open = () => openWindow({ kind: "trash" });
   useBinding({ on: { key: "T" }, id: "trash", run: { label: t(trashKeys.open, "Trash"), run: open } });
+  const ref = useRef<HTMLButtonElement>(null);
+  const was = useRef(n);
+  useEffect(() => {
+    // its hover look, there and back: the removal landed here
+    if (n !== null && was.current !== null && n > was.current) {
+      const root = getComputedStyle(document.documentElement);
+      const now = getComputedStyle(ref.current!);
+      ref.current!.animate({ backgroundColor: [now.backgroundColor, root.getPropertyValue("--color-hover"), now.backgroundColor], color: [now.color, root.getPropertyValue("--color-ink"), now.color] }, { duration: 800, easing: "ease-in-out" });
+    }
+    was.current = n;
+  }, [n]);
   return (
-    <Button variant="ghost" size={button("sm")} className="text-ink-soft" onClick={open}>
+    <Button ref={ref} variant="ghost" size={button("sm")} className="text-ink-soft" onClick={open}>
       <Trash2 aria-hidden />
       {t(trashKeys.open, "Trash")}
       {n !== null && n > 0 && <span className="tabular-nums">{n}</span>}
@@ -364,9 +375,9 @@ function GmbRow({
   onNavigate?: () => void;
 }) {
   const t = useT();
-  const kept = useKept();
+  const remove = useRemove(onChanged);
   const hovered = useOnMap((s) => s.hovered === gmb.id);
-  const [dialog, setDialog] = useState<"edit" | "link" | "remove" | null>(null);
+  const [dialog, setDialog] = useState<"edit" | "link" | null>(null);
   const held = useTokens();
   const spend = useSpendConfirm();
   const name = gmb.name;
@@ -456,17 +467,15 @@ function GmbRow({
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onClick={() => setDialog("remove")}>
+          <DropdownMenuItem variant="destructive" onClick={() => void remove(() => ok(api.DELETE("/gmbs/{id}", { params: { path: { id: gmb.id } } })))}>
             <Trash2 aria-hidden />
-            {t(gmbsKeys.remove, "Remove")}…
+            {t(gmbsKeys.remove, "Remove")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       {spend.dialog}
       {dialog === "edit" && <EditGbp gmb={gmb} onClose={() => setDialog(null)} onChanged={onChanged} />}
-      {dialog === "link" && linked && <LinkPlace gmbId={gmb.id} linked={linked} onClose={() => setDialog(null)} onDone={onChanged} />}
-      {dialog === "remove" && <RemoveDialog title={t(gmbsKeys.gmb.remove.title, "Remove {name}?", { name })} body={t(gmbsKeys.gmb.remove.body, "It goes to the trash{kept}: every service stops working on it until then; its history stays.", { kept })} remove={() => ok(api.DELETE("/gmbs/{id}", { params: { path: { id: gmb.id } } }))} onRemoved={onChanged} onClose={() => setDialog(null)} />}
-      {onMap ? (
+      {dialog === "link" && linked && <LinkPlace gmbId={gmb.id} linked={linked} onClose={() => setDialog(null)} onDone={onChanged} />}      {onMap ? (
         <button type="button" className={body} title={(gmb.address ? `${name}\n${gmb.address}` : name) + hint} onClick={() => openOrFocus(gmb, peeked)}
           // a click shows its card; ↵ opens its window
           onKeyDown={(e) => {

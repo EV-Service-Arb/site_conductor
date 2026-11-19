@@ -11,7 +11,7 @@ import { api, ok } from "@/shared/api";
 import { type Country, type Gmail, type Gmails, type Gmb, type Trade, countryValues } from "@/shared/api/schema";
 import { useT, account } from "@/shared/i18n";
 
-import { HEADING, ON_HOVER, ROW, Remove, ResetSelection, useKept } from "./outline-parts";
+import { HEADING, ON_HOVER, ROW, Remove, ResetSelection } from "./outline-parts";
 
 const same = (a: Pattern, b: Pattern) => a.trade === b.trade && a.country === b.country;
 /** Shift, Ctrl or Cmd: a click adds to what is picked rather than replacing it. */
@@ -27,7 +27,6 @@ const META = "font-normal tracking-normal normal-case";
  */
 export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmails; selection: Selection; onFlip: (gmbs: Gmb[], enabled: boolean) => Promise<void>; onChanged: () => void }) {
   const t = useT();
-  const kept = useKept();
   const trades = useTrades();
   const scope = useScope();
   const [open, setOpen] = useState(false);
@@ -147,7 +146,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
                   <span className={cn("flex items-center", ON_HOVER)}>
                     <OpenAccount gmail={g} onOpened={() => setOpen(false)} />
                     <AddGmbButton gmail={g.id} trade={null} />
-                    <Remove title={t(gmbsKeys.gmail.remove.title, "Remove {gmail}?", { gmail: g.gmail })} body={t(gmbsKeys.gmail.remove.body, "It goes to the trash with its GBPs{kept}: every service stops working on them until then.", { kept })} remove={() => ok(api.DELETE("/gmails/{id}", { params: { path: { id: g.id } } }))} onRemoved={onChanged} />
+                    <Remove title={t(gmbsKeys.gmail.remove.title, "Remove {gmail}", { gmail: g.gmail })} remove={() => ok(api.DELETE("/gmails/{id}", { params: { path: { id: g.id } } }))} onRemoved={onChanged} />
                   </span>
                   <span className="text-xs text-ink-soft tabular-nums" title={t(scopeKeys.gmail.count, "Its GBPs in the categories picked")}>
                     {edited && k > 0 && !full ? `${k}/${gmbs.length}` : inScope}

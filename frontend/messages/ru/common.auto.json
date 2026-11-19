@@ -1875,13 +1875,9 @@
     "en": "Gmail",
     "t": "Gmail"
   },
-  "gmbs.gmail.remove.body": {
-    "en": "It goes to the trash with its GBPs{kept}: every service stops working on them until then.",
-    "t": "Он уйдёт в корзину вместе со своими GBP{kept}; до тех пор сервисы с ними не работают."
-  },
   "gmbs.gmail.remove.title": {
-    "en": "Remove {gmail}?",
-    "t": "Удалить {gmail}?"
+    "en": "Remove {gmail}",
+    "t": "Удалить {gmail}"
   },
   "gmbs.gmb.add": {
     "en": "Add a GBP",
@@ -1890,14 +1886,6 @@
   "gmbs.gmb.none": {
     "en": "No place found.",
     "t": "Место не найдено."
-  },
-  "gmbs.gmb.remove.body": {
-    "en": "It goes to the trash{kept}: every service stops working on it until then; its history stays.",
-    "t": "Он уйдёт в корзину{kept}; до тех пор сервисы с ним не работают, история останется."
-  },
-  "gmbs.gmb.remove.title": {
-    "en": "Remove {name}?",
-    "t": "Удалить {name}?"
   },
   "gmbs.inView": {
     "en": "In view",
@@ -3982,14 +3970,6 @@
   "trash.erase.title": {
     "en": "Delete {name} for good?",
     "t": "Удалить {name} навсегда?"
-  },
-  "trash.for.days": {
-    "en": ", restorable for {days} days",
-    "t": " и восстановим {days} дн."
-  },
-  "trash.for.ever": {
-    "en": ", kept until you restore it",
-    "t": " и хранится, пока вы его не восстановите"
   },
   "trash.gmails": {
     "en": "Gmails",
