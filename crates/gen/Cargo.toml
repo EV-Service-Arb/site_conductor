@@ -9,6 +9,11 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 
+[[bin]]
+name = "sa_gen"
+path = "src/main.rs"
+test = false
+
 [dependencies]
 ev_lib = { workspace = true, features = ["api"] }
 sa_auth.workspace = true

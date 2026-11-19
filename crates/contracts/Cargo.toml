@@ -12,6 +12,9 @@ readme.workspace = true
 [package.metadata.cargo-machete]
 ignored = ["prost", "tonic", "tonic-prost"]
 
+[lib]
+test = false
+
 [dependencies]
 prost.workspace = true
 tonic.workspace = true

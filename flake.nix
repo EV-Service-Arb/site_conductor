@@ -75,6 +75,19 @@
                 require_serial = true;
                 files = "^(crates/.*\\.(rs|toml)|Cargo\\.(toml|lock)|contracts/.*)$"; # what the document is built from: a front-end-only commit skips the build
               };
+              # `test = false` keeps a crate's harnesses from building; a test written there would never run
+              untested = {
+                enable = true;
+                name = "no tests in a crate built with test = false";
+                entry = toString (pkgs.writeShellScript "untested" ''
+                  for m in crates/*/Cargo.toml; do
+                    grep -q '^test = false' "$m" || continue
+                    if grep -rnE '#\[(tokio::)?test' "$(dirname "$m")/src"; then echo "$m: test = false, so the above never run" >&2; exit 1; fi
+                  done
+                '');
+                pass_filenames = false;
+                files = "^crates/.*\\.(rs|toml)$";
+              };
               # A conductor release ships against its peers' vendored documents: each must already be released.
               peers-released = {
                 enable = true;
