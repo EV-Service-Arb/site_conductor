@@ -1674,7 +1674,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** What a category may be studied by, and where: placement's trade files and the countries it has a base for. */
+        /** The countries placement has a grid for. */
         get: operations["catalog"];
         put?: never;
         post?: never;
@@ -1693,9 +1693,9 @@ export interface paths {
         };
         /**
          * A study of an area: under one of the caller's categories, or the area's grid alone; never spends.
-         * @description 404 no such area or category of the caller's; 422 a category not set up to be studied
-         *     (`no_study`, `no_google_category`, `no_keywords`), set up for `another_country`, or one
-         *     placement does not study (`unstudied`); 503 placement not connected.
+         * @description 404 no such area or category of the caller's; 422 a category with `no_google_category`, set up
+         *     for `another_country`, or an area where placement has no grid (`unstudied`); 503 placement not
+         *     connected.
          */
         get: operations["study"];
         put?: never;
@@ -1938,8 +1938,10 @@ export interface paths {
         get?: never;
         /**
          * Sets a trade up in a country, or edits it there.
-         * @description 400 a keyword twice once normalized, a gcid not Google's there or twice, additional ones past 9
-         *     or without a primary.
+         * @description 400 a keyword twice once normalized, keywords without the primary's name at weight 1, a weight
+         *     not positive, a gcid not Google's there or twice, additional ones past 9 or without a primary,
+         *     an excluded word twice or a type that is none, a demand with an empty expression or a column
+         *     twice.
          */
         put: operations["set_up_trade"];
         post?: never;
@@ -3431,6 +3433,24 @@ export interface components {
             /** @description A `site` key's landing, `https://<domain>[:port]`; no other kind has one. */
             origin?: string | null;
         };
+        /**
+         * @description An additional Google category and what one competitor of its tier weighs against one of the
+         *     primary's.
+         */
+        AdditionalCategory: {
+            google: components["schemas"]["GoogleCategory"];
+            /** Format: double */
+            weight: number;
+        };
+        AdditionalIn: {
+            /** @description A gcid Google has in the country. */
+            id: string;
+            /**
+             * Format: double
+             * @description Positive.
+             */
+            weight: number;
+        };
         Advance: {
             /** @description Pasted as to `resolve`: taken while the GBP has none, needed to become verified. */
             place?: string | null;
@@ -3656,30 +3676,27 @@ export interface components {
         Candidates: {
             candidates: components["schemas"]["Place"][];
         };
-        /**
-         * @description What placement studies: the trade files a category's `study` names one of, and the countries it
-         *     has a base for.
-         */
+        /** @description The countries placement has a grid for. */
         Catalog: {
             countries: components["schemas"]["Country"][];
-            trades: string[];
         };
         /** @description A trade set up for a country: Plumbing · FR. */
         Category: {
             country: components["schemas"]["Country"];
-            /** @description At most 9, in the order they are entered into Google's form. */
-            google_additional: components["schemas"]["GoogleCategory"][];
-            /** @description What Google's form is given as the category. */
+            demand: components["schemas"]["Demand"] | null;
+            excluded: components["schemas"]["Excluded"];
+            /** @description At most 9, in the order they are entered into Google's form: a competitor tier each. */
+            google_additional: components["schemas"]["AdditionalCategory"][];
+            /** @description What Google's form is given as the category; its studies' first competitor tier. */
             google_primary: components["schemas"]["GoogleCategory"] | null;
             /**
              * @description Lowercase, in the country's language, none naming a city: the terms every GBP of the
-             *     category is compared on.
+             *     category is scanned on, and each competitor of its studies scored on as weighed. With a
+             *     primary, its name is among them at weight 1.
              */
-            keywords: string[];
+            keywords: components["schemas"]["Keyword"][];
             /** @description The country's language, its keywords' and Google's form's: `fr`. */
             lang: string;
-            /** @description Placement's trade that studies it. */
-            study: string | null;
         };
         /** @description A field of a GBP, before and after. */
         Changed: {
@@ -3759,6 +3776,10 @@ export interface components {
          * @enum {string}
          */
         Closed: "until_verified" | "frozen_while_verifying" | "off_maps";
+        Column: {
+            expr: string;
+            name: string;
+        };
         ConnectedSites: {
             internal_reads: components["schemas"]["ReadInternalReads"];
             received: components["schemas"]["ReadMap_of_Timestamp"];
@@ -3791,6 +3812,15 @@ export interface components {
          * @enum {string}
          */
         Country: "FR" | "US" | "CA" | "GB";
+        /** @description What the country's grid means to the trade, per cell. */
+        Demand: {
+            /** @description Derived before `expr` reads them, in order. */
+            columns: components["schemas"]["Column"][];
+            /** @description Over the grid's columns and `columns`. */
+            expr: string;
+            /** @description Heat layers the trade adds to the country's. */
+            layers: components["schemas"]["Layer"][];
+        };
         Destination: {
             /** @description Why nothing reaches it: a test that arrives clears it. */
             dead: string | null;
@@ -3855,7 +3885,14 @@ export interface components {
          * @description Which refusal, for a client to act on: its status follows from it.
          * @enum {string}
          */
-        ErrorCode: "another_country" | "bad_gateway" | "bad_request" | "browsers_not_connected" | "conflict" | "csrf" | "forbidden" | "internal" | "no_google_category" | "no_keywords" | "no_study" | "not_found" | "too_large" | "too_many" | "unaffordable" | "unauthenticated" | "unavailable" | "unstudied";
+        ErrorCode: "another_country" | "bad_gateway" | "bad_request" | "browsers_not_connected" | "conflict" | "csrf" | "forbidden" | "internal" | "no_google_category" | "not_found" | "too_large" | "too_many" | "unaffordable" | "unauthenticated" | "unavailable" | "unstudied";
+        /** @description Places the sweep turns up that are never competitors, checked before any tier. */
+        Excluded: {
+            /** @description Places types (`hardware_store`); a place whose primary type is one. */
+            types: string[];
+            /** @description Lowercase; a place whose name holds one. */
+            words: string[];
+        };
         /** @description Where a gmail's proxy comes out, at its last check. */
         Exit: {
             city: string;
@@ -4183,6 +4220,22 @@ export interface components {
         };
         /** @enum {string} */
         KeyedSourceKind: "site" | "review_archive" | "gbp" | "posthog" | "sheet" | "telephony" | "bot";
+        Keyword: {
+            text: string;
+            /**
+             * Format: double
+             * @description What ranking for it is worth against the primary's name; None: scanned, not scored.
+             */
+            weight: number | null;
+        };
+        KeywordInput: {
+            text: string;
+            /**
+             * Format: double
+             * @description What ranking for it is worth against the primary's name; None: scanned, not scored.
+             */
+            weight?: number | null;
+        };
         /**
          * @description What the caller is owed until they claim it: a charge kicked back (`service`, `key`,
          *     `label`), or an admin's grant (`by`, `note`).
@@ -4412,6 +4465,12 @@ export interface components {
             lat: number;
             /** Format: double */
             lng: number;
+        };
+        Layer: {
+            expr: string;
+            name: string;
+            note: string;
+            scale: components["schemas"]["Scale"];
         };
         /** @description `GET /tokens/ledger`: `next` is the `before` of the next page, `null` at the end. */
         Ledger: {
@@ -5029,6 +5088,11 @@ export interface components {
             stream: string | null;
         };
         /**
+         * @description - `percentile`: Rank, not magnitude: for heavy-tailed quantities.
+         * @enum {string}
+         */
+        Scale: "linear" | "percentile";
+        /**
          * @description Where it happens: who counts it and charges for it.
          *
          *     - `conductor`: At the buy, before Google is asked.
@@ -5210,14 +5274,14 @@ export interface components {
             never_purge?: boolean | null;
         };
         SetUp: {
+            demand?: components["schemas"]["Demand"] | null;
+            excluded: components["schemas"]["Excluded"];
             /** @description At most 9, only with a primary. */
-            google_additional: string[];
+            google_additional: components["schemas"]["AdditionalIn"][];
             /** @description A gcid Google has in the country. */
             google_primary?: string | null;
-            /** @description In the country's language, each once normalized. */
-            keywords: string[];
-            /** @description Placement's study of it. */
-            study?: string | null;
+            /** @description In the country's language, each once normalized; with a primary, its name at weight 1. */
+            keywords: components["schemas"]["KeywordInput"][];
         };
         Site: {
             brands: string[];
@@ -7634,6 +7698,8 @@ export type ActionState = components['schemas']['ActionState'];
 export type Actor = components['schemas']['Actor'];
 export type AddChat = components['schemas']['AddChat'];
 export type AddSource = components['schemas']['AddSource'];
+export type AdditionalCategory = components['schemas']['AdditionalCategory'];
+export type AdditionalIn = components['schemas']['AdditionalIn'];
 export type Advance = components['schemas']['Advance'];
 export type Alerts = components['schemas']['Alerts'];
 export type AnswerState = components['schemas']['AnswerState'];
@@ -7669,11 +7735,13 @@ export type Checked = components['schemas']['Checked'];
 export type Claude = components['schemas']['Claude'];
 export type ClaudeConnect = components['schemas']['ClaudeConnect'];
 export type Closed = components['schemas']['Closed'];
+export type Column = components['schemas']['Column'];
 export type ConnectedSites = components['schemas']['ConnectedSites'];
 export type Connections = components['schemas']['Connections'];
 export type Consent = components['schemas']['Consent'];
 export type Cost = components['schemas']['Cost'];
 export type Country = components['schemas']['Country'];
+export type Demand = components['schemas']['Demand'];
 export type Destination = components['schemas']['Destination'];
 export type DestinationKind = components['schemas']['DestinationKind'];
 export type Device = components['schemas']['Device'];
@@ -7681,6 +7749,7 @@ export type EditBrand = components['schemas']['EditBrand'];
 export type EditKitDraft = components['schemas']['EditKitDraft'];
 export type Error = components['schemas']['Error'];
 export type ErrorCode = components['schemas']['ErrorCode'];
+export type Excluded = components['schemas']['Excluded'];
 export type Exit = components['schemas']['Exit'];
 export type ExportEntry = components['schemas']['ExportEntry'];
 export type ExportGmail = components['schemas']['ExportGmail'];
@@ -7711,6 +7780,8 @@ export type InternalReads = components['schemas']['InternalReads'];
 export type Invite = components['schemas']['Invite'];
 export type KeptAnswer = components['schemas']['KeptAnswer'];
 export type KeyedSourceKind = components['schemas']['KeyedSourceKind'];
+export type Keyword = components['schemas']['Keyword'];
+export type KeywordInput = components['schemas']['KeywordInput'];
 export type Kickback = components['schemas']['Kickback'];
 export type Kit = components['schemas']['Kit'];
 export type KitBlock = components['schemas']['KitBlock'];
@@ -7731,6 +7802,7 @@ export type KitTarget = components['schemas']['KitTarget'];
 export type Kits = components['schemas']['Kits'];
 export type LabelPhoto = components['schemas']['LabelPhoto'];
 export type LatLng = components['schemas']['LatLng'];
+export type Layer = components['schemas']['Layer'];
 export type Ledger = components['schemas']['Ledger'];
 export type LedgerEntry = components['schemas']['LedgerEntry'];
 export type LedgerKind = components['schemas']['LedgerKind'];
@@ -7791,6 +7863,7 @@ export type Role = components['schemas']['Role'];
 export type Rule = components['schemas']['Rule'];
 export type RulesBody = components['schemas']['RulesBody'];
 export type Running = components['schemas']['Running'];
+export type Scale = components['schemas']['Scale'];
 export type Scope = components['schemas']['Scope'];
 export type SetBrands = components['schemas']['SetBrands'];
 export type SetBrowser = components['schemas']['SetBrowser'];
@@ -8099,7 +8172,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8226,7 +8299,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8358,7 +8431,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8489,7 +8562,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8619,7 +8692,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8747,7 +8820,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8880,7 +8953,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9008,7 +9081,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9141,7 +9214,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9269,7 +9342,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9405,7 +9478,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9543,7 +9616,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9676,7 +9749,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9804,7 +9877,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9932,7 +10005,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10066,7 +10139,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10200,7 +10273,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10328,7 +10401,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10460,7 +10533,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10588,7 +10661,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10715,7 +10788,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10844,7 +10917,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10977,7 +11050,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11106,7 +11179,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11232,7 +11305,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11360,7 +11433,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11492,7 +11565,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11622,7 +11695,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11750,7 +11823,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11880,7 +11953,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12014,7 +12087,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12146,7 +12219,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12280,7 +12353,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12414,7 +12487,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12548,7 +12621,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12677,7 +12750,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12809,7 +12882,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12943,7 +13016,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13077,7 +13150,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13208,7 +13281,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13336,7 +13409,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13468,7 +13541,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13596,7 +13669,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13730,7 +13803,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13860,7 +13933,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13996,7 +14069,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14126,7 +14199,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14262,7 +14335,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14394,7 +14467,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14524,7 +14597,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14660,7 +14733,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14788,7 +14861,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14920,7 +14993,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15048,7 +15121,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15180,7 +15253,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15313,7 +15386,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15441,7 +15514,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15573,7 +15646,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15701,7 +15774,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15833,7 +15906,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15961,7 +16034,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16090,7 +16163,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16223,7 +16296,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16356,7 +16429,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16484,7 +16557,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16613,7 +16686,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16742,7 +16815,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16871,7 +16944,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17005,7 +17078,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17138,7 +17211,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17266,7 +17339,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17395,7 +17468,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17528,7 +17601,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17656,7 +17729,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17785,7 +17858,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17917,7 +17990,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18047,7 +18120,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18177,7 +18250,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18310,7 +18383,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18443,7 +18516,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18573,7 +18646,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18701,7 +18774,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18836,7 +18909,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18968,7 +19041,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19100,7 +19173,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19234,7 +19307,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19365,7 +19438,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19497,7 +19570,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19625,7 +19698,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19760,7 +19833,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19891,7 +19964,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20025,7 +20098,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20159,7 +20232,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20289,7 +20362,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20419,7 +20492,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20550,7 +20623,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20679,7 +20752,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20809,7 +20882,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20936,7 +21009,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21068,7 +21141,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21200,7 +21273,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21328,7 +21401,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21458,7 +21531,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21589,7 +21662,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21722,7 +21795,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21855,7 +21928,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22050,7 +22123,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22176,7 +22249,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22303,7 +22376,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22435,7 +22508,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22561,7 +22634,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22689,7 +22762,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22817,7 +22890,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22938,10 +23011,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /**
-             * @description What placement studies: the trade files a category's `study` names one of, and the countries it
-             *     has a base for.
-             */
+            /** @description The countries placement has a grid for. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -23013,7 +23083,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23149,7 +23219,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23285,7 +23355,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23412,7 +23482,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23544,7 +23614,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23671,7 +23741,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23799,7 +23869,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23931,7 +24001,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24059,7 +24129,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24187,7 +24257,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24320,7 +24390,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24451,7 +24521,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24579,7 +24649,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24707,7 +24777,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24839,7 +24909,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24967,7 +25037,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25101,7 +25171,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25236,7 +25306,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25365,7 +25435,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25496,7 +25566,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25631,7 +25701,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25761,7 +25831,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25897,7 +25967,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26025,7 +26095,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26153,7 +26223,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26281,7 +26351,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26409,7 +26479,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26537,7 +26607,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26668,7 +26738,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied` */
+            /** @description `another_country`, `no_google_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -35311,7 +35381,7 @@ export const closedValues: ReadonlyArray<FlattenedDeepRequired<components>["sche
 export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Country"]> = ["FR", "US", "CA", "GB"];
 export const destinationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DestinationKind"]> = ["channel", "private", "group"];
 export const deviceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Device"]> = ["pixel_7", "galaxy_s23", "redmi_note_14"];
-export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["another_country", "bad_gateway", "bad_request", "browsers_not_connected", "conflict", "csrf", "forbidden", "internal", "no_google_category", "no_keywords", "no_study", "not_found", "too_large", "too_many", "unaffordable", "unauthenticated", "unavailable", "unstudied"];
+export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["another_country", "bad_gateway", "bad_request", "browsers_not_connected", "conflict", "csrf", "forbidden", "internal", "no_google_category", "not_found", "too_large", "too_many", "unaffordable", "unauthenticated", "unavailable", "unstudied"];
 export const feedbackValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Feedback"]> = ["up", "down"];
 export const fieldValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Field"]> = ["name", "place_id", "address", "phone", "website", "hours", "google_primary", "country", "point", "photos", "areas", "hidden_address", "customers_visit", "spots", "role", "owner_gmail"];
 export const flowKindDtoValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FlowKindDto"]> = ["renewal", "purchase", "set", "spend", "grant_claimed", "refund", "granted"];
@@ -35331,6 +35401,7 @@ export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
 export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "payment_received", "source_silent", "booked", "access_requested", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed"];
+export const scaleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scale"]> = ["linear", "percentile"];
 export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scope"]> = ["conductor", "review_archive", "browsers", "placement"];
 export const sourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "panel", "booking", "bot"];
 export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["State"]> = ["draft", "verifying", "verified", "suspended"];
