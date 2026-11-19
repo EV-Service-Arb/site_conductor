@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, FloatingPanel } from "@evinvest/uikit";
+import { Button, FloatingPanel, useBinding, useKeymap } from "@evinvest/uikit";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { useEffect } from "react";
 
@@ -11,6 +11,13 @@ import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
 import { useButtonSize } from "@/shared/ui/touch";
 
 import { faceOf } from "./faces";
+
+/** `leader z`: the shown window over the map ⇄ its own page; its button's hint carries the keys. */
+function useFlipKey(flip: (() => void) | null): string | undefined {
+  const t = useT();
+  useBinding({ on: { key: "z" }, id: "window-flip", run: { label: t(windowKeys.flip, "Window: over the map or its own page"), run: flip } });
+  return useKeymap().bound.get("window-flip")?.sequence;
+}
 
 const TOP_PX = 64;
 
@@ -28,6 +35,8 @@ function WindowFrame({ k }: { k: WinKey }) {
   const face = faceOf(k);
   const width = typeof face.width === "number" ? face.width : face.width(k);
   const page = JSON.stringify(pageOf(k));
+  const keys = useFlipKey(desk ? () => pageWindow(k) : null);
+  const toPage = keys === undefined ? t(windowKeys.toPage, "Its own page") : `${t(windowKeys.toPage, "Its own page")} · ${keys}`;
   useEffect(() => {
     if (!desk) go(JSON.parse(page) as At, "replace");
   }, [desk, page]);
@@ -39,7 +48,7 @@ function WindowFrame({ k }: { k: WinKey }) {
       onClose={() => closeWindow(k)}
       closeLabel={t(windowKeys.close, "Close the window")}
       actions={
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.toPage, "Its own page")} title={t(windowKeys.toPage, "Its own page")} onClick={() => pageWindow(k)}>
+        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.toPage, "Its own page")} title={toPage} onClick={() => pageWindow(k)}>
           <Maximize2 aria-hidden />
         </Button>
       }
@@ -60,6 +69,7 @@ export function WindowPage({ at }: { at: At }) {
   if (shown === null || !shown.page) throw new Error(`${at.view} is no window's page`);
   const k = shown.key;
   const face = faceOf(k);
+  const keys = useFlipKey(desk ? () => floatWindow(k) : null);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-2 border-b border-border px-4 py-2 text-sm">
@@ -67,9 +77,15 @@ export function WindowPage({ at }: { at: At }) {
           <face.Title k={k} page />
         </span>
         {desk && (
-          <Button variant="ghost" size={button("sm")} onClick={() => floatWindow(k)}>
+          <Button
+            variant="ghost"
+            size={button("sm")}
+            icon
+            aria-label={t(windowKeys.toMap, "Over the map")}
+            title={keys === undefined ? t(windowKeys.toMap, "Over the map") : `${t(windowKeys.toMap, "Over the map")} · ${keys}`}
+            onClick={() => floatWindow(k)}
+          >
             <Minimize2 aria-hidden />
-            {t(windowKeys.toMap, "Over the map")}
           </Button>
         )}
       </header>

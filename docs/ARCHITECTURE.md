@@ -296,7 +296,7 @@ second block below to it.
   Home ?gmb=12&tab=log ─┐                         open set [kit:lyon, gbp:12, account:3]
   /gbp/12?tab=log ──────┴─▶ shown: WinKey ──▶ hotbar: shown ▸ pressed · hidden ▸ plain · page ▸ ⤢
                               │                  click: hide / show / float back · × closes
-         desktop: floating panel (⤢ its page, ×) · phone: its page · page: ⤡ over the map
+         desktop: floating panel (⤢ its page, ×) · phone: its page · page: ⤡ over the map · leader z flips
   ```
 - **The elements route by the location.** The front end's location store moves it with
   `pushState`, which fires nothing: after each move, its own or an element's (it wraps

@@ -4491,6 +4491,10 @@
     "en": "{n} of {of} ready",
     "t": "{n} из {of} готово"
   },
+  "window.flip": {
+    "en": "Window: over the map or its own page",
+    "t": "Окно: поверх карты или на отдельной странице"
+  },
   "window.header.email": {
     "en": "Google: {subject} · {ago}",
     "t": "Google: {subject} · {ago}"
