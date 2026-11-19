@@ -3,6 +3,7 @@
 
 use eyre::WrapErr;
 use jiff::{SignedDuration, Timestamp};
+use sa_core::agent::Approval;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -10,7 +11,7 @@ use zeroize::Zeroizing;
 
 use crate::{
 	Panel,
-	session::{Tokens, pkce_challenge, random_token},
+	session::{Granted, Tokens, pkce_challenge, random_token},
 	store::{oauth, sessions},
 };
 
@@ -27,6 +28,8 @@ pub struct Grant {
 	pub challenge: String,
 	/// The client's `state`, handed back with the code.
 	pub state: Option<String>,
+	/// What the user lets the client do without asking them first.
+	pub approval: Approval,
 }
 
 /// A registered client.
@@ -72,7 +75,11 @@ impl Panel {
 	/// Opens the session `grant` gives its client, on the tokens concierge issued its user; the
 	/// code that hands the client its bearer.
 	pub async fn grant(&self, grant: &Grant, tokens: &Tokens, now: Timestamp) -> eyre::Result<String> {
-		let (key, opened) = self.open(grant.user_id, Some(&grant.client_id), tokens, now).await?;
+		let granted = Granted {
+			client_id: grant.client_id.clone(),
+			approval: grant.approval,
+		};
+		let (key, opened) = self.open(grant.user_id, Some(&granted), tokens, now).await?;
 		let code = random_token()?;
 		let hash = code_hash(&code);
 		let sealed = self.key.seal(&bearer_aad(&hash), opened.cookie.as_bytes())?;
@@ -90,10 +97,10 @@ impl Panel {
 		Ok(code)
 	}
 
-	/// The bearer `code` hands `client_id`, when its redirect URI and verifier are the code's and
-	/// its minute has not passed. The code is spent whatever the answer; a code presented wrong
-	/// closes its session.
-	pub async fn redeem(&self, request: TokenRequest<'_>, now: Timestamp) -> eyre::Result<Option<Zeroizing<String>>> {
+	/// The bearer `code` hands `client_id`, and the level it was granted, when its redirect URI and
+	/// verifier are the code's and its minute has not passed. The code is spent whatever the answer;
+	/// a code presented wrong closes its session.
+	pub async fn redeem(&self, request: TokenRequest<'_>, now: Timestamp) -> eyre::Result<Option<(Zeroizing<String>, Approval)>> {
 		let TokenRequest {
 			code,
 			client_id,
@@ -108,13 +115,13 @@ impl Panel {
 		let Some(session) = sessions::get(&mut conn, &row.session).await? else {
 			return Ok(None);
 		};
-		let ok = row.expires_at > now && row.redirect_uri == redirect_uri && session.client_id.as_deref() == Some(client_id) && pkce_challenge(verifier) == row.challenge;
-		if !ok {
+		let granted = session.client.filter(|c| c.client_id == client_id);
+		let (true, Some(granted)) = (row.expires_at > now && row.redirect_uri == redirect_uri && pkce_challenge(verifier) == row.challenge, granted) else {
 			sessions::delete(&mut conn, &row.session).await?;
 			return Ok(None);
-		}
+		};
 		eyre::ensure!(row.data_key_fp == self.key.fingerprint(), "an MCP code was sealed under another PANEL_DATA_KEY");
 		let bearer = self.key.open(&bearer_aad(&hash), &row.bearer_sealed)?;
-		Ok(Some(Zeroizing::new(String::from_utf8(bearer.to_vec()).wrap_err("a sealed bearer is not UTF-8")?)))
+		Ok(Some((Zeroizing::new(String::from_utf8(bearer.to_vec()).wrap_err("a sealed bearer is not UTF-8")?), granted.approval)))
 	}
 }

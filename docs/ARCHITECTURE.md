@@ -71,9 +71,10 @@ crates/browsers/         sa_browsers: the devices a browser poses as, a launch's
                          frames (lib); the runner (`sa_browsers serve`): Orbita headless, Mimic through
                          the Multilogin app's launcher, a browser's devtools passed to the conductor
                          alone, a film made the camera; a cloud phone's life and its viewer over adb
-crates/sandbox/          sa_sandbox: a run of the agents' code and what it answers, its limits (lib); the
-                         runner (`sa_sandbox serve`): each run one Deno process, type-checked first, no
-                         permission but the net to the conductor's `/api/run`; `js/`, what a run imports
+crates/sandbox/          sa_sandbox: a session of the agents' code and what it answers, its limits (lib); the
+                         runner (`sa_sandbox serve`): each session one Deno process, each cell type-checked
+                         first against the cells before it, no permission but the net to the conductor's
+                         `/api/run`; `js/`, what a session runs
 crates/places/           Google Places: a place from what a person pastes (an id, a Maps URL, a
                          search), its point; suggestions as one types (Autocomplete, no session
                          token); a locality's viewport, the one around a point (Geocoding), a
@@ -88,7 +89,7 @@ crates/contracts/        concierge's gRPC contract (tonic, from contracts/proto)
 crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`; thin over `Panel`
   src/signin.rs          /auth/login, /auth/callback, /auth/logout; the /api/v1 gate
   src/oauth.rs           /mcp/{register,authorize,token} and their metadata: OAuth 2.1 for MCP clients
-  src/mcp.rs             POST /mcp: `search`, `call` and `execute` to an MCP client
+  src/mcp.rs             /mcp: MCP sessions; `search`, `call`, `execute` and `poll` to an MCP client
   src/concierge.rs       concierge over gRPC: ExchangeCode, RefreshClientToken, GetMe,
                          PublishCatalog; its development stand-in (PANEL_DEV_SIGN_IN)
   src/cookies.rs         __Host- cookies, the double-submit CSRF check
@@ -118,13 +119,13 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
   src/brands.rs          /api/v1/brands, /api/v1/gmbs/brand
   src/catalog.rs         every operation behind the origin: the conductor's own and the services'
                          documents, pulled and merged under their forward prefixes
-  src/tools.rs           an agent's `search`, `call` and `execute` over the catalog: a call runs through
+  src/tools.rs           an agent's `search`, `call`, `execute` and `poll` over the catalog: a call runs through
                          the app with the caller's credentials, as their own request would
-  src/execute.rs         `execute`: a run in sa_sandbox, its token; /api/run, the run's way back
+  src/execute.rs         `execute`, `poll`: sessions in sa_sandbox, a cell's token; /api/run, its way back
   src/claude.rs          the Claude API; /api/v1/me/claude: a person's own Claude, connected
   src/ask.rs             the in-page assistant's loop (`POST /assistant/chats/{id}/ask`): Claude with
-                         `search`/`call`/`execute`, `open` (a view) and `run` (a binding); what destroys or
-                         spends is proposed, the user confirms it
+                         `search`/`call`/`execute`/`poll`, `open` (a view) and `run` (a binding); what the
+                         level holds is proposed, the user confirms it, and a cell waiting on it goes on
   src/areas.rs           /api/v1/areas, and the cities and localities they are drawn from
   src/placement.rs       /api/v1/placement: a study's Definition built from the areas and trades, placement
                          asked as the caller; a pull held, what placement says it lacks bought, charged
@@ -242,7 +243,7 @@ second block below to it.
 /api/queries_cache        public, rate-limited    open to everyone
 /api/ingest               in-cluster
 /api/kit                  in-cluster
-/api/run                  in-cluster              a sandbox's runs (Code mode)
+/api/run                  in-cluster              a sandbox's cells (Code mode)
 /auth                     public, rate-limited
 /mcp                      public
 /mcp/register             public, rate-limited    open (RFC 7591)
@@ -656,15 +657,17 @@ lacking `need`: it asks, then reads `/me` every 30 s and goes on to `continue` (
 
 ## Agents over MCP
 
-`<origin>/mcp` serves MCP (Streamable HTTP, JSON answers, no MCP session) as the signed-in user,
-the only MCP of the services: `search` and `call` over the catalog (`tools.rs`), `execute` (Code
-mode, below), and each operation
+`<origin>/mcp` serves MCP (Streamable HTTP: `initialize` opens an MCP session, `Mcp-Session-Id`, which
+every later request names and `DELETE` ends; JSON answers, SSE where it asks the user) as the
+signed-in user, the only MCP of the services: `search` and `call` over the catalog (`tools.rs`),
+`execute` and `poll` (Code mode, below), and each operation
 a service marks its own tool (`x-tool`, `sa_core::agent::Tool`) as `<service>_<operation_id>`
 (`playbook_search`), its parameters and body the tool's input, a text answer handed on as it
 came. Its instructions are the documents' descriptions, the conductor's then each service's. A
-call runs as their own request would, through the gate or the forward; one whose hints say
-destructive or spends answers what it would do until it comes with `confirmed: true`, which the
-client sets once its user agreed.
+call runs as their own request would, through the gate or the forward, unless the approval level
+holds it (below): then a client that declared `elicitation` asks its user (`elicitation/create`, a
+form of one boolean, on the answer's stream) and runs it on their yes; any other answers what it
+would do until it comes with `confirmed: true`, which the client sets once its user agreed.
 
 ```text
 POST /mcp/register    open (RFC 7591): redirect_uris (https, or http on loopback, any port), a name
@@ -674,10 +677,19 @@ POST /mcp/authorize   the form's CSRF, the session → concierge's sign-in again
                       sa_prelogin → /auth/callback: a session of the client's (sessions.client_id),
                       the same user's or refused → redirect_uri?code&state
 POST /mcp/token       code (60 s, once; its hash, the bearer sealed) + verifier → {access_token}
-POST /mcp             Bearer, else 401 with WWW-Authenticate's resource_metadata
+POST /mcp             Bearer, else 401 with WWW-Authenticate's resource_metadata; initialize → Mcp-Session-Id,
+                      named by every later request (none 400, unknown or ended 404); a client's
+                      answer to what it was asked → 202
+DELETE /mcp           its session ends, the sandbox's with it
 /.well-known/oauth-{protected-resource,authorization-server}/mcp   RFC 9728, 8414
 ```
 
+- **One approval level, at the gate.** `ask` proposes what destroys or spends, `spend` runs what
+  spends, `act` runs both (`sa_core::agent::Approval`; `Hints::held_by`, which `call`, an
+  operation's own tool and a cell's relay all ask). The in-page assistant is told it with each
+  question (the composer's chip); an MCP client's is its grant's scope, chosen on the consent page
+  and kept on its session: `spend`, `act`, or neither for `ask` (`scopes_supported`). A call that
+  destroys or spends and ran on its own is an action already done in the answer.
 - **A grant is a session**, its id the bearer: rotated, refused and closed as a browser's, so a
   family revoked at concierge or a sign-out (every session of the user) ends it, and it lives as
   long as the session does: no refresh token. A browser's id is no bearer, nor a client's a cookie.
@@ -686,31 +698,52 @@ POST /mcp             Bearer, else 401 with WWW-Authenticate's resource_metadata
 
 ## Code mode
 
-`execute { code }`, on both transports where `PANEL_SANDBOX_URL` is set: TypeScript over the
-catalog's client, for work that takes several calls. It runs in sa_sandbox's pod, never here.
+`execute { code }` and `poll { cell }`, on both transports where `PANEL_SANDBOX_URL` is set:
+TypeScript over the catalog's client, for work that takes several calls. It runs in sa_sandbox's
+pod, never here, as a cell of a session that outlives a reply.
 
 ```text
-agent ─execute─▶ conductor: a run's token → the caller's cookie+CSRF or bearer, while execute waits
-   POST /runs {code, token} (Conductor assertion, aud sandbox) ─▶ sa_sandbox
-      deno run --check: main.ts = the code + `import { api }` (crates/sandbox/js/prelude.ts)
-      api = createApi<paths>(catalog.json)  ── Bearer token ──▶ conductor /api/run/<path>
-   /api/run: a live run, under CALLS ─ one operation of the catalog (static segments before
-             parameters) ─ destroys or spends? the run's proposal, refused (x-sa-run-refused) : the
-             request through the app as the caller, its Set-Cookie dropped
-   ◀── Ran {ended, stdout, stderr, truncated} + the proposal, from the conductor's own record
+agent ─execute─▶ conductor: the caller's session (a chat and its asker, or the MCP session's), opened if none
+   POST /sessions ─▶ sa_sandbox: deno run js/host.ts, a nonce on its stdin
+   POST /sessions/{s}/cells {code, token} (Conductor assertion, aud sandbox)
+      js/names.ts: the code's top-level declarations
+      cell_N.ts = the code + imports of what the cells before declared + exports of its own + `import { api }`
+      deno check cell_N.ts: a type error runs nothing
+      host.ts: the cell's token set, `await import(cell_N.ts)` ── Bearer token ──▶ conductor /api/run/<path>
+   /api/run: the live cell's token, under CALLS ─ one operation of the catalog (static segments
+             before parameters) ─ held by the level? it waits for the person (PAUSE): agreed, on; else
+             `refused` : the request through the app as the caller, its Set-Cookie dropped
+   GET /sessions/{s}/cells/{N}?stdout&stderr&until ◀── execute: to its end; poll: until it says more;
+             either answered at WAIT, or at once on a held call: `paused`, the call's proposal
 ```
 
+- **A session is its caller's alone**: in-page, a chat's as one person asks in it (acting as another,
+  as that pair); on MCP, the MCP session's. Chats are shared, and a session's globals hold what its
+  caller's permissions fetched.
+- **A cell sees what the cells before it declared**: their top-level declarations, types included,
+  are imported from the latest cell that ran to its end declaring each; a cell that threw hands on
+  nothing, and a name declared again is the later cell's. A cell is checked against the catalog and
+  those, and runs only alone: one at a time.
 - **The client is the catalog's**: gen writes `crates/sandbox/js/catalog.json` with the catalog's own
-  merge over the vendored documents, and its types (`catalog.ts`) beside it; the runner type-checks
-  every run against them first, and a type error runs nothing.
-- **A run is one Deno process** with no permission but the net to the conductor's `host:port`
-  (the runner's `SANDBOX_CONDUCTOR_URL`, never a request's) and the two run variables; its
-  environment emptied, killed at `LIMIT` (60 s), each stream kept to `OUTPUT` (64 KiB), `CALLS`
-  (100) operations at most, `SANDBOX_MAX` runs at once (past it, 503). The limits are
-  `sa_sandbox`'s, read by both ends.
-- **The first call that destroys or spends ends the run**: the prelude exits on the gate's
-  refusal, and that call is proposed as a `call` of it would be (an action in the answer; on MCP,
-  `proposed` until `call` comes with `confirmed: true`). The token dies with `execute`.
+  merge over the vendored documents, and its types (`catalog.ts`) beside it. The relay's own
+  refusals are the client's hop (`refused`, 403, never a 401): the code reads them as an answer
+  and decides what follows.
+- **A session is one Deno process** with no permission but the net to the conductor's `host:port`
+  (the runner's `SANDBOX_CONDUCTOR_URL`, never a request's), `SA_RUN_URL` and reading its own
+  cells; its environment emptied, its heap 256 MB. A cell's streams are kept to `OUTPUT` (64 KiB),
+  its calls to `CALLS` (100); it is answered after `WAIT` (20 s) and killed at `LIMIT` (10 min),
+  its session with it. A session idle `IDLE` (30 min) is let go, and past `SANDBOX_MAX` the idlest
+  (none idle: 503). One the runner no longer holds answers 410: its state is gone, and the agent is
+  told so; it is never made anew empty under the same name. The limits are `sa_sandbox`'s, read by
+  both ends.
+- **A cell's calls are its caller's own**: each goes through the gate with the caller's credentials
+  as of their latest request about the session, so a rotated session is followed and a signed-out
+  one ends the session (the prelude's exit 3). A cell's token dies with the cell.
+- **A held call waits in the relay, and the cell with it.** In-page, it is an action in the answer;
+  `act` lets it run there and resumes the answer: a new turn, the model told what the code did next.
+  A new question in the chat declines it. On MCP, a client that declared `elicitation` is asked on
+  the answer's stream; one that did not sees it refused at once, its proposal in the error. Past
+  `PAUSE` (10 min) unanswered, it is refused.
 
 ## Live updates, `/api/v1/live`
 
@@ -1169,9 +1202,9 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   viewer only through it; the runner holds none of the conductor's secrets: a launch brings a token
   for that run alone (GoLogin's 3 minutes, Multilogin's 3 hours) and the proxy.
 - **Model-written code runs only in sa_sandbox**, its own pod: Deno with no permission but the net to
-  the conductor's `/api/run`, which is never public. It holds no secret but its run's token, which
-  opens only the catalog's operations, as their caller, while the run lasts, and none that destroys
-  or spends.
+  the conductor's `/api/run`, which is never public. It holds no secret but its cell's token, which
+  opens only the catalog's operations, as their caller, while the cell lasts, and none the caller's
+  approval level holds until the person agrees.
 - **A cloud phone bills while it runs**: nothing a test runs starts one, and one that started stops
   on every way its run ends (docs/spec/browsers.md).
 - **No two gmails share a proxy**: an exit two accounts share is a link Google can draw.
@@ -1263,7 +1296,10 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   `api.gologin.com:443` and `api.multilogin.com:443`. Multilogin's account auto-stop (Account
   settings) at 40 min is the backstop by hand.
 - **The sandbox.** sa_sandbox is its own pod (`panel-sandbox`; the conductor's `PANEL_SANDBOX_URL`,
-  in-cluster only), stateless: `SANDBOX_MAX` runs at once, each one's type check about 300 MB, the
+  in-cluster only), holding its sessions in memory: one replica, which the conductor's own record of
+  them (in memory too) names by the runner's id; a rollout ends every session, each then answered as
+  gone. `SANDBOX_MAX` sessions at once, each a Deno process (heap 256 MB) and a cell's type check
+  about 300 MB more, the
   conductor's public keys (`PANEL_ASSERTION_KEYS`), Deno and `crates/sandbox/js` with its packages
   in the image. Its egress is DNS and the conductor's `/api/run` alone, which the public
   IngressRoute must not route.

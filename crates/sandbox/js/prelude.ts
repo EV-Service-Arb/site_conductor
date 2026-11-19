@@ -1,25 +1,22 @@
-// The client a run's code calls the operations through: the catalog's paths, absolute, as `search` names them.
+// The client a cell's code calls the operations through: the catalog's paths, absolute, as `search` names them.
 import { createApi } from "@evinvest/api";
 import catalog from "./catalog.json" with { type: "json" };
 import type { paths } from "./catalog.ts";
 
-const token = Deno.env.get("SA_RUN_TOKEN")!;
+/** The running cell's token: the host sets it before each cell. */
+let token = "";
+export function setToken(t: string): void {
+  token = t;
+}
 
-export const api = createApi<paths>({
+export const api = createApi<paths, "refused">({
   document: catalog,
   baseUrl: Deno.env.get("SA_RUN_URL")!,
   headers: () => ({ authorization: `Bearer ${token}` }),
   onUnauthenticated: () => {
-    console.error("the caller's session ended: the run stops here");
+    console.error("the caller's session ended: the session stops here, its state with it");
     Deno.exit(3);
   },
-  // the conductor's own refusal (sa_sandbox::REFUSED), not the operation's: nothing after it runs
-  fetch: async (input, init) => {
-    const answer = await fetch(input, init);
-    if (answer.headers.has("x-sa-run-refused")) {
-      console.error(await answer.text());
-      Deno.exit(4);
-    }
-    return answer;
-  },
+  // the conductor's own refusal (sa_sandbox::REFUSED): a call not let by, declined, or past a cell's calls
+  hop: { refused: 403 },
 });

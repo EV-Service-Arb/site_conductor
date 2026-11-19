@@ -28,6 +28,7 @@ use crate::{
 	oauth::Grant,
 	store::sessions::{self, SealedTokens, SessionRow},
 };
+pub use crate::store::sessions::Granted;
 
 /// How long a pre-login lives: the time to sign in at concierge (Google included).
 pub const PRELOGIN_TTL: SignedDuration = SignedDuration::from_mins(10);
@@ -143,7 +144,7 @@ pub struct Session {
 	pub key: SessionKey,
 	pub user_id: Uuid,
 	/// The MCP client it was granted to; `None`: a browser's.
-	pub client_id: Option<String>,
+	pub client: Option<Granted>,
 	/// Whose account it acts in, lending its user's permissions.
 	pub acting_as: Option<Uuid>,
 	pub access: Zeroizing<String>,
@@ -291,7 +292,7 @@ impl Panel {
 		Ok(self.open(user_id, None, tokens, now).await?.1)
 	}
 
-	pub(crate) async fn open(&self, user_id: Uuid, client_id: Option<&str>, tokens: &Tokens, now: Timestamp) -> eyre::Result<(SessionKey, Opened)> {
+	pub(crate) async fn open(&self, user_id: Uuid, client: Option<&Granted>, tokens: &Tokens, now: Timestamp) -> eyre::Result<(SessionKey, Opened)> {
 		let cookie = Zeroizing::new(random_token()?);
 		let key = SessionKey::of_cookie(&cookie).ok_or_else(|| eyre::eyre!("a fresh session id is not one"))?;
 		let (access, refresh) = self.seal_tokens(&key, tokens)?;
@@ -300,7 +301,7 @@ impl Panel {
 		if pruned > 0 {
 			tracing::debug!(pruned, "dropped expired sessions");
 		}
-		sessions::insert(&mut conn, key.as_bytes(), user_id, client_id, &self.sealed(&access, &refresh, tokens), now).await?;
+		sessions::insert(&mut conn, key.as_bytes(), user_id, client, &self.sealed(&access, &refresh, tokens), now).await?;
 		Ok((
 			key,
 			Opened {
@@ -401,7 +402,7 @@ impl Panel {
 				Ok(Session {
 					key,
 					user_id: row.user_id,
-					client_id: row.client_id,
+					client: row.client,
 					acting_as: row.acting_as,
 					access: tokens.access,
 					access_expires_at: tokens.access_expires_at,
@@ -473,7 +474,7 @@ impl Panel {
 		Ok(Session {
 			key,
 			user_id: row.user_id,
-			client_id: row.client_id.clone(),
+			client: row.client.clone(),
 			acting_as: row.acting_as,
 			access: self.open_token(Which::Access, &key, row)?,
 			access_expires_at: row.access_expires_at,

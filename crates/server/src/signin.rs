@@ -162,6 +162,9 @@ pub struct Caller {
 	/// Who acts in this account, lending their permissions; `None`: its own user.
 	#[serde(rename = "acting")]
 	pub actor: Option<sa_auth::Actor>,
+	/// What an MCP client's grant lets it do without asking; `None`: a browser's, whose assistant is told with each question.
+	#[serde(skip)]
+	pub granted: Option<sa_core::agent::Approval>,
 }
 
 impl<S: Send + Sync> FromRequestParts<S> for Caller {
@@ -644,7 +647,7 @@ pub(crate) async fn bearer(s: &SignIn, headers: &HeaderMap, freshness: Freshness
 async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Result<Caller, Refusal<Code>> {
 	let session = match s.panel.session(id, Timestamp::now(), &s.concierge).await {
 		// A browser's id is no bearer, nor a client's a cookie.
-		Ok(session) if session.client_id.is_some() != bearer => return Err(Refusal::new(Code::Unauthenticated, "sign in")),
+		Ok(session) if session.client.is_some() != bearer => return Err(Refusal::new(Code::Unauthenticated, "sign in")),
 		Ok(session) => session,
 		Err(SessionError::Missing | SessionError::Rejected) => return Err(Refusal::new(Code::Unauthenticated, "sign in")),
 		Err(SessionError::Unavailable) => return Err(Refusal::new(Code::Unavailable, "sign-in is unavailable, try again")),
@@ -712,6 +715,7 @@ async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Res
 		permissions: me.permissions,
 		dev_sign_in: s.concierge.is_dev(),
 		actor: None,
+		granted: session.client.as_ref().map(|c| c.approval),
 	};
 	let Some(subject) = session.acting_as else { return Ok(own) };
 	assert!(!bearer, "PUT /me/acting refuses a bearer");
@@ -732,6 +736,7 @@ async fn caller(s: &SignIn, id: &str, bearer: bool, freshness: Freshness) -> Res
 			sub: own.user_id.to_string(),
 			email: own.email,
 		}),
+		granted: None,
 	})
 }
 

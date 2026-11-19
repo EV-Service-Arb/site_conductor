@@ -106,16 +106,10 @@ function ChatBody({ id, display, onOpen, onHide, read }: Surface & { id: string 
   const send = (draft: Draft, from = turns.length) => {
     const named = [...(subject && !draft.subjectOff ? asMentions([subject]) : []), ...draft.mentions].filter((m, i, xs) => xs.findIndex((x) => x.id === m.id) === i);
     const page: Page = { url: `${window.location.pathname}${window.location.search}`, bindings: [...keymap.bound.values()] };
-    const asked = ask(chat, from, { text: draft.text, mentions: named, files: draft.files }, page);
+    const asked = ask(chat, from, { text: draft.text, mentions: named, files: draft.files }, page, s.approval);
     if (asked.id !== id) onOpen(asked.id);
     asked.answered.then(
-      (done) => {
-        reload();
-        const answer = done.turns.at(-1);
-        const first = answer?.role === "assistant" ? answer.actions.find((a) => a.state === "proposed" && "call" in a.target) : undefined;
-        if (s.approval === "act" && answer?.role === "assistant" && first !== undefined)
-          void ok(api.POST("/assistant/chats/{id}/act", { params: { path: { id: asked.id } }, body: { turn: answer.id, action: first.id } })).then(reload, failed);
-      },
+      () => reload(),
       (e: unknown) => {
         keepDraft(id, draft);
         if (asked.id !== id) onOpen(id);
