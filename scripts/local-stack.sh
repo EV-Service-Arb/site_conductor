@@ -778,8 +778,19 @@ trap 'stop_all; exit 130' INT TERM
 # Polls `url` while `pid` lives, at most `tries` seconds.
 wait_for() {
 	local name="$1" url="$2" tries="$3" pid="$4"
+	local code errors=0
 	for _ in $(seq "$tries"); do
-		curl -fsS -o /dev/null --max-time 5 "$url" 2>/dev/null && return 0
+		code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" 2>/dev/null)"
+		case "$code" in
+		[23]??) return 0 ;;
+		500) errors=$((errors + 1)) ;; # next dev answers a compile error with 500, for good
+		*) errors=0 ;;
+		esac
+		[ "$errors" -lt 10 ] || {
+			echo "$name answered $url with 500 ten times running — the tail of $state/logs/$name.log:" >&2
+			tail -n 40 "$state/logs/$name.log" >&2
+			return 1
+		}
 		kill -0 "$pid" 2>/dev/null || {
 			echo "$name stopped before answering $url — the tail of $state/logs/$name.log:" >&2
 			tail -n 40 "$state/logs/$name.log" >&2

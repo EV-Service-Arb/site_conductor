@@ -107,7 +107,7 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
                          listener they work on, the services' dashboards; its own in dashboards.rs
   src/live.rs            GET /api/v1/live, and the follower of sites' change feed
   src/gmbs.rs            /api/v1/gmails, /api/v1/gmbs, /api/v1/trades
-  src/connections.rs     /api/v1/gmails/{id}/{connections,imap,maps_key}; each gmail's inbox followed
+  src/connections.rs     /api/v1/gmails/{id}/{connections,imap,maps_key,business}; each gmail's inbox followed
   src/browser.rs         /api/v1/gmails/{id}/browser{,/test,/start,/stop,/film,/thread}; the runner; the viewer's
                          socket, the relay between it and a browser's devtools, a phone's passed through
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
@@ -534,13 +534,13 @@ POST   /alerts/destinations/{id}/test
 DELETE /alerts/destinations/{id}
 GET    /gmails
 POST   /gmails
-PATCH  /gmails/{id}
 DELETE /gmails/{id}
 GET    /gmails/{id}/connections
 GET    /gmails/{id}/browser                 socket: the viewer
-PUT    /gmails/{id}/{imap,maps_key,browser}
-POST   /gmails/{id}/{imap,maps_key,browser}/test
-DELETE /gmails/{id}/{imap,maps_key,browser}
+PUT    /gmails/{id}/{imap,maps_key,browser,business}
+POST   /gmails/{id}/{imap,maps_key,browser,business}/test
+DELETE /gmails/{id}/{imap,maps_key,browser,business}
+POST   /gmails/{id}/business/consent
 POST   /gmails/{id}/browser/{start,stop,thread}  start: slow
 PUT    /gmails/{id}/browser/film            slow
 DELETE /gmails/{id}/browser/film

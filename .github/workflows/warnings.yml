@@ -28,10 +28,11 @@ jobs:
             extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
-      - name: Restore lean nix cache
+      - id: lean-restore
+        name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean-particle-code-duplication-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-code-duplication-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
             nix-lean-particle-code-duplication-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
@@ -50,7 +51,7 @@ jobs:
         with:
           key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
-      - if: always() && github.ref_name == github.event.repository.default_branch
+      - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
           cd /tmp/nix-lean-cache
@@ -62,11 +63,11 @@ jobs:
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
         shell: bash
-      - if: always() && github.ref_name == github.event.repository.default_branch
+      - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean-particle-code-duplication-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-code-duplication-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
     timeout-minutes: 90
   frontend-lint:
@@ -93,10 +94,11 @@ jobs:
             extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
-      - name: Restore lean nix cache
+      - id: lean-restore
+        name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean-particle-frontend-lint-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-frontend-lint-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
             nix-lean-particle-frontend-lint-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
@@ -129,7 +131,7 @@ jobs:
         with:
           key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
-      - if: always() && github.ref_name == github.event.repository.default_branch
+      - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
           cd /tmp/nix-lean-cache
@@ -141,11 +143,11 @@ jobs:
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
         shell: bash
-      - if: always() && github.ref_name == github.event.repository.default_branch
+      - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean-particle-frontend-lint-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-frontend-lint-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
     timeout-minutes: 90
   pre_ci:
@@ -287,10 +289,11 @@ jobs:
             extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
-      - name: Restore lean nix cache
+      - id: lean-restore
+        name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean-particle-rust-machete-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-rust-machete-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
             nix-lean-particle-rust-machete-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
@@ -309,7 +312,7 @@ jobs:
         with:
           key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
-      - if: always() && github.ref_name == github.event.repository.default_branch
+      - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
           cd /tmp/nix-lean-cache
@@ -321,11 +324,11 @@ jobs:
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
         shell: bash
-      - if: always() && github.ref_name == github.event.repository.default_branch
+      - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean-particle-rust-machete-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-rust-machete-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
     timeout-minutes: 90
   rust-sorted:
@@ -351,10 +354,11 @@ jobs:
             extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
-      - name: Restore lean nix cache
+      - id: lean-restore
+        name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean-particle-rust-sorted-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-rust-sorted-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
             nix-lean-particle-rust-sorted-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
@@ -373,7 +377,7 @@ jobs:
         with:
           key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
-      - if: always() && github.ref_name == github.event.repository.default_branch
+      - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
           cd /tmp/nix-lean-cache
@@ -385,11 +389,11 @@ jobs:
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
         shell: bash
-      - if: always() && github.ref_name == github.event.repository.default_branch
+      - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean-particle-rust-sorted-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-rust-sorted-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
     timeout-minutes: 90
   rust-sorted-derives:
@@ -415,10 +419,11 @@ jobs:
             extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
-      - name: Restore lean nix cache
+      - id: lean-restore
+        name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean-particle-rust-sorted-derives-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-rust-sorted-derives-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
             nix-lean-particle-rust-sorted-derives-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
@@ -437,7 +442,7 @@ jobs:
         with:
           key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
-      - if: always() && github.ref_name == github.event.repository.default_branch
+      - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
           cd /tmp/nix-lean-cache
@@ -449,11 +454,11 @@ jobs:
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
         shell: bash
-      - if: always() && github.ref_name == github.event.repository.default_branch
+      - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean-particle-rust-sorted-derives-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-rust-sorted-derives-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
     timeout-minutes: 90
   tokei:
@@ -479,10 +484,11 @@ jobs:
             extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
-      - name: Restore lean nix cache
+      - id: lean-restore
+        name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean-particle-tokei-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-tokei-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
             nix-lean-particle-tokei-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
@@ -501,7 +507,7 @@ jobs:
         with:
           key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
-      - if: always() && github.ref_name == github.event.repository.default_branch
+      - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
           cd /tmp/nix-lean-cache
@@ -513,11 +519,11 @@ jobs:
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
         shell: bash
-      - if: always() && github.ref_name == github.event.repository.default_branch
+      - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean-particle-tokei-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
+          key: nix-lean-particle-tokei-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
     timeout-minutes: 90
 name: Warnings
