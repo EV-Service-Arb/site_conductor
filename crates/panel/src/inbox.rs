@@ -18,6 +18,13 @@ const SNIPPET: usize = 200;
 /// A shorter name, place id or address line is in every other message.
 const NAMES_FROM: usize = 4;
 
+/// A mailbox the follower reads.
+pub trait Mailbox: Sync {
+	/// Its UIDVALIDITY and its mail with Google past `after` (another UIDVALIDITY's: from the first),
+	/// at most `limit`.
+	fn read(&self, account: Account<'_>, after: Option<Cursor>, limit: usize) -> impl Future<Output = eyre::Result<Batch>> + Send;
+}
+
 /// Where a follower stands in a mailbox: its UIDVALIDITY, the last UID taken.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Cursor {
@@ -55,13 +62,6 @@ pub struct Mail {
 	pub sent: bool,
 	/// Its text, as far as it was read.
 	pub text: String,
-}
-
-/// A mailbox the follower reads.
-pub trait Mailbox: Sync {
-	/// Its UIDVALIDITY and its mail with Google past `after` (another UIDVALIDITY's: from the first),
-	/// at most `limit`.
-	fn read(&self, account: Account<'_>, after: Option<Cursor>, limit: usize) -> impl Future<Output = eyre::Result<Batch>> + Send;
 }
 
 impl Panel {

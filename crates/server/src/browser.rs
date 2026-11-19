@@ -198,6 +198,14 @@ impl Connected {
 	}
 }
 
+/// A Gmail thread for the gmail's browser to open.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct OpenThread {
+	/// Gmail's X-GM-THRID, hex, as an `email` of a GBP's log names it.
+	pub thread: String,
+}
+
 /// sa_browsers' runner, told by the conductor alone.
 #[derive(Clone)]
 struct Runner {
@@ -438,14 +446,6 @@ async fn set_film(State(state): State<ApiState>, Extension(caller): Extension<Ca
 		StatusCode::PAYLOAD_TOO_LARGE => Err(Refusal::new(Code::TooLarge, format!("a film is {} MiB at most", FILM_MAX >> 20))),
 		s => Err(eyre::eyre!("the browsers' runner answered a film with {s}: {text}").into()),
 	}
-}
-
-/// A Gmail thread for the gmail's browser to open.
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct OpenThread {
-	/// Gmail's X-GM-THRID, hex, as an `email` of a GBP's log names it.
-	pub thread: String,
 }
 
 /// Opens a thread in a new tab of the gmail's own running browser, on the Google session signed in

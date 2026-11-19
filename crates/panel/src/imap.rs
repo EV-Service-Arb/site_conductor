@@ -36,6 +36,9 @@ const LITERAL_MAX: usize = 4 * BODY_MAX;
 /// Gmail's search for mail with Google: from or to any google.com address, its promotions left out.
 const WITH_GOOGLE: &str = "{from:google.com to:google.com} -category:promotions";
 
+/// Gmail over IMAP: its All Mail searched with Gmail's own syntax, read only.
+pub struct Gmail;
+
 /// Why the inbox did not log in, as its owner reads it; `Err` is ours.
 pub(crate) async fn login(inbox: Inbox<'_>, password: &str) -> eyre::Result<Result<(), String>> {
 	match tokio::time::timeout(TIMEOUT, open(inbox, password)).await {
@@ -44,9 +47,6 @@ pub(crate) async fn login(inbox: Inbox<'_>, password: &str) -> eyre::Result<Resu
 		Err(_) => Ok(Err(format!("{}:{PORT} did not answer within {}s", inbox.host, TIMEOUT.as_secs()))),
 	}
 }
-
-/// Gmail over IMAP: its All Mail searched with Gmail's own syntax, read only.
-pub struct Gmail;
 
 impl Mailbox for Gmail {
 	async fn read(&self, account: Account<'_>, after: Option<Cursor>, limit: usize) -> eyre::Result<Batch> {
@@ -156,13 +156,6 @@ struct Session {
 	io: BufReader<TlsStream<TcpStream>>,
 	tag: u32,
 }
-
-/// An untagged response: its text, each literal in it as `{}`, and the literals in order.
-struct Untagged {
-	text: String,
-	literals: Vec<Vec<u8>>,
-}
-
 impl Session {
 	/// `command`'s untagged responses and its tagged status; `verb` names it in errors, never its
 	/// arguments (LOGIN's are the credentials).
@@ -228,6 +221,12 @@ impl Session {
 		self.io.flush().await?;
 		Ok(())
 	}
+}
+
+/// An untagged response: its text, each literal in it as `{}`, and the literals in order.
+struct Untagged {
+	text: String,
+	literals: Vec<Vec<u8>>,
 }
 
 /// The mailbox a LIST response flags `\\All`: Gmail's All Mail, whatever its language names it.
