@@ -98,6 +98,15 @@ export default class Timeline implements Reporter {
   private readonly restore: (() => void)[] = [];
   private readonly write = process.stdout.write.bind(process.stdout);
 
+  /** v2: a v1 reporter is not told onConfigure, and its onBegin comes only after the webServer is up */
+  version() {
+    return "v2" as const;
+  }
+
+  printsToStdio() {
+    return true;
+  }
+
   constructor(options: { out: string }) {
     this.out = options.out;
     const file = process.env.STACK_TIMELINE;

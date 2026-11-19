@@ -820,14 +820,14 @@ fi
 
 if [ -n "$browsers_origin" ]; then
 	say "starting the browsers' runner on $browsers_origin (Orbita, the Multilogin app, a phone's tools: nix build .#orbita .#mlx .#phone-tools)"
-	BROWSERS_ORBITA="$(nix build --no-link --print-out-paths "$root#orbita")/bin/orbita"
-	BROWSERS_FFMPEG="$(nix build --no-link --print-out-paths nixpkgs#ffmpeg-headless.bin)/bin/ffmpeg"
-	BROWSERS_MLX="$(nix build --no-link --print-out-paths "$root#mlx")/bin/mlx-headless"
-	phone_tools="$(nix build --no-link --print-out-paths "$root#phone-tools")"
+	BROWSERS_ORBITA="$(timed orbita nix build --no-link --print-out-paths "$root#orbita")/bin/orbita"
+	BROWSERS_FFMPEG="$(timed ffmpeg nix build --no-link --print-out-paths nixpkgs#ffmpeg-headless.bin)/bin/ffmpeg"
+	BROWSERS_MLX="$(timed mlx nix build --no-link --print-out-paths "$root#mlx")/bin/mlx-headless"
+	phone_tools="$(timed phone-tools nix build --no-link --print-out-paths "$root#phone-tools")"
 	BROWSERS_ADB="$phone_tools/adb" BROWSERS_BUSYBOX="$phone_tools/busybox" BROWSERS_ADB_KEYBOARD="$phone_tools/ADBKeyboard.apk"
 	export BROWSERS_ORBITA BROWSERS_FFMPEG BROWSERS_MLX BROWSERS_ADB BROWSERS_BUSYBOX BROWSERS_ADB_KEYBOARD
 	busy "$BROWSERS_PORT" && die "port $BROWSERS_PORT is taken: the browsers' runner's"
-	in_shell "$root" bash -c "$own_cargo b -q -p sa_browsers"
+	timed browsers in_shell "$root" bash -c "$own_cargo b -q -p sa_browsers"
 	serving browsers "$root" "$own_cargo b -q -p sa_browsers" "browsers serve" -e rs,toml,lock &
 	essential+=("$!")
 elif [ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ]; then
