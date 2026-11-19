@@ -331,8 +331,13 @@ POST /placement/study/pull?…        ─ the same Definition ─▶ placement P
      each Ask bought into the queries cache (`gop`), asked again until none ─▶ POST /studies/pull ◀── the payload
 ```
 
-The conductor decides what cannot be studied, by why (`no_study`, `no_google_category`,
-`no_keywords`, `another_country`; placement's `unstudied`); the front end only renders it. A study
+A category is its studies' whole definition; an area applies it. Its competitors are tiered by
+which of its Google categories' searches found them, first match wins: the primary's (its name and
+each keyword), then one per additional category (its name alone), Excluded checked before any.
+Each additional tier weighs against the primary's 1, as each keyword against the primary's name.
+
+The conductor decides what cannot be studied, by why (`no_google_category`, `another_country`;
+placement's `unstudied`: no grid for the country); the front end only renders it. A study
 never spends; a pull (`sa:placement:study:spend`) buys the Places searches it lacks at the puller's
 tokens (Tokens and GBPs). Placement buys nothing: the conductor is the one center of data
 ingestion, and what placement derives, for a map or for training, it derives from what the
@@ -942,10 +947,10 @@ priced in money, so an account overshoots by its hours behind.
   unknown until said, cleared by a transfer. A gmail usually owns up to 3 GBPs and manages up to 6
   before Google grows wary: its count shown, never refused.
 - **A GBP's category** is its trade (its owner's: Plumbing) in its own country, derived, never
-  stored: Plumbing · FR. The trade set up for a country holds its Google categories there, placement's
-  study of it, and its keywords (`sa_core::gbp::keywords`), the terms every GBP of the category is
-  compared on, in the country's language; any other term is one study's or one location's own and
-  stays out of comparisons. Not set up there is shown so, never filled from another country. A
+  stored: Plumbing · FR. The trade set up for a country holds its Google categories there, its
+  keywords (`sa_core::gbp::keywords`), the terms every GBP of the category is compared on, in the
+  country's language, and what its studies read (`sa_core::placement::Category`, Placement); any
+  other term is one location's own and stays out of comparisons. Not set up there is shown so, never filled from another country. A
   trade is deleted only once no live GBP holds it; no service stores its id.
 - **A GBP's brand** is under its gmail and its category, at most one, optional: no brand, no kit
   photos and no logo. A gmail, trade or country moved drops it in the same write; the schema
