@@ -93,6 +93,7 @@ export default class Timeline implements Reporter {
   private readonly tty = process.stdout.isTTY === true;
   private timer: ReturnType<typeof setInterval> | undefined;
   private drawn = 0;
+  private failure: unknown;
   private atLineStart = true;
   private readonly restore: (() => void)[] = [];
   private readonly write = process.stdout.write.bind(process.stdout);
@@ -118,9 +119,9 @@ export default class Timeline implements Reporter {
         }) as typeof stream.write;
         this.restore.push(() => (stream.write = own));
       }
-      this.timer = setInterval(() => this.draw(), 250);
+      this.timer = setInterval(() => this.live(() => this.draw()), 250);
     } else {
-      this.timer = setInterval(() => this.write(this.snapshot() + "\n"), 30_000);
+      this.timer = setInterval(() => this.live(() => this.write(this.snapshot() + "\n")), 30_000);
     }
     this.timer.unref();
   }
@@ -136,9 +137,8 @@ export default class Timeline implements Reporter {
   }
 
   onEnd() {
-    clearInterval(this.timer);
-    this.erase();
-    for (const restore of this.restore) restore();
+    this.stop();
+    if (this.failure !== undefined) throw this.failure;
     const now = Date.now();
     const stack = this.stack();
     const tests = [...this.tests.values()].map((t) => ({ name: `${t.project}: ${t.name}`, start: t.start, end: t.end }));
@@ -187,6 +187,23 @@ export default class Timeline implements Reporter {
     const all = [...stack, ...this.tests.values()];
     const open = all.filter((s) => s.end === undefined && !stack.some((o) => o.end === undefined && o.name.startsWith(s.name + "/")));
     return `[timeline ${duration(now - t0)}] running: ${open.map((s) => `${s.name} ${duration(now - s.start)}`).join(", ") || "nothing"} · done: ${all.length - all.filter((s) => s.end === undefined).length}`;
+  }
+
+  /** A broken timeline stops the live view, says so, and fails the run at its end: thrown from a timer, the runner would swallow it. */
+  private live(tick: () => void) {
+    try {
+      tick();
+    } catch (error) {
+      this.stop();
+      this.failure = error;
+      process.stderr.write(`timeline: ${String(error)}\n`);
+    }
+  }
+
+  private stop() {
+    clearInterval(this.timer);
+    this.erase();
+    for (const restore of this.restore.splice(0)) restore();
   }
 
   private erase() {
