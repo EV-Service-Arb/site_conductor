@@ -1076,6 +1076,8 @@
   "undo.undo": "Undo",
   "usage.access.admin": "Administration",
   "usage.access.members": "Members",
+  "usage.access.own": "Your account",
+  "usage.access.placement": "Placement",
   "usage.description": "Your access, tokens and spending on Service-Arb.",
   "usage.title": "Usage",
   "wallet.description": "Balances and recent activity of the Service-Arb compartment.",

@@ -4127,6 +4127,14 @@
     "en": "Members",
     "t": "Участники"
   },
+  "usage.access.own": {
+    "en": "Your account",
+    "t": "Ваш аккаунт"
+  },
+  "usage.access.placement": {
+    "en": "Placement",
+    "t": "Размещение"
+  },
   "usage.description": {
     "en": "Your access, tokens and spending on Service-Arb.",
     "t": "Ваш доступ, токены и расходы в Service-Arb."

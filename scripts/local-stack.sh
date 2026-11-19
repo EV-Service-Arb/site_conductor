@@ -538,6 +538,8 @@ if [ "$run_panel" = 1 ] && [ -z "${PANEL_GRAFANA_SERVER:-}" ]; then
 fi
 # The front end's packages and the map's overlay, for the next dev started below.
 web_prep() {
+	# two --fixed runs of one state of the checkout share its copy, whose next build refuses a second at once; under `&`: held till the job ends
+	[ "$fixed" = 0 ] || { exec 9<"$src/.copied" && flock 9; }
 	# in the dev shell, whose js-local lays our packages' checkouts over the install (frontend/_.js-local.json);
 	# npm ci stamps node_modules/.package-lock.json: a lockfile pulled since is newer
 	timed packages prefixed web in_shell "$src" bash -c \
