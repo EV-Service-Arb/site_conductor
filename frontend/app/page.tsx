@@ -9,7 +9,7 @@ import { AdminTokensView } from "@/views/admin-tokens";
 import { AlertsView } from "@/views/alerts";
 import { AssistantView } from "@/views/assistant";
 import { Home } from "@/views/home";
-import { KitPage, KitQr, kitOfPage } from "@/views/kit";
+import { KitQr } from "@/views/kit";
 import { MembersView } from "@/views/members";
 import { ReviewArchiveView } from "@/views/review-archive";
 import { PanelShell } from "@/views/shell";
@@ -18,6 +18,7 @@ import { SourcesView } from "@/views/sources";
 import { TokensView } from "@/views/tokens";
 import { UsageView } from "@/views/usage";
 import { WalletView } from "@/views/wallet";
+import { WindowPage } from "@/views/windows";
 import { state, useT } from "@/shared/i18n";
 import { type At, useHere } from "@/shared/lib/location";
 
@@ -60,11 +61,17 @@ function framed(at: Exclude<At, { view: "access" | "kit_qr" }>): ReactNode {
       return <MembersView />;
     case "alerts":
       return <AlertsView />;
+    case "gbp":
+    case "gmail":
+    case "category":
+    case "categories":
+    case "trash":
+    case "adding":
     case "kits":
     case "kit":
     case "kit_gmb":
     case "kit_pool":
-      return <KitPage at={kitOfPage(at)!} />;
+      return <WindowPage at={at} />;
     default:
       if (at.view === "sites" || at.view.startsWith("sites.")) return <SitesView />;
       at.view satisfies `review_archive${string}` | `sites${string}`;

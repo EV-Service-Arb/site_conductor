@@ -1,9 +1,9 @@
 "use client";
 
-import { CloseButton, NativeSelect, NativeSelectOption, Settled, Skeleton, cn } from "@evinvest/uikit";
+import { NativeSelect, NativeSelectOption, Settled, Skeleton, cn } from "@evinvest/uikit";
 import { Mail } from "lucide-react";
 
-import { GMAIL_ROLE_NAME, openAccount, useGmails, windowKeys, gmbs } from "@/entities/gmb";
+import { GMAIL_ROLE_NAME, openWindow, useGmails, gmbs } from "@/entities/gmb";
 import { BrowserSession } from "@/features/browser-session";
 import { ImapCard } from "@/features/connect-imap";
 import { BrowserCard } from "@/features/set-browser";
@@ -13,18 +13,16 @@ import { type Gmail, type GmailRole, type Tab, gmailRoleValues } from "@/shared/
 import { useT, account } from "@/shared/i18n";
 import { useResource } from "@evinvest/api/react";
 import { ErrorState } from "@/shared/ui/error-state";
-import { TAB_NAME } from "./window";
+import { TAB_NAME } from "./tabs";
 import { notifyFailure } from "@/shared/ui/notify";
-import { useButtonSize } from "@/shared/ui/touch";
 
-/** A managing gmail's own window over the map, shaped as a trade's: what it is connected to, and its browser. */
+/** A managing gmail's own window, shaped as a trade's: what it is connected to, and its browser. */
 export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Tab; gbps: number }) {
   const t = useT();
   if (!gmail.tabs.includes(tab)) throw new Error(`?tab=${tab}: not a tab of gmail ${gmail.id}'s window`);
-  const button = useButtonSize();
 
   return (
-    <section aria-label={gmail.gmail} className="absolute inset-y-0 right-0 left-0 flex flex-col overflow-y-auto border-l border-border bg-background md:left-36">
+    <section aria-label={gmail.gmail} className="flex flex-col">
       <header className="flex items-start gap-3 px-6 pt-4">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <h2 className="flex min-w-0 items-center gap-2 text-lg font-semibold text-ink">
@@ -36,7 +34,6 @@ export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Tab; gb
             <RoleSelect gmail={gmail} />
           </p>
         </div>
-        <CloseButton size={button("sm")} label={t(windowKeys.close, "Close the window")} onClose={() => openAccount(null)} />
       </header>
       <nav role="tablist" aria-label={gmail.gmail} className="flex items-center gap-1 border-b border-border px-6 pt-3">
         {gmail.tabs.map((k) => (
@@ -45,7 +42,7 @@ export function AccountWindow({ gmail, tab, gbps }: { gmail: Gmail; tab: Tab; gb
             type="button"
             role="tab"
             aria-selected={k === tab}
-            onClick={() => openAccount({ gmail: gmail.id, tab: k })}
+            onClick={() => openWindow({ kind: "account", gmail: gmail.id, tab: k })}
             className={cn("-mb-px border-b-2 px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring", k === tab ? "border-ink text-ink" : "border-transparent text-ink-soft hover:text-ink")}
           >
             {TAB_NAME[k](t)}

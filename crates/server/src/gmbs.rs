@@ -235,6 +235,31 @@ pub struct SuggestionsDto {
 	pub suggestions: Vec<SuggestionDto>,
 }
 
+/// `GET /gmbs/{id}/log`.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+pub struct LogDto {
+	/// Newest first.
+	pub events: Vec<LoggedDto>,
+	/// `before` for the older page; `null` past the first event.
+	pub next: Option<i64>,
+}
+
+/// A row of a GBP's log.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+pub struct LoggedDto {
+	pub id: i64,
+	/// RFC 3339.
+	pub at: String,
+	/// Who did it, by name; `null` for Google, or a run.
+	pub by: Option<String>,
+	/// The gmail it was under.
+	pub gmail_id: Option<i64>,
+	/// Its gmail's (a browser run for the gmail alone), not its own.
+	pub of_gmail: bool,
+	#[serde(flatten)]
+	pub event: sa_panel::gmbs::Event,
+}
+
 /// A panorama to open, on the account the page's map loaded on.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -756,31 +781,6 @@ pub(crate) struct LogQuery {
 	before: Option<i64>,
 	/// Comma-separated; none, every kind.
 	kinds: Option<String>,
-}
-
-/// `GET /gmbs/{id}/log`.
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-pub struct LogDto {
-	/// Newest first.
-	pub events: Vec<LoggedDto>,
-	/// `before` for the older page; `null` past the first event.
-	pub next: Option<i64>,
-}
-
-/// A row of a GBP's log.
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-pub struct LoggedDto {
-	pub id: i64,
-	/// RFC 3339.
-	pub at: String,
-	/// Who did it, by name; `null` for Google, or a run.
-	pub by: Option<String>,
-	/// The gmail it was under.
-	pub gmail_id: Option<i64>,
-	/// Its gmail's (a browser run for the gmail alone), not its own.
-	pub of_gmail: bool,
-	#[serde(flatten)]
-	pub event: sa_panel::gmbs::Event,
 }
 
 /// A GBP's log, newest first, a page at a time: what changed of it (each field before and after) and what was done

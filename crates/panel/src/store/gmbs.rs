@@ -239,72 +239,6 @@ pub enum Field {
 	Spots,
 }
 
-/// What `before` → `after` logs: its moves, and the fields changed, as a Sync's or a hand's.
-fn diff(before: &Gmb, after: &Gmb, synced: bool) -> Vec<Event> {
-	assert_eq!(before.id, after.id, "one GBP's change");
-	let mut events = Vec::new();
-	if before.state != after.state {
-		events.push(Event::State {
-			from: before.state,
-			to: after.state,
-		});
-	}
-	if before.gmail_id != after.gmail_id {
-		events.push(Event::Gmail {
-			from: before.gmail_id,
-			to: after.gmail_id,
-		});
-	}
-	if before.trade_id != after.trade_id {
-		events.push(Event::Trade {
-			from: before.trade_id,
-			to: after.trade_id,
-		});
-	}
-	if before.brand_id != after.brand_id {
-		events.push(Event::Brand {
-			from: before.brand_id,
-			to: after.brand_id,
-		});
-	}
-	if before.film != after.film {
-		events.push(Event::Film { film: after.film.clone() });
-	}
-	if before.enabled != after.enabled {
-		events.push(Event::Switched { on: after.enabled });
-	}
-	let mut changes = Vec::new();
-	let mut field = |field: Field, from: serde_json::Value, to: serde_json::Value| {
-		if from != to {
-			changes.push(Changed { field, from, to });
-		}
-	};
-	fn json<T: serde::Serialize>(v: &T) -> serde_json::Value {
-		serde_json::to_value(v).expect("a GBP's fields serialize")
-	}
-	field(Field::Name, json(&before.name), json(&after.name));
-	field(Field::PlaceId, json(&before.place_id), json(&after.place_id));
-	field(Field::Address, json(&before.address), json(&after.address));
-	field(Field::Phone, json(&before.phone), json(&after.phone));
-	field(Field::Website, json(&before.website), json(&after.website));
-	field(Field::Hours, json(&before.hours), json(&after.hours));
-	field(Field::GooglePrimary, json(&before.google_primary), json(&after.google_primary));
-	field(Field::Country, json(&before.country), json(&after.country));
-	field(Field::Point, json(&before.location), json(&after.location));
-	let authors = |b: &Gmb| b.photos.iter().map(|p| p.author.clone()).collect::<Vec<_>>(); // a photo's id is new each Sync
-	field(Field::Photos, json(&authors(before)), json(&authors(after)));
-	field(Field::Areas, json(&before.areas), json(&after.areas));
-	field(Field::HiddenAddress, json(&before.hidden_address), json(&after.hidden_address));
-	field(Field::CustomersVisit, json(&before.customers_visit), json(&after.customers_visit));
-	field(Field::Spots, json(&before.spots), json(&after.spots));
-	match synced {
-		true => events.push(Event::Synced { changes }),
-		false if !changes.is_empty() => events.push(Event::Edited { changes }),
-		false => {}
-	}
-	events
-}
-
 /// `event` in the log of GBP `gmb` (none: of gmail `gmail`'s every GBP), `gmail` the one it was under.
 pub async fn log(conn: &mut SqliteConnection, gmb: Option<i64>, gmail: Option<i64>, by: Option<Uuid>, now: Timestamp, event: &Event) -> eyre::Result<()> {
 	let kind: &'static str = EventKind::from(event).into();
@@ -1080,6 +1014,72 @@ pub async fn set_trades(conn: &mut SqliteConnection, owner: Uuid, ids: &BTreeSet
 	.await
 	.wrap_err("setting GMBs' trade")?;
 	Ok(i64::try_from(done.rows_affected()).expect("a few rows") == asked)
+}
+
+/// What `before` → `after` logs: its moves, and the fields changed, as a Sync's or a hand's.
+fn diff(before: &Gmb, after: &Gmb, synced: bool) -> Vec<Event> {
+	assert_eq!(before.id, after.id, "one GBP's change");
+	let mut events = Vec::new();
+	if before.state != after.state {
+		events.push(Event::State {
+			from: before.state,
+			to: after.state,
+		});
+	}
+	if before.gmail_id != after.gmail_id {
+		events.push(Event::Gmail {
+			from: before.gmail_id,
+			to: after.gmail_id,
+		});
+	}
+	if before.trade_id != after.trade_id {
+		events.push(Event::Trade {
+			from: before.trade_id,
+			to: after.trade_id,
+		});
+	}
+	if before.brand_id != after.brand_id {
+		events.push(Event::Brand {
+			from: before.brand_id,
+			to: after.brand_id,
+		});
+	}
+	if before.film != after.film {
+		events.push(Event::Film { film: after.film.clone() });
+	}
+	if before.enabled != after.enabled {
+		events.push(Event::Switched { on: after.enabled });
+	}
+	let mut changes = Vec::new();
+	let mut field = |field: Field, from: serde_json::Value, to: serde_json::Value| {
+		if from != to {
+			changes.push(Changed { field, from, to });
+		}
+	};
+	fn json<T: serde::Serialize>(v: &T) -> serde_json::Value {
+		serde_json::to_value(v).expect("a GBP's fields serialize")
+	}
+	field(Field::Name, json(&before.name), json(&after.name));
+	field(Field::PlaceId, json(&before.place_id), json(&after.place_id));
+	field(Field::Address, json(&before.address), json(&after.address));
+	field(Field::Phone, json(&before.phone), json(&after.phone));
+	field(Field::Website, json(&before.website), json(&after.website));
+	field(Field::Hours, json(&before.hours), json(&after.hours));
+	field(Field::GooglePrimary, json(&before.google_primary), json(&after.google_primary));
+	field(Field::Country, json(&before.country), json(&after.country));
+	field(Field::Point, json(&before.location), json(&after.location));
+	let authors = |b: &Gmb| b.photos.iter().map(|p| p.author.clone()).collect::<Vec<_>>(); // a photo's id is new each Sync
+	field(Field::Photos, json(&authors(before)), json(&authors(after)));
+	field(Field::Areas, json(&before.areas), json(&after.areas));
+	field(Field::HiddenAddress, json(&before.hidden_address), json(&after.hidden_address));
+	field(Field::CustomersVisit, json(&before.customers_visit), json(&after.customers_visit));
+	field(Field::Spots, json(&before.spots), json(&after.spots));
+	match synced {
+		true => events.push(Event::Synced { changes }),
+		false if !changes.is_empty() => events.push(Event::Edited { changes }),
+		false => {}
+	}
+	events
 }
 
 #[derive(sqlx::FromRow)]

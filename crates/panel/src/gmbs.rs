@@ -26,9 +26,9 @@ pub use crate::{
 	store::gmbs::{Category, Changed, Event, EventKind, Field, GbpCountry, Gmail, Gmb, GmbId, GmbPhoto, Logged, Point, Spot, Trade, TradeId},
 };
 
-const MAX_SPOTS: usize = 20;
 /// The rows of a page of a GBP's log.
 pub const LOG_PAGE: u32 = 100;
+const MAX_SPOTS: usize = 20;
 
 /// A GBP that is on Google already, added under a gmail.
 #[derive(Clone, Debug)]

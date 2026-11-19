@@ -7,7 +7,7 @@ import { useT } from "@/shared/i18n";
 
 import { categoryName, categoryOf } from "../model/category";
 import { useGmbTags } from "../model/gmails-context";
-import { openTrade } from "../model/on-map";
+import { openWindow } from "../model/windows";
 import { windowKeys } from "../model/i18n";
 
 /** A GBP's category, opening its trade's window on its country; what it lacks in the warning tone. Nothing while it has no trade. */
@@ -20,7 +20,7 @@ export function CategoryChip({ gmb }: { gmb: Gmb }) {
   return (
     <button
       type="button"
-      onClick={() => openTrade(placed.trade.id, country)}
+      onClick={() => openWindow({ kind: "trade", trade: placed.trade.id, country: country ?? null, brand: null })}
       title={t(windowKeys.category.open, "Open its trade")}
       className={cn(
         "shrink-0 rounded-full border px-2 py-0.5 text-xs outline-none hover:bg-hover/50 focus-visible:ring-2 focus-visible:ring-ring",

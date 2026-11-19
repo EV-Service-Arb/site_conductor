@@ -4,7 +4,7 @@ import { toast, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, Dro
 import { ChevronDown, CircleMinus, CirclePlus, Link2, Pencil, RefreshCw, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
-import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, openOrFocus, openTrash, readyCount, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, syncGmb, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, trades as tradesKeys } from "@/entities/gmb";
+import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, openOrFocus, openWindow, readyCount, useShown, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, syncGmb, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, trades as tradesKeys } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { AddGmbButton } from "@/features/add-gmb";
@@ -89,6 +89,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
       onMap={onMap}
       peeked={l.gmb.id === peeked}
       current={l.gmb.id === pointed}
+      inArchive={at.view.startsWith("review_archive")}
       selected={isSelected(l.gmb.id)}
       linked={linked}
       onMove={move}
@@ -201,7 +202,7 @@ function TrashButton() {
   const trash = useTrash();
   const button = useButtonSize();
   const n = trash.status === "ok" ? trash.data.gmails.length + trash.data.gmbs.length : null;
-  const open = () => openTrash(true);
+  const open = () => openWindow({ kind: "trash" });
   useBinding({ on: { key: "T" }, id: "trash", run: { label: t(trashKeys.open, "Trash"), run: open } });
   return (
     <Button variant="ghost" size={button("sm")} className="text-ink-soft" onClick={open}>
@@ -339,6 +340,7 @@ function GmbRow({
   onMap,
   peeked,
   current,
+  inArchive,
   selected,
   linked,
   onMove,
@@ -352,6 +354,8 @@ function GmbRow({
   onMap: boolean;
   peeked: boolean;
   current: boolean;
+  /** On the archive's pages: a row opens the GBP's there. */
+  inArchive: boolean;
   selected: boolean;
   linked: ReadonlyMap<number, SiteTag> | null;
   onMove: (gmbs: readonly number[], into: boolean) => void;
@@ -382,7 +386,7 @@ function GmbRow({
       }
       onChanged();
     });
-  const first = gmb.tabs[0];
+  const page = useShown()?.page === true;
   const move = (selected ? t(gmbsKeys.deselect, "Leave out") : t(gmbsKeys.select, "Select"));
   const issue = issueOf(gmb, tags);
   const archive = tags.archive?.get(gmb.id);
@@ -463,11 +467,18 @@ function GmbRow({
       {dialog === "link" && linked && <LinkPlace gmbId={gmb.id} linked={linked} onClose={() => setDialog(null)} onDone={onChanged} />}
       {dialog === "remove" && <RemoveDialog title={t(gmbsKeys.gmb.remove.title, "Remove {name}?", { name })} body={t(gmbsKeys.gmb.remove.body, "It goes to the trash{kept}: every service stops working on it until then; its history stays.", { kept })} remove={() => ok(api.DELETE("/gmbs/{id}", { params: { path: { id: gmb.id } } }))} onRemoved={onChanged} onClose={() => setDialog(null)} />}
       {onMap ? (
-        <button type="button" className={body} title={(gmb.address ? `${name}\n${gmb.address}` : name) + hint} onClick={() => openOrFocus(gmb, peeked)}>
+        <button type="button" className={body} title={(gmb.address ? `${name}\n${gmb.address}` : name) + hint} onClick={() => openOrFocus(gmb, peeked)}
+          // a click shows its card; ↵ opens its window
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            openWindow({ kind: "gbp", gmb: gmb.id, tab: "profile" });
+          }}
+        >
           {label}
         </button>
-      ) : first !== undefined ? (
-        <ViewLink to={{ view: "home", params: { gmb: gmb.id, tab: first } }} onClick={() => onNavigate?.()} className={body} title={name + hint}>
+      ) : !inArchive ? (
+        <ViewLink to={page ? { view: "gbp", params: { gmb: gmb.id, tab: "profile" } } : { view: "home", params: { gmb: gmb.id, tab: "profile" } }} onClick={() => onNavigate?.()} className={body} title={name + hint}>
           {label}
         </ViewLink>
       ) : (

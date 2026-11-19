@@ -4,7 +4,7 @@ import { useResource } from "@evinvest/api/react";
 import { Button, Skeleton, cn } from "@evinvest/uikit";
 import { Plus, QrCode } from "lucide-react";
 
-import { type KitAt, floatKit, kit as kitKeys } from "@/entities/gmb";
+import { type KitAt, editKit, kit as kitKeys } from "@/entities/gmb";
 import { api } from "@/shared/api";
 import { useT } from "@/shared/i18n";
 import { ErrorState } from "@/shared/ui/error-state";
@@ -25,7 +25,7 @@ export function KitsList({ go, current }: { go: (at: KitAt) => void; current?: s
         <h2 className={cn(SECTION_HEAD, "flex-1")}>
           {t(kitKeys.list.title, "Kits")} <span className="font-normal tabular-nums">{kits.data.kits.length}</span>
         </h2>
-        <Button variant="ghost" size={button("sm")} onClick={() => floatKit({ kit: "", edit: true })}>
+        <Button variant="ghost" size={button("sm")} onClick={() => editKit("")}>
           <Plus aria-hidden />
           {t(kitKeys.list.new, "New")}
         </Button>

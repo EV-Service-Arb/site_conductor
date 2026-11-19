@@ -13,6 +13,8 @@ use super::{
 };
 use crate::kit::Target;
 
+const KIT: &str = "SELECT k.id, k.slug, k.name, k.area, (SELECT COUNT(*) FROM kit_members m WHERE m.kit_id = k.id) FROM kits k";
+
 /// A draft of a category, not removed, with what the offer ranks it by.
 #[derive(Clone, Debug)]
 pub struct DraftRow {
@@ -362,8 +364,6 @@ pub struct KitRow {
 	pub members: i64,
 }
 
-const KIT: &str = "SELECT k.id, k.slug, k.name, k.area, (SELECT COUNT(*) FROM kit_members m WHERE m.kit_id = k.id) FROM kits k";
-
 pub async fn kits(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<KitRow>> {
 	let rows: Vec<(i64, String, String, Option<String>, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("{KIT} WHERE k.owner = $1 ORDER BY k.name, k.slug")))
 		.bind(owner)
@@ -474,7 +474,11 @@ pub async fn draft_places(conn: &mut SqliteConnection, trade: i64, country: Coun
 
 /// Over the places it had.
 pub async fn set_draft_places(conn: &mut SqliteConnection, draft: i64, areas: &[String]) -> eyre::Result<()> {
-	sqlx::query("DELETE FROM kit_draft_places WHERE draft_id = $1").bind(draft).execute(&mut *conn).await.wrap_err("clearing places")?;
+	sqlx::query("DELETE FROM kit_draft_places WHERE draft_id = $1")
+		.bind(draft)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("clearing places")?;
 	sqlx::query("INSERT INTO kit_draft_places (draft_id, area) SELECT $1, value FROM json_each($2)")
 		.bind(draft)
 		.bind(serde_json::to_string(areas).expect("slugs serialize"))

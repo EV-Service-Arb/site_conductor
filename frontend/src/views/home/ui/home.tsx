@@ -5,8 +5,7 @@ import { Button, Skeleton, cn, useDismissableLayer } from "@evinvest/uikit";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { type Listed, type Tags, issueOf, narrowed, openAccount, openOrFocus, openTrade, peek, setOnMap, under, useAccountWindow, useCategoriesWindow, useTrash, useTrashWindow, useAddWindow, move, useBrands, useGmails, useGmbTags, useOnMap, usePeeked, useSelection, useTab, useTradeWindow, useTrades } from "@/entities/gmb";
-import { AddPanel } from "@/features/add-gmb";
+import { type Listed, type Tags, issueOf, narrowed, openOrFocus, peek, setOnMap, move, useGmails, useGmbTags, useKitEdit, useOnMap, usePeeked, useSelection, useShown } from "@/entities/gmb";
 import { PlacingBar } from "@/features/place-gmb";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { PlacementOverlay, StudyAreaWindow } from "@/features/placement-overlay";
@@ -18,14 +17,10 @@ import { Locate, StreetView, pin, useTheMap } from "@/shared/map";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { useButtonSize } from "@/shared/ui/touch";
 import { ErrorState } from "@/shared/ui/error-state";
-import { KitFloat } from "@/views/kit";
+import { KitEdit } from "@/views/kit";
+import { Floats } from "@/views/windows";
 
-import { AccountWindow } from "./account-window";
 import { Peek } from "./peek";
-import { BrandWindow } from "./brand-window";
-import { CategoriesWindow, TradeWindow } from "./trade-window";
-import { TrashWindow } from "./trash-window";
-import { LocationWindow } from "./window";
 
 /** `/`: the caller's GMBs on a map, unless they come back from the sign-in dialog to the page they were on. */
 export function Home() {
@@ -49,24 +44,8 @@ export function Home() {
       {/* not found: the conductor has no browser key, so there is no map */}
       {config.status === "error" && config.failure.code === "not_found" && <EmptyState className="m-6" title={t(home.noMap, "No map here")} description={t(home.noMap.why, "No Google account in the conductor's config has a browser key. Your GMBs are in the list beside.")} />}
       {config.status === "ok" && <GmbMap config={config.data} />}
-      {config.status === "error" && <KitFloat map={null} />}
-      <Floats />
+      {config.status !== "ok" && <Floats hidden={false} />}
     </div>
-  );
-}
-
-/** The windows floating over the page, with a map under them or none. */
-function Floats() {
-  const gmails = useGmails();
-  const trades = useTrades();
-  const trash = useTrash();
-  const categoriesWindow = useCategoriesWindow();
-  const trashWindow = useTrashWindow();
-  return (
-    <>
-      {categoriesWindow && trades.status === "ok" && gmails.status === "ok" && <CategoriesWindow trades={trades.data} gmbs={gmails.data.gmbs} />}
-      {trashWindow && trash.status === "ok" && <TrashWindow trash={trash.data} />}
-    </>
   );
 }
 
@@ -80,11 +59,12 @@ function GmbMap({ config }: { config: MapConfig }) {
   const placing = useOnMap((s) => s.placing);
   const picking = useOnMap((s) => s.picking);
   const marks = useOnMap((s) => s.marks);
-  const add = useAddWindow();
+  const shownWindow = useShown();
+  const adding = shownWindow?.key.kind === "add";
+  const editing = useKitEdit();
   const t = useT();
   const button = useButtonSize();
   const peeked = usePeeked();
-  const tab = useTab();
   // `?at` as the page opened: what it says after is where the map has since moved
   const [left] = useState(useHome()?.at ?? null);
   const { tags } = useGmbTags();
@@ -198,34 +178,8 @@ function GmbMap({ config }: { config: MapConfig }) {
   }, [moved]);
 
   const peekedListed = gmails.status === "ok" ? narrowed(gmails.data, null, "").find((l) => l.gmb.id === peeked) : undefined;
-  const tabs = peekedListed?.gmb.tabs;
-  // a GBP whose state moved since its window opened: its state's first tab, or its card alone
-  useEffect(() => {
-    if (tabs !== undefined && tab !== null && !tabs.includes(tab)) setHome({ tab: tabs[0] });
-  }, [tabs, tab]);
-  const windowed = peekedListed !== undefined && tab !== null && tabs?.includes(tab) === true;
-  const tradeWindow = useTradeWindow();
-  const trades = useTrades();
-  const opened = tradeWindow !== null && trades.status === "ok" ? trades.data.find((tr) => tr.id === tradeWindow.trade) : undefined;
-  const brands = useBrands();
-  const openedBrand = tradeWindow?.brand != null && brands.status === "ok" ? brands.data.find((b) => b.id === tradeWindow.brand) : undefined;
-  // a brand removed: its category's tab
-  const brandGone = tradeWindow !== null && tradeWindow.brand !== null && brands.status === "ok" && openedBrand === undefined;
-  useEffect(() => {
-    if (brandGone && tradeWindow.country !== null) openTrade(tradeWindow.trade, tradeWindow.country);
-  }, [brandGone, tradeWindow]);
-  // a trade deleted, here or in another tab: its window closes
-  const gone = tradeWindow !== null && trades.status === "ok" && opened === undefined;
-  useEffect(() => {
-    if (gone) openTrade(null);
-  }, [gone]);
-  const accountWindow = useAccountWindow();
-  const account = accountWindow !== null && gmails.status === "ok" ? gmails.data.gmails.find((g) => g.id === accountWindow.gmail) : undefined;
-  // a gmail removed, here or in another tab: its window closes
-  const accountGone = accountWindow !== null && gmails.status === "ok" && account === undefined;
-  useEffect(() => {
-    if (accountGone) openAccount(null);
-  }, [accountGone]);
+  // the GBP's window over the map stands in for its card
+  const windowed = shownWindow?.key.kind === "gbp";
   const focus = useOnMap((s) => s.focus);
   useEffect(() => {
     if (map.status !== "ok" || focus === null) return;
@@ -254,7 +208,7 @@ function GmbMap({ config }: { config: MapConfig }) {
 
   // a form's picks while one is open, else the peeked draft's spots past its first, which is its pin
   const peekedSpots = peekedListed?.gmb.state === "draft" ? peekedListed.gmb.spots.slice(1) : [];
-  const numbered = add !== null ? marks.map((at, i) => ({ at, n: i + 1 })) : peekedSpots.map(({ lat, lng }, i) => ({ at: { lat, lng }, n: i + 2 }));
+  const numbered = adding ? marks.map((at, i) => ({ at, n: i + 1 })) : peekedSpots.map(({ lat, lng }, i) => ({ at: { lat, lng }, n: i + 2 }));
   const numberedRef = useRef(numbered);
   useEffect(() => {
     numberedRef.current = numbered;
@@ -307,13 +261,9 @@ function GmbMap({ config }: { config: MapConfig }) {
         </OnPin>
       )}
       {peekedListed && windows && !windowed && !peekedListed.gmb.location && <Peek listed={peekedListed} onClose={() => peek(null)} className="absolute top-4 right-4" />}
-      {peekedListed && windows && windowed && <LocationWindow listed={peekedListed} tab={tab} />}
-      {opened && tradeWindow && tradeWindow.brand === null && gmails.status === "ok" && windows && <TradeWindow trade={opened} country={tradeWindow.country} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
-      {opened && openedBrand && gmails.status === "ok" && windows && <BrandWindow trade={opened} brand={openedBrand} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />}
-      {account && accountWindow && gmails.status === "ok" && windows && <AccountWindow gmail={account} tab={accountWindow.tab} gbps={under(gmails.data, account.id).length} />}
-      {windows && <KitFloat map={map.status === "ok" ? map.map : null} />}
+      <Floats hidden={placed !== undefined || (picking !== null && !adding)} />
+      {map.status === "ok" && windows && editing !== null && <KitEdit map={map.map} slug={editing} />}
       {map.status === "ok" && windows && <StudyAreaWindow map={map.map} />}
-      {add && placed === undefined && <AddPanel key={JSON.stringify(add)} {...add} />}
       {picking !== null && (
         <div className="absolute bottom-4 left-4 flex items-center gap-3 rounded-lg border border-border bg-background py-2 pr-2 pl-4 shadow-overlay">
           <p className="text-sm text-ink">{picking.label}</p>

@@ -242,7 +242,13 @@ pub(super) async fn kit(db: &TestDb) -> Kit {
 	];
 	let mut drafts = Vec::new();
 	for n in 1..=8 {
-		drafts.push(panel.add_draft(owner, trade, Country::FR, &format!("Draft {n}: quick and clean."), &[], now).await.unwrap().unwrap());
+		drafts.push(
+			panel
+				.add_draft(owner, trade, Country::FR, &format!("Draft {n}: quick and clean."), &[], now)
+				.await
+				.unwrap()
+				.unwrap(),
+		);
 	}
 	let app = app_with(panel.clone(), operator(), "dev@localhost", &base.parse().unwrap(), http::Limits::default());
 	let mut browser = Browser::default();
@@ -490,11 +496,23 @@ async fn what_a_brands_photo_shows_rides_to_the_landing() {
 	let db = TestDb::create().await;
 	let mut k = kit(&db).await;
 	let (status, photos) = k
-		.call(Method::PATCH, &format!("/api/v1/brands/{}/photos/{}.jpg", k.brand, k.photos[0]), Some(json!({ "shows": "  The new tap  " })))
+		.call(
+			Method::PATCH,
+			&format!("/api/v1/brands/{}/photos/{}.jpg", k.brand, k.photos[0]),
+			Some(json!({ "shows": "  The new tap  " })),
+		)
 		.await;
 	assert_eq!(status, StatusCode::OK, "{photos}");
 	let (_, body) = k.get("/api/kit/v1/offer?brand=aquafix&slug=lyon-7&qr=1").await;
 	let o: Value = serde_json::from_slice(&body).unwrap();
-	let shown: Vec<&Value> = o["drafts"].as_array().unwrap().iter().flat_map(|d| d["photos"].as_array().unwrap()).filter(|p| p["id"] == k.photos[0]).map(|p| &p["shows"]).collect();
-	assert!(!shown.is_empty() && shown.iter().all(|s| *s == "The new tap"), "{o}");
+	let shown: Vec<&Value> = o["drafts"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.flat_map(|d| d["photos"].as_array().unwrap())
+		.filter(|p| p["id"] == k.photos[0])
+		.map(|p| &p["shows"])
+		.collect();
+	assert!(!shown.is_empty(), "{o}");
+	assert!(shown.iter().all(|s| *s == "The new tap"), "{o}");
 }

@@ -29,6 +29,7 @@ const gmb = (id: number, { located = true, enabled = true } = {}): Gmb => ({
   website: null,
   hours: [],
   google_primary: null,
+    synced_at: null,
   photos: [],
   readiness: null,
   tabs: [],

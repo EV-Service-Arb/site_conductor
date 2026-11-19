@@ -282,6 +282,20 @@ second block below to it.
   nested under their pages) is the front end's one page, which shows the view the location
   parses as; below a nest the path is the element's to route. The bundles run on this origin:
   their builds are trusted as the conductor's own code is.
+- **Windows are routes, pages and hotbar entries.** Every window (a GBP, a gmail, a trade or brand,
+  the categories, the trash, Add a GBP, a review kit) is a key of one closed union (`WinKey`,
+  `entities/gmb/model/windows.ts`: how it reads from and writes to Home's params, its page, its
+  entry), drawn by one registry (`views/windows`: title, icon, body, the same over the map and as
+  a page). One floats at a time; a phone only ever gets its page. The tab's open set
+  (sessionStorage) is the hotbar's entries after the app's tools; × or Escape takes one out.
+  Map modes (the kit's editor, a study's area) draw on the map: no window, no page.
+
+  ```text
+  Home ?gmb=12&tab=log ─┐                         open set [kit:lyon, gbp:12, account:3]
+  /gbp/12?tab=log ──────┴─▶ shown: WinKey ──▶ hotbar: shown ▸ pressed · hidden ▸ plain · page ▸ ⤢
+                              │                  click: hide / show / float back · × closes
+         desktop: floating panel (⤢ its page, ×) · phone: its page · page: ⤡ over the map
+  ```
 - **The elements route by the location.** The front end's location store moves it with
   `pushState`, which fires nothing: after each move, its own or an element's (it wraps
   `pushState`/`replaceState`), it dispatches a stateless `popstate`, as back and forward do
@@ -966,6 +980,12 @@ push (a change, a page, 60 s)
   catalog knows), country, point and photos (`gmb_photos`, at most 10) with Places (New)'s. A GBP
   added without a key, or imported, has no point until synced. Categories as configured (the
   additional ones) and the owner's own photos are the Business Profile API's, which is not asked.
+- **A GBP's log** (`gmb_events`, `GET /gmbs/{id}/log`): what changed of it, each field before and
+  after (a Sync's too, one that changed nothing included), its moves, gmail, trade, brand, film,
+  switch, trash, and its gmail's browser launched or stopped; written in the transaction it records,
+  with the gmail it was under and who did it. A browser run for the gmail alone is the gmail's, in
+  the log of each GBP while under it. review_archive's events of the GBP (reviews appeared, gone,
+  back, appeals, failed scans) are its own (`/me/gmbs/{gmb}/events`): the page merges both by time.
 - **The review kit** is below.
 - **A GBP's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
   language table) follows the point's rule: Google's (its address), else set by hand
@@ -1173,7 +1193,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   on every way its run ends (docs/spec/browsers.md).
 - **No two gmails share a proxy**: an exit two accounts share is a link Google can draw.
 - **The ledger is append-only, and nothing a service stores an id of is deleted.**
-  `token_ledger` refuses UPDATE and DELETE; gmails and GBPs get `removed_at`, which a restore
+  `token_ledger` and `gmb_events` refuse UPDATE and DELETE; gmails and GBPs get `removed_at`, which a restore
   clears until `purged_at`, set once; kick-backs only `claimed_at`, once.
 - **A GBP with a place is tracked in review_archive; it is walked only while Verified.** The
   snapshot carries every GBP with a place, its state and country; the archive derives the track.

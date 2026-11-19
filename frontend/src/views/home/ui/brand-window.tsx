@@ -1,10 +1,10 @@
 "use client";
 
 import { Button, ConfirmDialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, cn, toast } from "@evinvest/uikit";
-import { Ellipsis, ImagePlus, ListFilter, MapPin, Plus, Tag, Trash2, Upload as UploadIcon, X } from "lucide-react";
+import { Ellipsis, ImagePlus, ListFilter, MapPin, Plus, Tag, Trash2, Upload as UploadIcon } from "lucide-react";
 import { useState } from "react";
 
-import { brandKeys, chooseCategoryScope, chooseGmailScope, kit, logoSrc, move, open, openCategories, openTrade, photoMax, photoSrc, scopeKeys, trades as tradesKeys, uploadLogo, uploadPhoto, useBrands, useGmails, useGmbTags, windowKeys } from "@/entities/gmb";
+import { brandKeys, chooseCategoryScope, chooseGmailScope, kit, logoSrc, move, openWindow, photoMax, photoSrc, scopeKeys, trades as tradesKeys, uploadLogo, uploadPhoto, useBrands, useGmails, useGmbTags } from "@/entities/gmb";
 import { Refused, api, ok } from "@/shared/api";
 import type { Brand, Gmail, Gmb, KitPhoto, Trade } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
@@ -40,16 +40,16 @@ export function BrandWindow({ trade, brand, gmbs, gmails }: { trade: Trade; bran
   const held = gmbs.filter((b) => b.brand_id === brand.id);
   const brandless = gmbs.filter((b) => b.brand_id === null && b.gmail_id === brand.gmail_id && b.trade_id === brand.trade_id && b.country?.code === brand.country);
   return (
-    <section aria-label={brand.name} className="absolute inset-y-0 right-0 left-0 flex flex-col overflow-y-auto border-l border-border bg-background md:left-36">
+    <section aria-label={brand.name} className="flex flex-col">
       <header className="flex items-start gap-3 px-6 pt-4">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <h2 className="flex min-w-0 items-center gap-2 text-lg font-semibold text-ink">
             <Tag aria-hidden className="size-4 shrink-0 text-ink-soft" />
-            <button type="button" onClick={() => openCategories(true)} className="shrink-0 rounded font-medium text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+            <button type="button" onClick={() => openWindow({ kind: "categories" })} className="shrink-0 rounded font-medium text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
               {t(scopeKeys.categories, "Categories")}
             </button>
             <span aria-hidden className="text-ink-soft/60">/</span>
-            <button type="button" onClick={() => openTrade(trade.id, brand.country)} className="shrink-0 rounded font-medium text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+            <button type="button" onClick={() => openWindow({ kind: "trade", trade: trade.id, country: brand.country, brand: null })} className="shrink-0 rounded font-medium text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
               {category}
             </button>
             <span aria-hidden className="text-ink-soft/60">/</span>
@@ -69,9 +69,6 @@ export function BrandWindow({ trade, brand, gmbs, gmails }: { trade: Trade; bran
           {t(tradesKeys.window.scope, "Scope the outline to it")}
         </Button>
         <More brand={brand} />
-        <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} title={t(windowKeys.close, "Close the window")} onClick={() => openTrade(null)}>
-          <X aria-hidden />
-        </Button>
       </header>
       <div className="flex max-w-3xl flex-col gap-6 p-6">
         <Identity brand={brand} example={held[0]?.name} />
@@ -87,7 +84,7 @@ export function BrandWindow({ trade, brand, gmbs, gmails }: { trade: Trade; bran
           ) : (
             <span className="flex flex-wrap gap-1.5">
               {held.map((b) => (
-                <button key={b.id} type="button" onClick={() => open(b)} className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-sm text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring">
+                <button key={b.id} type="button" onClick={() => openWindow({ kind: "gbp", gmb: b.id, tab: "profile" })} className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-sm text-ink outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring">
                   <MapPin aria-hidden className="size-3.5 text-ink-soft" />
                   {b.name}
                 </button>
@@ -137,7 +134,7 @@ function More({ brand }: { brand: Brand }) {
         labels={{ cancel: t(move.cancel, "Cancel") }}
         onConfirm={async () => {
           await ok(api.DELETE("/brands/{id}", { params: { path: { id: brand.id } } }));
-          openTrade(brand.trade_id, brand.country);
+          openWindow({ kind: "trade", trade: brand.trade_id, country: brand.country, brand: null });
           brands.reload();
         }}
       />

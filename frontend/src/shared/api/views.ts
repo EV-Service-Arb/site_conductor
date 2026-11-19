@@ -124,6 +124,35 @@ export const VIEWS = {
       },
       "key": "y"
     },
+    "adding": {
+      "path": "/add",
+      "description": "The Add a GBP panel as a page, with what it starts from: a gmail (`account`), a trade.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {
+          "account": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "trade": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      }
+    },
     "admin_tokens": {
       "path": "/admin/tokens",
       "description": "Everyone's tokens, prices and flows.",
@@ -167,6 +196,135 @@ export const VIEWS = {
         "properties": {
           "chat": {
             "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      }
+    },
+    "categories": {
+      "path": "/categories",
+      "description": "Every trade by country, as a page.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      }
+    },
+    "category": {
+      "path": "/category/{trade}",
+      "description": "A trade's window as its own page, on `country`'s tab; `brand`, a brand's under it.",
+      "params": {
+        "properties": {
+          "trade": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "trade"
+        ],
+        "type": "object"
+      },
+      "query": {
+        "properties": {
+          "brand": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "country": {
+            "description": "ISO 3166-1 alpha-2, of the countries GBPs are in.",
+            "enum": [
+              "FR",
+              "US",
+              "CA",
+              "GB",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      }
+    },
+    "gbp": {
+      "path": "/gbp/{gmb}",
+      "description": "A GBP's window as its own page.",
+      "params": {
+        "properties": {
+          "gmb": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "gmb"
+        ],
+        "type": "object"
+      },
+      "query": {
+        "properties": {
+          "tab": {
+            "enum": [
+              "profile",
+              "log",
+              "launch",
+              "browser",
+              "connections",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      }
+    },
+    "gmail": {
+      "path": "/gmail/{account}",
+      "description": "A gmail's window as its own page.",
+      "params": {
+        "properties": {
+          "account": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "account"
+        ],
+        "type": "object"
+      },
+      "query": {
+        "properties": {
+          "tab": {
+            "enum": [
+              "profile",
+              "log",
+              "launch",
+              "browser",
+              "connections",
+              null
+            ],
             "type": [
               "string",
               "null"
@@ -1004,6 +1162,20 @@ export const VIEWS = {
         "type": "object"
       },
       "key": "t"
+    },
+    "trash": {
+      "path": "/trash",
+      "description": "What the caller removed, as a page.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      }
     },
     "usage": {
       "path": "/usage",
