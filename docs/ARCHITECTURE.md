@@ -829,12 +829,12 @@ declared once, in accounting's `google.nix`, which the config file (`--config`, 
 `sa_places::Account`) imports whole: its export and reader, `allow` per slice of accounting's
 (the conductor holds its rank 1 against `maps`, which every meter here falls in; the guard holds
 them all at Google), and what it `provides`, each slot optional: `places` (Places, Geocoding),
-`browser` (Maps JS). Every key bills on its account (docs/spec/google.md); each use of ours is
+`browser` (Maps JS), `business` (the Business Profile APIs' OAuth client, #119). Every key bills on its account (docs/spec/google.md); each use of ours is
 stored with the account that paid (`usage.account`). N accounts are one with N× the free units,
 the money capped per account.
 
 ```text
-accounting/google.nix  accounts = [ { name, export { table, reader, since }, credits, allow { <slice> }, provides { places?, browser?, ads? } } … ]
+accounting/google.nix  accounts = [ { name, export { table, reader, since }, credits, allow { <slice> }, provides { places?, browser?, business?, ads? } } … ]
   ├─ the guard (accounting): holds each slice's real money to `allow` at Google
   ├─ the conductor, review_archive, gop: `import`, each reading the slots it uses
   └─ devops: the same list, each secret slot `{ env = "SA_GOOGLE_<NAME>_<SLOT>"; }`

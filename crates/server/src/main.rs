@@ -186,6 +186,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 					export = a.export.table,
 					places = a.provides.places.is_some(),
 					browser = a.provides.browser.is_some(),
+					business = a.provides.business.is_some(),
 					allow = sa_panel::meters::allowance(a),
 					"Google account"
 				);

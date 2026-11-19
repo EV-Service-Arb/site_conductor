@@ -35,6 +35,16 @@ pub struct Provides {
 	pub places: Option<Key>,
 	/// Maps JS, referrer-restricted.
 	pub browser: Option<Key>,
+	/// Business Profile APIs; refused (0 QPM) until Google approves the project.
+	pub business: Option<Business>,
+}
+
+/// The OAuth client a gmail grants `business.manage` to; the grants stay with whoever holds them.
+#[derive(Clone)]
+#[cfg_attr(feature = "settings", derive(v_utils::macros::ConfigJsonSchema, v_utils::macros::MyConfigPrimitives))]
+pub struct Business {
+	pub client_id: String,
+	pub client_secret: String,
 }
 
 #[derive(Clone)]
@@ -59,6 +69,7 @@ impl std::fmt::Debug for Account {
 			.field("export", &self.export.table)
 			.field("places", &tail(self.provides.places.as_deref()))
 			.field("browser", &tail(self.provides.browser.as_deref()))
+			.field("business", &self.provides.business.as_ref().map(|b| &b.client_id))
 			.field("allow", &self.allow)
 			.finish_non_exhaustive()
 	}
