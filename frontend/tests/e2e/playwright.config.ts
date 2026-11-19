@@ -14,12 +14,13 @@ export function stackConfig({ ports, args, specs }: { ports: [stack: string, web
   const WEB = port(ports[1]);
   if (WEB !== STACK + 1) throw new Error(`${ports[1]} ${WEB}: \`dev --port ${STACK}\` serves its next dev on ${STACK + 1}`);
   const tmp = (path: string) => new URL(`../../tmp/playwright-${STACK}/${path}`, import.meta.url).pathname;
+  process.env.STACK_TIMELINE = new URL(`../../../.local-port-${STACK}/timeline.tsv`, import.meta.url).pathname; // where `dev --port` keeps it; read by timeline.ts, written by sign-in.ts too
   return defineConfig({
     testDir: ".",
     ...specs,
     fullyParallel: true, // the specs share no server state: each page is its own context, over the one session
     outputDir: tmp(""),
-    reporter: [["list"], ["./timeline.ts", { stack: new URL(`../../../.local-port-${STACK}/timeline.tsv`, import.meta.url).pathname, out: tmp("timeline.txt") }]],
+    reporter: [["list"], ["./timeline.ts", { out: tmp("timeline.txt") }]],
     globalSetup: "./sign-in.ts",
     use: {
       baseURL: `http://localhost:${WEB}`, // `next dev` refuses its dev resources to any other host, so the page never hydrates

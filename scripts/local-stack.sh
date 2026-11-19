@@ -167,7 +167,8 @@ if [ "$reset" = 1 ] && [ -d "$state" ]; then
 	rm -rf "$state"
 fi
 mkdir -p "$state/logs" "$state/secrets"
-: >"$state/timeline.tsv"
+export STACK_TIMELINE="$state/timeline.tsv"
+: >"$STACK_TIMELINE"
 # Ignored by its own .gitignore: the repo's is generated, and this is nobody else's business.
 printf '*\n' >"$state/.gitignore"
 
@@ -354,11 +355,22 @@ fi
 
 # ── the builds ───────────────────────────────────────────────────────────────────────────
 
-# `in_shell <checkout> <command…>`: in that checkout, under its own dev shell's toolchain
+# `in_shell <checkout> <command…>`: in that checkout, under its own dev shell's toolchain; under `timed`,
+# the shell's realisation and the command are spans of their own
 in_shell() {
 	local dir="$1"
 	shift
-	(cd "$dir" && nix develop -c "$@")
+	if [ -z "${TIMELINE_PARENT:-}" ]; then
+		(cd "$dir" && nix develop -c "$@")
+		return
+	fi
+	local start
+	start="$(date +%s%3N)"
+	printf '%s\t%s\t\n' "$TIMELINE_PARENT/nix develop" "$start" >>"$STACK_TIMELINE"
+	# shellcheck disable=SC2016 # expanded by the shell inside
+	(cd "$dir" && nix develop -c bash -c "$(declare -f timed)"'
+		printf "%s\t%s\t%s\n" "$TIMELINE_PARENT/nix develop" "$0" "$(date +%s%3N)" >>"$STACK_TIMELINE"
+		timed "${1##*/}" "$@"' "$start" "$@")
 }
 REVIEW_ARCHIVE_WEB_BUILD="nix run .#build-mfe -- '$state/watch/review_archive-mfe'"
 # The checkout's binaries linked into the state, its target dir keeping the rest: other sessions
@@ -366,14 +378,16 @@ REVIEW_ARCHIVE_WEB_BUILD="nix run .#build-mfe -- '$state/watch/review_archive-mf
 own_cargo="env CARGO_BUILD_BUILD_DIR='$root/target' CARGO_TARGET_DIR='$state/target' cargo"
 # once more on a failure: other sessions sweep target dirs, mid-build too
 retried() { "$@" || { warn "retrying: $*"; "$@"; }; }
-# `timed <name> <command…>`: one row of $state/timeline.tsv (name, start, end in epoch ms), which
-# the e2e's timeline reporter draws beside the tests
+# `timed <name> <command…>`: a span of $STACK_TIMELINE (name, start, end in epoch ms; a row without end
+# on start, the whole row again on end), nested under the `timed` it runs in; the e2e's timeline
+# reporter draws it beside the tests
 timed() {
-	local name="$1" start rc=0
+	local name="${TIMELINE_PARENT:+$TIMELINE_PARENT/}$1" start rc=0
 	shift
 	start="$(date +%s%3N)"
-	"$@" || rc=$?
-	printf '%s\t%s\t%s\n' "$name" "$start" "$(date +%s%3N)" >>"$state/timeline.tsv"
+	printf '%s\t%s\t\n' "$name" "$start" >>"$STACK_TIMELINE"
+	TIMELINE_PARENT="$name" "$@" || rc=$?
+	printf '%s\t%s\t%s\n' "$name" "$start" "$(date +%s%3N)" >>"$STACK_TIMELINE"
 	return "$rc"
 }
 # Each line prefixed with whose it is, and kept in .local/logs/<name>.log.
@@ -410,9 +424,9 @@ fi
 web_prep() {
 	# in the dev shell, whose js-local lays our packages' checkouts over the install (frontend/_.js-local.json);
 	# npm ci stamps node_modules/.package-lock.json: a lockfile pulled since is newer
-	prefixed web in_shell "$root" bash -c \
+	timed packages prefixed web in_shell "$root" bash -c \
 		'cd frontend && if [ node_modules/.package-lock.json -nt package-lock.json ]; then js-local; else npm ci; fi'
-	prefixed placement-overlay in_shell "$root" placement-overlay
+	timed overlay prefixed placement-overlay in_shell "$root" placement-overlay
 }
 web_prep_build=""
 if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
@@ -548,7 +562,7 @@ fi
 sandbox_origin=""
 if [ "$run_panel" = 1 ]; then
 	sandbox_js="$root/crates/sandbox/js"
-	[ "$sandbox_js/node_modules/.package-lock.json" -nt "$sandbox_js/package.json" ] || in_shell "$root" bash -c "cd crates/sandbox/js && npm install --no-audit --no-fund >&2"
+	[ "$sandbox_js/node_modules/.package-lock.json" -nt "$sandbox_js/package.json" ] || timed sandbox-js in_shell "$root" bash -c "cd crates/sandbox/js && npm install --no-audit --no-fund >&2"
 	if [ -d "$sandbox_js/node_modules/@evinvest/api" ]; then
 		sandbox_origin="http://127.0.0.1:$SANDBOX_PORT"
 	fi
@@ -821,7 +835,7 @@ fi
 if [ -n "$sandbox_origin" ]; then
 	say "starting the sandbox's runner on $sandbox_origin"
 	busy "$SANDBOX_PORT" && die "port $SANDBOX_PORT is taken: the sandbox's runner's"
-	in_shell "$root" cargo b -q -p sa_sandbox
+	timed sandbox in_shell "$root" cargo b -q -p sa_sandbox
 	serving sandbox "$root" "cargo b -q -p sa_sandbox" "sandbox serve" -e rs,toml,lock &
 	essential+=("$!")
 elif [ "$run_panel" = 1 ]; then
@@ -836,6 +850,8 @@ if [ "$run_panel" = 1 ]; then
 	# Dev sign-in's session, as the admin: the seeds are the conductor's own operations.
 	if [ "$role" = admin ]; then
 		say "seeding $state/panel.db over HTTP"
+		seed_start="$(date +%s%3N)"
+		printf 'seed\t%s\t\n' "$seed_start" >>"$STACK_TIMELINE"
 		jar="$state/session.jar"
 		rm -f "$jar"
 		login="$(curl -fsS -o /dev/null -c "$jar" -w '%{redirect_url}' "$origin/auth/login?as=$DEV_EMAIL")"
@@ -900,6 +916,7 @@ if [ "$run_panel" = 1 ]; then
 			for slug in "${VIFNET_PLACES[@]}"; do register vifnet "$slug"; done
 			for slug in "${DEBOUCHAGE_PLACES[@]}"; do register debouchage "$slug"; done
 		fi
+		printf 'seed\t%s\t%s\n' "$seed_start" "$(date +%s%3N)" >>"$STACK_TIMELINE"
 	elif [ "$fresh" = 1 ]; then
 		die "a new state is seeded as the admin: run it once without --role $role"
 	fi
