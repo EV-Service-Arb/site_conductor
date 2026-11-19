@@ -3,7 +3,7 @@
 import { Button } from "@evinvest/uikit";
 import { Plus } from "lucide-react";
 
-import { gmbs, openAdd } from "@/entities/gmb";
+import { gmbs, openWindow } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
 
@@ -20,7 +20,7 @@ export function AddGmbButton({ gmail, trade, labeled }: { gmail: number | null; 
       aria-label={label}
       title={labeled ? undefined : label}
       className={labeled ? "justify-start text-ink-soft" : undefined}
-      onClick={() => openAdd({ ...(gmail !== null && { gmail }), ...(trade !== null && { trade }) })}
+      onClick={() => openWindow({ kind: "add", at: { ...(gmail !== null && { gmail }), ...(trade !== null && { trade }) } })}
     >
       <Plus aria-hidden />
       {labeled && label}

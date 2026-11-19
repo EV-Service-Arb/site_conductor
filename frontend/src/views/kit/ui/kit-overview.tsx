@@ -3,7 +3,7 @@
 import { Badge, Button, Skeleton, cn, toast } from "@evinvest/uikit";
 import { ChevronRight, Info, Link2, LocateOff, Pencil, QrCode } from "lucide-react";
 
-import { type KitAt, TARGET_NAME, floatKit, kit as kitKeys } from "@/entities/gmb";
+import { type KitAt, TARGET_NAME, editKit, kit as kitKeys } from "@/entities/gmb";
 import type { Kit, KitEvent, KitHappening, KitMember } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
 import { formatDistance } from "@/shared/lib/format";
@@ -46,7 +46,7 @@ function Header({ kit }: { kit: Kit }) {
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <h2 className="flex items-center gap-2 text-xl font-semibold text-ink">
           {kit.name}
-          <Button variant="ghost" size={button("sm")} icon aria-label={t(kitKeys.edit, "Edit the kit")} title={t(kitKeys.edit, "Edit the kit")} onClick={() => floatKit({ kit: kit.slug, edit: true })}>
+          <Button variant="ghost" size={button("sm")} icon aria-label={t(kitKeys.edit, "Edit the kit")} title={t(kitKeys.edit, "Edit the kit")} onClick={() => editKit(kit.slug)}>
             <Pencil aria-hidden />
           </Button>
         </h2>
@@ -139,7 +139,7 @@ function Desk({ kit, go }: { kit: Kit; go: (at: KitAt) => void }) {
       )}
       {kit.latest.length > 0 && <Latest latest={kit.latest} name={name} />}
       <footer className="flex flex-wrap gap-2">
-        <Button variant="outline" size={button("sm")} onClick={() => floatKit({ kit: kit.slug, edit: true })}>
+        <Button variant="outline" size={button("sm")} onClick={() => editKit(kit.slug)}>
           <Pencil aria-hidden />
           {t(kitKeys.editGbps, "Add or drop GBPs")}
         </Button>

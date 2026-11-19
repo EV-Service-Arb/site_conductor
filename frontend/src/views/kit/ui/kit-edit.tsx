@@ -5,7 +5,7 @@ import { Button, ConfirmDialog, Input, ToggleGroup, ToggleGroupItem, cn } from "
 import { Check, Map as MapIcon, Pencil, Search, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { AreaDraw, CategoryChip, floatKit, isSlug, kit as kitKeys, move, slugOf, useGmails, useOutline, useSelection, windowKeys } from "@/entities/gmb";
+import { AreaDraw, CategoryChip, editKit, isSlug, openWindow, kit as kitKeys, move, slugOf, useGmails, useOutline, useSelection, windowKeys } from "@/entities/gmb";
 import { Refused, api, ok } from "@/shared/api";
 import type { AreaGmbs, Gmb } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
@@ -91,7 +91,7 @@ function Editor({ map, slug, name0, area0, gmbs0, title }: { map: google.maps.Ma
     setBusy(true);
     try {
       await ok(api.PUT("/kits/{slug}", { params: { path: { slug: finalSlug } }, body: { name: name.trim(), area, gmbs: [...chosen] } }));
-      floatKit({ kit: finalSlug });
+      openWindow({ kind: "kit", at: { kit: finalSlug } });
     } catch (e) {
       if (!(e instanceof Refused)) throw e;
       if (e.failure.code !== "unauthenticated") setRefused(failureText(e.failure, t));
@@ -110,7 +110,7 @@ function Editor({ map, slug, name0, area0, gmbs0, title }: { map: google.maps.Ma
       <section aria-label={title} className="pointer-events-auto flex max-h-full w-full flex-col overflow-y-auto rounded-lg border border-border bg-background shadow-overlay md:w-120">
         <header className="flex items-center gap-2 border-b border-border px-4 py-3">
           <h2 className="flex-1 text-sm font-semibold text-ink">{title}</h2>
-          <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} onClick={() => floatKit(slug === "" ? null : { kit: slug })}>
+          <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.close, "Close the window")} onClick={() => (slug === "" ? editKit(null) : openWindow({ kind: "kit", at: { kit: slug } }))}>
             <X aria-hidden />
           </Button>
         </header>
@@ -221,7 +221,7 @@ function Delete({ slug, name }: { slug: string; name: string }) {
       labels={{ cancel: t(move.cancel, "Cancel") }}
       onConfirm={async () => {
         await ok(api.DELETE("/kits/{slug}", { params: { path: { slug } } }));
-        floatKit({ kit: "" });
+        openWindow({ kind: "kit", at: { kit: "" } });
       }}
     />
   );

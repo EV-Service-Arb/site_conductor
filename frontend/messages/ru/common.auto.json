@@ -267,10 +267,6 @@
     "en": "Last 7 days",
     "t": "За 7 дней"
   },
-  "add.close": {
-    "en": "Close",
-    "t": "Закрыть"
-  },
   "add.country.byHand": {
     "en": "Not on Maps: its country is said by hand.",
     "t": "Не на Картах: страна указывается вручную."
@@ -354,6 +350,10 @@
   "add.spots.pick": {
     "en": "Pick it on the map",
     "t": "Выбрать на карте"
+  },
+  "add.spots.pick.offMap": {
+    "en": "No map on this page: float it over the map to pick there",
+    "t": "На этой странице нет карты: поместите её поверх карты, чтобы выбирать там"
   },
   "add.spots.picking": {
     "en": "Click the map where spot {n} stands",
@@ -2087,10 +2087,6 @@
     "en": "kit waits for Verified",
     "t": "набор ждёт статуса «Подтверждён»"
   },
-  "kit.close": {
-    "en": "Close the kit",
-    "t": "Закрыть набор"
-  },
   "kit.copied": {
     "en": "Link copied",
     "t": "Ссылка скопирована"
@@ -2486,14 +2482,6 @@
   "kit.tally.title": {
     "en": "Collected",
     "t": "Собрано"
-  },
-  "kit.toMap": {
-    "en": "Over the map",
-    "t": "Над картой"
-  },
-  "kit.toPage": {
-    "en": "Its own page",
-    "t": "Своя страница"
   },
   "kit.up": {
     "en": "Up",
@@ -4071,21 +4059,325 @@
     "en": "Close the window",
     "t": "Закрыть окно"
   },
-  "window.next": {
-    "en": "Next",
-    "t": "Следующий"
+  "window.log.added": {
+    "en": "Added as {state}",
+    "t": "Добавлен как {state}"
+  },
+  "window.log.all": {
+    "en": "All",
+    "t": "Все"
+  },
+  "window.log.appeared": {
+    "en": "A review on Google",
+    "t": "Отзыв в Google"
+  },
+  "window.log.brand": {
+    "en": "Given a brand",
+    "t": "Получил бренд"
+  },
+  "window.log.brandGone": {
+    "en": "Its brand dropped",
+    "t": "Бренд снят"
+  },
+  "window.log.by": {
+    "en": "by {name}",
+    "t": "от {name}"
+  },
+  "window.log.byGoogle": {
+    "en": "by Google, or a run",
+    "t": "от Google или запуска"
+  },
+  "window.log.earlier": {
+    "en": "Earlier ↓",
+    "t": "Раньше ↓"
+  },
+  "window.log.edited": {
+    "en": "Edited: {fields}",
+    "t": "Изменено: {fields}"
+  },
+  "window.log.edits": {
+    "en": "Edits",
+    "t": "Правки"
+  },
+  "window.log.emailFrom": {
+    "en": "from {who}",
+    "t": "от {who}"
+  },
+  "window.log.emailTo": {
+    "en": "to {who}",
+    "t": "кому: {who}"
+  },
+  "window.log.emails": {
+    "en": "Emails",
+    "t": "Письма"
+  },
+  "window.log.field.address": {
+    "en": "address",
+    "t": "адрес"
+  },
+  "window.log.field.areas": {
+    "en": "service areas",
+    "t": "зоны обслуживания"
+  },
+  "window.log.field.country": {
+    "en": "country",
+    "t": "страна"
+  },
+  "window.log.field.customersVisit": {
+    "en": "customers visit",
+    "t": "клиенты приходят"
+  },
+  "window.log.field.googlePrimary": {
+    "en": "Google category",
+    "t": "категория Google"
+  },
+  "window.log.field.hiddenAddress": {
+    "en": "hidden address",
+    "t": "скрытый адрес"
+  },
+  "window.log.field.hours": {
+    "en": "hours",
+    "t": "часы работы"
+  },
+  "window.log.field.name": {
+    "en": "name",
+    "t": "название"
+  },
+  "window.log.field.phone": {
+    "en": "phone",
+    "t": "телефон"
+  },
+  "window.log.field.photos": {
+    "en": "photos",
+    "t": "фото"
+  },
+  "window.log.field.placeId": {
+    "en": "place id",
+    "t": "place id"
+  },
+  "window.log.field.point": {
+    "en": "point",
+    "t": "точка"
+  },
+  "window.log.field.spots": {
+    "en": "spots",
+    "t": "места"
+  },
+  "window.log.field.website": {
+    "en": "website",
+    "t": "сайт"
+  },
+  "window.log.film": {
+    "en": "Film recorded by hand",
+    "t": "Плёнка записана вручную"
+  },
+  "window.log.filmCleared": {
+    "en": "Film cleared",
+    "t": "Плёнка очищена"
+  },
+  "window.log.gmail": {
+    "en": "Moved to another gmail",
+    "t": "Перенесён на другой gmail"
+  },
+  "window.log.launched": {
+    "en": "Browser launched",
+    "t": "Браузер запущен"
+  },
+  "window.log.launchedFilm": {
+    "en": "Browser launched, playing its film",
+    "t": "Браузер запущен, играет свою плёнку"
+  },
+  "window.log.noEmails": {
+    "en": "No emails with Google: they are read from the gmail's inbox once its IMAP is set.",
+    "t": "Писем от Google нет: они читаются из входящих gmail, как только настроен его IMAP."
+  },
+  "window.log.noSubject": {
+    "en": "(no subject)",
+    "t": "(без темы)"
+  },
+  "window.log.none": {
+    "en": "Nothing logged yet.",
+    "t": "Пока ничего не записано."
+  },
+  "window.log.ofGmail": {
+    "en": "the gmail's, {gmail}",
+    "t": "у gmail, {gmail}"
+  },
+  "window.log.off": {
+    "en": "Switched off",
+    "t": "Выключен"
+  },
+  "window.log.on": {
+    "en": "Switched on",
+    "t": "Включён"
+  },
+  "window.log.openThread": {
+    "en": "Open thread",
+    "t": "Открыть переписку"
+  },
+  "window.log.reinstatementCleared": {
+    "en": "Reinstatement withdrawn",
+    "t": "Запрос на восстановление отозван"
+  },
+  "window.log.reinstatementSet": {
+    "en": "Reinstatement asked of Google",
+    "t": "Восстановление запрошено у Google"
+  },
+  "window.log.removed": {
+    "en": "Removed to the trash",
+    "t": "Перемещён в корзину"
+  },
+  "window.log.restored": {
+    "en": "Restored from the trash",
+    "t": "Восстановлен из корзины"
+  },
+  "window.log.returned": {
+    "en": "A review back on Google",
+    "t": "Отзыв вернулся в Google"
+  },
+  "window.log.reviewRemoved": {
+    "en": "A review removed",
+    "t": "Отзыв удалён"
+  },
+  "window.log.reviews": {
+    "en": "Reviews",
+    "t": "Отзывы"
+  },
+  "window.log.scanFailed": {
+    "en": "A scan of its reviews failed",
+    "t": "Не удалось просканировать его отзывы"
+  },
+  "window.log.stopped": {
+    "en": "Browser stopped",
+    "t": "Браузер остановлен"
+  },
+  "window.log.suspended": {
+    "en": "A 5-star review suspended",
+    "t": "5-звёздочный отзыв приостановлен"
+  },
+  "window.log.synced": {
+    "en": "Sync: {n} fields changed on Google",
+    "t": "Синхронизация: изменено полей в Google: {n}"
+  },
+  "window.log.syncedSame": {
+    "en": "Sync: nothing changed on Google",
+    "t": "Синхронизация: в Google ничего не изменилось"
+  },
+  "window.log.syncs": {
+    "en": "Syncs",
+    "t": "Синхронизации"
+  },
+  "window.log.threadOpened": {
+    "en": "Opened in the gmail's browser",
+    "t": "Открыто в браузере gmail"
+  },
+  "window.log.trade": {
+    "en": "Given another trade",
+    "t": "Получил другую сферу деятельности"
+  },
+  "window.log.tradeGone": {
+    "en": "Its trade taken away",
+    "t": "Сфера деятельности снята"
+  },
+  "window.log.verification": {
+    "en": "Verification",
+    "t": "Верификация"
   },
   "window.planned": {
     "en": "planned · {at}",
     "t": "план · {at}"
   },
-  "window.prev": {
-    "en": "Previous",
-    "t": "Предыдущий"
+  "window.profile.added": {
+    "en": "Added {at}",
+    "t": "Добавлен {at}"
   },
-  "window.readyToSubmit": {
-    "en": "ready to submit",
-    "t": "готово к отправке"
+  "window.profile.brand": {
+    "en": "Brand",
+    "t": "Бренд"
+  },
+  "window.profile.connections": {
+    "en": "Connections",
+    "t": "Связи"
+  },
+  "window.profile.copied": {
+    "en": "Copied",
+    "t": "Скопировано"
+  },
+  "window.profile.copy": {
+    "en": "Copy",
+    "t": "Копировать"
+  },
+  "window.profile.hours": {
+    "en": "Hours",
+    "t": "Часы работы"
+  },
+  "window.profile.kit": {
+    "en": "Review kit",
+    "t": "Набор для отзывов"
+  },
+  "window.profile.noGmail": {
+    "en": "No gmail yet",
+    "t": "Gmail пока нет"
+  },
+  "window.profile.noPhotos": {
+    "en": "No photos: Sync pulls Google's",
+    "t": "Нет фото: синхронизация подтянет фото из Google"
+  },
+  "window.profile.offGoogle": {
+    "en": "Not on Maps: no photos from Google",
+    "t": "Нет на Картах: фото из Google нет"
+  },
+  "window.profile.onGoogle": {
+    "en": "On Google",
+    "t": "В Google"
+  },
+  "window.profile.openSite": {
+    "en": "Open",
+    "t": "Открыть"
+  },
+  "window.profile.ours": {
+    "en": "Ours",
+    "t": "Наше"
+  },
+  "window.profile.ours.what": {
+    "en": "what Google does not hold",
+    "t": "то, чего нет в Google"
+  },
+  "window.profile.pinByHand": {
+    "en": "pin placed by hand",
+    "t": "метка поставлена вручную"
+  },
+  "window.profile.pinGoogle": {
+    "en": "pin from Google",
+    "t": "метка из Google"
+  },
+  "window.profile.reviews": {
+    "en": "Reviews",
+    "t": "Отзывы"
+  },
+  "window.profile.serviceArea": {
+    "en": "service area",
+    "t": "зона обслуживания"
+  },
+  "window.profile.site": {
+    "en": "its site · {n} leads in 7 days",
+    "t": "его сайт · заявок за 7 дней: {n}"
+  },
+  "window.profile.sync": {
+    "en": "Sync",
+    "t": "Синхронизация"
+  },
+  "window.profile.syncCost": {
+    "en": "up to {n} tokens",
+    "t": "до {n} токенов"
+  },
+  "window.profile.synced": {
+    "en": "synced from Google {ago}",
+    "t": "синхронизировано с Google {ago}"
+  },
+  "window.profile.visit": {
+    "en": "customers visit",
+    "t": "клиенты приходят"
   },
   "window.tab.browser": {
     "en": "Browser",
@@ -4099,8 +4391,24 @@
     "en": "Launch",
     "t": "Запуск"
   },
+  "window.tab.log": {
+    "en": "Log",
+    "t": "Журнал"
+  },
+  "window.tab.profile": {
+    "en": "Profile",
+    "t": "Профиль"
+  },
   "window.tabs": {
     "en": "Sections",
     "t": "Разделы"
+  },
+  "window.toMap": {
+    "en": "Over the map",
+    "t": "Над картой"
+  },
+  "window.toPage": {
+    "en": "Its own page",
+    "t": "Своя страница"
   }
 }

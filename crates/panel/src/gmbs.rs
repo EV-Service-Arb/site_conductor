@@ -23,9 +23,11 @@ use crate::{
 };
 pub use crate::{
 	google_categories::GoogleCategory,
-	store::gmbs::{Category, GbpCountry, Gmail, Gmb, GmbId, GmbPhoto, Point, Spot, Trade, TradeId},
+	store::gmbs::{Category, Changed, Event, EventKind, Field, GbpCountry, Gmail, Gmb, GmbId, GmbPhoto, Logged, Point, Spot, Trade, TradeId},
 };
 
+/// The rows of a page of a GBP's log.
+pub const LOG_PAGE: u32 = 100;
 const MAX_SPOTS: usize = 20;
 
 /// A GBP that is on Google already, added under a gmail.
@@ -242,8 +244,12 @@ impl Panel {
 		if db::gmail_owner(&mut tx, id).await? == Some(owner) && crate::store::browsers::browser(&mut tx, id).await?.is_some() {
 			return Ok(Err(Refused::Conflict("remove its browser first: its provider's profile and its session go with it".to_owned())));
 		}
+		let going = db::gmbs(&mut tx, owner).await?.into_iter().filter(|b| b.gmail_id == Some(id)).collect::<Vec<_>>();
 		if !db::remove_gmail(&mut tx, owner, id, now).await? {
 			return Ok(Err(Refused::NotFound));
+		}
+		for b in going {
+			db::log(&mut tx, Some(b.id), Some(id), Some(owner), now, &Event::Removed).await?;
 		}
 		tx.commit().await.wrap_err("committing a gmail's removal")?;
 		self.snapshot_due.notify_one();
@@ -357,6 +363,7 @@ impl Panel {
 			db::set_spots(&mut tx, owner, added.id, &spots).await?;
 			added = db::gmb_of(&mut tx, None, added.id).await?.expect("added in this transaction");
 		}
+		db::log(&mut tx, Some(added.id), added.gmail_id, Some(owner), now, &Event::Added { state: added.state }).await?;
 		tx.commit().await.wrap_err("committing a GBP without a place")?;
 		self.snapshot_due.notify_one();
 		Ok(Ok(added))
@@ -431,6 +438,7 @@ impl Panel {
 			trade_id: e.trade,
 		};
 		let added = db::add_gmb(&mut tx, None, &new, now).await?;
+		db::log(&mut tx, Some(added.id), added.gmail_id, owner, now, &Event::Added { state: added.state }).await?;
 		tx.commit().await.wrap_err("committing a GMB")?;
 		self.snapshot_due.notify_one();
 		Ok(Ok(added))
@@ -474,6 +482,7 @@ impl Panel {
 		}
 		db::set_fields(&mut tx, id, &edit).await?;
 		let edited = db::gmb_of(&mut tx, Some(owner), id).await?.expect("read in this transaction");
+		db::record(&mut tx, Some(owner), Timestamp::now(), &gbp, &edited, false).await?;
 		tx.commit().await.wrap_err("committing a GMB's edit")?;
 		self.snapshot_due.notify_one();
 		Ok(Ok(edited))
@@ -550,6 +559,7 @@ impl Panel {
 			None => db::set_state(&mut tx, id, to).await?,
 		}
 		let moved = db::gmb_of(&mut tx, owner, id).await?.expect("read in this transaction");
+		db::record(&mut tx, owner, Timestamp::now(), &gbp, &moved, false).await?;
 		tx.commit().await.wrap_err("committing a GMB's state")?;
 		self.snapshot_due.notify_one();
 		Ok(Ok(moved))
@@ -637,11 +647,27 @@ impl Panel {
 			google_primary,
 			photos: &photos,
 		};
-		db::sync(&mut tx, id, &synced).await?;
-		let gbp = db::gmb_of(&mut tx, Some(owner), id).await?.expect("read in this transaction");
+		let now = Timestamp::now();
+		db::sync(&mut tx, id, &synced, now).await?;
+		let after = db::gmb_of(&mut tx, Some(owner), id).await?.expect("read in this transaction");
+		db::record(&mut tx, Some(owner), now, &gbp, &after, true).await?;
 		tx.commit().await.wrap_err("committing a synced GBP")?;
 		self.snapshot_due.notify_one();
-		Ok(Ok(gbp))
+		Ok(Ok(after))
+	}
+
+	/// A page of the owner's GBP `id`'s log before event `before`, newest first, of `kinds` (none: every kind).
+	pub async fn gmb_log(&self, owner: Uuid, id: i64, before: Option<i64>, kinds: &[EventKind]) -> eyre::Result<Result<Vec<Logged>, Refused>> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a GBP's log")?;
+		Ok(db::events(&mut conn, owner, id, before, kinds, LOG_PAGE).await?.ok_or(Refused::NotFound))
+	}
+
+	/// `event` of the owner's gmail `gmail`'s browser in the log of `gmb` it ran for, else of each GBP under the gmail.
+	pub async fn log_browser(&self, owner: Uuid, gmail: i64, gmb: Option<i64>, event: &Event) -> eyre::Result<()> {
+		assert!(matches!(event, Event::Launched { .. } | Event::Stopped), "a browser's own: {event:?}");
+		let mut tx = self.store.begin_write().await?;
+		db::log(&mut tx, gmb, Some(gmail), Some(owner), Timestamp::now(), event).await?;
+		tx.commit().await.wrap_err("committing a browser's event")
 	}
 
 	/// Photo `photo` of the owner's GBP `id`, as its last Sync took it.
@@ -657,9 +683,13 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
+		let Some(before) = db::gmb_of(&mut tx, owner, id).await? else {
+			return Ok(Err(Refused::NotFound));
+		};
 		if let Err(r) = db::set_country_by_hand(&mut tx, owner, id, country).await? {
 			return Ok(Err(r));
 		}
+		db::record_since(&mut tx, owner, Timestamp::now(), &[before]).await?;
 		tx.commit().await.wrap_err("committing a country")?;
 		self.snapshot_due.notify_one();
 		Ok(Ok(()))
@@ -674,9 +704,13 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
+		let Some(before) = db::gmb_of(&mut tx, Some(owner), id).await? else {
+			return Ok(Err(Refused::NotFound));
+		};
 		if let Err(r) = db::place(&mut tx, owner, id, at).await? {
 			return Ok(Err(r));
 		}
+		db::record_since(&mut tx, Some(owner), Timestamp::now(), &[before]).await?;
 		tx.commit().await.wrap_err("committing a placed point")?;
 		Ok(Ok(()))
 	}
@@ -699,6 +733,7 @@ impl Panel {
 		}
 		db::set_spots(&mut tx, owner, id, &given).await?;
 		let set = db::gmb_of(&mut tx, Some(owner), id).await?.expect("read in this transaction");
+		db::record(&mut tx, Some(owner), Timestamp::now(), &gbp, &set, false).await?;
 		tx.commit().await.wrap_err("committing a draft's spots")?;
 		Ok(Ok(set))
 	}
@@ -709,9 +744,13 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
+		let Some(before) = db::gmb_of(&mut tx, Some(owner), id).await? else {
+			return Ok(Err(Refused::NotFound));
+		};
 		if let Err(r) = db::unplace(&mut tx, owner, id).await? {
 			return Ok(Err(r));
 		}
+		db::record_since(&mut tx, Some(owner), Timestamp::now(), &[before]).await?;
 		tx.commit().await.wrap_err("committing a point taken back")?;
 		Ok(Ok(()))
 	}
@@ -726,9 +765,11 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
+		let befores = db::of_ids(&mut tx, &ids).await?;
 		if !db::switch(&mut tx, owner, &ids, on).await? {
 			return Ok(Err(Refused::NotFound));
 		}
+		db::record_since(&mut tx, Some(owner), Timestamp::now(), &befores).await?;
 		tx.commit().await.wrap_err("committing a switch")?;
 		self.snapshot_due.notify_one();
 		Ok(Ok(()))
@@ -739,9 +780,11 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
-		if !db::remove_gmb(&mut tx, owner, id, now).await? {
+		let Some(gone) = db::gmb_of(&mut tx, Some(owner), id).await? else {
 			return Ok(Err(Refused::NotFound));
-		}
+		};
+		assert!(db::remove_gmb(&mut tx, owner, id, now).await?, "read live in this transaction");
+		db::log(&mut tx, Some(id), gone.gmail_id, Some(owner), now, &Event::Removed).await?;
 		tx.commit().await.wrap_err("committing a GMB's removal")?;
 		self.snapshot_due.notify_one();
 		Ok(Ok(()))
@@ -883,9 +926,11 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
+		let befores = db::of_ids(&mut tx, &ids).await?;
 		if !trade_is(&mut tx, owner, trade).await? || !db::set_trades(&mut tx, owner, &ids, trade).await? {
 			return Ok(Err(Refused::NotFound));
 		}
+		db::record_since(&mut tx, Some(owner), Timestamp::now(), &befores).await?;
 		tx.commit().await.wrap_err("committing GBPs' trade")?;
 		Ok(Ok(()))
 	}

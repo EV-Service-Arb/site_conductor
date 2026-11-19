@@ -4,7 +4,7 @@ import { Button, Input, Settled, Skeleton, StatusDot, buttonVariants, cn, toast 
 import { ArrowLeft, ArrowRight, Hand, Plus, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
-import { browsersUnconnected, openAccount, useGmails, browser as browserKeys } from "@/entities/gmb";
+import { browsersUnconnected, openWindow, useGmails, browser as browserKeys } from "@/entities/gmb";
 import type { Browser, BrowserIn, BrowserOut, Gmail } from "@/shared/api/schema";
 import { Refused, api, ok } from "@/shared/api";
 import { type T, useT, account } from "@/shared/i18n";
@@ -35,7 +35,7 @@ export function BrowserSession({ gmail, gmb, aside }: { gmail: Gmail; gmb: numbe
       {connections.status === "ok" &&
         (connections.data.browser === null ? (
           <EmptyState title={t(browserKeys.session.none, "No browser for this gmail yet")} description={t(browserKeys.session.none.body, "Set up {gmail}'s antidetect environment on its Connections tab.", { gmail: gmail.gmail })}>
-            <Button size={button("sm")} onClick={() => openAccount({ gmail: gmail.id, tab: "connections" })}>
+            <Button size={button("sm")} onClick={() => openWindow({ kind: "account", gmail: gmail.id, tab: "connections" })}>
               {t(browserKeys.session.setUp, "Set it up")}
             </Button>
           </EmptyState>

@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger, Switch, cn } from "@evinvest/u
 import { ArrowUpRight, Check, ChevronDown, ChevronRight, ListFilter, Plug, Settings } from "lucide-react";
 import { type MouseEvent, useEffect, useState } from "react";
 
-import { chooseCategoryScope, chooseGmailScope, covers, GMAIL_ROLE_NAME, inCategories, openAccount, openCategories, openTrade, type Pattern, type Selection, under, useScope, useTrades, scopeKeys, gmbs as gmbsKeys } from "@/entities/gmb";
+import { chooseCategoryScope, chooseGmailScope, covers, GMAIL_ROLE_NAME, inCategories, openWindow, type Pattern, type Selection, under, useScope, useTrades, scopeKeys, gmbs as gmbsKeys } from "@/entities/gmb";
 import { AddGmailButton } from "@/features/add-gmail";
 import { AddGmbButton } from "@/features/add-gmb";
 import { api, ok } from "@/shared/api";
@@ -34,7 +34,7 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
   const [opened, setOpened] = useState<ReadonlySet<number>>(new Set());
   const openSettings = (trade: number, country: Country | undefined) => {
     setOpen(false);
-    openTrade(trade, country);
+    openWindow({ kind: "trade", trade, country: country ?? null, brand: null });
   };
   const { scoped, chosen, edited, isSelected, move } = selection;
   const { gmails } = data;
@@ -307,7 +307,7 @@ function ManageCategories({ onOpened }: { onOpened: () => void }) {
       type="button"
       onClick={() => {
         onOpened();
-        openCategories(true);
+        openWindow({ kind: "categories" });
       }}
       title={t(scopeKeys.categories.manage, "Manage categories")}
       className="flex items-center gap-1 rounded p-0.5 tracking-wide uppercase outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
@@ -327,7 +327,7 @@ function OpenAccount({ gmail, onOpened }: { gmail: Gmail; onOpened: () => void }
       type="button"
       onClick={() => {
         onOpened();
-        openAccount({ gmail: gmail.id, tab: "connections" });
+        openWindow({ kind: "account", gmail: gmail.id, tab: "connections" });
       }}
       aria-label={label}
       title={label}

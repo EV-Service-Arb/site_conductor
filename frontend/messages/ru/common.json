@@ -194,13 +194,5 @@
   "state.noView": {
     "en": "Nothing is at this address",
     "t": "По этому адресу ничего нет"
-  },
-  "window.next": {
-    "en": "Next",
-    "t": "Следующее"
-  },
-  "window.prev": {
-    "en": "Previous",
-    "t": "Предыдущее"
   }
 }

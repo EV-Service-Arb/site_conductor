@@ -1,10 +1,10 @@
 "use client";
 
-import { Badge, Button, ConfirmDialog, FloatingPanel, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch, type Tone } from "@evinvest/uikit";
+import { Badge, Button, ConfirmDialog, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch, type Tone } from "@evinvest/uikit";
 import { ChevronDown, ExternalLink, RotateCcw, Trash2 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { move, openTrash, STATE_NAME, STATE_TONE, useGmails, trash as trashKeys, windowKeys } from "@/entities/gmb";
+import { move, STATE_NAME, STATE_TONE, useGmails, trash as trashKeys } from "@/entities/gmb";
 import { may, useMe } from "@/entities/session";
 import { api, ok } from "@/shared/api";
 import type { Trash, TrashedGbp } from "@/shared/api/schema";
@@ -13,8 +13,6 @@ import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 const DAY_MS = 86_400_000;
-/** Where the home's floating windows first open: over the map, beside the outline. */
-export const FLOAT_AT = { x: 500, y: 140 };
 const KEEP_DAYS = [1, 7, 30, 90] as const; // as the server accepts
 const SECTION = "flex flex-col gap-2";
 const SECTION_HEAD = "flex items-baseline gap-2 text-xs font-semibold tracking-wide text-ink-soft uppercase";
@@ -110,18 +108,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
   );
 
   return (
-    <FloatingPanel
-      title={
-        <span className="flex items-center gap-2">
-          <Trash2 aria-hidden className="size-4 shrink-0 text-ink-soft" />
-          {t(trashKeys.title, "Trash")}
-        </span>
-      }
-      at={FLOAT_AT}
-      closeLabel={t(windowKeys.close, "Close the window")}
-      onClose={() => openTrash(false)}
-    >
-      <div className="flex w-3xl max-w-full flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-6">
         <p className="-mt-2 text-sm text-ink-soft">{t(trashKeys.what, "What you removed: every service stops working on it until it is restored.")}</p>
         <Settings trash={trash} onSet={reload} />
         {trash.gmails.length === 0 && trash.gmbs.length === 0 ? (
@@ -158,8 +145,7 @@ export function TrashWindow({ trash }: { trash: Trash }) {
             )}
           </>
         )}
-      </div>
-    </FloatingPanel>
+    </div>
   );
 }
 

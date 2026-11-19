@@ -1,6 +1,6 @@
 "use client";
 
-import { CloseButton, Button, Field, FieldDescription, FieldLabel, Input, NativeSelect, NativeSelectOption, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
+import { Button, Field, FieldDescription, FieldLabel, Input, NativeSelect, NativeSelectOption, ToggleGroup, ToggleGroupItem } from "@evinvest/uikit";
 import { useEffect, useId, useState } from "react";
 
 import {
@@ -8,12 +8,11 @@ import {
   STATE_NAME,
   TradeSelect,
   gmbs,
-  open,
-  openAdd,
+  closeWindow,
+  openWindow,
   setOnMap,
   trades,
   useGmails,
-  useOnMap,
 } from "@/entities/gmb";
 import { api, ok } from "@/shared/api";
 import { type Country, type Place, type Spot, type State, countryValues } from "@/shared/api/schema";
@@ -36,17 +35,17 @@ const STATE_HINT = {
 } satisfies Record<State, (t: T) => string>;
 
 /**
- * `?add`: a GBP added, over the map beside it, of a trade, under a gmail if given. Its state comes first: a verified one is found on Google
+ * A GBP added, of a trade, under a gmail if given. Its state comes first: a verified one is found on Google
  * (its place, point and country Google's); a draft is where its spots are, in order; the others are not on Maps, so they are added by name,
- * at a point or none. What is picked is drawn on the map.
+ * at a point or none. What is picked is drawn on the map; on its page there is no map to pick on.
  */
-export function AddPanel({ gmail: scopedGmail, trade: scopedTrade }: Adding) {
+export function AddPanel({ at, page }: { at: Adding; page: boolean }) {
+  const { gmail: scopedGmail, trade: scopedTrade } = at;
   const t = useT();
   const button = useButtonSize();
   const size = useControlSize();
   const id = useId();
   const gmails = useGmails();
-  const picking = useOnMap((s) => s.picking !== null);
   const [state, setState] = useState<State>("draft");
   const [trade, setTrade] = useState<number | null>(scopedTrade ?? null);
   const [name, setName] = useState("");
@@ -90,9 +89,9 @@ export function AddPanel({ gmail: scopedGmail, trade: scopedTrade }: Adding) {
             },
           }));
       gmails.reload();
-      openAdd(null);
+      closeWindow({ kind: "add", at });
       if (added.location === null) setOnMap({ placing: added.id });
-      else open(added);
+      else openWindow({ kind: "gbp", gmb: added.id, tab: "profile" });
     } catch (e) {
       notifyFailure(e, t);
     } finally {
@@ -102,14 +101,8 @@ export function AddPanel({ gmail: scopedGmail, trade: scopedTrade }: Adding) {
 
   const title = t(gmbs.gmb.add, "Add a GBP");
   return (
-    <section aria-label={title} className={cn("absolute inset-y-0 right-0 flex w-full flex-col overflow-y-auto border-l border-border bg-background md:w-md", picking && "max-md:hidden")}>
-      <header className="flex items-start gap-3 px-6 pt-4 pb-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h2 className="text-lg font-semibold text-ink">{title}</h2>
-          <p className="text-sm text-ink-soft">{STATE_HINT[state](t)}</p>
-        </div>
-        <CloseButton size={button("sm")} label={t(addKeys.close, "Close")} onClose={() => openAdd(null)} />
-      </header>
+    <section aria-label={title} className="flex flex-col">
+      <p className="px-6 pt-4 pb-3 text-sm text-ink-soft">{STATE_HINT[state](t)}</p>
       {/* no <form>: the trade select holds its own, for a new trade */}
       <div className="flex flex-1 flex-col gap-4 px-6 pb-6">
         <ToggleGroup
@@ -157,6 +150,7 @@ export function AddPanel({ gmail: scopedGmail, trade: scopedTrade }: Adding) {
                 )}
               </FieldLabel>
               <SpotsEditor
+                onMap={!page}
                 spots={spots}
                 gmail={gmail}
                 single={!draft}

@@ -2,7 +2,7 @@
 
 import { CloseButton, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, buttonVariants, cn } from "@evinvest/uikit";
 
-import { CategoryChip, type Listed, gmbPhotoSrc, issueOf, issueText, open, useGmbTags, gmbs } from "@/entities/gmb";
+import { CategoryChip, type Listed, gmbPhotoSrc, issueOf, issueText, openWindow, useGmbTags, gmbs } from "@/entities/gmb";
 import { ViewLink } from "@/shared/lib/location";
 import { useT, home } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -26,10 +26,10 @@ export function Peek({ listed, onClose, className }: { listed: Listed; onClose: 
     <Card className={cn("w-80 gap-3 py-4 shadow-overlay", className)}>
       <CardHeader className="flex items-start gap-2 px-4">
         <div className="min-w-0 flex-1">
-          <CardTitle className="truncate" title={name}>
-            {name}
-          </CardTitle>
-          <CardDescription>{[gmb.address, gmail?.gmail].filter(Boolean).join(" · ")}</CardDescription>
+          <button type="button" onClick={() => openWindow({ kind: "gbp", gmb: gmb.id, tab: "profile" })} title={t(home.peek.open, "Open")} className="flex max-w-full flex-col items-start rounded text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+            <CardTitle className="max-w-full truncate">{name}</CardTitle>
+            <CardDescription>{[gmb.address, gmail?.gmail].filter(Boolean).join(" · ")}</CardDescription>
+          </button>
           <div className="pt-1">
             <CategoryChip gmb={gmb} />
           </div>
@@ -74,11 +74,9 @@ export function Peek({ listed, onClose, className }: { listed: Listed; onClose: 
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {gmb.tabs.length > 0 && (
-            <Button size={button("sm")} onClick={() => open(gmb)}>
-              {t(home.peek.open, "Open")}
-            </Button>
-          )}
+          <Button size={button("sm")} onClick={() => openWindow({ kind: "gbp", gmb: gmb.id, tab: "profile" })}>
+            {t(home.peek.open, "Open")}
+          </Button>
           <ViewLink to={{ view: "review_archive.mine.gmb", params: { gmb: gmb.id } }} className={buttonVariants({ variant: "outline", size: button("sm") })}>
             {reviewsNote ? `${t(home.peek.reviews, "Reviews")} · ${reviewsNote}` : t(home.peek.reviews, "Reviews")}
           </ViewLink>

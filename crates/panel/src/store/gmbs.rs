@@ -14,7 +14,7 @@ use super::{from_db, to_db};
 use crate::google_categories::GoogleCategory;
 
 const GMB: &str = "SELECT b.id, b.gmail_id, b.place_id, b.name, b.address, b.state, b.country, b.country_by IS NOT NULL AS country_by_hand, b.phone, \
-	b.trade_id, b.brand_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, b.website, b.hours, b.google_primary, \
+	b.trade_id, b.brand_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, b.website, b.hours, b.google_primary, b.synced_at, \
 	(SELECT json_group_array(json_object('id', p.id, 'author', p.author)) FROM (SELECT * FROM gmb_photos p WHERE p.gmb_id = b.id ORDER BY p.n) p) AS photos, NOT EXISTS (SELECT 1 FROM gmbs_off o WHERE o.gmb_id = b.id) AS enabled, \
 	(SELECT json_group_array(json_object('lat', s.lat, 'lng', s.lng, 'label', s.label, 'note', s.note)) FROM (SELECT * FROM gmb_spots s WHERE s.gmb_id = b.id ORDER BY s.pos) s) AS spots FROM gmbs b";
 
@@ -87,6 +87,8 @@ pub struct Gmb {
 	pub google_primary: Option<String>,
 	/// In Google's order.
 	pub photos: Vec<GmbPhoto>,
+	/// When a Sync last wrote it.
+	pub synced_at: Option<Timestamp>,
 }
 
 /// A photo a Sync took of a GBP's profile on Google.
@@ -151,6 +153,203 @@ pub struct NewGmb<'a> {
 	pub at_by_hand: bool,
 	/// The owner's.
 	pub trade_id: Option<i64>,
+}
+
+/// What a GBP's log holds, a row each (`gmb_events`).
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, strum::EnumDiscriminants, schemars::JsonSchema, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[strum_discriminants(
+	name(EventKind),
+	derive(serde::Deserialize, schemars::JsonSchema, serde::Serialize, strum::EnumString, strum::IntoStaticStr, strum::VariantArray),
+	serde(rename_all = "snake_case"),
+	strum(serialize_all = "snake_case")
+)]
+pub enum Event {
+	/// Created.
+	Added {
+		state: State,
+	},
+	State {
+		from: State,
+		to: State,
+	},
+	/// By hand.
+	Edited {
+		changes: Vec<Changed>,
+	},
+	/// Overwritten with its profile on Google; one that changed nothing too.
+	Synced {
+		changes: Vec<Changed>,
+	},
+	Gmail {
+		from: Option<i64>,
+		to: Option<i64>,
+	},
+	Trade {
+		from: Option<i64>,
+		to: Option<i64>,
+	},
+	Brand {
+		from: Option<i64>,
+		to: Option<i64>,
+	},
+	/// verif_vid's film, set or cleared.
+	Film {
+		film: Option<String>,
+	},
+	/// Its owner's switch.
+	Switched {
+		on: bool,
+	},
+	Removed,
+	Restored,
+	/// Its gmail's browser launched: at its point, or for the gmail alone (then each of its GBPs').
+	Launched {
+		/// The launch plays a film as the camera.
+		film: bool,
+	},
+	/// Its gmail's browser stopped by its owner.
+	Stopped,
+	/// A message with Google in its gmail's inbox naming it; one naming none is the gmail's.
+	Email {
+		/// Gmail's X-GM-MSGID.
+		message: String,
+		/// Gmail's X-GM-THRID, hex: the thread's address in Gmail.
+		thread: String,
+		/// When Gmail took it in.
+		date: Timestamp,
+		subject: Option<String>,
+		/// Its sender; one sent, its recipients.
+		counterparts: Vec<String>,
+		snippet: String,
+		/// From the gmail.
+		sent: bool,
+	},
+}
+
+/// A field of a GBP, before and after.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, schemars::JsonSchema, serde::Serialize)]
+pub struct Changed {
+	pub field: Field,
+	pub from: serde_json::Value,
+	pub to: serde_json::Value,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, schemars::JsonSchema, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Field {
+	Name,
+	PlaceId,
+	Address,
+	Phone,
+	Website,
+	Hours,
+	GooglePrimary,
+	Country,
+	Point,
+	Photos,
+	Areas,
+	HiddenAddress,
+	CustomersVisit,
+	Spots,
+}
+
+/// `event` in the log of GBP `gmb` (none: of gmail `gmail`'s every GBP), `gmail` the one it was under.
+pub async fn log(conn: &mut SqliteConnection, gmb: Option<i64>, gmail: Option<i64>, by: Option<Uuid>, now: Timestamp, event: &Event) -> eyre::Result<()> {
+	let kind: &'static str = EventKind::from(event).into();
+	sqlx::query("INSERT INTO gmb_events (gmb_id, gmail_id, at, by, kind, data) VALUES ($1, $2, $3, $4, $5, $6)")
+		.bind(gmb)
+		.bind(gmail)
+		.bind(to_db(now))
+		.bind(by)
+		.bind(kind)
+		.bind(serde_json::to_string(event).expect("an event serializes"))
+		.execute(&mut *conn)
+		.await
+		.wrap_err("logging a GBP's event")?;
+	Ok(())
+}
+
+/// What `before` → `after` changed of a GBP, in its log; a Sync's is logged changing nothing too.
+pub async fn record(conn: &mut SqliteConnection, by: Option<Uuid>, now: Timestamp, before: &Gmb, after: &Gmb, synced: bool) -> eyre::Result<()> {
+	for e in diff(before, after, synced) {
+		log(conn, Some(after.id), before.gmail_id, by, now, &e).await?;
+	}
+	Ok(())
+}
+
+/// What changed of each of `befores` since it was read, in its log.
+pub async fn record_since(conn: &mut SqliteConnection, by: Option<Uuid>, now: Timestamp, befores: &[Gmb]) -> eyre::Result<()> {
+	for before in befores {
+		let after = gmb_of(conn, None, before.id).await?.expect("live through its own write");
+		record(conn, by, now, before, &after, false).await?;
+	}
+	Ok(())
+}
+
+/// The live GBPs of `ids`, as they are now.
+pub async fn of_ids(conn: &mut SqliteConnection, ids: &BTreeSet<i64>) -> eyre::Result<Vec<Gmb>> {
+	let rows: Vec<GmbRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+		"{GMB} WHERE b.id IN (SELECT value FROM json_each($1)) AND b.removed_at IS NULL ORDER BY b.id"
+	)))
+	.bind(serde_json::to_string(ids).expect("ids serialize"))
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("loading GBPs")?;
+	rows.into_iter().map(gmb).collect()
+}
+
+/// A row of a GBP's log.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Logged {
+	pub id: i64,
+	pub at: Timestamp,
+	/// Who did it, by name; none for Google or a run.
+	pub by: Option<String>,
+	/// The gmail it was under.
+	pub gmail_id: Option<i64>,
+	/// Its gmail's, not its own.
+	pub of_gmail: bool,
+	pub event: Event,
+}
+
+/// A page of GBP `gmb`'s log before event `before`, newest first, of `kinds` (none: every kind); each of its
+/// gmails' own while it was under it. `None`: no live GBP of the owner's.
+pub async fn events(conn: &mut SqliteConnection, owner: Uuid, gmb: i64, before: Option<i64>, kinds: &[EventKind], limit: u32) -> eyre::Result<Option<Vec<Logged>>> {
+	let Some(b) = gmb_of(conn, Some(owner), gmb).await? else {
+		return Ok(None);
+	};
+	let kinds: Vec<&'static str> = kinds.iter().map(|k| k.into()).collect();
+	let rows: Vec<(i64, i64, Option<String>, Option<i64>, bool, String)> = sqlx::query_as(
+		"SELECT e.id, e.at, u.name, e.gmail_id, e.gmb_id IS NULL, e.data FROM gmb_events e LEFT JOIN users u ON u.user_id = e.by \
+		 WHERE (e.gmb_id = $1 OR (e.gmb_id IS NULL AND e.at >= $3 AND e.gmail_id IS \
+		   coalesce((SELECT o.gmail_id FROM gmb_events o WHERE o.gmb_id = $1 AND o.id > e.id ORDER BY o.id LIMIT 1), $2))) \
+		 AND ($4 IS NULL OR e.id < $4) AND ($5 = '[]' OR e.kind IN (SELECT value FROM json_each($5))) \
+		 ORDER BY e.id DESC LIMIT $6",
+	)
+	.bind(gmb)
+	.bind(b.gmail_id)
+	.bind(to_db(b.created_at))
+	.bind(before)
+	.bind(serde_json::to_string(&kinds).expect("kinds serialize"))
+	.bind(limit)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("reading a GBP's log")?;
+	let logged = rows
+		.into_iter()
+		.map(|(id, at, by, gmail_id, of_gmail, data)| {
+			Ok(Logged {
+				id,
+				at: from_db(at)?,
+				by,
+				gmail_id,
+				of_gmail,
+				event: serde_json::from_str(&data).wrap_err_with(|| format!("GBP event {id}"))?,
+			})
+		})
+		.collect::<eyre::Result<_>>()?;
+	Ok(Some(logged))
 }
 
 /// The owner's gmails not removed, by address.
@@ -493,8 +692,8 @@ pub async fn unplace(conn: &mut SqliteConnection, owner: Uuid, gmb_id: i64) -> e
 
 /// GBP `id`'s profile as `s` says, its photos replaced; with no trade, it takes the one trade of
 /// its owner's set up in its country with its Google primary category, if just one is.
-pub async fn sync(conn: &mut SqliteConnection, id: i64, s: &Synced<'_>) -> eyre::Result<()> {
-	sqlx::query("UPDATE gmbs SET name = $2, address = $3, phone = $4, website = $5, hours = $6, google_primary = $7 WHERE id = $1")
+pub async fn sync(conn: &mut SqliteConnection, id: i64, s: &Synced<'_>, now: Timestamp) -> eyre::Result<()> {
+	sqlx::query("UPDATE gmbs SET name = $2, address = $3, phone = $4, website = $5, hours = $6, google_primary = $7, synced_at = $8 WHERE id = $1")
 		.bind(id)
 		.bind(s.name)
 		.bind(s.address)
@@ -502,6 +701,7 @@ pub async fn sync(conn: &mut SqliteConnection, id: i64, s: &Synced<'_>) -> eyre:
 		.bind(s.website)
 		.bind((!s.hours.is_empty()).then(|| serde_json::to_string(s.hours).expect("strings serialize")))
 		.bind(s.google_primary)
+		.bind(to_db(now))
 		.execute(&mut *conn)
 		.await
 		.wrap_err("syncing a GBP")?;
@@ -831,6 +1031,72 @@ pub async fn set_trades(conn: &mut SqliteConnection, owner: Uuid, ids: &BTreeSet
 	Ok(i64::try_from(done.rows_affected()).expect("a few rows") == asked)
 }
 
+/// What `before` → `after` logs: its moves, and the fields changed, as a Sync's or a hand's.
+fn diff(before: &Gmb, after: &Gmb, synced: bool) -> Vec<Event> {
+	assert_eq!(before.id, after.id, "one GBP's change");
+	let mut events = Vec::new();
+	if before.state != after.state {
+		events.push(Event::State {
+			from: before.state,
+			to: after.state,
+		});
+	}
+	if before.gmail_id != after.gmail_id {
+		events.push(Event::Gmail {
+			from: before.gmail_id,
+			to: after.gmail_id,
+		});
+	}
+	if before.trade_id != after.trade_id {
+		events.push(Event::Trade {
+			from: before.trade_id,
+			to: after.trade_id,
+		});
+	}
+	if before.brand_id != after.brand_id {
+		events.push(Event::Brand {
+			from: before.brand_id,
+			to: after.brand_id,
+		});
+	}
+	if before.film != after.film {
+		events.push(Event::Film { film: after.film.clone() });
+	}
+	if before.enabled != after.enabled {
+		events.push(Event::Switched { on: after.enabled });
+	}
+	let mut changes = Vec::new();
+	let mut field = |field: Field, from: serde_json::Value, to: serde_json::Value| {
+		if from != to {
+			changes.push(Changed { field, from, to });
+		}
+	};
+	fn json<T: serde::Serialize>(v: &T) -> serde_json::Value {
+		serde_json::to_value(v).expect("a GBP's fields serialize")
+	}
+	field(Field::Name, json(&before.name), json(&after.name));
+	field(Field::PlaceId, json(&before.place_id), json(&after.place_id));
+	field(Field::Address, json(&before.address), json(&after.address));
+	field(Field::Phone, json(&before.phone), json(&after.phone));
+	field(Field::Website, json(&before.website), json(&after.website));
+	field(Field::Hours, json(&before.hours), json(&after.hours));
+	field(Field::GooglePrimary, json(&before.google_primary), json(&after.google_primary));
+	field(Field::Country, json(&before.country), json(&after.country));
+	field(Field::Point, json(&before.location), json(&after.location));
+	let authors = |b: &Gmb| b.photos.iter().map(|p| p.author.clone()).collect::<Vec<_>>(); // a photo's id is new each Sync
+	field(Field::Photos, json(&authors(before)), json(&authors(after)));
+	field(Field::Areas, json(&before.areas), json(&after.areas));
+	field(Field::HiddenAddress, json(&before.hidden_address), json(&after.hidden_address));
+	field(Field::CustomersVisit, json(&before.customers_visit), json(&after.customers_visit));
+	field(Field::Spots, json(&before.spots), json(&after.spots));
+	match synced {
+		true => events.push(Event::Synced { changes }),
+		false if !changes.is_empty() => events.push(Event::Edited { changes }),
+		false => {}
+	}
+	events
+}
+
 #[derive(sqlx::FromRow)]
 struct CategoryRow {
 	trade_id: i64,
@@ -865,6 +1131,7 @@ struct GmbRow {
 	website: Option<String>,
 	hours: Option<String>,
 	google_primary: Option<String>,
+	synced_at: Option<i64>,
 	photos: String,
 	enabled: bool,
 	spots: String,
@@ -925,5 +1192,6 @@ fn gmb(r: GmbRow) -> eyre::Result<Gmb> {
 			.unwrap_or_default(),
 		google_primary: r.google_primary,
 		photos: serde_json::from_str(&r.photos).wrap_err_with(|| format!("GMB {}'s photos", r.id))?,
+		synced_at: r.synced_at.map(from_db).transpose()?,
 	})
 }

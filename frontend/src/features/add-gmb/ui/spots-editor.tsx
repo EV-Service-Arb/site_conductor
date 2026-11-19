@@ -17,14 +17,16 @@ export const spotKey = (s: { lat: number; lng: number }) => `${s.lat},${s.lng}`;
 
 /**
  * Spots in order, the first a draft's point: added off Google's suggestions or picked on the map; `single` holds one, without a note
- * (a GBP past a draft). `onChange` gets the country Google gave a spot it just added.
+ * (a GBP past a draft). `onChange` gets the country Google gave a spot it just added. Off the map (a window's page) none is picked on it.
  */
 export function SpotsEditor({
+  onMap,
   spots,
   gmail,
   single,
   onChange,
 }: {
+  onMap: boolean;
   spots: readonly Spot[];
   gmail: number | null;
   single?: boolean;
@@ -142,8 +144,9 @@ export function SpotsEditor({
             size={button()}
             icon
             aria-pressed={picking}
+            disabled={!onMap}
             aria-label={t(addKeys.spots.pick, "Pick it on the map")}
-            title={t(addKeys.spots.pick, "Pick it on the map")}
+            title={onMap ? t(addKeys.spots.pick, "Pick it on the map") : t(addKeys.spots.pick.offMap, "No map on this page: float it over the map to pick there")}
             onClick={() =>
               setOnMap({
                 picking: picking

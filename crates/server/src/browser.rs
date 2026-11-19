@@ -9,6 +9,8 @@
 //! DELETE /api/v1/gmails/{id}/browser        → 204: stopped, the provider's profile and the session gone
 //! POST   /api/v1/gmails/{id}/browser/start {gmb?}  → 204 once up: at that GBP's point, else nowhere
 //! POST   /api/v1/gmails/{id}/browser/stop   → 204
+//! POST   /api/v1/gmails/{id}/browser/thread {thread}  → 204: a Gmail thread in a new tab of it; 409
+//!                                           while it does not run, or a cloud phone
 //! PUT    /api/v1/gmails/{id}/browser/film   an mp4 (≤ 512 MiB) → 204: its next launch's back camera,
 //!                                           the sound its mic; 400 no sound, 409 while it runs. A
 //!                                           cloud phone's (≤ 100 MiB) into Multilogin's Library,
@@ -55,6 +57,7 @@ use sa_browsers::{
 use sa_core::prices::{BrowserStart, PhoneTime, Spends};
 use sa_panel::{
 	browsers::{Browsers, LIBRARY_MAX, NewBrowser, Provider, Run},
+	gmbs::Event,
 	live::{Ended, Signal},
 	session::SessionKey,
 };
@@ -195,6 +198,14 @@ impl Connected {
 	}
 }
 
+/// A Gmail thread for the gmail's browser to open.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct OpenThread {
+	/// Gmail's X-GM-THRID, hex, as an `email` of a GBP's log names it.
+	pub thread: String,
+}
+
 /// sa_browsers' runner, told by the conductor alone.
 #[derive(Clone)]
 struct Runner {
@@ -273,6 +284,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		// A launch waits on the provider and the browser's devtools, a film's upload on its bytes.
 		ApiRoute::new(M::POST, "/gmails/{id}/browser/start", SLOW, start_browser),
 		ApiRoute::new(M::POST, "/gmails/{id}/browser/stop", USER, stop_browser),
+		ApiRoute::new(M::POST, "/gmails/{id}/browser/thread", USER, open_thread),
 		ApiRoute::new(M::PUT, "/gmails/{id}/browser/film", SLOW, set_film).layer(|h| h.layer(DefaultBodyLimit::max(FILM_MAX))),
 		ApiRoute::new(M::DELETE, "/gmails/{id}/browser/film", USER, remove_film),
 		ApiRoute::new(M::GET, "/gmails/{id}/browser", USER, viewer),
@@ -351,10 +363,12 @@ async fn start_browser(
 ) -> ApiResult<NoContent> {
 	let c = connected(&state)?;
 	let launch = state.sign_in.panel.launch(&c.browsers, by, gmail, b.gmb, Timestamp::now()).await??;
+	let (_, film) = c.state(gmail).await?;
 	c.runner
 		.expect_done(Method::POST, &format!("/profiles/{gmail}/launch"), Some(&launch))
 		.await?
 		.map_err(|_| Refusal::new(Code::Conflict, "it runs for another GBP, or for the gmail alone: stop it first"))?;
+	state.sign_in.panel.log_browser(caller.user_id, gmail, b.gmb, &Event::Launched { film }).await?;
 	tracing::info!(user_id = %caller.user_id, gmail_id = gmail, run = launch.run, "gmail's browser up");
 	Ok(NoContent)
 }
@@ -363,10 +377,14 @@ async fn start_browser(
 async fn stop_browser(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>) -> ApiResult<NoContent> {
 	let c = connected(&state)?;
 	state.sign_in.panel.browser_of(caller.user_id, gmail).await??;
+	let (running, _) = c.state(gmail).await?;
 	c.runner
 		.expect_done(Method::POST, &format!("/profiles/{gmail}/stop"), None)
 		.await?
 		.map_err(|t| Refusal::new(Code::Conflict, t))?;
+	if let Some(r) = running {
+		state.sign_in.panel.log_browser(caller.user_id, gmail, r.gmb, &Event::Stopped).await?;
+	}
 	Ok(NoContent)
 }
 
@@ -428,6 +446,56 @@ async fn set_film(State(state): State<ApiState>, Extension(caller): Extension<Ca
 		StatusCode::PAYLOAD_TOO_LARGE => Err(Refusal::new(Code::TooLarge, format!("a film is {} MiB at most", FILM_MAX >> 20))),
 		s => Err(eyre::eyre!("the browsers' runner answered a film with {s}: {text}").into()),
 	}
+}
+
+/// Opens a thread in a new tab of the gmail's own running browser, on the Google session signed in
+/// there: Gmail is never asked from here. 409 while it does not run, or on a cloud phone.
+async fn open_thread(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id: gmail }): Ids<Id<i64>>, Body(b): Body<OpenThread>) -> ApiResult<NoContent> {
+	let c = connected(&state)?;
+	if b.thread.is_empty() || b.thread.len() > 16 || !b.thread.bytes().all(|x| x.is_ascii_hexdigit()) {
+		return Err(Refusal::new(Code::BadRequest, "a thread is Gmail's X-GM-THRID, hex"));
+	}
+	let panel = &state.sign_in.panel;
+	if panel.browser_of(caller.user_id, gmail).await??.provider == Provider::Multilogin {
+		return Err(Refusal::new(Code::Conflict, "a cloud phone opens it in its own Gmail app"));
+	}
+	let address = panel
+		.gmails(caller.user_id)
+		.await?
+		.0
+		.into_iter()
+		.find(|g| g.id == gmail)
+		.expect("its browser is the owner's, so is it")
+		.gmail;
+	let Some(mut devtools) = c.runner.socket(gmail, "cdp").await? else {
+		return Err(Refusal::new(Code::Conflict, "its browser is not running: start it"));
+	};
+	let url = format!("https://mail.google.com/mail/?authuser={address}#all/{}", b.thread);
+	let created = async {
+		devtools
+			.send(tungstenite::Message::text(
+				json!({ "id": 1, "method": "Target.createTarget", "params": { "url": url } }).to_string(),
+			))
+			.await
+			.wrap_err("asking for a tab")?;
+		//LOOP: its events until the answer; the timeout bounds it
+		loop {
+			let Some(m) = devtools.next().await else {
+				eyre::bail!("its devtools closed before a tab opened")
+			};
+			if let tungstenite::Message::Text(t) = m.wrap_err("its devtools")? {
+				let answer: Value = serde_json::from_str(&t).wrap_err("a devtools message")?;
+				if answer["id"] == 1 {
+					eyre::ensure!(answer.get("error").is_none(), "a tab refused: {}", answer["error"]);
+					return Ok(());
+				}
+			}
+		}
+	};
+	let opened = tokio::time::timeout(SEND_WITHIN, created).await;
+	let _closed = devtools.close(None).await; // the runner counts its clients by their sockets
+	opened.map_err(|_| Refusal::new(Code::Unavailable, "its browser did not open a tab in time"))??;
+	Ok(NoContent)
 }
 
 /// One viewer per gmail: a new one closes the one before.

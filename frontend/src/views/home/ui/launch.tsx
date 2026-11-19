@@ -4,7 +4,7 @@ import { Button, Input, NativeSelect, NativeSelectOption, ToggleGroup, ToggleGro
 import { Check, Copy, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { CategoryChip, categoryName, categoryOf, GMAIL_ROLE_NAME, gmbs, googleName, type Listed, openAccount, openTrade, type Placed, TradeSelect, under, useGmails, useGmbTags } from "@/entities/gmb";
+import { CategoryChip, categoryName, categoryOf, GMAIL_ROLE_NAME, gmbs, googleName, type Listed, openWindow, type Placed, TradeSelect, under, useGmails, useGmbTags } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
 import { LinkPlaceButton } from "@/features/link-gmb-place";
 import { SpotsEditor } from "@/features/add-gmb";
@@ -31,7 +31,7 @@ const MUST_NAME = {
 } satisfies Record<MustHave, (t: T) => string>;
 
 /** A draft's tab: what Google's form asks, in its order, then what stands behind it; and the move onto Google once the form is sent. */
-export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
+export function Launch({ listed: { gmb, gmail }, page }: { listed: Listed; page: boolean }) {
   const t = useT();
   const locale = useLocale();
   const me = useMe();
@@ -136,7 +136,7 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
       value: gmail?.browser && t(launch.profile.of, "{gmail}'s browser", { gmail: gmail.gmail }),
       editor: gmail ? (
         <span>
-          <Button variant="outline" size={button("sm")} onClick={() => openAccount({ gmail: gmail.id, tab: "connections" })}>
+          <Button variant="outline" size={button("sm")} onClick={() => openWindow({ kind: "account", gmail: gmail.id, tab: "connections" })}>
             {t(launch.profile.open, "Open {gmail}'s connections", { gmail: gmail.gmail })}
           </Button>
         </span>
@@ -176,7 +176,7 @@ export function Launch({ listed: { gmb, gmail } }: { listed: Listed }) {
         </ol>
       </section>
 
-      <Behind listed={{ gmb, gmail }} />
+      <Behind listed={{ gmb, gmail }} page={page} />
       <OntoGoogle gmbId={gmb.id} onMoved={gmails.reload} />
     </div>
   );
@@ -305,7 +305,7 @@ function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: 
         {t(launch.category.in, "in {country} →", { country: region(country) })}
         <CategoryChip gmb={gmb} />
         {lacking !== null && (
-          <Button variant={placed.status === "not_set_up" ? "primary" : "outline"} size={button("sm")} onClick={() => openTrade(placed.trade.id, country)}>
+          <Button variant={placed.status === "not_set_up" ? "primary" : "outline"} size={button("sm")} onClick={() => openWindow({ kind: "trade", trade: placed.trade.id, country, brand: null })}>
             {(placed.status === "not_set_up" ? t(launch.category.setUp, "Set up {category}", { category: name }) : t(launch.category.open, "Open {category}", { category: name }))}
           </Button>
         )}
@@ -387,7 +387,7 @@ function CountrySelect({ gmb, value, disabled, onSet }: { gmb: number; value: Co
 }
 
 /** Outside the nine: its point on the map and its country, which its reviews' language follows. */
-function Behind({ listed: { gmb } }: { listed: Listed }) {
+function Behind({ listed: { gmb }, page }: { listed: Listed; page: boolean }) {
   const t = useT();
   const gmails = useGmails();
   const googles = gmb.country !== null && !gmb.country.by_hand;
@@ -400,6 +400,7 @@ function Behind({ listed: { gmb } }: { listed: Listed }) {
           <span className="text-xs text-ink-faint">{t(launch.where.hint, "where it could stand, each with a note · its point is the first · drag to reorder")}</span>
         </span>
         <SpotsEditor
+          onMap={!page}
           spots={gmb.spots}
           gmail={gmb.gmail_id}
           onChange={(spots) =>

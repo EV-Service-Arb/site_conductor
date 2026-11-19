@@ -59,13 +59,14 @@ function moved(popped: boolean) {
 
 function install() {
   const { pushState, replaceState } = window.history;
+  // Next moves the history from its insertion effects, where no update may be scheduled: heard a microtask later
   window.history.pushState = function (...args: Parameters<History["pushState"]>) {
     pushState.apply(this, args);
-    if (!ours) moved(false);
+    if (!ours) queueMicrotask(() => moved(false));
   };
   window.history.replaceState = function (...args: Parameters<History["replaceState"]>) {
     replaceState.apply(this, args);
-    if (!ours) moved(false);
+    if (!ours) queueMicrotask(() => moved(false));
   };
   window.addEventListener("popstate", () => moved(true));
 }
@@ -95,7 +96,8 @@ export function useHere(): Here | null {
   return useSyncExternalStore(subscribe, read, () => null);
 }
 
-function viewed(): { at: At; carried: Carried } {
+/** Where the page is now, outside rendering: what a click decides by. */
+export function viewed(): { at: At; carried: Carried } {
   const here = read();
   if ("error" in here) throw new Error(`no view is here: ${here.error.message}`);
   return here;

@@ -2,8 +2,9 @@
 
 import { useSyncExternalStore } from "react";
 
-import type { Country, Gmb, LatLng, Tab } from "@/shared/api/schema";
-import { type Home, setHome, useHome } from "@/shared/lib/location";
+import type { Gmb, LatLng } from "@/shared/api/schema";
+
+import { cardOnly, peek } from "./windows";
 
 /** What the map and the outline beside it share about the GMBs. */
 export interface OnMap {
@@ -40,102 +41,9 @@ export function setOnMap(change: Partial<OnMap>): void {
   for (const l of listeners) l();
 }
 
-/** One window at a time over the map: opening one closes the rest. */
-const NO_WINDOW = { gmb: undefined, trade: undefined, country: undefined, brand: undefined, account: undefined, tab: undefined, categories: undefined, trash: undefined, add: undefined, kit: undefined, kit_gmb: undefined, kit_pool: undefined, kit_edit: undefined } as const;
-
-/** The GMB whose card is open on the map. */
-export function usePeeked(): number | null {
-  return useHome()?.gmb ?? null;
-}
-
-export function peek(gmb: number | null): void {
-  setHome({ gmb: gmb ?? undefined });
-}
-
-/** The tab the GBP's window is open on; `null`: no window, the card only, or a gmail's window holds `?tab`. */
-export function useTab(): Tab | null {
-  const home = useHome();
-  if (home === null || home.account !== undefined) return null;
-  return home.tab ?? null;
-}
-
-/** The GBP's window, on the open tab while it has it, else on its first; its card alone where it has none (`Gmb.tabs`). */
-export function open(gmb: Pick<Gmb, "id" | "tabs">): void {
-  setHome((now) => ({ ...NO_WINDOW, gmb: gmb.id, tab: now.account === undefined && gmb.tabs.find((t) => t === now.tab) !== undefined ? now.tab : gmb.tabs[0] }));
-}
-
-/** A GBP clicked on the map or in the outline beside it: the first click opens it, the next goes to it on the map, out of its window. */
+/** A GBP clicked on the map or in the outline beside it: the first click shows its card, the next goes to it on the map, its card alone. */
 export function openOrFocus(gmb: Gmb, peeked: boolean): void {
-  if (!peeked || gmb.location === null) return open(gmb);
-  setHome({ tab: undefined });
+  if (!peeked || gmb.location === null) return peek(gmb.id);
+  cardOnly(gmb.id);
   setOnMap({ focus: gmb.id });
-}
-
-/** The trade whose window is open, on a country's tab; `null` country: the trade has none set up yet, or none picked. `brand`: a brand's page under that tab. */
-export function useTradeWindow(): { trade: number; country: Country | null; brand: number | null } | null {
-  const home = useHome();
-  if (home?.trade === undefined) return null;
-  if (home.brand !== undefined && home.country === undefined) throw new Error(`?brand=${home.brand}: its page sits under a country's tab`);
-  return { trade: home.trade, country: home.country ?? null, brand: home.brand ?? null };
-}
-
-export function openTrade(trade: number | null, country?: Country, brand?: number): void {
-  setHome({ ...NO_WINDOW, trade: trade ?? undefined, country, brand });
-}
-
-/** Every trade by country, the level a trade's window sits under (`?categories`). */
-export function useCategoriesWindow(): boolean {
-  return useHome()?.categories === true;
-}
-
-export function openCategories(on: boolean): void {
-  setHome({ ...NO_WINDOW, categories: on });
-}
-
-/** The gmail whose own window is open (`?account`, apart from the outline's `?gmail` scope), on its tab (one of `Gmail.tabs`). */
-export function useAccountWindow(): { gmail: number; tab: Tab } | null {
-  const home = useHome();
-  if (home?.account === undefined) return null;
-  if (home.tab === undefined) throw new Error(`?account=${home.account}: its window has no ?tab`);
-  return { gmail: home.account, tab: home.tab };
-}
-
-export function openAccount(at: { gmail: number; tab: Tab } | null): void {
-  setHome({ ...NO_WINDOW, account: at?.gmail, tab: at?.tab });
-}
-
-/** What the caller removed (`?trash`), restorable until purged. */
-export function useTrashWindow(): boolean {
-  return useHome()?.trash === true;
-}
-
-export function openTrash(on: boolean): void {
-  setHome({ ...NO_WINDOW, trash: on });
-}
-
-/** Where in a review kit: `kit` its slug (`""`: the list, or with `edit` a new one); a GBP of it, a pool (`<trade>.<country>`) or its editor. */
-export type KitAt = { kit: string; gmb?: number | undefined; pool?: string | undefined; edit?: true | undefined };
-
-/** The kit floating over the map (`?kit`). */
-export function useKitFloat(): KitAt | null {
-  const home = useHome();
-  if (home?.kit === undefined) return null;
-  return { kit: home.kit, gmb: home.kit_gmb, pool: home.kit_pool, edit: home.kit_edit ? true : undefined };
-}
-
-/** Over the map: one window at a time. */
-export function floatKit(at: KitAt | null): void {
-  setHome({ ...NO_WINDOW, kit: at?.kit, kit_gmb: at?.gmb, kit_pool: at?.pool, kit_edit: at?.edit });
-}
-
-/** What the Add a GBP panel opens with: the outline's gmail and trade, when it is scoped to one. */
-export type Adding = NonNullable<Home["add"]>;
-
-/** The Add a GBP panel over the map (`?add`). */
-export function useAddWindow(): Adding | null {
-  return useHome()?.add ?? null;
-}
-
-export function openAdd(at: Adding | null): void {
-  setHome({ ...NO_WINDOW, add: at ?? undefined });
 }

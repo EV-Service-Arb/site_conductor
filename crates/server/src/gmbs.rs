@@ -82,7 +82,9 @@ pub struct GmbDto {
 	pub google_primary: Option<String>,
 	/// In Google's order, each at `GET /gmbs/{id}/photos/{photo}`.
 	pub photos: Vec<sa_panel::gmbs::GmbPhoto>,
-	/// Its window's tabs, in order: its state's.
+	/// RFC 3339: when a Sync last wrote it.
+	pub synced_at: Option<String>,
+	/// Its window's tabs, in order.
 	pub tabs: Vec<Tab>,
 	/// A draft's must-haves not ready; `null` past a draft.
 	pub readiness: Option<ReadinessDto>,
@@ -233,6 +235,31 @@ pub struct SuggestionsDto {
 	pub suggestions: Vec<SuggestionDto>,
 }
 
+/// `GET /gmbs/{id}/log`.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+pub struct LogDto {
+	/// Newest first.
+	pub events: Vec<LoggedDto>,
+	/// `before` for the older page; `null` past the first event.
+	pub next: Option<i64>,
+}
+
+/// A row of a GBP's log.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+pub struct LoggedDto {
+	pub id: i64,
+	/// RFC 3339.
+	pub at: String,
+	/// Who did it, by name; `null` for Google, or a run.
+	pub by: Option<String>,
+	/// The gmail it was under.
+	pub gmail_id: Option<i64>,
+	/// Its gmail's (a browser run for the gmail alone), not its own.
+	pub of_gmail: bool,
+	#[serde(flatten)]
+	pub event: sa_panel::gmbs::Event,
+}
+
 /// A panorama to open, on the account the page's map loaded on.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -266,6 +293,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::PUT, "/gmbs/{id}/state", USER, move_gmb),
 		ApiRoute::new(M::POST, "/gmbs/{id}/sync", USER, sync_gmb),
 		ApiRoute::new(M::GET, "/gmbs/{id}/photos/{photo}", USER, gmb_photo),
+		ApiRoute::new(M::GET, "/gmbs/{id}/log", USER, gmb_log),
 		ApiRoute::new(M::DELETE, "/gmbs/{id}", USER, remove_gmb),
 		ApiRoute::new(M::PUT, "/gmbs/enabled", USER, switch_gmbs),
 		ApiRoute::new(M::PUT, "/gmbs/trade", USER, set_gmb_trades),
@@ -316,7 +344,7 @@ impl Around {
 	fn dto(&self, b: Gmb) -> GmbDto {
 		let readiness = (b.state == GbpState::Draft).then(|| self.readiness(&b));
 		GmbDto {
-			tabs: tabs(b.state).to_vec(),
+			tabs: tabs(&b),
 			readiness,
 			id: b.id,
 			gmail_id: b.gmail_id,
@@ -341,6 +369,7 @@ impl Around {
 			hours: b.hours,
 			google_primary: b.google_primary,
 			photos: b.photos,
+			synced_at: b.synced_at.map(|t| t.to_string()),
 		}
 	}
 
@@ -372,14 +401,11 @@ impl Around {
 	}
 }
 
-/// A GBP's window's tabs, by its state.
-fn tabs(state: GbpState) -> &'static [Tab] {
-	match state {
-		GbpState::Draft => &[Tab::Launch, Tab::Browser],
-		GbpState::Verifying => &[Tab::Browser],
-		GbpState::Verified => &[],
-		GbpState::Suspended => &[],
-	}
+/// A GBP's window's tabs: its profile and log, a draft's launch, its gmail's browser.
+fn tabs(b: &Gmb) -> Vec<Tab> {
+	let launch = (b.state == GbpState::Draft).then_some(Tab::Launch);
+	let browser = b.gmail_id.map(|_| Tab::Browser);
+	[Some(Tab::Profile), Some(Tab::Log), launch, browser].into_iter().flatten().collect()
 }
 
 impl From<Gmail> for GmailDto {
@@ -746,6 +772,45 @@ pub(crate) struct PhotoIn {
 /// A photo a GBP's last Sync took, never another under its id.
 async fn gmb_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PhotoIn { id, photo }): Ids<PhotoIn>) -> ApiResult<crate::kit::Jpeg> {
 	Ok(crate::kit::Jpeg(panel.gmb_photo(caller.user_id, id, photo).await??))
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct LogQuery {
+	/// The previous page's `next`.
+	before: Option<i64>,
+	/// Comma-separated; none, every kind.
+	kinds: Option<String>,
+}
+
+/// A GBP's log, newest first, a page at a time: what changed of it (each field before and after) and what was done
+/// with it, in the write that did it; and its gmails' own while it was under them.
+async fn gmb_log(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>, Params(q): Params<LogQuery>) -> ApiResult<Json<LogDto>> {
+	let kinds = q
+		.kinds
+		.iter()
+		.flat_map(|k| k.split(','))
+		.map(|k| {
+			k.parse::<sa_panel::gmbs::EventKind>()
+				.map_err(|_| Refusal::new(Code::BadRequest, format!("no kind of event {k:?}")))
+		})
+		.collect::<Result<Vec<_>, _>>()?;
+	let page = panel.gmb_log(caller.user_id, gmb, q.before, &kinds).await??;
+	let full = page.len() == usize::try_from(sa_panel::gmbs::LOG_PAGE).expect("a page fits");
+	Ok(Json(LogDto {
+		next: page.last().filter(|_| full).map(|l| l.id),
+		events: page
+			.into_iter()
+			.map(|l| LoggedDto {
+				id: l.id,
+				at: l.at.to_string(),
+				by: l.by,
+				gmail_id: l.gmail_id,
+				of_gmail: l.of_gmail,
+				event: l.event,
+			})
+			.collect(),
+	}))
 }
 
 /// Removes a GBP to the trash.

@@ -18,6 +18,7 @@ pub mod browsers;
 pub mod claude;
 pub mod connections;
 pub mod gmbs;
+pub(crate) mod inbox;
 pub mod kit;
 pub mod meters;
 pub mod oauth;

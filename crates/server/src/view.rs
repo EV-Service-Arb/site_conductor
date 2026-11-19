@@ -115,6 +115,24 @@ pub enum View {
 	/// A category's drafts and photos, from a kit.
 	#[view("/kit/{slug}/pool/{trade}/{country}")]
 	KitPool { slug: String, trade: i64, country: Country },
+	/// A GBP's window as its own page.
+	#[view("/gbp/{gmb}")]
+	Gbp { gmb: i64, tab: Option<Tab> },
+	/// A gmail's window as its own page.
+	#[view("/gmail/{account}")]
+	Gmail { account: i64, tab: Option<Tab> },
+	/// Every trade by country, as a page.
+	#[view("/categories")]
+	Categories,
+	/// A trade's window as its own page, on `country`'s tab; `brand`, a brand's under it.
+	#[view("/category/{trade}")]
+	Category { trade: i64, country: Option<Country>, brand: Option<i64> },
+	/// What the caller removed, as a page.
+	#[view("/trash")]
+	Trash,
+	/// The Add a GBP panel as a page, with what it starts from: a gmail (`account`), a trade.
+	#[view("/add")]
+	Adding { account: Option<i64>, trade: Option<i64> },
 	/// sites' pages, its element's to route.
 	#[view("/sites", nest = "sites", key = 's', scope = 'v')]
 	Sites { below: String },
@@ -143,6 +161,10 @@ pub struct Outline {
 #[derive(Clone, Copy, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Tab {
+	/// A GBP as Google shows it, and what the conductor knows of it.
+	Profile,
+	/// What happened to a GBP.
+	Log,
 	/// A draft's launch onto Google.
 	Launch,
 	/// The gmail's browser.

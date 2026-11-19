@@ -5,7 +5,7 @@ import { Car, ChevronRight, Crosshair, Eye, EyeOff, Flame, Grid3x3, MapPin, Sett
 import { type ComponentType, type ReactNode, useState } from "react";
 import { PANEL } from "@config";
 
-import { covers, openCategories, openTrade, useScope, useTrades } from "@/entities/gmb";
+import { covers, openWindow, useScope, useTrades } from "@/entities/gmb";
 import type { Country } from "@/shared/api/schema";
 import { useMe } from "@/entities/session";
 import { api } from "@/shared/api";
@@ -196,7 +196,7 @@ function CategoryButton({ picked }: { picked: { trade: number; country: Country;
   const t = useT();
   const label = picked === null ? t(placementKeys.categories, "Categories: where a study is linked") : t(placementKeys.category, "{category}: keywords, Google's categories, study", { category: picked.label });
   return (
-    <Button variant="ghost" size="sm" icon aria-label={label} title={label} onClick={() => (picked === null ? openCategories(true) : openTrade(picked.trade, picked.country))}>
+    <Button variant="ghost" size="sm" icon aria-label={label} title={label} onClick={() => openWindow(picked === null ? { kind: "categories" } : { kind: "trade", trade: picked.trade, country: picked.country, brand: null })}>
       <Settings2 aria-hidden />
     </Button>
   );
