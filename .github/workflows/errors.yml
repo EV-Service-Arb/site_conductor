@@ -245,44 +245,6 @@ jobs:
           key: nix-lean-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
     timeout-minutes: 90
-  load_nix:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Lean cache setup
-        run: |
-          mkdir -p /tmp/nix-lean-cache
-          chmod 0777 /tmp/nix-lean-cache
-          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
-          chmod 0755 /tmp/nix-lean-pbh.sh
-        shell: bash
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
-        with:
-          extra-conf: |
-            lazy-trees = true
-            post-build-hook = /tmp/nix-lean-pbh.sh
-            extra-substituters = file:///tmp/nix-lean-cache
-            extra-trusted-substituters = file:///tmp/nix-lean-cache
-            require-sigs = false
-      - if: github.ref_name != github.event.repository.default_branch
-        name: Restore lean nix cache
-        uses: actions/cache/restore@v5
-        with:
-          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
-          path: /tmp/nix-lean-cache
-          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-      - if: github.ref_name == github.event.repository.default_branch
-        name: Lean nix cache (built-only paths)
-        uses: actions/cache@v5
-        with:
-          key: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ github.run_id }}
-          path: /tmp/nix-lean-cache
-          restore-keys: nix-lean-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-      - name: Cache packages
-        run: |
-          # Pre-fetch packages into nix store so they're cached for dependent jobs
-          # Use nix-shell which properly sets up env vars like PKG_CONFIG_PATH
-          nix-shell -p ffmpeg deno pkg-config openssl.out openssl.dev git --run "echo packages cached"
   pre_ci:
     uses: valeratrades/.github/.github/workflows/pre_ci.yml@main
   report:
@@ -371,9 +333,7 @@ jobs:
   rust-tests:
     if: needs.pre_ci.outputs.continue
     name: Rust ${{matrix.rust}}
-    needs:
-      - load_nix
-      - pre_ci
+    needs: pre_ci
     outputs:
       prepare_seconds: ${{ steps.prepare.outputs.seconds }}
       run_seconds: ${{ steps.tests.outputs.seconds }}
@@ -443,7 +403,6 @@ jobs:
           cargo test --workspace --no-run
           if [ \"\$TIMED\" = true ]; then echo \"seconds=\$((\$(date +%s) - start))\" >> \"\$GITHUB_OUTPUT\"; fi
           "
-      - run: nix-shell -p ffmpeg deno pkg-config openssl.out openssl.dev git --command "set -e; export LD_LIBRARY_PATH=\"\$(nix-build '<nixpkgs>' -A ffmpeg --no-out-link)/lib\${LD_LIBRARY_PATH:+:}\$LD_LIBRARY_PATH\" && export LD_LIBRARY_PATH=\"\$(nix-build '<nixpkgs>' -A deno --no-out-link)/lib\${LD_LIBRARY_PATH:+:}\$LD_LIBRARY_PATH\" && export LD_LIBRARY_PATH=\"\$(nix-build '<nixpkgs>' -A pkg-config --no-out-link)/lib\${LD_LIBRARY_PATH:+:}\$LD_LIBRARY_PATH\" && export LD_LIBRARY_PATH=\"\$(nix-build '<nixpkgs>' -A openssl.out --no-out-link)/lib\${LD_LIBRARY_PATH:+:}\$LD_LIBRARY_PATH\" && export LD_LIBRARY_PATH=\"\$(nix-build '<nixpkgs>' -A openssl.dev --no-out-link)/lib\${LD_LIBRARY_PATH:+:}\$LD_LIBRARY_PATH\" && cargo check --workspace --all-targets"
       - env:
           TIMED: ${{ matrix.rust == 'nightly' }}
         id: tests
