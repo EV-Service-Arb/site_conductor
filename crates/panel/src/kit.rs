@@ -299,7 +299,7 @@ impl Panel {
 			.filter(|t| t.id == trade)
 			.flat_map(|t| t.categories)
 			.find(|c| c.country == country)
-			.map(|c| c.keywords))
+			.map(|c| c.keywords.into_iter().map(|k| k.text).collect()))
 	}
 
 	/// The category's drafts, not removed, with their tags.
@@ -727,7 +727,8 @@ impl Panel {
 		for (trade, country) in categories {
 			let t = trades.iter().find(|t| t.id == trade).ok_or_else(|| eyre::eyre!("trade {trade} of a member is not its owner's"))?;
 			let Some(c) = t.categories.iter().find(|c| c.country == country) else { continue }; // a GBP's category not set up: nothing to offer
-			let pool = pool(&mut conn, trade, country, &c.keywords, &areas).await?;
+			let keywords: Vec<String> = c.keywords.iter().map(|k| k.text.clone()).collect();
+			let pool = pool(&mut conn, trade, country, &keywords, &areas).await?;
 			let mut warnings = Vec::new();
 			let named: BTreeSet<&str> = pool.drafts.iter().flat_map(|d| d.names.iter().map(String::as_str)).collect();
 			for n in named {

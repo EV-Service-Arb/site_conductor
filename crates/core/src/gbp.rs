@@ -75,8 +75,7 @@ pub fn phone(raw: &str) -> Result<String, Invalid> {
 
 /// A category's keywords as stored: each trimmed, its inner whitespace one space, lowercased, at
 /// most 80 chars; at most 50, none twice. A keyword names no city: the grid point is the location,
-/// and a city term is one location's own. No weights: a term weighs its search volume where it is
-/// read.
+/// and a city term is one location's own.
 pub fn keywords(raw: &[String]) -> Result<Vec<String>, Invalid> {
 	let mut out: Vec<String> = Vec::with_capacity(raw.len());
 	for typed in raw {

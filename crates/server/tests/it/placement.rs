@@ -46,16 +46,16 @@ const NEED: usize = 38;
 /// What the stub answers a study with, byte for byte.
 const PAYLOAD: &str = r#"{"name":"as placement wrote it"}"#;
 
-/// Placement: every definition is studied but one whose study is `carpentry`.
+/// Placement: every definition is studied but one of the trade `Carpentry`.
 async fn study(Json(def): Json<Definition>) -> axum::response::Response {
-	match def.category.as_ref().map(|c| c.study.as_str()) {
-		Some("carpentry") => (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({ "code": "unstudied", "error": "no trade file carpentry" }))).into_response(),
+	match def.category.as_ref().map(|c| c.name.as_str()) {
+		Some("Carpentry") => (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({ "code": "unstudied", "error": "no grid for it" }))).into_response(),
 		_ => ([("content-type", "application/json")], PAYLOAD).into_response(),
 	}
 }
 
 /// Placement's pull, reading what the conductor holds: [`NEED`] first pages, then the one behind
-/// the first, each lacking unless fetched since the pull began; the pull of study `fails` fails.
+/// the first, each lacking unless fetched since the pull began; the pull of the trade `Fails` fails.
 #[derive(Clone)]
 struct Pulled {
 	store: Store,
@@ -96,7 +96,7 @@ async fn held(store: &Store, a: &Ask, since: Timestamp) -> bool {
 }
 
 async fn pull(State(p): State<Pulled>, Json(def): Json<Definition>) -> axum::response::Response {
-	if def.category.as_ref().is_some_and(|c| c.study == "fails") {
+	if def.category.as_ref().is_some_and(|c| c.name == "Fails") {
 		return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": "internal", "error": "the build failed" }))).into_response();
 	}
 	*p.since.lock().unwrap() = None;
@@ -151,7 +151,7 @@ impl Conductor {
 			since: Arc::default(),
 		};
 		let placement = Router::new()
-			.route("/trades.json", get(|| async { Json(json!({ "trades": ["plumbing", "carpentry"], "countries": ["FR"] })) }))
+			.route("/catalog.json", get(|| async { Json(json!({ "countries": ["FR"] })) }))
 			.route("/studies", post(study))
 			.route("/studies/asks", post(asks))
 			.route("/studies/pull", post(pull))
@@ -235,12 +235,13 @@ impl Conductor {
 	}
 }
 
-fn set_up(study: Option<&str>, primary: Option<&str>, keywords: &[&str]) -> Value {
-	json!({ "keywords": keywords, "google_primary": primary, "google_additional": [], "study": study })
+fn set_up(primary: Option<&str>, keywords: &[(&str, Option<f64>)]) -> Value {
+	let keywords: Vec<Value> = keywords.iter().map(|(text, weight)| json!({ "text": text, "weight": weight })).collect();
+	json!({ "keywords": keywords, "google_primary": primary, "google_additional": [], "excluded": { "words": [], "types": [] }, "demand": null })
 }
 
 fn plumbing() -> Value {
-	set_up(Some("plumbing"), Some("gcid:plumber"), &["plombier", "fuite d'eau"])
+	set_up(Some("gcid:plumber"), &[("plombier", Some(1.)), ("fuite d'eau", Some(0.5))])
 }
 
 #[tokio::test]
@@ -254,8 +255,8 @@ async fn a_study_is_built_from_the_conductors_rows_and_its_payload_streamed_thro
 	assert_eq!(path, "/studies");
 	let category = def.category.unwrap();
 	assert_eq!(
-		(category.study.as_str(), category.google_primary.name.as_str(), def.area.slug()),
-		("plumbing", "Plombier", "lyon"),
+		(category.name.as_str(), category.primary.name.as_str(), def.area.slug()),
+		("Plumbing", "Plombier", "lyon"),
 		"named in the country's language"
 	);
 
@@ -265,17 +266,15 @@ async fn a_study_is_built_from_the_conductors_rows_and_its_payload_streamed_thro
 	assert_eq!(def.category, None, "the area's grid alone");
 
 	let (status, catalog) = c.call(Method::GET, "/api/v1/placement/catalog", Value::Null).await;
-	assert_eq!((status, catalog), (StatusCode::OK, json!({ "trades": ["plumbing", "carpentry"], "countries": ["FR"] })));
+	assert_eq!((status, catalog), (StatusCode::OK, json!({ "countries": ["FR"] })));
 }
 
 #[tokio::test]
 async fn a_category_not_set_up_to_be_studied_is_refused_by_why() {
 	let mut c = Conductor::new(operator(), 8, 1000).await;
 	for (name, country, set_up, code) in [
-		("Roofing", "FR", set_up(None, Some("gcid:roofing_contractor"), &["couvreur"]), "no_study"),
-		("Painting", "FR", set_up(Some("painting"), None, &["peintre"]), "no_google_category"),
-		("Locksmith", "FR", set_up(Some("locksmith"), Some("gcid:locksmith"), &[]), "no_keywords"),
-		("Cleaning", "US", set_up(Some("cleaning"), Some("gcid:plumber"), &["cleaner"]), "another_country"),
+		("Painting", "FR", set_up(None, &[("peintre", None)]), "no_google_category"),
+		("Cleaning", "US", set_up(Some("gcid:plumber"), &[("plumber", Some(1.))]), "another_country"),
 	] {
 		let category = c.trade(name, country, set_up).await;
 		let (status, body) = c.call(Method::GET, &format!("/api/v1/placement/study?area=lyon&category={category}"), Value::Null).await;
@@ -293,7 +292,7 @@ async fn a_category_not_set_up_to_be_studied_is_refused_by_why() {
 		"no such area"
 	);
 
-	let carpentry = c.trade("Carpentry", "FR", set_up(Some("carpentry"), Some("gcid:plumber"), &["menuisier"])).await;
+	let carpentry = c.trade("Carpentry", "FR", plumbing()).await;
 	let (status, body) = c.call(Method::GET, &format!("/api/v1/placement/study?area=lyon&category={carpentry}"), Value::Null).await;
 	assert_eq!((status, &body["code"]), (StatusCode::UNPROCESSABLE_ENTITY, &json!("unstudied")), "placement's own word: {body}");
 }
@@ -366,7 +365,7 @@ async fn a_pull_past_its_budget_is_stopped_owed_back_and_its_retry_buys_only_the
 #[tokio::test]
 async fn a_failed_pull_is_charged_what_it_bought_and_owes_it_all_back() {
 	let mut c = Conductor::new(admin(), 8, 1000).await;
-	let fails = c.trade("Plumbing", "FR", set_up(Some("fails"), Some("gcid:plumber"), &["plombier"])).await;
+	let fails = c.trade("Fails", "FR", plumbing()).await;
 
 	let (status, _) = c.send(Method::POST, &format!("/api/v1/placement/study/pull?area=lyon&category={fails}"), Value::Null).await;
 	assert_eq!(status, StatusCode::BAD_GATEWAY);

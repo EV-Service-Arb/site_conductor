@@ -27,6 +27,8 @@ use zeroize::Zeroizing;
 const ALERTS: i64 = 20261105090000;
 /// The migration that took a trade's Google categories off Google's list.
 const GOOGLE_CATEGORIES: i64 = 20261112090000;
+/// The migration that made a category its studies' whole definition.
+const DEFINITION: i64 = 20261119130000;
 
 /// A refresher that must not be asked: the tokens above are fresh.
 struct Never;
@@ -634,6 +636,45 @@ async fn google_labels_become_gcids() {
 	let err = migrator.run(&mut *conn).await.unwrap_err().to_string();
 	assert!(err.contains("GB 'Plumbing contractor'"), "the down migration's gcid stays: {err}");
 	assert!(!err.contains("FR"), "the down migration's gcid stays: {err}");
+}
+
+/// Keywords become weighed ones, the primary's name among them at weight 1 and the rest unweighed;
+/// an additional category, whose weight is a person's to give, stops the migration, named.
+#[tokio::test]
+async fn a_category_becomes_its_studies_definition() {
+	let db = TestDb::create().await;
+	let pool = db.pool().await;
+	let mut conn = pool.acquire().await.unwrap();
+	let migrator = sqlx::migrate!("./migrations");
+	migrator.undo(&mut *conn, DEFINITION - 1).await.unwrap();
+	for sql in [
+		"INSERT INTO users VALUES (x'00000000000000000000000000000001', 'ann@localhost', 'Ann', 1, 1)",
+		"INSERT INTO trades (owner, name, created_at) VALUES (x'00000000000000000000000000000001', 'Plumbing', 1)",
+		r#"INSERT INTO categories VALUES (1, 'FR', '["fuite d''eau"]', 'gcid:plumber', '[]', 'plumbing')"#,
+		r#"INSERT INTO categories VALUES (1, 'US', '["plumber", "drain"]', 'gcid:plumber', '[]', NULL)"#,
+		r#"INSERT INTO categories VALUES (1, 'GB', '["plumber"]', NULL, '[]', NULL)"#,
+	] {
+		sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&mut *conn).await.unwrap();
+	}
+	migrator.run(&mut *conn).await.unwrap();
+	let keywords: Vec<(String, String)> = sqlx::query_as("SELECT country, keywords FROM categories ORDER BY country").fetch_all(&mut *conn).await.unwrap();
+	let keywords: Vec<(String, serde_json::Value)> = keywords.into_iter().map(|(c, k)| (c, serde_json::from_str(&k).unwrap())).collect();
+	assert_eq!(
+		keywords,
+		[
+			("FR".into(), json!([{ "text": "fuite d'eau", "weight": null }, { "text": "plombier", "weight": 1.0 }])),
+			("GB".into(), json!([{ "text": "plumber", "weight": null }])),
+			("US".into(), json!([{ "text": "plumber", "weight": 1.0 }, { "text": "drain", "weight": null }])),
+		]
+	);
+
+	migrator.undo(&mut *conn, DEFINITION - 1).await.unwrap();
+	sqlx::query(r#"UPDATE categories SET google_additional = '["gcid:heating_contractor"]' WHERE country = 'FR'"#)
+		.execute(&mut *conn)
+		.await
+		.unwrap();
+	let err = migrator.run(&mut *conn).await.unwrap_err().to_string();
+	assert!(err.contains("1·FR"), "{err}");
 }
 
 fn origin(raw: &str) -> SiteOrigin {

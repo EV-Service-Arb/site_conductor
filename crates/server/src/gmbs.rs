@@ -10,6 +10,7 @@ use ev_lib::api::{Body, Created, Ids, JsonSchema, Params, Refusal};
 use jiff::Timestamp;
 use sa_core::{
 	gbp::{Country, OnGoogle, Role, State as GbpState},
+	placement::{Demand, Excluded, Keyword},
 	prices::{PlacesRequest, Spends, StreetViewLoad},
 };
 use sa_panel::{
@@ -142,14 +143,24 @@ pub struct CategoryDto {
 	/// The country's language, its keywords' and Google's form's: `fr`.
 	pub lang: String,
 	/// Lowercase, in the country's language, none naming a city: the terms every GBP of the
-	/// category is compared on.
-	pub keywords: Vec<String>,
-	/// What Google's form is given as the category.
+	/// category is scanned on, and each competitor of its studies scored on as weighed. With a
+	/// primary, its name is among them at weight 1.
+	pub keywords: Vec<Keyword>,
+	/// What Google's form is given as the category; its studies' first competitor tier.
 	pub google_primary: Option<GoogleCategoryDto>,
-	/// At most 9, in the order they are entered into Google's form.
-	pub google_additional: Vec<GoogleCategoryDto>,
-	/// Placement's trade that studies it.
-	pub study: Option<String>,
+	/// At most 9, in the order they are entered into Google's form: a competitor tier each.
+	pub google_additional: Vec<AdditionalDto>,
+	pub excluded: Excluded,
+	pub demand: Option<Demand>,
+}
+
+/// An additional Google category and what one competitor of its tier weighs against one of the
+/// primary's.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "AdditionalCategory")]
+pub struct AdditionalDto {
+	pub google: GoogleCategoryDto,
+	pub weight: f64,
 }
 
 /// One of Google's categories.
@@ -470,8 +481,9 @@ impl From<Trade> for TradeDto {
 					lang: c.country.lang().to_owned(),
 					keywords: c.keywords,
 					google_primary: c.google_primary.map(GoogleCategoryDto::from),
-					google_additional: c.google_additional.into_iter().map(GoogleCategoryDto::from).collect(),
-					study: c.study,
+					google_additional: c.google_additional.into_iter().map(|(g, weight)| AdditionalDto { google: g.into(), weight }).collect(),
+					excluded: c.excluded,
+					demand: c.demand,
 				})
 				.collect(),
 		}
@@ -960,20 +972,31 @@ async fn delete_trade(State(panel): State<Panel>, Extension(caller): Extension<C
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SetUp {
-	/// In the country's language, each once normalized.
-	keywords: Vec<String>,
+	/// In the country's language, each once normalized; with a primary, its name at weight 1.
+	keywords: Vec<Keyword>,
 	/// A gcid Google has in the country.
 	google_primary: Option<String>,
 	/// At most 9, only with a primary.
-	google_additional: Vec<String>,
-	/// Placement's study of it.
-	study: Option<String>,
+	google_additional: Vec<AdditionalIn>,
+	excluded: Excluded,
+	demand: Option<Demand>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AdditionalIn {
+	/// A gcid Google has in the country.
+	id: String,
+	/// Positive.
+	weight: f64,
 }
 
 /// Sets a trade up in a country, or edits it there.
 ///
-/// 400 a keyword twice once normalized, a gcid not Google's there or twice, additional ones past 9
-/// or without a primary.
+/// 400 a keyword twice once normalized, keywords without the primary's name at weight 1, a weight
+/// not positive, a gcid not Google's there or twice, additional ones past 9 or without a primary,
+/// an excluded word twice or a type that is none, a demand with an empty expression or a column
+/// twice.
 async fn set_up_trade(
 	State(panel): State<Panel>,
 	Extension(caller): Extension<Caller>,
@@ -984,15 +1007,17 @@ async fn set_up_trade(
 		keywords,
 		google_primary,
 		google_additional,
-		study,
+		excluded,
+		demand,
 	} = b;
 	let google = |id: &str| GoogleCategory::find(country, id);
 	let category = Category {
 		country,
 		keywords,
 		google_primary: google_primary.as_deref().map(google).transpose()?,
-		google_additional: google_additional.iter().map(|id| google(id)).collect::<Result<_, _>>()?,
-		study,
+		google_additional: google_additional.iter().map(|a| google(&a.id).map(|g| (g, a.weight))).collect::<Result<_, _>>()?,
+		excluded,
+		demand,
 	};
 	let set = panel.set_up(caller.user_id, trade, category).await??;
 	tracing::info!(user_id = %caller.user_id, trade_id = trade, %country, "category set up");

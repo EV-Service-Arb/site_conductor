@@ -861,17 +861,44 @@ impl Panel {
 	}
 
 	/// The owner's trade `id` set up for `c.country` as `c` says, over what it was: the keywords in
-	/// [`sa_core::gbp::keywords`]' form, the study trimmed and not empty, at most 9 additional
-	/// Google categories beside a primary, none twice.
+	/// [`sa_core::gbp::keywords`]' form and weighed, the primary's name among them at weight 1, at
+	/// most 9 additional Google categories beside a primary, none twice, each weighed; the excluded
+	/// words trimmed lowercase.
 	pub async fn set_up(&self, owner: Uuid, id: i64, c: Category) -> eyre::Result<Result<Trade, Refused>> {
-		let study = match c.study.as_deref().map(str::trim) {
-			Some("") => return Ok(Err(Refused::Invalid("a category's study is not empty: null clears it".to_owned()))),
-			t => t.map(str::to_owned),
-		};
-		let keywords = match sa_core::gbp::keywords(&c.keywords) {
+		let texts = match sa_core::gbp::keywords(&c.keywords.iter().map(|k| k.text.clone()).collect::<Vec<_>>()) {
 			Ok(k) => k,
 			Err(e) => return Ok(Err(Refused::Invalid(e.to_string()))),
 		};
+		let keywords: Vec<_> = texts
+			.into_iter()
+			.zip(&c.keywords)
+			.map(|(text, k)| sa_core::placement::Keyword { text, weight: k.weight })
+			.collect();
+		let excluded = sa_core::placement::Excluded {
+			words: c.excluded.words.iter().map(|w| w.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()).collect(),
+			types: c.excluded.types.clone(),
+		};
+		let checked = sa_core::placement::weighed(&keywords)
+			.and_then(|()| excluded.check())
+			.and_then(|()| c.demand.as_ref().map_or(Ok(()), sa_core::placement::Demand::check));
+		if let Err(e) = checked {
+			return Ok(Err(Refused::Invalid(e.to_string())));
+		}
+		if let Some((g, w)) = c.google_additional.iter().find(|(_, w)| !(w.is_finite() && *w > 0.)) {
+			return Ok(Err(Refused::Invalid(format!("Google category {} weighs {w}: a weight is positive", g.id))));
+		}
+		if let Some(p) = c.google_primary {
+			let name = p.names.get(c.country.lang()).expect("google_categories.json names each in its countries' languages");
+			let primary = match sa_core::gbp::keywords(std::slice::from_ref(name)) {
+				Ok(k) => k.into_iter().next().expect("one in, one out"),
+				Err(e) => return Ok(Err(Refused::Invalid(e.to_string()))),
+			};
+			if !keywords.iter().any(|k| k.text == primary && k.weight == Some(1.)) {
+				return Ok(Err(Refused::Invalid(format!(
+					"the keywords carry the primary's name {primary:?} at weight 1: the rest are weighed against it"
+				))));
+			}
+		}
 		if c.google_additional.len() > 9 {
 			return Ok(Err(Refused::Invalid("Google takes at most 9 additional categories".to_owned())));
 		}
@@ -879,10 +906,10 @@ impl Panel {
 			return Ok(Err(Refused::Invalid("additional Google categories need a primary one".to_owned())));
 		}
 		let mut seen = BTreeSet::new();
-		if let Some(twice) = c.google_primary.iter().chain(&c.google_additional).find(|g| !seen.insert(g.id)) {
+		if let Some(twice) = c.google_primary.iter().chain(c.google_additional.iter().map(|(g, _)| g)).find(|g| !seen.insert(g.id)) {
 			return Ok(Err(Refused::Invalid(format!("Google category {} twice", twice.id))));
 		}
-		let c = Category { keywords, study, ..c };
+		let c = Category { keywords, excluded, ..c };
 		let mut tx = self.store.begin_write().await?;
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));

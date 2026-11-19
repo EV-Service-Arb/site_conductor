@@ -50,16 +50,11 @@ pub enum Code {
 	BrowsersNotConnected,
 	/// What this answer stands on did not answer.
 	BadGateway,
-	/// The category names no placement trade to study it by.
-	NoStudy,
 	/// The category has no primary Google category.
 	NoGoogleCategory,
-	/// The category has no keyword.
-	NoKeywords,
 	/// The category is set up for another country than the area's.
 	AnotherCountry,
-	/// Nothing placement serves studies it: no such trade file, no base for the country, or the
-	/// trade refuses it.
+	/// Placement has no grid for the area's country.
 	Unstudied,
 	/// A pull needs more than the balance affords.
 	Unaffordable,
@@ -78,7 +73,7 @@ impl ErrorCode for Code {
 			Self::TooMany => StatusCode::TOO_MANY_REQUESTS,
 			Self::Unavailable | Self::BrowsersNotConnected => StatusCode::SERVICE_UNAVAILABLE,
 			Self::BadGateway => StatusCode::BAD_GATEWAY,
-			Self::NoStudy | Self::NoGoogleCategory | Self::NoKeywords | Self::AnotherCountry | Self::Unstudied => StatusCode::UNPROCESSABLE_ENTITY,
+			Self::NoGoogleCategory | Self::AnotherCountry | Self::Unstudied => StatusCode::UNPROCESSABLE_ENTITY,
 			Self::Unaffordable => StatusCode::PAYMENT_REQUIRED,
 			Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
 		}

@@ -70,28 +70,35 @@ impl Definition {
 			}
 		}
 		let Some(c) = &self.category else { return Ok(()) };
-		let named = format!("category {}·{}", c.trade, c.country);
+		let named = format!("category {}·{}", c.name, c.country);
 		ensure(c.country == a.country(), format!("{named} applied to an area in {}", a.country()))?;
-		ensure(!c.study.is_empty() && c.study.trim() == c.study, format!("{named} names study {:?}", c.study))?;
-		ensure(!c.keywords.is_empty(), format!("{named} carries no keyword"))?;
-		ensure(keywords(&c.keywords)? == c.keywords, format!("{named}'s keywords are not as a category stores them"))?;
-		ensure(
-			c.google_additional.len() <= 9,
-			format!("{named} carries {} additional Google categories, not ≤ 9", c.google_additional.len()),
-		)?;
-		for g in std::iter::once(&c.google_primary).chain(&c.google_additional) {
+		ensure(!c.name.trim().is_empty(), format!("trade {} has no name", c.trade))?;
+		let googles: Vec<&Gcid> = std::iter::once(&c.primary).chain(c.additional.iter().map(|x| &x.google)).collect();
+		ensure(googles.len() <= 10, format!("{named} carries {} additional Google categories, not ≤ 9", c.additional.len()))?;
+		for (i, g) in googles.iter().enumerate() {
 			ensure(g.id.starts_with("gcid:") && g.id.len() > 5, format!("Google category {:?} is not a gcid", g.id))?;
 			ensure(!g.name.trim().is_empty(), format!("Google category {} has no name", g.id))?;
+			ensure(!googles[..i].iter().any(|o| o.id == g.id), format!("{named} carries {} twice", g.id))?;
 		}
+		for x in &c.additional {
+			ensure(weight(x.weight), format!("{named}'s {} weighs {}", x.google.id, x.weight))?;
+		}
+		weighed(&c.keywords)?;
+		let primary = primary_keyword(&c.primary)?;
+		ensure(
+			c.keywords.iter().any(|k| k.text == primary && k.weight == Some(1.)),
+			format!("{named} does not carry its primary's name {primary:?} as a keyword at weight 1"),
+		)?;
+		c.excluded.check()?;
+		c.demand.as_ref().map_or(Ok(()), Demand::check)?;
 		Ok(())
 	}
 
-	/// Keywords and additional categories are sets to a study, so their order is not part of what
-	/// it is.
+	/// Keywords are a set to a study, so their order is not part of what it is; the additional
+	/// categories' is, as first match wins.
 	pub fn canonical(mut self) -> Self {
 		if let Some(c) = &mut self.category {
-			c.keywords.sort();
-			c.google_additional.sort();
+			c.keywords.sort_by(|a, b| a.text.cmp(&b.text));
 		}
 		self
 	}
@@ -103,13 +110,75 @@ impl Definition {
 		hex::encode(Sha256::digest(bytes))
 	}
 
-	/// `<study>·<CC>·<slug>`, or the slug alone without a category.
+	/// `<trade>·<CC>·<slug>`, or the slug alone without a category.
 	pub fn name(&self) -> String {
 		match &self.category {
-			Some(c) => format!("{}·{}·{}", c.study, c.country, self.area.slug()),
+			Some(c) => format!("{}·{}·{}", c.name, c.country, self.area.slug()),
 			None => self.area.slug().to_owned(),
 		}
 	}
+}
+
+fn weight(w: f64) -> bool {
+	w.is_finite() && w > 0.
+}
+
+fn ensure(ok: bool, why: String) -> Result<(), Invalid> {
+	if ok { Ok(()) } else { Err(Invalid(why)) }
+}
+
+/// Keywords in [`keywords`]' form, each weight positive and finite.
+pub fn weighed(k: &[Keyword]) -> Result<(), Invalid> {
+	let texts: Vec<String> = k.iter().map(|k| k.text.clone()).collect();
+	ensure(keywords(&texts)? == texts, "keywords are not as a category stores them".to_owned())?;
+	for k in k {
+		if let Some(w) = k.weight {
+			ensure(weight(w), format!("the keyword {:?} weighs {w}", k.text))?;
+		}
+	}
+	Ok(())
+}
+
+impl Excluded {
+	pub fn check(&self) -> Result<(), Invalid> {
+		for (i, w) in self.words.iter().enumerate() {
+			ensure(!w.is_empty() && *w == w.trim().to_lowercase(), format!("the excluded word {w:?} is not trimmed lowercase"))?;
+			ensure(!self.words[..i].contains(w), format!("the word {w:?} is excluded twice"))?;
+		}
+		for (i, t) in self.types.iter().enumerate() {
+			ensure(
+				!t.is_empty() && t.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'),
+				format!("the excluded type {t:?} is not a Places type"),
+			)?;
+			ensure(!self.types[..i].contains(t), format!("the type {t:?} is excluded twice"))?;
+		}
+		Ok(())
+	}
+}
+
+impl Demand {
+	pub fn check(&self) -> Result<(), Invalid> {
+		ensure(!self.expr.trim().is_empty(), "the demand is empty".to_owned())?;
+		for (i, col) in self.columns.iter().enumerate() {
+			let ident = col.name.bytes().next().is_some_and(|b| b.is_ascii_lowercase()) && col.name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
+			ensure(ident, format!("the column {:?} is not [a-z][a-z0-9_]*", col.name))?;
+			ensure(!col.expr.trim().is_empty(), format!("the column {} is empty", col.name))?;
+			ensure(!self.columns[..i].iter().any(|o| o.name == col.name), format!("the column {} is derived twice", col.name))?;
+		}
+		for (i, l) in self.layers.iter().enumerate() {
+			ensure(
+				!l.name.trim().is_empty() && !l.expr.trim().is_empty(),
+				format!("the layer {:?} has no name or no expression", l.name),
+			)?;
+			ensure(!self.layers[..i].iter().any(|o| o.name == l.name), format!("the layer {} is added twice", l.name))?;
+		}
+		Ok(())
+	}
+}
+
+/// The primary's name as a keyword: the term every other is weighed against.
+pub fn primary_keyword(primary: &Gcid) -> Result<String, Invalid> {
+	Ok(keywords(std::slice::from_ref(&primary.name))?.remove(0))
 }
 
 /// An area as the conductor keeps it: a city's viewport or a circle, and a margin around it that
@@ -145,26 +214,94 @@ impl Area {
 	}
 }
 
-/// A trade set up for a country. `study` names the placement trade that carries what only an
-/// expert writes: the demand model, the tier vocabulary, λ.
+/// A trade set up for a country: everything a study of it reads, whichever area it is applied to.
+/// Its competitors are tiered by which of its Google categories' searches found them, first match
+/// wins (docs/ARCHITECTURE.md, Placement).
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Category {
 	pub trade: u64,
+	/// The trade's name: what a study is called by.
+	pub name: String,
 	pub country: Country,
-	pub study: String,
-	/// [`keywords`]' form.
-	pub keywords: Vec<String>,
-	pub google_primary: Gcid,
-	pub google_additional: Vec<Gcid>,
+	/// Tier 1, what its searches return, and the weight of 1 the rest is weighed against: searched by
+	/// its name and by each keyword.
+	pub primary: Gcid,
+	/// A tier each after the primary's, in this order: what the search of its exact name returns.
+	pub additional: Vec<Additional>,
+	/// [`keywords`]' form, the primary's name among them at weight 1.
+	pub keywords: Vec<Keyword>,
+	pub excluded: Excluded,
+	/// None: no demand surface, and nothing that reads one.
+	pub demand: Option<Demand>,
 }
 
-/// What placement studies: the trade files a category's `study` names one of, and the countries it
-/// has a base for.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Keyword {
+	pub text: String,
+	/// What ranking for it is worth against the primary's name; None: scanned, not scored.
+	pub weight: Option<f64>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Additional {
+	pub google: Gcid,
+	/// A competitor of its tier against one of the primary's.
+	pub weight: f64,
+}
+
+/// Places the sweep turns up that are never competitors, checked before any tier.
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Excluded {
+	/// Lowercase; a place whose name holds one.
+	pub words: Vec<String>,
+	/// Places types (`hardware_store`); a place whose primary type is one.
+	pub types: Vec<String>,
+}
+
+/// What the country's grid means to the trade, per cell.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Demand {
+	/// Over the grid's columns and `columns`.
+	pub expr: String,
+	/// Derived before `expr` reads them, in order.
+	pub columns: Vec<Column>,
+	/// Heat layers the trade adds to the country's.
+	pub layers: Vec<Layer>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Column {
+	pub name: String,
+	pub expr: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Layer {
+	pub name: String,
+	pub expr: String,
+	pub scale: Scale,
+	pub note: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Scale {
+	/// Rank, not magnitude: for heavy-tailed quantities.
+	Percentile,
+	Linear,
+}
+
+/// The countries placement has a grid for.
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Catalog {
-	pub trades: Vec<String>,
 	pub countries: Vec<Country>,
 }
 
@@ -180,7 +317,7 @@ pub struct Gcid {
 mod tests {
 	use super::*;
 
-	/// What placement's work dir already keeps a study under, from before this type was sa_core's.
+	/// A study's address is its definition's: one that moves is every work dir's studies keyed anew.
 	#[test]
 	fn a_study_keeps_its_address() {
 		let def = Definition {
@@ -197,19 +334,30 @@ mod tests {
 			},
 			category: Some(Category {
 				trade: 1,
+				name: "Plumbing".into(),
 				country: Country::FR,
-				study: "plumbing".into(),
-				keywords: vec!["plombier".into(), "fuite d'eau".into()],
-				google_primary: Gcid {
+				primary: Gcid {
 					id: "gcid:plumber".into(),
 					name: "Plombier".into(),
 				},
-				google_additional: vec![],
+				additional: vec![],
+				keywords: vec![
+					Keyword {
+						text: "plombier".into(),
+						weight: Some(1.),
+					},
+					Keyword {
+						text: "fuite d'eau".into(),
+						weight: None,
+					},
+				],
+				excluded: Excluded::default(),
+				demand: None,
 			}),
 		};
 		def.check().unwrap();
 		assert_eq!(def.id(), PINNED);
 	}
 
-	const PINNED: &str = "f43fc15bc1974d6e73621c240d7648c66a025e989ae05f443ccf5a7409c258b2";
+	const PINNED: &str = "f335012cc483774064b9050692a54b57fd76b40d109d7009f74c2deae9bfcf55";
 }

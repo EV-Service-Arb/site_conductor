@@ -713,7 +713,7 @@ async fn a_trade_is_its_owners() {
 		Some(json!({ "name": "Lyon 7", "trade": plumbing["id"], "state": "draft", "spots": [{ "lat": 45.76, "lng": 4.84 }] })),
 	)
 	.await;
-	let set_up = json!({ "keywords": [], "google_primary": null, "google_additional": [], "study": null });
+	let set_up = json!({ "keywords": [], "google_primary": null, "google_additional": [], "excluded": { "words": [], "types": [] }, "demand": null });
 	for (method, uri, body) in [
 		(Method::PATCH, format!("/api/v1/gmbs/{}", mine["id"]), Some(json!({ "trade": theirs }))),
 		(
@@ -738,7 +738,13 @@ async fn a_trade_a_live_gbp_holds_is_not_deleted() {
 	let (app, mut b, _, _) = beside_another(&db).await;
 	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
 	let uri = format!("/api/v1/trades/{}", trade["id"]);
-	let set_up = json!({ "keywords": ["plombier"], "google_primary": "gcid:plumber", "google_additional": [], "study": "plumbing" });
+	let set_up = json!({
+		"keywords": [{ "text": "plombier", "weight": 1.0 }],
+		"google_primary": "gcid:plumber",
+		"google_additional": [],
+		"excluded": { "words": [], "types": [] },
+		"demand": null,
+	});
 	let (status, _) = call(&mut b, &app, Method::PUT, &format!("{uri}/FR"), Some(set_up)).await;
 	assert_eq!(status, StatusCode::OK);
 	let (_, gbp) = call(
@@ -769,12 +775,25 @@ async fn keywords_are_one_spelling_each_and_none_twice() {
 	let (status, _) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": " PLUMBING " }))).await;
 	assert_eq!(status, StatusCode::CONFLICT, "a name whatever its case");
 	let uri = format!("/api/v1/trades/{}/FR", trade["id"]);
-	let keywords = |k: Value| Some(json!({ "keywords": k, "google_primary": null, "google_additional": [], "study": null }));
+	let keywords = |primary: Value, k: Value| Some(json!({ "keywords": k, "google_primary": primary, "google_additional": [], "excluded": { "words": [], "types": [] }, "demand": null }));
+	let unweighed = |texts: &[&str]| json!(texts.iter().map(|t| json!({ "text": t, "weight": null })).collect::<Vec<_>>());
 
-	let (status, body) = call(&mut b, &app, Method::PUT, &uri, keywords(json!(["Plombier", " plombier  "]))).await;
+	let (status, body) = call(&mut b, &app, Method::PUT, &uri, keywords(json!(null), unweighed(&["Plombier", " plombier  "]))).await;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
-	let (status, body) = call(&mut b, &app, Method::PUT, &uri, keywords(json!(["  Fuite \t d'eau ", "Plombier"]))).await;
-	assert_eq!((status, &body["categories"][0]["keywords"]), (StatusCode::OK, &json!(["fuite d'eau", "plombier"])), "{body}");
+	let (status, body) = call(&mut b, &app, Method::PUT, &uri, keywords(json!(null), unweighed(&["  Fuite \t d'eau ", "Plombier"]))).await;
+	assert_eq!(
+		(status, &body["categories"][0]["keywords"]),
+		(StatusCode::OK, &json!([{ "text": "fuite d'eau", "weight": null }, { "text": "plombier", "weight": null }])),
+		"{body}"
+	);
+
+	for (k, why) in [
+		(unweighed(&["fuite d'eau", "plombier"]), "the primary's name not at weight 1"),
+		(json!([{ "text": "plombier", "weight": 1.0 }, { "text": "fuite d'eau", "weight": 0.0 }]), "a weight not positive"),
+	] {
+		let (status, body) = call(&mut b, &app, Method::PUT, &uri, keywords(json!("gcid:plumber"), k)).await;
+		assert_eq!(status, StatusCode::BAD_REQUEST, "{why}: {body}");
+	}
 }
 
 #[tokio::test]
@@ -783,7 +802,16 @@ async fn google_categories_are_googles_in_the_country_in_order() {
 	let (app, mut b, _, _) = beside_another(&db).await;
 	let (_, trade) = call(&mut b, &app, Method::POST, "/api/v1/trades", Some(json!({ "name": "Plumbing" }))).await;
 	let uri = format!("/api/v1/trades/{}/FR", trade["id"]);
-	let google = |primary: Value, additional: Value| Some(json!({ "keywords": [], "google_primary": primary, "google_additional": additional, "study": null }));
+	let google = |primary: Value, additional: Value| {
+		let additional: Vec<Value> = additional.as_array().unwrap().iter().map(|id| json!({ "id": id, "weight": 0.5 })).collect();
+		Some(json!({
+			"keywords": [{ "text": "plombier", "weight": 1.0 }],
+			"google_primary": primary,
+			"google_additional": additional,
+			"excluded": { "words": [], "types": [] },
+			"demand": null,
+		}))
+	};
 
 	let (status, body) = call(
 		&mut b,
@@ -800,7 +828,7 @@ async fn google_categories_are_googles_in_the_country_in_order() {
 		.as_array()
 		.unwrap()
 		.iter()
-		.map(|g| g["names"]["fr"].as_str().unwrap())
+		.map(|g| g["google"]["names"]["fr"].as_str().unwrap())
 		.collect();
 	assert_eq!(names, ["Chauffagiste", "Service d'évacuation des eaux"]);
 

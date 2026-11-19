@@ -5,8 +5,12 @@ use std::collections::BTreeSet;
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::gbp::{Country, Managed, Role, State};
+use sa_core::{
+	gbp::{Country, Managed, Role, State},
+	placement::{Demand, Excluded, Keyword},
+};
 use sa_places::LatLng;
+use serde::{Deserialize, Serialize};
 use sqlx::SqliteConnection;
 use uuid::Uuid;
 
@@ -859,14 +863,20 @@ pub struct Trade {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Category {
 	pub country: Country,
-	/// In [`sa_core::gbp::keywords`]' form.
-	pub keywords: Vec<String>,
+	/// [`sa_core::placement::weighed`]; with a primary, its name among them at weight 1.
+	pub keywords: Vec<Keyword>,
 	/// Google's category it is typed into Google's form as.
 	pub google_primary: Option<GoogleCategory>,
-	/// Google's additional categories, in the order they are entered.
-	pub google_additional: Vec<GoogleCategory>,
-	/// Placement's trade that studies it.
-	pub study: Option<String>,
+	/// Google's additional categories, in the order they are entered, each a competitor tier's weight.
+	pub google_additional: Vec<(GoogleCategory, f64)>,
+	pub excluded: Excluded,
+	pub demand: Option<Demand>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct AdditionalRow {
+	id: String,
+	weight: f64,
 }
 
 /// The owner's trades, by name.
@@ -877,7 +887,7 @@ pub async fn trades(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Ve
 		.await
 		.wrap_err("listing trades")?;
 	let categories: Vec<CategoryRow> = sqlx::query_as(
-		"SELECT c.trade_id, c.country, c.keywords, c.google_primary, c.google_additional, c.study FROM categories c JOIN trades t ON t.id = c.trade_id \
+		"SELECT c.trade_id, c.country, c.keywords, c.google_primary, c.google_additional, c.excluded, c.demand FROM categories c JOIN trades t ON t.id = c.trade_id \
 		 WHERE t.owner = $1 ORDER BY c.country",
 	)
 	.bind(owner)
@@ -901,20 +911,25 @@ pub async fn trades(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Ve
 		keywords,
 		google_primary,
 		google_additional,
-		study,
+		excluded,
+		demand,
 	} in categories
 	{
 		let trade = trades.iter_mut().find(|t| t.id == trade_id).expect("joined on the owner's trades");
 		let c: Country = country.parse()?;
 		// A gcid a refresh of the list dropped: its rows need migrating to what Google replaced it with.
 		let google = |id: &str| GoogleCategory::find(c, id).wrap_err_with(|| format!("trade {trade_id}'s Google category in {country}"));
-		let additional: Vec<String> = serde_json::from_str(&google_additional).wrap_err_with(|| format!("trade {trade_id}'s additional Google categories in {country}"))?;
+		let additional: Vec<AdditionalRow> = serde_json::from_str(&google_additional).wrap_err_with(|| format!("trade {trade_id}'s additional Google categories in {country}"))?;
 		trade.categories.push(Category {
 			country: c,
 			keywords: serde_json::from_str(&keywords).wrap_err_with(|| format!("trade {trade_id}'s keywords in {country}"))?,
 			google_primary: google_primary.as_deref().map(google).transpose()?,
-			google_additional: additional.iter().map(|id| google(id)).collect::<eyre::Result<_>>()?,
-			study,
+			google_additional: additional.iter().map(|a| Ok((google(&a.id)?, a.weight))).collect::<eyre::Result<_>>()?,
+			excluded: serde_json::from_str(&excluded).wrap_err_with(|| format!("trade {trade_id}'s excluded in {country}"))?,
+			demand: demand
+				.map(|d| serde_json::from_str(&d))
+				.transpose()
+				.wrap_err_with(|| format!("trade {trade_id}'s demand in {country}"))?,
 		});
 	}
 	Ok(trades)
@@ -987,16 +1002,28 @@ pub async fn delete_trade(conn: &mut SqliteConnection, id: i64) -> eyre::Result<
 /// Trade `id` set up for `c.country` as `c` says, over what it was.
 pub async fn set_up(conn: &mut SqliteConnection, id: i64, c: &Category) -> eyre::Result<()> {
 	sqlx::query(
-		"INSERT INTO categories (trade_id, country, keywords, google_primary, google_additional, study) VALUES ($1, $2, $3, $4, $5, $6) \
+		"INSERT INTO categories (trade_id, country, keywords, google_primary, google_additional, excluded, demand) VALUES ($1, $2, $3, $4, $5, $6, $7) \
 		 ON CONFLICT (trade_id, country) DO UPDATE SET keywords = excluded.keywords, google_primary = excluded.google_primary, \
-		 google_additional = excluded.google_additional, study = excluded.study",
+		 google_additional = excluded.google_additional, excluded = excluded.excluded, demand = excluded.demand",
 	)
 	.bind(id)
 	.bind(c.country.as_str())
-	.bind(serde_json::to_string(&c.keywords).expect("strings serialize"))
+	.bind(serde_json::to_string(&c.keywords).expect("keywords serialize"))
 	.bind(c.google_primary.map(|g| g.id))
-	.bind(serde_json::to_string(&c.google_additional.iter().map(|g| g.id).collect::<Vec<_>>()).expect("strings serialize"))
-	.bind(&c.study)
+	.bind(
+		serde_json::to_string(
+			&c.google_additional
+				.iter()
+				.map(|(g, weight)| AdditionalRow {
+					id: g.id.to_owned(),
+					weight: *weight,
+				})
+				.collect::<Vec<_>>(),
+		)
+		.expect("rows serialize"),
+	)
+	.bind(serde_json::to_string(&c.excluded).expect("excluded serializes"))
+	.bind(c.demand.as_ref().map(|d| serde_json::to_string(d).expect("a demand serializes")))
 	.execute(&mut *conn)
 	.await
 	.wrap_err("setting a category up")?;
@@ -1107,7 +1134,8 @@ struct CategoryRow {
 	keywords: String,
 	google_primary: Option<String>,
 	google_additional: String,
-	study: Option<String>,
+	excluded: String,
+	demand: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]

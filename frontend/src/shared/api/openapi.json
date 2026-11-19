@@ -121,7 +121,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -181,8 +181,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -282,7 +280,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -342,8 +340,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -454,7 +450,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -514,8 +510,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -627,7 +621,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -687,8 +681,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -793,7 +785,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -853,8 +845,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -952,7 +942,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -1012,8 +1002,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -1140,7 +1128,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -1200,8 +1188,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -1302,7 +1288,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -1362,8 +1348,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -1490,7 +1474,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -1550,8 +1534,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -1652,7 +1634,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -1712,8 +1694,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -1824,7 +1804,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -1884,8 +1864,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -2009,7 +1987,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -2069,8 +2047,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -2197,7 +2173,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -2257,8 +2233,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -2356,7 +2330,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -2416,8 +2390,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -2522,7 +2494,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -2582,8 +2554,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -2705,7 +2675,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -2765,8 +2735,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -2888,7 +2856,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -2948,8 +2916,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -3054,7 +3020,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -3114,8 +3080,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -3226,7 +3190,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -3286,8 +3250,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -3389,7 +3351,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -3449,8 +3411,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -3548,7 +3508,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -3608,8 +3568,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -3721,7 +3679,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -3781,8 +3739,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -3903,7 +3859,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -3963,8 +3919,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -4084,7 +4038,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -4144,8 +4098,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -4238,7 +4190,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -4298,8 +4250,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -4399,7 +4349,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -4459,8 +4409,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -4568,7 +4516,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -4628,8 +4576,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -4741,7 +4687,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -4801,8 +4747,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -4905,7 +4849,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -4965,8 +4909,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -5078,7 +5020,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -5138,8 +5080,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -5262,7 +5202,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -5322,8 +5262,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -5444,7 +5382,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -5504,8 +5442,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -5625,7 +5561,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -5685,8 +5621,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -5814,7 +5748,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -5874,8 +5808,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -5997,7 +5929,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -6057,8 +5989,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -6173,7 +6103,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -6233,8 +6163,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -6349,7 +6277,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -6409,8 +6337,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -6532,7 +6458,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -6592,8 +6518,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -6716,7 +6640,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -6776,8 +6700,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -6890,7 +6812,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -6950,8 +6872,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -7048,7 +6968,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -7108,8 +7028,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -7217,7 +7135,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -7277,8 +7195,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -7383,7 +7299,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -7443,8 +7359,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -7564,7 +7478,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -7624,8 +7538,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -7733,7 +7645,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -7793,8 +7705,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -7930,7 +7840,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -7990,8 +7900,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -8103,7 +8011,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -8163,8 +8071,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -8300,7 +8206,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -8360,8 +8266,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -8480,7 +8384,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -8540,8 +8444,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -8655,7 +8557,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -8715,8 +8617,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -8847,7 +8747,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -8907,8 +8807,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -9009,7 +8907,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -9069,8 +8967,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -9178,7 +9074,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -9238,8 +9134,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -9344,7 +9238,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -9404,8 +9298,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -9547,7 +9439,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -9607,8 +9499,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -9730,7 +9620,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -9790,8 +9680,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -9894,7 +9782,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -9954,8 +9842,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -10067,7 +9953,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -10127,8 +10013,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -10231,7 +10115,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -10291,8 +10175,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -10408,7 +10290,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -10468,8 +10350,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -10579,7 +10459,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -10639,8 +10519,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -10752,7 +10630,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -10812,8 +10690,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -10929,7 +10805,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -10989,8 +10865,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -11113,7 +10987,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -11173,8 +11047,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -11277,7 +11149,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -11337,8 +11209,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -11450,7 +11320,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -11510,8 +11380,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -11623,7 +11491,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -11683,8 +11551,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -11796,7 +11662,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -11856,8 +11722,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -11980,7 +11844,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -12040,8 +11904,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -12172,7 +12034,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -12232,8 +12094,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -12336,7 +12196,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -12396,8 +12256,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -12509,7 +12367,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -12569,8 +12427,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -12693,7 +12549,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -12753,8 +12609,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -12857,7 +12711,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -12917,8 +12771,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -13030,7 +12882,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -13090,8 +12942,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -13202,7 +13052,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -13262,8 +13112,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -13366,7 +13214,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -13426,8 +13274,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -13530,7 +13376,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -13590,8 +13436,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -13719,7 +13563,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -13779,8 +13623,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -13915,7 +13757,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -13975,8 +13817,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -14087,7 +13927,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -14147,8 +13987,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -14253,7 +14091,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -14313,8 +14151,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -14436,7 +14272,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -14496,8 +14332,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -14612,7 +14446,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -14672,8 +14506,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -14795,7 +14627,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -14855,8 +14687,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -14977,7 +14807,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -15037,8 +14867,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -15165,7 +14993,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -15225,8 +15053,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -15341,7 +15167,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -15401,8 +15227,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -15505,7 +15329,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -15565,8 +15389,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -15705,7 +15527,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -15765,8 +15587,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -15884,7 +15704,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -15944,8 +15764,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -16067,7 +15885,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -16127,8 +15945,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -16250,7 +16066,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -16310,8 +16126,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -16432,7 +16246,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -16492,8 +16306,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -16612,7 +16424,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -16672,8 +16484,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -16786,7 +16596,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -16846,8 +16656,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -16966,7 +16774,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -17026,8 +16834,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -17157,7 +16963,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -17217,8 +17023,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -17326,7 +17130,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -17386,8 +17190,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -17506,7 +17308,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -17566,8 +17368,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -17681,7 +17481,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -17741,8 +17541,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -17845,7 +17643,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -17905,8 +17703,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -18033,7 +17829,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -18093,8 +17889,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -18195,7 +17989,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -18255,8 +18049,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -18368,7 +18160,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -18428,8 +18220,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -18544,7 +18334,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -18604,8 +18394,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -18790,7 +18578,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -18850,8 +18638,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -18943,7 +18729,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -19003,8 +18789,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -19108,7 +18892,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -19168,8 +18952,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -19279,7 +19061,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -19339,8 +19121,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -19432,7 +19212,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -19492,8 +19272,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -19594,7 +19372,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -19654,8 +19432,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -19756,7 +19532,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -19816,8 +19592,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -19913,11 +19687,11 @@
         "tags": [
           "placement"
         ],
-        "summary": "What a category may be studied by, and where: placement's trade files and the countries it has a base for.",
+        "summary": "The countries placement has a grid for.",
         "operationId": "catalog",
         "responses": {
           "200": {
-            "description": "What placement studies: the trade files a category's `study` names one of, and the countries it\nhas a base for.",
+            "description": "The countries placement has a grid for.",
             "content": {
               "application/json": {
                 "schema": {
@@ -19997,7 +19771,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -20057,8 +19831,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -20076,7 +19848,7 @@
           "placement"
         ],
         "summary": "A study of an area: under one of the caller's categories, or the area's grid alone; never spends.",
-        "description": "404 no such area or category of the caller's; 422 a category not set up to be studied\n(`no_study`, `no_google_category`, `no_keywords`), set up for `another_country`, or one\nplacement does not study (`unstudied`); 503 placement not connected.",
+        "description": "404 no such area or category of the caller's; 422 a category with `no_google_category`, set up\nfor `another_country`, or an area where placement has no grid (`unstudied`); 503 placement not\nconnected.",
         "operationId": "study",
         "parameters": [
           {
@@ -20184,7 +19956,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -20244,8 +20016,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -20371,7 +20141,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -20431,8 +20201,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -20536,7 +20304,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -20596,8 +20364,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -20707,7 +20473,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -20767,8 +20533,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -20870,7 +20634,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -20930,8 +20694,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -21037,7 +20799,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -21097,8 +20859,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -21215,7 +20975,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -21275,8 +21035,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -21374,7 +21132,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -21434,8 +21192,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -21535,7 +21291,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -21595,8 +21351,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -21725,7 +21479,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -21785,8 +21539,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -21890,7 +21642,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -21950,8 +21702,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -22052,7 +21802,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -22112,8 +21862,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -22213,7 +21961,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -22273,8 +22021,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -22382,7 +22128,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -22442,8 +22188,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -22548,7 +22292,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -22608,8 +22352,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -22729,7 +22471,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -22789,8 +22531,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -22807,7 +22547,7 @@
           "gmbs"
         ],
         "summary": "Sets a trade up in a country, or edits it there.",
-        "description": "400 a keyword twice once normalized, a gcid not Google's there or twice, additional ones past 9\nor without a primary.",
+        "description": "400 a keyword twice once normalized, keywords without the primary's name at weight 1, a weight\nnot positive, a gcid not Google's there or twice, additional ones past 9 or without a primary,\nan excluded word twice or a type that is none, a demand with an empty expression or a column\ntwice.",
         "operationId": "set_up_trade",
         "parameters": [
           {
@@ -22922,7 +22662,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -22982,8 +22722,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -23095,7 +22833,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -23155,8 +22893,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -23277,7 +23013,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -23337,8 +23073,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -23469,7 +23203,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -23529,8 +23263,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -23654,7 +23386,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -23714,8 +23446,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -23855,7 +23585,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -23915,8 +23645,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -24014,7 +23742,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -24074,8 +23802,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -24180,7 +23906,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -24240,8 +23966,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -24347,7 +24071,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -24407,8 +24131,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -24513,7 +24235,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -24573,8 +24295,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -24680,7 +24400,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -24740,8 +24460,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -24845,7 +24563,7 @@
             }
           },
           "422": {
-            "description": "`another_country`, `no_google_category`, `no_keywords`, `no_study`, `unstudied`",
+            "description": "`another_country`, `no_google_category`, `unstudied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -24905,8 +24623,6 @@
           "forbidden": 403,
           "internal": 500,
           "no_google_category": 422,
-          "no_keywords": 422,
-          "no_study": 422,
           "not_found": 404,
           "too_large": 413,
           "too_many": 429,
@@ -25144,6 +24860,42 @@
           "key_id",
           "kind",
           "brands"
+        ]
+      },
+      "AdditionalCategory": {
+        "description": "An additional Google category and what one competitor of its tier weighs against one of the\nprimary's.",
+        "type": "object",
+        "properties": {
+          "google": {
+            "$ref": "#/components/schemas/GoogleCategory"
+          },
+          "weight": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "google",
+          "weight"
+        ]
+      },
+      "AdditionalIn": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "A gcid Google has in the country.",
+            "type": "string"
+          },
+          "weight": {
+            "description": "Positive.",
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "weight"
         ]
       },
       "Advance": {
@@ -25834,7 +25586,7 @@
         ]
       },
       "Catalog": {
-        "description": "What placement studies: the trade files a category's `study` names one of, and the countries it\nhas a base for.",
+        "description": "The countries placement has a grid for.",
         "type": "object",
         "properties": {
           "countries": {
@@ -25842,17 +25594,10 @@
             "items": {
               "$ref": "#/components/schemas/Country"
             }
-          },
-          "trades": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         },
         "additionalProperties": false,
         "required": [
-          "trades",
           "countries"
         ]
       },
@@ -25863,15 +25608,28 @@
           "country": {
             "$ref": "#/components/schemas/Country"
           },
+          "demand": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Demand"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "excluded": {
+            "$ref": "#/components/schemas/Excluded"
+          },
           "google_additional": {
-            "description": "At most 9, in the order they are entered into Google's form.",
+            "description": "At most 9, in the order they are entered into Google's form: a competitor tier each.",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/GoogleCategory"
+              "$ref": "#/components/schemas/AdditionalCategory"
             }
           },
           "google_primary": {
-            "description": "What Google's form is given as the category.",
+            "description": "What Google's form is given as the category; its studies' first competitor tier.",
             "anyOf": [
               {
                 "$ref": "#/components/schemas/GoogleCategory"
@@ -25882,22 +25640,15 @@
             ]
           },
           "keywords": {
-            "description": "Lowercase, in the country's language, none naming a city: the terms every GBP of the\ncategory is compared on.",
+            "description": "Lowercase, in the country's language, none naming a city: the terms every GBP of the\ncategory is scanned on, and each competitor of its studies scored on as weighed. With a\nprimary, its name is among them at weight 1.",
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Keyword"
             }
           },
           "lang": {
             "description": "The country's language, its keywords' and Google's form's: `fr`.",
             "type": "string"
-          },
-          "study": {
-            "description": "Placement's trade that studies it.",
-            "type": [
-              "string",
-              "null"
-            ]
           }
         },
         "required": [
@@ -25906,7 +25657,8 @@
           "keywords",
           "google_primary",
           "google_additional",
-          "study"
+          "excluded",
+          "demand"
         ]
       },
       "Changed": {
@@ -26134,6 +25886,22 @@
           "off_maps"
         ]
       },
+      "Column": {
+        "type": "object",
+        "properties": {
+          "expr": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "expr"
+        ]
+      },
       "ConnectedSites": {
         "type": "object",
         "properties": {
@@ -26267,6 +26035,36 @@
           "US",
           "CA",
           "GB"
+        ]
+      },
+      "Demand": {
+        "description": "What the country's grid means to the trade, per cell.",
+        "type": "object",
+        "properties": {
+          "columns": {
+            "description": "Derived before `expr` reads them, in order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Column"
+            }
+          },
+          "expr": {
+            "description": "Over the grid's columns and `columns`.",
+            "type": "string"
+          },
+          "layers": {
+            "description": "Heat layers the trade adds to the country's.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Layer"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "expr",
+          "columns",
+          "layers"
         ]
       },
       "Destination": {
@@ -26450,8 +26248,6 @@
           "forbidden",
           "internal",
           "no_google_category",
-          "no_keywords",
-          "no_study",
           "not_found",
           "too_large",
           "too_many",
@@ -26459,6 +26255,31 @@
           "unauthenticated",
           "unavailable",
           "unstudied"
+        ]
+      },
+      "Excluded": {
+        "description": "Places the sweep turns up that are never competitors, checked before any tier.",
+        "type": "object",
+        "properties": {
+          "types": {
+            "description": "Places types (`hardware_store`); a place whose primary type is one.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "words": {
+            "description": "Lowercase; a place whose name holds one.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "words",
+          "types"
         ]
       },
       "Exit": {
@@ -27487,6 +27308,47 @@
           "bot"
         ]
       },
+      "Keyword": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "weight": {
+            "description": "What ranking for it is worth against the primary's name; None: scanned, not scored.",
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "weight"
+        ]
+      },
+      "KeywordInput": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "weight": {
+            "description": "What ranking for it is worth against the primary's name; None: scanned, not scored.",
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ]
+      },
       "Kickback": {
         "description": "What the caller is owed until they claim it: a charge kicked back (`service`, `key`,\n`label`), or an admin's grant (`by`, `note`).",
         "type": "object",
@@ -28149,6 +28011,30 @@
         "required": [
           "lat",
           "lng"
+        ]
+      },
+      "Layer": {
+        "type": "object",
+        "properties": {
+          "expr": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "scale": {
+            "$ref": "#/components/schemas/Scale"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "expr",
+          "scale",
+          "note"
         ]
       },
       "Ledger": {
@@ -30152,6 +30038,14 @@
           "stream"
         ]
       },
+      "Scale": {
+        "description": "- `percentile`: Rank, not magnitude: for heavy-tailed quantities.",
+        "type": "string",
+        "enum": [
+          "linear",
+          "percentile"
+        ]
+      },
       "Scope": {
         "description": "Where it happens: who counts it and charges for it.\n\n- `conductor`: At the buy, before Google is asked.\n- `review_archive`: After the fact, through its charge feed.\n- `browsers`: sa_browsers' runner: charged as its usage feed is taken, to whom each use names.\n- `placement`: gmaps_optimal_placement's studies: what a pull bought, charged at the conductor's forward.",
         "type": "string",
@@ -30597,11 +30491,24 @@
       "SetUp": {
         "type": "object",
         "properties": {
+          "demand": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Demand"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "excluded": {
+            "$ref": "#/components/schemas/Excluded"
+          },
           "google_additional": {
             "description": "At most 9, only with a primary.",
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/AdditionalIn"
             }
           },
           "google_primary": {
@@ -30612,24 +30519,18 @@
             ]
           },
           "keywords": {
-            "description": "In the country's language, each once normalized.",
+            "description": "In the country's language, each once normalized; with a primary, its name at weight 1.",
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/KeywordInput"
             }
-          },
-          "study": {
-            "description": "Placement's study of it.",
-            "type": [
-              "string",
-              "null"
-            ]
           }
         },
         "additionalProperties": false,
         "required": [
           "keywords",
-          "google_additional"
+          "google_additional",
+          "excluded"
         ]
       },
       "Site": {

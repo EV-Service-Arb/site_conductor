@@ -2,7 +2,7 @@
 //! [`Definition`] from its own areas and trades, and is placement's one client, as the person asking.
 //!
 //! ```text
-//! GET  /placement/catalog                  → placement GET /trades.json
+//! GET  /placement/catalog                  → placement GET /catalog.json
 //! GET  /placement/study?area&category      → Definition → placement POST /studies, the payload streamed back
 //! POST /placement/study/pull?area&category → held: placement POST /studies/asks, each search bought,
 //!                                            until it lacks none → POST /studies/pull, charged what was bought
@@ -102,12 +102,11 @@ impl OperationOutput for Payload {
 	}
 }
 
-/// What a category may be studied by, and where: placement's trade files and the countries it has
-/// a base for.
+/// The countries placement has a grid for.
 async fn catalog(State(s): State<ApiState>, Extension(caller): Extension<Caller>) -> ApiResult<Json<Catalog>> {
-	let res = ask(&s, &caller, Method::GET, "/trades.json", Body::empty()).await?;
+	let res = ask(&s, &caller, Method::GET, "/catalog.json", Body::empty()).await?;
 	if res.status() != StatusCode::OK {
-		return Err(refused(res, "/trades.json").await);
+		return Err(refused(res, "/catalog.json").await);
 	}
 	let body = to_bytes(res.into_body(), REFUSAL)
 		.await
@@ -117,9 +116,9 @@ async fn catalog(State(s): State<ApiState>, Extension(caller): Extension<Caller>
 
 /// A study of an area: under one of the caller's categories, or the area's grid alone; never spends.
 ///
-/// 404 no such area or category of the caller's; 422 a category not set up to be studied
-/// (`no_study`, `no_google_category`, `no_keywords`), set up for `another_country`, or one
-/// placement does not study (`unstudied`); 503 placement not connected.
+/// 404 no such area or category of the caller's; 422 a category with `no_google_category`, set up
+/// for `another_country`, or an area where placement has no grid (`unstudied`); 503 placement not
+/// connected.
 async fn study(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Params(at): Params<StudyIn>) -> ApiResult<Payload> {
 	let def = define(&s, &caller, at).await?;
 	let res = ask(&s, &caller, Method::POST, "/studies", json(&def)).await?;
@@ -207,11 +206,7 @@ async fn define(s: &ApiState, caller: &Caller, at: StudyIn) -> ApiResult<Definit
 				.and_then(|t| t.categories.iter().find(|c| c.country == of).map(|c| (t, c)))
 				.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
 			let named = format!("{} · {of}", trade.name);
-			let study = c.study.clone().ok_or_else(|| Refusal::new(Code::NoStudy, format!("{named} names no study")))?;
 			let primary = c.google_primary.ok_or_else(|| Refusal::new(Code::NoGoogleCategory, format!("{named} has no Google category")))?;
-			if c.keywords.is_empty() {
-				return Err(Refusal::new(Code::NoKeywords, format!("{named} has no keyword")));
-			}
 			if of != country {
 				return Err(Refusal::new(Code::AnotherCountry, format!("{named} is not set up for {country}, where {} is", area.name)));
 			}
@@ -221,11 +216,13 @@ async fn define(s: &ApiState, caller: &Caller, at: StudyIn) -> ApiResult<Definit
 			};
 			Some(placement::Category {
 				trade: u64::try_from(trade.id).expect("a trade's id is a rowid"),
+				name: trade.name.clone(),
 				country: of,
-				study,
+				primary: gcid(primary),
+				additional: c.google_additional.iter().map(|&(g, weight)| placement::Additional { google: gcid(g), weight }).collect(),
 				keywords: c.keywords.clone(),
-				google_primary: gcid(primary),
-				google_additional: c.google_additional.iter().copied().map(gcid).collect(),
+				excluded: c.excluded.clone(),
+				demand: c.demand.clone(),
 			})
 		}
 	};

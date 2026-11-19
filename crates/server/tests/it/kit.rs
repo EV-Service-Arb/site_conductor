@@ -20,6 +20,7 @@ use sa_auth::SourceKind;
 use sa_core::{
 	gbp::{Country, OnGoogle},
 	ids::{BrandId, SiteOrigin},
+	placement::Excluded,
 	prices::{Item, PlacesRequest, Spender},
 };
 use sa_panel::{
@@ -202,7 +203,8 @@ pub(super) async fn kit(db: &TestDb) -> Kit {
 		keywords: vec![],
 		google_primary: None,
 		google_additional: vec![],
-		study: None,
+		excluded: Excluded::default(),
+		demand: None,
 	};
 	panel.set_up(owner, trade, fr).await.unwrap().unwrap();
 	let gmail = panel.add_gmail(owner, "lyon@gmail.com", now).await.unwrap().unwrap().id;
