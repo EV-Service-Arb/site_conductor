@@ -104,7 +104,7 @@ conductor, concierge and Telegram are stand-ins on loopback ports. Nothing to se
 
 <br>
 
-<sup>Links for devs:</sup>
+#### Dev links
 - <sup><a href="./docs/ARCHITECTURE.md">architecture</a></sup>
 - <sup><a href="https://github.com/EV-Main/.github/blob/main/code/STYLE.md">style</a></sup>
 - <sup><a href="https://github.com/EV-Main/.github/tree/main/code/conventions">conventions</a></sup>

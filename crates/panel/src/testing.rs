@@ -149,6 +149,7 @@ pub fn account(name: &str, places: Option<&str>, browser: Option<&str>) -> sa_pl
 		provides: sa_places::Provides {
 			places: places.map(|k| sa_places::Key { key: k.to_owned() }),
 			browser: browser.map(|k| sa_places::Key { key: k.to_owned() }),
+			business: None,
 		},
 	}
 }

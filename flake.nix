@@ -36,8 +36,10 @@
           SA_PORT_RANGE = "${toString SA_PORT_RANGE.from}-${toString SA_PORT_RANGE.to}";
           PANEL_BIND = "127.0.0.1:${local 0}";
           PANEL_WEB_PORT = local 1; # the front end's `npm run dev`
-          FIGMA_STACK_PORT = local 3; # `nix run .#e2e`/`.#figma`'s own stack (`dev --port`), never a running one's
+          FIGMA_STACK_PORT = local 3; # `nix run .#figma`'s own stack (`dev --port`), never a running one's
           FIGMA_WEB_PORT = local 4; # its next dev: FIGMA_STACK_PORT + 1
+          E2E_STACK_PORT = local 7; # `nix run .#e2e`'s
+          E2E_WEB_PORT = local 8;
           BROWSERS_BIND = "127.0.0.1:${local 5}"; # sa_browsers' runner
           SANDBOX_BIND = "127.0.0.1:${local 6}"; # sa_sandbox's runner
         };
@@ -102,41 +104,15 @@
           };
         };
         js = v_flakes.js { inherit pkgs; packages = [ "frontend" ]; };
-        # A job of its own, so the run's graph shows each one's time; the rest of the errors share one `Particles` job.
-        own = p: p // {
-          ci = {
-            job = {
-              name = p.name;
-              runs-on = "ubuntu-latest";
-              timeout-minutes = 45;
-              steps = [{ uses = "actions/checkout@v5"; }]
-                ++ lib.optionals (p ? ciCache && p.ciCache != null) (
-                let
-                  cacheWith = {
-                    path = lib.concatStringsSep "\n" p.ciCache.paths;
-                    key = "particle-${p.name}-\${{ runner.os }}-\${{ hashFiles(${lib.concatMapStringsSep ", " (f: "'${f}'") p.ciCache.hashFiles}) }}";
-                    restore-keys = "particle-${p.name}-\${{ runner.os }}-";
-                  };
-                in
-                [
-                  { "if" = "github.ref_name != github.event.repository.default_branch"; uses = "actions/cache/restore@v5"; "with" = cacheWith; }
-                  { "if" = "github.ref_name == github.event.repository.default_branch"; uses = "actions/cache@v5"; "with" = cacheWith; }
-                ]
-              );
-            };
-            work = [{ run = "nix run .#test -- --severity errors --serial ${p.name}"; }];
-          };
-        };
         github = v_flakes.github {
           inherit pkgs pname rs js;
           enable = true;
           lastSupportedVersion = "nightly-2026-09-24";
           containerRelease = { registry = "ghcr.io/ev-service-arb"; };
-          figma = { };
+          figma = { on = "publish"; }; # the render needs prod's data and the peers, which only a developer's machine has
           jobs.default = true;
           jobs.errors.install.packages = [ "ffmpeg" "deno" ]; # crates/browsers/tests/runner.rs cuts its films with ffmpeg; crates/sandbox's tests run Deno
-          jobs.errors.exclude = [ "frontend-typecheck" "frontend-test" ];
-          jobs.errors.augment = map own [ (js.script "frontend" "typecheck") (js.script "frontend" "test") e2e { name = "checks"; builds = checks; } ];
+          jobs.errors.augment = [ e2e ];
           jobs.warnings.exclude = [ "code-duplication" ];
           jobs.warnings.augment = [{ name = "code-duplication"; args.excludePatterns = [ "frontend/src/shared/api/schema.ts" "frontend/src/shared/api/services/**" "frontend/src/shared/api/views.ts" "crates/sandbox/js/catalog.ts" ]; }]; # generated
           lfs = false;
@@ -342,87 +318,13 @@
         orbita = import ./nix/orbita.nix { inherit pkgs; } "151";
         multilogin = import ./nix/multilogin.nix { inherit pkgs; };
 
-        # What the deploy must provide, beyond what `container.implement` records. Plain
-        # data on the contract, read by the devops generator; `checks.contract-env` holds
-        # `requiredEnv` to the binary's own `--print-required-vars`.
-        deploy = {
-          # Settings::required_var_names("production"): the pod exits 78 without any of them.
-          # PANEL_DB_PATH is the container's own env (below); the rest the deploy supplies.
-          requiredEnv = [ "PANEL_DB_PATH" "PANEL_DATA_KEY" "PANEL_PUBLIC_ORIGIN" "CONCIERGE_PUBLIC_ORIGIN" "CONCIERGE_GRPC_ADDR" "RP_CLIENT_SECRET_SA" "PANEL_ASSERTION_KEY" "PANEL_REVIEW_ARCHIVE_URL" "PANEL_PLAYBOOK_URL" "PANEL_SITES_URL" "TOKENS_START_CAP_MULTIPLE" ];
+        contract = import ./nix/contract.nix { inherit pname; };
+        inherit (contract) provides consumes sandboxDeploy;
+        deploy = contract.deploy // {
           # The Google accounts (docs/ARCHITECTURE.md, Google accounts): a literal mounted here, each
           # account's secrets named in it as `{ env = "…"; }`, from the sops-backed Secret.
           configFile = configPath;
-          # from the sops-backed Secret, never literal env
-          secretEnv = [
-            "PANEL_DATA_KEY"
-            "SENTRY_DSN"
-            "RP_CLIENT_SECRET_SA"
-            "PANEL_ASSERTION_KEY"
-            "TELEGRAM_BOT_TOKEN"
-            "GOLOGIN_TOKEN"
-            "MULTILOGIN_TOKEN"
-            "CLAUDE_CODE_OAUTH_TOKEN"
-          ];
-          # TELEGRAM_BOT_TOKEN needs the forward (it sends sites' notes).
-          optionalEnv = [
-            "SENTRY_DSN"
-            "TELEGRAM_BOT_TOKEN"
-            "TELEGRAM_BOT_USERNAME"
-            "TELEGRAM_LOCALE"
-            # 15 and 500 by default
-            "TOKENS_DAILY"
-            "TOKENS_CAP"
-            # the gmails' browsers: the runner (sa_browsers, below) with a provider's token or both; unset,
-            # their routes answer 503, and a provider without its token too
-            "GOLOGIN_TOKEN"
-            "MULTILOGIN_TOKEN"
-            "PANEL_BROWSERS_URL"
-            # the agents' `execute`: sa_sandbox's runner (below); unset, there is none
-            "PANEL_SANDBOX_URL"
-            # the in-page assistant's model (a Claude subscription); unset, asking it answers 503
-            "CLAUDE_CODE_OAUTH_TOKEN"
-          ];
-          ingress = {
-            # in-cluster only, by service DNS: the landings' and bots' ingest, the landings' review kit, the sandbox's runs
-            # (docs/ARCHITECTURE.md, Deploy requirements)
-            excludePathPrefixes = [ "/api/ingest" "/api/kit" "/api/run" ];
-            # per client IP at the edge; the conductor bounds concurrency, not who calls. /api/hooks/booking:
-            # the booking providers' webhooks, forwarded to sites (public, signature-checked there).
-            # /api/queries_cache: open to everyone, so this is its only guard. /mcp/register: open too.
-            # `checks.paths` holds both lists to the binary's path table (forward::ROUTES and OWN).
-            rateLimitPathPrefixes = [ "/auth" "/api/hooks/booking" "/api/queries_cache" "/mcp/register" "/mcp/authorize" "/mcp/token" ];
-          };
-          egress = {
-            # concierge's gRPC, at the address it names
-            grpcEnv = [ "CONCIERGE_GRPC_ADDR" ];
-            # the Bot API; the Places API (the accounts' Places keys); GoLogin's (GOLOGIN_TOKEN) and
-            # Multilogin's (MULTILOGIN_TOKEN) APIs; the Claude API (CLAUDE_CODE_OAUTH_TOKEN)
-            # the meters' baseline: each account's billing export, its service account's token
-            hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "geocode.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" "bigquery.googleapis.com:443" "oauth2.googleapis.com:443" "api.anthropic.com:443" ];
-          };
         };
-
-        # What the conductor serves to its peers, by endpoint: devops builds a consumer's URL from it.
-        # `checks.provided-paths` holds it to the routes the binary mounts.
-        provides = {
-          ingest = "/api/ingest/v1/events";
-          # the landings' review kit pages (docs/ARCHITECTURE.md, Review kit)
-          kit = "/api/kit/v1";
-          # the queries cache (docs/ARCHITECTURE.md, Queries cache): review_archive's and placement's
-          queries_cache = "/api/queries_cache";
-          # a sandbox's run, back to its caller's operations (docs/ARCHITECTURE.md, Code mode)
-          run = "/api/run";
-        };
-        # The services the forward reaches (docs/ARCHITECTURE.md, Forward), by contract name: devops
-        # sets each variable to the peer's in-cluster origin and opens the egress to it.
-        consumes = {
-          PANEL_SITES_URL = "sites_panel";
-          PANEL_REVIEW_ARCHIVE_URL = "review_archive";
-          PANEL_PLAYBOOK_URL = "playbook_web";
-          PANEL_PLACEMENT_URL = "gmaps_optimal_placement";
-          PANEL_SANDBOX_URL = "${pname}-sandbox";
-        };
-
         containerStd = v_flakes.container.implement {
           inherit pkgs pname;
           containers."" = {
@@ -459,45 +361,12 @@
             imageEnv = [ "SANDBOX_DENO=${pkgs.deno}/bin/deno" "SANDBOX_JS=${sandboxJs}" ];
           };
         };
-        # The sandbox's deploy: the conductor's public keys (its assertion is all it trusts), and the conductor's
-        # `/api/run` its only peer; no host off-cluster.
-        sandboxDeploy = {
-          requiredEnv = [ "PANEL_ASSERTION_KEYS" "SANDBOX_CONDUCTOR_URL" ];
-          egress.hosts = [ ];
-          consumes.SANDBOX_CONDUCTOR_URL = "${pname}.run";
-        };
         # `implement` knows no key for these, and throws on one it does not know.
         extra = {
           ${pname} = deploy // { inherit provides consumes; };
           "${pname}-sandbox" = sandboxDeploy;
         };
         containers = lib.mapAttrs (name: c: c // { contract = c.contract // extra.${name}; }) containerStd.containers;
-
-        contractEnv = pkgs.runCommand "${pname}-contract-env" { } ''
-          ${bin}/bin/${pname} --print-required-vars production | sort > got
-          printf '%s\n' ${lib.escapeShellArgs deploy.requiredEnv} | sort > want
-          diff -u want got || { echo "flake.nix deploy.requiredEnv disagrees with the binary" >&2; exit 1; }
-          touch "$out"
-        '';
-
-        providedPaths = pkgs.runCommand "${pname}-provided-paths" { } ''
-          ${bin}/bin/${pname} --print-provided-paths | sort > got
-          printf '%s\n' ${lib.escapeShellArgs (lib.attrValues provides)} | sort > want
-          diff -u want got || { echo "flake.nix provides disagrees with the routes the binary mounts" >&2; exit 1; }
-          touch "$out"
-        '';
-
-        paths = pkgs.runCommand "${pname}-paths" { } ''
-          check() {
-            ${bin}/bin/${pname} --print-paths "$1" | sort > got
-            printf '%s\n' $2 | sort > want
-            diff -u want got || { echo "flake.nix $3 disagrees with the binary's --print-paths $1" >&2; exit 1; }
-          }
-          check rate-limited ${lib.escapeShellArg (lib.concatStringsSep " " deploy.ingress.rateLimitPathPrefixes)} ingress.rateLimitPathPrefixes
-          check unpublished ${lib.escapeShellArg (lib.concatStringsSep " " deploy.ingress.excludePathPrefixes)} ingress.excludePathPrefixes
-          check consumed ${lib.escapeShellArg (lib.concatStringsSep " " (lib.attrNames consumes))} consumes
-          touch "$out"
-        '';
 
         # The front end's own screens into Figma (frontend/tests/e2e), by `@evinvest/figma-render`'s bin;
         # the loop is the `figma-render` skill.
@@ -508,7 +377,7 @@
           config = "tests/e2e";
           env = localEnv;
           runtimeInputs = [ dev ];
-          run = ''exec node_modules/.bin/evinvest-figma-render "$@" -c tests/e2e --file ${figmaFile}'';
+          run = ''exec node_modules/.bin/evinvest-figma-render "$@" -c tests/e2e/figma.config.ts --file ${figmaFile}'';
         }).program;
         # The front end's behaviour over the same stack: every spec in frontend/tests/e2e but the renders.
         e2e = js.playwright {
@@ -517,12 +386,7 @@
           config = "tests/e2e";
           env = localEnv;
           runtimeInputs = [ dev ];
-          run = ''exec playwright test -c tests/e2e --grep-invert @figma "$@"'';
-        };
-        checks = {
-          contract-env = contractEnv;
-          provided-paths = providedPaths;
-          inherit paths;
+          run = ''exec playwright test -c tests/e2e "$@"'';
         };
         # In the devShell, not an app: built in another environment, every crate's fingerprint is stale.
         testTimeline = pkgs.writeShellApplication {
@@ -568,11 +432,11 @@
             about = "  cargo test                      every test; the database ones on throwaway SQLite files\n"
               + "  panel --help                    the CLI itself";
           };
-          publish = v_flakes.utils.publish pkgs;
+          publish = github.publish;
           gen = { type = "app"; program = lib.getExe gen; meta.description = "the OpenAPI document and the front end's client types from it (pre-commit runs it too)"; };
           dev = { type = "app"; program = lib.getExe dev; meta.description = "the conductor and its peers under watch: a conductor already serving is replaced, a peer used (docs/LOCAL.md)"; };
           e2e = { type = "app"; program = lib.getExe e2e.program; meta.description = "the front end's behaviour over a stack of its own (frontend/tests/e2e, the renders aside); args go to `playwright test`"; };
-          figma = { type = "app"; program = lib.getExe figma; meta.description = "the front end's screens into Figma over a stack of its own, gridded on a new page of figmaFile; `-- frames` lists them"; };
+          figma = { type = "app"; program = lib.getExe figma; meta.description = "the front end's screens into Figma, crawled over a stack of its own on prod's data, gridded on a new page of figmaFile"; };
           local-stack = { type = "app"; program = lib.getExe localStack; meta.description = "the conductor, its Grafana, sites_panel, review_archive and the landings, wired together on this machine (docs/LOCAL.md)"; };
         };
 
@@ -582,8 +446,6 @@
         } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (containerStd.packages // { grafana-server = grafanaServer; inherit orbita; mlx = multilogin.mlx; phone-tools = multilogin.phoneTools; });
 
         containers = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux containers;
-
-        inherit checks;
 
         devShells.default =
           with pkgs;

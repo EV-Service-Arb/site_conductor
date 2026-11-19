@@ -1179,7 +1179,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** The operator showed the GBP's QR: the funnel's `shown`. */
+        /**
+         * The operator showed the GBP's QR: the tally's `shown`, tagged with the kit whose page showed it.
+         * @description 404 a kit the GBP is not in.
+         */
         post: operations["kit_shown"];
         delete?: never;
         options?: never;
@@ -1394,7 +1397,7 @@ export interface paths {
          */
         put: operations["put_kit"];
         post?: never;
-        /** Deletes the caller's kit: only the selection goes, no draft, photo or use. */
+        /** Removes the caller's kit: its slug is free again; nothing it collected goes, its events keep its tag. */
         delete: operations["delete_kit"];
         options?: never;
         head?: never;
@@ -2141,7 +2144,7 @@ export interface paths {
          * Case-insensitive regex over the service-arb playbook.
          * @description Each kind of source has its own slots, so none crowds out another: the manual (knowledge/structured), the course (lessons and the recordings they link), calls, videos, texts. Within a kind, a passage holding the rarer of the pattern's alternatives ranks first. Each hit gives path:line, its header, its label, the source URL and the lines around it; the files past the slots follow as path:line, for `read`. A pattern hitting most of the scope is refused, with the sub-scopes it hits.
          *
-         *     A label is who backs the passage, how they know (ran it, says so, heard it), how sure they were in σ, the information's age, `init`: what it was worth when said, and `norm`: what it is worth today, 0 to 1, higher is better. `unvetted`: nobody of ours has checked the claim. `unscored`: nothing says who speaks.
+         *     A label is who backs the passage, how they know (ran it, says so, heard it), how sure they were, the information's age, `init`: what it was worth when said, and `norm`: what it is worth today, 0 to 1, higher is better. `unvetted`: nobody of ours has checked the claim. `unscored`: nothing says who speaks.
          */
         get: operations["playbook.search"];
         put?: never;
@@ -18603,7 +18606,10 @@ export interface operations {
     };
     kit_shown: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The kit whose page shows it. */
+                kit?: string | null;
+            };
             header?: never;
             path: {
                 id: number;

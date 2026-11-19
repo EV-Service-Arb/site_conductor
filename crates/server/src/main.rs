@@ -59,14 +59,14 @@ enum Cmd {
 fn main() -> eyre::Result<()> {
 	color_eyre::install()?;
 
-	// What the contract's `provides` must equal (the flake's `checks.provided-paths`).
+	// What nix/contract.nix's `provides` must equal (tests/it/contract.rs).
 	if std::env::args().nth(1).as_deref() == Some("--print-provided-paths") {
 		for path in sa_server::PROVIDED_PATHS {
 			println!("{path}");
 		}
 		return Ok(());
 	}
-	// What the flake's ingress and `consumes` must equal (its `checks.paths`).
+	// What nix/contract.nix's ingress and `consumes` must equal (tests/it/contract.rs).
 	if std::env::args().nth(1).as_deref() == Some("--print-paths") {
 		let paths = sa_server::forward::paths();
 		let listed: Vec<&str> = match std::env::args().nth(2).as_deref() {
@@ -186,6 +186,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 					export = a.export.table,
 					places = a.provides.places.is_some(),
 					browser = a.provides.browser.is_some(),
+					business = a.provides.business.is_some(),
 					allow = sa_panel::meters::allowance(a),
 					"Google account"
 				);

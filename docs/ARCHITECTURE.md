@@ -217,8 +217,8 @@ POST /auth/logout    CSRF; every session of the user is closed
 The services live under the conductor's origin; `forward.rs` streams each prefix to its
 service, both ways (hyper-util, no buffering), one table for all of it (`ROUTES`).
 With the conductor's own prefixes (`OWN`) it is every prefix of the origin and what the edge does
-with each: the front end's reserved paths (`web.rs`, a JSON 404 below any of them) and the flake's
-ingress lists (`checks.paths`, by `--print-paths`) are derived from it, and a test holds the
+with each: the front end's reserved paths (`web.rs`, a JSON 404 below any of them) and the contract's
+ingress lists (nix/contract.nix, held to `--print-paths`) are derived from it, and a test holds the
 second block below to it.
 
 ```text
@@ -290,7 +290,7 @@ second block below to it.
   (sessionStorage) is the hotbar's entries after the app's tools; × or Escape takes one out.
   Map modes (the kit's editor, a study's area) draw on the map: no window, no page.
 
-  ```text
+  ```
   Home ?gmb=12&tab=log ─┐                         open set [kit:lyon, gbp:12, account:3]
   /gbp/12?tab=log ──────┴─▶ shown: WinKey ──▶ hotbar: shown ▸ pressed · hidden ▸ plain · page ▸ ⤢
                               │                  click: hide / show / float back · × closes
@@ -844,12 +844,12 @@ declared once, in accounting's `google.nix`, which the config file (`--config`, 
 `sa_places::Account`) imports whole: its export and reader, `allow` per slice of accounting's
 (the conductor holds its rank 1 against `maps`, which every meter here falls in; the guard holds
 them all at Google), and what it `provides`, each slot optional: `places` (Places, Geocoding),
-`browser` (Maps JS). Every key bills on its account (docs/spec/google.md); each use of ours is
+`browser` (Maps JS), `business` (the Business Profile APIs' OAuth client, #119). Every key bills on its account (docs/spec/google.md); each use of ours is
 stored with the account that paid (`usage.account`). N accounts are one with N× the free units,
 the money capped per account.
 
 ```text
-accounting/google.nix  accounts = [ { name, export { table, reader, since }, credits, allow { <slice> }, provides { places?, browser?, ads? } } … ]
+accounting/google.nix  accounts = [ { name, export { table, reader, since }, credits, allow { <slice> }, provides { places?, browser?, business?, ads? } } … ]
   ├─ the guard (accounting): holds each slice's real money to `allow` at Google
   ├─ the conductor, review_archive, gop: `import`, each reading the slots it uses
   └─ devops: the same list, each secret slot `{ env = "SA_GOOGLE_<NAME>_<SLOT>"; }`
@@ -1032,6 +1032,10 @@ a review of g first seen at s (review_archive's feed) → kit_posted, decided on
 ```
 
 - **A use is the copy**, not the post: a copy never posted still keeps the draft off g.
+- **An event is stored once, tagged with the kit it came from**: a QR shown from a kit's page, a
+  page opened from a kit's QR (`<page>?qr&kit=<id>`); a copy, a save and a review matched to a copy
+  through their view. A kit is removed, never deleted, so its tags keep pointing at it; its slug is
+  free again.
 - **A tally** is per GBP, since the period the client sends (`since`, its local midnight for a
   day) or since it joined the kit, the later; a kit's is its GBPs' summed, so a GBP in two counts
   in both.
@@ -1225,17 +1229,16 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **The contract** (`nix eval .#containers.<system>.panel.contract`) names the port (the flake's `port`),
   `/health`, `APP_ENV=production`, the variables required, secret and optional,
   `PANEL_DB_PATH`, the volume (`/data`) and the SQLite file on it to replicate, what the ingress
-  must not publish or must rate-limit, and the egress. `checks.contract-env` fails the flake
-  when its required variables and the binary's `--print-required-vars` disagree; `checks.paths`
-  when its `ingress.rateLimitPathPrefixes`, `ingress.excludePathPrefixes` or `consumes` and the
-  binary's `--print-paths rate-limited|unpublished|consumed` (the path table, the forward's
-  variables) do.
+  must not publish or must rate-limit, and the egress; what is not `container.implement`'s is
+  nix/contract.nix. `crates/server/tests/it/contract.rs` fails when its required variables,
+  `ingress.rateLimitPathPrefixes`, `ingress.excludePathPrefixes`, `consumes` or `provides` and the
+  binary's `--print-required-vars`, `--print-paths rate-limited|unpublished|consumed` or
+  `--print-provided-paths` disagree.
 - **What it provides and consumes, by contract name.** `provides.ingest` is
   `/api/ingest/v1/events`, `provides.kit` `/api/kit/v1`, `provides.queries_cache` `/api/queries_cache`; `consumes` names the peers behind `PANEL_SITES_URL` (`sites_panel`),
   `PANEL_REVIEW_ARCHIVE_URL` (`review_archive`), `PANEL_PLAYBOOK_URL` (`playbook_web`) and
   `PANEL_PLACEMENT_URL` (`gmaps_optimal_placement`), whose
-  URLs and egress devops derives. `checks.provided-paths` fails the flake when `provides` and the
-  binary's `--print-provided-paths` (the constants its router mounts) disagree.
+  URLs and egress devops derives.
 - **The landings, outbound on :443.** The Connected sites page asks each site key's origin; the
   origins are data, so the egress is public :443, not a host list.
 - **Ingest, the kit and the runs stay inside the cluster.** Their senders reach them by service DNS;

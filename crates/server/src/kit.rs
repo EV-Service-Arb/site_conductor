@@ -704,10 +704,14 @@ async fn page_of(s: &ApiState, gmb: i64, site: Option<&BrandId>) -> ApiResult<Op
 }
 
 /// What the QR of a GBP whose page is `page` encodes.
-fn qr_url(page: Option<&String>, target: Option<Target>, review_uri: Option<String>) -> Option<String> {
+/// From a kit, `&kit=<id>` tags the views it opens with it; Google's own link carries nothing.
+fn qr_url(page: Option<&String>, target: Option<Target>, review_uri: Option<String>, kit: Option<i64>) -> Option<String> {
 	match (page, target) {
 		(_, None) => None,
-		(Some(page), Some(_)) => Some(format!("{page}?qr")),
+		(Some(page), Some(_)) => Some(match kit {
+			Some(k) => format!("{page}?qr&kit={k}"),
+			None => format!("{page}?qr"),
+		}),
 		(None, Some(_)) => review_uri,
 	}
 }
@@ -723,7 +727,7 @@ async fn kit_dto(s: &ApiState, caller: &Caller, gmb: i64, since: Timestamp) -> A
 	let page = page_of(s, gmb, brand.as_ref().map(|b| &b.site)).await?;
 	Ok(GmbKitDto {
 		target,
-		url: qr_url(page.as_ref(), target, review_uri),
+		url: qr_url(page.as_ref(), target, review_uri, None),
 		page,
 		brand: brand.map(Into::into),
 		drafts: ranked(drafts, target),
@@ -756,9 +760,11 @@ async fn set_gmb_kit(
 	Ok(Json(kit_dto(&s, &caller, gmb, Timestamp::now()).await?))
 }
 
-/// The operator showed the GBP's QR: the funnel's `shown`.
-async fn kit_shown(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>) -> ApiResult<NoContent> {
-	panel.kit_shown(caller.user_id, gmb, Timestamp::now()).await??;
+/// The operator showed the GBP's QR: the tally's `shown`, tagged with the kit whose page showed it.
+///
+/// 404 a kit the GBP is not in.
+async fn kit_shown(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>, Params(q): Params<ShownIn>) -> ApiResult<NoContent> {
+	panel.kit_shown(caller.user_id, gmb, q.kit.as_deref(), Timestamp::now()).await??;
 	Ok(NoContent)
 }
 
@@ -794,6 +800,7 @@ async fn kits(State(panel): State<Panel>, Extension(caller): Extension<Caller>) 
 /// is left to offer it, its categories' pools and the latest of what happened.
 async fn kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>, Params(q): Params<Since>) -> ApiResult<Json<KitDto>> {
 	let Scope {
+		id,
 		slug,
 		name,
 		area,
@@ -816,7 +823,7 @@ async fn kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Id
 		};
 		gmbs.push(MemberDto {
 			id: m.gmb.id,
-			url: qr_url(page.as_ref(), m.target, m.review_uri),
+			url: qr_url(page.as_ref(), m.target, m.review_uri, Some(id)),
 			page,
 			blocked,
 			name: m.gmb.name,
@@ -875,9 +882,10 @@ async fn put_kit(State(panel): State<Panel>, Extension(caller): Extension<Caller
 	Ok(NoContent)
 }
 
-/// Deletes the caller's kit: only the selection goes, no draft, photo or use.
+/// Removes the caller's kit: its slug is free again; nothing it collected goes, its events keep its
+/// tag.
 async fn delete_kit(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(SlugIn { slug }): Ids<SlugIn>) -> ApiResult<NoContent> {
-	panel.delete_kit(caller.user_id, &slug).await??;
+	panel.remove_kit(caller.user_id, &slug, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, slug, "kit deleted");
 	Ok(NoContent)
 }
@@ -937,12 +945,21 @@ async fn view_of(l: &Landing, key: &Grant, view: Uuid) -> Result<(), Box<Respons
 	Ok(())
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ShownIn {
+	/// The kit whose page shows it.
+	kit: Option<String>,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct OfferQuery {
 	brand: BrandId,
 	slug: String,
 	qr: Option<u8>,
+	/// The kit whose QR it came from.
+	kit: Option<i64>,
 }
 
 async fn offer(State(l): State<Landing>, OriginalUri(uri): OriginalUri, headers: HeaderMap, q: Result<Query<OfferQuery>, QueryRejection>) -> Response {
@@ -952,7 +969,7 @@ async fn offer(State(l): State<Landing>, OriginalUri(uri): OriginalUri, headers:
 		Err(res) => return *res,
 	};
 	let Ok(Query(q)) = q else {
-		return Refusal::new(Code::BadRequest, "brand, slug and qr=1 if it came from the QR").into_response();
+		return Refusal::new(Code::BadRequest, "brand, slug, qr=1 if it came from the QR and kit=<id> if from a kit's").into_response();
 	};
 	if !key.brands.iter().any(|b| b.as_str() == q.brand.as_str()) {
 		return Refusal::new(Code::NotFound, "not found").into_response();
@@ -962,7 +979,7 @@ async fn offer(State(l): State<Landing>, OriginalUri(uri): OriginalUri, headers:
 		Ok(None) => return Refusal::new(Code::NotFound, "not found").into_response(),
 		Err(e) => return e.into_response(),
 	};
-	match l.panel.kit_offer(gmb, q.qr == Some(1), Timestamp::now()).await {
+	match l.panel.kit_offer(gmb, q.qr == Some(1), q.kit, Timestamp::now()).await {
 		Ok(Ok(o)) => {
 			let mut res = Json(OfferDto::from(o)).into_response();
 			res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));

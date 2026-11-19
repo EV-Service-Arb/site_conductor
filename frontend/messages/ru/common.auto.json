@@ -353,7 +353,7 @@
   },
   "add.spots.pick.offMap": {
     "en": "No map on this page: float it over the map to pick there",
-    "t": "На этой странице нет карты: выведите её поверх карты, чтобы выбрать место там"
+    "t": "На этой странице нет карты: поместите окно поверх карты, чтобы выбрать там"
   },
   "add.spots.picking": {
     "en": "Click the map where spot {n} stands",
@@ -1125,7 +1125,7 @@
   },
   "brand.photos.showsLabel": {
     "en": "What it shows: its caption for the reviewer",
-    "t": "Что на фото: подпись для рецензента"
+    "t": "Что на фото: подпись для проверяющего"
   },
   "brand.photos.why": {
     "en": "The review kit offers them with {category}'s drafts. A GBP without a brand is offered drafts only.",
@@ -2061,11 +2061,11 @@
   },
   "kit.area": {
     "en": "area {area}",
-    "t": "зона {area}"
+    "t": "район {area}"
   },
   "kit.block.draft": {
     "en": "not on Google yet",
-    "t": "ещё не в Google"
+    "t": "ещё нет в Google"
   },
   "kit.block.noPage": {
     "en": "no landing page: Google's form only",
@@ -2073,11 +2073,11 @@
   },
   "kit.block.suspended": {
     "en": "no kit while suspended",
-    "t": "набора нет, пока GBP приостановлен"
+    "t": "нет набора, пока приостановлен"
   },
   "kit.block.verifying": {
     "en": "kit waits for Verified",
-    "t": "набор ждёт статуса «Подтверждён»"
+    "t": "набор ждёт подтверждения"
   },
   "kit.copied": {
     "en": "Link copied",
@@ -2113,11 +2113,11 @@
   },
   "kit.edit.deleteTitle": {
     "en": "Delete {name}?",
-    "t": "Удалить «{name}»?"
+    "t": "Удалить {name}?"
   },
   "kit.edit.draft": {
     "en": "not on Google yet: joins once it is",
-    "t": "ещё не в Google: добавится, когда появится"
+    "t": "ещё нет в Google: присоединится, когда появится"
   },
   "kit.edit.draw": {
     "en": "Draw one",
@@ -2129,7 +2129,7 @@
   },
   "kit.edit.fromArea": {
     "en": "An area",
-    "t": "Зона"
+    "t": "Район"
   },
   "kit.edit.fromOutline": {
     "en": "The outline's {n} selected",
@@ -2141,7 +2141,7 @@
   },
   "kit.edit.inArea": {
     "en": "{n} of your GBPs in it or next to it",
-    "t": "Ваших GBP в ней или рядом: {n}"
+    "t": "Ваших GBP в нём или рядом: {n}"
   },
   "kit.edit.inIt": {
     "en": "in it",
@@ -2153,7 +2153,7 @@
   },
   "kit.edit.linkHint": {
     "en": "the operator's page; a reviewer never sees it (their QR goes to the brand's site)",
-    "t": "страница оператора; автор отзыва её не видит (его QR ведёт на сайт бренда)"
+    "t": "страница оператора; рецензент её не видит (его QR ведёт на сайт бренда)"
   },
   "kit.edit.name": {
     "en": "Name",
@@ -2181,19 +2181,19 @@
   },
   "kit.edit.suspended": {
     "en": "Suspended: no kit while suspended",
-    "t": "Приостановлен: набора нет, пока GBP приостановлен"
+    "t": "Приостановлен: нет набора, пока приостановлен"
   },
   "kit.edit.title": {
     "en": "Edit {name}",
-    "t": "Изменить «{name}»"
+    "t": "Изменить {name}"
   },
   "kit.edit.verifying": {
     "en": "Verifying: joins when Verified",
-    "t": "Проверяется: добавится после подтверждения"
+    "t": "Проверяется: присоединится после подтверждения"
   },
   "kit.edit.waiting": {
     "en": "{n} wait in it, counted once Verified",
-    "t": "Ожидают в ней: {n}, учтутся после подтверждения"
+    "t": "Ожидают в нём: {n}, будут учтены после подтверждения"
   },
   "kit.editGbps": {
     "en": "Add or drop GBPs",
@@ -2205,7 +2205,7 @@
   },
   "kit.gbps.hint": {
     "en": "a row opens it · q in it shows its QR",
-    "t": "строка открывает GBP · q в ней показывает QR"
+    "t": "строка открывает его · q в ней показывает QR"
   },
   "kit.gbps.name": {
     "en": "GBP",
@@ -2221,7 +2221,7 @@
   },
   "kit.gmb.noCategory": {
     "en": "No category: nothing to offer but Google's form.",
-    "t": "Нет категории: предложить можно только форму Google."
+    "t": "Нет категории: можно предложить только форму Google."
   },
   "kit.gmb.notIn": {
     "en": "Not in this kit any more.",
@@ -2229,7 +2229,7 @@
   },
   "kit.latest": {
     "en": "Latest",
-    "t": "Недавнее"
+    "t": "Последнее"
   },
   "kit.latest.copied": {
     "en": "copied a draft",
@@ -2237,7 +2237,7 @@
   },
   "kit.latest.gone": {
     "en": "a review from a draft gone",
-    "t": "отзыв из удалённого черновика"
+    "t": "отзыв из черновика пропал"
   },
   "kit.latest.hint": {
     "en": "every scan, copy and review, newest first",
@@ -2245,7 +2245,7 @@
   },
   "kit.latest.opened": {
     "en": "opened its page",
-    "t": "открыл её страницу"
+    "t": "открыл свою страницу"
   },
   "kit.latest.posted": {
     "en": "on Google, from a draft",
@@ -2273,7 +2273,7 @@
   },
   "kit.left.counts": {
     "en": "{d} drafts · {p} photos",
-    "t": "Черновиков: {d} · фото: {p}"
+    "t": "черновиков: {d} · фото: {p}"
   },
   "kit.left.google": {
     "en": "no drafts needed",
@@ -2281,7 +2281,7 @@
   },
   "kit.list": {
     "en": "Review kits",
-    "t": "Наборы для отзывов"
+    "t": "Наборы отзывов"
   },
   "kit.list.members": {
     "en": "{n} GBPs",
@@ -2293,7 +2293,7 @@
   },
   "kit.list.none": {
     "en": "No kit yet: a kit is GBPs you collect reviews for together, from an area, the outline or by hand.",
-    "t": "Наборов пока нет: набор — это GBP, для которых вы собираете отзывы вместе, из зоны, контура или вручную."
+    "t": "Наборов пока нет: набор — это GBP, для которых вы вместе собираете отзывы, из района, контура или вручную."
   },
   "kit.list.title": {
     "en": "Kits",
@@ -2317,7 +2317,7 @@
   },
   "kit.period.all": {
     "en": "All",
-    "t": "Все"
+    "t": "Всё"
   },
   "kit.period.month": {
     "en": "30 d",
@@ -2333,11 +2333,11 @@
   },
   "kit.phone.info": {
     "en": "Its drafts and tally",
-    "t": "Его черновики и итоги"
+    "t": "Его черновики и счёт"
   },
   "kit.phone.locationOff": {
     "en": "location off",
-    "t": "геолокация выкл."
+    "t": "геолокация выключена"
   },
   "kit.phone.order": {
     "en": "In the kit's order",
@@ -2345,11 +2345,11 @@
   },
   "kit.pickOne": {
     "en": "Pick a kit, or make one with New.",
-    "t": "Выберите набор или создайте кнопкой «Новый»."
+    "t": "Выберите набор или создайте через «Новый»."
   },
   "kit.pool.about": {
     "en": "About",
-    "t": "О черновике"
+    "t": "О нём"
   },
   "kit.pool.all": {
     "en": "All {n}",
@@ -2361,11 +2361,11 @@
   },
   "kit.pool.discard": {
     "en": "Discard",
-    "t": "Отменить"
+    "t": "Отбросить"
   },
   "kit.pool.dots": {
     "en": "dots: this kit's {n} GBPs, filled = went there",
-    "t": "точки: {n} GBP этого набора, закрашена — там уже были"
+    "t": "точки: GBP этого набора ({n}), закрашенная — там побывали"
   },
   "kit.pool.draft": {
     "en": "Draft #{id} · {n} uses",
@@ -2397,7 +2397,7 @@
   },
   "kit.pool.noAreas": {
     "en": "No area of this country drawn yet: a kit's editor draws one on the map.",
-    "t": "В этой стране пока не нарисовано ни одной зоны: её рисуют в редакторе набора на карте."
+    "t": "Ни одного района этой страны ещё не нарисовано: редактор набора рисует район на карте."
   },
   "kit.pool.only": {
     "en": "Only for GBPs in",
@@ -2413,7 +2413,7 @@
   },
   "kit.pool.untagged": {
     "en": "no tag {n}",
-    "t": "без метки {n}"
+    "t": "без тега {n}"
   },
   "kit.pools": {
     "en": "Pools",
@@ -2421,7 +2421,7 @@
   },
   "kit.pools.drafts": {
     "en": "{d} drafts",
-    "t": "Черновиков: {d}"
+    "t": "черновиков: {d}"
   },
   "kit.pools.hint": {
     "en": "what the GBPs draw from · each draft and photo once per GBP",
@@ -2441,11 +2441,11 @@
   },
   "kit.tally.copied": {
     "en": "copied a draft",
-    "t": "скопировали черновик"
+    "t": "скопировал черновик"
   },
   "kit.tally.gone": {
     "en": "gone since",
-    "t": "удалены с тех пор"
+    "t": "пропало с тех пор"
   },
   "kit.tally.onGoogle": {
     "en": "on Google",
@@ -2453,11 +2453,11 @@
   },
   "kit.tally.other": {
     "en": "+{n} reviews not from drafts",
-    "t": "Отзывов не из черновиков: +{n}"
+    "t": "+{n} отзывов не из черновиков"
   },
   "kit.tally.scanned": {
     "en": "scanned",
-    "t": "отсканировали"
+    "t": "отсканировано"
   },
   "kit.tally.scansShort": {
     "en": "scans",
@@ -2481,7 +2481,7 @@
   },
   "kit.window": {
     "en": "Review kit · {name}",
-    "t": "Набор для отзывов · {name}"
+    "t": "Набор отзывов · {name}"
   },
   "launch.areas.add": {
     "en": "Add an area, Enter",
@@ -4053,7 +4053,7 @@
   },
   "window.log.added": {
     "en": "Added as {state}",
-    "t": "Добавлена как {state}"
+    "t": "Добавлен как {state}"
   },
   "window.log.all": {
     "en": "All",
@@ -4145,7 +4145,7 @@
   },
   "window.log.field.spots": {
     "en": "spots",
-    "t": "места"
+    "t": "точки"
   },
   "window.log.field.website": {
     "en": "website",
@@ -4153,15 +4153,15 @@
   },
   "window.log.film": {
     "en": "Film recorded by hand",
-    "t": "Плёнка записана вручную"
+    "t": "Фильм записан вручную"
   },
   "window.log.filmCleared": {
     "en": "Film cleared",
-    "t": "Плёнка очищена"
+    "t": "Фильм удалён"
   },
   "window.log.gmail": {
     "en": "Moved to another gmail",
-    "t": "Перенесена на другой gmail"
+    "t": "Перенесён на другой gmail"
   },
   "window.log.launched": {
     "en": "Browser launched",
@@ -4169,7 +4169,7 @@
   },
   "window.log.launchedFilm": {
     "en": "Browser launched, playing its film",
-    "t": "Браузер запущен, играет свою плёнку"
+    "t": "Браузер запущен, проигрывает свой фильм"
   },
   "window.log.noEmails": {
     "en": "Emails with Google are not followed yet.",
@@ -4181,15 +4181,15 @@
   },
   "window.log.ofGmail": {
     "en": "the gmail's, {gmail}",
-    "t": "gmail-аккаунта {gmail}"
+    "t": "из gmail {gmail}"
   },
   "window.log.off": {
     "en": "Switched off",
-    "t": "Выключена"
+    "t": "Выключен"
   },
   "window.log.on": {
     "en": "Switched on",
-    "t": "Включена"
+    "t": "Включён"
   },
   "window.log.reinstatementCleared": {
     "en": "Reinstatement withdrawn",
@@ -4201,15 +4201,15 @@
   },
   "window.log.removed": {
     "en": "Removed to the trash",
-    "t": "Перемещена в корзину"
+    "t": "Перемещён в корзину"
   },
   "window.log.restored": {
     "en": "Restored from the trash",
-    "t": "Восстановлена из корзины"
+    "t": "Восстановлен из корзины"
   },
   "window.log.returned": {
     "en": "A review back on Google",
-    "t": "Отзыв снова в Google"
+    "t": "Отзыв вернулся в Google"
   },
   "window.log.reviewRemoved": {
     "en": "A review removed",
@@ -4221,7 +4221,7 @@
   },
   "window.log.scanFailed": {
     "en": "A scan of its reviews failed",
-    "t": "Не удалось проверить её отзывы"
+    "t": "Не удалось проверить его отзывы"
   },
   "window.log.stopped": {
     "en": "Browser stopped",
@@ -4245,11 +4245,11 @@
   },
   "window.log.trade": {
     "en": "Given another trade",
-    "t": "Назначена другая сфера"
+    "t": "Назначен другой вид деятельности"
   },
   "window.log.tradeGone": {
     "en": "Its trade taken away",
-    "t": "Сфера снята"
+    "t": "Вид деятельности снят"
   },
   "window.log.verification": {
     "en": "Verification",
@@ -4261,7 +4261,7 @@
   },
   "window.profile.added": {
     "en": "Added {at}",
-    "t": "Добавлена {at}"
+    "t": "Добавлен {at}"
   },
   "window.profile.brand": {
     "en": "Brand",
@@ -4293,7 +4293,7 @@
   },
   "window.profile.noPhotos": {
     "en": "No photos: Sync pulls Google's",
-    "t": "Фото нет: синхронизация подтянет фото из Google"
+    "t": "Фото нет: Синхронизация подтянет фото из Google"
   },
   "window.profile.offGoogle": {
     "en": "Not on Maps: no photos from Google",
@@ -4333,11 +4333,11 @@
   },
   "window.profile.site": {
     "en": "its site · {n} leads in 7 days",
-    "t": "её сайт · обращений за 7 дней: {n}"
+    "t": "его сайт · {n} заявок за 7 дней"
   },
   "window.profile.sync": {
     "en": "Sync",
-    "t": "Синхронизировать"
+    "t": "Синхронизация"
   },
   "window.profile.syncCost": {
     "en": "up to {n} tokens",
@@ -4377,7 +4377,7 @@
   },
   "window.toMap": {
     "en": "Over the map",
-    "t": "Поверх карты"
+    "t": "Над картой"
   },
   "window.toPage": {
     "en": "Its own page",

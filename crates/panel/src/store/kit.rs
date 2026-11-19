@@ -225,13 +225,15 @@ pub async fn set_target(conn: &mut SqliteConnection, gmb: i64, target: Option<(T
 	Ok(())
 }
 
-pub async fn add_view(conn: &mut SqliteConnection, view: Uuid, gmb: i64, qr: bool, now: Timestamp, leased_until: Timestamp, drafts: &[i64]) -> eyre::Result<()> {
-	sqlx::query("INSERT INTO kit_views (id, gmb_id, qr, at, leased_until) VALUES ($1, $2, $3, $4, $5)")
+/// `kit`: the kit whose QR it was opened from.
+pub async fn add_view(conn: &mut SqliteConnection, view: Uuid, gmb: i64, qr: bool, kit: Option<i64>, now: Timestamp, leased_until: Timestamp, drafts: &[i64]) -> eyre::Result<()> {
+	sqlx::query("INSERT INTO kit_views (id, gmb_id, qr, at, leased_until, kit_id) VALUES ($1, $2, $3, $4, $5, $6)")
 		.bind(view)
 		.bind(gmb)
 		.bind(qr)
 		.bind(to_db(now))
 		.bind(to_db(leased_until))
+		.bind(kit)
 		.execute(&mut *conn)
 		.await
 		.wrap_err("adding a view")?;
@@ -302,10 +304,12 @@ pub async fn use_photo(conn: &mut SqliteConnection, view: Uuid, gmb: GmbId, phot
 	Ok(done.rows_affected() == 1)
 }
 
-pub async fn shown(conn: &mut SqliteConnection, gmb: i64, now: Timestamp) -> eyre::Result<()> {
-	sqlx::query("INSERT INTO kit_shown (gmb_id, at) VALUES ($1, $2)")
+/// `kit`: the kit whose page showed it.
+pub async fn shown(conn: &mut SqliteConnection, gmb: i64, kit: Option<i64>, now: Timestamp) -> eyre::Result<()> {
+	sqlx::query("INSERT INTO kit_shown (gmb_id, at, kit_id) VALUES ($1, $2, $3)")
 		.bind(gmb)
 		.bind(to_db(now))
+		.bind(kit)
 		.execute(&mut *conn)
 		.await
 		.wrap_err("recording a QR shown")?;
@@ -365,7 +369,7 @@ pub struct KitRow {
 }
 
 pub async fn kits(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<KitRow>> {
-	let rows: Vec<(i64, String, String, Option<String>, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("{KIT} WHERE k.owner = $1 ORDER BY k.name, k.slug")))
+	let rows: Vec<(i64, String, String, Option<String>, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("{KIT} WHERE k.owner = $1 AND k.removed_at IS NULL ORDER BY k.name, k.slug")))
 		.bind(owner)
 		.fetch_all(&mut *conn)
 		.await
@@ -374,7 +378,7 @@ pub async fn kits(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<
 }
 
 pub async fn kit(conn: &mut SqliteConnection, owner: Uuid, slug: &str) -> eyre::Result<Option<KitRow>> {
-	let row: Option<(i64, String, String, Option<String>, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("{KIT} WHERE k.owner = $1 AND k.slug = $2")))
+	let row: Option<(i64, String, String, Option<String>, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("{KIT} WHERE k.owner = $1 AND k.slug = $2 AND k.removed_at IS NULL")))
 		.bind(owner)
 		.bind(slug)
 		.fetch_optional(&mut *conn)
@@ -387,7 +391,7 @@ pub async fn kit(conn: &mut SqliteConnection, owner: Uuid, slug: &str) -> eyre::
 pub async fn put_kit(conn: &mut SqliteConnection, owner: Uuid, slug: &str, name: &str, area: Option<&str>, now: Timestamp) -> eyre::Result<i64> {
 	sqlx::query_scalar(
 		"INSERT INTO kits (owner, slug, name, area, created_at) VALUES ($1, $2, $3, $4, $5) \
-		 ON CONFLICT (owner, slug) DO UPDATE SET name = excluded.name, area = excluded.area RETURNING id",
+		 ON CONFLICT (owner, slug) WHERE removed_at IS NULL DO UPDATE SET name = excluded.name, area = excluded.area RETURNING id",
 	)
 	.bind(owner)
 	.bind(slug)
@@ -418,15 +422,25 @@ pub async fn set_members(conn: &mut SqliteConnection, kit: i64, gmbs: &[i64], no
 	Ok(())
 }
 
-/// `false`: the owner has no such kit.
-pub async fn delete_kit(conn: &mut SqliteConnection, owner: Uuid, slug: &str) -> eyre::Result<bool> {
-	let done = sqlx::query("DELETE FROM kits WHERE owner = $1 AND slug = $2")
+/// `false`: the owner has no such kit, live. Its rows stay: events are tagged with it.
+pub async fn remove_kit(conn: &mut SqliteConnection, owner: Uuid, slug: &str, now: Timestamp) -> eyre::Result<bool> {
+	let done = sqlx::query("UPDATE kits SET removed_at = $3 WHERE owner = $1 AND slug = $2 AND removed_at IS NULL")
 		.bind(owner)
 		.bind(slug)
+		.bind(to_db(now))
 		.execute(&mut *conn)
 		.await
-		.wrap_err("deleting a kit")?;
+		.wrap_err("removing a kit")?;
 	Ok(done.rows_affected() == 1)
+}
+
+/// Kit `id`'s owner, removed or not.
+pub async fn kit_owner(conn: &mut SqliteConnection, id: i64) -> eyre::Result<Option<Uuid>> {
+	sqlx::query_scalar("SELECT owner FROM kits WHERE id = $1")
+		.bind(id)
+		.fetch_optional(&mut *conn)
+		.await
+		.wrap_err("loading a kit's owner")
 }
 
 /// The kit's GBPs and when each joined, in that order.
