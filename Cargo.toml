@@ -21,64 +21,64 @@ sa_places = { path = "crates/places", version = "0.1.0" }
 sa_sandbox = { path = "crates/sandbox", version = "0.1.0" }
 sa_server = { path = "crates/server", version = "0.1.0" }
 
-axum = "0.8"
-base64 = "0.22"
-chacha20poly1305 = "0.10"
-clap = { version = "4", features = ["derive", "env"] }
-color-eyre = "0.6"
+axum = "0.8.9"
+base64 = "0.22.1"
+chacha20poly1305 = "0.10.1"
+clap = { version = "4.6.8", features = ["derive", "env"] }
+color-eyre = "0.6.5"
 concierge_iam = "0.1.2"
-dioxus = { version = "0.7", default-features = false }
-ed25519-dalek = "2"
+dioxus = { version = "0.7.10", default-features = false }
+ed25519-dalek = "2.2.0"
 ev_lib = { version = "0.34.1", default-features = false }
-eyre = "0.6"
-futures = "0.3"
-getrandom = "0.3"
+eyre = "0.6.14"
+futures = "0.3.34"
+getrandom = "0.3.4"
 gmaps_optimal_placement_core = { git = "https://github.com/EV-Service-Arb/gmaps_optimal_placement", branch = "main" }
-hex = "0.4"
-hmac = "0.13"
-http-body-util = "0.1"
-hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
-icu_locale = "2"
-image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
-jiff = "0.2"
-js-sys = "0.3"
-mail-parser = "1"
-percent-encoding = "2"
-prost = "0.14"
-protox = "0.9"
-regex = "1"
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider"] }
-ring = "0.17"
-rustix = { version = "1", features = ["process"] }
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] } # ring, not aws-lc: aws-lc-sys rebuilds a bundled C library per target dir
-rustls-platform-verifier = "0.7"
-schemars = { version = "1", features = ["uuid1", "jiff02"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-sha2 = "0.11"
-sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite-bundled", "macros", "migrate", "uuid", "json"] }
-strum = { version = "0.28", features = ["derive"] }
-subtle = "2.6"
-tempfile = "3"
+hex = "0.4.3"
+hmac = "0.13.0"
+http-body-util = "0.1.5"
+hyper-util = { version = "0.1.21", features = ["client-legacy", "http1", "tokio"] }
+icu_locale = "2.4.0"
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+jiff = "0.2.46"
+js-sys = "0.3.106"
+mail-parser = "1.0.1"
+percent-encoding = "2.3.2"
+prost = "0.14.6"
+protox = "0.9.1"
+regex = "1.13.2"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls-no-provider"] }
+ring = "0.17.14"
+rustix = { version = "1.1.6", features = ["process"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] } # ring, not aws-lc: aws-lc-sys rebuilds a bundled C library per target dir
+rustls-platform-verifier = "0.7.1"
+schemars = { version = "1.2.3", features = ["uuid1", "jiff02"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "sqlite-bundled", "macros", "migrate", "uuid", "json"] }
+strum = { version = "0.28.0", features = ["derive"] }
+subtle = "2.6.1"
+tempfile = "3.27.0"
 tg_types = "0.1"
-thiserror = "2"
-tokio = { version = "1", features = ["full"] }
-tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "ring", "tls12"] }
-tokio-tungstenite = "0.29"
-tonic = { version = "0.14", features = ["tls-ring"] }
-tonic-prost = "0.14"
-tonic-prost-build = "0.14"
-tower = "0.5"
-tower-http = "0.6"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tsify = "0.5"
-tzf-rs = { version = "2", default-features = false, features = ["bundled"] }
-url = "2"
-uuid = "1"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["full"] }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["logging", "ring", "tls12"] }
+tokio-tungstenite = "0.29.0"
+tonic = { version = "0.14.9", features = ["tls-ring"] }
+tonic-prost = "0.14.9"
+tonic-prost-build = "0.14.9"
+tower = "0.5.3"
+tower-http = "0.7.0"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tsify = "0.5.8"
+tzf-rs = { version = "2.3.0", default-features = false, features = ["bundled"] }
+url = "2.5.8"
+uuid = "1.29.3"
 v_utils = { version = "2.24.1", default-features = false, features = ["macros"] }
-wasm-bindgen = "0.2"
-zeroize = "1"
+wasm-bindgen = "=0.2.129"
+zeroize = "1.9.2"
 
 [workspace.lints.clippy]
 float_cmp = "allow"

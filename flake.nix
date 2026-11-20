@@ -110,6 +110,7 @@
         );
         rs = v_flakes.rs {
           inherit pkgs rust;
+          pinDeps = true;
           build.workspace = {
             "./crates/server" = [ "git_version" "log_directives" "api_docs" ];
           };
