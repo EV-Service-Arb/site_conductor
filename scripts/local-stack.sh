@@ -214,6 +214,12 @@ if [ "$fixed" = 1 ]; then
 		[ ! -e "$root/frontend/_.js-local.json" ] || cp "$root/frontend/_.js-local.json" "$src/frontend/"
 		for d in frontend/node_modules crates/sandbox/js/node_modules; do [ ! -d "$root/$d" ] || cp -al "$root/$d" "$src/$d"; done
 		[ ! -d "$root/frontend/src/shared/placement_overlay" ] || cp -a "$root/frontend/src/shared/placement_overlay" "$src/frontend/src/shared/"
+		# the newest copy's Turbopack cache: the export compiles only what differs
+		prev=""
+		for c in "$root"/.local/fixed/*/frontend/.next/cache; do
+			if [ -d "$c" ] && { [ -z "$prev" ] || [ "$c" -nt "$prev" ]; }; then prev="$c"; fi
+		done
+		[ -z "$prev" ] || { mkdir -p "$src/frontend/.next" && cp -a "$prev" "$src/frontend/.next/"; }
 		touch "$src/.copied"
 	fi
 fi
@@ -551,7 +557,7 @@ web_prep() {
 		timed overlay prefixed placement-overlay in_shell "$src" env CARGO_BUILD_BUILD_DIR="$root/target" placement-overlay
 		echo "$inputs" >"$out/.inputs-hash"
 	fi
-	[ "$fixed" = 0 ] || timed export prefixed web in_shell "$src" bash -c 'cd frontend && npm run -s build'
+	[ "$fixed" = 0 ] || timed export prefixed web in_shell "$src" bash -c 'cd frontend && npm run -s i18n && PANEL_EXPORT_UNCHECKED=1 npx next build'
 }
 web_prep_build=""
 if [ "$run_panel" = 1 ] && { [ "$watch" = 1 ] || [ "$fixed" = 1 ]; }; then

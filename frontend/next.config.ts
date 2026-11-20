@@ -33,5 +33,6 @@ export default function config(phase: string): NextConfig {
   return {
     output: "export",
     images: { unoptimized: true },
+    typescript: { ignoreBuildErrors: process.env.PANEL_EXPORT_UNCHECKED !== undefined }, // `dev --fixed`'s export: types are `nix run .#test`'s
   };
 }
