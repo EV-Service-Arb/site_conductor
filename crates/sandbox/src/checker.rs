@@ -106,7 +106,7 @@ impl Checker {
 		let cell = at(n);
 		let said = async {
 			let (reply, replied) = oneshot::channel();
-			self.ask(Ask::Diagnose(Diagnose {
+			self.ask(Ask::Diagnose(Box::new(Diagnose {
 				scope: scope.uri.clone(),
 				cell: cell.clone(),
 				evict: (0..n).map(at).collect(),
@@ -114,7 +114,7 @@ impl Checker {
 				deadline,
 				span: Span::current(),
 				reply: Reply::Cell(reply),
-			}));
+			})));
 			replied.await.wrap_err("the checker restarted")?
 		}
 		.instrument(tracing::info_span!("diagnostics"))
@@ -160,7 +160,7 @@ enum Ask {
 		deadline: Instant,
 		reply: oneshot::Sender<eyre::Result<Vec<Name>>>,
 	},
-	Diagnose(Diagnose),
+	Diagnose(Box<Diagnose>),
 	Forget(Url),
 }
 
@@ -498,7 +498,7 @@ impl Generation {
 				self.names.write_all(line.as_bytes()).await.wrap_err("names.ts's stdin")?;
 				self.naming.push_back((deadline, reply));
 			}
-			Ask::Diagnose(d) => self.waiting.push(d),
+			Ask::Diagnose(d) => self.waiting.push(*d),
 			Ask::Forget(scope) => {
 				self.registering.remove(&scope);
 				if self.told.remove(&scope) {
