@@ -280,7 +280,7 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          restore-keys: particles-warnings-rust-clippy-0-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+          restore-keys: particles-warnings-rust-clippy-0-${{ runner.os }}-
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.particle-cache-0.outputs.cache-hit != 'true'
         name: Stamp particle's cache
         run: '[ ! -d ./target ] || find ./target -type f -exec touch -a -d @1 {} +'
@@ -401,7 +401,7 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          restore-keys: particles-warnings-rust-doc-0-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+          restore-keys: particles-warnings-rust-doc-0-${{ runner.os }}-
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.particle-cache-0.outputs.cache-hit != 'true'
         name: Stamp particle's cache
         run: '[ ! -d ./target ] || find ./target -type f -exec touch -a -d @1 {} +'
