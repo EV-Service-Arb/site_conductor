@@ -10,7 +10,11 @@ test("the leader reaches the page from the assistant's focused composer, with Al
   await expect(composer).toBeVisible();
   await page.keyboard.press("z");
   await expect(composer).toHaveValue("z");
-  await page.keyboard.press("Alt+z");
+  // Pressed again until the keymap listens: it attaches once the page hydrates, after the composer takes keys.
+  await expect(async () => {
+    await page.keyboard.press("Alt+z");
+    await expect(page.getByText("Keybinds")).toBeVisible({ timeout: 500 });
+  }).toPass();
   await page.keyboard.press("g");
   await page.keyboard.press("e");
   await expect(page).toHaveURL(/\/alerts\/?\?assistant=sidebar$/);
