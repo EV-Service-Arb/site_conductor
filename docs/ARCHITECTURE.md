@@ -74,8 +74,8 @@ crates/browsers/         sa_browsers: the devices a browser poses as, a launch's
                          alone, a film made the camera; a cloud phone's life and its viewer over adb
 crates/sandbox/          sa_sandbox: a session of the agents' code and what it answers, its limits (lib); the
                          runner (`sa_sandbox serve`): each session one Deno process, each cell type-checked
-                         first against the cells before it, no permission but the net to the conductor's
-                         `/api/run`; `js/`, what a session runs
+                         first against the cells before it by the runner's one `deno lsp`, no permission
+                         but the net to the conductor's `/api/run`; `js/`, what a session runs
 crates/places/           Google Places: a place from what a person pastes (an id, a Maps URL, a
                          search), its point; suggestions as one types (Autocomplete, no session
                          token); a locality's viewport, the one around a point (Geocoding), a
@@ -725,11 +725,11 @@ pod, never here, as a cell of a session that outlives a reply.
 
 ```text
 agent ─execute─▶ conductor: the caller's session (a chat and its asker, or the MCP session's), opened if none
-   POST /sessions ─▶ sa_sandbox: deno run js/host.ts, a nonce on its stdin
+   POST /sessions ─▶ sa_sandbox: deno run js/host.ts, a nonce on its stdin; its dir a config scope of the checker
    POST /sessions/{s}/cells {code, token} (Conductor assertion, aud sandbox)
-      js/names.ts: the code's top-level declarations
+      js/names.ts (the runner's one, kept running): the code's top-level declarations
       cell_N.ts = the code + imports of what the cells before declared + exports of its own + `import { api }`
-      deno check cell_N.ts: a type error runs nothing
+      deno lsp (the runner's one): cell_N's diagnostics in its session's scope; an error runs nothing
       host.ts: the cell's token set, `await import(cell_N.ts)` ── Bearer token ──▶ conductor /api/run/<path>
    /api/run: the live cell's token, under CALLS ─ one operation of the catalog (static segments
              before parameters) ─ held by the level? it waits for the person (PAUSE): agreed, on; else
@@ -744,7 +744,8 @@ agent ─execute─▶ conductor: the caller's session (a chat and its asker, or
 - **A cell sees what the cells before it declared**: their top-level declarations, types included,
   are imported from the latest cell that ran to its end declaring each; a cell that threw hands on
   nothing, and a name declared again is the later cell's. A cell is checked against the catalog and
-  those, and runs only alone: one at a time.
+  those alone: its program is what it imports, in its session's own scope, so no session's
+  declarations reach another's. It runs only alone: one at a time.
 - **The client is the catalog's**: gen writes `crates/sandbox/js/catalog.json` with the catalog's own
   merge over the vendored documents, and its types (`catalog.ts`) beside it. The relay's own
   refusals are the client's hop (`refused`, 403, never a 401): the code reads them as an answer
@@ -1333,8 +1334,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **The sandbox.** sa_sandbox is its own pod (`panel-sandbox`; the conductor's `PANEL_SANDBOX_URL`,
   in-cluster only), holding its sessions in memory: one replica, which the conductor's own record of
   them (in memory too) names by the runner's id; a rollout ends every session, each then answered as
-  gone. `SANDBOX_MAX` sessions at once, each a Deno process (heap 256 MB) and a cell's type check
-  about 300 MB more, the
+  gone. `SANDBOX_MAX` sessions at once, each a Deno process (heap 256 MB), and one type checker
+  for them all (`deno lsp`, ~0.7 GB resident with nine sessions' scopes), the
   conductor's public keys (`PANEL_ASSERTION_KEYS`), Deno and `crates/sandbox/js` with its packages
   in the image. Its egress is DNS and the conductor's `/api/run` alone, which the public
   IngressRoute must not route.

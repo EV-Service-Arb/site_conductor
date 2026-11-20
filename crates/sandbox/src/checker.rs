@@ -38,7 +38,7 @@ pub(crate) struct Checker {
 impl Checker {
 	/// The checker, and the future that drives its processes: it ends only when a warm-up fails.
 	pub(crate) fn try_new(deno: PathBuf, js: PathBuf, cache: PathBuf) -> eyre::Result<(Self, impl Future<Output = eyre::Result<Infallible>>)> {
-		let (asks, asked) = mpsc::unbounded_channel();
+		let (asks, asked) = mpsc::unbounded_channel(); //UNBOUNDED: a scope's drop cannot wait; a session asks one at a time, and SANDBOX_MAX bounds the sessions
 		let deno_json: Arc<[u8]> = std::fs::read(js.join("deno.json")).wrap_err("SANDBOX_JS's deno.json")?.into();
 		let prelude = Url::from_file_path(js.join("prelude.ts")).expect("canonical paths are absolute");
 		let driver = Driver {
@@ -124,7 +124,7 @@ impl Checker {
 			std::fs::write(scope.dir.join(format!("cell_{n}.ts")), module).wrap_err("writing a cell")?;
 			return Ok(Ok(declares));
 		}
-		Ok(Err(render(&errors, &cell, &module, &format!("{}/", scope.uri))?))
+		Ok(Err(render(&errors, &cell, &module, scope)?))
 	}
 
 	fn ask(&self, ask: Ask) {
@@ -216,9 +216,10 @@ struct Position {
 	character: usize,
 }
 
-/// The errors in `deno check`'s shape, `cell`'s own lines shown and paths in `dir` relative.
-fn render(errors: &[Diagnostic], cell: &Url, text: &str, dir: &str) -> eyre::Result<String> {
+/// The errors in `deno check`'s shape, `cell`'s own lines shown and paths in `scope` relative.
+fn render(errors: &[Diagnostic], cell: &Url, text: &str, scope: &Scope) -> eyre::Result<String> {
 	let lines: Vec<&str> = text.lines().collect();
+	let dir = format!("{}/", scope.uri);
 	let shown = |out: &mut String, uri: &str, range: &Range, indent: &str| {
 		if uri == cell.as_str()
 			&& let Some(line) = lines.get(range.start.line)
@@ -234,7 +235,7 @@ fn render(errors: &[Diagnostic], cell: &Url, text: &str, dir: &str) -> eyre::Res
 			let mark = if to <= from + 1 { "^".to_owned() } else { "~".repeat(to - from) };
 			writeln!(out, "{indent}{line}\n{indent}{pad}{mark}").expect("a String takes writes");
 		}
-		let path = uri.strip_prefix(dir).unwrap_or(uri); // outside the session's dir: the js's, whole
+		let path = uri.strip_prefix(&dir).unwrap_or(uri); // outside the session's dir: the js's, whole
 		writeln!(out, "{indent}    at {path}:{}:{}", range.start.line + 1, range.start.character + 1).expect("a String takes writes");
 	};
 	let mut out = String::new();
@@ -521,7 +522,7 @@ impl Generation {
 		match (m.get("id"), m.get("method").and_then(Value::as_str)) {
 			(Some(id), Some(method)) => {
 				let id = id.clone();
-				let answer = match method {
+				let mut answer = match method {
 					"workspace/configuration" => {
 						let items = m["params"]["items"].as_array().ok_or_else(|| eyre::eyre!("workspace/configuration without items: {m}"))?;
 						// another section's settings this client has none of
@@ -534,7 +535,6 @@ impl Generation {
 						json!({ "error": { "code": -32601, "message": format!("{method}: not a method of this client") } })
 					}
 				};
-				let mut answer = answer;
 				answer["jsonrpc"] = "2.0".into();
 				answer["id"] = id;
 				self.send(answer).await?;
