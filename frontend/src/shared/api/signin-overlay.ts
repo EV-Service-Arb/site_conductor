@@ -34,9 +34,14 @@ export function registerOverlayHost(): () => void {
   };
 }
 
+/** A dev sign-in backend's mark (`sa_server::cookies::DEV_SIGN_IN`): `/auth/login` signs in without concierge. */
+function devSignIn(): boolean {
+  return typeof document !== "undefined" && document.cookie.split(";").some(p => p.trim() === "sa_dev_sign_in=1");
+}
+
 /** True when the overlay took the 401; false means the caller must redirect itself. */
 export function requestSignInOverlay(): boolean {
-  if (!PANEL.signinOverlay || hosts === 0) return false;
+  if (!PANEL.signinOverlay || hosts === 0 || devSignIn()) return false;
   rememberPage();
   set("open");
   return true;

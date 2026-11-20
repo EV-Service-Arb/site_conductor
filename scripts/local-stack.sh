@@ -16,7 +16,7 @@
 #                                          serving stopped and replaced; the conductor on n
 #   nix run .#dev -- --fixed [<rev>]       the same unwatched, the conductor as this checkout is now, or at <rev>;
 #                                          beside the watched one, on the first free pair down from SA_PORT_RANGE's top;
-#                                          opened in the default browser
+#                                          on a copy of .local's state, opened in the default browser
 #
 # The conductor and its front end come from `nix build .#bin` / `.#frontend` of this checkout,
 # unless PANEL_BIN / PANEL_WEB_DIR name others (PANEL_BIN=target/debug/panel for a cargo build);
@@ -120,7 +120,8 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [-
   --fixed [<rev>]: nothing watched; the conductor and its static front end built once from a copy of this checkout
   as it is now, or at <rev> (a commit, a tag), into this checkout's build dir: only what differs compiles. Without --port,
   on the first free pair down from SA_PORT_RANGE's top, beside a watched dev and other --fixed runs, never replacing them.
-  Without --port and --port-offset, opened in the default browser (xdg-open).
+  Without --port and --port-offset, on a copy of .local's state (its sessions too; a fresh one when a migration it applied
+  differs in the copy), opened in the default browser (xdg-open).
 EOF
 		exit 0
 		;;
@@ -432,6 +433,33 @@ if [ "$from_prod" = 1 ]; then
 	"${#copies[@]}") say "--from-prod: keeping the copy of prod's databases in $state (--reset for a fresh one)" ;;
 	*) die "--from-prod restores into a state with none of its databases, or keeps all of them: add --reset" ;;
 	esac
+fi
+# --fixed as a person runs it: on a copy of the watched dev's state, sessions included (the browser's localhost cookie is
+# every port's); a fresh one when its database has a migration this copy changed, which the conductor would refuse
+copied=0
+if [ "$window" = 1 ] && [ "$from_prod" = 0 ] && [ "$state" != "$root/.local" ] && [ -e "$root/.local/panel.db" ]; then
+	rm -rf "$state/panel.db"* "$state/sites_panel.db"* "$state/review_archive" "$state/secrets" "$state/data-key"
+	mkdir -p "$state/secrets"
+	changed=""
+	rows="$(sqlite3 "$root/.local/panel.db" "SELECT version || ' ' || lower(hex(checksum)) FROM _sqlx_migrations WHERE success")" || die "$root/.local/panel.db: no migrations table"
+	while read -r v sum; do
+		f=""
+		for c in "$src/crates/panel/migrations/$v"_*.sql; do [[ $c == *.down.sql ]] || f="$c"; done
+		[ -e "$f" ] || continue # a rollback, as the conductor takes it
+		[ "$(sha384sum <"$f" | cut -d' ' -f1)" = "$sum" ] || changed+=" $v"
+	done <<<"$rows"
+	if [ -n "$changed" ]; then
+		warn "--fixed: .local's panel.db applied migrations this copy has otherwise ($changed ): a fresh state"
+	else
+		say "--fixed: a copy of .local's state"
+		for db in panel.db sites_panel.db review_archive/review_archive.db; do
+			[ ! -e "$root/.local/$db" ] || { mkdir -p "$(dirname "$state/$db")" && sqlite3 "$root/.local/$db" ".backup '$state/$db'"; }
+		done
+		[ ! -d "$root/.local/review_archive/blobs" ] || cp -al "$root/.local/review_archive/blobs" "$state/review_archive/"
+		[ ! -d "$root/.local/secrets" ] || cp -a "$root/.local/secrets/." "$state/secrets/"
+		cp "$root/.local/data-key" "$state/data-key" # what the copied sessions and secrets are sealed with
+		copied=1
+	fi
 fi
 # Beside the builds, waited on before the first reader. Under `timed`, so errexit is off: every step checked.
 prod_data() {
@@ -1130,8 +1158,10 @@ if [ "$sites" = 1 ]; then
 	done
 fi
 
-# through dev sign-in: the default browser's localhost cookies are every port's, another stack's session among them
-[ "$window" = 0 ] || xdg-open "$public_origin/auth/login?return_to=/" >"$state/logs/browser.log" 2>&1
+# a copy holds the watched dev's session; a fresh state signs in
+landing="/"
+[ "$copied" = 1 ] || landing="/auth/login?return_to=/"
+[ "$window" = 0 ] || xdg-open "$public_origin$landing" >"$state/logs/browser.log" 2>&1
 
 {
 	echo

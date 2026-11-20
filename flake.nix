@@ -386,7 +386,7 @@
 
         # The front end's own screens into Figma (frontend/tests/e2e), by `@evinvest/figma-render`'s bin;
         # the loop is the `figma-render` skill.
-        figmaFile = "G9JfrDvGd0BKUdOKYg61Nn"; # "panel — renders"
+        figmaFile = "8Z2zYr2Mwq4qmnjgp19kuS"; # "panel — renders", in the Pro team "EV Invest"
         # a stack outliving its run (tests/e2e/stack.ts), by its state dir: `--stop` stops it, `--restart` starts the run on a
         # new one, on a new state when `wipe`
         stackRun = { state, wipe ? false }: run: ''
@@ -412,7 +412,7 @@
           env = localEnv;
           runtimeInputs = [ dev pkgs.procps pkgs.gnugrep ];
           # a new state: prod's data copied anew
-          run = stackRun { state = "../.local-$FIGMA_PORT_OFFSET"; wipe = true; } ''exec node_modules/.bin/evinvest-figma-render "$@" -c tests/e2e/figma.config.ts --file ${figmaFile}'';
+          run = stackRun { state = "../.local-$FIGMA_PORT_OFFSET"; wipe = true; } ''exec node_modules/.bin/evinvest-figma-render -c tests/e2e/figma.config.ts --file ${figmaFile} "$@"'';
         }).program;
         # The front end's behaviour over the same stack: every spec in frontend/tests/e2e but the renders.
         e2e = js.playwright {
@@ -436,7 +436,7 @@
         # app does not depend on them, so naming a cargo build skips the Nix one.
         localStack = pkgs.writeShellApplication {
           name = "local-stack";
-          runtimeInputs = with pkgs; [ coreutils curl gawk jq git gnused iproute2 procps util-linux nodejs_22 watchexec litestream sops yq-go openssh gnutar ];
+          runtimeInputs = with pkgs; [ coreutils curl gawk jq git gnused iproute2 procps util-linux nodejs_22 watchexec litestream sops yq-go openssh gnutar sqlite ];
           text = lib.concatStrings (lib.mapAttrsToList (k: v: "export ${k}=${v}\n") localEnv) + builtins.readFile ./scripts/local-stack.sh;
         };
 

@@ -420,6 +420,9 @@ pub async fn callback(State(s): State<SignIn>, headers: HeaderMap, Query(q): Que
 	let h = res.headers_mut();
 	h.append(header::SET_COOKIE, s.cookies.set(cookies::SESSION, &opened.cookie, max_age, true));
 	h.append(header::SET_COOKIE, s.cookies.set(cookies::CSRF, &csrf, max_age, false));
+	if s.concierge.is_dev() {
+		h.append(header::SET_COOKIE, s.cookies.set(cookies::DEV_SIGN_IN, "1", max_age, false));
+	}
 	res
 }
 

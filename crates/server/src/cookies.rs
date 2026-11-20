@@ -13,6 +13,9 @@ pub const SESSION: Name = Name { v: "sa_session" };
 /// The double-submit CSRF token: readable by the page, which echoes it in [`CSRF_HEADER`].
 pub const CSRF: Name = Name { v: "sa_csrf" };
 pub const CSRF_HEADER: &str = "x-sa-csrf";
+/// Set by a dev sign-in: the page sends a 401 to `/auth/login` instead of concierge's dialog, on every localhost port
+/// (cookies ignore the port), so a stack whose session another one replaced signs itself back in.
+pub const DEV_SIGN_IN: Name = Name { v: "sa_dev_sign_in" };
 /// A cookie's name, before the `__Host-` prefix.
 #[derive(Clone, Copy, Debug)]
 pub struct Name {
