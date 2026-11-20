@@ -1,6 +1,9 @@
 [[include]]
 optional = true
 path = "local.toml"
+[build]
+target-dir = "target/outside-shell" # another rustc, no cranelift: its fingerprints would rebuild the shell's whole target/ and it this one's
+
 [unstable]
 checksum-freshness = true # a source's content, not its mtime: `dev --fixed`'s copies build into this checkout's build dir
 

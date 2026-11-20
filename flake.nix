@@ -507,6 +507,7 @@
               + ''
                 cp -f ${(v_flakes.files.treefmt) { inherit pkgs; }} ./.treefmt.toml
                 cp -f ${(v_flakes.files.gitattributes) { inherit pkgs; lfs = false; }} ./.gitattributes
+                export CARGO_TARGET_DIR="$(git rev-parse --show-toplevel)/target" # .cargo/config.toml's is for builds outside this shell
               '';
 
             packages = stackPackages ++ [
