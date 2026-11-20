@@ -67,11 +67,11 @@ enum Cmd {
 		#[arg(long, env = "PANEL_ASSERTION_KEYS")]
 		keys: String,
 		/// How long a cell lives before its session is killed; the conductor tells the agent `LIMIT`.
-		#[arg(long, env = "SANDBOX_LIMIT_SECS", default_value_t = LIMIT.as_secs())]
-		limit_secs: u64,
+		#[arg(long, env = "SANDBOX_LIMIT_MS", default_value_t = LIMIT.as_secs() * 1000)]
+		limit_ms: u64,
 		/// How long an answer waits on a cell; the conductor's client waits past `WAIT`.
-		#[arg(long, env = "SANDBOX_WAIT_SECS", default_value_t = WAIT.as_secs())]
-		wait_secs: u64,
+		#[arg(long, env = "SANDBOX_WAIT_MS", default_value_t = WAIT.as_secs() * 1000)]
+		wait_ms: u64,
 	},
 }
 
@@ -92,12 +92,12 @@ async fn main() -> eyre::Result<()> {
 		js,
 		conductor,
 		keys,
-		limit_secs,
-		wait_secs,
+		limit_ms,
+		wait_ms,
 	} = Cli::parse().cmd;
 	let keys: Keys = keys.parse().map_err(|e| eyre::eyre!("PANEL_ASSERTION_KEYS: {e}"))?;
 	eyre::ensure!(max > 0, "SANDBOX_MAX is at least 1");
-	eyre::ensure!(wait_secs <= WAIT.as_secs(), "SANDBOX_WAIT_SECS past WAIT outlasts the conductor's client");
+	eyre::ensure!(u128::from(wait_ms) <= WAIT.as_millis(), "SANDBOX_WAIT_MS past WAIT outlasts the conductor's client");
 	eyre::ensure!(conductor.scheme() == "http", "SANDBOX_CONDUCTOR_URL is the conductor's in-cluster http origin, not {conductor}");
 	let host = conductor.host_str().ok_or_else(|| eyre::eyre!("SANDBOX_CONDUCTOR_URL names no host"))?;
 	let port = conductor.port_or_known_default().expect("http has a known port");
@@ -118,8 +118,8 @@ async fn main() -> eyre::Result<()> {
 		origin: conductor.as_str().trim_end_matches('/').to_owned(),
 		cache,
 		verifier: Verifier::new(keys, Service::Sandbox),
-		limit: Duration::from_secs(limit_secs),
-		wait: Duration::from_secs(wait_secs),
+		limit: Duration::from_millis(limit_ms),
+		wait: Duration::from_millis(wait_ms),
 		sessions: Mutex::default(),
 		supervise,
 	}));

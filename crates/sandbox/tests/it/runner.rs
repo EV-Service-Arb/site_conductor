@@ -18,32 +18,36 @@ use sa_auth::{Assertion, Principal, Service, Signer};
 use sa_sandbox::{Ended, OUTPUT, Opened, Ran};
 use serde_json::json;
 
-const LIMIT: Duration = Duration::from_secs(4); // the runner's, set below: the shipped minutes would hold the suite
-const WAIT: Duration = Duration::from_secs(1);
+use crate::{SLACK, WAIT};
+
 const SEED: &str = "k1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
 const HELLO: &str = "await fetch(`${Deno.env.get(\"SA_RUN_URL\")}/hello`)";
+/// Holds its cell until the test calls [`Runner::release`].
+const GATE: &str = "await fetch(`${Deno.env.get(\"SA_RUN_URL\")}/gate`)";
 
 struct Runner {
 	base: String,
 	signer: Signer,
 	http: reqwest::Client,
 	heard: Arc<AtomicUsize>,
+	gate: Arc<tokio::sync::Semaphore>,
 	/// An origin a cell must not reach.
 	elsewhere: String,
 	_child: tokio::process::Child,
 }
 impl Runner {
-	async fn start(max: usize) -> Self {
+	async fn start(max: usize, limit: Duration) -> Self {
 		let heard = Arc::new(AtomicUsize::new(0));
-		let conductor = listen(heard.clone()).await;
-		let elsewhere = listen(Arc::new(AtomicUsize::new(0))).await;
+		let gate = Arc::new(tokio::sync::Semaphore::new(0));
+		let conductor = listen(heard.clone(), gate.clone()).await;
+		let elsewhere = listen(Arc::new(AtomicUsize::new(0)), Arc::new(tokio::sync::Semaphore::new(0))).await;
 		let signer: Signer = SEED.parse().unwrap();
 		let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_sa_sandbox"))
 			.arg("serve")
 			.env("SANDBOX_BIND", "127.0.0.1:0")
 			.env("SANDBOX_MAX", max.to_string())
-			.env("SANDBOX_LIMIT_SECS", LIMIT.as_secs().to_string())
-			.env("SANDBOX_WAIT_SECS", WAIT.as_secs().to_string())
+			.env("SANDBOX_LIMIT_MS", limit.as_millis().to_string())
+			.env("SANDBOX_WAIT_MS", WAIT.as_millis().to_string())
 			.env("SANDBOX_DENO", deno())
 			.env("SANDBOX_JS", crate::js())
 			.env("SANDBOX_CONDUCTOR_URL", format!("{conductor}/api/run"))
@@ -64,6 +68,7 @@ impl Runner {
 			signer,
 			http: reqwest::Client::new(),
 			heard,
+			gate,
 			elsewhere,
 			_child: child,
 		}
@@ -114,6 +119,11 @@ impl Runner {
 		serde_json::from_str(&body).unwrap()
 	}
 
+	/// Lets one [`GATE`] by.
+	fn release(&self) {
+		self.gate.add_permits(1);
+	}
+
 	/// The cell's answers until it ends, its streams joined.
 	async fn end(&self, session: &str, mut ran: Ran) -> Ran {
 		while ran.ended.is_none() {
@@ -128,18 +138,24 @@ impl Runner {
 	}
 }
 
-async fn listen(heard: Arc<AtomicUsize>) -> String {
+async fn listen(heard: Arc<AtomicUsize>, gate: Arc<tokio::sync::Semaphore>) -> String {
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let at = listener.local_addr().unwrap();
 	let app = Router::new()
 		.route(
 			"/api/run/hello",
-			get(|State(heard): State<Arc<AtomicUsize>>| async move {
+			get(|State((heard, _)): State<(Arc<AtomicUsize>, Arc<tokio::sync::Semaphore>)>| async move {
 				heard.fetch_add(1, Ordering::SeqCst);
 				"hello from the conductor"
 			}),
 		)
-		.with_state(heard);
+		.route(
+			"/api/run/gate",
+			get(|State((_, gate)): State<(Arc<AtomicUsize>, Arc<tokio::sync::Semaphore>)>| async move {
+				gate.acquire().await.expect("never closed").forget();
+			}),
+		)
+		.with_state((heard, gate));
 	tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
 	format!("http://{at}")
 }
@@ -153,7 +169,7 @@ fn deno() -> PathBuf {
 
 #[tokio::test]
 async fn only_the_conductor_is_heard() {
-	let r = Runner::start(1).await;
+	let r = Runner::start(1, SLACK).await;
 	let (status, _) = (r.http.post(format!("{}/sessions", r.base)).send().await.unwrap().status().as_u16(), ());
 	assert_eq!(status, 401);
 	let other = r.signer.sign(&Assertion {
@@ -169,7 +185,7 @@ async fn only_the_conductor_is_heard() {
 
 #[tokio::test]
 async fn a_cell_reaches_the_conductor_and_nothing_else() {
-	let r = Runner::start(1).await;
+	let r = Runner::start(1, SLACK).await;
 	let s = r.open().await;
 	let code = format!(
 		r#"
@@ -198,7 +214,7 @@ for (const [what, attempt] of Object.entries(tries)) {{
 
 #[tokio::test]
 async fn a_cell_sees_what_the_cells_before_it_declared() {
-	let r = Runner::start(1).await;
+	let r = Runner::start(1, SLACK).await;
 	let s = r.open().await;
 	let ran = r
 		.end(&s, r.cell(&s, "const n = 41;\ninterface P { x: number }\nfunction twice(v: number) { return v * 2; }").await)
@@ -222,7 +238,7 @@ async fn a_cell_sees_what_the_cells_before_it_declared() {
 
 #[tokio::test]
 async fn a_session_never_sees_another_sessions_declarations() {
-	let r = Runner::start(2).await;
+	let r = Runner::start(2, SLACK).await;
 	let (a, b) = (r.open().await, r.open().await);
 	let ran = r
 		.end(
@@ -241,7 +257,7 @@ async fn a_session_never_sees_another_sessions_declarations() {
 
 #[tokio::test]
 async fn a_cell_sees_only_what_it_imports() {
-	let r = Runner::start(1).await;
+	let r = Runner::start(1, SLACK).await;
 	let s = r.open().await;
 	let ran = r.end(&s, r.cell(&s, "export const g = 1;\ndeclare global { var hidden: string }").await).await;
 	assert_eq!(ran.ended, Some(Ended::Done), "{}", ran.stderr);
@@ -254,7 +270,7 @@ async fn a_cell_sees_only_what_it_imports() {
 
 #[tokio::test]
 async fn output_is_kept_up_to_its_cap() {
-	let r = Runner::start(1).await;
+	let r = Runner::start(1, SLACK).await;
 	let s = r.open().await;
 	let ran = r.end(&s, r.cell(&s, &format!("console.log(\"x\".repeat({}));", OUTPUT * 2)).await).await;
 	assert_eq!((ran.ended, ran.stdout.len(), ran.truncated), (Some(Ended::Done), OUTPUT, true));
@@ -262,22 +278,23 @@ async fn output_is_kept_up_to_its_cap() {
 
 #[tokio::test]
 async fn a_long_cell_is_answered_as_it_runs_and_holds_its_session() {
-	let r = Runner::start(1).await;
+	let r = Runner::start(1, SLACK).await;
 	let s = r.open().await;
 	let ran = r
-		.cell(&s, "console.log(\"early\");\nawait new Promise((r) => setTimeout(r, 2500));\nconsole.log(\"late\");")
+		.cell(&s, &format!("console.log(\"early\");\n{GATE};\nconsole.log(\"late\");"))
 		.await;
 	assert_eq!(ran.ended, None, "{}", ran.stderr);
 	let mid = r.poll(&s, &ran, "more").await;
 	assert_eq!((mid.ended, format!("{}{}", ran.stdout, mid.stdout).as_str()), (None, "early\n"), "{}", mid.stderr);
 	assert_eq!(r.try_cell(&s, "console.log(1)").await.0, 409, "one cell at a time");
+	r.release();
 	let ran = r.end(&s, mid).await;
 	assert_eq!((ran.ended, ran.stdout.as_str()), (Some(Ended::Done), "early\nlate\n"));
 }
 
 #[tokio::test]
 async fn a_cell_past_its_limit_takes_its_session() {
-	let r = Runner::start(1).await;
+	let r = Runner::start(1, WAIT).await; // the limit it runs past
 	let s = r.open().await;
 	let ran = r.end(&s, r.cell(&s, "const kept = 1;\nsetInterval(() => {}, 1000);\nawait new Promise(() => {});").await).await;
 	assert_eq!(ran.ended, Some(Ended::Killed));
@@ -288,11 +305,12 @@ async fn a_cell_past_its_limit_takes_its_session() {
 
 #[tokio::test]
 async fn the_idlest_session_makes_room_but_a_running_one_does_not() {
-	let r = Runner::start(1).await;
+	let r = Runner::start(1, SLACK).await;
 	let busy = r.open().await;
-	let ran = r.cell(&busy, "await new Promise((r) => setTimeout(r, 2500));").await;
+	let ran = r.cell(&busy, GATE).await;
 	assert_eq!(ran.ended, None);
 	assert_eq!(r.send(reqwest::Method::POST, "/sessions", None).await.0, 503, "its one slot runs a cell");
+	r.release();
 	r.end(&busy, ran).await;
 	let other = r.open().await;
 	assert_eq!(r.try_cell(&busy, "console.log(1)").await.0, 410, "let go for the new one");

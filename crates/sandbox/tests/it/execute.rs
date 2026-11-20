@@ -94,7 +94,7 @@ async fn runner(conductor: &str) -> (String, tokio::process::Child) {
 		.arg("serve")
 		.env("SANDBOX_BIND", "127.0.0.1:0")
 		.env("SANDBOX_MAX", "4")
-		.env("SANDBOX_WAIT_SECS", "1")
+		.env("SANDBOX_WAIT_MS", crate::WAIT.as_millis().to_string())
 		.env("SANDBOX_DENO", deno)
 		.env("SANDBOX_JS", crate::js())
 		.env("SANDBOX_CONDUCTOR_URL", format!("{conductor}/api/run"))
@@ -276,7 +276,7 @@ async fn a_session_keeps_what_its_cells_declared() {
 			execute("e1", "const me = (await api.GET(\"/api/v1/me\")).data!;"),
 			execute("e2", "console.log(me.email);"),
 			execute("e3", "console.log(nobody);"),
-			execute("e4", "await new Promise((r) => setTimeout(r, 1500));\nconsole.log(\"late\");"),
+			execute("e4", &format!("await new Promise((r) => setTimeout(r, {}));\nconsole.log(\"late\");", (crate::WAIT * 2).as_millis())), // past its first answer
 		]),
 		round(vec![tool("p1", "poll", json!({ "cell": 3 })), tool("p2", "poll", json!({ "cell": 3 }))]),
 		end("Done."),

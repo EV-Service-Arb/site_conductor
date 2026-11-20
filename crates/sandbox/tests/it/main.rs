@@ -1,6 +1,11 @@
-use std::path::Path;
+use std::{path::Path, time::Duration};
 mod execute;
 mod runner;
+
+/// The runner's answer wait: an answer comes this long after its cell started, or as it ends.
+const WAIT: Duration = Duration::from_millis(100);
+/// Past what any step takes on a loaded machine: a passing test never waits it out.
+const SLACK: Duration = Duration::from_secs(4);
 
 /// `crates/sandbox/js`, its node_modules installed: a fresh checkout's, CI's, by deno; an installed one
 /// may be js-local's links, never replaced.
