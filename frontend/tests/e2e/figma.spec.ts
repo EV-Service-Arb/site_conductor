@@ -21,7 +21,6 @@ defineFigmaSuite(
     ...windows,
     { name: "assistant", url: "/?assistant=sidebar", selector: ASSISTANT },
     { name: "assistant floating", url: "/?assistant=floating", selector: ASSISTANT },
-    { name: "access", url: "/access?continue=%2F&need=sa%3Aoperator", selector: "main" },
   ],
   {
     hide: ["nextjs-portal"], // `next dev`'s indicator

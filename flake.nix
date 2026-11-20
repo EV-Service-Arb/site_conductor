@@ -128,6 +128,7 @@
           jobs.warnings.exclude = [ "code-duplication" ];
           jobs.warnings.augment = [{ name = "code-duplication"; args.excludePatterns = [ "frontend/src/shared/api/schema.ts" "frontend/src/shared/api/services/**" "frontend/src/shared/api/views.ts" "crates/sandbox/js/catalog.ts" ]; }]; # generated
           lfs = false;
+          envrc.extra = "watch_file scripts/local-stack.sh"; # baked into the shell's `figma`
         };
         readme = v_flakes.readme-fw {
           inherit pkgs;
@@ -512,6 +513,7 @@
               sqlite # inspecting the database
               rust
               testTimeline
+              figma # `nix run .#figma` without its ~8s of evaluation
             ] ++ pre-commit-check.enabledPackages ++ combined.enabledPackages;
 
             env = localEnv // {
