@@ -203,9 +203,10 @@ Or skip the session: `sites_panel place set aquafix royat --phone +33499887766` 
 configures them (`../gitops`, fetched), with the R2 keys from `../devops`'s sops
 (`DEVOPS_DIR`, `GITOPS_DIR` name others), and copies review_archive's blobs, which are not
 replicated, off its volume over ssh (`PROD_SSH` in the script). Everyone's data comes along; dev
-sign-in is prod's `admin@evinvest.ltd`. What prod sealed under its own `PANEL_DATA_KEY` (prod's
-sessions, its sources' secrets, sites' Google tokens) does not open here: the landings sign with
-the stack's own `<brand>-local` keys. Nothing walks Maps, nothing is told to Telegram. Prod's
+sign-in is prod's `admin@evinvest.ltd`. The state's `data-key` is prod's `PANEL_DATA_KEY`
+(`panel_data_key` in `../devops`'s sops), so what prod sealed opens here: its leads' PII, its
+sources' secrets, its sessions; a kept copy under another key is refused (`--reset`).
+The landings sign with the stack's own `<brand>-local` keys. Nothing walks Maps, nothing is told to Telegram. Prod's
 GMBs come without the cache that located them: a verified one's **Sync** (its ⋮ in the outline) asks
 for its point and profile.
 

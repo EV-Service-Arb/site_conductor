@@ -423,14 +423,21 @@ copies=("$state/panel.db:panel-data/panel.db" "$state/sites_panel.db:sites-panel
 	"$REVIEW_ARCHIVE_DATA_DIR/review_archive.db:review-archive-data/review_archive.db")
 restore=0
 if [ "$from_prod" = 1 ]; then
+	devops="${DEVOPS_DIR:-$(dirname "$service_arb")/devops}"
+	# what prod sealed (its leads' PII, its sources' secrets, its sessions) opens under prod's key alone
+	prod_key="$(sops -d --extract '["panel_data_key"]' "$devops/nix/secrets/platform.json")" || die "--from-prod: no panel_data_key in $devops/nix/secrets/platform.json"
 	kept=0
 	for c in "${copies[@]}"; do [ ! -e "${c%%:*}" ] || kept=$((kept + 1)); done
 	case "$kept" in
 	0)
 		[ ! -e "$REVIEW_ARCHIVE_DATA_DIR/blobs" ] || die "--from-prod: $REVIEW_ARCHIVE_DATA_DIR has blobs but no databases: add --reset"
 		restore=1
+		echo "$prod_key" >"$state/data-key"
 		;;
-	"${#copies[@]}") say "--from-prod: keeping the copy of prod's databases in $state (--reset for a fresh one)" ;;
+	"${#copies[@]}")
+		[ "$(cat "$state/data-key")" = "$prod_key" ] || die "--from-prod: $state's copy of prod's databases is under a key of its own, which opens none of what prod sealed: add --reset"
+		say "--from-prod: keeping the copy of prod's databases in $state (--reset for a fresh one)"
+		;;
 	*) die "--from-prod restores into a state with none of its databases, or keeps all of them: add --reset" ;;
 	esac
 fi
@@ -463,7 +470,7 @@ if [ "$fixed" = 1 ] && [ "$from_prod" = 0 ] && [ "$state" != "$root/.local" ] &&
 fi
 # Beside the builds, waited on before the first reader. Under `timed`, so errexit is off: every step checked.
 prod_data() {
-	local devops="${DEVOPS_DIR:-$(dirname "$service_arb")/devops}" gitops="${GITOPS_DIR:-$(dirname "$service_arb")/gitops}"
+	local gitops="${GITOPS_DIR:-$(dirname "$service_arb")/gitops}"
 	local cache="$root/.local-prod-blobs" r2_key r2_secret volume c p pids=() failed=0
 	# the replicas as gitops main configures them, not as an old checkout of it says
 	git -C "$gitops" fetch -q origin main || return 1
