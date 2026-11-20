@@ -24,8 +24,9 @@ jobs:
         with:
           extra-conf: |
             lazy-trees = true
+            extra-substituters = https://valeratrades.cachix.org file:///tmp/nix-lean-cache
+            extra-trusted-public-keys = valeratrades.cachix.org-1:gXVwhzO5YB+BaiEJYT48qZgzdaErGQew6xtZcz4Fo1Q=
             post-build-hook = /tmp/nix-lean-pbh.sh
-            extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
       - id: lean-restore
@@ -58,7 +59,10 @@ jobs:
           shopt -s nullglob
           narinfos=(*.narinfo)
           ((${#narinfos[@]})) || exit 0
-          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
+          paths=$(sed -n 's/^StorePath: //p' "${narinfos[@]}")
+          { xargs nix-store --check-validity --print-invalid <<< "$paths"
+            xargs -P 16 -I{} sh -c 'h=$(basename {}); curl -sfo /dev/null https://valeratrades.cachix.org/${h%%-*}.narinfo && echo {}; true' <<< "$paths"
+          } | while read -r p; do
             n=$(basename "$p") && n=${n%%-*}.narinfo
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
@@ -93,8 +97,9 @@ jobs:
         with:
           extra-conf: |
             lazy-trees = true
+            extra-substituters = https://valeratrades.cachix.org file:///tmp/nix-lean-cache
+            extra-trusted-public-keys = valeratrades.cachix.org-1:gXVwhzO5YB+BaiEJYT48qZgzdaErGQew6xtZcz4Fo1Q=
             post-build-hook = /tmp/nix-lean-pbh.sh
-            extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
       - id: lean-restore
@@ -147,7 +152,10 @@ jobs:
           shopt -s nullglob
           narinfos=(*.narinfo)
           ((${#narinfos[@]})) || exit 0
-          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
+          paths=$(sed -n 's/^StorePath: //p' "${narinfos[@]}")
+          { xargs nix-store --check-validity --print-invalid <<< "$paths"
+            xargs -P 16 -I{} sh -c 'h=$(basename {}); curl -sfo /dev/null https://valeratrades.cachix.org/${h%%-*}.narinfo && echo {}; true' <<< "$paths"
+          } | while read -r p; do
             n=$(basename "$p") && n=${n%%-*}.narinfo
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
@@ -242,8 +250,9 @@ jobs:
         with:
           extra-conf: |
             lazy-trees = true
+            extra-substituters = https://valeratrades.cachix.org file:///tmp/nix-lean-cache
+            extra-trusted-public-keys = valeratrades.cachix.org-1:gXVwhzO5YB+BaiEJYT48qZgzdaErGQew6xtZcz4Fo1Q=
             post-build-hook = /tmp/nix-lean-pbh.sh
-            extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
       - id: lean-restore
@@ -325,7 +334,10 @@ jobs:
           shopt -s nullglob
           narinfos=(*.narinfo)
           ((${#narinfos[@]})) || exit 0
-          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
+          paths=$(sed -n 's/^StorePath: //p' "${narinfos[@]}")
+          { xargs nix-store --check-validity --print-invalid <<< "$paths"
+            xargs -P 16 -I{} sh -c 'h=$(basename {}); curl -sfo /dev/null https://valeratrades.cachix.org/${h%%-*}.narinfo && echo {}; true' <<< "$paths"
+          } | while read -r p; do
             n=$(basename "$p") && n=${n%%-*}.narinfo
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
@@ -359,8 +371,9 @@ jobs:
         with:
           extra-conf: |
             lazy-trees = true
+            extra-substituters = https://valeratrades.cachix.org file:///tmp/nix-lean-cache
+            extra-trusted-public-keys = valeratrades.cachix.org-1:gXVwhzO5YB+BaiEJYT48qZgzdaErGQew6xtZcz4Fo1Q=
             post-build-hook = /tmp/nix-lean-pbh.sh
-            extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
       - id: lean-restore
@@ -442,7 +455,10 @@ jobs:
           shopt -s nullglob
           narinfos=(*.narinfo)
           ((${#narinfos[@]})) || exit 0
-          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
+          paths=$(sed -n 's/^StorePath: //p' "${narinfos[@]}")
+          { xargs nix-store --check-validity --print-invalid <<< "$paths"
+            xargs -P 16 -I{} sh -c 'h=$(basename {}); curl -sfo /dev/null https://valeratrades.cachix.org/${h%%-*}.narinfo && echo {}; true' <<< "$paths"
+          } | while read -r p; do
             n=$(basename "$p") && n=${n%%-*}.narinfo
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
@@ -473,8 +489,9 @@ jobs:
         with:
           extra-conf: |
             lazy-trees = true
+            extra-substituters = https://valeratrades.cachix.org file:///tmp/nix-lean-cache
+            extra-trusted-public-keys = valeratrades.cachix.org-1:gXVwhzO5YB+BaiEJYT48qZgzdaErGQew6xtZcz4Fo1Q=
             post-build-hook = /tmp/nix-lean-pbh.sh
-            extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
       - id: lean-restore
@@ -507,7 +524,10 @@ jobs:
           shopt -s nullglob
           narinfos=(*.narinfo)
           ((${#narinfos[@]})) || exit 0
-          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
+          paths=$(sed -n 's/^StorePath: //p' "${narinfos[@]}")
+          { xargs nix-store --check-validity --print-invalid <<< "$paths"
+            xargs -P 16 -I{} sh -c 'h=$(basename {}); curl -sfo /dev/null https://valeratrades.cachix.org/${h%%-*}.narinfo && echo {}; true' <<< "$paths"
+          } | while read -r p; do
             n=$(basename "$p") && n=${n%%-*}.narinfo
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
@@ -538,8 +558,9 @@ jobs:
         with:
           extra-conf: |
             lazy-trees = true
+            extra-substituters = https://valeratrades.cachix.org file:///tmp/nix-lean-cache
+            extra-trusted-public-keys = valeratrades.cachix.org-1:gXVwhzO5YB+BaiEJYT48qZgzdaErGQew6xtZcz4Fo1Q=
             post-build-hook = /tmp/nix-lean-pbh.sh
-            extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
       - id: lean-restore
@@ -572,7 +593,10 @@ jobs:
           shopt -s nullglob
           narinfos=(*.narinfo)
           ((${#narinfos[@]})) || exit 0
-          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
+          paths=$(sed -n 's/^StorePath: //p' "${narinfos[@]}")
+          { xargs nix-store --check-validity --print-invalid <<< "$paths"
+            xargs -P 16 -I{} sh -c 'h=$(basename {}); curl -sfo /dev/null https://valeratrades.cachix.org/${h%%-*}.narinfo && echo {}; true' <<< "$paths"
+          } | while read -r p; do
             n=$(basename "$p") && n=${n%%-*}.narinfo
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
@@ -603,8 +627,9 @@ jobs:
         with:
           extra-conf: |
             lazy-trees = true
+            extra-substituters = https://valeratrades.cachix.org file:///tmp/nix-lean-cache
+            extra-trusted-public-keys = valeratrades.cachix.org-1:gXVwhzO5YB+BaiEJYT48qZgzdaErGQew6xtZcz4Fo1Q=
             post-build-hook = /tmp/nix-lean-pbh.sh
-            extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
       - id: lean-restore
@@ -637,7 +662,10 @@ jobs:
           shopt -s nullglob
           narinfos=(*.narinfo)
           ((${#narinfos[@]})) || exit 0
-          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
+          paths=$(sed -n 's/^StorePath: //p' "${narinfos[@]}")
+          { xargs nix-store --check-validity --print-invalid <<< "$paths"
+            xargs -P 16 -I{} sh -c 'h=$(basename {}); curl -sfo /dev/null https://valeratrades.cachix.org/${h%%-*}.narinfo && echo {}; true' <<< "$paths"
+          } | while read -r p; do
             n=$(basename "$p") && n=${n%%-*}.narinfo
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
@@ -668,8 +696,9 @@ jobs:
         with:
           extra-conf: |
             lazy-trees = true
+            extra-substituters = https://valeratrades.cachix.org file:///tmp/nix-lean-cache
+            extra-trusted-public-keys = valeratrades.cachix.org-1:gXVwhzO5YB+BaiEJYT48qZgzdaErGQew6xtZcz4Fo1Q=
             post-build-hook = /tmp/nix-lean-pbh.sh
-            extra-substituters = file:///tmp/nix-lean-cache
             extra-trusted-substituters = file:///tmp/nix-lean-cache
             require-sigs = false
       - id: lean-restore
@@ -702,7 +731,10 @@ jobs:
           shopt -s nullglob
           narinfos=(*.narinfo)
           ((${#narinfos[@]})) || exit 0
-          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
+          paths=$(sed -n 's/^StorePath: //p' "${narinfos[@]}")
+          { xargs nix-store --check-validity --print-invalid <<< "$paths"
+            xargs -P 16 -I{} sh -c 'h=$(basename {}); curl -sfo /dev/null https://valeratrades.cachix.org/${h%%-*}.narinfo && echo {}; true' <<< "$paths"
+          } | while read -r p; do
             n=$(basename "$p") && n=${n%%-*}.narinfo
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
