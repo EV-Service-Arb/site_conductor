@@ -221,6 +221,38 @@ async fn a_cell_sees_what_the_cells_before_it_declared() {
 }
 
 #[tokio::test]
+async fn a_session_never_sees_another_sessions_declarations() {
+	let r = Runner::start(2).await;
+	let (a, b) = (r.open().await, r.open().await);
+	let ran = r
+		.end(
+			&a,
+			r.cell(&a, "declare global { var leak: string }\ninterface Shared { x: number }\nconst s: Shared = { x: 1 };")
+				.await,
+		)
+		.await;
+	assert_eq!(ran.ended, Some(Ended::Done), "{}", ran.stderr);
+	for code in ["console.log(leak);", "const s: Shared = { x: 1 };\nconsole.log(s);"] {
+		let ran = r.cell(&b, code).await;
+		assert_eq!(ran.ended, Some(Ended::Rejected), "{code}: {}", ran.stderr);
+		assert!(ran.stderr.contains("TS2304"), "{code}: {}", ran.stderr);
+	}
+}
+
+#[tokio::test]
+async fn a_cell_sees_only_what_it_imports() {
+	let r = Runner::start(1).await;
+	let s = r.open().await;
+	let ran = r.end(&s, r.cell(&s, "export const g = 1;\ndeclare global { var hidden: string }").await).await;
+	assert_eq!(ran.ended, Some(Ended::Done), "{}", ran.stderr);
+	let ran = r.end(&s, r.cell(&s, "console.log(g, typeof hidden);").await).await;
+	assert_eq!((ran.ended, ran.stdout.as_str()), (Some(Ended::Done), "1 undefined\n"), "{}", ran.stderr);
+	let ran = r.cell(&s, "const g = 2;\nconsole.log(g, hidden);").await;
+	assert_eq!(ran.ended, Some(Ended::Rejected), "imports nothing of cell 0: {}", ran.stderr);
+	assert!(ran.stderr.contains("TS2304"), "{}", ran.stderr);
+}
+
+#[tokio::test]
 async fn output_is_kept_up_to_its_cap() {
 	let r = Runner::start(1).await;
 	let s = r.open().await;

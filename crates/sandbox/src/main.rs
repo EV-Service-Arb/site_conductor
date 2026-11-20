@@ -1,8 +1,10 @@
 //! `sa_sandbox serve`: the agents' code, in sessions. A session is one Deno process (`js/host.ts`) with
 //! no permission but the net to the conductor's `/api/run` and reading its own cells; each cell is a
-//! module type-checked first, against the catalog and the declarations of the cells that ran before it,
-//! which it imports. Nothing here holds a secret of the conductor's: a cell brings its own token, and
-//! an assertion is all the runner trusts.
+//! module type-checked first (`checker`: one for the runner, a scope per session), against the catalog
+//! and the declarations of the cells that ran before it, which it imports. Nothing here holds a secret
+//! of the conductor's: a cell brings its own token, and an assertion is all the runner trusts.
+
+mod checker;
 
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -26,15 +28,15 @@ use clap::{Parser, Subcommand};
 use eyre::WrapErr;
 use futures::{FutureExt, StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use sa_auth::{Keys, Service, Verifier};
-use sa_sandbox::{CHECK, Cell, Ended, IDLE, LIMIT, OUTPUT, Opened, Poll, Ran, Seen, Until, WAIT};
-use serde::Deserialize;
+use sa_sandbox::{Cell, Ended, IDLE, LIMIT, OUTPUT, Opened, Poll, Ran, Seen, Until, WAIT};
 use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt},
 	process::{Child, ChildStdin},
 	sync::{Notify, mpsc},
 };
-use tracing::Instrument;
 use url::Url;
+
+use crate::checker::{Checker, Name, Scope};
 
 /// The V8 heap a session's code may grow to.
 const HEAP_MB: usize = 256;
@@ -103,15 +105,15 @@ async fn main() -> eyre::Result<()> {
 		eyre::ensure!(js.join(file).is_file(), "SANDBOX_JS has no {file}: {}", js.display());
 	}
 	let js = js.canonicalize().wrap_err("SANDBOX_JS")?;
-	let prelude = Url::from_file_path(js.join("prelude.ts")).expect("canonical paths are absolute");
 	let cache = std::env::temp_dir().join("sa_sandbox-deno");
 	std::fs::create_dir_all(&cache).wrap_err_with(|| format!("creating {}", cache.display()))?;
+	let (checker, check) = Checker::try_new(deno.clone(), js.clone(), cache.clone())?;
 	let (supervise, watched) = mpsc::channel(max);
 	let runner = Runner(Arc::new(Inner {
 		max,
 		deno,
 		js,
-		prelude,
+		checker,
 		net: format!("{host}:{port}"),
 		origin: conductor.as_str().trim_end_matches('/').to_owned(),
 		cache,
@@ -125,10 +127,13 @@ async fn main() -> eyre::Result<()> {
 	println!("{}", listener.local_addr()?); // the tests bind port 0 and read it here
 	tracing::info!(%bind, net = runner.0.net, "serving");
 	let served = axum::serve(listener, routes(runner)).with_graceful_shutdown(shutdown_signal());
-	// the sessions' processes are this future's: they end with the server, killed on drop
+	// the sessions' and the checker's processes are these futures': they end with the server, killed on drop
 	tokio::select! {
 		served = served => served.wrap_err("HTTP server"),
 		() = watch(watched) => unreachable!("the runner holds the sender for as long as the server runs"),
+		checked = check => match checked {
+			Err(e) => Err(e.wrap_err("the type checker")),
+		},
 	}
 }
 
@@ -147,21 +152,6 @@ async fn watch(mut watched: mpsc::Receiver<BoxFuture<'static, ()>>) {
 #[derive(Clone)]
 struct Runner(Arc<Inner>);
 impl Runner {
-	fn deno(&self, dir: &Path) -> tokio::process::Command {
-		let r = &self.0;
-		let mut cmd = tokio::process::Command::new(&r.deno);
-		cmd.env_clear()
-			.env("DENO_DIR", &r.cache)
-			.env("DENO_NO_UPDATE_CHECK", "1")
-			.env("NO_COLOR", "1")
-			.current_dir(dir)
-			.stdin(Stdio::piped())
-			.stdout(Stdio::piped())
-			.stderr(Stdio::piped())
-			.kill_on_drop(true);
-		cmd
-	}
-
 	/// Lets go of what idled past [`IDLE`], and of the idlest when the slots are full.
 	fn make_room(&self) -> Result<(), Refused> {
 		let sessions = self.0.sessions.lock().expect("never held across a panic");
@@ -196,8 +186,8 @@ impl Runner {
 		self.make_room()?;
 		let r = &self.0;
 		let dir = tempfile::tempdir().wrap_err("a session's directory")?;
-		let mut child = self
-			.deno(dir.path())
+		let scope = r.checker.scope(dir.path())?;
+		let mut child = deno(&r.deno, &r.cache, dir.path())
 			.args(["run", "--no-prompt", "--no-remote", "--cached-only", "--allow-env=SA_RUN_URL"])
 			.arg("--config")
 			.arg(r.js.join("deno.json"))
@@ -215,6 +205,7 @@ impl Runner {
 		let s = Arc::new(Session {
 			id: id.clone(),
 			dir,
+			scope,
 			stdin: tokio::sync::Mutex::new(stdin),
 			state: Mutex::new(SessionState {
 				cells: Vec::new(),
@@ -256,7 +247,7 @@ impl Runner {
 		};
 		// dropped before the cell starts (its request gone), the session takes cells again
 		let undo = Unstarted(&s);
-		let checked = self.check(&s, n, &cell.code, &names).await;
+		let checked = self.0.checker.check(&s.scope, n, &cell.code, &names).await;
 		std::mem::forget(undo);
 		match checked {
 			Ok(Ok(declares)) => {
@@ -288,73 +279,6 @@ impl Runner {
 			}
 		}
 		Ok(self.answer(&s, n, Seen::default(), Until::Now).await)
-	}
-
-	/// What `code` declares, once it type-checks as cell `n` importing `names`; else what the check said.
-	#[tracing::instrument(skip_all, fields(cell = n))]
-	async fn check(&self, s: &Session, n: usize, code: &str, names: &BTreeMap<String, (usize, bool)>) -> eyre::Result<Result<Vec<Name>, String>> {
-		let r = &self.0;
-		let mut reading = self
-			.deno(&r.js)
-			.args(["run", "--no-prompt", "--no-remote", "--cached-only", "--allow-env"])
-			.arg("--config")
-			.arg(r.js.join("deno.json"))
-			.arg(r.js.join("names.ts"))
-			.spawn()
-			.wrap_err("starting names.ts")?;
-		let mut stdin = reading.stdin.take().expect("piped");
-		stdin.write_all(code.as_bytes()).await.wrap_err("handing names.ts the code")?;
-		drop(stdin);
-		let read = tokio::time::timeout(CHECK, reading.wait_with_output().instrument(tracing::info_span!("names.ts")))
-			.await
-			.wrap_err("names.ts past CHECK")?
-			.wrap_err("names.ts")?;
-		eyre::ensure!(read.status.success(), "names.ts: {}", String::from_utf8_lossy(&read.stderr));
-		let mut declares: Vec<Name> = serde_json::from_slice(&read.stdout).wrap_err("names.ts's answer")?;
-		declares.dedup_by(|a, b| a.name == b.name);
-		let mut from: BTreeMap<usize, (Vec<&str>, Vec<&str>)> = BTreeMap::new();
-		for (name, (cell, is_type)) in names {
-			if !declares.iter().any(|d| &d.name == name) {
-				let (values, types) = from.entry(*cell).or_default();
-				if *is_type { types } else { values }.push(name);
-			}
-		}
-		// after the code, so its line numbers stay its own: imports hoist
-		let mut module = format!("{code}\n");
-		for (cell, (values, types)) in &from {
-			for (names, kind) in [(values, ""), (types, "type ")] {
-				if !names.is_empty() {
-					module.push_str(&format!("import {kind}{{ {} }} from \"./cell_{cell}.ts\";\n", names.join(", ")));
-				}
-			}
-		}
-		for (is_type, kind) in [(false, ""), (true, "type ")] {
-			let own: Vec<&str> = declares.iter().filter(|d| d.is_type == is_type && !d.exported).map(|d| d.name.as_str()).collect();
-			if !own.is_empty() {
-				module.push_str(&format!("export {kind}{{ {} }};\n", own.join(", ")));
-			}
-		}
-		module.push_str(&format!("import {{ api }} from \"{}\";\n", r.prelude));
-		let file = format!("cell_{n}.ts");
-		std::fs::write(s.dir.path().join(&file), module).wrap_err("writing a cell")?;
-		let checked = self
-			.deno(s.dir.path())
-			.args(["check", "--no-remote", "--cached-only"])
-			.arg("--config")
-			.arg(r.js.join("deno.json"))
-			.arg(&file)
-			.stdin(Stdio::null())
-			.output();
-		let checked = tokio::time::timeout(CHECK, checked.instrument(tracing::info_span!("deno check")))
-			.await
-			.wrap_err("deno check past CHECK")?
-			.wrap_err("deno check")?;
-		if checked.status.success() {
-			return Ok(Ok(declares));
-		}
-		let at = format!("{}/", Url::from_directory_path(s.dir.path()).expect("a temp dir is absolute").as_str().trim_end_matches('/'));
-		let said = [checked.stdout, checked.stderr].map(|b| String::from_utf8_lossy(&b).replace(&at, "")).concat();
-		Ok(Err(said))
 	}
 
 	/// Cell `n` past `seen`, once `until` holds or the wait passed.
@@ -408,12 +332,27 @@ impl Runner {
 	}
 }
 
+/// Deno as every process of the runner's runs: nothing of the runner's environment, `cache` its `DENO_DIR`.
+fn deno(bin: &Path, cache: &Path, dir: &Path) -> tokio::process::Command {
+	let mut cmd = tokio::process::Command::new(bin);
+	cmd.env_clear()
+		.env("DENO_DIR", cache)
+		.env("DENO_NO_UPDATE_CHECK", "1")
+		.env("NO_COLOR", "1")
+		.current_dir(dir)
+		.stdin(Stdio::piped())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.kill_on_drop(true);
+	cmd
+}
+
 struct Inner {
 	max: usize,
 	deno: PathBuf,
 	/// `SANDBOX_JS`, canonical.
 	js: PathBuf,
-	prelude: Url,
+	checker: Checker,
 	/// `--allow-net`'s one `host:port`.
 	net: String,
 	/// `SA_RUN_URL`: where the prelude's client sends.
@@ -429,8 +368,9 @@ struct Inner {
 
 struct Session {
 	id: String,
-	/// The cells' modules, and nothing else the session may read.
+	/// The cells' modules and its deno.json, and nothing else the session may read.
 	dir: tempfile::TempDir,
+	scope: Scope,
 	stdin: tokio::sync::Mutex<ChildStdin>,
 	state: Mutex<SessionState>,
 	/// A cell said more, or ended.
@@ -460,15 +400,6 @@ struct CellState {
 	stderr: Kept,
 	ended: Option<Ended>,
 	declares: Vec<Name>,
-}
-
-/// A top-level declaration of a cell, as `js/names.ts` reads it.
-#[derive(Clone, Deserialize)]
-struct Name {
-	name: String,
-	#[serde(rename = "type")]
-	is_type: bool,
-	exported: bool,
 }
 
 /// Why a request about a session was refused.

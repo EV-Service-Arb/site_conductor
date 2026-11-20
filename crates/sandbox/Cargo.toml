@@ -33,7 +33,7 @@ tempfile.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-url.workspace = true
+url = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 reqwest.workspace = true
