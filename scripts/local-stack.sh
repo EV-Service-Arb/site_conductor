@@ -1130,7 +1130,8 @@ if [ "$sites" = 1 ]; then
 	done
 fi
 
-[ "$window" = 0 ] || xdg-open "$public_origin" >"$state/logs/browser.log" 2>&1
+# through dev sign-in: the default browser's localhost cookies are every port's, another stack's session among them
+[ "$window" = 0 ] || xdg-open "$public_origin/auth/login?return_to=/" >"$state/logs/browser.log" 2>&1
 
 {
 	echo
