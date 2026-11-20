@@ -37,11 +37,11 @@ jobs:
         name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean2-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
-            nix-lean-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-            nix-lean-particle-e2e-${{ runner.os }}-
+            nix-lean2-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+            nix-lean2-particle-e2e-${{ runner.os }}-
       - id: eval-cache
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
@@ -132,10 +132,7 @@ jobs:
           shopt -s nullglob
           narinfos=(*.narinfo)
           ((${#narinfos[@]})) || exit 0
-          paths=$(sed -n 's/^StorePath: //p' "${narinfos[@]}")
-          { xargs nix-store --check-validity --print-invalid <<< "$paths"
-            sed 's|^/nix/store/\([a-z0-9]*\)-.*|-o /dev/null https://valeratrades.cachix.org/\1.narinfo|' <<< "$paths" | xargs curl -s --parallel -w '%{http_code} %{url}\n' | sed -n 's|^200 .*/\(.*\)\.narinfo$|/nix/store/\1|p'
-          } | while read -r p; do
+          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
             n=$(basename "$p") && n=${n%%-*}.narinfo
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
@@ -144,10 +141,10 @@ jobs:
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean2-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
       - env:
-          FAMILY: nix-lean-particle-e2e-${{ runner.os }}-
+          FAMILY: nix-lean2-particle-e2e-${{ runner.os }}-
           GH_TOKEN: ${{ github.token }}
           KEY: ${{ steps.lean-restore.outputs.cache-primary-key }}
         if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
@@ -186,11 +183,11 @@ jobs:
         name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean2-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
-            nix-lean-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-            nix-lean-particle-frontend-test-${{ runner.os }}-
+            nix-lean2-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+            nix-lean2-particle-frontend-test-${{ runner.os }}-
       - id: eval-cache
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
@@ -232,10 +229,7 @@ jobs:
           shopt -s nullglob
           narinfos=(*.narinfo)
           ((${#narinfos[@]})) || exit 0
-          paths=$(sed -n 's/^StorePath: //p' "${narinfos[@]}")
-          { xargs nix-store --check-validity --print-invalid <<< "$paths"
-            sed 's|^/nix/store/\([a-z0-9]*\)-.*|-o /dev/null https://valeratrades.cachix.org/\1.narinfo|' <<< "$paths" | xargs curl -s --parallel -w '%{http_code} %{url}\n' | sed -n 's|^200 .*/\(.*\)\.narinfo$|/nix/store/\1|p'
-          } | while read -r p; do
+          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
             n=$(basename "$p") && n=${n%%-*}.narinfo
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
@@ -244,10 +238,10 @@ jobs:
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean2-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
       - env:
-          FAMILY: nix-lean-particle-frontend-test-${{ runner.os }}-
+          FAMILY: nix-lean2-particle-frontend-test-${{ runner.os }}-
           GH_TOKEN: ${{ github.token }}
           KEY: ${{ steps.lean-restore.outputs.cache-primary-key }}
         if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
@@ -286,11 +280,11 @@ jobs:
         name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean2-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
-            nix-lean-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-            nix-lean-particle-frontend-typecheck-${{ runner.os }}-
+            nix-lean2-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+            nix-lean2-particle-frontend-typecheck-${{ runner.os }}-
       - id: eval-cache
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
@@ -381,10 +375,7 @@ jobs:
           shopt -s nullglob
           narinfos=(*.narinfo)
           ((${#narinfos[@]})) || exit 0
-          paths=$(sed -n 's/^StorePath: //p' "${narinfos[@]}")
-          { xargs nix-store --check-validity --print-invalid <<< "$paths"
-            sed 's|^/nix/store/\([a-z0-9]*\)-.*|-o /dev/null https://valeratrades.cachix.org/\1.narinfo|' <<< "$paths" | xargs curl -s --parallel -w '%{http_code} %{url}\n' | sed -n 's|^200 .*/\(.*\)\.narinfo$|/nix/store/\1|p'
-          } | while read -r p; do
+          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
             n=$(basename "$p") && n=${n%%-*}.narinfo
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
@@ -393,10 +384,10 @@ jobs:
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean2-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
       - env:
-          FAMILY: nix-lean-particle-frontend-typecheck-${{ runner.os }}-
+          FAMILY: nix-lean2-particle-frontend-typecheck-${{ runner.os }}-
           GH_TOKEN: ${{ github.token }}
           KEY: ${{ steps.lean-restore.outputs.cache-primary-key }}
         if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
@@ -521,11 +512,11 @@ jobs:
         name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean-particle-rust-tests-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean2-particle-rust-tests-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
-            nix-lean-particle-rust-tests-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-            nix-lean-particle-rust-tests-${{ runner.os }}-
+            nix-lean2-particle-rust-tests-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+            nix-lean2-particle-rust-tests-${{ runner.os }}-
       - id: eval-cache
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
@@ -596,10 +587,7 @@ jobs:
           shopt -s nullglob
           narinfos=(*.narinfo)
           ((${#narinfos[@]})) || exit 0
-          paths=$(sed -n 's/^StorePath: //p' "${narinfos[@]}")
-          { xargs nix-store --check-validity --print-invalid <<< "$paths"
-            sed 's|^/nix/store/\([a-z0-9]*\)-.*|-o /dev/null https://valeratrades.cachix.org/\1.narinfo|' <<< "$paths" | xargs curl -s --parallel -w '%{http_code} %{url}\n' | sed -n 's|^200 .*/\(.*\)\.narinfo$|/nix/store/\1|p'
-          } | while read -r p; do
+          sed -n 's/^StorePath: //p' "${narinfos[@]}" | xargs nix-store --check-validity --print-invalid | while read -r p; do
             n=$(basename "$p") && n=${n%%-*}.narinfo
             echo "$n" && sed -n 's/^URL: //p' "$n"
           done | sudo xargs -r rm -f
@@ -608,10 +596,10 @@ jobs:
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean-particle-rust-tests-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean2-particle-rust-tests-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
       - env:
-          FAMILY: nix-lean-particle-rust-tests-${{ runner.os }}-
+          FAMILY: nix-lean2-particle-rust-tests-${{ runner.os }}-
           GH_TOKEN: ${{ github.token }}
           KEY: ${{ steps.lean-restore.outputs.cache-primary-key }}
         if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
