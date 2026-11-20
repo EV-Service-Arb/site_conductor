@@ -26,5 +26,6 @@ defineFigmaSuite(
     // `/account`, `/wallet`: the platform's, which refuses a localhost origin; `assistant=`: carried into every link from
     // a page that shows it; the rest are no pages
     exclude: [/^\/(account|wallet)\b/, /[?&]assistant=/, /^\/(auth|api|mcp|grafana)\//],
+    oneDocument: /^\/(\?|$)/, // Home: a load of it buys a Google map
   },
 );
