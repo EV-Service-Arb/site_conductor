@@ -37,11 +37,10 @@ impl Runner {
 		let heard = Arc::new(AtomicUsize::new(0));
 		let conductor = listen(heard.clone()).await;
 		let elsewhere = listen(Arc::new(AtomicUsize::new(0))).await;
-		let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
 		let signer: Signer = SEED.parse().unwrap();
-		let child = tokio::process::Command::new(env!("CARGO_BIN_EXE_sa_sandbox"))
+		let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_sa_sandbox"))
 			.arg("serve")
-			.env("SANDBOX_BIND", format!("127.0.0.1:{port}"))
+			.env("SANDBOX_BIND", "127.0.0.1:0")
 			.env("SANDBOX_MAX", max.to_string())
 			.env("SANDBOX_LIMIT_SECS", LIMIT.as_secs().to_string())
 			.env("SANDBOX_WAIT_SECS", WAIT.as_secs().to_string())
@@ -49,11 +48,16 @@ impl Runner {
 			.env("SANDBOX_JS", crate::js())
 			.env("SANDBOX_CONDUCTOR_URL", format!("{conductor}/api/run"))
 			.env("PANEL_ASSERTION_KEYS", signer.public())
-			.stdout(Stdio::null())
+			.stdout(Stdio::piped())
 			.kill_on_drop(true)
 			.spawn()
 			.unwrap();
-		let base = format!("http://127.0.0.1:{port}");
+		let mut addr = String::new();
+		tokio::io::AsyncBufReadExt::read_line(&mut tokio::io::BufReader::new(child.stdout.take().unwrap()), &mut addr)
+			.await
+			.unwrap();
+		assert!(!addr.is_empty(), "the runner exited before it listened");
+		let base = format!("http://{}", addr.trim());
 		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		let r = Self {
 			base,
@@ -63,13 +67,7 @@ impl Runner {
 			elsewhere,
 			_child: child,
 		};
-		for _ in 0..100 {
-			if r.http.get(format!("{}/health", r.base)).send().await.is_ok() {
-				return r;
-			}
-			tokio::time::sleep(Duration::from_millis(50)).await;
-		}
-		panic!("the runner never listened");
+		r
 	}
 
 	fn assertion(&self, method: &str, path: &str) -> String {

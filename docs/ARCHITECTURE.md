@@ -598,7 +598,6 @@ DELETE /kits/{slug}
 GET    /areas
 GET    /areas/{slug}
 PUT    /areas/{slug}
-GET    /areas/{slug}/gmbs
 GET    /placement/catalog                   study:read
 GET    /placement/study                     study:read, slow
 POST   /placement/study/pull                study:spend, fresh, slow

@@ -28,12 +28,12 @@ use futures::{FutureExt, StreamExt, future::BoxFuture, stream::FuturesUnordered}
 use sa_auth::{Keys, Principal, Service};
 use sa_sandbox::{CHECK, Cell, Ended, IDLE, LIMIT, OUTPUT, Opened, Poll, Ran, Seen, Until, WAIT};
 use serde::Deserialize;
-use tracing::Instrument;
 use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt},
 	process::{Child, ChildStdin},
 	sync::{Notify, mpsc},
 };
+use tracing::Instrument;
 use url::Url;
 
 /// The V8 heap a session's code may grow to.
@@ -78,7 +78,10 @@ async fn main() -> eyre::Result<()> {
 	color_eyre::install()?;
 	{
 		use tracing_subscriber::{EnvFilter, Layer, fmt, prelude::*};
-		tracing_subscriber::registry().with(fmt::layer().with_filter(EnvFilter::from_default_env())).with(sa_trace::layer()).init();
+		tracing_subscriber::registry()
+			.with(fmt::layer().with_filter(EnvFilter::from_default_env()))
+			.with(sa_trace::layer())
+			.init();
 	}
 	let Cmd::Serve {
 		bind,
@@ -119,6 +122,7 @@ async fn main() -> eyre::Result<()> {
 		supervise,
 	}));
 	let listener = tokio::net::TcpListener::bind(bind).await.wrap_err_with(|| format!("binding {bind}"))?;
+	println!("{}", listener.local_addr()?); // the tests bind port 0 and read it here
 	tracing::info!(%bind, net = runner.0.net, "serving");
 	let served = axum::serve(listener, routes(runner)).with_graceful_shutdown(shutdown_signal());
 	// the sessions' processes are this future's: they end with the server, killed on drop
@@ -341,7 +345,10 @@ impl Runner {
 			.arg(&file)
 			.stdin(Stdio::null())
 			.output();
-		let checked = tokio::time::timeout(CHECK, checked.instrument(tracing::info_span!("deno check"))).await.wrap_err("deno check past CHECK")?.wrap_err("deno check")?;
+		let checked = tokio::time::timeout(CHECK, checked.instrument(tracing::info_span!("deno check")))
+			.await
+			.wrap_err("deno check past CHECK")?
+			.wrap_err("deno check")?;
 		if checked.status.success() {
 			return Ok(Ok(declares));
 		}

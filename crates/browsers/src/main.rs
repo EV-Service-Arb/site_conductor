@@ -91,7 +91,10 @@ async fn main() -> eyre::Result<()> {
 	color_eyre::install()?;
 	{
 		use tracing_subscriber::{EnvFilter, Layer, fmt, prelude::*};
-		tracing_subscriber::registry().with(fmt::layer().with_filter(EnvFilter::from_default_env())).with(sa_trace::layer()).init();
+		tracing_subscriber::registry()
+			.with(fmt::layer().with_filter(EnvFilter::from_default_env()))
+			.with(sa_trace::layer())
+			.init();
 	}
 	let Cmd::Serve {
 		bind,
@@ -148,6 +151,7 @@ async fn main() -> eyre::Result<()> {
 	// stopped through the launcher, then the group killed
 	let mlx_group = profile::Group::of(&mlx);
 	let listener = tokio::net::TcpListener::bind(bind).await.wrap_err_with(|| format!("binding {bind}"))?;
+	println!("{}", listener.local_addr()?); // the tests bind port 0 and read it here
 	tracing::info!(%bind, "serving");
 	let (stop, stopping) = watch::channel(false);
 	let server = std::future::IntoFuture::into_future(axum::serve(listener, routes(runner.clone())).with_graceful_shutdown(shutdown_signal()));

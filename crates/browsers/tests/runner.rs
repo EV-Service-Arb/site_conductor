@@ -16,6 +16,7 @@ use axum::{Json, extract::State, routing::post};
 use futures::{SinkExt, StreamExt};
 use sa_auth::{Assertion, Principal, Service, Signer};
 use serde_json::{Value, json};
+use tokio::io::AsyncBufReadExt;
 use tokio_tungstenite::tungstenite::{self, client::IntoClientRequest};
 
 const SEED: &str = "k1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
@@ -72,11 +73,10 @@ impl Runner {
 
 	async fn serve(max: usize, dir: tempfile::TempDir, multilogin: Multilogin) -> Self {
 		let (orbita, sessions) = (dir.path().join("orbita"), dir.path().join("sessions"));
-		let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
 		let signer: Signer = SEED.parse().unwrap();
-		let child = tokio::process::Command::new(env!("CARGO_BIN_EXE_sa_browsers"))
+		let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_sa_browsers"))
 			.arg("serve")
-			.env("BROWSERS_BIND", format!("127.0.0.1:{port}"))
+			.env("BROWSERS_BIND", "127.0.0.1:0")
 			.env("BROWSERS_DIR", &sessions)
 			.env("BROWSERS_MAX", max.to_string())
 			.env("BROWSERS_ORBITA", &orbita)
@@ -88,13 +88,15 @@ impl Runner {
 			.env("BROWSERS_BUSYBOX", &orbita)
 			.env("BROWSERS_ADB_KEYBOARD", &orbita)
 			.env("PANEL_ASSERTION_KEYS", signer.public())
-			.stdout(Stdio::null())
+			.stdout(Stdio::piped())
 			.kill_on_drop(true)
 			.spawn()
 			.unwrap();
+		let mut addr = String::new();
+		tokio::io::BufReader::new(child.stdout.take().unwrap()).read_line(&mut addr).await.unwrap();
 		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		let r = Self {
-			base: format!("http://127.0.0.1:{port}"),
+			base: format!("http://{}", addr.trim()),
 			max,
 			dir,
 			signer,
@@ -102,13 +104,8 @@ impl Runner {
 			child,
 			multilogin,
 		};
-		for _ in 0..100 {
-			if tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
-				return r;
-			}
-			tokio::time::sleep(Duration::from_millis(50)).await;
-		}
-		panic!("the runner never listened");
+		assert!(!addr.is_empty(), "the runner exited before it listened");
+		r
 	}
 
 	fn token(&self, method: &str, path: &str) -> String {

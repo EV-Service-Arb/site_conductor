@@ -86,32 +86,29 @@ fn end(text: &str) -> Value {
 
 /// The runner, sending back to `conductor`, answering within a second.
 async fn runner(conductor: &str) -> (String, tokio::process::Child) {
-	let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
 	let deno = std::env::split_paths(&std::env::var_os("PATH").unwrap())
 		.map(|d| d.join("deno"))
 		.find(|p| p.is_file())
 		.expect("deno on PATH: the dev shell has it");
-	let child = tokio::process::Command::new(env!("CARGO_BIN_EXE_sa_sandbox"))
+	let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_sa_sandbox"))
 		.arg("serve")
-		.env("SANDBOX_BIND", format!("127.0.0.1:{port}"))
+		.env("SANDBOX_BIND", "127.0.0.1:0")
 		.env("SANDBOX_MAX", "4")
 		.env("SANDBOX_WAIT_SECS", "1")
 		.env("SANDBOX_DENO", deno)
 		.env("SANDBOX_JS", crate::js())
 		.env("SANDBOX_CONDUCTOR_URL", format!("{conductor}/api/run"))
 		.env("PANEL_ASSERTION_KEYS", SEED.parse::<sa_auth::Signer>().unwrap().public())
-		.stdout(Stdio::null())
+		.stdout(Stdio::piped())
 		.kill_on_drop(true)
 		.spawn()
 		.unwrap();
-	let base = format!("http://{}", format_args!("127.0.0.1:{port}"));
-	for _ in 0..100 {
-		if reqwest::get(format!("{base}/health")).await.is_ok() {
-			return (base, child);
-		}
-		tokio::time::sleep(Duration::from_millis(50)).await;
-	}
-	panic!("the runner never listened");
+	let mut addr = String::new();
+	tokio::io::AsyncBufReadExt::read_line(&mut tokio::io::BufReader::new(child.stdout.take().unwrap()), &mut addr)
+		.await
+		.unwrap();
+	assert!(!addr.is_empty(), "the runner exited before it listened");
+	(format!("http://{}", addr.trim()), child)
 }
 
 /// The conductor with a runner behind it, served (a cell's calls come back over the net), its asker
