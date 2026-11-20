@@ -193,6 +193,14 @@
           };
           npmDepsHash = "sha256-5AWfHRXALyxr0HUUZhdRwSGd8g9/URACBbnq1DUIvO8=";
           dontNpmBuild = true;
+          # the runner checks a cell alone, never the js it imports
+          doCheck = true;
+          nativeCheckInputs = [ pkgs.deno ];
+          checkPhase = ''
+            runHook preCheck
+            DENO_DIR="$TMPDIR/deno" deno check --no-remote --cached-only --config deno.json host.ts
+            runHook postCheck
+          '';
           installPhase = ''
             runHook preInstall
             cp -r . "$out"
@@ -389,8 +397,8 @@
             criticality = "normal";
             withCacert = false; # it dials the conductor alone, in plain http
             entrypoint = [ "${sandboxBin}/bin/sa_sandbox" "serve" "--bind" "0.0.0.0:${toString sandboxPort}" ];
-            # sessions held at once, each a Deno process (its heap capped at 256 MB) and, while a cell is checked,
-            # ~300 MB more: the pod's memory is this many of both; past it the idlest session is let go
+            # sessions held at once, each a Deno process (its heap capped at 256 MB), beside one type checker for them
+            # all (~0.7 GB): the pod's memory is this many sessions and the checker; past it the idlest session is let go
             env.SANDBOX_MAX = "2";
             imageEnv = [ "SANDBOX_DENO=${pkgs.deno}/bin/deno" "SANDBOX_JS=${sandboxJs}" ];
           };
