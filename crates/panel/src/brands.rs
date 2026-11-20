@@ -114,7 +114,7 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
-	/// The owner's brand `id`'s logo: re-encoded as a PNG, at most [`LOGO_SIDE`] on its longer side.
+	/// The owner's brand `id`'s logo: re-encoded as a PNG, at most `LOGO_SIDE` on its longer side.
 	pub async fn set_logo(&self, owner: Uuid, id: i64, upload: Vec<u8>) -> eyre::Result<Result<Brand, Refused>> {
 		if upload.len() > PHOTO_MAX {
 			return Ok(Err(Refused::TooLarge(format!("a logo is at most {} MiB", PHOTO_MAX >> 20))));

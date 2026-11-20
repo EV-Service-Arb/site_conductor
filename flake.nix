@@ -124,9 +124,10 @@
           figma = { on = "publish"; }; # the render needs prod's data and the peers, which only a developer's machine has
           jobs.default = true;
           jobs.errors.install.packages = [ "ffmpeg" "deno" ]; # crates/browsers/tests/runner.rs cuts its films with ffmpeg; crates/sandbox's tests run Deno
-          jobs.errors.augment = [ (e2e // { ciCache = [ e2e.ciCache rs.ciCache ]; }) ]; # local-stack's conductor build
+          jobs.errors.exclude = [ "frontend-typecheck" ];
+          jobs.errors.augment = [ (e2e // { ciCache = [ e2e.ciCache rs.ciCache ]; }) frontendTypecheck ]; # e2e: local-stack's conductor build
           jobs.warnings.exclude = [ "code-duplication" ];
-          jobs.warnings.augment = [{ name = "code-duplication"; args.excludePatterns = [ "frontend/src/shared/api/schema.ts" "frontend/src/shared/api/services/**" "frontend/src/shared/api/views.ts" "crates/sandbox/js/catalog.ts" ]; }]; # generated
+          jobs.warnings.augment = [{ name = "code-duplication"; args.excludePatterns = [ "frontend/src/shared/api/schema.ts" "frontend/src/shared/api/services/**" "frontend/src/shared/api/views.ts" "crates/sandbox/js/catalog.ts" "crates/server/src/connections.rs" ]; }]; # generated; connections.rs: its route table, alike by nature to kit.rs'
           lfs = false;
           envrc.extra = "watch_file scripts/local-stack.sh"; # baked into the shell's `figma`
         };
@@ -228,13 +229,30 @@
         # The same into the checkout, unoptimised: next dev imports it (local-stack --dev).
         placementOverlayDev = pkgs.writeShellApplication {
           name = "placement-overlay";
-          runtimeInputs = [ wasm-bindgen-cli pkgs.gitMinimal ]; # the shell's cargo
+          runtimeInputs = [ wasm-bindgen-cli pkgs.gitMinimal pkgs.jq ]; # the shell's cargo
           text = ''
             cd "$(git rev-parse --show-toplevel)"
             cargo build -q -p placement_overlay --target wasm32-unknown-unknown
-            wasm-bindgen --target web --out-dir frontend/src/shared/placement_overlay --out-name placement_overlay target/wasm32-unknown-unknown/debug/placement_overlay.wasm
+            target="$(cargo metadata --format-version 1 --no-deps | jq -r .target_directory)"
+            wasm-bindgen --target web --out-dir frontend/src/shared/placement_overlay --out-name placement_overlay "$target/wasm32-unknown-unknown/debug/placement_overlay.wasm"
           '';
         };
+
+        # The front end's typecheck, its overlay's module built first where the checkout has none (gitignored)
+        frontendTypecheck =
+          let p = js.script "frontend" "typecheck"; in
+          p // {
+            prepare = pkgs.writeShellApplication {
+              name = "frontend-typecheck-install";
+              runtimeInputs = [ rust pkgs.stdenv.cc pkgs.mold pkgs.gitMinimal ]; # placementOverlayDev's cargo
+              text = ''
+                ${lib.getExe p.prepare}
+                cd "$(git rev-parse --show-toplevel)"
+                [ -d frontend/src/shared/placement_overlay ] || ${lib.getExe placementOverlayDev}
+              '';
+            };
+            ciCache = [ p.ciCache rs.ciCache ];
+          };
 
         # The front end's static export (`next build` → out/), served by `panel serve` from
         # PANEL_WEB_DIR on the same origin as /api and /auth.
@@ -245,7 +263,7 @@
             src = lib.cleanSource ./frontend;
             filter = path: _type: !(builtins.elem (baseNameOf path) [ "node_modules" ".next" "out" ]);
           };
-          npmDepsHash = "sha256-rny9u1FSldhSYbkRjMijxRaOJtnE76Ql5aCg+apy/d8=";
+          npmDepsHash = "sha256-KAGMYGVbF42nZabqpVnXz+mCnprkMlPS8TgC9yFnT8E=";
           env = {
             NEXT_TELEMETRY_DISABLED = "1";
           };

@@ -16,16 +16,16 @@ use std::{
 
 use axum::{
 	Json, Router,
-	extract::{Path as Segments, Query, Request, State},
+	extract::{Path as Segments, Query, State},
 	http::StatusCode,
-	middleware::{self, Next},
+	middleware,
 	response::{IntoResponse, Response},
 	routing::{delete, get, post},
 };
 use clap::{Parser, Subcommand};
 use eyre::WrapErr;
 use futures::{FutureExt, StreamExt, future::BoxFuture, stream::FuturesUnordered};
-use sa_auth::{Keys, Principal, Service};
+use sa_auth::{Keys, Service, Verifier};
 use sa_sandbox::{CHECK, Cell, Ended, IDLE, LIMIT, OUTPUT, Opened, Poll, Ran, Seen, Until, WAIT};
 use serde::Deserialize;
 use tokio::{
@@ -115,7 +115,7 @@ async fn main() -> eyre::Result<()> {
 		net: format!("{host}:{port}"),
 		origin: conductor.as_str().trim_end_matches('/').to_owned(),
 		cache,
-		keys,
+		verifier: Verifier::new(keys, Service::Sandbox),
 		limit: Duration::from_secs(limit_secs),
 		wait: Duration::from_secs(wait_secs),
 		sessions: Mutex::default(),
@@ -420,7 +420,7 @@ struct Inner {
 	origin: String,
 	/// `DENO_DIR`, shared: the code cannot write, only Deno's own caches do.
 	cache: PathBuf,
-	keys: Keys,
+	verifier: Verifier,
 	limit: Duration,
 	wait: Duration,
 	sessions: Mutex<HashMap<String, Arc<Session>>>,
@@ -626,35 +626,9 @@ fn routes(runner: Runner) -> Router {
 		.route("/sessions/{session}", delete(close))
 		.route("/sessions/{session}/cells", post(cell))
 		.route("/sessions/{session}/cells/{cell}", get(poll))
-		.layer(middleware::from_fn_with_state(runner.clone(), conductor_only))
+		.layer(middleware::from_fn_with_state(runner.0.verifier.clone(), sa_auth::conductor_only))
 		.route("/health", get(|| async { StatusCode::OK }))
 		.with_state(runner)
-}
-
-/// The conductor's assertion for exactly this request, else 401.
-async fn conductor_only(State(runner): State<Runner>, req: Request, next: Next) -> Response {
-	let token = req.headers().get(sa_auth::HEADER).and_then(|v| v.to_str().ok());
-	let now = jiff::Timestamp::now().as_second();
-	let verified = token.map(|t| {
-		sa_auth::verify(
-			&runner.0.keys,
-			t,
-			Service::Sandbox,
-			sa_auth::Request {
-				method: req.method().as_str(),
-				path: req.uri().path(),
-				body: None,
-			},
-			now,
-		)
-	});
-	match verified {
-		Some(Ok(a)) if a.principal == Principal::Conductor => next.run(req).await,
-		refused => {
-			tracing::warn!(path = req.uri().path(), ?refused, "refused: not the conductor's");
-			(StatusCode::UNAUTHORIZED, "the conductor's assertion only").into_response()
-		}
-	}
 }
 
 async fn open(State(runner): State<Runner>) -> Result<(StatusCode, Json<Opened>), Refused> {

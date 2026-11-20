@@ -22,7 +22,7 @@ use sha2::{Digest as _, Sha256};
 #[cfg(feature = "axum")]
 mod gate;
 #[cfg(feature = "axum")]
-pub use gate::{Conductor, Denied, Gate, Verifier, Vouch};
+pub use gate::{Conductor, Denied, Gate, Verifier, Vouch, conductor_only};
 #[cfg(feature = "axum")]
 mod hop;
 #[cfg(feature = "axum")]

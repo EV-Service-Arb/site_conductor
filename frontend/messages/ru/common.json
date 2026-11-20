@@ -3,21 +3,9 @@
     "en": "Last 30 days",
     "t": "Последние 30 дней"
   },
-  "area.badSlug": {
-    "en": "Lowercase letters, digits, - and _; up to 64.",
-    "t": "Строчные латинские буквы, цифры, - и _; до 64."
-  },
   "area.centre": {
     "en": "The area's centre: drag it",
     "t": "Центр области: перетащите его"
-  },
-  "area.link": {
-    "en": "its link",
-    "t": "ссылка"
-  },
-  "area.name": {
-    "en": "its name",
-    "t": "название"
   },
   "area.namePlaceholder": {
     "en": "Chassieu",
@@ -26,10 +14,6 @@
   "area.noneFound": {
     "en": "No city found.",
     "t": "Город не найден."
-  },
-  "area.orClick": {
-    "en": "or click the map; drag the centre after",
-    "t": "или нажмите на карту; потом перетащите центр"
   },
   "area.radius": {
     "en": "radius",

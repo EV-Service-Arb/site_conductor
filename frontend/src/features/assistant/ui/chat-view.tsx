@@ -132,29 +132,30 @@ function ChatBody({ id, display, onOpen, onHide, read }: Surface & { id: string 
     void ok(api.PUT("/assistant/chats/{id}/turns", { params: { path: { id: chat.id } }, body: { base: chat.version, from: at, turns: [turn, ...chat.turns.slice(at + 1)] } })).then(reload, failed);
   };
 
+  const onDisplay: Controls["onDisplay"] = (chatId, to) => {
+    if (to === display && chatId === id) return;
+    if (to === "full") {
+      // the display chosen on the way back is the one shown
+      if (display !== "full") {
+        const kept = { ...carried };
+        delete kept.assistant;
+        back = href(VIEWS, at, kept);
+      }
+      go({ view: "assistant", params: chatId === null ? {} : { chat: chatId } });
+    } else {
+      openChat(chatId, to);
+      if (display === "full") {
+        go(back ?? { view: "home", params: {} });
+        back = null;
+      }
+    }
+  };
   const controls: Controls = {
     display,
-    onDisplay: (chatId, to) => {
-      if (to === display && chatId === id) return;
-      if (to === "full") {
-        // the display chosen on the way back is the one shown
-        if (display !== "full") {
-          const kept = { ...carried };
-          delete kept.assistant;
-          back = href(VIEWS, at, kept);
-        }
-        go({ view: "assistant", params: chatId === null ? {} : { chat: chatId } });
-      } else {
-        openChat(chatId, to);
-        if (display === "full") {
-          go(back ?? { view: "home", params: {} });
-          back = null;
-        }
-      }
-    },
+    onDisplay,
     onConfirm: setConfirm,
     onChanged: reload,
-    flipKeys: useFloatie(surface, display === "floating" ? () => controls.onDisplay(id, "full") : display === "full" ? () => controls.onDisplay(id, "floating") : null),
+    flipKeys: useFloatie(surface, display === "floating" ? () => onDisplay(id, "full") : display === "full" ? () => onDisplay(id, "floating") : null),
   };
   const confirmed = async (c: Confirm) => {
     if (c.kind === "clear") await ok(api.DELETE("/assistant/archived"));

@@ -16,93 +16,72 @@ pub(crate) fn own(doc: &OpenApi) -> [(&'static str, Value); 2] {
 }
 
 fn tokens(doc: &OpenApi) -> Value {
-	Board::new(doc, CONDUCTOR)
-		.panel(
-			Panel {
-				id: 1,
-				kind: "stat",
-				title: "In the range",
-				grid: [0, 0, 24, 5],
-			},
-			in_range(
-				op_id(crate::tokens::token_flows),
-				Select {
-					root_selector: r##"(
+	let board = Board::new(doc, CONDUCTOR).panel(
+		Panel {
+			id: 1,
+			kind: "stat",
+			title: "In the range",
+			grid: [0, 0, 24, 5],
+		},
+		in_range(
+			op_id(crate::tokens::token_flows),
+			Select {
+				root_selector: r##"(
   $rows := flows[kind in ["spend", "purchase", "granted", "renewal", "refund"]];
   [$distinct($rows.kind).(
     $k := $;
     {"kind": $k, "tokens": $abs($sum($rows[kind = $k].tokens))}
   )]
 )"##,
-					columns: &[("kind", Column::String), ("tokens", Column::Number)],
-				},
-			),
-			stat(
-				Calc::LastNotNull,
-				true,
-				TextMode::ValueAndName,
-				json!({
-					"unit": "none",
-					"decimals": 0,
-					"displayName": "${__data.fields.kind}"
-				}),
-			),
-		)
-		.panel(
-			Panel {
-				id: 2,
-				kind: "timeseries",
-				title: "Spent per day, by service, ${measure:text}",
-				grid: [0, 5, 12, 9],
+				columns: &[("kind", Column::String), ("tokens", Column::Number)],
 			},
-			in_range(
-				op_id(crate::tokens::token_flows),
-				Select {
-					root_selector: &PerDay {
-						rows: r#"flows[kind in ["spend"]]"#,
-						day: "$substring(at, 0, 10)",
-						series: "service",
-						value: r#""tokens": -("${measure}" = "at_cost" ? $sum($r.at_cost) : $sum($r.tokens))"#,
-					}
-					.to_string(),
-					columns: &[("day", Column::Timestamp), ("series", Column::String), ("tokens", Column::Number)],
-				},
-			),
-			bars_per_day("tokens", Unit::Plain, 0),
-		)
-		.panel(
-			Panel {
-				id: 3,
-				kind: "timeseries",
-				title: "Given per day: bought, granted, renewed, refunded",
-				grid: [12, 5, 12, 9],
-			},
-			in_range(
-				op_id(crate::tokens::token_flows),
-				Select {
-					root_selector: &PerDay {
-						rows: r#"flows[kind in ["purchase", "granted", "renewal", "refund"]]"#,
-						day: "$substring(at, 0, 10)",
-						series: "kind",
-						value: r#""tokens": $sum($r.tokens)"#,
-					}
-					.to_string(),
-					columns: &[("day", Column::Timestamp), ("series", Column::String), ("tokens", Column::Number)],
-				},
-			),
-			bars_per_day("tokens", Unit::Plain, 0),
-		)
-		.panel(
-			Panel {
-				id: 4,
-				kind: "bargauge",
-				title: "Spent by person, ${measure:text}",
-				grid: [0, 14, 12, 10],
-			},
-			in_range(
-				op_id(crate::tokens::token_flows),
-				Select {
-					root_selector: r##"(
+		),
+		stat(
+			Calc::LastNotNull,
+			true,
+			TextMode::ValueAndName,
+			json!({
+				"unit": "none",
+				"decimals": 0,
+				"displayName": "${__data.fields.kind}"
+			}),
+		),
+	);
+	let board = tokens_per_day(
+		board,
+		Panel {
+			id: 2,
+			kind: "timeseries",
+			title: "Spent per day, by service, ${measure:text}",
+			grid: [0, 5, 12, 9],
+		},
+		r#"flows[kind in ["spend"]]"#,
+		"service",
+		r#""tokens": -("${measure}" = "at_cost" ? $sum($r.at_cost) : $sum($r.tokens))"#,
+	);
+	tokens_per_day(
+		board,
+		Panel {
+			id: 3,
+			kind: "timeseries",
+			title: "Given per day: bought, granted, renewed, refunded",
+			grid: [12, 5, 12, 9],
+		},
+		r#"flows[kind in ["purchase", "granted", "renewal", "refund"]]"#,
+		"kind",
+		r#""tokens": $sum($r.tokens)"#,
+	)
+	.panel(
+		Panel {
+			id: 4,
+			kind: "bargauge",
+			title: "Spent by person, ${measure:text}",
+			grid: [0, 14, 12, 10],
+		},
+		in_range(
+			op_id(crate::tokens::token_flows),
+			Select {
+				root_selector: r##"(
   $rows := flows[kind = "spend"];
   [$distinct($rows.email).(
     $e := $;
@@ -110,56 +89,56 @@ fn tokens(doc: &OpenApi) -> Value {
     {"who": $r[0].name ? $r[0].name : $e, "spent": -("${measure}" = "at_cost" ? $sum($r.at_cost) : $sum($r.tokens))}
   )]^(>spent)
 )"##,
-					columns: &[("who", Column::String), ("spent", Column::Number)],
-				},
-			),
-			json!({
-					"options": {
-					"displayMode": "basic",
-					"orientation": "horizontal",
-					"reduceOptions": {
-						"calcs": [
-							"lastNotNull"
-						],
-						"fields": "/^spent$/",
-						"values": true
-					},
-					"showUnfilled": true,
-					"valueMode": "color",
-					"namePlacement": "left",
-					"sizing": "manual",
-					"minVizHeight": 16,
-					"maxVizHeight": 22,
-					"text": {
-						"titleSize": 13,
-						"valueSize": 13
-					}
-					},
-					"fieldConfig": {
-					"defaults": {
-						"unit": "none",
-						"decimals": 0,
-						"min": 0,
-						"color": {
-							"mode": "fixed",
-							"fixedColor": "blue"
-						}
-					},
-					"overrides": []
-					}
-			}),
-		)
-		.panel(
-			Panel {
-				id: 5,
-				kind: "table",
-				title: "Spent on, ${measure:text}",
-				grid: [12, 14, 12, 10],
+				columns: &[("who", Column::String), ("spent", Column::Number)],
 			},
-			in_range(
-				op_id(crate::tokens::token_flows),
-				Select {
-					root_selector: r##"(
+		),
+		json!({
+				"options": {
+				"displayMode": "basic",
+				"orientation": "horizontal",
+				"reduceOptions": {
+					"calcs": [
+						"lastNotNull"
+					],
+					"fields": "/^spent$/",
+					"values": true
+				},
+				"showUnfilled": true,
+				"valueMode": "color",
+				"namePlacement": "left",
+				"sizing": "manual",
+				"minVizHeight": 16,
+				"maxVizHeight": 22,
+				"text": {
+					"titleSize": 13,
+					"valueSize": 13
+				}
+				},
+				"fieldConfig": {
+				"defaults": {
+					"unit": "none",
+					"decimals": 0,
+					"min": 0,
+					"color": {
+						"mode": "fixed",
+						"fixedColor": "blue"
+					}
+				},
+				"overrides": []
+				}
+		}),
+	)
+	.panel(
+		Panel {
+			id: 5,
+			kind: "table",
+			title: "Spent on, ${measure:text}",
+			grid: [12, 14, 12, 10],
+		},
+		in_range(
+			op_id(crate::tokens::token_flows),
+			Select {
+				root_selector: r##"(
   $rows := flows[kind = "spend"];
   [$distinct($rows.(service & "|" & label)).(
     $k := $;
@@ -167,169 +146,169 @@ fn tokens(doc: &OpenApi) -> Value {
     {"service": $r[0].service, "what": $r[0].label, "times": $count($r), "tokens": -("${measure}" = "at_cost" ? $sum($r.at_cost) : $sum($r.tokens))}
   )]^(>tokens)
 )"##,
-					columns: &[("service", Column::String), ("what", Column::String), ("times", Column::Number), ("tokens", Column::Number)],
-				},
-			),
-			json!({
-					"options": {
-					"showHeader": true,
-					"cellHeight": "sm",
-					"footer": {
-						"show": false
-					}
-					},
-					"fieldConfig": {
-					"defaults": {
-						"custom": {
-							"align": "auto"
-						}
-					},
-					"overrides": [
-						width("service", 130),
-						width("times", 70),
-						width("tokens", 80)
-					]
-					},
-					"transformations": [
-					order(&["what", "service", "times", "tokens"])
-					]
-			}),
-		)
-		.panel(
-			Panel {
-				id: 6,
-				kind: "table",
-				title: "Purchases, grants and balances set",
-				grid: [0, 24, 24, 9],
+				columns: &[("service", Column::String), ("what", Column::String), ("times", Column::Number), ("tokens", Column::Number)],
 			},
-			in_range(
-				op_id(crate::tokens::token_flows),
-				Select {
-					root_selector: r##"[flows[kind in ["purchase", "granted", "grant_claimed", "set"]].{
+		),
+		json!({
+				"options": {
+				"showHeader": true,
+				"cellHeight": "sm",
+				"footer": {
+					"show": false
+				}
+				},
+				"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"align": "auto"
+					}
+				},
+				"overrides": [
+					width("service", 130),
+					width("times", 70),
+					width("tokens", 80)
+				]
+				},
+				"transformations": [
+				order(&["what", "service", "times", "tokens"])
+				]
+		}),
+	)
+	.panel(
+		Panel {
+			id: 6,
+			kind: "table",
+			title: "Purchases, grants and balances set",
+			grid: [0, 24, 24, 9],
+		},
+		in_range(
+			op_id(crate::tokens::token_flows),
+			Select {
+				root_selector: r##"[flows[kind in ["purchase", "granted", "grant_claimed", "set"]].{
   "at": at, "who": name ? name : email, "kind": kind, "tokens": tokens, "by": by, "note": note
 }]^(>at)"##,
-					columns: &[
-						("at", Column::Timestamp),
-						("who", Column::String),
-						("kind", Column::String),
-						("tokens", Column::Number),
-						("by", Column::String),
-						("note", Column::String),
-					],
+				columns: &[
+					("at", Column::Timestamp),
+					("who", Column::String),
+					("kind", Column::String),
+					("tokens", Column::Number),
+					("by", Column::String),
+					("note", Column::String),
+				],
+			},
+		),
+		json!({
+				"options": {
+				"showHeader": true,
+				"cellHeight": "sm",
+				"footer": {
+					"show": false
+				}
 				},
-			),
+				"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"align": "auto"
+					}
+				},
+				"overrides": [
+					width("at", 170),
+					width("kind", 120),
+					width("tokens", 80)
+				]
+				},
+				"transformations": [
+				order(&["at", "who", "kind", "tokens", "by", "note"])
+				]
+		}),
+	)
+	.row(7, "What it costs us", [0, 33, 24, 1])
+	.panel(
+		Panel {
+			id: 8,
+			kind: "stat",
+			title: "Our bill in the range",
+			grid: [0, 34, 24, 4],
+		},
+		in_range(
+			op_id(crate::usage::spend),
+			Select {
+				root_selector: &PerDay {
+					rows: OUR_BILL,
+					day: "day",
+					series: "tool_title",
+					value: r#""value": $sum($r.usd)"#,
+				}
+				.to_string(),
+				columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
+			},
+		),
+		stat(
+			Calc::Sum,
+			false,
+			TextMode::Value,
 			json!({
-					"options": {
-					"showHeader": true,
-					"cellHeight": "sm",
-					"footer": {
-						"show": false
-					}
-					},
-					"fieldConfig": {
-					"defaults": {
-						"custom": {
-							"align": "auto"
-						}
-					},
-					"overrides": [
-						width("at", 170),
-						width("kind", 120),
-						width("tokens", 80)
-					]
-					},
-					"transformations": [
-					order(&["at", "who", "kind", "tokens", "by", "note"])
-					]
+				"unit": "currencyUSD",
+				"decimals": 2,
+				"noValue": "no unit costs set"
 			}),
-		)
-		.row(7, "What it costs us", [0, 33, 24, 1])
-		.panel(
-			Panel {
-				id: 8,
-				kind: "stat",
-				title: "Our bill in the range",
-				grid: [0, 34, 24, 4],
+		),
+	)
+	.panel(
+		Panel {
+			id: 9,
+			kind: "timeseries",
+			title: "$ per day, by tool (our keys and accounts)",
+			grid: [0, 38, 12, 9],
+		},
+		in_range(
+			op_id(crate::usage::spend),
+			Select {
+				root_selector: &PerDay {
+					rows: OUR_BILL,
+					day: "day",
+					series: "tool_title",
+					value: r#""value": $sum($r.usd)"#,
+				}
+				.to_string(),
+				columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
 			},
-			in_range(
-				op_id(crate::usage::spend),
-				Select {
-					root_selector: &PerDay {
-						rows: OUR_BILL,
-						day: "day",
-						series: "tool_title",
-						value: r#""value": $sum($r.usd)"#,
-					}
-					.to_string(),
-					columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
-				},
-			),
-			stat(
-				Calc::Sum,
-				false,
-				TextMode::Value,
-				json!({
-					"unit": "currencyUSD",
-					"decimals": 2,
-					"noValue": "no unit costs set"
-				}),
-			),
-		)
-		.panel(
-			Panel {
-				id: 9,
-				kind: "timeseries",
-				title: "$ per day, by tool (our keys and accounts)",
-				grid: [0, 38, 12, 9],
+		),
+		bars_per_day("$", Unit::Usd, 2),
+	)
+	.panel(
+		Panel {
+			id: 10,
+			kind: "timeseries",
+			title: "Actions per day, by tool (in its unit)",
+			grid: [12, 38, 12, 9],
+		},
+		in_range(
+			op_id(crate::usage::spend),
+			Select {
+				root_selector: &PerDay {
+					rows: "days[true]",
+					day: "day",
+					series: r#"(tool_title & " · " & unit & "s")"#,
+					value: r#""value": $sum($r.units)"#,
+				}
+				.to_string(),
+				columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
 			},
-			in_range(
-				op_id(crate::usage::spend),
-				Select {
-					root_selector: &PerDay {
-						rows: OUR_BILL,
-						day: "day",
-						series: "tool_title",
-						value: r#""value": $sum($r.usd)"#,
-					}
-					.to_string(),
-					columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
-				},
-			),
-			bars_per_day("$", Unit::Usd, 2),
-		)
-		.panel(
-			Panel {
-				id: 10,
-				kind: "timeseries",
-				title: "Actions per day, by tool (in its unit)",
-				grid: [12, 38, 12, 9],
-			},
-			in_range(
-				op_id(crate::usage::spend),
-				Select {
-					root_selector: &PerDay {
-						rows: "days[true]",
-						day: "day",
-						series: r#"(tool_title & " · " & unit & "s")"#,
-						value: r#""value": $sum($r.units)"#,
-					}
-					.to_string(),
-					columns: &[("day", Column::Timestamp), ("series", Column::String), ("value", Column::Number)],
-				},
-			),
-			bars_per_day("units", Unit::Plain, 0),
-		)
-		.panel(
-			Panel {
-				id: 11,
-				kind: "table",
-				title: "Every costly action in the range",
-				grid: [0, 47, 24, 10],
-			},
-			in_range(
-				op_id(crate::usage::spend),
-				Select {
-					root_selector: r##"(
+		),
+		bars_per_day("units", Unit::Plain, 0),
+	)
+	.panel(
+		Panel {
+			id: 11,
+			kind: "table",
+			title: "Every costly action in the range",
+			grid: [0, 47, 24, 10],
+		},
+		in_range(
+			op_id(crate::usage::spend),
+			Select {
+				root_selector: r##"(
   $d := days;
   $count($d) = 0 ? [] : [$append([], $distinct($d.item)).(
     $i := $;
@@ -345,91 +324,91 @@ fn tokens(doc: &OpenApi) -> Value {
     }
   )]^(>$."$", >ours)
 )"##,
-					columns: &[
-						("what", Column::String),
-						("unit", Column::String),
-						("ours", Column::Number),
-						("their keys", Column::Number),
-						("times", Column::Number),
-						("$", Column::Number),
-						("by", Column::String),
+				columns: &[
+					("what", Column::String),
+					("unit", Column::String),
+					("ours", Column::Number),
+					("their keys", Column::Number),
+					("times", Column::Number),
+					("$", Column::Number),
+					("by", Column::String),
+				],
+			},
+		),
+		json!({
+				"transformations": [
+				order(&["what", "unit", "ours", "their keys", "times", "$", "by"])
+				],
+				"options": {
+				"showHeader": true,
+				"cellHeight": "sm",
+				"footer": {
+					"show": true,
+					"reducer": [
+						"sum"
 					],
-				},
-			),
-			json!({
-					"transformations": [
-					order(&["what", "unit", "ours", "their keys", "times", "$", "by"])
-					],
-					"options": {
-					"showHeader": true,
-					"cellHeight": "sm",
-					"footer": {
-						"show": true,
-						"reducer": [
-							"sum"
-						],
-						"fields": [
-							"$"
-						]
-					}
-					},
-					"fieldConfig": {
-					"defaults": {
-						"custom": {
-							"align": "auto"
-						}
-					},
-					"overrides": [
-						{
-							"matcher": {
-								"id": "byName",
-								"options": "$"
-							},
-							"properties": [
-								{
-									"id": "unit",
-									"value": "currencyUSD"
-								},
-								{
-									"id": "decimals",
-									"value": 2
-								},
-								{
-									"id": "custom.width",
-									"value": 110
-								}
-							]
-						},
-						width("unit", 90),
-						width("ours", 90),
-						width("their keys", 100),
-						width("times", 80)
+					"fields": [
+						"$"
 					]
+				}
+				},
+				"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"align": "auto"
 					}
-			}),
-		)
-		.build(
-			Dashboard {
-				uid: "sa-tokens",
-				title: "Tokens and costs · everyone",
-				from: "now-30d",
-				variables: vec![json!({
-					"type": "custom",
-					"name": "measure",
-					"label": "Spent",
-					"query": "charged : tokens, at cost : at_cost",
-					"current": { "text": "charged", "value": "tokens" },
-					"options": [
-						{ "text": "charged", "value": "tokens", "selected": true },
-						{ "text": "at cost", "value": "at_cost", "selected": false }
-					],
-					"hide": 0,
-					"multi": false,
-					"includeAll": false
-				})],
-			}
-			.into(),
-		)
+				},
+				"overrides": [
+					{
+						"matcher": {
+							"id": "byName",
+							"options": "$"
+						},
+						"properties": [
+							{
+								"id": "unit",
+								"value": "currencyUSD"
+							},
+							{
+								"id": "decimals",
+								"value": 2
+							},
+							{
+								"id": "custom.width",
+								"value": 110
+							}
+						]
+					},
+					width("unit", 90),
+					width("ours", 90),
+					width("their keys", 100),
+					width("times", 80)
+				]
+				}
+		}),
+	)
+	.build(
+		Dashboard {
+			uid: "sa-tokens",
+			title: "Tokens and costs · everyone",
+			from: "now-30d",
+			variables: vec![json!({
+				"type": "custom",
+				"name": "measure",
+				"label": "Spent",
+				"query": "charged : tokens, at cost : at_cost",
+				"current": { "text": "charged", "value": "tokens" },
+				"options": [
+					{ "text": "charged", "value": "tokens", "selected": true },
+					{ "text": "at cost", "value": "at_cost", "selected": false }
+				],
+				"hide": 0,
+				"multi": false,
+				"includeAll": false
+			})],
+		}
+		.into(),
+	)
 }
 
 fn meters(doc: &OpenApi) -> Value {
@@ -631,6 +610,28 @@ impl std::fmt::Display for PerDay<'_> {
 )"#
 		)
 	}
+}
+
+/// `rows` of the token flows summed per day into `value`, a series per `series`, as bars.
+fn tokens_per_day<'a>(board: Board<'a>, panel: Panel, rows: &str, series: &str, value: &str) -> Board<'a> {
+	let selector = PerDay {
+		rows,
+		day: "$substring(at, 0, 10)",
+		series,
+		value,
+	}
+	.to_string();
+	board.panel(
+		panel,
+		in_range(
+			op_id(crate::tokens::token_flows),
+			Select {
+				root_selector: &selector,
+				columns: &[("day", Column::Timestamp), ("series", Column::String), ("tokens", Column::Number)],
+			},
+		),
+		bars_per_day("tokens", Unit::Plain, 0),
+	)
 }
 
 fn in_range<'a>(operation: &'a str, select: Select<'a>) -> Query<'a> {

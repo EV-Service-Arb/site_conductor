@@ -29,7 +29,7 @@ jiff = { workspace = true, features = ["serde"] }
 reqwest.workspace = true
 rustix.workspace = true
 rustls.workspace = true
-sa_auth.workspace = true
+sa_auth = { workspace = true, features = ["axum"] }
 sa_core.workspace = true
 sa_trace.workspace = true
 schemars.workspace = true

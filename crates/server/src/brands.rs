@@ -4,13 +4,10 @@
 use axum::{
 	Extension, Json,
 	extract::{DefaultBodyLimit, State},
-	http::{Method, header},
-	response::{IntoResponse, NoContent, Response},
+	http::Method,
+	response::NoContent,
 };
-use ev_lib::api::{
-	Body, Created, GenContext, Ids, JsonSchema, OperationOutput,
-	openapi::{MediaType, Operation, Response as Answer, StatusCode as Status},
-};
+use ev_lib::api::{Body, Created, Ids, JsonSchema};
 use jiff::Timestamp;
 use sa_core::{gbp::Country, ids::BrandId};
 use sa_panel::{
@@ -23,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
 	api::{ApiResult, Id},
 	http::{ApiRoute, SLOW, USER},
-	kit::{Image, Jpeg, PhotoDto, jpg},
+	kit::{Format, Image, Jpeg, PhotoDto, Picture, jpg},
 	signin::Caller,
 };
 
@@ -180,8 +177,8 @@ async fn set_logo(State(panel): State<Panel>, Extension(caller): Extension<Calle
 }
 
 /// A brand's logo. 404 none yet.
-async fn logo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>) -> ApiResult<Png> {
-	Ok(Png(panel.logo(caller.user_id, id).await??))
+async fn logo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>) -> ApiResult<Picture<Png>> {
+	Ok(Picture(panel.logo(caller.user_id, id).await??, Png))
 }
 
 /// A brand's photos, newest first.
@@ -198,8 +195,8 @@ async fn add_photo(State(panel): State<Panel>, Extension(caller): Extension<Call
 }
 
 /// A photo of a brand, `{file}` being `<photo>.jpg`.
-async fn photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PhotoIn { id, file }): Ids<PhotoIn>) -> ApiResult<Jpeg> {
-	Ok(Jpeg(panel.kit_photo(caller.user_id, id, jpg(&file)?).await??))
+async fn photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PhotoIn { id, file }): Ids<PhotoIn>) -> ApiResult<Picture<Jpeg>> {
+	Ok(Picture(panel.kit_photo(caller.user_id, id, jpg(&file)?).await??, Jpeg))
 }
 
 /// Labels a photo of the brand with what it shows; answers the brand's photos.
@@ -241,26 +238,10 @@ async fn photos_of(panel: &Panel, caller: &Caller, brand: i64) -> ApiResult<Phot
 }
 
 /// A logo; its URL stays as it changes.
-struct Png(Vec<u8>);
+struct Png;
 
-impl IntoResponse for Png {
-	fn into_response(self) -> Response {
-		([(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "private, no-cache")], self.0).into_response()
-	}
-}
-
-impl OperationOutput for Png {
-	type Inner = Self;
-
-	fn operation_response(_: &mut GenContext, _: &mut Operation) -> Option<Answer> {
-		Some(Answer {
-			description: "A PNG.".to_owned(),
-			content: [("image/png".into(), MediaType::default())].into_iter().collect(),
-			..Answer::default()
-		})
-	}
-
-	fn inferred_responses(ctx: &mut GenContext, op: &mut Operation) -> Vec<(Option<Status>, Answer)> {
-		Self::operation_response(ctx, op).map(|r| (Some(Status::Code(200)), r)).into_iter().collect()
-	}
+impl Format for Png {
+	const CACHE: &'static str = "private, no-cache";
+	const DESCRIPTION: &'static str = "A PNG.";
+	const MIME: &'static str = "image/png";
 }

@@ -21,18 +21,18 @@ use std::{
 use axum::{
 	Json, Router,
 	extract::{
-		DefaultBodyLimit, Path, Query, Request, State, WebSocketUpgrade,
+		DefaultBodyLimit, Path, Query, State, WebSocketUpgrade,
 		ws::{self, rejection::WebSocketUpgradeRejection},
 	},
 	http::StatusCode,
-	middleware::{self, Next},
+	middleware,
 	response::{IntoResponse, Response},
 	routing::{delete, get, post, put},
 };
 use clap::{Parser, Subcommand};
 use eyre::WrapErr;
 use futures::{SinkExt, StreamExt, stream::FuturesUnordered};
-use sa_auth::{Keys, Principal, Service};
+use sa_auth::{Keys, Service, Verifier};
 use sa_browsers::{Launch, Profiles, Running};
 use tokio::sync::{mpsc, watch};
 use tokio_tungstenite::tungstenite;
@@ -133,7 +133,7 @@ async fn main() -> eyre::Result<()> {
 		adb_keyboard,
 		minutes: phone::MobileMinutes::of_serve(),
 		records: Mutex::default(),
-		keys,
+		verifier: Verifier::new(keys, Service::Browsers),
 		profiles: Mutex::default(),
 		starts,
 	}));
@@ -200,7 +200,7 @@ struct Inner {
 	/// Held across a read and write of the phones' records.
 	records: Mutex<()>,
 	usage: usage::Usage,
-	keys: Keys,
+	verifier: Verifier,
 	profiles: Mutex<HashMap<i64, profile::Slot>>,
 	starts: mpsc::Sender<profile::Start>,
 }
@@ -215,34 +215,8 @@ fn routes(runner: Runner) -> Router {
 		.route("/profiles/{gmail}/view", get(view))
 		.route("/usage", get(used))
 		.route("/profiles/{gmail}/film", put(set_film).delete(remove_film).layer(DefaultBodyLimit::max(FILM_MAX)))
-		.layer(middleware::from_fn_with_state(runner.clone(), conductor_only))
+		.layer(middleware::from_fn_with_state(runner.0.verifier.clone(), sa_auth::conductor_only))
 		.with_state(runner)
-}
-
-/// The conductor's assertion for exactly this request, else 401.
-async fn conductor_only(State(runner): State<Runner>, req: Request, next: Next) -> Response {
-	let token = req.headers().get(sa_auth::HEADER).and_then(|v| v.to_str().ok());
-	let now = jiff::Timestamp::now().as_second();
-	let verified = token.map(|t| {
-		sa_auth::verify(
-			&runner.0.keys,
-			t,
-			Service::Browsers,
-			sa_auth::Request {
-				method: req.method().as_str(),
-				path: req.uri().path(),
-				body: None,
-			},
-			now,
-		)
-	});
-	match verified {
-		Some(Ok(a)) if a.principal == Principal::Conductor => next.run(req).await,
-		refused => {
-			tracing::warn!(path = req.uri().path(), ?refused, "refused: not the conductor's");
-			(StatusCode::UNAUTHORIZED, "the conductor's assertion only").into_response()
-		}
-	}
 }
 
 #[derive(serde::Deserialize)]

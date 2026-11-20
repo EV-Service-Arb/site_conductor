@@ -328,7 +328,8 @@ pub async fn events(conn: &mut SqliteConnection, owner: Uuid, gmb: i64, before: 
 		return Ok(None);
 	};
 	let kinds: Vec<&'static str> = kinds.iter().map(|k| k.into()).collect();
-	let rows: Vec<(i64, i64, Option<String>, Option<i64>, bool, String)> = sqlx::query_as(
+	type Row = (i64, i64, Option<String>, Option<i64>, bool, String);
+	let rows: Vec<Row> = sqlx::query_as(
 		"SELECT e.id, e.at, u.name, e.gmail_id, e.gmb_id IS NULL, e.data FROM gmb_events e LEFT JOIN users u ON u.user_id = e.by \
 		 WHERE (e.gmb_id = $1 OR (e.gmb_id IS NULL AND e.at >= $3 AND e.gmail_id IS \
 		   coalesce((SELECT o.gmail_id FROM gmb_events o WHERE o.gmb_id = $1 AND o.id > e.id ORDER BY o.id LIMIT 1), $2))) \

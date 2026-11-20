@@ -74,7 +74,8 @@ pub async fn drafts(conn: &mut SqliteConnection, trade: i64, country: Country, g
 
 /// The brand's photos not removed, newest first; whether each was saved on `gmb` (none asked: false).
 pub async fn photos(conn: &mut SqliteConnection, brand: i64, gmb: Option<i64>) -> eyre::Result<Vec<PhotoRow>> {
-	let rows: Vec<(i64, Option<String>, i64, i64, i64, bool, i64)> = sqlx::query_as(
+	type Row = (i64, Option<String>, i64, i64, i64, bool, i64);
+	let rows: Vec<Row> = sqlx::query_as(
 		"SELECT p.id, p.shows, p.width, p.height, (SELECT COUNT(*) FROM kit_photo_uses u WHERE u.photo_id = p.id), \
 		 EXISTS (SELECT 1 FROM kit_photo_uses u WHERE u.photo_id = p.id AND u.gmb_id = $2), p.created_at \
 		 FROM kit_photos p WHERE p.brand_id = $1 AND p.removed_at IS NULL ORDER BY p.id DESC",
@@ -226,6 +227,7 @@ pub async fn set_target(conn: &mut SqliteConnection, gmb: i64, target: Option<(T
 }
 
 /// `kit`: the kit whose QR it was opened from.
+#[expect(clippy::too_many_arguments, reason = "the view's columns, each named at the call site")]
 pub async fn add_view(conn: &mut SqliteConnection, view: Uuid, gmb: i64, qr: bool, kit: Option<i64>, now: Timestamp, leased_until: Timestamp, drafts: &[i64]) -> eyre::Result<()> {
 	sqlx::query("INSERT INTO kit_views (id, gmb_id, qr, at, leased_until, kit_id) VALUES ($1, $2, $3, $4, $5, $6)")
 		.bind(view)

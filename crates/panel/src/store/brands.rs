@@ -58,6 +58,7 @@ pub async fn named(conn: &mut SqliteConnection, gmail: i64, trade: i64, country:
 }
 
 /// Its name free ([`named`]); the schema refuses a gmail or trade not the owner's.
+#[expect(clippy::too_many_arguments, reason = "the brand's columns, each named at the call site")]
 pub async fn add(conn: &mut SqliteConnection, owner: Uuid, gmail: i64, trade: i64, country: Country, name: &str, site: &BrandId, now: Timestamp) -> eyre::Result<i64> {
 	sqlx::query_scalar("INSERT INTO brands (owner, gmail_id, trade_id, country, name, site, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id")
 		.bind(owner)

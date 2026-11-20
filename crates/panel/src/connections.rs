@@ -1,5 +1,5 @@
 //! A gmail's connections: its inbox over IMAP, its own Maps key and its Business Profile client
-//! and grant ([`crate::business`]), each checked before it is
+//! and grant (`business`), each checked before it is
 //! stored, sealed, and never read back out but by the conductor's own use. And who a Places
 //! request is made for: the gmail's key, its owner's other gmails', then the shared rotation, paid
 //! in tokens at the price an admin sets ([`sa_places::Payer`]).

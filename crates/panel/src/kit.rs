@@ -663,10 +663,10 @@ impl Panel {
 			let g = gmbs_db::gmb_of(&mut conn, Some(owner), gmb)
 				.await?
 				.ok_or_else(|| eyre::eyre!("kit {slug}'s GBP {gmb} is not its owner's"))?;
-			if let (Some(t), Some(c)) = (g.trade_id, &g.country) {
-				if !categories.contains(&(t, c.code)) {
-					categories.push((t, c.code));
-				}
+			if let (Some(t), Some(c)) = (g.trade_id, &g.country)
+				&& !categories.contains(&(t, c.code))
+			{
+				categories.push((t, c.code));
 			}
 			let target = db::target(&mut conn, gmb).await?;
 			let ranked = ranked(&mut conn, &g, &areas, now).await?;
@@ -736,7 +736,7 @@ impl Panel {
 
 	/// A page of review_archive's reviews, asked for after `after`, and the cursor moved to its
 	/// `next`, in one write transaction. A review first seen is matched once, greedily by time, to
-	/// the oldest copy on its GBP within [`POSTED_WITHIN`] before it whose words it carries; after
+	/// the oldest copy on its GBP within `POSTED_WITHIN` before it whose words it carries; after
 	/// that only its `gone_at` follows. How many were taken.
 	pub async fn take_reviews(&self, page: sa_core::feeds::ReviewPage, after: i64) -> eyre::Result<usize> {
 		let last = page.reviews.last().map_or(after, |r| r.seq);

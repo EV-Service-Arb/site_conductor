@@ -9,8 +9,10 @@ use std::{
 };
 
 use axum::{
-	extract::{FromRef, FromRequestParts, OptionalFromRequestParts, OriginalUri},
+	extract::{FromRef, FromRequestParts, OptionalFromRequestParts, OriginalUri, Request, State},
 	http::{StatusCode, request::Parts},
+	middleware::Next,
+	response::{IntoResponse, Response},
 };
 use concierge_iam::Permission;
 use ev_lib::api::{ErrorCode, Guard, OperationInput, Refusal};
@@ -228,6 +230,16 @@ impl<S: Vouch<()> + Send + Sync> FromRequestParts<S> for Conductor {
 			Principal::Conductor => Ok(Self),
 			_ => Err(unauthenticated("only the conductor's own assertion opens this route".into())),
 		}
+	}
+}
+
+/// A runner the conductor alone calls: its router's layer, `middleware::from_fn_with_state(verifier, conductor_only)`.
+pub async fn conductor_only(State(verifier): State<Verifier>, req: Request, next: Next) -> Response {
+	let (parts, body) = req.into_parts();
+	match verifier.principal::<Denied>(&parts) {
+		Ok(Principal::Conductor) => next.run(Request::from_parts(parts, body)).await,
+		Ok(_) => unauthenticated::<Denied>("only the conductor's own assertion opens this runner".into()).into_response(),
+		Err(refused) => refused.into_response(),
 	}
 }
 

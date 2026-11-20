@@ -810,8 +810,8 @@ pub(crate) struct PhotoIn {
 }
 
 /// A photo a GBP's last Sync took, never another under its id.
-async fn gmb_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PhotoIn { id, photo }): Ids<PhotoIn>) -> ApiResult<crate::kit::Jpeg> {
-	Ok(crate::kit::Jpeg(panel.gmb_photo(caller.user_id, id, photo).await??))
+async fn gmb_photo(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(PhotoIn { id, photo }): Ids<PhotoIn>) -> ApiResult<crate::kit::Picture<crate::kit::Jpeg>> {
+	Ok(crate::kit::Picture(panel.gmb_photo(caller.user_id, id, photo).await??, crate::kit::Jpeg))
 }
 
 #[derive(Deserialize, JsonSchema)]

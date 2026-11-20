@@ -341,7 +341,7 @@ impl Panel {
 					delta: -n,
 					kind: Kind::Charge,
 					charged: Some(charged.clone()),
-					cost: cost.map(|cost| cost * n / c.spent),
+					cost: cost.map(|cost| (cost * n).div_euclid(c.spent)),
 					by: None,
 					note: None,
 				};
@@ -385,7 +385,7 @@ async fn charge_cost(conn: &mut SqliteConnection, c: &Charge) -> eyre::Result<Op
 	let mut total = 0;
 	for (&item, &units) in &c.used {
 		let Some(cost) = usage::cost_at(conn, item, c.at).await? else { return Ok(None) };
-		total += units * cost / item.per();
+		total += (units * cost).div_euclid(item.per());
 	}
 	Ok(Some(total))
 }

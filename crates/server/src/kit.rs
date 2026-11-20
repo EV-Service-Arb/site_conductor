@@ -72,6 +72,13 @@ const PAGE: &str = "/avis/";
 /// The places as last read, and when.
 type Kept = (Instant, Arc<Vec<Place>>);
 
+/// What a [`Picture`] is answered as.
+pub(crate) trait Format {
+	const MIME: &'static str;
+	const CACHE: &'static str;
+	const DESCRIPTION: &'static str;
+}
+
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitDraft")]
 pub(crate) struct DraftDto {
@@ -527,22 +534,31 @@ pub(crate) fn jpg(file: &str) -> ApiResult<i64> {
 	file.strip_suffix(".jpg").and_then(|id| id.parse().ok()).ok_or_else(|| Refusal::new(Code::NotFound, "not found"))
 }
 
-/// A photo's bytes, never changed under its id.
-pub(crate) struct Jpeg(pub(crate) Vec<u8>);
+/// A photo, never changed under its id.
+pub(crate) struct Jpeg;
 
-impl IntoResponse for Jpeg {
+impl Format for Jpeg {
+	const CACHE: &'static str = "private, max-age=31536000, immutable";
+	const DESCRIPTION: &'static str = "A JPEG.";
+	const MIME: &'static str = "image/jpeg";
+}
+
+/// An image's bytes, in its format.
+pub(crate) struct Picture<F>(pub(crate) Vec<u8>, pub(crate) F);
+
+impl<F: Format> IntoResponse for Picture<F> {
 	fn into_response(self) -> Response {
-		([(header::CONTENT_TYPE, "image/jpeg"), (header::CACHE_CONTROL, "private, max-age=31536000, immutable")], self.0).into_response()
+		([(header::CONTENT_TYPE, F::MIME), (header::CACHE_CONTROL, F::CACHE)], self.0).into_response()
 	}
 }
 
-impl OperationOutput for Jpeg {
+impl<F: Format> OperationOutput for Picture<F> {
 	type Inner = Self;
 
 	fn operation_response(_: &mut GenContext, _: &mut Operation) -> Option<Answer> {
 		Some(Answer {
-			description: "A JPEG.".to_owned(),
-			content: [("image/jpeg".into(), MediaType::default())].into_iter().collect(),
+			description: F::DESCRIPTION.to_owned(),
+			content: [(F::MIME.into(), MediaType::default())].into_iter().collect(),
 			..Answer::default()
 		})
 	}
@@ -963,7 +979,7 @@ async fn offered_photo(State(l): State<Landing>, OriginalUri(uri): OriginalUri, 
 		return *res;
 	}
 	match l.panel.offered_photo(q.view, photo).await {
-		Ok(Ok(bytes)) => Jpeg(bytes).into_response(),
+		Ok(Ok(bytes)) => Picture(bytes, Jpeg).into_response(),
 		Ok(Err(r)) => Refusal::<Code>::from(r).into_response(),
 		Err(e) => Refusal::<Code>::from(e).into_response(),
 	}

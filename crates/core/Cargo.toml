@@ -8,6 +8,9 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 
+[package.metadata.docs.rs]
+features = ["api"]
+
 [features]
 # a service's end of the conductor's wire, in its router: what an operation spends (`prices::Spends`), an agent tool (`agent::Tool`), the change feed (`feeds::changes`)
 api = ["dep:axum", "dep:ev_lib", "dep:futures", "dep:tokio"]
