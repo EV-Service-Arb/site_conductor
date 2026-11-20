@@ -35,6 +35,7 @@ use std::{path::Path, time::Duration};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
+use tracing::Instrument;
 use sqlx::{
 	Sqlite, SqliteConnection, SqlitePool, Transaction,
 	migrate::Migrator,
@@ -75,12 +76,13 @@ impl Store {
 		Self::open_with(options(path), bus).await.wrap_err_with(|| format!("opening the database at {}", path.display()))
 	}
 
+	#[tracing::instrument(name = "store open", skip_all)]
 	pub async fn open_with(options: SqliteConnectOptions, bus: Bus) -> eyre::Result<Self> {
 		let told = bus.clone();
 		// A request waits at most 3 s for a connection, then fails: a pool drained by a burst
 		// answers 500 quickly instead of stacking every request behind it.
 		let pool = ev_lib::sqlite::pool("conductor", options, 8, Duration::from_secs(3), move |topic| told.changed(topic));
-		migrator().run(&pool).await.wrap_err("applying migrations")?;
+		migrator().run(&pool).instrument(tracing::info_span!("migrate")).await.wrap_err("applying migrations")?;
 		let mut tx = pool.begin_with("BEGIN IMMEDIATE").await.wrap_err("beginning a write")?;
 		tokens::init_rates(&mut tx, jiff::Timestamp::now()).await?;
 		tx.commit().await.wrap_err("committing the first terms")?;
@@ -108,7 +110,7 @@ pub async fn begin_write(conn: &mut SqliteConnection) -> eyre::Result<Transactio
 }
 
 /// The schema, embedded from `migrations/`.
-fn migrator() -> Migrator {
+pub(crate) fn migrator() -> Migrator {
 	let mut m = sqlx::migrate!("./migrations");
 	// A migration the database has and this build does not know is a rollback onto a schema
 	// moved on: fine, as it was on Postgres.

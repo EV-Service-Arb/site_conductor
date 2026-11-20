@@ -31,6 +31,7 @@ rustix.workspace = true
 rustls.workspace = true
 sa_auth.workspace = true
 sa_core.workspace = true
+sa_trace.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true

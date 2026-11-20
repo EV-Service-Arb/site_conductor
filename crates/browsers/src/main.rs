@@ -89,7 +89,10 @@ enum Cmd {
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
 	color_eyre::install()?;
-	tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
+	{
+		use tracing_subscriber::{EnvFilter, Layer, fmt, prelude::*};
+		tracing_subscriber::registry().with(fmt::layer().with_filter(EnvFilter::from_default_env())).with(sa_trace::layer()).init();
+	}
 	let Cmd::Serve {
 		bind,
 		dir,

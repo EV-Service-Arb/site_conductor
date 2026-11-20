@@ -86,6 +86,7 @@ crates/places/           Google Places: a place from what a person pastes (an id
 crates/ui/               Dioxus components the services' front ends share
 crates/placement_overlay/  the home map's drawing of a placement payload (wasm, imported by the front end;
                          placement's core linked by git): a renderer, the host fetches and pulls
+crates/trace/            `SA_TRACE`: the spans a run closes, as Chrome trace events, for `test-timeline`'s chart
 crates/contracts/        concierge's gRPC contract (tonic, from contracts/proto)
 crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`; thin over `Panel`
   src/signin.rs          /auth/login, /auth/callback, /auth/logout; the /api/v1 gate

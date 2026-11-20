@@ -28,6 +28,7 @@ use futures::{FutureExt, StreamExt, future::BoxFuture, stream::FuturesUnordered}
 use sa_auth::{Keys, Principal, Service};
 use sa_sandbox::{CHECK, Cell, Ended, IDLE, LIMIT, OUTPUT, Opened, Poll, Ran, Seen, Until, WAIT};
 use serde::Deserialize;
+use tracing::Instrument;
 use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt},
 	process::{Child, ChildStdin},
@@ -75,7 +76,10 @@ enum Cmd {
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
 	color_eyre::install()?;
-	tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
+	{
+		use tracing_subscriber::{EnvFilter, Layer, fmt, prelude::*};
+		tracing_subscriber::registry().with(fmt::layer().with_filter(EnvFilter::from_default_env())).with(sa_trace::layer()).init();
+	}
 	let Cmd::Serve {
 		bind,
 		max,
@@ -283,6 +287,7 @@ impl Runner {
 	}
 
 	/// What `code` declares, once it type-checks as cell `n` importing `names`; else what the check said.
+	#[tracing::instrument(skip_all, fields(cell = n))]
 	async fn check(&self, s: &Session, n: usize, code: &str, names: &BTreeMap<String, (usize, bool)>) -> eyre::Result<Result<Vec<Name>, String>> {
 		let r = &self.0;
 		let mut reading = self
@@ -296,7 +301,7 @@ impl Runner {
 		let mut stdin = reading.stdin.take().expect("piped");
 		stdin.write_all(code.as_bytes()).await.wrap_err("handing names.ts the code")?;
 		drop(stdin);
-		let read = tokio::time::timeout(CHECK, reading.wait_with_output())
+		let read = tokio::time::timeout(CHECK, reading.wait_with_output().instrument(tracing::info_span!("names.ts")))
 			.await
 			.wrap_err("names.ts past CHECK")?
 			.wrap_err("names.ts")?;
@@ -336,7 +341,7 @@ impl Runner {
 			.arg(&file)
 			.stdin(Stdio::null())
 			.output();
-		let checked = tokio::time::timeout(CHECK, checked).await.wrap_err("deno check past CHECK")?.wrap_err("deno check")?;
+		let checked = tokio::time::timeout(CHECK, checked.instrument(tracing::info_span!("deno check"))).await.wrap_err("deno check past CHECK")?.wrap_err("deno check")?;
 		if checked.status.success() {
 			return Ok(Ok(declares));
 		}

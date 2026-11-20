@@ -128,6 +128,7 @@ fn init_tracing() -> eyre::Result<()> {
 		.with(filter)
 		.with(fmt::layer().with_writer(std::io::stderr))
 		.with(error_monitoring::tracing_layer())
+		.with(sa_trace::layer())
 		.init();
 	Ok(())
 }

@@ -44,6 +44,7 @@ sa_core = { workspace = true, features = ["api"] }
 sa_panel.workspace = true
 sa_places = { workspace = true, features = ["settings"] }
 sa_sandbox.workspace = true
+sa_trace.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true

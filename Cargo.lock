@@ -4334,6 +4334,7 @@ dependencies = [
  "rustls",
  "sa_auth",
  "sa_core",
+ "sa_trace",
  "schemars",
  "serde",
  "serde_json",
@@ -4423,6 +4424,7 @@ dependencies = [
  "sa_core",
  "sa_panel",
  "sa_places",
+ "sa_trace",
  "schemars",
  "serde",
  "serde_json",
@@ -4435,6 +4437,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tracing",
+ "tracing-subscriber",
  "tzf-rs",
  "url",
  "uuid",
@@ -4482,6 +4485,7 @@ dependencies = [
  "sa_auth",
  "sa_panel",
  "sa_server",
+ "sa_trace",
  "serde",
  "serde_json",
  "tempfile",
@@ -4523,6 +4527,7 @@ dependencies = [
  "sa_places",
  "sa_sandbox",
  "sa_server",
+ "sa_trace",
  "schemars",
  "serde",
  "serde_json",
@@ -4544,6 +4549,15 @@ dependencies = [
  "uuid",
  "v_utils",
  "zeroize",
+]
+
+[[package]]
+name = "sa_trace"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

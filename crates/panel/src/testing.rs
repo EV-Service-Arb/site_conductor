@@ -38,10 +38,23 @@ pub struct TestDb {
 }
 
 impl TestDb {
-	/// A fresh, empty database.
+	/// A fresh database, migrated: a copy of [`migrated`]'s.
 	pub async fn create() -> Self {
-		let path = std::env::temp_dir().join(format!("panel_test_{}.db", Uuid::now_v7().simple()));
-		Self { path }
+		let db = Self::empty().await;
+		std::fs::copy(migrated().await, &db.path).expect("copying the migrated database");
+		db
+	}
+
+	/// A fresh database with nothing in it, not even the migrations.
+	pub async fn empty() -> Self {
+		static TRACED: std::sync::Once = std::sync::Once::new();
+		TRACED.call_once(|| {
+			if let Some(spans) = sa_trace::layer() {
+				use tracing_subscriber::prelude::*;
+				tracing_subscriber::registry().with(spans).init();
+			}
+		});
+		Self { path: std::env::temp_dir().join(format!("panel_test_{}.db", Uuid::now_v7().simple())) }
 	}
 
 	pub fn path(&self) -> &Path {
@@ -62,21 +75,6 @@ impl TestDb {
 			.connect_with(store::options(&self.path))
 			.await
 			.expect("connecting to the test database")
-	}
-}
-
-impl Drop for TestDb {
-	fn drop(&mut self) {
-		// The WAL and its index sit beside the file; a pool still open only keeps them a while.
-		for suffix in ["", "-wal", "-shm"] {
-			let mut path = self.path.clone().into_os_string();
-			path.push(suffix);
-			match std::fs::remove_file(&path) {
-				Ok(()) => {}
-				Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-				Err(e) => eprintln!("could not remove test database {}: {e}", PathBuf::from(path).display()),
-			}
-		}
 	}
 }
 
@@ -160,7 +158,6 @@ pub struct Signed {
 	pub signature: String,
 	pub body: Vec<u8>,
 }
-
 impl Signed {
 	pub fn batch(&self) -> crate::SignedBatch<'_> {
 		crate::SignedBatch {
@@ -219,6 +216,40 @@ pub struct Told {
 	pub units: i64,
 	pub net: i64,
 	pub through: Timestamp,
+}
+
+/// A database migrated once per state of migrations/, shared by every test process: migrating one takes seconds.
+#[tracing::instrument]
+async fn migrated() -> PathBuf {
+	let mut h = std::hash::DefaultHasher::new();
+	for m in store::migrator().iter() {
+		std::hash::Hash::hash(&(m.version, &*m.checksum), &mut h);
+	}
+	let path = std::env::temp_dir().join(format!("panel_test_migrated_{:x}.db", std::hash::Hasher::finish(&h)));
+	let lock = std::fs::File::create(path.with_extension("lock")).expect("the migrated test database's lock");
+	lock.lock().expect("locking the migrated test database"); // one process migrates; the rest wait for it
+	if !path.exists() {
+		let part = path.with_extension("part");
+		Store::open(&part, crate::live::Bus::default()).await.expect("migrating the shared test database").pool().close().await;
+		assert!(!Path::new(&format!("{}-wal", part.display())).exists(), "the last connection's close checkpoints the WAL in");
+		std::fs::rename(&part, &path).expect("publishing the migrated test database");
+	}
+	path
+}
+
+impl Drop for TestDb {
+	fn drop(&mut self) {
+		// The WAL and its index sit beside the file; a pool still open only keeps them a while.
+		for suffix in ["", "-wal", "-shm"] {
+			let mut path = self.path.clone().into_os_string();
+			path.push(suffix);
+			match std::fs::remove_file(&path) {
+				Ok(()) => {}
+				Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+				Err(e) => eprintln!("could not remove test database {}: {e}", PathBuf::from(path).display()),
+			}
+		}
+	}
 }
 
 impl crate::meters::Reader for Told {
