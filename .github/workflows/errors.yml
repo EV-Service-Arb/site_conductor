@@ -22,7 +22,7 @@ jobs:
         run: |
           mkdir -p /tmp/nix-lean-cache
           chmod 0777 /tmp/nix-lean-cache
-          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
+          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --no-recursive --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
           chmod 0755 /tmp/nix-lean-pbh.sh
         shell: bash
       - name: Install Nix
@@ -39,11 +39,11 @@ jobs:
         name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean2-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean3-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
-            nix-lean2-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-            nix-lean2-particle-e2e-${{ runner.os }}-
+            nix-lean3-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+            nix-lean3-particle-e2e-${{ runner.os }}-
       - id: eval-cache
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
@@ -143,10 +143,10 @@ jobs:
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean2-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean3-particle-e2e-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
       - env:
-          FAMILY: nix-lean2-particle-e2e-${{ runner.os }}-
+          FAMILY: nix-lean3-particle-e2e-${{ runner.os }}-
           GH_TOKEN: ${{ github.token }}
           KEY: ${{ steps.lean-restore.outputs.cache-primary-key }}
         if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
@@ -168,7 +168,7 @@ jobs:
         run: |
           mkdir -p /tmp/nix-lean-cache
           chmod 0777 /tmp/nix-lean-cache
-          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
+          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --no-recursive --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
           chmod 0755 /tmp/nix-lean-pbh.sh
         shell: bash
       - name: Install Nix
@@ -185,11 +185,11 @@ jobs:
         name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean2-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean3-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
-            nix-lean2-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-            nix-lean2-particle-frontend-test-${{ runner.os }}-
+            nix-lean3-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+            nix-lean3-particle-frontend-test-${{ runner.os }}-
       - id: eval-cache
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
@@ -240,10 +240,10 @@ jobs:
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean2-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean3-particle-frontend-test-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
       - env:
-          FAMILY: nix-lean2-particle-frontend-test-${{ runner.os }}-
+          FAMILY: nix-lean3-particle-frontend-test-${{ runner.os }}-
           GH_TOKEN: ${{ github.token }}
           KEY: ${{ steps.lean-restore.outputs.cache-primary-key }}
         if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
@@ -265,7 +265,7 @@ jobs:
         run: |
           mkdir -p /tmp/nix-lean-cache
           chmod 0777 /tmp/nix-lean-cache
-          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
+          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --no-recursive --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
           chmod 0755 /tmp/nix-lean-pbh.sh
         shell: bash
       - name: Install Nix
@@ -282,11 +282,11 @@ jobs:
         name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean2-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean3-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
-            nix-lean2-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-            nix-lean2-particle-frontend-typecheck-${{ runner.os }}-
+            nix-lean3-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+            nix-lean3-particle-frontend-typecheck-${{ runner.os }}-
       - id: eval-cache
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
@@ -386,10 +386,10 @@ jobs:
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean2-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean3-particle-frontend-typecheck-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
       - env:
-          FAMILY: nix-lean2-particle-frontend-typecheck-${{ runner.os }}-
+          FAMILY: nix-lean3-particle-frontend-typecheck-${{ runner.os }}-
           GH_TOKEN: ${{ github.token }}
           KEY: ${{ steps.lean-restore.outputs.cache-primary-key }}
         if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
@@ -497,7 +497,7 @@ jobs:
         run: |
           mkdir -p /tmp/nix-lean-cache
           chmod 0777 /tmp/nix-lean-cache
-          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
+          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --no-recursive --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
           chmod 0755 /tmp/nix-lean-pbh.sh
         shell: bash
       - name: Install Nix
@@ -514,11 +514,11 @@ jobs:
         name: Restore lean nix cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-lean2-particle-rust-tests-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean3-particle-rust-tests-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
           restore-keys: |-
-            nix-lean2-particle-rust-tests-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
-            nix-lean2-particle-rust-tests-${{ runner.os }}-
+            nix-lean3-particle-rust-tests-${{ runner.os }}-${{ hashFiles('flake.lock') }}-
+            nix-lean3-particle-rust-tests-${{ runner.os }}-
       - id: eval-cache
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
@@ -598,10 +598,10 @@ jobs:
         name: Save lean nix cache
         uses: actions/cache/save@v5
         with:
-          key: nix-lean2-particle-rust-tests-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
+          key: nix-lean3-particle-rust-tests-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/*.nix') }}
           path: /tmp/nix-lean-cache
       - env:
-          FAMILY: nix-lean2-particle-rust-tests-${{ runner.os }}-
+          FAMILY: nix-lean3-particle-rust-tests-${{ runner.os }}-
           GH_TOKEN: ${{ github.token }}
           KEY: ${{ steps.lean-restore.outputs.cache-primary-key }}
         if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
@@ -619,7 +619,7 @@ jobs:
         run: |
           mkdir -p /tmp/nix-lean-cache
           chmod 0777 /tmp/nix-lean-cache
-          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
+          printf '#!/bin/sh\nexport PATH=/nix/var/nix/profiles/default/bin:$PATH\nnix copy --no-recursive --to "file:///tmp/nix-lean-cache?compression=zstd&parallel-compression=true" $OUT_PATHS || true\n' > /tmp/nix-lean-pbh.sh
           chmod 0755 /tmp/nix-lean-pbh.sh
         shell: bash
       - name: Install Nix
