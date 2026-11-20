@@ -59,15 +59,14 @@ impl Runner {
 		assert!(!addr.is_empty(), "the runner exited before it listened");
 		let base = format!("http://{}", addr.trim());
 		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
-		let r = Self {
+		Self {
 			base,
 			signer,
 			http: reqwest::Client::new(),
 			heard,
 			elsewhere,
 			_child: child,
-		};
-		r
+		}
 	}
 
 	fn assertion(&self, method: &str, path: &str) -> String {
