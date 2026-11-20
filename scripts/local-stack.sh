@@ -120,8 +120,8 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [-
   --fixed [<rev>]: nothing watched; the conductor and its static front end built once from a copy of this checkout
   as it is now, or at <rev> (a commit, a tag), into this checkout's build dir: only what differs compiles. Without --port,
   on the first free pair down from SA_PORT_RANGE's top, beside a watched dev and other --fixed runs, never replacing them.
-  Without --port and --port-offset, on a copy of .local's state (its sessions too; a fresh one when a migration it applied
-  differs in the copy), opened in the default browser (xdg-open).
+  On a copy of .local's state (its sessions too; a fresh one when a migration it applied differs in the copy). Without
+  --port and --port-offset, opened in the default browser (xdg-open).
 EOF
 		exit 0
 		;;
@@ -434,10 +434,10 @@ if [ "$from_prod" = 1 ]; then
 	*) die "--from-prod restores into a state with none of its databases, or keeps all of them: add --reset" ;;
 	esac
 fi
-# --fixed as a person runs it: on a copy of the watched dev's state, sessions included (the browser's localhost cookie is
-# every port's); a fresh one when its database has a migration this copy changed, which the conductor would refuse
+# --fixed: on a copy of the watched dev's state, sessions included (the browser's localhost cookie is every port's), its
+# peers holding the same data; a fresh one when its database has a migration this copy changed, which the conductor would refuse
 copied=0
-if [ "$window" = 1 ] && [ "$from_prod" = 0 ] && [ "$state" != "$root/.local" ] && [ -e "$root/.local/panel.db" ]; then
+if [ "$fixed" = 1 ] && [ "$from_prod" = 0 ] && [ "$state" != "$root/.local" ] && [ -e "$root/.local/panel.db" ]; then
 	rm -rf "$state/panel.db"* "$state/sites_panel.db"* "$state/review_archive" "$state/secrets" "$state/data-key"
 	mkdir -p "$state/secrets"
 	changed=""

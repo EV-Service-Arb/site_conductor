@@ -36,7 +36,7 @@
           SA_PORT_RANGE = "${toString SA_PORT_RANGE.from}-${toString SA_PORT_RANGE.to}";
           PANEL_BIND = "127.0.0.1:${local 0}";
           PANEL_WEB_PORT = local 1; # the front end's `npm run dev`
-          FIGMA_PORT_OFFSET = "2000"; # `nix run .#figma`'s own stack, its peers included: clear of the range and of a worktree's 1000
+          FIGMA_STACK_PORT = local 9; # `nix run .#figma`'s (`dev --port --fixed`), the next one its own too
           E2E_STACK_PORT = local 7; # `nix run .#e2e`'s (`dev --port`), its next dev on the next
           BROWSERS_BIND = "127.0.0.1:${local 5}"; # sa_browsers' runner
           SANDBOX_BIND = "127.0.0.1:${local 6}"; # sa_sandbox's runner
@@ -121,7 +121,7 @@
           enable = true;
           lastSupportedVersion = "nightly-2026-09-24";
           containerRelease = { registry = "ghcr.io/ev-service-arb"; };
-          figma = { on = "publish"; }; # the render needs prod's data and the peers, which only a developer's machine has
+          figma = { on = "publish"; }; # the render needs .local's data, the peers and a browser key, which only a developer's machine has
           jobs.default = true;
           jobs.errors.install.packages = [ "ffmpeg" "deno" ]; # crates/browsers/tests/runner.rs cuts its films with ffmpeg; crates/sandbox's tests run Deno
           jobs.errors.exclude = [ "frontend-typecheck" ];
@@ -405,9 +405,8 @@
         # The front end's own screens into Figma (frontend/tests/e2e), by `@evinvest/figma-render`'s bin;
         # the loop is the `figma-render` skill.
         figmaFile = "8Z2zYr2Mwq4qmnjgp19kuS"; # "panel — renders", in the Pro team "EV Invest"
-        # a stack outliving its run (tests/e2e/stack.ts), by its state dir: `--stop` stops it, `--restart` starts the run on a
-        # new one, on a new state when `wipe`
-        stackRun = { state, wipe ? false }: run: ''
+        # a stack outliving its run (tests/e2e/stack.ts), by its state dir: `--stop` stops it, `--restart` starts the run on a new one
+        stackRun = { state }: run: ''
           stop() {
             local pid
             pid="$(cat "${state}/pid" 2>/dev/null)" || return 0
@@ -419,7 +418,7 @@
           }
           case "''${1:-}" in
           --stop) stop; exit 0 ;;
-          --restart) stop; ${lib.optionalString wipe ''rm -rf "${state}";''} shift ;;
+          --restart) stop; shift ;;
           esac
           ${run}
         '';
@@ -429,8 +428,7 @@
           config = "tests/e2e";
           env = localEnv;
           runtimeInputs = [ dev pkgs.procps pkgs.gnugrep ];
-          # a new state: prod's data copied anew
-          run = stackRun { state = "../.local-$FIGMA_PORT_OFFSET"; wipe = true; } ''exec node_modules/.bin/evinvest-figma-render -c tests/e2e/figma.config.ts --file ${figmaFile} "$@"'';
+          run = stackRun { state = "../.local-port-$FIGMA_STACK_PORT"; } ''exec node_modules/.bin/evinvest-figma-render -c tests/e2e/figma.config.ts --file ${figmaFile} "$@"'';
         }).program;
         # The front end's behaviour over the same stack: every spec in frontend/tests/e2e but the renders.
         e2e = js.playwright {
@@ -497,7 +495,7 @@
           gen = { type = "app"; program = lib.getExe gen; meta.description = "the OpenAPI document and the front end's client types from it (pre-commit runs it too)"; };
           dev = { type = "app"; program = lib.getExe dev; meta.description = "the conductor and its peers under watch: a conductor already serving is replaced, a peer used (docs/LOCAL.md)"; };
           e2e = { type = "app"; program = lib.getExe e2e.program; meta.description = "the front end's behaviour over a stack of its own (frontend/tests/e2e, the renders aside); args go to `playwright test`"; };
-          figma = { type = "app"; program = lib.getExe figma; meta.description = "the front end's screens into Figma, crawled over a stack of its own on prod's data, gridded on a new page of figmaFile"; };
+          figma = { type = "app"; program = lib.getExe figma; meta.description = "the front end's screens into Figma, crawled over a stack of its own on a copy of .local's data, gridded on a new page of figmaFile"; };
           local-stack = { type = "app"; program = lib.getExe localStack; meta.description = "the conductor, its Grafana, sites_panel, review_archive and the landings, wired together on this machine (docs/LOCAL.md)"; };
         };
 

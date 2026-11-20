@@ -298,8 +298,8 @@ Production has no such bypass: there, wait out the 600 s.
 Over a `dev --port $E2E_STACK_PORT --no-peers` stack of its own, which outlives the run: the next run reuses it
 (seconds), waiting first for its watched conductor build when a crate is newer (`rebuild` in the chart). It
 holds ~1–2 GB and rebuilds on every save until `nix run .#e2e -- --stop`; `-- --restart` starts the run on a new
-one. `nix run .#figma`'s (`--port-offset $FIGMA_PORT_OFFSET --fixed --from-prod`, its own peers) outlives its run too,
-restarted on a copy of the checkout once that differs, keeping prod's data: `-- --restart` copies it anew, `-- --stop` stops it.
+one. `nix run .#figma`'s (`--port $FIGMA_STACK_PORT --fixed`) outlives its run too, restarted on a copy of the checkout
+once that differs, each start on a new copy of `.local`'s state: `-- --restart` copies both anew, `-- --stop` stops it.
 
 ## Troubleshooting
 
