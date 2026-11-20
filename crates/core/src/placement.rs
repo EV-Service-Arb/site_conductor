@@ -119,14 +119,6 @@ impl Definition {
 	}
 }
 
-fn weight(w: f64) -> bool {
-	w.is_finite() && w > 0.
-}
-
-fn ensure(ok: bool, why: String) -> Result<(), Invalid> {
-	if ok { Ok(()) } else { Err(Invalid(why)) }
-}
-
 /// Keywords in [`keywords`]' form, each weight positive and finite.
 pub fn weighed(k: &[Keyword]) -> Result<(), Invalid> {
 	let texts: Vec<String> = k.iter().map(|k| k.text.clone()).collect();
@@ -137,43 +129,6 @@ pub fn weighed(k: &[Keyword]) -> Result<(), Invalid> {
 		}
 	}
 	Ok(())
-}
-
-impl Excluded {
-	pub fn check(&self) -> Result<(), Invalid> {
-		for (i, w) in self.words.iter().enumerate() {
-			ensure(!w.is_empty() && *w == w.trim().to_lowercase(), format!("the excluded word {w:?} is not trimmed lowercase"))?;
-			ensure(!self.words[..i].contains(w), format!("the word {w:?} is excluded twice"))?;
-		}
-		for (i, t) in self.types.iter().enumerate() {
-			ensure(
-				!t.is_empty() && t.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'),
-				format!("the excluded type {t:?} is not a Places type"),
-			)?;
-			ensure(!self.types[..i].contains(t), format!("the type {t:?} is excluded twice"))?;
-		}
-		Ok(())
-	}
-}
-
-impl Demand {
-	pub fn check(&self) -> Result<(), Invalid> {
-		ensure(!self.expr.trim().is_empty(), "the demand is empty".to_owned())?;
-		for (i, col) in self.columns.iter().enumerate() {
-			let ident = col.name.bytes().next().is_some_and(|b| b.is_ascii_lowercase()) && col.name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
-			ensure(ident, format!("the column {:?} is not [a-z][a-z0-9_]*", col.name))?;
-			ensure(!col.expr.trim().is_empty(), format!("the column {} is empty", col.name))?;
-			ensure(!self.columns[..i].iter().any(|o| o.name == col.name), format!("the column {} is derived twice", col.name))?;
-		}
-		for (i, l) in self.layers.iter().enumerate() {
-			ensure(
-				!l.name.trim().is_empty() && !l.expr.trim().is_empty(),
-				format!("the layer {:?} has no name or no expression", l.name),
-			)?;
-			ensure(!self.layers[..i].iter().any(|o| o.name == l.name), format!("the layer {} is added twice", l.name))?;
-		}
-		Ok(())
-	}
 }
 
 /// The primary's name as a keyword: the term every other is weighed against.
@@ -261,6 +216,22 @@ pub struct Excluded {
 	/// Places types (`hardware_store`); a place whose primary type is one.
 	pub types: Vec<String>,
 }
+impl Excluded {
+	pub fn check(&self) -> Result<(), Invalid> {
+		for (i, w) in self.words.iter().enumerate() {
+			ensure(!w.is_empty() && *w == w.trim().to_lowercase(), format!("the excluded word {w:?} is not trimmed lowercase"))?;
+			ensure(!self.words[..i].contains(w), format!("the word {w:?} is excluded twice"))?;
+		}
+		for (i, t) in self.types.iter().enumerate() {
+			ensure(
+				!t.is_empty() && t.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'),
+				format!("the excluded type {t:?} is not a Places type"),
+			)?;
+			ensure(!self.types[..i].contains(t), format!("the type {t:?} is excluded twice"))?;
+		}
+		Ok(())
+	}
+}
 
 /// What the country's grid means to the trade, per cell.
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
@@ -272,6 +243,25 @@ pub struct Demand {
 	pub columns: Vec<Column>,
 	/// Heat layers the trade adds to the country's.
 	pub layers: Vec<Layer>,
+}
+impl Demand {
+	pub fn check(&self) -> Result<(), Invalid> {
+		ensure(!self.expr.trim().is_empty(), "the demand is empty".to_owned())?;
+		for (i, col) in self.columns.iter().enumerate() {
+			let ident = col.name.bytes().next().is_some_and(|b| b.is_ascii_lowercase()) && col.name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
+			ensure(ident, format!("the column {:?} is not [a-z][a-z0-9_]*", col.name))?;
+			ensure(!col.expr.trim().is_empty(), format!("the column {} is empty", col.name))?;
+			ensure(!self.columns[..i].iter().any(|o| o.name == col.name), format!("the column {} is derived twice", col.name))?;
+		}
+		for (i, l) in self.layers.iter().enumerate() {
+			ensure(
+				!l.name.trim().is_empty() && !l.expr.trim().is_empty(),
+				format!("the layer {:?} has no name or no expression", l.name),
+			)?;
+			ensure(!self.layers[..i].iter().any(|o| o.name == l.name), format!("the layer {} is added twice", l.name))?;
+		}
+		Ok(())
+	}
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
@@ -311,6 +301,14 @@ pub struct Catalog {
 pub struct Gcid {
 	pub id: String,
 	pub name: String,
+}
+
+fn weight(w: f64) -> bool {
+	w.is_finite() && w > 0.
+}
+
+fn ensure(ok: bool, why: String) -> Result<(), Invalid> {
+	if ok { Ok(()) } else { Err(Invalid(why)) }
 }
 
 #[cfg(test)]

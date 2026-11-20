@@ -873,12 +873,6 @@ pub struct Category {
 	pub demand: Option<Demand>,
 }
 
-#[derive(Deserialize, Serialize)]
-struct AdditionalRow {
-	id: String,
-	weight: f64,
-}
-
 /// The owner's trades, by name.
 pub async fn trades(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<Trade>> {
 	let rows: Vec<(i64, String, i64)> = sqlx::query_as("SELECT id, name, created_at FROM trades WHERE owner = $1 ORDER BY lower(name), id")
@@ -1057,6 +1051,12 @@ pub async fn set_trades(conn: &mut SqliteConnection, owner: Uuid, ids: &BTreeSet
 	.await
 	.wrap_err("setting GMBs' trade")?;
 	Ok(i64::try_from(done.rows_affected()).expect("a few rows") == asked)
+}
+
+#[derive(Deserialize, Serialize)]
+struct AdditionalRow {
+	id: String,
+	weight: f64,
 }
 
 /// What `before` → `after` logs: its moves, and the fields changed, as a Sync's or a hand's.
