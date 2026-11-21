@@ -13,7 +13,7 @@ import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { type T, useT, placement as placementKeys, state, hotbar } from "@/shared/i18n";
 import { type Base, setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
 
-import { type CategoryKey, type Data, type Layer, type Legend, type MapView, type Query, type Refusal, type Studied, categoryKey, pull, setMapView, studiable, useMapView, usePlacement, useStudied } from "../model/placement";
+import { type Ages, type CategoryKey, type Data, type Layer, type Legend, type MapView, type Query, type Refusal, type Studied, categoryKey, pull, setMapView, studiable, useMapView, usePlacement, useStudied } from "../model/placement";
 
 const LAYOUT = {
   column: "flex w-80 flex-col",
@@ -23,21 +23,6 @@ const LAYOUT = {
 /** The leading trade layers (Demand, Underserved) and location layers (Population, income, cars) a row each; the rest under More. */
 const FEATURED = { trade: 2, location: 3 };
 const ICONS: Record<string, ComponentType<{ className?: string }>> = { demand: Flame, "underserved-demand": Crosshair, population: Users, "standard-of-living-yr": Wallet, "estimated-cars": Car };
-
-/** Upper edges in days, each a period a person names; the last bar holds everything older. */
-const AGE_EDGES: readonly (readonly [number, string])[] = [
-  [1, "1d"],
-  [3, "3d"],
-  [7, "1w"],
-  [14, "2w"],
-  [30, "1mo"],
-  [61, "2mo"],
-  [91, "3mo"],
-  [182, "6mo"],
-  [365, "1y"],
-  [730, "2y"],
-  [1460, "4y"],
-];
 
 const FROM_NAME = {
   pick: (t) => t(placementKeys.from.pick, "your pick"),
@@ -124,7 +109,7 @@ export function MapPanel() {
               <Row icon={MapPin} label={t(hotbar.places, "Google's places")} on={places} onToggle={() => showPlaces(!places)} />
             </Section>
           )}
-          {ok && data !== null && <DataSection view={view} data={data} notice={ok.notice} pulling={ok.pulling} pullFailed={ok.pullFailed} drawn={studied.status === "ok" ? studied.drawn : null} picked={studied.status === "ok" ? (studied.picked?.category ?? null) : null} />}
+          {ok && data !== null && <DataSection view={view} data={data} ages={legend?.ages ?? null} notice={ok.notice} pulling={ok.pulling} pullFailed={ok.pullFailed} drawn={studied.status === "ok" ? studied.drawn : null} picked={studied.status === "ok" ? (studied.picked?.category ?? null) : null} />}
           {ok && data === null && ok.notice !== null && <Note tone="warn">{ok.notice.text}</Note>}
           <Section title={t(placementKeys.base, "Base")}>
             <ToggleGroup type="single" size="sm" value={base} onValueChange={(v) => typeof v === "string" && v !== "" && setBase(v as Base)} className="px-2">
@@ -305,18 +290,15 @@ function PullButton({ searches, pulling, drawn }: { searches: number; pulling: b
   );
 }
 
-function DataSection({ view, data, notice, pulling, pullFailed, drawn, picked }: { view: MapView; data: Data; notice: { text: string; missing: number | null } | null; pulling: boolean; pullFailed: string | null; drawn: Query | null; picked: Category | null }) {
+function DataSection({ view, data, ages, notice, pulling, pullFailed, drawn, picked }: { view: MapView; data: Data; ages: Ages | null; notice: { text: string; missing: number | null } | null; pulling: boolean; pullFailed: string | null; drawn: Query | null; picked: Category | null }) {
   const t = useT();
   const me = useMe();
-  const [now] = useState(() => Date.now() / 1000);
   const trade = data.trade;
-  const ages = trade === null ? [] : trade.tiers.flatMap((tier) => (view.tiers?.[tier.name]?.show === false ? [] : tier.fetched_s.map((s) => (now - s) / 86400)));
-  const oldest = ages.length === 0 ? null : Math.max(...ages);
   return (
     <Section title={t(placementKeys.data, "Data")}>
       {notice !== null && <Note tone="warn">{notice.text}</Note>}
-      {trade !== null && oldest !== null && (
-        <Fold title={t(placementKeys.age, "Data age · oldest {days} d", { days: Math.round(oldest) })}>
+      {ages !== null && (
+        <Fold title={t(placementKeys.age, "Data age · oldest {days} d", { days: Math.round(ages.oldest_days) })}>
           <AgeChart ages={ages} />
         </Fold>
       )}
@@ -386,41 +368,25 @@ function DataSection({ view, data, notice, pulling, pullFailed, drawn, picked }:
   );
 }
 
-/** Competitors per age bucket over a logged axis, so a month does not dwarf the day before it; a bar greys as it gets older. */
-function AgeChart({ ages }: { ages: readonly number[] }) {
-  const bucket = (d: number) => {
-    const i = AGE_EDGES.findIndex(([e]) => d < e);
-    return i === -1 ? AGE_EDGES.length - 1 : i;
-  };
-  const counts = new Array<number>(bucket(Math.max(...ages)) + 1).fill(0);
-  for (const d of ages) counts[bucket(d)]! += 1;
-  const top = AGE_EDGES[counts.length - 1]![0];
-  const x = (d: number) => (100 * Math.log1p(d)) / Math.log1p(top);
-  const max = Math.max(...counts);
+/** The overlay's age histogram of the competitors shown: a bar greys as it gets older. */
+function AgeChart({ ages }: { ages: Ages }) {
   return (
     <div className="relative mx-2 mt-1 mb-4 h-12">
-      {counts.map((n, i) => {
-        if (n === 0) return null;
-        const lo = i === 0 ? 0 : AGE_EDGES[i - 1]![0];
-        const hi = AGE_EDGES[i]![0];
-        const chroma = 0.16 * (1 - x((lo + hi) / 2) / 100);
-        return (
-          <div
-            key={i}
-            className="absolute bottom-0 flex items-start justify-center text-caption text-background tabular-nums"
-            style={{ left: `${x(lo)}%`, width: `calc(${x(hi) - x(lo)}% - 1px)`, height: `${(100 * n) / max}%`, background: `oklch(0.74 ${chroma.toFixed(3)} 235)` }}
-          >
-            {n}
-          </div>
-        );
-      })}
-      {AGE_EDGES.slice(0, counts.length).map(([e, label], i) =>
-        [0, 2, 4, 8].includes(i) || i === counts.length - 1 ? (
-          <span key={label} className="absolute -bottom-4 -translate-x-1/2 text-caption text-ink-soft" style={{ left: `${x(e)}%` }}>
-            {label}
-          </span>
-        ) : null,
-      )}
+      {ages.bars.map((b) => (
+        <div
+          key={b.span}
+          title={b.span}
+          className="absolute bottom-0 flex items-start justify-center text-caption text-background tabular-nums"
+          style={{ left: `${b.left}%`, width: `calc(${b.width}% - 1px)`, height: `${b.height}%`, background: `oklch(0.74 ${(0.16 * b.fresh).toFixed(3)} 235)` }}
+        >
+          {b.count}
+        </div>
+      ))}
+      {ages.ticks.map((tick) => (
+        <span key={tick.label} className="absolute -bottom-4 -translate-x-1/2 text-caption text-ink-soft" style={{ left: `${tick.left}%` }}>
+          {tick.label}
+        </span>
+      ))}
     </div>
   );
 }

@@ -34,7 +34,10 @@ ev_lib = { version = "0.34.1", default-features = false }
 eyre = "0.6.14"
 futures = "0.3.34"
 getrandom = "0.4.3"
+# placement's library, its vocabulary and its overlay, from one revision (docs/ARCHITECTURE.md, Placement)
+gmaps_optimal_placement = { git = "https://github.com/EV-Service-Arb/gmaps_optimal_placement", branch = "main" }
 gmaps_optimal_placement_core = { git = "https://github.com/EV-Service-Arb/gmaps_optimal_placement", branch = "main" }
+gmaps_optimal_placement_overlay = { git = "https://github.com/EV-Service-Arb/gmaps_optimal_placement", branch = "main" }
 hex = "0.4.3"
 hmac = "0.13.0"
 http-body-util = "0.1.5"

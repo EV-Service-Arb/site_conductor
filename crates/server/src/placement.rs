@@ -1,50 +1,92 @@
 //! Placement's studies (docs/ARCHITECTURE.md, Placement): the conductor builds a study's
-//! [`Definition`] from its own areas and trades, and is placement's one client, as the person asking.
+//! [`Definition`] from its own areas and trades, and placement's library builds it, in process, out
+//! of the work dir and this conductor's queries cache.
 //!
 //! ```text
-//! GET  /placement/catalog                  → placement GET /catalog.json
-//! GET  /placement/study?area&category      → Definition → placement POST /studies, the payload streamed back
-//! POST /placement/study/pull?area&category → held: placement POST /studies/asks, each search bought,
-//!                                            until it lacks none → POST /studies/pull, charged what was bought
+//! GET  /placement/catalog                  → the countries placement holds a base for
+//! GET  /placement/study?area&category      → Definition → its payload, built once and kept
+//! POST /placement/study/pull?area&category → held: what the study lacks, each search bought, asked
+//!                                            again until it lacks none → built again, charged what was bought
 //! ```
+
+use std::{
+	collections::HashMap,
+	path::PathBuf,
+	sync::{Arc, Mutex},
+	time::SystemTime,
+};
 
 use axum::{
 	Extension, Json,
-	body::{Body, to_bytes},
+	body::Bytes,
 	extract::State,
-	http::{HeaderMap, HeaderValue, Method, StatusCode, header},
+	http::{Method, header},
 	response::{IntoResponse, Response},
 };
 use ev_lib::api::{
 	GenContext, JsonSchema, OperationOutput, Params, Refusal,
 	openapi::{MediaType, Operation, Response as Answer, SchemaObject, StatusCode as Status},
 };
-use sa_auth::{Principal, Service, Study};
+use gmaps_optimal_placement::{Held, Work};
+use gmaps_optimal_placement_core::{Additional, Area, Ask, Category, Country, Definition, Gcid, LatLng, SEARCH_TEXT};
+use sa_auth::Study;
 use sa_core::{
-	gbp::Country,
-	placement::{self, Asks, Catalog, Definition, Gcid},
+	gbp,
 	prices::{PlacementRequest, Spends},
+	queries_cache::{Key, Scheme, gop},
 };
-use sa_panel::gmbs::GoogleCategory;
-use serde::Deserialize;
+use sa_panel::{gmbs::GoogleCategory, store::Store};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use strum::VariantArray;
 
 use crate::{
 	api::{ApiResult, Code},
-	forward::{self, Services},
 	http::{ApiRoute, ApiState, Flags, Gate, SLOW, USER},
 	signin::{Caller, Freshness},
 };
-
-/// The most of placement's refusal read.
-const REFUSAL: usize = 64 * 1024;
-/// The most of placement's asks read: a round of a sweep is a few hundred searches.
-const ASKS: usize = 4 * 1024 * 1024;
 
 /// A pull spends: not on a permission revoked a minute ago.
 const PULL: Gate = sa_auth::Gate::USER.with(Flags {
 	freshness: Freshness::Fresh,
 	slow: true,
 });
+
+/// Placement's work dir, and every payload built over it.
+#[derive(Clone)]
+pub struct Placement {
+	dir: PathBuf,
+	// shortcut: unbounded, one payload per area × category any operator opened; an LRU when the process grows
+	built: Arc<Mutex<HashMap<String, Slot>>>,
+}
+impl Placement {
+	/// Over the work dir at `dir` (`PANEL_PLACEMENT_DIR`).
+	pub fn new(dir: PathBuf) -> Self {
+		Self { dir, built: Arc::default() }
+	}
+
+	/// One study's: a pull and a read of it take turns.
+	fn slot(&self, sha: &str) -> Slot {
+		self.built.lock().expect("no holder panics").entry(sha.to_owned()).or_default().clone()
+	}
+}
+
+type Slot = Arc<tokio::sync::Mutex<Option<Bytes>>>;
+
+/// The answers this conductor's queries cache keeps, read from the blocking thread a build runs on.
+struct Cached {
+	store: Store,
+	rt: tokio::runtime::Handle,
+}
+impl Held for Cached {
+	fn held(&self, ask: &Ask) -> eyre::Result<Option<(serde_json::Value, SystemTime)>> {
+		let key = Key(Sha256::digest(gop(SEARCH_TEXT, &ask.body)).into());
+		Ok(self
+			.rt
+			.block_on(self.store.cached_query(Scheme::Gop, key))?
+			.map(|kept| (kept.answer, SystemTime::from(kept.fetched_at))))
+	}
+}
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
@@ -64,12 +106,18 @@ struct StudyIn {
 	category: Option<String>,
 }
 
-/// A study's payload as placement wrote it, streamed through unread: the home map's overlay reads it.
-pub(crate) struct Payload(Response);
+/// The countries placement holds a base for.
+#[derive(JsonSchema, Serialize)]
+struct Catalog {
+	countries: Vec<Country>,
+}
+
+/// A study's payload as placement serialised it: the home map's overlay reads it.
+pub(crate) struct Payload(Bytes);
 
 impl IntoResponse for Payload {
 	fn into_response(self) -> Response {
-		self.0
+		([(header::CONTENT_TYPE, "application/json")], self.0).into_response()
 	}
 }
 
@@ -102,30 +150,34 @@ impl OperationOutput for Payload {
 	}
 }
 
-/// The countries placement has a grid for.
-async fn catalog(State(s): State<ApiState>, Extension(caller): Extension<Caller>) -> ApiResult<Json<Catalog>> {
-	let res = ask(&s, &caller, Method::GET, "/catalog.json", Body::empty()).await?;
-	if res.status() != StatusCode::OK {
-		return Err(refused(res, "/catalog.json").await);
-	}
-	let body = to_bytes(res.into_body(), REFUSAL)
-		.await
-		.map_err(|e| Refusal::new(Code::BadGateway, format!("reading placement's catalog: {e}")))?;
-	Ok(Json(serde_json::from_slice(&body).map_err(|e| eyre::eyre!("placement's catalog: {e}"))?))
+/// The countries placement holds a base for.
+///
+/// 503 placement not connected.
+async fn catalog(State(s): State<ApiState>) -> ApiResult<Json<Catalog>> {
+	connected(&s)?;
+	Ok(Json(Catalog {
+		countries: Country::VARIANTS.to_vec(),
+	}))
 }
 
 /// A study of an area: under one of the caller's categories, or the area's grid alone; never spends.
+/// Built on the first read and kept, out of what is held: a study whose searches are not all there
+/// opens on what is, and its notice says how many it lacks.
 ///
 /// 404 no such area or category of the caller's; 422 a category with `no_google_category`, set up
-/// for `another_country`, or an area where placement has no grid (`unstudied`); 503 placement not
+/// for `another_country`, or an area where placement holds no base (`unstudied`); 503 placement not
 /// connected.
 async fn study(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Params(at): Params<StudyIn>) -> ApiResult<Payload> {
+	let p = connected(&s)?.clone();
 	let def = define(&s, &caller, at).await?;
-	let res = ask(&s, &caller, Method::POST, "/studies", json(&def)).await?;
-	match res.status() {
-		StatusCode::OK => Ok(Payload(res)),
-		_ => Err(refused(res, "/studies").await),
+	let slot = p.slot(&def.id());
+	let mut slot = slot.lock().await;
+	if let Some(built) = &*slot {
+		return Ok(Payload(built.clone()));
 	}
+	let built = built(&s, &p, def).await?;
+	*slot = Some(built.clone());
+	Ok(Payload(built))
 }
 
 /// Builds a study again, buying the Places searches it lacks at the caller's tokens.
@@ -134,35 +186,30 @@ async fn study(State(s): State<ApiState>, Extension(caller): Extension<Caller>, 
 /// balance affords, nothing bought when that shows before the first; 409 while a search is
 /// unpriced. What it bought is charged, and owed back when the pull failed.
 async fn pull(State(s): State<ApiState>, Spends(caller, _): Spends<PlacementRequest, Caller>, Params(at): Params<StudyIn>) -> ApiResult<Payload> {
+	let p = connected(&s)?.clone();
 	let def = define(&s, &caller, at).await?;
+	let sha = def.id();
+	let slot = p.slot(&sha);
+	let mut slot = slot.lock().await;
 	let held = s.sign_in.panel.pull(caller.user_id).await??;
-	let pulled = match bought(&s, &caller, &def, &held).await {
-		Ok(()) => ask(&s, &caller, Method::POST, "/studies/pull", json(&def)).await,
+	let pulled = match bought(&s, &p, &def, &held).await {
+		Ok(()) => built(&s, &p, def).await,
 		Err(e) => Err(e),
 	};
-	let (failed, answer) = match pulled {
-		Ok(res) if res.status() == StatusCode::OK => (false, Ok(Payload(res))),
-		Ok(res) => (true, Err(refused(res, "/studies/pull").await)),
-		Err(e) => (true, Err(e)),
-	};
-	held.paid(&def.id(), failed).await?;
-	answer
+	held.paid(&sha, pulled.is_err()).await?;
+	let built = pulled?;
+	*slot = Some(built.clone());
+	Ok(Payload(built))
 }
 
-/// Every search placement says `def` lacks, bought: it is asked again after each round, since what
-/// lies behind a page (the next one, a tile's quarters) is known only once it is answered.
-async fn bought(s: &ApiState, caller: &Caller, def: &Definition, held: &sa_panel::placement::Pull) -> ApiResult<()> {
+/// Every search `def` lacks, bought: it is asked again after each round, since what lies behind a
+/// page (the next one, a tile's quarters) is known only once it is answered.
+async fn bought(s: &ApiState, p: &Placement, def: &Definition, held: &sa_panel::placement::Pull) -> ApiResult<()> {
+	let since = held.since(&def.id()).await?;
 	let mut asked = std::collections::HashSet::new();
 	//LOOP: a repeated ask errors, so it ends once placement asks for nothing
 	loop {
-		let res = ask(s, caller, Method::POST, "/studies/asks", json(def)).await?;
-		if res.status() != StatusCode::OK {
-			return Err(refused(res, "/studies/asks").await);
-		}
-		let body = to_bytes(res.into_body(), ASKS)
-			.await
-			.map_err(|e| Refusal::new(Code::BadGateway, format!("reading placement's asks: {e}")))?;
-		let Asks { since, asks } = serde_json::from_slice(&body).map_err(|e| eyre::eyre!("placement's asks of {}: {e}", def.id()))?;
+		let asks = blocking(s, p, Some(since), def.clone(), |study, work| study.asks(work)).await?;
 		if asks.is_empty() {
 			return Ok(());
 		}
@@ -185,19 +232,50 @@ async fn bought(s: &ApiState, caller: &Caller, def: &Definition, held: &sa_panel
 	}
 }
 
+/// `def` built, serialised, out of what is held.
+async fn built(s: &ApiState, p: &Placement, def: Definition) -> ApiResult<Bytes> {
+	blocking(s, p, None, def, |study, work| Ok(Bytes::from(serde_json::to_vec(&study.build(work)?)?))).await
+}
+
+/// `then` over `def`'s study, on a blocking thread: a build reads archives and the queries cache
+/// synchronously. An answer fetched before `since` is lacking.
+async fn blocking<T: Send + 'static>(
+	s: &ApiState,
+	p: &Placement,
+	since: Option<jiff::Timestamp>,
+	def: Definition,
+	then: impl FnOnce(&gmaps_optimal_placement::Study, &Work) -> eyre::Result<T> + Send + 'static,
+) -> ApiResult<T> {
+	let held = Cached {
+		store: s.sign_in.panel.store().clone(),
+		rt: tokio::runtime::Handle::current(),
+	};
+	let dir = p.dir.clone();
+	let done = tokio::task::spawn_blocking(move || {
+		let work = Work::at(dir, Box::new(held)).since(since.map(SystemTime::from));
+		then(&gmaps_optimal_placement::load(&def, Vec::new())?, &work)
+	})
+	.await
+	.unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()));
+	Ok(done?)
+}
+
+fn connected(s: &ApiState) -> ApiResult<&Placement> {
+	s.placement.as_ref().ok_or_else(|| Refusal::new(Code::Unavailable, "placement not connected".to_owned()))
+}
+
 /// The study of `at`, as the conductor's own areas and the caller's trades say it.
 async fn define(s: &ApiState, caller: &Caller, at: StudyIn) -> ApiResult<Definition> {
 	let area = s.sign_in.panel.area(&at.area).await?.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
-	let country: Country = area
-		.country
-		.parse()
-		.map_err(|_| Refusal::new(Code::Unstudied, format!("{} is in {}, where nothing is studied", area.name, area.country)))?; // no Country: none of placement's bases
+	let unstudied = || Refusal::new(Code::Unstudied, format!("{} is in {}, where nothing is studied", area.name, area.country));
+	let of_area: gbp::Country = area.country.parse().map_err(|_| unstudied())?;
+	let country: Country = of_area.as_str().parse().map_err(|_| unstudied())?; // no Country: none of placement's bases
 	let category = match at.category {
 		None => None,
 		Some(key) => {
 			let (trade, of) = key
 				.split_once('.')
-				.and_then(|(t, c)| Some((t.parse::<i64>().ok()?, c.parse::<Country>().ok()?)))
+				.and_then(|(t, c)| Some((t.parse::<i64>().ok()?, c.parse::<gbp::Country>().ok()?)))
 				.ok_or_else(|| Refusal::new(Code::BadRequest, format!("category {key:?}: not <trade id>.<country>")))?;
 			let trades = s.sign_in.panel.trades(caller.user_id).await?;
 			let (trade, c) = trades
@@ -207,19 +285,19 @@ async fn define(s: &ApiState, caller: &Caller, at: StudyIn) -> ApiResult<Definit
 				.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
 			let named = format!("{} · {of}", trade.name);
 			let primary = c.google_primary.ok_or_else(|| Refusal::new(Code::NoGoogleCategory, format!("{named} has no Google category")))?;
-			if of != country {
-				return Err(Refusal::new(Code::AnotherCountry, format!("{named} is not set up for {country}, where {} is", area.name)));
+			if of != of_area {
+				return Err(Refusal::new(Code::AnotherCountry, format!("{named} is not set up for {of_area}, where {} is", area.name)));
 			}
 			let gcid = |g: GoogleCategory| Gcid {
 				id: g.id.to_owned(),
 				name: g.names.get(of.lang()).expect("google_categories.json names each in its countries' languages").clone(),
 			};
-			Some(placement::Category {
+			Some(Category {
 				trade: u64::try_from(trade.id).expect("a trade's id is a rowid"),
 				name: trade.name.clone(),
-				country: of,
+				country,
 				primary: gcid(primary),
-				additional: c.google_additional.iter().map(|&(g, weight)| placement::Additional { google: gcid(g), weight }).collect(),
+				additional: c.google_additional.iter().map(|&(g, weight)| Additional { google: gcid(g), weight }).collect(),
 				keywords: c.keywords.clone(),
 				excluded: c.excluded.clone(),
 				demand: c.demand.clone(),
@@ -227,10 +305,13 @@ async fn define(s: &ApiState, caller: &Caller, at: StudyIn) -> ApiResult<Definit
 		}
 	};
 	let def = Definition {
-		area: placement::Area::Circle {
+		area: Area::Circle {
 			slug: area.slug,
 			country,
-			center: area.center,
+			center: LatLng {
+				lat: area.center.lat,
+				lng: area.center.lng,
+			},
 			radius_m: area.radius_m as f64,
 			margin_m: 0.,
 		},
@@ -238,49 +319,4 @@ async fn define(s: &ApiState, caller: &Caller, at: StudyIn) -> ApiResult<Definit
 	};
 	def.check().map_err(|e| eyre::eyre!("the conductor built a definition placement refuses: {e}"))?;
 	Ok(def)
-}
-
-fn json(def: &Definition) -> Body {
-	Body::from(serde_json::to_vec(def).expect("a definition serialises"))
-}
-
-/// `method path` of placement, as `caller`.
-async fn ask(s: &ApiState, caller: &Caller, method: Method, path: &str, body: Body) -> ApiResult<Response> {
-	let services: &Services = s.placement.as_ref().ok_or_else(|| Refusal::new(Code::Unavailable, "placement not connected".to_owned()))?;
-	let headers = HeaderMap::from_iter([(header::CONTENT_TYPE, HeaderValue::from_static("application/json"))]);
-	let user = forward::user(caller.clone(), Service::Placement);
-	services.send(Service::Placement, method, path, headers, Some(Principal::User(user)), body).await.map_err(|e| {
-		tracing::warn!(error = %e, "placement did not answer");
-		Refusal::new(Code::BadGateway, "placement did not answer".to_owned())
-	})
-}
-
-/// Placement's refusal of `path`, as the caller is told it.
-async fn refused(res: Response, path: &str) -> Refusal<Code> {
-	#[derive(Deserialize)]
-	#[serde(rename_all = "snake_case")]
-	enum Theirs {
-		Unstudied,
-		Forbidden,
-		Internal,
-		#[serde(other)]
-		Other,
-	}
-	#[derive(Deserialize)]
-	struct Refused {
-		code: Theirs,
-		error: String,
-	}
-	let status = res.status();
-	let body = match to_bytes(res.into_body(), REFUSAL).await {
-		Ok(b) => b,
-		Err(e) => return Refusal::new(Code::BadGateway, format!("reading placement's answer to {path}: {e}")),
-	};
-	match serde_json::from_slice::<Refused>(&body) {
-		Ok(Refused { code: Theirs::Unstudied, error }) => Refusal::new(Code::Unstudied, error),
-		Ok(Refused { code: Theirs::Forbidden, .. }) => Refusal::new(Code::Forbidden, "your permissions do not allow this"),
-		Ok(Refused { code: Theirs::Internal, error }) => Refusal::new(Code::BadGateway, format!("placement failed: {error}")),
-		// anything else is what the conductor built or signed
-		Ok(Refused { code: Theirs::Other, .. }) | Err(_) => Refusal::from(eyre::eyre!("placement answered {path} with {status}: {}", String::from_utf8_lossy(&body))),
-	}
 }

@@ -1,14 +1,13 @@
 //! The conductor without I/O: no database, network, clock or randomness. Time comes in as an
 //! argument. Feature `api` is the exception: a service's end of the conductor's wire, in its router.
 //!
-//! - [`gbp`]: a GBP's states and moves, its country and language, a category's keywords, and the
-//!   snapshot the services are told;
+//! - [`gbp`]: a GBP's states and moves, its country and language, and the snapshot the services
+//!   are told;
 //! - [`agent`]: how far an agent acts on its own; (feature `api`) an operation that is its own agent tool;
 //! - [`dashboards`] (feature `api`): a service's Grafana dashboards, over its document;
 //! - [`feeds`]: what the conductor's hubs read of a service and push to it, path and page;
 //! - [`ids`]: what a source key may name (brands), how its key id looks, and a site key's origin;
 //! - [`geo`]: points and rectangles, as Google draws them;
-//! - [`placement`]: the study the conductor hands placement, and its address;
 //! - [`signature`]: how a source signs a batch, and how the conductor checks it;
 //! - [`queries_cache`]: the queries cache's wire;
 //! - [`notify`]: the Telegram rules, the conductor's own messages, the buttons' signed data, and
@@ -27,7 +26,6 @@ pub mod geo;
 pub mod ids;
 pub mod meters;
 pub mod notify;
-pub mod placement;
 pub mod prices;
 pub mod queries_cache;
 pub mod signature;

@@ -66,7 +66,7 @@ pub(crate) struct Request<'a> {
 	pub url: &'a str,
 	pub mask: &'a str,
 	pub body: &'a str,
-	/// Whose key it is: [`Scheme::Gop`] for a search placement asked (`sa_core::placement::Ask`).
+	/// Whose key it is: [`Scheme::Gop`] for a search of a study's.
 	pub scheme: Scheme,
 	/// How Google bills it; not part of the key, the mask decides it.
 	pub sku: sa_core::prices::PlacesRequest,
@@ -80,7 +80,7 @@ impl Request<'_> {
 		match self.scheme {
 			Scheme::Places => format!("{}\n{}\n{}\n{}", self.method, self.url, self.mask, self.body),
 			// keyed by Google's URL, whichever this one is: a stub's stands in for it
-			Scheme::Gop => sa_core::queries_cache::gop(self.body),
+			Scheme::Gop => sa_core::queries_cache::gop(&format!("{}:searchText", crate::GOOGLE), self.body),
 		}
 	}
 

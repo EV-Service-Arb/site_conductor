@@ -28,6 +28,8 @@ ev_lib = { workspace = true, features = ["settings", "error_monitoring", "api", 
 eyre.workspace = true
 futures.workspace = true
 getrandom.workspace = true
+gmaps_optimal_placement.workspace = true
+gmaps_optimal_placement_core.workspace = true
 hex.workspace = true
 http-body-util.workspace = true
 hyper-util.workspace = true
@@ -70,6 +72,7 @@ ev_lib = { workspace = true, features = ["api_docs"] }
 [dev-dependencies]
 axum = { workspace = true, features = ["multipart"] }
 base64.workspace = true
+gmaps_optimal_placement = { workspace = true, features = ["testing"] }
 hmac.workspace = true
 image.workspace = true
 sa_panel = { workspace = true, features = ["testing"] }

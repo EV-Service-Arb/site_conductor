@@ -861,26 +861,26 @@ impl Panel {
 	}
 
 	/// The owner's trade `id` set up for `c.country` as `c` says, over what it was: the keywords in
-	/// [`sa_core::gbp::keywords`]' form and weighed, the primary's name among them at weight 1, at
+	/// [`gmaps_optimal_placement_core::keywords`]' form and weighed, the primary's name among them at weight 1, at
 	/// most 9 additional Google categories beside a primary, none twice, each weighed; the excluded
 	/// words trimmed lowercase.
 	pub async fn set_up(&self, owner: Uuid, id: i64, c: Category) -> eyre::Result<Result<Trade, Refused>> {
-		let texts = match sa_core::gbp::keywords(&c.keywords.iter().map(|k| k.text.clone()).collect::<Vec<_>>()) {
+		let texts = match gmaps_optimal_placement_core::keywords(&c.keywords.iter().map(|k| k.text.clone()).collect::<Vec<_>>()) {
 			Ok(k) => k,
 			Err(e) => return Ok(Err(Refused::Invalid(e.to_string()))),
 		};
 		let keywords: Vec<_> = texts
 			.into_iter()
 			.zip(&c.keywords)
-			.map(|(text, k)| sa_core::placement::Keyword { text, weight: k.weight })
+			.map(|(text, k)| gmaps_optimal_placement_core::Keyword { text, weight: k.weight })
 			.collect();
-		let excluded = sa_core::placement::Excluded {
+		let excluded = gmaps_optimal_placement_core::Excluded {
 			words: c.excluded.words.iter().map(|w| w.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()).collect(),
 			types: c.excluded.types.clone(),
 		};
-		let checked = sa_core::placement::weighed(&keywords)
+		let checked = gmaps_optimal_placement_core::weighed(&keywords)
 			.and_then(|()| excluded.check())
-			.and_then(|()| c.demand.as_ref().map_or(Ok(()), sa_core::placement::Demand::check));
+			.and_then(|()| c.demand.as_ref().map_or(Ok(()), gmaps_optimal_placement_core::Demand::check));
 		if let Err(e) = checked {
 			return Ok(Err(Refused::Invalid(e.to_string())));
 		}
@@ -889,7 +889,7 @@ impl Panel {
 		}
 		if let Some(p) = c.google_primary {
 			let name = p.names.get(c.country.lang()).expect("google_categories.json names each in its countries' languages");
-			let primary = match sa_core::gbp::keywords(std::slice::from_ref(name)) {
+			let primary = match gmaps_optimal_placement_core::keywords(std::slice::from_ref(name)) {
 				Ok(k) => k.into_iter().next().expect("one in, one out"),
 				Err(e) => return Ok(Err(Refused::Invalid(e.to_string()))),
 			};

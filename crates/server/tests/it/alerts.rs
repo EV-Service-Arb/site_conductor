@@ -471,7 +471,6 @@ async fn setup() -> Setup {
 		review_archive: archive_base.parse().unwrap(),
 		playbook: sites_base.parse().unwrap(),
 		sites: sites_base.parse().unwrap(),
-		placement: None,
 		signer: SEED.parse().unwrap(),
 	});
 	let (sign_in, _) = sa_server::testing::conductor(panel.clone(), std::iter::empty::<&str>().collect(), "hub@test", &sites_base.parse().unwrap());

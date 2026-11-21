@@ -10,6 +10,7 @@ import { type Home, setHome, useHome } from "@/shared/lib/location";
 import { useResource } from "@evinvest/api/react";
 
 export type { Legend, Tune };
+export type Ages = NonNullable<Legend["ages"]>;
 export type Data = Summary;
 export type Layer = Summary["layers"][number];
 

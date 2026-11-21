@@ -22,6 +22,7 @@ pub(crate) mod inbox;
 pub mod kit;
 pub mod meters;
 pub mod oauth;
+pub(crate) mod placement;
 mod queries_cache;
 pub mod sessions;
 pub mod sources;
@@ -35,12 +36,12 @@ use std::{path::Path, time::Duration};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use tracing::Instrument;
 use sqlx::{
 	Sqlite, SqliteConnection, SqlitePool, Transaction,
 	migrate::Migrator,
 	sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteSynchronous},
 };
+use tracing::Instrument;
 
 use crate::live::Bus;
 

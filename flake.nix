@@ -151,7 +151,7 @@
           filter = path: _type: baseNameOf path != ".cargo";
         };
 
-        # placement's core is a git dependency (crates/placement_overlay)
+        # placement's crates are a git dependency (crates/server, crates/placement_overlay)
         cargoLock = {
           lockFile = ./Cargo.lock;
           allowBuiltinFetchGit = true;
@@ -465,7 +465,7 @@
         };
 
         # `nix run .#dev`'s peers, from the checkouts _.siblings-local.json names; a user's entry may name a `command` (docs/LOCAL.md)
-        devPeers = [ "sites_panel" "review_archive" "gmaps_optimal_placement" ];
+        devPeers = [ "sites_panel" "review_archive" ];
         devUsers = { };
         devPrelude = lib.concatStrings (lib.mapAttrsToList
           (user: peers:

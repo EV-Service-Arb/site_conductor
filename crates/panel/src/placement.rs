@@ -2,9 +2,11 @@
 //!
 //! ```text
 //! pull(user): the person's turn held, the search priced — budget = balance ÷ its price
+//!   ─ since(study): when its first pull since its last whole one began
 //!   ─ buy(ask, since) for each search placement says the study lacks, on the house's rotation,
-//!     refused past the budget ─ paid(failed): the searches bought × the price in the ledger, owed
-//!   back whole when the pull failed, as a failed walk's is; the turn let go
+//!     refused past the budget ─ paid(study, failed): the searches bought × the price in the ledger,
+//!   owed back whole when the pull failed, as a failed walk's is; a whole one forgets `since`; the
+//!   turn let go
 //! ```
 
 use std::sync::{
@@ -13,17 +15,18 @@ use std::sync::{
 };
 
 use eyre::WrapErr;
+use gmaps_optimal_placement_core::Ask;
 use jiff::Timestamp;
-use sa_core::{
-	placement::Ask,
-	prices::{Item, PlacementRequest, PlacesRequest},
-};
+use sa_core::prices::{Item, PlacementRequest, PlacesRequest};
 use sa_places::{Bought, Hold, Payer, Pending, Purse};
 use uuid::Uuid;
 
 use crate::{
 	Panel, Refused,
-	store::tokens::{self as ledger, Charged, Entry, Kind, Owed},
+	store::{
+		self,
+		tokens::{self as ledger, Charged, Entry, Kind, Owed},
+	},
 	tokens::is_open,
 };
 
@@ -60,15 +63,24 @@ impl Pull {
 		)
 	}
 
+	/// When the first pull of `study` since its last whole one began: what is fetched before it is
+	/// bought again, and what is fetched since is what a pull that stopped part-way already paid for.
+	pub async fn since(&self, study: &str) -> eyre::Result<Timestamp> {
+		let mut tx = self.panel.store.begin_write().await?;
+		let since = store::placement::began(&mut tx, study, Timestamp::now()).await?;
+		tx.commit().await.wrap_err("committing a pull's beginning")?;
+		Ok(since)
+	}
+
 	/// `ask` bought on the house's rotation, unless the queries cache holds an answer fetched since
 	/// `since`; refused [`sa_places::Error::Unpaid`] past [`Self::budget`].
 	pub async fn buy(&self, ask: &Ask, since: Timestamp) -> Result<(), sa_places::Error> {
 		let payer = Payer { own: Vec::new(), purse: Some(self) };
-		self.panel.google.asked(ask, since, &payer).await
+		self.panel.google.asked(&ask.mask, &ask.body, since, &payer).await
 	}
 
 	/// What study `sha`'s pull bought, charged; a pull that `failed` is the house's, so all of it is
-	/// owed back.
+	/// owed back, and one that did not ended whole.
 	pub async fn paid(self, sha: &str, failed: bool) -> eyre::Result<()> {
 		let bought = self.bought.load(Ordering::SeqCst);
 		let budget = self.budget();
@@ -76,7 +88,12 @@ impl Pull {
 		assert!(bought <= budget, "the purse holds no search past the budget");
 		let bought = i64::try_from(bought).wrap_err("searches bought")?;
 		let tokens = price * bought;
+		let mut tx = panel.store.begin_write().await?;
+		if !failed {
+			store::placement::ended(&mut tx, sha).await?;
+		}
 		if tokens == 0 {
+			tx.commit().await.wrap_err("committing a pull's end")?;
 			drop(turn);
 			return Ok(());
 		}
@@ -94,7 +111,6 @@ impl Pull {
 			by: None,
 			note: None,
 		};
-		let mut tx = panel.store.begin_write().await?;
 		ledger::append(&mut tx, user, &entry).await?;
 		if failed {
 			let charged = entry.charged.expect("built with its charge above");

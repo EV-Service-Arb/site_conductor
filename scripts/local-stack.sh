@@ -116,7 +116,7 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [-
   unless they already answer on their ports, a peer without a checkout skipped with a warning.
   --port <n>: the conductor on n and its next dev on n+1, in SA_PORT_RANGE, with a state of its own; no browsers' nor
   sandbox's runner, whose ports are the stack's on the usual ones.
-  --no-peers: neither built nor started: sites_panel, review_archive, gmaps_optimal_placement, playbook; the conductor answers 502 for them.
+  --no-peers: neither built nor started: sites_panel, review_archive, playbook; the conductor answers 502 for them.
   --fixed [<rev>]: nothing watched; the conductor and its static front end built once from a copy of this checkout
   as it is now, or at <rev> (a commit, a tag), into this checkout's build dir: only what differs compiles. Without --port,
   on the first free pair down from SA_PORT_RANGE's top, beside a watched dev and other --fixed runs, never replacing them.
@@ -291,7 +291,6 @@ BROWSERS_PORT=$((BROWSERS_PORT + offset)) # a sibling's, as the others are
 SANDBOX_PORT=$((SANDBOX_PORT + offset))
 SITES_PORT="$(shell_port "$SITES_DIR" PANEL_BIND)"
 REVIEW_ARCHIVE_PORT="$(shell_port "$REVIEW_ARCHIVE_DIR" REVIEW_ARCHIVE_SERVER_BIND)"
-PLACEMENT_PORT="$(shell_port "$PLACEMENT_DIR" PLACEMENT_PORT)"
 PLAYBOOK_PORT="$(shell_port "$PLAYBOOK_DIR" PORT)"
 AQUAFIX_PORT=""
 VIFNET_PORT=""
@@ -307,9 +306,7 @@ answers() { curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$1/health" 2>/
 run_panel=1
 run_sites=1
 run_review_archive=1
-run_placement=1
 run_playbook=1
-placement_answers() { curl -fsS -o /dev/null --max-time 5 "http://127.0.0.1:$PLACEMENT_PORT/health" 2>/dev/null; }
 # `take_over <port>`: a conductor or its next dev listening there stops, with the run that started it
 # (whatever else that run serves goes too, and is started here instead); anything else is let be.
 take_over() {
@@ -371,13 +368,6 @@ if [ "$dev" = 1 ]; then
 		say "review_archive already serves http://127.0.0.1:$REVIEW_ARCHIVE_PORT: using it"
 		run_review_archive=0
 	fi
-	if [ -z "$PLACEMENT_PORT" ]; then
-		warn "skipping gmaps_optimal_placement: no checkout at $PLACEMENT_DIR (_.siblings-local.json names it); the map says placement is not connected"
-		run_placement=0
-	elif placement_answers; then
-		say "gmaps_optimal_placement already serves http://127.0.0.1:$PLACEMENT_PORT: using it"
-		run_placement=0
-	fi
 	if [ -z "$PLAYBOOK_PORT" ]; then
 		warn "skipping playbook: no checkout at $PLAYBOOK_DIR (_.siblings-local.json names it); /mcp lists no playbook tools"
 		run_playbook=0
@@ -397,12 +387,11 @@ fi
 	warn "skipping playbook: no checkout at $PLAYBOOK_DIR (_.siblings-local.json names it); /mcp lists no playbook tools"
 	run_playbook=0
 }
-[ "$no_peers" = 0 ] || { run_sites=0; run_review_archive=0; run_placement=0; run_playbook=0; }
+[ "$no_peers" = 0 ] || { run_sites=0; run_review_archive=0; run_playbook=0; }
 ports=()
 [ "$run_panel" = 1 ] && ports+=("$PANEL_PORT")
 [ "$run_sites" = 1 ] && ports+=("$SITES_PORT")
 [ "$run_review_archive" = 1 ] && ports+=("$REVIEW_ARCHIVE_PORT")
-[ "$run_placement" = 1 ] && ports+=("$PLACEMENT_PORT")
 [ "$run_playbook" = 1 ] && ports+=("$PLAYBOOK_PORT")
 [ "$sites" = 1 ] && ports+=("$AQUAFIX_PORT" "$VIFNET_PORT" "$DEBOUCHAGE_PORT")
 [ "$watch" = 1 ] && [ "$run_panel" = 1 ] && ports+=("$WEB_DEV_PORT")
@@ -586,7 +575,7 @@ web_prep() {
 		'cd frontend && if [ node_modules/.package-lock.json -nt package-lock.json ]; then js-local; else npm ci; fi'
 	# skipped while its inputs hash as they did at its last build: the wasm takes ~20s
 	local out="$src/frontend/src/shared/placement_overlay" inputs
-	inputs="$( (cd "$src" && find crates/placement_overlay Cargo.toml Cargo.lock .cargo -type f ! -path '*/target/*'; [ -z "$PLACEMENT_DIR" ] || find "$PLACEMENT_DIR/gmaps_optimal_placement_core" -type f ! -path '*/target/*') | sort | (cd "$src" && xargs -d '\n' sha256sum) | sha256sum)"
+	inputs="$( (cd "$src" && find crates/placement_overlay Cargo.toml Cargo.lock .cargo -type f ! -path '*/target/*'; [ -z "$PLACEMENT_DIR" ] || find "$PLACEMENT_DIR/gmaps_optimal_placement_core" "$PLACEMENT_DIR/gmaps_optimal_placement_overlay" -type f ! -path '*/target/*') | sort | (cd "$src" && xargs -d '\n' sha256sum) | sha256sum)"
 	if [ ! -f "$out/placement_overlay_bg.wasm" ] || [ "$(cat "$out/.inputs-hash" 2>/dev/null)" != "$inputs" ]; then
 		timed overlay prefixed placement-overlay in_shell "$src" env CARGO_BUILD_BUILD_DIR="$root/target" placement-overlay
 		echo "$inputs" >"$out/.inputs-hash"
@@ -717,7 +706,8 @@ if [ "$watch" = 1 ] && { [ "$run_panel" = 1 ] || busy "$WEB_DEV_PORT"; }; then
 fi
 sites_origin="http://127.0.0.1:$SITES_PORT"
 review_archive_origin="http://127.0.0.1:$REVIEW_ARCHIVE_PORT"
-placement_origin="${PLACEMENT_PORT:+http://127.0.0.1:$PLACEMENT_PORT}"
+# the placement CLI's work dir: what this conductor studies is what its viewer opens
+placement_dir="${XDG_CACHE_HOME:-$HOME/.cache}/gmaps_optimal_placement"
 # playbook_web where it runs, else nowhere: the conductor's variable is required, and the forward answers 502 for it
 playbook_origin="http://127.0.0.1:9"
 if [ -n "$PLAYBOOK_PORT" ] && { [ "$run_playbook" = 1 ] || answers "$PLAYBOOK_PORT"; }; then
@@ -765,7 +755,7 @@ panel() {
 		PANEL_ASSERTION_KEY="$assertion_key" \
 		PANEL_SITES_URL="$sites_origin" \
 		PANEL_REVIEW_ARCHIVE_URL="$review_archive_origin" \
-		PANEL_PLACEMENT_URL="$placement_origin" \
+		PANEL_PLACEMENT_DIR="$placement_dir" \
 		PANEL_BROWSERS_URL="$browsers_origin" \
 		PANEL_SANDBOX_URL="$sandbox_origin" \
 		GOLOGIN_TOKEN="${browsers_origin:+${GOLOGIN_TOKEN:-}}" \
@@ -924,7 +914,7 @@ sandbox() {
 		"$state/target/debug/sa_sandbox" "$@"
 }
 export -f panel sites_panel review_archive browsers sandbox playbook
-export state conductor_config spend_flag public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_origin browsers_origin sandbox_origin \
+export state conductor_config spend_flag public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_dir browsers_origin sandbox_origin \
 	PANEL_GRAFANA_SERVER PANEL_BIN SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR REVIEW_ARCHIVE_DATA_DIR REVIEW_ARCHIVE_PORT \
 	PANEL_PORT SITES_PORT BROWSERS_PORT SANDBOX_PORT root src PLAYBOOK_BIN PLAYBOOK_PORT playbook_origin
 watched() {
@@ -991,16 +981,6 @@ if [ "$run_playbook" = 1 ]; then
 	say "starting playbook_web on $playbook_origin"
 	prefixed playbook playbook &
 	wait_for playbook "$playbook_origin/health" 60 "$!" || warn "playbook_web did not come up; /mcp lists no playbook tools"
-fi
-
-if [ "$run_placement" = 1 ]; then
-	# not watched, and not essential: the map goes on without it; its first build takes minutes
-	say "starting gmaps_optimal_placement on $placement_origin (the home map's studies)"
-	# its settings' `queries_cache`, through their environment: `serve` takes no settings flag
-	(cd "$PLACEMENT_DIR" && PANEL_ASSERTION_KEYS="$assertion_public" GMAPS_OPTIMAL_PLACEMENT_QUERIES_CACHE="$origin/api/queries_cache" \
-		prefixed placement bash -c \
-		"${DEV_COMMAND_gmaps_optimal_placement:-nix run .#conductor -- --port $PLACEMENT_PORT --countries examples/countries}") &
-	placement_pid=$!
 fi
 
 if [ -n "$browsers_origin" ]; then
@@ -1076,9 +1056,9 @@ if [ "$run_panel" = 1 ]; then
 		[ -z "$AQUAFIX_PORT" ] || source_key aquafix-local aquafix "http://localhost:$AQUAFIX_PORT"
 		[ -z "$VIFNET_PORT" ] || source_key vifnet-local vifnet "http://localhost:$VIFNET_PORT"
 		[ -z "$DEBOUCHAGE_PORT" ] || source_key debouchage-local debouchage "http://localhost:$DEBOUCHAGE_PORT"
-		# What gmaps_optimal_placement's own work dir holds, into this conductor's queries cache, each answer
-		# as of its file's time (a newer answer cached stays).
-		placement_cached="${XDG_CACHE_HOME:-$HOME/.cache}/gmaps_optimal_placement/data/places_cache"
+		# What the placement CLI's mirror holds, into this conductor's queries cache, each answer as of its
+		# file's time (a newer answer cached stays).
+		placement_cached="$placement_dir/data/places_cache"
 		if [ -d "$placement_cached" ]; then
 			mapfile -d '' -t answers_files < <(find "$placement_cached" -maxdepth 1 -name '*.json' -print0)
 			for ((i = 0; i < ${#answers_files[@]}; i += 500)); do
@@ -1117,18 +1097,14 @@ if [ "$watch" = 1 ] && [ "$run_panel" = 1 ]; then
 	say "starting the front end's next dev on $public_origin"
 	(
 		cd "$root/frontend"
-		# the map's overlay (crates/placement_overlay) again whenever it or the placement core it links changes
+		# the map's overlay (crates/placement_overlay) again whenever it or the placement crates it links change
 		prefixed placement-overlay watched "$root" --postpone -w crates/placement_overlay -w Cargo.lock -w .cargo/config.toml \
-			${PLACEMENT_DIR:+-w "$PLACEMENT_DIR/gmaps_optimal_placement_core"} -- placement-overlay &
+			${PLACEMENT_DIR:+-w "$PLACEMENT_DIR/gmaps_optimal_placement_core" -w "$PLACEMENT_DIR/gmaps_optimal_placement_overlay"} -- placement-overlay &
 		PANEL_DEV_BACKEND="$origin" PANEL_DEV_DIST=".next${own_port:+/port-$own_port}" \
 			prefixed web npx next dev --port "$WEB_DEV_PORT"
 	) &
 	web_pid=$!
 	timed web-ready wait_for web "$public_origin/" 300 "$web_pid" || die "next dev did not start"
-fi
-
-if [ "$run_placement" = 1 ]; then
-	wait_for placement "$placement_origin/health" 900 "$placement_pid" || warn "gmaps_optimal_placement did not come up; the map says placement is not connected"
 fi
 
 started=()

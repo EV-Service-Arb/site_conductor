@@ -188,7 +188,15 @@ async fn authorize(State(s): State<SignIn>, uri: Uri, headers: HeaderMap, q: Res
 		field("csrf", csrf),
 	]
 	.concat();
-	let asked = q.scope.as_deref().unwrap_or_default().split(' ').filter_map(|s| s.parse::<Approval>().ok()).filter(|a| *a != Approval::Ask).max().unwrap_or(Approval::Ask); // no scope of ours asked: the narrowest
+	let asked = q
+		.scope
+		.as_deref()
+		.unwrap_or_default()
+		.split(' ')
+		.filter_map(|s| s.parse::<Approval>().ok())
+		.filter(|a| *a != Approval::Ask)
+		.max()
+		.unwrap_or(Approval::Ask); // no scope of ours asked: the narrowest
 	let levels = [
 		(Approval::Ask, "Ask me first", "it proposes whatever removes or spends, and waits for me"),
 		(Approval::Spend, "Spend on its own", "it spends tokens without asking, and asks before it removes anything"),

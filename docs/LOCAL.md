@@ -95,7 +95,7 @@ What it does (`scripts/local-stack.sh`, which the flake app runs as is):
    given its origin; the
    places `aquafix/{royat, clermont-ferrand, desgenettes, lyon-est, la-mouche, lyon-nord}` and
    `vifnet/vifnet` and `debouchage/clermont-ferrand` in sites_panel, registered with nothing set (through the conductor's `/api/sites/places`), and
-   gmaps_optimal_placement's cached answers into the queries cache (each as of its file's time).
+   the placement CLI's mirrored answers into the queries cache (each as of its file's time).
 3. Starts `sites_panel serve` (its bundle from `PANEL_MFE_DIR`, the conductor's public key in
    `PANEL_ASSERTION_KEYS`), `review_archive serve` likewise (a headless Chromium on a signed-out
    profile: its Maps walks fail and say so), then `panel serve` in development, with dev sign-in, a signing key for this machine alone, `PANEL_SITES_URL`
@@ -217,8 +217,9 @@ names another): `{ google = (import ~/s/ev/_sa/accounting/google.nix).accounts; 
 `{ env = "GOOGLE_MAPS_KEY_EVINVEST"; }` from the shell. The stack refuses to start without the
 file; `google = [ ];` is no account: a GMB is added by its place id alone and `/` has no map.
 Answers are kept in the conductor's queries cache, `.local/panel.db`: `--reset` pays for them again.
-Every start pulls `gmaps_optimal_placement`'s own work dir into it, and placement and review_archive
-are pointed at it.
+Every start pulls the placement CLI's mirror into it, and review_archive is pointed at it. The
+conductor studies in the CLI's work dir (`PANEL_PLACEMENT_DIR`), so the CLI's viewer opens what it
+studied.
 
 ## Browsers
 
