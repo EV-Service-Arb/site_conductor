@@ -7,7 +7,7 @@ use sa_core::{notify::Locale, tokens::Renewal};
 use sa_panel::seal::DataKey;
 
 /// The peers' in-cluster origins, by variable: the services the forward reaches, and the sandbox. The flake's `consumes`.
-pub const CONSUMED: [&str; 5] = ["PANEL_SITES_URL", "PANEL_REVIEW_ARCHIVE_URL", "PANEL_PLAYBOOK_URL", "PANEL_PLACEMENT_URL", "PANEL_SANDBOX_URL"];
+pub const CONSUMED: [&str; 4] = ["PANEL_SITES_URL", "PANEL_REVIEW_ARCHIVE_URL", "PANEL_PLAYBOOK_URL", "PANEL_SANDBOX_URL"];
 
 ev_lib::settings! {
 	/// Each secret is needed only by what uses it; a missing one fails that, with an error
@@ -60,9 +60,9 @@ ev_lib::settings! {
 		/// and the hubs' feeds.
 		#[required_in("production")]
 		panel_sites_url: Option<String>,
-		/// gmaps_optimal_placement (`serve`), from inside the cluster: the home
-		/// map's overlay. Optional; needs the forward's four.
-		panel_placement_url: Option<String>,
+		/// Placement's work dir: its public archives and every study built over them, for the home
+		/// map's overlay. Unset: placement is not connected.
+		panel_placement_dir: Option<String>,
 		/// The conductor's bot (`@evinvest_sa_bot`; not `telegram_token_main`). Unset: no Telegram
 		/// notifications, and `serve` says so. Needs the forward configured too: sites' notes
 		/// are what it sends.
@@ -188,9 +188,7 @@ impl Settings {
 		];
 		let set = |v: &Option<String>| v.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned);
 		let missing: Vec<&str> = vars.iter().filter(|(_, v)| set(v).is_none()).map(|(name, _)| *name).collect();
-		let placement = self.panel_placement_url.as_deref().map(str::trim).filter(|v| !v.is_empty());
 		if missing.len() == vars.len() {
-			eyre::ensure!(placement.is_none(), "PANEL_PLACEMENT_URL needs the forward's four too");
 			return Ok(None);
 		}
 		eyre::ensure!(missing.is_empty(), "signing in needs {} too", missing.join(", "));
@@ -220,7 +218,7 @@ impl Settings {
 	/// The services behind the conductor (docs/ARCHITECTURE.md, Forward): `None` when none of their
 	/// variables is set; some but not all is a mistake, named.
 	pub fn forward(&self) -> eyre::Result<Option<sa_server::forward::Upstreams>> {
-		let [sites, review_archive, playbook, placement_url, _] = CONSUMED;
+		let [sites, review_archive, playbook, _] = CONSUMED;
 		let vars = [
 			("PANEL_ASSERTION_KEY", &self.panel_assertion_key),
 			(review_archive, &self.panel_review_archive_url),
@@ -228,9 +226,7 @@ impl Settings {
 			(sites, &self.panel_sites_url),
 		];
 		let missing: Vec<&str> = vars.iter().filter(|(_, v)| v.as_deref().is_none_or(|v| v.trim().is_empty())).map(|(name, _)| *name).collect();
-		let placement = self.panel_placement_url.as_deref().map(str::trim).filter(|v| !v.is_empty());
 		if missing.len() == vars.len() {
-			eyre::ensure!(placement.is_none(), "PANEL_PLACEMENT_URL needs the forward's four too");
 			return Ok(None);
 		}
 		eyre::ensure!(missing.is_empty(), "the forward needs {} too", missing.join(", "));
@@ -244,7 +240,6 @@ impl Settings {
 			review_archive: uri(review_archive, &self.panel_review_archive_url)?,
 			playbook: uri(playbook, &self.panel_playbook_url)?,
 			sites: uri(sites, &self.panel_sites_url)?,
-			placement: placement.map(|raw| bare_http_origin(Var { name: placement_url, raw })).transpose()?,
 			signer: self
 				.panel_assertion_key
 				.as_deref()
@@ -253,6 +248,15 @@ impl Settings {
 				.parse()
 				.map_err(|e| eyre::eyre!("PANEL_ASSERTION_KEY: {e}"))?,
 		}))
+	}
+
+	/// Placement over its work dir: `None` when PANEL_PLACEMENT_DIR is unset.
+	pub fn placement(&self) -> Option<sa_server::placement::Placement> {
+		self.panel_placement_dir
+			.as_deref()
+			.map(str::trim)
+			.filter(|v| !v.is_empty())
+			.map(|dir| sa_server::placement::Placement::new(dir.into()))
 	}
 
 	/// The gmails' browsers: `None` when none of the variables is set; a token without the runner,
@@ -494,7 +498,7 @@ mod tests {
 				"PANEL_REVIEW_ARCHIVE_URL",
 				"PANEL_PLAYBOOK_URL",
 				"PANEL_SITES_URL",
-				"PANEL_PLACEMENT_URL",
+				"PANEL_PLACEMENT_DIR",
 				"TELEGRAM_BOT_TOKEN",
 				"TELEGRAM_BOT_USERNAME",
 				"TELEGRAM_LOCALE",

@@ -19516,11 +19516,12 @@
         "tags": [
           "placement"
         ],
-        "summary": "The countries placement has a grid for.",
+        "summary": "The countries placement holds a base for.",
+        "description": "503 placement not connected.",
         "operationId": "catalog",
         "responses": {
           "200": {
-            "description": "The countries placement has a grid for.",
+            "description": "The countries placement holds a base for.",
             "content": {
               "application/json": {
                 "schema": {
@@ -19676,8 +19677,8 @@
         "tags": [
           "placement"
         ],
-        "summary": "A study of an area: under one of the caller's categories, or the area's grid alone; never spends.",
-        "description": "404 no such area or category of the caller's; 422 a category with `no_google_category`, set up\nfor `another_country`, or an area where placement has no grid (`unstudied`); 503 placement not\nconnected.",
+        "summary": "A study of an area: under one of the caller's categories, or the area's grid alone; never spends. Built on the first read and kept, out of what is held: a study whose searches are not all there opens on what is, and its notice says how many it lacks.",
+        "description": "404 no such area or category of the caller's; 422 a category with `no_google_category`, set up\nfor `another_country`, or an area where placement holds no base (`unstudied`); 503 placement not\nconnected.",
         "operationId": "study",
         "parameters": [
           {
@@ -24999,6 +25000,13 @@
           }
         ]
       },
+      "BaseCountry": {
+        "description": "ISO 3166-1 alpha-2, of the countries a base is compiled in for.",
+        "type": "string",
+        "enum": [
+          "FR"
+        ]
+      },
       "Bill": {
         "description": "Whose bill it lands on.\n\n- `ours`: Our keys, accounts and machines.\n- `theirs`: A person's own key.",
         "type": "string",
@@ -25355,17 +25363,16 @@
         ]
       },
       "Catalog": {
-        "description": "The countries placement has a grid for.",
+        "description": "The countries placement holds a base for.",
         "type": "object",
         "properties": {
           "countries": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Country"
+              "$ref": "#/components/schemas/BaseCountry"
             }
           }
         },
-        "additionalProperties": false,
         "required": [
           "countries"
         ]
@@ -29809,7 +29816,7 @@
         ]
       },
       "Scale": {
-        "description": "- `percentile`: Rank, not magnitude: for heavy-tailed quantities.",
+        "description": "- `percentile`: Rank, not magnitude — these quantities are heavy-tailed and a linear ramp shows one hot pixel.",
         "type": "string",
         "enum": [
           "linear",

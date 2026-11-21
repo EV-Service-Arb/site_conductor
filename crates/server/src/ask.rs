@@ -38,7 +38,8 @@ const ROUNDS: usize = 24;
 
 /// What the model is told, at the level the person picked.
 fn system(approval: Approval) -> String {
-	format!("You are the Service-Arb panel's assistant. The panel runs Google Business Profiles (GBPs; a GMB in \
+	format!(
+		"You are the Service-Arb panel's assistant. The panel runs Google Business Profiles (GBPs; a GMB in \
 code) for trade businesses: the managing gmails, each GBP's state (draft, verifying, verified, suspended), its site and \
 leads, its reviews, tokens that pay for Google requests. You act for the person asking, with exactly their permissions.\n\
 \n\
@@ -47,7 +48,9 @@ Tools: `search` finds the panel's operations by what they do (use it before `cal
 that keeps what it declared, and `poll` follows a cell still running. {} A proposal is confirmed by the person from the answer, so say what it will do. `open` offers a view as a link; `run` offers a binding of the page's keymap. The <page> block \
 says what is open and the bindings bound now.\n\
 \n\
-Answer briefly, in the person's language. Formatting: **bold**, `- ` items, `@[label](location:<gbp id>)` to name a GBP.", tools::held(approval))
+Answer briefly, in the person's language. Formatting: **bold**, `- ` items, `@[label](location:<gbp id>)` to name a GBP.",
+		tools::held(approval)
+	)
 }
 
 /// The model that answered: a fallback's, when it stood in.

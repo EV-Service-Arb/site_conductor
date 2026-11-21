@@ -7,10 +7,10 @@ use std::collections::{BTreeMap, HashSet};
 
 use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
 use ev_lib::api::{Body, Created, Ids, JsonSchema, Params, Refusal};
+use gmaps_optimal_placement_core::{Demand, Excluded, Keyword};
 use jiff::Timestamp;
 use sa_core::{
 	gbp::{Country, OnGoogle, Role, State as GbpState},
-	placement::{Demand, Excluded, Keyword},
 	prices::{PlacesRequest, Spends, StreetViewLoad},
 };
 use sa_panel::{

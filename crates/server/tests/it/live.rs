@@ -98,7 +98,6 @@ async fn follow(base: &str, bus: &Bus) -> watch::Sender<bool> {
 		review_archive: none.parse().unwrap(),
 		playbook: base.parse().unwrap(),
 		sites: base.parse().unwrap(),
-		placement: None,
 		signer: SEED.parse().unwrap(),
 	});
 	let (stop, stopped) = watch::channel(false);

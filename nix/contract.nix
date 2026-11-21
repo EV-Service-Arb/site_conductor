@@ -72,7 +72,6 @@
     PANEL_SITES_URL = "sites_panel";
     PANEL_REVIEW_ARCHIVE_URL = "review_archive";
     PANEL_PLAYBOOK_URL = "playbook_web";
-    PANEL_PLACEMENT_URL = "gmaps_optimal_placement";
     PANEL_SANDBOX_URL = "${pname}-sandbox";
   };
   # The sandbox's deploy: the conductor's public keys (its assertion is all it trusts), and the conductor's

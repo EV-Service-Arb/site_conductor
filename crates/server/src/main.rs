@@ -201,6 +201,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				settings.browsers()?,
 				settings.model(),
 				settings.sandbox()?,
+				settings.placement(),
 				readers,
 				bind,
 			)
@@ -231,6 +232,7 @@ async fn serve(
 	browsers: Option<sa_server::browser::Connected>,
 	model: sa_server::claude::Model,
 	sandbox: Option<sa_server::execute::Sandbox>,
+	placement: Option<sa_server::placement::Placement>,
 	readers: Vec<sa_panel::meters::google::Google>,
 	bind: SocketAddr,
 ) -> eyre::Result<()> {
@@ -327,6 +329,9 @@ async fn serve(
 	if browsers.is_none() {
 		tracing::warn!("PANEL_BROWSERS_URL unset: no browsers, their routes answer 503");
 	}
+	if placement.is_none() {
+		tracing::warn!("PANEL_PLACEMENT_DIR unset: no placement, its routes answer 503");
+	}
 	if sandbox.is_none() {
 		tracing::warn!("PANEL_SANDBOX_URL unset: no sandbox, the agents have no execute");
 	}
@@ -344,6 +349,7 @@ async fn serve(
 		browsers,
 		Some(model),
 		sandbox,
+		placement,
 	);
 	let app = match files {
 		Some(files) => web::serve(app, files),

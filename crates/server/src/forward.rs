@@ -236,8 +236,6 @@ pub struct Upstreams {
 	pub review_archive: Uri,
 	pub playbook: Uri,
 	pub sites: Uri,
-	/// gmaps_optimal_placement: optional, apart from the other three.
-	pub placement: Option<Uri>,
 	pub signer: Signer,
 }
 
@@ -257,11 +255,6 @@ impl Services {
 		}
 	}
 
-	/// Whether `service` is configured: placement may not be.
-	pub(crate) fn serves(&self, service: Service) -> bool {
-		service != Service::Placement || self.upstreams.placement.is_some()
-	}
-
 	/// `method path[?query]` to `service`, `principal` vouched for by an assertion bound to the
 	/// path; what only the conductor may say, and hop-by-hop headers, are not passed either way.
 	/// The answer streams.
@@ -279,7 +272,6 @@ impl Services {
 			Service::ReviewArchive => &self.upstreams.review_archive,
 			Service::Playbook => &self.upstreams.playbook,
 			Service::Sites => &self.upstreams.sites,
-			Service::Placement => self.upstreams.placement.as_ref().expect("sent to only where `serves` says so"),
 			Service::Browsers => panic!("the runner is not forwarded: `browser` calls it"),
 			Service::Sandbox => panic!("the runner is not forwarded: `execute` calls it"),
 		};
@@ -377,7 +369,6 @@ impl Forward {
 	}
 
 	async fn pass(&self, route: &Route, req: Request, principal: Option<Principal>) -> Response {
-		assert!(self.services.serves(route.service), "every forwarded service is configured");
 		let rest = &req.uri().path()[route.prefix.len()..];
 		// decoded as a service might, so no route reaches above its upstream prefix
 		let decoded = rest.to_ascii_lowercase().replace("%2e", ".").replace("%2f", "/").replace("%5c", "/").replace('\\', "/");

@@ -4,11 +4,9 @@
 use std::collections::BTreeSet;
 
 use eyre::WrapErr;
+use gmaps_optimal_placement_core::{Demand, Excluded, Keyword};
 use jiff::Timestamp;
-use sa_core::{
-	gbp::{Country, Managed, Role, State},
-	placement::{Demand, Excluded, Keyword},
-};
+use sa_core::gbp::{Country, Managed, Role, State};
 use sa_places::LatLng;
 use serde::{Deserialize, Serialize};
 use sqlx::SqliteConnection;
@@ -864,7 +862,7 @@ pub struct Trade {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Category {
 	pub country: Country,
-	/// [`sa_core::placement::weighed`]; with a primary, its name among them at weight 1.
+	/// [`gmaps_optimal_placement_core::weighed`]; with a primary, its name among them at weight 1.
 	pub keywords: Vec<Keyword>,
 	/// Google's category it is typed into Google's form as.
 	pub google_primary: Option<GoogleCategory>,

@@ -128,7 +128,7 @@ async fn a_services_own_tool_is_listed_and_answers_as_it_came() {
 	let (base, seen) = testing::upstream(routes).await;
 	let (sign_in, forward) = testing::conductor(panel.clone(), operator(), "dev@localhost", &base.parse().unwrap());
 	forward.catalog().follow(testing::services(&base.parse().unwrap()), tokio::sync::watch::channel(true).1).await;
-	let app = sa_server::http::app(sign_in, Some(forward), None, sa_server::http::Limits::default(), None, None, None, None);
+	let app = sa_server::http::app(sign_in, Some(forward), None, sa_server::http::Limits::default(), None, None, None, None, None);
 	let (bearer, _, _) = mcp_grant(&app, "ask").await;
 
 	let (init, client) = Mcp::initialize(&app, &bearer, json!({})).await;

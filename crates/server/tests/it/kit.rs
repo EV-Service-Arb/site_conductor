@@ -15,12 +15,12 @@ use axum::{
 	http::{Method, Request, StatusCode},
 	routing::get,
 };
+use gmaps_optimal_placement_core::Excluded;
 use jiff::{SignedDuration, Timestamp};
 use sa_auth::SourceKind;
 use sa_core::{
 	gbp::{Country, OnGoogle},
 	ids::{BrandId, SiteOrigin},
-	placement::Excluded,
 	prices::{Item, PlacesRequest, Spender},
 };
 use sa_panel::{

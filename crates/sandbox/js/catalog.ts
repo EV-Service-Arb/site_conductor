@@ -1657,7 +1657,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The countries placement has a grid for. */
+        /**
+         * The countries placement holds a base for.
+         * @description 503 placement not connected.
+         */
         get: operations["catalog"];
         put?: never;
         post?: never;
@@ -1675,9 +1678,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * A study of an area: under one of the caller's categories, or the area's grid alone; never spends.
+         * A study of an area: under one of the caller's categories, or the area's grid alone; never spends. Built on the first read and kept, out of what is held: a study whose searches are not all there opens on what is, and its notice says how many it lacks.
          * @description 404 no such area or category of the caller's; 422 a category with `no_google_category`, set up
-         *     for `another_country`, or an area where placement has no grid (`unstudied`); 503 placement not
+         *     for `another_country`, or an area where placement holds no base (`unstudied`); 503 placement not
          *     connected.
          */
         get: operations["study"];
@@ -3516,6 +3519,11 @@ export interface components {
             note: string;
         };
         /**
+         * @description ISO 3166-1 alpha-2, of the countries a base is compiled in for.
+         * @enum {string}
+         */
+        BaseCountry: "FR";
+        /**
          * @description Whose bill it lands on.
          *
          *     - `ours`: Our keys, accounts and machines.
@@ -3642,9 +3650,9 @@ export interface components {
         Candidates: {
             candidates: components["schemas"]["Place"][];
         };
-        /** @description The countries placement has a grid for. */
+        /** @description The countries placement holds a base for. */
         Catalog: {
-            countries: components["schemas"]["Country"][];
+            countries: components["schemas"]["BaseCountry"][];
         };
         /** @description A trade set up for a country: Plumbing · FR. */
         Category: {
@@ -5055,7 +5063,7 @@ export interface components {
             stream: string | null;
         };
         /**
-         * @description - `percentile`: Rank, not magnitude: for heavy-tailed quantities.
+         * @description - `percentile`: Rank, not magnitude — these quantities are heavy-tailed and a linear ramp shows one hot pixel.
          * @enum {string}
          */
         Scale: "linear" | "percentile";
@@ -7678,6 +7686,7 @@ export type Attachment = components['schemas']['Attachment'];
 export type AttachmentInput = components['schemas']['AttachmentInput'];
 export type Balance = components['schemas']['Balance'];
 export type BalanceChange = components['schemas']['BalanceChange'];
+export type BaseCountry = components['schemas']['BaseCountry'];
 export type Bill = components['schemas']['Bill'];
 export type Bound = components['schemas']['Bound'];
 export type Brand = components['schemas']['Brand'];
@@ -22847,7 +22856,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The countries placement has a grid for. */
+            /** @description The countries placement holds a base for. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -35212,6 +35221,7 @@ type ReadonlyArray<T> = [
 export const actionStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ActionState"]> = ["proposed", "done"];
 export const answerStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["AnswerState"]> = ["working", "writing", "done", "stopped"];
 export const approvalValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Approval"]> = ["ask", "spend", "act"];
+export const baseCountryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BaseCountry"]> = ["FR"];
 export const billValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Bill"]> = ["ours", "theirs"];
 export const closedValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Closed"]> = ["until_verified", "frozen_while_verifying", "off_maps"];
 export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Country"]> = ["FR", "US", "CA", "GB"];

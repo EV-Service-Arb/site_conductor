@@ -1,6 +1,6 @@
 [package]
 name = "placement_overlay"
-description = "Placement's heat, pressure field and competitor dots over the home map's google.maps.Map"
+description = "Placement's overlay over the home map's google.maps.Map, built from the revision the conductor builds studies with"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -12,12 +12,7 @@ test = false
 crate-type = ["cdylib"]
 
 [dependencies]
-gmaps_optimal_placement_core = { workspace = true, features = ["ts"] }
-js-sys.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-tsify.workspace = true
-wasm-bindgen.workspace = true
+gmaps_optimal_placement_overlay.workspace = true
 
 [lints]
 workspace = true

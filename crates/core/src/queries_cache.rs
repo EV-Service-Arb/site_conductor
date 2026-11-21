@@ -27,7 +27,7 @@ pub enum Scheme {
 	/// `sa_places`: the conductor's and review_archive's Places requests.
 	Places,
 	/// gmaps_optimal_placement's requests, [`gop`]'s digest: a study's Places searches, bought by
-	/// the conductor for a pull (`placement::Ask`), and its keyword volumes.
+	/// the conductor for a pull, and its keyword volumes.
 	Gop,
 }
 
@@ -113,9 +113,9 @@ pub struct Put {
 	pub bought: Option<crate::usage::Billed>,
 }
 
-/// What a [`Scheme::Gop`] key is the digest of.
-pub fn gop(body: &str) -> String {
-	format!("{}\n{body}", crate::placement::SEARCH_TEXT)
+/// What a [`Scheme::Gop`] key is the digest of: the request's URL, as Google serves it, and its body.
+pub fn gop(url: &str, body: &str) -> String {
+	format!("{url}\n{body}")
 }
 
 /// A query's path under the cache's URL (`<origin>/api/queries_cache`, what a client is given).

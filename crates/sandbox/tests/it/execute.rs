@@ -148,6 +148,7 @@ impl Stack {
 			None,
 			Some(Model::new(Origins { api: model.clone(), oauth: model }, Some("owner".to_owned().into()))),
 			Some(Sandbox::try_new(&sandbox, SEED.parse().unwrap()).unwrap()),
+			None,
 		);
 		let served = app.clone();
 		tokio::spawn(async move { axum::serve(listener, served).await.unwrap() });
@@ -276,7 +277,10 @@ async fn a_session_keeps_what_its_cells_declared() {
 			execute("e1", "const me = (await api.GET(\"/api/v1/me\")).data!;"),
 			execute("e2", "console.log(me.email);"),
 			execute("e3", "console.log(nobody);"),
-			execute("e4", &format!("await new Promise((r) => setTimeout(r, {}));\nconsole.log(\"late\");", (crate::WAIT * 2).as_millis())), // past its first answer
+			execute(
+				"e4",
+				&format!("await new Promise((r) => setTimeout(r, {}));\nconsole.log(\"late\");", (crate::WAIT * 2).as_millis()),
+			), // past its first answer
 		]),
 		round(vec![tool("p1", "poll", json!({ "cell": 3 })), tool("p2", "poll", json!({ "cell": 3 }))]),
 		end("Done."),

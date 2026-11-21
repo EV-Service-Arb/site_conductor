@@ -25,6 +25,9 @@ use sa_core::{
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
+/// Google's Places API (New), which a request is keyed by whichever host answers it.
+const GOOGLE: &str = "https://places.googleapis.com/v1/places";
+
 const SEARCH_MASK: &str = "places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents";
 
 const DETAILS_MASK: &str = "id,displayName,formattedAddress,location,addressComponents";
@@ -225,7 +228,7 @@ impl Google {
 			rank,
 			cache,
 			spend: false,
-			base: "https://places.googleapis.com/v1/places".to_owned(),
+			base: GOOGLE.to_owned(),
 			geocode: "https://geocode.googleapis.com/v4/geocode/location".to_owned(),
 		})
 	}
@@ -601,15 +604,15 @@ impl Google {
 		Ok(named)
 	}
 
-	/// `ask`, a search of placement's for a study, bought for `payer` unless the queries cache holds
-	/// an answer fetched since `since`.
-	pub async fn asked(&self, ask: &sa_core::placement::Ask, since: jiff::Timestamp, payer: &Payer<'_>) -> Result<(), Error> {
+	/// A text search of `body` under the field `mask`, a study's, bought for `payer` unless the
+	/// queries cache holds an answer fetched since `since`.
+	pub async fn asked(&self, mask: &str, body: &str, since: jiff::Timestamp, payer: &Payer<'_>) -> Result<(), Error> {
 		let url = format!("{}:searchText", self.base);
 		let req = Request {
 			method: "POST",
 			url: &url,
-			mask: &ask.mask,
-			body: &ask.body,
+			mask,
+			body,
 			scheme: Scheme::Gop,
 			sku: PlacesRequest::Search,
 			subject: "a study's sweep",

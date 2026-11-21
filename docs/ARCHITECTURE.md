@@ -4,9 +4,10 @@ The conductor is Service-Arb's host on `sa.evinvest.ltd`: who a person is (sessi
 concierge), what they hold across the services (the gmails and GMBs they manage, their tokens),
 who a machine is (the source keys), the shell the browser loads, and the forward to the services
 behind the origin — sites_panel (the sites business: leads, places, pricing, experiments,
-bookings, invoices), review_archive and playbook — placement (gmaps_optimal_placement: where
-demand sits and how contested it is, drawn over the home map), which the conductor alone asks — and each managing gmail's antidetect
-browser or cloud phone, run by sa_browsers and driven through the conductor. Each service trusts only the assertion the
+bookings, invoices), review_archive and playbook — and each managing gmail's antidetect
+browser or cloud phone, run by sa_browsers and driven through the conductor. Placement
+(gmaps_optimal_placement: where demand sits and how contested it is, drawn over the home map) is
+a library it links and runs in process. Each service trusts only the assertion the
 conductor signs for a request; none of them sees a session, and none calls the conductor but its
 queries cache: it reads them. Live updates and alerts are its hubs, fed by what the services tell it; tokens are
 charged from what review_archive tells it.
@@ -16,8 +17,7 @@ a walk's charge are each about one. A gmail is a managing gmail, a scope of GBPs
 one, a GBP on one.
 
 ```text
-browser ─session──▶ conductor ─x-sa-assertion (User)──────────────▶ sites /api/v1, review_archive, playbook,
-                                                                     placement
+browser ─session──▶ conductor ─x-sa-assertion (User)──────────────▶ sites /api/v1, review_archive, playbook
 landings/bots ─HMAC▶ conductor ─x-sa-assertion (Source) + raw body ▶ sites /api/ingest/v1
 landings ─HMAC▶ conductor /api/kit/v1: the review kit, answered here
 conductor ◀── pulls (Conductor) ── sites /api/conductor/{changes, notifications, sources/received,
@@ -27,7 +27,7 @@ conductor ◀── pulls (Conductor) ── review_archive /api/conductor/{char
 conductor ─── pushes (Conductor) ─▶ review_archive /api/conductor/gmbs   GMBs, balances, the cursor
 conductor ── GET <origin>/.well-known/sa-site, public :443 ──────▶ each site key's landing
 landings ──────────────────────── direct, in-cluster ────────────▶ sites /api/internal
-review_archive, placement, laptops ─────── open, rate-limited ─▶ conductor /api/queries_cache: what was paid for
+review_archive, laptops ────────────────── open, rate-limited ─▶ conductor /api/queries_cache: what was paid for
 conductor ─── (Conductor) launch, stop, devtools ─────────────────▶ sa_browsers /profiles/{gmail}/…
 ```
 
@@ -84,8 +84,8 @@ crates/places/           Google Places: a place from what a person pastes (an id
                          rotation its purse pays for; the Google accounts (`Account`) the rotation's
                          keys are on; review_archive takes it too
 crates/ui/               Dioxus components the services' front ends share
-crates/placement_overlay/  the home map's drawing of a placement payload (wasm, imported by the front end;
-                         placement's core linked by git): a renderer, the host fetches and pulls
+crates/placement_overlay/  placement's overlay re-exported (wasm, imported by the front end), so Cargo.lock
+                         pins it to the builder `placement.rs` links: a renderer, the host fetches and pulls
 crates/trace/            `SA_TRACE`: the spans a run closes, as Chrome trace events, for `test-timeline`'s chart
 crates/contracts/        concierge's gRPC contract (tonic, from contracts/proto)
 crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`; thin over `Panel`
@@ -129,8 +129,8 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
                          `search`/`call`/`execute`/`poll`, `open` (a view) and `run` (a binding); what the
                          level holds is proposed, the user confirms it, and a cell waiting on it goes on
   src/areas.rs           /api/v1/areas, and the cities and localities they are drawn from
-  src/placement.rs       /api/v1/placement: a study's Definition built from the areas and trades, placement
-                         asked as the caller; a pull held, what placement says it lacks bought, charged
+  src/placement.rs       /api/v1/placement: a study's Definition built from the areas and trades, and built by
+                         placement's library in process; a pull held, what the study lacks bought, charged
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
                          work in `serve`
   src/telegram.rs        the Bot API, its long poll
@@ -317,19 +317,22 @@ second block below to it.
 - Without `PANEL_ASSERTION_KEY`, `PANEL_REVIEW_ARCHIVE_URL`, `PANEL_PLAYBOOK_URL` and
   `PANEL_SITES_URL` (all four, or none), nothing is forwarded, nothing ingested, the hubs hear
   nothing of sites, and review_archive is neither followed nor told.
-- **Placement** (`PANEL_PLACEMENT_URL`, optional, needs the four) is not forwarded: see Placement.
 
 ## Placement
 
-gmaps_optimal_placement's `serve`, behind `PANEL_PLACEMENT_URL`, has one client: the conductor
-(`placement.rs`), as the caller. The browser never speaks placement's protocol; what crosses repos
-is placement's core (a Cargo dependency of `crates/placement_overlay`) and `sa_core::placement`.
+gmaps_optimal_placement is a library `placement.rs` links: the builder, its vocabulary (`_core`:
+`Definition`, `Category`, `Ask`, `Country`) and the overlay that draws its payload
+(`crates/placement_overlay` re-exports it) come from one pin, so `Model::try_new` checks a payload
+against the model that built it. It builds over its work dir (`PANEL_PLACEMENT_DIR`: the public
+archives, and every studied definition for its `fit`), on a blocking thread, and reads a billed
+answer only through its `Held`: here, this conductor's queries cache.
 
 ```text
-GET  /placement/study?area&category ─ the area, the caller's category (or none) → Definition ─▶ placement POST /studies
-     ◀── the payload, unread ── the front end hands it to the overlay (wasm, built with the front end)
-POST /placement/study/pull?…        ─ the same Definition ─▶ placement POST /studies/asks ─▶ [Ask], since
-     each Ask bought into the queries cache (`gop`), asked again until none ─▶ POST /studies/pull ◀── the payload
+GET  /placement/study?area&category ─ the area, the caller's category (or none) → Definition ─▶ build, kept per id
+     ◀── the payload ── the front end hands it to the overlay (wasm, built with the front end)
+POST /placement/study/pull?…        ─ since: when the first pull since the study's last whole one began
+     asks ─▶ [Ask], each bought into the queries cache (`gop`), asked again until none ─▶ build ◀── the payload
+     a whole pull forgets since; a stopped one keeps it, so its retry buys only what it did not
 ```
 
 A category is its studies' whole definition; an area applies it. Its competitors are tiered by
@@ -337,8 +340,8 @@ which of its Google categories' searches found them, first match wins: the prima
 each keyword), then one per additional category (its name alone), Excluded checked before any.
 Each additional tier weighs against the primary's 1, as each keyword against the primary's name.
 
-The conductor decides what cannot be studied, by why (`no_google_category`, `another_country`;
-placement's `unstudied`: no grid for the country); the front end only renders it. A study
+The conductor decides what cannot be studied, by why (`no_google_category`, `another_country`,
+`unstudied`: an area in a country placement holds no base for); the front end only renders it. A study
 never spends; a pull (`sa:placement:study:spend`) buys the Places searches it lacks at the puller's
 tokens (Tokens and GBPs). Placement buys nothing: the conductor is the one center of data
 ingestion, and what placement derives, for a map or for training, it derives from what the
@@ -464,9 +467,8 @@ when the key is issued, or once with `PUT /sources/{key_id}/origin` for a key is
 ## Queries cache
 
 What a paid query was answered — Places searches and details, placement's search volumes — is
-kept here once per query, for anyone who might ask it again: sa_places in this process,
-review_archive and placement in the cluster, a laptop's gmaps_optimal_placement over the public
-origin.
+kept here once per query, for anyone who might ask it again: sa_places and placement's studies in
+this process, review_archive in the cluster, a laptop's placement CLI over the public origin.
 
 ```text
 GET    /api/queries_cache/{scheme}/{key}         200 {answer, fetched_at} | 404
@@ -478,8 +480,8 @@ PUT    /api/queries_cache/{scheme}/{key}         {answer, request, bought: {item
 ```
 
 - **A key is its query's SHA-256**, under its client's scheme: `places` (sa_places: method,
-  URL, field mask, body) and `gop` (placement: URL, body; its Places searches the conductor buys
-  for a pull, `sa_places::Google::asked`). The cache derives none.
+  URL, field mask, body) and `gop` (placement: Google's URL, body; a study's Places searches the
+  conductor buys for a pull, `sa_places::Google::asked`). The cache derives none.
 - **Buying is claim, buy, PUT.** A claim holds the key 30 s; whoever else asks waits on it and is
   served what was bought. A failed buy gives the claim up; a holder that dies lets it lapse.
 - **A PUT says what it bought** (`bought`: the catalog item and whose key, null for an answer kept
@@ -831,10 +833,10 @@ review_archive's lookups are the house's for now.
 house's rotation, under the same lock:
 
 ```text
-POST /api/v1/placement/study/pull ─ price set, budget = balance ÷ price ─▶ placement …/asks: [Ask]
+POST /api/v1/placement/study/pull ─ price set, budget = balance ÷ price ─▶ the study's asks: [Ask]
   ├─ the first round needs more than n: 402, nothing bought ─▶ the person told the tokens it needs
   ├─ each Ask bought (the pull its purse: none past n, else 402), asked again until none is lacking
-  └─ ─▶ placement …/pull ─▶ the ledger: the searches bought × price; a pull that failed
+  └─ ─▶ built ─▶ the ledger: the searches bought × price; a pull that failed
                     owes it all back, as a failed walk does: the failure is the house's
 ```
 
@@ -949,8 +951,8 @@ priced in money, so an account overshoots by its hours behind.
   before Google grows wary: its count shown, never refused.
 - **A GBP's category** is its trade (its owner's: Plumbing) in its own country, derived, never
   stored: Plumbing · FR. The trade set up for a country holds its Google categories there, its
-  keywords (`sa_core::gbp::keywords`), the terms every GBP of the category is compared on, in the
-  country's language, and what its studies read (`sa_core::placement::Category`, Placement); any
+  keywords (placement's `keywords`), the terms every GBP of the category is compared on, in the
+  country's language, and what its studies read (placement's `Category`, Placement); any
   other term is one location's own and stays out of comparisons. Not set up there is shown so, never filled from another country. A
   trade is deleted only once no live GBP holds it; no service stores its id.
 - **A GBP's brand** is under its gmail and its category, at most one, optional: no brand, no kit
@@ -1284,8 +1286,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   `--print-provided-paths` disagree.
 - **What it provides and consumes, by contract name.** `provides.ingest` is
   `/api/ingest/v1/events`, `provides.kit` `/api/kit/v1`, `provides.queries_cache` `/api/queries_cache`; `consumes` names the peers behind `PANEL_SITES_URL` (`sites_panel`),
-  `PANEL_REVIEW_ARCHIVE_URL` (`review_archive`), `PANEL_PLAYBOOK_URL` (`playbook_web`) and
-  `PANEL_PLACEMENT_URL` (`gmaps_optimal_placement`), whose
+  `PANEL_REVIEW_ARCHIVE_URL` (`review_archive`) and `PANEL_PLAYBOOK_URL` (`playbook_web`), whose
   URLs and egress devops derives.
 - **The landings, outbound on :443.** The Connected sites page asks each site key's origin; the
   origins are data, so the egress is public :443, not a host list.

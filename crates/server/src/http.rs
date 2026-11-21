@@ -109,6 +109,7 @@ pub fn app(
 	browsers: Option<browser::Connected>,
 	model: Option<Model>,
 	sandbox: Option<Sandbox>,
+	placement: Option<placement::Placement>,
 ) -> Router {
 	let auth = Router::new()
 		.route("/auth/login", get(signin::login))
@@ -134,7 +135,7 @@ pub fn app(
 		sign_in: sign_in.clone(),
 		live: Live::new(sign_in.clone(), limits.live),
 		sites: forward.as_ref().map(|f| f.services().clone()),
-		placement: forward.as_ref().map(|f| f.services().clone()).filter(|s| s.serves(sa_auth::Service::Placement)),
+		placement,
 		pages: pages.clone(),
 		probe: connected::probe_client(),
 		telegram,
@@ -244,8 +245,8 @@ pub(crate) struct ApiState {
 	pub(crate) live: Live,
 	/// With the forward configured.
 	pub(crate) sites: Option<Services>,
-	/// With PANEL_PLACEMENT_URL too.
-	pub(crate) placement: Option<Services>,
+	/// With PANEL_PLACEMENT_DIR.
+	pub(crate) placement: Option<placement::Placement>,
 	/// What the Connected sites page asks the landings with.
 	pub(crate) probe: reqwest::Client,
 	/// With `TELEGRAM_BOT_TOKEN`.

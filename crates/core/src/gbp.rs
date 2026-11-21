@@ -73,30 +73,6 @@ pub fn phone(raw: &str) -> Result<String, Invalid> {
 	}
 }
 
-/// A category's keywords as stored: each trimmed, its inner whitespace one space, lowercased, at
-/// most 80 chars; at most 50, none twice. A keyword names no city: the grid point is the location,
-/// and a city term is one location's own.
-pub fn keywords(raw: &[String]) -> Result<Vec<String>, Invalid> {
-	let mut out: Vec<String> = Vec::with_capacity(raw.len());
-	for typed in raw {
-		let k = typed.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
-		if k.is_empty() {
-			return Err(Invalid::new("a keyword is not empty"));
-		}
-		if k.chars().count() > 80 {
-			return Err(Invalid::new(format!("{k:?} is over 80 characters")));
-		}
-		if out.contains(&k) {
-			return Err(Invalid::new(format!("{typed:?} is the keyword {k:?} twice")));
-		}
-		out.push(k);
-	}
-	match out.len() {
-		51.. => Err(Invalid::new(format!("{} keywords: a category takes 50", out.len()))),
-		_ => Ok(out),
-	}
-}
-
 /// What a GBP's gmail is on it: created on or transferred to it, or managing it.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]

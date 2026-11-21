@@ -19,6 +19,7 @@ ev_lib = { workspace = true, features = ["sqlite"] }
 eyre.workspace = true
 futures.workspace = true
 getrandom.workspace = true
+gmaps_optimal_placement_core.workspace = true
 hex.workspace = true
 hmac.workspace = true
 icu_locale.workspace = true

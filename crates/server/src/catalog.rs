@@ -177,7 +177,7 @@ impl Catalog {
 	}
 
 	async fn pull(&self, services: &Services, etags: &Mutex<BTreeMap<String, HeaderValue>>) {
-		let documents = Service::VARIANTS.iter().copied().filter(|s| services.serves(*s)).filter_map(|s| Some((s, s.document()?)));
+		let documents = Service::VARIANTS.iter().copied().filter_map(|s| Some((s, s.document()?)));
 		for (service, path) in documents {
 			let name = service.to_string();
 			match self.pull_one(services, service, path, etags).await {
