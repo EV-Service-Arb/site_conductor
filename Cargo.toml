@@ -45,7 +45,6 @@ hyper-util = { version = "0.1.21", features = ["client-legacy", "http1", "tokio"
 icu_locale = "2.4.0"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 jiff = "0.2.46"
-js-sys = "0.3.106"
 mail-parser = "1.0.1"
 percent-encoding = "2.3.2"
 prost = "0.14.6"
@@ -76,12 +75,10 @@ tower = "0.5.3"
 tower-http = "0.7.1"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-tsify = "0.5.8"
 tzf-rs = { version = "2.3.0", default-features = false, features = ["bundled"] }
 url = "2.5.8"
 uuid = "1.29.3"
 v_utils = { version = "2.24.1", default-features = false, features = ["macros"] }
-wasm-bindgen = "=0.2.129"
 zeroize = "1.9.2"
 
 [workspace.lints.clippy]
