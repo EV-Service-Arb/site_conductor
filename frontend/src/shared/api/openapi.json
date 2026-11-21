@@ -32267,7 +32267,7 @@
           "required": [],
           "type": "object"
         },
-        "path": "/account",
+        "path": "/user/account",
         "query": {
           "properties": {
             "section": {
@@ -32289,7 +32289,7 @@
           "required": [],
           "type": "object"
         },
-        "path": "/add",
+        "path": "/gbps/add",
         "query": {
           "properties": {
             "account": {
@@ -32335,7 +32335,7 @@
           "required": [],
           "type": "object"
         },
-        "path": "/alerts",
+        "path": "/user/alerts",
         "query": {
           "properties": {},
           "required": [],
@@ -32392,7 +32392,7 @@
           "required": [],
           "type": "object"
         },
-        "path": "/categories",
+        "path": "/gbps/categories",
         "query": {
           "properties": {},
           "required": [],
@@ -32413,7 +32413,7 @@
           ],
           "type": "object"
         },
-        "path": "/category/{trade}",
+        "path": "/gbps/categories/{trade}",
         "query": {
           "properties": {
             "country": {
@@ -32449,7 +32449,7 @@
           ],
           "type": "object"
         },
-        "path": "/gbp/{gmb}",
+        "path": "/gbps/{gmb}",
         "query": {
           "properties": {
             "step": {
@@ -32784,7 +32784,7 @@
           ],
           "type": "object"
         },
-        "path": "/kit/{slug}",
+        "path": "/reviews/kit/{slug}",
         "query": {
           "properties": {},
           "required": [],
@@ -32809,7 +32809,7 @@
           ],
           "type": "object"
         },
-        "path": "/kit/{slug}/{gmb}",
+        "path": "/reviews/kit/{slug}/{gmb}",
         "query": {
           "properties": {},
           "required": [],
@@ -32845,7 +32845,7 @@
           ],
           "type": "object"
         },
-        "path": "/kit/{slug}/pool/{trade}/{country}",
+        "path": "/reviews/kit/{slug}/pool/{trade}/{country}",
         "query": {
           "properties": {},
           "required": [],
@@ -32870,7 +32870,7 @@
           ],
           "type": "object"
         },
-        "path": "/kit/{slug}/{gmb}/qr",
+        "path": "/reviews/kit/{slug}/{gmb}/qr",
         "query": {
           "properties": {},
           "required": [],
@@ -32885,7 +32885,7 @@
           "required": [],
           "type": "object"
         },
-        "path": "/kit",
+        "path": "/reviews/kit",
         "query": {
           "properties": {},
           "required": [],
@@ -32901,7 +32901,7 @@
           "required": [],
           "type": "object"
         },
-        "path": "/members",
+        "path": "/admin/members",
         "query": {
           "properties": {},
           "required": [],
@@ -32923,7 +32923,7 @@
           ],
           "type": "object"
         },
-        "path": "/review_archive",
+        "path": "/reviews/archive",
         "query": {
           "properties": {},
           "required": [],
@@ -32962,7 +32962,7 @@
           "required": [],
           "type": "object"
         },
-        "path": "/sources",
+        "path": "/admin/sources",
         "query": {
           "properties": {},
           "required": [],
@@ -32977,7 +32977,7 @@
           "required": [],
           "type": "object"
         },
-        "path": "/tokens",
+        "path": "/user/tokens",
         "query": {
           "properties": {},
           "required": [],
@@ -32991,7 +32991,7 @@
           "required": [],
           "type": "object"
         },
-        "path": "/trash",
+        "path": "/gbps/trash",
         "query": {
           "properties": {},
           "required": [],
@@ -33006,7 +33006,7 @@
           "required": [],
           "type": "object"
         },
-        "path": "/usage",
+        "path": "/user/usage",
         "query": {
           "properties": {},
           "required": [],
@@ -33022,7 +33022,7 @@
           "required": [],
           "type": "object"
         },
-        "path": "/wallet",
+        "path": "/user/wallet",
         "query": {
           "properties": {},
           "required": [],

@@ -23,9 +23,9 @@ defineFigmaSuite(
   ],
   {
     hide: ["nextjs-portal"], // `next dev`'s indicator
-    // `/account`, `/wallet`: the platform's, which refuses a localhost origin; `assistant=`: carried into every link from
+    // `/user/account`, `/user/wallet`: the platform's, which refuses a localhost origin; `assistant=`: carried into every link from
     // a page that shows it; the rest are no pages
-    exclude: [/^\/(account|wallet)\b/, /[?&]assistant=/, /^\/(auth|api|mcp|grafana)\//],
+    exclude: [/^\/user\/(account|wallet)\b/, /[?&]assistant=/, /^\/(auth|api|mcp|grafana)\//],
     oneDocument: /^\/(\?|$)/, // Home: a load of it buys a Google map
   },
 );

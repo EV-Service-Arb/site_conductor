@@ -113,7 +113,7 @@ export const VIEWS = {
       }
     },
     "account": {
-      "path": "/account",
+      "path": "/user/account",
       "description": "The caller's account: their sign-in, their Claude, what they spend.",
       "params": {
         "properties": {},
@@ -136,7 +136,7 @@ export const VIEWS = {
       "key": "y"
     },
     "adding": {
-      "path": "/add",
+      "path": "/gbps/add",
       "description": "The Add a GBP panel as a page, with what it starts from: a gmail (`account`), a trade.",
       "params": {
         "properties": {},
@@ -181,7 +181,7 @@ export const VIEWS = {
       "key": "a"
     },
     "alerts": {
-      "path": "/alerts",
+      "path": "/user/alerts",
       "description": "Where the caller's alerts go, and which.",
       "params": {
         "properties": {},
@@ -239,7 +239,7 @@ export const VIEWS = {
       }
     },
     "categories": {
-      "path": "/categories",
+      "path": "/gbps/categories",
       "description": "Every trade by country, as a page.",
       "params": {
         "properties": {},
@@ -253,7 +253,7 @@ export const VIEWS = {
       }
     },
     "category": {
-      "path": "/category/{trade}",
+      "path": "/gbps/categories/{trade}",
       "description": "A trade's window as its own page, on `country`'s tab.",
       "params": {
         "properties": {
@@ -289,7 +289,7 @@ export const VIEWS = {
       }
     },
     "gbp": {
-      "path": "/gbp/{gmb}",
+      "path": "/gbps/{gmb}",
       "description": "A GBP's window as its own page.",
       "params": {
         "properties": {
@@ -625,7 +625,7 @@ export const VIEWS = {
       "key": "h"
     },
     "kit": {
-      "path": "/kit/{slug}",
+      "path": "/reviews/kit/{slug}",
       "description": "A review kit: what it collected, its GBPs, its pools; on a phone, its GBPs nearest first.",
       "params": {
         "properties": {
@@ -645,7 +645,7 @@ export const VIEWS = {
       }
     },
     "kit_gmb": {
-      "path": "/kit/{slug}/{gmb}",
+      "path": "/reviews/kit/{slug}/{gmb}",
       "description": "A kit's GBP: its QR's target, drafts, photos and tally.",
       "params": {
         "properties": {
@@ -670,7 +670,7 @@ export const VIEWS = {
       }
     },
     "kit_pool": {
-      "path": "/kit/{slug}/pool/{trade}/{country}",
+      "path": "/reviews/kit/{slug}/pool/{trade}/{country}",
       "description": "A category's drafts and photos, from a kit.",
       "params": {
         "properties": {
@@ -706,7 +706,7 @@ export const VIEWS = {
       }
     },
     "kit_qr": {
-      "path": "/kit/{slug}/{gmb}/qr",
+      "path": "/reviews/kit/{slug}/{gmb}/qr",
       "description": "A kit's GBP's QR, full screen, for the reviewer; a swipe goes through the kit.",
       "params": {
         "properties": {
@@ -731,7 +731,7 @@ export const VIEWS = {
       }
     },
     "kits": {
-      "path": "/kit",
+      "path": "/reviews/kit",
       "description": "The caller's review kits.",
       "params": {
         "properties": {},
@@ -746,7 +746,7 @@ export const VIEWS = {
       "key": "k"
     },
     "members": {
-      "path": "/members",
+      "path": "/admin/members",
       "description": "Everyone, to act as; and the way back while acting.",
       "params": {
         "properties": {},
@@ -762,7 +762,7 @@ export const VIEWS = {
       "key": "m"
     },
     "review_archive": {
-      "path": "/review_archive",
+      "path": "/reviews/archive",
       "description": "The review archive's dashboard.",
       "params": {
         "properties": {
@@ -784,7 +784,7 @@ export const VIEWS = {
       "nest": "review_archive"
     },
     "review_archive.mine.gmail": {
-      "path": "/review_archive/gmails/{gmail}",
+      "path": "/reviews/archive/gmails/{gmail}",
       "description": "A gmail's GMBs.",
       "params": {
         "properties": {
@@ -806,7 +806,7 @@ export const VIEWS = {
       }
     },
     "review_archive.mine.gmb": {
-      "path": "/review_archive/gmbs/{gmb}",
+      "path": "/reviews/archive/gmbs/{gmb}",
       "description": "A GMB's board: its place's reviews in lanes.",
       "params": {
         "properties": {
@@ -828,7 +828,7 @@ export const VIEWS = {
       }
     },
     "review_archive.mine.home": {
-      "path": "/review_archive",
+      "path": "/reviews/archive",
       "description": "Every GMB of the member's, by gmail.",
       "params": {
         "properties": {},
@@ -842,7 +842,7 @@ export const VIEWS = {
       }
     },
     "review_archive.mine.settings": {
-      "path": "/review_archive/settings",
+      "path": "/reviews/archive/settings",
       "description": "The member's settings.",
       "params": {
         "properties": {},
@@ -1192,7 +1192,7 @@ export const VIEWS = {
       }
     },
     "sources": {
-      "path": "/sources",
+      "path": "/admin/sources",
       "description": "Source keys and the sites they connect.",
       "params": {
         "properties": {},
@@ -1208,7 +1208,7 @@ export const VIEWS = {
       "key": "c"
     },
     "tokens": {
-      "path": "/tokens",
+      "path": "/user/tokens",
       "description": "The caller's tokens: balance, ledger, what they used.",
       "params": {
         "properties": {},
@@ -1223,7 +1223,7 @@ export const VIEWS = {
       "key": "t"
     },
     "trash": {
-      "path": "/trash",
+      "path": "/gbps/trash",
       "description": "What the caller removed, as a page.",
       "params": {
         "properties": {},
@@ -1237,7 +1237,7 @@ export const VIEWS = {
       }
     },
     "usage": {
-      "path": "/usage",
+      "path": "/user/usage",
       "description": "What the caller's actions cost.",
       "params": {
         "properties": {},
@@ -1252,7 +1252,7 @@ export const VIEWS = {
       "key": "u"
     },
     "wallet": {
-      "path": "/wallet",
+      "path": "/user/wallet",
       "description": "The caller's wallet.",
       "params": {
         "properties": {},

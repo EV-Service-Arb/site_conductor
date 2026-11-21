@@ -15,7 +15,7 @@ export default async function signIn(config: FullConfig) {
       if (!me.ok()) throw new Error(`dev sign-in left no session: /api/v1/me answered ${me.status()}`);
     });
     // `next dev` compiles a page on its first request: all at once here, not one worker's test timing out on each
-    const warmed = await Promise.all(Object.entries({ home: "/", alerts: "/alerts" }).map(([page, path]) => timed(`sign-in/compile ${page}`, () => context.get(path))));
+    const warmed = await Promise.all(Object.entries({ home: "/", alerts: "/user/alerts" }).map(([page, path]) => timed(`sign-in/compile ${page}`, () => context.get(path))));
     for (const page of warmed) if (!page.ok()) throw new Error(`warming ${page.url()}: ${page.status()}`);
     await context.storageState({ path: storageState });
     await context.dispose();

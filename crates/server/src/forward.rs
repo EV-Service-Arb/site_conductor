@@ -495,7 +495,7 @@ mod tests {
 		assert_eq!(route("/api/review_archive/me"), Some(("/api/review_archive", Gate::Session)));
 		assert_eq!(route("/api/review_archive/grafana/api/ds/query"), Some(("/api/review_archive", Gate::Session)));
 		assert_eq!(route("/api/review_archived"), None);
-		assert_eq!(route("/review_archive"), None, "the page is the front end's");
+		assert_eq!(route("/reviews/archive"), None, "the page is the front end's");
 		assert_eq!(route("/api/sites/leads"), Some(("/api/sites", Gate::Session)));
 		assert_eq!(route("/mfe/sites/mfe-sites.js"), Some(("/mfe/sites", Gate::Open)));
 		assert_eq!(route("/sites/leads"), None, "the page is the front end's");

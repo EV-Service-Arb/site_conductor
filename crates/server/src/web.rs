@@ -131,8 +131,8 @@ mod tests {
 			"/cabinets",
 			"/leads/",
 			"/_next/static/a.js",
-			"/review_archive",
-			"/review_archive/gmails/3",
+			"/reviews/archive",
+			"/reviews/archive/gmails/3",
 			"/sites/leads",
 		] {
 			assert!(!reserved(p), "{p}");

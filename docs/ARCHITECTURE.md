@@ -279,7 +279,7 @@ second block below to it.
   one Google map per page session, kept while the page is away (each built is a billed load), its
   viewport splitting the outline's list; placing a GMB's point is a mode of it.
 - **The pages.** `/sites` mounts `<mfe-sites-panel api="/api/sites" base="/sites" csrf-cookie>`
-  from `/mfe/sites/`; `/review_archive` mounts
+  from `/mfe/sites/`; `/reviews/archive` mounts
   `<mfe-review-archive-dashboard grafana="/grafana/" ui>` from `/mfe/review_archive/`, `ui` its
   default (`reviewArchiveUi` in `frontend/panel.config.ts`). Every view (`View`, the services'
   nested under their pages) is the front end's one page, which shows the view the location
@@ -295,7 +295,7 @@ second block below to it.
 
   ```
   Home ?gmb=12&tab=log ─┐                         open set [kit:lyon, gbp:12, account:3]
-  /gbp/12?tab=log ──────┴─▶ shown: WinKey ──▶ hotbar: shown ▸ pressed · hidden ▸ plain · page ▸ ⤢
+  /gbps/12?tab=log ─────┴─▶ shown: WinKey ──▶ hotbar: shown ▸ pressed · hidden ▸ plain · page ▸ ⤢
                               │                  click: hide / show / float back · × closes
          desktop: floating panel (⤢ its page, ×) · phone: its page · page: ⤡ over the map · leader z flips
   ```
@@ -1099,7 +1099,7 @@ a review of g first seen at s (review_archive's feed) → kit_posted, decided on
 - **Areas** are geography, everyone's, and carry their country (ISO 3166-1 alpha-2, Places'): a circle
   around a centre, and the locality its centre lies in, if any, an outline to see it by. One is named
   `<city> × <radius>` while its centre is in the city's circle, else by hand; a kit made from one takes
-  its name and link. A kit is at `/kit/<slug>`, its slug the owner's, never `new`.
+  its name and link. A kit is at `/reviews/kit/<slug>`, its slug the owner's, never `new`.
 
 ## Alerts
 

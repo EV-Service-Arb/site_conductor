@@ -69,31 +69,31 @@ pub enum View {
 	#[view("/assistant")]
 	Assistant { chat: Option<Uuid> },
 	/// The caller's account: their sign-in, their Claude, what they spend.
-	#[view("/account", key = 'y')]
+	#[view("/user/account", key = 'y')]
 	Account {
 		/// One of concierge's account sections.
 		section: Option<String>,
 	},
 	/// Source keys and the sites they connect.
-	#[view("/sources", needs = Sources::Manage, key = 'c')]
+	#[view("/admin/sources", needs = Sources::Manage, key = 'c')]
 	Sources,
 	/// The caller's tokens: balance, ledger, what they used.
-	#[view("/tokens", key = 't')]
+	#[view("/user/tokens", key = 't')]
 	Tokens,
 	/// Everyone's tokens, prices and flows.
 	#[view("/admin/tokens", needs = Tokens::Grant, key = 'a')]
 	AdminTokens,
 	/// What the caller's actions cost.
-	#[view("/usage", key = 'u')]
+	#[view("/user/usage", key = 'u')]
 	Usage,
 	/// Everyone, to act as; and the way back while acting.
-	#[view("/members", needs = Members::ActAs, key = 'm')]
+	#[view("/admin/members", needs = Members::ActAs, key = 'm')]
 	Members,
 	/// The caller's wallet.
-	#[view("/wallet", needs = Own::Payments, key = 'w')]
+	#[view("/user/wallet", needs = Own::Payments, key = 'w')]
 	Wallet,
 	/// Where the caller's alerts go, and which.
-	#[view("/alerts", key = 'e')]
+	#[view("/user/alerts", key = 'e')]
 	Alerts,
 	/// Asking for a permission the caller lacks, then on to where they were going.
 	#[view("/access")]
@@ -103,46 +103,46 @@ pub enum View {
 		r#continue: String,
 	},
 	/// The caller's review kits.
-	#[view("/kit", key = 'k')]
+	#[view("/reviews/kit", key = 'k')]
 	Kits,
 	/// A review kit: what it collected, its GBPs, its pools; on a phone, its GBPs nearest first.
-	#[view("/kit/{slug}")]
+	#[view("/reviews/kit/{slug}")]
 	Kit { slug: String },
 	/// A kit's GBP: its QR's target, drafts, photos and tally.
-	#[view("/kit/{slug}/{gmb}")]
+	#[view("/reviews/kit/{slug}/{gmb}")]
 	KitGmb { slug: String, gmb: i64 },
 	/// A kit's GBP's QR, full screen, for the reviewer; a swipe goes through the kit.
-	#[view("/kit/{slug}/{gmb}/qr")]
+	#[view("/reviews/kit/{slug}/{gmb}/qr")]
 	KitQr { slug: String, gmb: i64 },
 	/// A category's drafts and photos, from a kit.
-	#[view("/kit/{slug}/pool/{trade}/{country}")]
+	#[view("/reviews/kit/{slug}/pool/{trade}/{country}")]
 	KitPool { slug: String, trade: i64, country: Country },
 	/// A GBP's window as its own page.
-	#[view("/gbp/{gmb}")]
+	#[view("/gbps/{gmb}")]
 	Gbp { gmb: i64, tab: Option<Tab>, step: Option<u8> },
 	/// A gmail's window as its own page.
 	#[view("/gmail/{account}")]
 	Gmail { account: i64, tab: Option<Tab> },
 	/// Every trade by country, as a page.
-	#[view("/categories")]
+	#[view("/gbps/categories")]
 	Categories,
 	/// A trade's window as its own page, on `country`'s tab.
-	#[view("/category/{trade}")]
+	#[view("/gbps/categories/{trade}")]
 	Category { trade: i64, country: Option<Country> },
 	/// A brand's window as its own page.
 	#[view("/brand/{brand}")]
 	Brand { brand: i64 },
 	/// What the caller removed, as a page.
-	#[view("/trash")]
+	#[view("/gbps/trash")]
 	Trash,
 	/// The Add a GBP panel as a page, with what it starts from: a gmail (`account`), a trade.
-	#[view("/add")]
+	#[view("/gbps/add")]
 	Adding { account: Option<i64>, trade: Option<i64> },
 	/// sites' pages, its element's to route.
 	#[view("/sites", nest = "sites", key = 's', scope = 'v')]
 	Sites { below: String },
 	/// The review archive's dashboard.
-	#[view("/review_archive", nest = "review_archive", key = 'r')]
+	#[view("/reviews/archive", nest = "review_archive", key = 'r')]
 	ReviewArchive { below: String },
 }
 

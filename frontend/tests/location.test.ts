@@ -23,7 +23,7 @@ async function check(from: string, act: (store: Store) => void, to: string) {
 
 describe("the location store", () => {
   it("keeps the carried keys across a move to another view", async () => {
-    await check("/?gmbs=1,2&assistant=sidebar", (store) => store.go({ view: "tokens", params: {} }), "/tokens?assistant=sidebar&gmbs=1%2C2");
+    await check("/?gmbs=1,2&assistant=sidebar", (store) => store.go({ view: "tokens", params: {} }), "/user/tokens?assistant=sidebar&gmbs=1%2C2");
   });
 
   it("puts back the carried keys an element's own move dropped", async () => {
@@ -34,11 +34,11 @@ describe("the location store", () => {
   });
 
   it("takes a carried key out when told to, and does not put it back", async () => {
-    await check("/tokens?gmbs=3&find=a", (store) => store.setCarried({ gmbs: undefined }), "/tokens?find=a");
+    await check("/user/tokens?gmbs=3&find=a", (store) => store.setCarried({ gmbs: undefined }), "/user/tokens?find=a");
   });
 
   it("sets Home's keys in place, or moves to Home with them", async () => {
     await check("/?gmb=5&tab=launch", (store) => store.setHome({ tab: undefined }), "/?gmb=5");
-    await check("/alerts?find=x", (store) => store.setHome({ trash: true }), "/?find=x&trash=");
+    await check("/user/alerts?find=x", (store) => store.setHome({ trash: true }), "/?find=x&trash=");
   });
 });

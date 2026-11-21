@@ -96,8 +96,8 @@ async fn pages_directories_and_the_404_page() {
 	assert!(!h.contains_key(header::LAST_MODIFIED), "the store's 1970 mtime is never told");
 
 	for uri in [
-		"/sources",
-		"/sources/",
+		"/admin/sources",
+		"/admin/sources/",
 		"/assistant?chat=0199b7c8-0000-7000-8000-000000000000",
 		"/access?need=sa:operator&continue=/",
 	] {
@@ -105,7 +105,7 @@ async fn pages_directories_and_the_404_page() {
 		assert_eq!((status, body.as_str()), (StatusCode::OK, INDEX), "a view is the page: {uri}");
 		assert!(is_page(&h), "{uri}");
 	}
-	let (status, _, _) = get_(&app, "/sources?nope=1").await;
+	let (status, _, _) = get_(&app, "/admin/sources?nope=1").await;
 	assert_eq!(status, StatusCode::NOT_FOUND, "a key no view has is no view");
 
 	let (status, h, body) = get_(&app, "/no/such/screen/").await;
@@ -148,7 +148,7 @@ async fn hashed_assets_are_immutable_and_nothing_revalidates_by_date() {
 async fn a_services_views_are_the_page() {
 	let export = Export::new();
 	let app = app(&export.web());
-	for uri in ["/sites", "/sites/leads", "/sites/leads/aquafix/L-1", "/review_archive/gmbs/3"] {
+	for uri in ["/sites", "/sites/leads", "/sites/leads/aquafix/L-1", "/reviews/archive/gmbs/3"] {
 		let (status, h, body) = get_(&app, uri).await;
 		assert_eq!((status, body.as_str()), (StatusCode::OK, INDEX), "{uri}");
 		assert!(is_page(&h), "{uri}");
@@ -234,18 +234,18 @@ async fn a_kits_paths_are_the_page() {
 	let export = Export::new();
 	let app = app(&export.web());
 	for path in [
-		"/kit",
-		"/kit/lyon-east",
-		"/kit/lyon-east/3",
-		"/kit/lyon-east/3/qr",
-		"/kit/lyon-east/pool/2/FR",
+		"/reviews/kit",
+		"/reviews/kit/lyon-east",
+		"/reviews/kit/lyon-east/3",
+		"/reviews/kit/lyon-east/3/qr",
+		"/reviews/kit/lyon-east/pool/2/FR",
 		"/?kit=lyon-east&kit_gmb=3",
 	] {
 		let (status, h, body) = get_(&app, path).await;
 		assert_eq!((status, body.as_str()), (StatusCode::OK, INDEX), "{path}");
 		assert!(is_page(&h), "{h:?}");
 	}
-	for path in ["/lyon-east/", "/kit/lyon-east/three", "/kit/lyon-east/3/qr/more"] {
+	for path in ["/lyon-east/", "/kit/lyon-east", "/reviews/kit/lyon-east/three", "/reviews/kit/lyon-east/3/qr/more"] {
 		let (status, _, body) = get_(&app, path).await;
 		assert_eq!((status, body.as_str()), (StatusCode::NOT_FOUND, "<html>not here</html>"), "{path}");
 	}
