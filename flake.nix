@@ -251,7 +251,7 @@
             src = lib.cleanSource ./frontend;
             filter = path: _type: !(builtins.elem (baseNameOf path) [ "node_modules" ".next" "out" ]);
           };
-          npmDepsHash = "sha256-KAGMYGVbF42nZabqpVnXz+mCnprkMlPS8TgC9yFnT8E=";
+          npmDepsHash = "sha256-w3FL0SKNya5W82KhFaaBK6AtXFpnwWqFEjO9/W9iX6Y=";
           env = {
             NEXT_TELEMETRY_DISABLED = "1";
           };
