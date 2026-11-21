@@ -280,9 +280,7 @@ async fn output_is_kept_up_to_its_cap() {
 async fn a_long_cell_is_answered_as_it_runs_and_holds_its_session() {
 	let r = Runner::start(1, SLACK).await;
 	let s = r.open().await;
-	let ran = r
-		.cell(&s, &format!("console.log(\"early\");\n{GATE};\nconsole.log(\"late\");"))
-		.await;
+	let ran = r.cell(&s, &format!("console.log(\"early\");\n{GATE};\nconsole.log(\"late\");")).await;
 	assert_eq!(ran.ended, None, "{}", ran.stderr);
 	let mid = r.poll(&s, &ran, "more").await;
 	assert_eq!((mid.ended, format!("{}{}", ran.stdout, mid.stdout).as_str()), (None, "early\n"), "{}", mid.stderr);

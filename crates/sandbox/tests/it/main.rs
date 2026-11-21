@@ -13,6 +13,9 @@ fn js() -> &'static str {
 	static INSTALLED: std::sync::Once = std::sync::Once::new();
 	let js = concat!(env!("CARGO_MANIFEST_DIR"), "/js");
 	INSTALLED.call_once(|| {
+		// nextest runs each test in a process of its own: one installs, the rest wait for it rather than read a half-written node_modules
+		let lock = std::fs::File::create(concat!(env!("CARGO_TARGET_TMPDIR"), "/sandbox-js-install.lock")).unwrap();
+		lock.lock().unwrap();
 		if !Path::new(js).join("node_modules").exists() {
 			let deno = std::env::split_paths(&std::env::var_os("PATH").unwrap())
 				.map(|d| d.join("deno"))
