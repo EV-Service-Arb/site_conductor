@@ -1,4 +1,4 @@
-import { type Gmb, type Trade, mustHaveValues } from "@/shared/api/schema";
+import { type Category, type Gmb, mustHaveValues } from "@/shared/api/schema";
 import { VIEWS } from "@/shared/api/views";
 import type { T } from "@/shared/i18n";
 
@@ -23,14 +23,15 @@ export const ISSUE_NAME = {
   unlocated: (t) => t(issueKeys.unlocated, "No location"),
   no_site: (t) => t(issueKeys.no_site, "No site"),
   no_category: (t) => t(issueKeys.no_category, "No category"),
+  not_googles_primary: (t) => t(issueKeys.not_googles_primary, "Not Google's primary"),
   off: (t) => t(issueKeys.off, "Off"),
 } satisfies Record<Issue, (t: T) => string>;
 
-/** The services' tags by GMB id, and the caller's trades; `null`: not read, the service did not answer, or the caller does not see it. */
+/** The services' tags by GMB id, and the caller's categories; `null`: not read, the service did not answer, or the caller does not see it. */
 export interface Tags {
   archive: ReadonlyMap<number, ArchiveTag> | null;
   sites: ReadonlyMap<number, SiteTag> | null;
-  trades: readonly Trade[] | null;
+  categories: readonly Category[] | null;
 }
 
 /** Every issue of the GMB, most pressing first. An off GMB is out of every service, so being off is all it has; a draft has no location or site yet by being one. */
@@ -46,7 +47,8 @@ export function issuesOf(gmb: Gmb, tags: Tags): Issue[] {
     draft,
     unlocated: !draft && gmb.location === null,
     no_site: !draft && tags.sites !== null && site === undefined,
-    no_category: tags.trades !== null && categoryOf(gmb, tags.trades).status !== "set_up",
+    no_category: tags.categories !== null && categoryOf(gmb, tags.categories).status !== "set_up",
+    not_googles_primary: gmb.trade !== null && gmb.google_primary !== null && gmb.trade !== gmb.google_primary,
   };
   return ISSUES.filter((i) => i !== "off" && has[i]);
 }

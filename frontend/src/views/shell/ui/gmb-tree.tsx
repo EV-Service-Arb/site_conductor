@@ -1,10 +1,10 @@
 "use client";
 
-import { toast, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn, useBinding } from "@evinvest/uikit";
-import { ChevronDown, CircleMinus, CirclePlus, Link2, Pencil, RefreshCw, Search, Tag as TagIcon, Trash2, X } from "lucide-react";
+import { toast, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn, useBinding } from "@evinvest/uikit";
+import { CircleMinus, CirclePlus, Link2, Pencil, RefreshCw, Search, Trash2 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
-import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, openOrFocus, openWindow, readyCount, useShown, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, syncGmb, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, useTrades, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, trades as tradesKeys } from "@/entities/gmb";
+import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, openOrFocus, openWindow, readyCount, useShown, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, syncGmb, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, TradePicker, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, trades as tradesKeys } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { AddGmbButton } from "@/features/add-gmb";
@@ -12,7 +12,7 @@ import { EditGbp } from "@/features/edit-gbp";
 import { LinkPlace } from "@/features/link-gmb-place";
 import { PlaceButton } from "@/features/place-gmb";
 import { api, ok, sites as sitesApi } from "@/shared/api";
-import { type Gmb, type State, countryValues, mustHaveValues } from "@/shared/api/schema";
+import { type Gmb, type State, mustHaveValues } from "@/shared/api/schema";
 import { ViewLink, useAt } from "@/shared/lib/location";
 import { useT } from "@/shared/i18n";
 import { ErrorState } from "@/shared/ui/error-state";
@@ -276,12 +276,11 @@ function Group({
   );
 }
 
-/** The selected GBPs given one trade, or none: every one, or none of them. Each trade previews where they land, per country. */
+/** The selected GBPs given one trade, or none: every one, or none of them. */
 function SetTrade({ gmbs, onSet }: { gmbs: Gmb[]; onSet: () => void }) {
   const t = useT();
-  const trades = useTrades();
   const undoable = useUndoable();
-  const give = async (trade: number | null) => {
+  const give = async (trade: string | null) => {
     try {
       undoable(await setTrades(gmbs, trade, t));
       onSet();
@@ -289,51 +288,9 @@ function SetTrade({ gmbs, onSet }: { gmbs: Gmb[]; onSet: () => void }) {
       notifyFailure(e, t);
     }
   };
-  const byCountry = countryValues.map((c) => [c, gmbs.filter((b) => b.country?.code === c).length] as const).filter(([, n]) => n > 0);
-  const nowhere = gmbs.filter((b) => b.country === null).length;
-  const untraded = gmbs.every((b) => b.trade_id === null);
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center gap-0.5 rounded px-1 text-xs font-normal tracking-normal normal-case outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
-        {t(tradesKeys.set, "Set trade · {n}", { n: gmbs.length })}
-        <ChevronDown aria-hidden className="size-3" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-96">
-        <DropdownMenuLabel className="flex text-xs tracking-wide text-ink-soft uppercase">
-          <span className="flex-1">{t(tradesKeys.set.title, "Set the trade of {n}", { n: gmbs.length })}</span>
-          <span className="font-normal normal-case">{[...byCountry.map(([c, n]) => `${c} ${n}`), ...(nowhere > 0 ? [t(tradesKeys.set.nowhere, "{n} no country", { n: nowhere })] : [])].join(" · ")}</span>
-        </DropdownMenuLabel>
-        {trades.status === "ok" &&
-          trades.data.map((tr) => (
-            <DropdownMenuItem key={tr.id} onClick={() => void give(tr.id)}>
-              <TagIcon aria-hidden />
-              <span className="flex min-w-0 flex-col">
-                {tr.name}
-                <span className="truncate text-xs text-ink-soft">
-                  {byCountry.map(([c, n], i) => {
-                    const setUp = tr.categories.some((k) => k.country === c);
-                    return (
-                      <span key={c} className={cn(!setUp && "text-accent-warn")}>
-                        {i > 0 && " · "}
-                        {setUp ? `${tr.name} · ${c} ${n}` : t(tradesKeys.set.notSetUp, "{category} {n} · not set up", { category: `${tr.name} · ${c}`, n })}
-                      </span>
-                    );
-                  })}
-                </span>
-              </span>
-            </DropdownMenuItem>
-          ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem disabled={untraded} onClick={() => void give(null)}>
-          <X aria-hidden />
-          <span className="flex flex-col">
-            {t(tradesKeys.none, "No trade")}
-            {untraded && <span className="text-xs text-ink-soft">{t(tradesKeys.set.untraded, "all {n} already have no trade", { n: gmbs.length })}</span>}
-          </span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+  const countries = new Set(gmbs.map((b) => b.country?.code ?? null));
+  const label = t(tradesKeys.set, "Set trade · {n}", { n: gmbs.length });
+  return <TradePicker value={null} onPick={(trade) => void give(trade)} none={t(tradesKeys.none, "No trade")} prompt={label} label={label} country={countries.size === 1 ? [...countries][0]! : null} className="h-6 max-w-56 text-xs font-normal tracking-normal normal-case" />;
 }
 
 function HeadAction({ onClick, children }: { onClick: () => void; children: ReactNode }) {

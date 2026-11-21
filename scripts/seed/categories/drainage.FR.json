@@ -1,7 +1,8 @@
 {
-  "trade": "Drainage",
+  "trade": "gcid:drainage_service",
   "country": "FR",
-  "set_up": {
+  "title": "Drainage",
+  "body": {
     "keywords": [
       {
         "text": "service d'évacuation des eaux",
@@ -28,8 +29,7 @@
         "weight": 0.4
       }
     ],
-    "google_primary": "gcid:drainage_service",
-    "google_additional": [
+    "additional": [
       {
         "id": "gcid:septic_system_service",
         "weight": 0.8

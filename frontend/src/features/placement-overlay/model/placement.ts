@@ -3,8 +3,8 @@
 import { useState, useSyncExternalStore } from "react";
 
 import { Refused, api, ok } from "@/shared/api";
-import { covers, useScope, useTrades } from "@/entities/gmb";
-import type { Area, Category, Trade } from "@/shared/api/schema";
+import { covers, useCategories, useScope } from "@/entities/gmb";
+import { type Area, type Category, type Country, countryValues } from "@/shared/api/schema";
 import type { Event, Legend, Notice, Overlay, Summary, Tune } from "@/shared/placement_overlay/placement_overlay";
 import { type Home, setHome, useHome } from "@/shared/lib/location";
 import { useResource } from "@evinvest/api/react";
@@ -83,29 +83,44 @@ export function attach(map: google.maps.Map): Promise<Overlay | null> {
   return attached;
 }
 
-/** What a study is asked by: the area, and the category over it or none. */
-export type Query = { area: string; category?: CategoryKey };
+/** What a study is asked by: the area, and the category version over it or none; or a published study, its own area and version. */
+export type Query = { area: string; version?: number } | { sha: string };
 
 export async function pull(q: Query): Promise<void> {
   const overlay = await attached;
   if (overlay === null) throw new Error("placement: a pull with no overlay attached");
   update({ pulling: true, pullFailed: null });
   try {
-    overlay.show(await ok(api.POST("/placement/study/pull", { params: { query: q }, parseAs: "text" })), true);
+    const answer = "sha" in q ? api.POST("/placement/studies/{sha}/pull", { params: { path: { sha: q.sha } }, parseAs: "text" }) : api.POST("/placement/study/pull", { params: { query: q }, parseAs: "text" });
+    overlay.show(await ok(answer), true);
     update({ pulling: false });
   } catch (e) {
     update({ pulling: false, pullFailed: e instanceof Refused ? e.failure.error : e instanceof Error ? e.message : String(e) });
   }
 }
 
-/** A category by the URL's spelling of it, `<trade id>.<country>`. */
-export type CategoryKey = `${number}.${string}`;
-export const categoryKey = (trade: number, country: string): CategoryKey => `${trade}.${country}`;
+/** A study's category version, as `?study` spells it: `<gcid>.<country>` the caller's category's head, `v<id>` a version, `s<sha>` a published study. */
+export type StudyKey = { kind: "head"; trade: string; country: Country } | { kind: "version"; id: number } | { kind: "published"; sha: string };
+
+export function parseStudy(raw: string): StudyKey {
+  if (raw.startsWith("v")) {
+    const id = Number(raw.slice(1));
+    if (!Number.isSafeInteger(id)) throw new Error(`?study=${raw}: not v<version id>`);
+    return { kind: "version", id };
+  }
+  if (raw.startsWith("s")) return { kind: "published", sha: raw.slice(1) };
+  const [trade, country, ...rest] = raw.split(".");
+  const c = countryValues.find((v) => v === country);
+  if (trade === undefined || !trade.startsWith("gcid:") || c === undefined || rest.length > 0) throw new Error(`?study=${raw}: not <gcid>.<country>, v<id> nor s<sha>`);
+  return { kind: "head", trade, country: c };
+}
+
+export const studyText = (k: StudyKey): string => (k.kind === "head" ? `${k.trade}.${k.country}` : k.kind === "version" ? `v${k.id}` : `s${k.sha}`);
 
 export interface MapView {
   heat: string | null;
-  /** The category whose study is drawn: the one picked, else the one studiable category in the outline's scope. */
-  study: CategoryKey | null;
+  /** The category version whose study is drawn: the one picked, else the head of the one studiable category in the outline's scope. */
+  study: StudyKey | null;
   /** Where `study` comes from. */
   from: "pick" | "scope" | null;
   /** The area it is drawn over, by slug; `""`: one being drawn. */
@@ -127,7 +142,7 @@ export function useMapView(): MapView {
   const scoped = useScopedStudy();
   return {
     heat: home.heat ?? null,
-    study: study === undefined ? scoped : study === "" ? null : (study as CategoryKey),
+    study: study === undefined ? scoped : study === "" ? null : parseStudy(study),
     from: study !== undefined && study !== "" ? "pick" : study === undefined && scoped !== null ? "scope" : null,
     area: home.area ?? null,
     pressure: home.pressure ?? null,
@@ -138,24 +153,24 @@ export function useMapView(): MapView {
   };
 }
 
-/** A category placement can study: one with a primary Google category, in a country it has a grid for. */
-export const studiable = (c: Category, countries: readonly string[]) => c.google_primary !== null && countries.includes(c.country);
+/** A category placement can study: one in a country it has a grid for. */
+export const studiable = (c: Category, countries: readonly string[]) => countries.includes(c.country);
 
-/** The one studiable category in the outline's scope. */
-function useScopedStudy(): CategoryKey | null {
+/** The head of the one studiable category in the outline's scope. */
+function useScopedStudy(): StudyKey | null {
   const { categories: scope } = useScope();
-  const trades = useTrades();
+  const categories = useCategories();
   const placement = usePlacement();
-  if (scope === null || trades.status !== "ok" || placement.status !== "ok") return null;
+  if (scope === null || categories.status !== "ok" || placement.status !== "ok") return null;
   const { countries } = placement;
-  const studied = trades.data.flatMap((tr) => tr.categories.filter((c) => studiable(c, countries) && scope.some((p) => covers(p, tr.id, c.country))).map((c) => categoryKey(tr.id, c.country)));
-  return studied.length === 1 ? studied[0]! : null;
+  const studied = categories.data.filter((c) => studiable(c, countries) && scope.some((p) => covers(p, c.trade.id, c.country)));
+  return studied.length === 1 ? { kind: "head", trade: studied[0]!.trade.id, country: studied[0]!.country } : null;
 }
 
 export function setMapView(change: Partial<MapView>): void {
   setHome({
     ...(change.heat !== undefined && { heat: change.heat ?? undefined }),
-    ...(change.study !== undefined && { study: change.study ?? "" }),
+    ...(change.study !== undefined && { study: change.study === null ? "" : studyText(change.study) }),
     ...(change.area !== undefined && { area: change.area ?? undefined }),
     ...(change.pressure !== undefined && { pressure: change.pressure === null ? undefined : Math.round(change.pressure) }),
     ...(change.competitors !== undefined && { competitors: change.competitors }),
@@ -166,8 +181,8 @@ export function setMapView(change: Partial<MapView>): void {
 }
 
 /** Why the conductor would not build a study: its own words for it. */
-export type Refusal = "no_google_category" | "another_country" | "unstudied";
-const REFUSALS: readonly string[] = ["no_google_category", "another_country", "unstudied"] satisfies Refusal[];
+export type Refusal = "another_country" | "unstudied";
+const REFUSALS: readonly string[] = ["another_country", "unstudied"] satisfies Refusal[];
 
 export type Studied =
   | { status: "loading" }
@@ -176,14 +191,15 @@ export type Studied =
       status: "ok";
       areas: readonly Area[];
       area: Area | null;
-      picked: { trade: Trade; category: Category } | null;
+      /** The caller's category whose head is picked. */
+      head: Category | null;
       /** What is asked over `area`; `null` while no area is picked. */
       drawn: Query | null;
     };
 
 /** The URL's study and area, resolved against the categories and the areas. */
 export function useStudied(view: MapView): Studied {
-  const trades = useTrades();
+  const categories = useCategories();
   const read = useResource(api, "/areas");
   const areas = read.status === "ok" ? { ...read, data: read.data.areas } : read;
   // an area drawn a moment ago may postdate the last read: read again once before calling it gone
@@ -193,28 +209,33 @@ export function useStudied(view: MapView): Studied {
     setAsked(missing);
     read.reload();
   }
-  if (trades.status === "error") return { status: "error", message: trades.failure.code };
+  if (categories.status === "error") return { status: "error", message: categories.failure.code };
   if (areas.status === "error") return { status: "error", message: areas.failure.code };
-  if (trades.status !== "ok" || areas.status !== "ok") return { status: "loading" };
-  let picked: { trade: Trade; category: Category } | null = null;
-  if (view.study !== null) {
-    const [id, country] = view.study.split(".");
-    const trade = trades.data.find((tr) => String(tr.id) === id);
-    const category = trade?.categories.find((c) => c.country === country);
-    if (trade === undefined || category === undefined) throw new Error(`?study=${view.study}: no such category`);
-    picked = { trade, category };
+  if (categories.status !== "ok" || areas.status !== "ok") return { status: "loading" };
+  const { study } = view;
+  let head: Category | null = null;
+  if (study?.kind === "head") {
+    head = categories.data.find((c) => c.trade.id === study.trade && c.country === study.country) ?? null;
+    if (head === null) throw new Error(`?study=${studyText(study)}: no such category of the caller's`);
   }
   const area = view.area === null || view.area === "" ? null : (areas.data.find((a) => a.slug === view.area) ?? null);
   if (missing !== null && asked === missing && areas.fresh) throw new Error(`?area=${view.area}: no such area`);
-  const drawn = area === null ? null : { area: area.slug, ...(view.study !== null && { category: view.study }) };
-  return { status: "ok", areas: areas.data, area, picked, drawn };
+  const drawn: Query | null = area === null ? null : study?.kind === "published" ? { sha: study.sha } : { area: area.slug, ...(head !== null && { version: head.head.id }), ...(study?.kind === "version" && { version: study.id }) };
+  return { status: "ok", areas: areas.data, area, head, drawn };
 }
 
 /** The payload of what is drawn, or why the conductor would not build it. */
 export type Payload = { status: "loading" } | { status: "error"; message: string } | { status: "refused"; refused: Refusal; message: string } | { status: "ok"; payload: string; fresh: boolean };
 
-export function usePayload(drawn: Query): Payload {
-  const read = useResource(api, "/placement/study", { params: { query: drawn }, parseAs: "text" });
+export function useAreaPayload(drawn: Extract<Query, { area: string }>): Payload {
+  return payloadOf(useResource(api, "/placement/study", { params: { query: drawn }, parseAs: "text" }));
+}
+
+export function usePublishedPayload(sha: string): Payload {
+  return payloadOf(useResource(api, "/placement/studies/{sha}", { params: { path: { sha } }, parseAs: "text" }));
+}
+
+function payloadOf(read: { status: "loading" } | { status: "ok"; data: string; fresh: boolean } | { status: "error"; failure: { code: string; error: string } }): Payload {
   if (read.status === "loading") return read;
   if (read.status === "ok") return { status: "ok", payload: read.data, fresh: read.fresh };
   const { code, error } = read.failure;

@@ -3,9 +3,9 @@
 import { type Country, type Gmb, countryValues } from "@/shared/api/schema";
 import { setCarried, useCarried } from "@/shared/lib/location";
 
-/** A category pattern, `<trade>.<country>`, either side `*`: `1.FR` a category, `2.*` a trade in every country, `*.US` a country across trades. */
+/** A category pattern, `<gcid>.<country>`, either side `*`: `gcid:plumber.FR` a category, `gcid:roofer.*` a trade in every country, `*.US` a country across trades. */
 export interface Pattern {
-  trade: number | "*";
+  trade: string;
   country: Country | "*";
 }
 
@@ -18,11 +18,10 @@ export interface Scope {
 
 function parsePattern(raw: string): Pattern {
   const [trade, country, ...rest] = raw.split(".");
-  const id = Number(trade);
-  if (rest.length > 0 || trade === undefined || country === undefined || (trade !== "*" && !Number.isSafeInteger(id))) throw new Error(`?category=${raw}: not <trade>.<country>`);
+  if (rest.length > 0 || trade === undefined || country === undefined || (trade !== "*" && !trade.startsWith("gcid:"))) throw new Error(`?category=${raw}: not <gcid>.<country>`);
   if (country !== "*" && !(countryValues as readonly string[]).includes(country)) throw new Error(`?category=${raw}: ${country} is not one of ${countryValues.join(", ")}`);
   if (trade === "*" && country === "*") throw new Error(`?category=${raw}: a pattern names a trade or a country`);
-  return { trade: trade === "*" ? "*" : id, country: country as Country | "*" };
+  return { trade, country: country as Country | "*" };
 }
 
 export const patternText = (p: Pattern) => `${p.trade}.${p.country}`;
@@ -33,13 +32,13 @@ export function useScope(): Scope {
 }
 
 /** Whether `p` takes `trade` in `country` (`null`: none yet, which only a `*` takes). */
-export function covers(p: Pattern, trade: number, country: Country | null): boolean {
+export function covers(p: Pattern, trade: string, country: Country | null): boolean {
   return (p.trade === "*" || p.trade === trade) && (p.country === "*" || p.country === country);
 }
 
 /** Whether the GBP is under any of `patterns`: one with no trade is under none. */
 export function inCategories(gmb: Gmb, patterns: readonly Pattern[]): boolean {
-  const trade = gmb.trade_id;
+  const trade = gmb.trade;
   return trade !== null && patterns.some((p) => covers(p, trade, gmb.country?.code ?? null));
 }
 

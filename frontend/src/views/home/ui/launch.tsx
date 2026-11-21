@@ -4,7 +4,7 @@ import { Button, Input, NativeSelect, NativeSelectOption, Planned, ToggleGroup, 
 import { Check, Copy, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { CategoryChip, categoryName, categoryOf, gmbs, googleName, type Listed, openWindow, type Placed, TradeSelect, under, useGmails, useGmbTags } from "@/entities/gmb";
+import { CategoryChip, categoryName, categoryOf, gmbs, googleName, type Listed, openWindow, type Placed, TradePicker, under, useGmails, useGmbTags, useTrade } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
 import { LinkPlaceButton } from "@/features/link-gmb-place";
 import { SpotsEditor } from "@/features/add-gmb";
@@ -37,7 +37,7 @@ export function Launch({ listed: { gmb, gmail }, page }: { listed: Listed; page:
   const me = useMe();
   const gmails = useGmails();
   const { sites, tags } = useGmbTags();
-  const placed = tags.trades === null ? null : categoryOf(gmb, tags.trades);
+  const placed = tags.categories === null ? null : categoryOf(gmb, tags.categories);
   const button = useButtonSize();
   const [failed, setFailed] = useState<{ must: MustHave; text: string } | null>(null);
   if (gmb.readiness === null) throw new Error(`GMB ${gmb.id}: the launch tab of a GBP past its draft`);
@@ -72,15 +72,15 @@ export function Launch({ listed: { gmb, gmail }, page }: { listed: Listed; page:
   const parts: Record<MustHave, { value: ReactNode; editor: ReactNode; why: string | null }> = {
     name: { value: gmb.name, editor: text("name", gmb.name, (v) => ({ name: v ?? "" })), why: t(launch.why.name, "keyword name: a nom commercial at the top helps an appeal") },
     category: {
-      value: placed?.status === "set_up" && [categoryName(placed.trade, placed.category.country), placed.category.google_primary && googleName(placed.category.google_primary, locale)].filter(Boolean).join(" · "),
+      value: placed?.status === "set_up" && categoryName(placed.category.trade, placed.category.country, locale),
       editor: (
         <span className="flex flex-col gap-2">
-          <TradeSelect value={gmb.trade_id} country={gmb.country?.code ?? null} className="w-80 max-w-full" label={t(launch.must.category, "Category")} onPick={(trade) => void save("category")({ trade })} />
+          <TradePicker value={gmb.trade} country={gmb.country?.code ?? null} className="w-80 max-w-full" label={t(launch.must.category, "Category")} onPick={(trade) => void save("category")({ trade })} />
           {placed !== null && <CategoryFix placed={placed} gmb={gmb} onSet={gmails.reload} />}
         </span>
       ),
       // past a trade, the fix says what is missing
-      why: placed === null || placed.status === "no_trade" ? t(launch.why.category, "its trade, set up in its country with Google's category") : null,
+      why: placed === null || placed.status === "no_trade" ? t(launch.why.category, "its trade, Google's primary category, set up in its country") : null,
     },
     areas: { value: gmb.areas.join(" · "), editor: <AreasEditor areas={gmb.areas} onSave={(areas) => save("areas")({ areas })} />, why: t(launch.why.areas, "up to 20 · they cover where the film is shot") },
     phone: { value: gmb.phone, editor: text("phone", gmb.phone, (phone) => ({ phone }), "tel"), why: t(launch.why.phone, "routes to the closers · on no other GBP") },
@@ -317,9 +317,6 @@ function AreasEditor({ areas, onSave }: { areas: string[]; onSave: (areas: strin
 /** Where the trade resolves in the GBP's country, and what it lacks with its one fix, or Google's categories to type into its form, in order. */
 function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: () => void }) {
   const t = useT();
-  const locale = useLocale();
-  const button = useButtonSize();
-  const region = (c: Country) => new Intl.DisplayNames([locale], { type: "region" }).of(c) ?? c;
   if (placed.status === "no_trade") return null;
   if (placed.status === "no_country")
     return (
@@ -331,47 +328,48 @@ function CategoryFix({ placed, gmb, onSet }: { placed: Placed; gmb: Gmb; onSet: 
         <span className="text-xs text-accent-warn">{t(launch.category.noCountry.why, "the category and Google's categories wait for the country")}</span>
       </span>
     );
+  return <CategoryIn placed={placed} gmb={gmb} />;
+}
+
+function CategoryIn({ placed, gmb }: { placed: Extract<Placed, { status: "set_up" | "not_set_up" }>; gmb: Gmb }) {
+  const t = useT();
+  const locale = useLocale();
+  const button = useButtonSize();
   const country = placed.status === "set_up" ? placed.category.country : placed.country;
-  const name = categoryName(placed.trade, country);
-  const lacking =
-    placed.status === "not_set_up"
-      ? t(launch.category.notSetUp, "{category} not set up: no Google category to type", { category: name })
-      : placed.category.google_primary === null
-        ? t(launch.category.noPrimary, "{category} has no primary Google category yet", { category: name })
-        : null;
+  const named = useTrade(placed.status === "set_up" ? placed.category.trade.id : placed.trade, country);
+  const region = new Intl.DisplayNames([locale], { type: "region" }).of(country) ?? country;
+  if (named === null) return null;
+  const name = categoryName(named, country, locale);
   return (
     <span className="flex flex-col gap-1">
       <span className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
-        {t(launch.category.in, "in {country} →", { country: region(country) })}
+        {t(launch.category.in, "in {country} →", { country: region })}
         <CategoryChip gmb={gmb} />
-        {lacking !== null && (
-          <Button variant={placed.status === "not_set_up" ? "primary" : "outline"} size={button("sm")} onClick={() => openWindow({ kind: "trade", trade: placed.trade.id, country })}>
-            {(placed.status === "not_set_up" ? t(launch.category.setUp, "Set up {category}", { category: name }) : t(launch.category.open, "Open {category}", { category: name }))}
+        {placed.status === "not_set_up" && (
+          <Button variant="primary" size={button("sm")} onClick={() => openWindow({ kind: "trade", trade: placed.trade, country })}>
+            {t(launch.category.setUp, "Set up {category}", { category: name })}
           </Button>
         )}
       </span>
-      {lacking !== null ? (
-        <span className="text-xs text-accent-warn">{lacking}</span>
+      {placed.status === "not_set_up" ? (
+        <span className="text-xs text-accent-warn">{t(launch.category.notSetUp, "{category} not set up: no keywords nor additional categories", { category: name })}</span>
       ) : (
-        placed.status === "set_up" &&
-        placed.category.google_primary !== null && (
-          <>
-            <TypeIn category={placed.category.google_primary} lang={placed.category.lang} />
-            {placed.category.google_additional.length > 0 && (
-              <span className="flex flex-col gap-1 text-xs text-ink-soft">
-                {t(launch.category.then, "then the additional ones, in this order:")}
-                <ol className="flex flex-col gap-0.5">
-                  {placed.category.google_additional.map(({ google: g }, i) => (
-                    <li key={g.id} className="flex items-center gap-2">
-                      <span className="w-4 text-right font-mono tabular-nums">{i + 1}</span>
-                      <Copyable category={g} lang={placed.category.lang} />
-                    </li>
-                  ))}
-                </ol>
-              </span>
-            )}
-          </>
-        )
+        <>
+          <TypeIn category={placed.category.trade} lang={placed.category.head.lang} />
+          {placed.category.head.additional.length > 0 && (
+            <span className="flex flex-col gap-1 text-xs text-ink-soft">
+              {t(launch.category.then, "then the additional ones, in this order:")}
+              <ol className="flex flex-col gap-0.5">
+                {placed.category.head.additional.map(({ google: g }, i) => (
+                  <li key={g.id} className="flex items-center gap-2">
+                    <span className="w-4 text-right font-mono tabular-nums">{i + 1}</span>
+                    <Copyable category={g} lang={placed.category.head.lang} />
+                  </li>
+                ))}
+              </ol>
+            </span>
+          )}
+        </>
       )}
     </span>
   );

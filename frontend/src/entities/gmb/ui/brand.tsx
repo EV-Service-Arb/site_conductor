@@ -29,7 +29,7 @@ export function useSites(): string[] {
 }
 
 /** A new brand under `gmail` in `trade` · `country`. */
-export function NewBrand({ gmail, trade, country, onDone }: { gmail: number; trade: number; country: Country; onDone: (added: Brand | null) => void }) {
+export function NewBrand({ gmail, trade, country, onDone }: { gmail: number; trade: string; country: Country; onDone: (added: Brand | null) => void }) {
   const t = useT();
   const size = useControlSize();
   const button = useButtonSize();

@@ -15,7 +15,6 @@ use axum::{
 	http::{Method, Request, StatusCode},
 	routing::get,
 };
-use gmaps_optimal_placement_core::Excluded;
 use jiff::{SignedDuration, Timestamp};
 use sa_auth::SourceKind;
 use sa_core::{
@@ -26,7 +25,8 @@ use sa_core::{
 use sa_panel::{
 	Panel,
 	brands::NewBrand,
-	gmbs::{Category, Existing},
+	categories::{Body as Settings, Key},
+	gmbs::Existing,
 	import::Export,
 	kit::Target,
 	seal::DataKey,
@@ -73,7 +73,7 @@ pub(super) struct Kit {
 	pub(super) panel: Panel,
 	secret: String,
 	pub(super) owner: Uuid,
-	pub(super) trade: i64,
+	pub(super) key: Key,
 	/// Aquafix, on aquafix, the brand of both GBPs.
 	pub(super) brand: i64,
 	/// Lyon 7, the GBP the checks are about; Lyon 3 shares its category and brand.
@@ -197,16 +197,8 @@ pub(super) async fn kit(db: &TestDb) -> Kit {
 		.unwrap()
 		.secret
 		.to_string();
-	let trade = panel.add_trade(owner, "Plumbing", now).await.unwrap().unwrap().id;
-	let fr = Category {
-		country: Country::FR,
-		keywords: vec![],
-		google_primary: None,
-		google_additional: vec![],
-		excluded: Excluded::default(),
-		demand: None,
-	};
-	panel.set_up(owner, trade, fr).await.unwrap().unwrap();
+	let key = Key::try_new(owner, "gcid:plumber", Country::FR).unwrap();
+	panel.apply(key, Settings::empty(key), now).await.unwrap().unwrap();
 	let gmail = panel.add_gmail(owner, "lyon@gmail.com", now).await.unwrap().unwrap().id;
 	let gmb = async |place: &str, name: &str| {
 		let e = Existing {
@@ -215,7 +207,7 @@ pub(super) async fn kit(db: &TestDb) -> Kit {
 			state: OnGoogle::Verified,
 			name: Some(name.to_owned()),
 			country: Some(Country::FR),
-			trade: Some(trade),
+			trade: Some(key.trade.id.to_owned()),
 		};
 		panel.add_gmb(Some(Spender::new(owner)), e, now).await.unwrap().unwrap().id
 	};
@@ -226,7 +218,7 @@ pub(super) async fn kit(db: &TestDb) -> Kit {
 			owner,
 			NewBrand {
 				gmail_id: gmail,
-				trade_id: trade,
+				trade: key.trade.id.to_owned(),
 				country: Country::FR,
 				name: "Aquafix".to_owned(),
 				site: BrandId::parse("aquafix").unwrap(),
@@ -244,13 +236,7 @@ pub(super) async fn kit(db: &TestDb) -> Kit {
 	];
 	let mut drafts = Vec::new();
 	for n in 1..=8 {
-		drafts.push(
-			panel
-				.add_draft(owner, trade, Country::FR, &format!("Draft {n}: quick and clean."), &[], now)
-				.await
-				.unwrap()
-				.unwrap(),
-		);
+		drafts.push(panel.add_draft(key, &format!("Draft {n}: quick and clean."), &[], now).await.unwrap().unwrap());
 	}
 	let app = app_with(panel.clone(), operator(), "dev@localhost", &base.parse().unwrap(), http::Limits::default());
 	let mut browser = Browser::default();
@@ -274,7 +260,7 @@ pub(super) async fn kit(db: &TestDb) -> Kit {
 		panel,
 		secret,
 		owner,
-		trade,
+		key,
 		brand,
 		seven,
 		three,
@@ -388,8 +374,7 @@ async fn a_draft_tagged_with_a_place_goes_only_to_a_gbp_in_it() {
 	let mut k = kit(&db).await;
 	areas(&db).await;
 	let (d1, d2) = (k.drafts[0], k.drafts[1]);
-	let trade = k.trade;
-	let tag = |d: i64| format!("/api/v1/trades/{trade}/FR/kit/drafts/{d}");
+	let tag = |d: i64| format!("/api/v1/categories/gcid:plumber/FR/kit/drafts/{d}");
 	let (status, _) = k.call(Method::PATCH, &tag(d1), Some(json!({ "places": ["bron"] }))).await;
 	assert_eq!(status, StatusCode::OK);
 	let (status, pool) = k.call(Method::PATCH, &tag(d2), Some(json!({ "places": ["lyon"] }))).await;

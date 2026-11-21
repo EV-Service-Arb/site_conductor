@@ -13,7 +13,7 @@ const gmb = (id: number, name: string, address: string | null, located: boolean,
   next: ["suspended", "verifying"],
   country: { code: "FR", by_hand: false },
   phone: null,
-  trade_id: null,
+  trade: null,
   brand_id: null,
   areas: [],
   hidden_address: null,
@@ -40,10 +40,10 @@ const gmails: Gmails = {
     { id: 2, gmail: "sameday.ny", created_at: "2026-11-05T00:00:00Z", browser: false, tabs: ["connections", "browser"] },
   ],
   gmbs: [
-    { ...gmb(10, "Aquafix · Vaise", "Lyon 9e", true), trade_id: 1 },
-    { ...gmb(11, "Aquafix · Gerland", "Lyon 7e", false), trade_id: 2 },
+    { ...gmb(10, "Aquafix · Vaise", "Lyon 9e", true), trade: "gcid:plumber" },
+    { ...gmb(11, "Aquafix · Gerland", "Lyon 7e", false), trade: "gcid:roofer" },
     gmb(12, "Aquafix · Croix-Rousse", "Lyon 4e", true, false),
-    { ...gmb(20, "Same Day Plumbing", null, true), trade_id: 1, country: { code: "US", by_hand: false } },
+    { ...gmb(20, "Same Day Plumbing", null, true), trade: "gcid:plumber", country: { code: "US", by_hand: false } },
     { ...gmb(30, "Aquafix · Part-Dieu", null, false, true, null), place_id: null, state: "draft", country: null },
   ],
 };
@@ -68,11 +68,11 @@ describe("the outline's GMBs", () => {
 
   it("under category patterns are those any pattern takes, and the gmails narrow them in turn; one with no trade is under none", () => {
     for (const [categories, scope, want] of [
-      [[{ trade: 1, country: "FR" }], null, [10]],
-      [[{ trade: 1, country: "*" }], null, [10, 20]],
+      [[{ trade: "gcid:plumber", country: "FR" }], null, [10]],
+      [[{ trade: "gcid:plumber", country: "*" }], null, [10, 20]],
       [[{ trade: "*", country: "FR" }], null, [10, 11]],
-      [[{ trade: 1, country: "FR" }, { trade: 2, country: "FR" }, { trade: 1, country: "US" }], null, [10, 11, 20]],
-      [[{ trade: 1, country: "*" }], new Set([2]), [20]],
+      [[{ trade: "gcid:plumber", country: "FR" }, { trade: "gcid:roofer", country: "FR" }, { trade: "gcid:plumber", country: "US" }], null, [10, 11, 20]],
+      [[{ trade: "gcid:plumber", country: "*" }], new Set([2]), [20]],
     ] as const) {
       expect(ids(narrowed(gmails, { gmails: scope, categories, brands: null }, "")), JSON.stringify(categories)).toEqual(want);
     }

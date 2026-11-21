@@ -20,7 +20,7 @@ import {
 } from "@evinvest/uikit";
 import { useId, useState } from "react";
 
-import { STATE_NAME, TradeSelect, useGmails, gmbs, trades } from "@/entities/gmb";
+import { STATE_NAME, TradePicker, useGmails, gmbs, trades } from "@/entities/gmb";
 import { api, ok } from "@/shared/api";
 import { type Country, type Gmb, type State, countryValues } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
@@ -38,7 +38,7 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
   const gmails = useGmails();
   const [gmail, setGmail] = useState(gmb.gmail_id);
   const [phone, setPhone] = useState(gmb.phone ?? "");
-  const [trade, setTrade] = useState(gmb.trade_id);
+  const [trade, setTrade] = useState(gmb.trade);
   const [country, setCountryPicked] = useState<Country | null>(gmb.country?.code ?? null);
   const [place, setPlace] = useState("");
   const [busy, setBusy] = useState(false);
@@ -63,7 +63,7 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
       const edit = {
         ...(gmail !== null && gmail !== gmb.gmail_id && { gmail_id: gmail }),
         ...(phone.trim() !== (gmb.phone ?? "") && { phone: phone.trim() === "" ? null : phone.trim() }),
-        ...(trade !== (gmb.trade_id) && { trade }),
+        ...(trade !== gmb.trade && { trade }),
       };
       if (Object.keys(edit).length > 0) await ok(api.PATCH("/gmbs/{id}", { params: { path: { id: gmb.id } }, body: edit }));
       if (country !== null && country !== gmb.country?.code) await ok(api.PUT("/gmbs/{id}/country", { params: { path: { id: gmb.id } }, body: { country } }));
@@ -108,7 +108,7 @@ export function EditGbp({ gmb, onClose, onChanged }: { gmb: Gmb; onClose: () => 
           )}
           <Field className="flex flex-col gap-1">
             <FieldLabel>{t(trades.trade, "Trade")}</FieldLabel>
-            <TradeSelect value={trade} onPick={setTrade} none={t(trades.none, "No trade")} label={t(trades.trade, "Trade")} className="w-full" />
+            <TradePicker value={trade} onPick={setTrade} none={t(trades.none, "No trade")} label={t(trades.trade, "Trade")} country={country} className="w-full" />
           </Field>
           <div className="flex gap-2">
             <Field className="flex min-w-0 flex-1 flex-col gap-1">

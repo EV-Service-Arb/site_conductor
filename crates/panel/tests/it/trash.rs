@@ -53,14 +53,14 @@ async fn opened(db: &TestDb) -> (Panel, Uuid) {
 	(p, owner)
 }
 
-fn existing(trade: i64, gmail_id: i64, place: &str, name: &str) -> Existing {
+fn existing(trade: &str, gmail_id: i64, place: &str, name: &str) -> Existing {
 	Existing {
 		gmail_id,
 		place: place.to_owned(),
 		state: OnGoogle::Verified,
 		name: Some(name.to_owned()),
 		country: Some(Country::FR),
-		trade: Some(trade),
+		trade: Some(trade.to_owned()),
 	}
 }
 
@@ -96,7 +96,7 @@ fn listed(t: &Trash) -> (Vec<(i64, usize)>, Vec<i64>) {
 async fn a_removed_gmail_waits_in_the_trash_and_comes_back_with_what_went_with_it() {
 	let db = TestDb::create().await;
 	let (p, owner) = opened(&db).await;
-	let trade = p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap().id;
+	let trade = "gcid:plumber";
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
 	let one = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();
 	let two = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, TWO, "Two"), now()).await.unwrap().unwrap();
@@ -135,7 +135,7 @@ async fn a_removed_gmail_waits_in_the_trash_and_comes_back_with_what_went_with_i
 async fn a_restore_is_refused_while_a_live_gbp_holds_its_place_or_a_live_gmail_its_address() {
 	let db = TestDb::create().await;
 	let (p, owner) = opened(&db).await;
-	let trade = p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap().id;
+	let trade = "gcid:plumber";
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
 	let one = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();
 	p.remove_gmb(owner, one.id, now()).await.unwrap().unwrap();
@@ -155,7 +155,7 @@ async fn a_restore_is_refused_while_a_live_gbp_holds_its_place_or_a_live_gmail_i
 async fn the_purge_ends_a_restore_once_the_kept_days_pass() {
 	let db = TestDb::create().await;
 	let (p, owner) = opened(&db).await;
-	let trade = p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap().id;
+	let trade = "gcid:plumber";
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
 	let one = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();
 	connect(&db, gmail.id).await;
@@ -208,7 +208,7 @@ async fn never_purge_keeps_everything() {
 async fn an_erase_is_gone_for_good_at_once() {
 	let db = TestDb::create().await;
 	let (p, owner) = opened(&db).await;
-	let trade = p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap().id;
+	let trade = "gcid:plumber";
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
 	let other = p.add_gmail(owner, "b@gmail.com", now()).await.unwrap().unwrap();
 	let one = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();

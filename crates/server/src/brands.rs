@@ -30,7 +30,8 @@ use crate::{
 pub(crate) struct BrandDto {
 	pub id: i64,
 	pub gmail_id: i64,
-	pub trade_id: i64,
+	/// A gcid.
+	pub trade: String,
 	pub country: Country,
 	/// What its GBPs' names start with: "Aquafix" → "Aquafix · Guillotière".
 	pub name: String,
@@ -65,7 +66,8 @@ pub(crate) struct PhotosDto {
 #[serde(deny_unknown_fields)]
 pub(crate) struct NewBrandDto {
 	gmail: i64,
-	trade: i64,
+	/// A gcid: the caller's category of it in `country`.
+	trade: String,
 	country: Country,
 	name: String,
 	site: BrandId,
@@ -107,7 +109,7 @@ impl From<Brand> for BrandDto {
 		Self {
 			id: b.id,
 			gmail_id: b.gmail_id,
-			trade_id: b.trade_id,
+			trade: b.trade,
 			country: b.country,
 			name: b.name,
 			site: b.site,
@@ -149,7 +151,7 @@ async fn brands(State(panel): State<Panel>, Extension(caller): Extension<Caller>
 async fn add_brand(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<NewBrandDto>) -> ApiResult<Created<BrandDto>> {
 	let new = NewBrand {
 		gmail_id: b.gmail,
-		trade_id: b.trade,
+		trade: b.trade,
 		country: b.country,
 		name: b.name,
 		site: b.site,

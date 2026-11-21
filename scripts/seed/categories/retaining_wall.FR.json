@@ -1,7 +1,8 @@
 {
-  "trade": "Retaining wall",
+  "trade": "gcid:retaining_wall_supplier",
   "country": "FR",
-  "set_up": {
+  "title": "Retaining wall",
+  "body": {
     "keywords": [
       {
         "text": "fournisseur de murs de soutènement",
@@ -20,8 +21,7 @@
         "weight": 0.5
       }
     ],
-    "google_primary": "gcid:retaining_wall_supplier",
-    "google_additional": [
+    "additional": [
       {
         "id": "gcid:earth_works_company",
         "weight": 0.6

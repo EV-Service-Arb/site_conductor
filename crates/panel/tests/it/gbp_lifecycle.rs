@@ -19,6 +19,9 @@ use uuid::Uuid;
 const PROCOPE: &str = "ChIJLU7jZClu5kcR4PcOOO6p3I0";
 const FLORE: &str = "ChIJD7fiBh9u5kcRYJSMaMOCCwQ";
 
+/// The trade every GBP here is of.
+const PLUMBER: &str = "gcid:plumber";
+
 fn now() -> Timestamp {
 	"2026-11-08T12:00:00Z".parse().unwrap()
 }
@@ -49,14 +52,6 @@ async fn person(p: &Panel, email: &str) -> Uuid {
 	user_id
 }
 
-/// `owner`'s trade, added the first time.
-async fn trade(p: &Panel, owner: Uuid) -> i64 {
-	match p.trades(owner).await.unwrap().first() {
-		Some(t) => t.id,
-		None => p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap().id,
-	}
-}
-
 async fn add(p: &Panel, owner: Uuid, gmail_id: i64, place: &str, name: &str, country: Option<Country>) -> Result<Gmb, Refused> {
 	let existing = Existing {
 		gmail_id,
@@ -64,7 +59,7 @@ async fn add(p: &Panel, owner: Uuid, gmail_id: i64, place: &str, name: &str, cou
 		state: OnGoogle::Verified,
 		name: Some(name.to_owned()),
 		country,
-		trade: Some(trade(p, owner).await),
+		trade: Some(PLUMBER.to_owned()),
 	};
 	p.add_gmb(Some(Spender::new(owner)), existing, now()).await.unwrap()
 }
@@ -72,7 +67,7 @@ async fn add(p: &Panel, owner: Uuid, gmail_id: i64, place: &str, name: &str, cou
 async fn create(p: &Panel, owner: Uuid, name: &str, state: State, gmail_id: Option<i64>, country: Option<Country>) -> Result<Gmb, Refused> {
 	let unplaced = Unplaced {
 		name: name.to_owned(),
-		trade: trade(p, owner).await,
+		trade: PLUMBER.to_owned(),
 		state,
 		gmail_id,
 		country,

@@ -22,7 +22,7 @@ async fn a_gbp_holds_a_brand_of_its_gmail_and_category_only_and_drops_it_when_ei
 			k.owner,
 			NewBrand {
 				gmail_id: paris,
-				trade_id: k.trade,
+				trade: k.key.trade.id.to_owned(),
 				country: Country::FR,
 				name: "Aquafix".to_owned(),
 				site: BrandId::parse("aquafix").unwrap(),
@@ -65,7 +65,7 @@ async fn a_brand_a_live_gbp_holds_stays() {
 	k.panel.set_brands(k.owner, &[k.three], None).await.unwrap().unwrap();
 	k.panel.remove_brand(k.owner, k.brand, now).await.unwrap().unwrap();
 	assert!(k.panel.brands(k.owner).await.unwrap().is_empty());
-	let refused = k.panel.remove_category(k.owner, k.trade, Country::FR).await.unwrap();
+	let refused = k.panel.delete_category(k.key).await.unwrap();
 	assert!(matches!(refused, Err(Refused::Conflict(_))), "a brand, removed too, keeps its category: {refused:?}");
 }
 

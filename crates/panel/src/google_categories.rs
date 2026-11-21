@@ -26,6 +26,13 @@ impl GoogleCategory {
 			.ok_or_else(|| Invalid::new(format!("Google lists no category {id:?} in {country}")))
 	}
 
+	/// `id` as Google lists it in any country.
+	pub fn listed(id: &str) -> Result<Self, Invalid> {
+		LIST.get_key_value(id)
+			.map(|(id, l)| Self { id, names: &l.names })
+			.ok_or_else(|| Invalid::new(format!("Google lists no category {id:?}")))
+	}
+
 	/// Every one Google lists in `country`, by id.
 	pub fn all(country: Country) -> impl Iterator<Item = Self> {
 		LIST.iter().filter(move |(_, l)| l.countries.contains(&country)).map(|(id, l)| Self { id, names: &l.names })

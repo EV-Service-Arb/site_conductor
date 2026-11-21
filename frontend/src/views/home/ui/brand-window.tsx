@@ -4,10 +4,10 @@ import { Button, ConfirmDialog, DropdownMenu, DropdownMenuContent, DropdownMenuI
 import { Ellipsis, ImagePlus, ListFilter, Mail, MapPin, Plus, Tag, Trash2, Upload as UploadIcon } from "lucide-react";
 import { useState } from "react";
 
-import { BrandMark, brandKeys, chooseBrandScope, closeWindow, kit, useSites, move, openWindow, photoMax, photoSrc, trades as tradesKeys, uploadLogo, uploadPhoto, useBrands, useGmails } from "@/entities/gmb";
+import { BrandMark, brandKeys, categoryName, chooseBrandScope, closeWindow, kit, useSites, move, openWindow, photoMax, photoSrc, trades as tradesKeys, uploadLogo, uploadPhoto, useBrands, useGmails } from "@/entities/gmb";
 import { Refused, api, ok } from "@/shared/api";
-import type { Brand, Gmail, Gmb, KitPhoto, Trade } from "@/shared/api/schema";
-import { useT } from "@/shared/i18n";
+import type { Brand, Gmail, Gmb, GoogleCategory, KitPhoto } from "@/shared/api/schema";
+import { useLocale, useT } from "@/shared/i18n";
 import { useResource } from "@evinvest/api/react";
 import { failureText } from "@/shared/ui/failure-text";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -18,13 +18,14 @@ const SECTION_HEAD = "flex items-baseline gap-2 text-xs font-semibold tracking-w
 const HINT = "font-normal tracking-normal normal-case";
 
 /** A brand's window: what every GBP of it shares, its photos, its GBPs; it sits under one gmail and one category. */
-export function BrandWindow({ trade, brand, gmbs, gmails }: { trade: Trade; brand: Brand; gmbs: readonly Gmb[]; gmails: readonly Gmail[] }) {
+export function BrandWindow({ trade, brand, gmbs, gmails }: { trade: GoogleCategory; brand: Brand; gmbs: readonly Gmb[]; gmails: readonly Gmail[] }) {
   const t = useT();
+  const locale = useLocale();
   const button = useButtonSize();
   const gmail = gmails.find((g) => g.id === brand.gmail_id);
-  const category = `${trade.name} · ${brand.country}`;
+  const category = categoryName(trade, brand.country, locale);
   const held = gmbs.filter((b) => b.brand_id === brand.id);
-  const brandless = gmbs.filter((b) => b.brand_id === null && b.gmail_id === brand.gmail_id && b.trade_id === brand.trade_id && b.country?.code === brand.country);
+  const brandless = gmbs.filter((b) => b.brand_id === null && b.gmail_id === brand.gmail_id && b.trade === brand.trade && b.country?.code === brand.country);
   return (
     <section aria-label={brand.name} className="flex flex-col">
       <header className="flex items-start gap-3 px-6 pt-4">

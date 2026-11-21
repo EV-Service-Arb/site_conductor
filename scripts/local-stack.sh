@@ -1064,13 +1064,22 @@ if [ "$run_panel" = 1 ]; then
 		[ -z "$AQUAFIX_PORT" ] || source_key aquafix-local aquafix "http://localhost:$AQUAFIX_PORT"
 		[ -z "$VIFNET_PORT" ] || source_key vifnet-local vifnet "http://localhost:$VIFNET_PORT"
 		[ -z "$DEBOUCHAGE_PORT" ] || source_key debouchage-local debouchage "http://localhost:$DEBOUCHAGE_PORT"
-		# The categories placement studies, each a trade set up in a country (scripts/seed/categories); a
-		# trade of that name is the caller's own, so a rerun edits it.
+		# The standard library's first listings (scripts/seed/categories): each the admin's category,
+		# released under its title once and again whenever its file moved the head, ranked in file order.
+		rank=0
 		for f in "$root"/scripts/seed/categories/*.json; do
-			name="$(jq -r .trade "$f")" country="$(jq -r .country "$f")"
-			id="$(api GET /trades | jq -r --arg n "$name" '.trades[] | select(.name == $n) | .id')"
-			[ -n "$id" ] || id="$(api POST /trades -d "$(jq -nc --arg n "$name" '{name: $n}')" | jq -r .id)"
-			api PUT "/trades/$id/$country" -d "$(jq -c .set_up "$f")" >/dev/null
+			rank=$((rank + 1))
+			trade="$(jq -r .trade "$f")" country="$(jq -r .country "$f")" title="$(jq -r .title "$f")"
+			head="$(api PUT "/categories/$trade/$country" -d "$(jq -c .body "$f")" | jq -r .head.id)"
+			listing="$(api GET "/library?trade=$trade&country=$country&kind=mine&sort=recent" | jq -c --arg t "$title" '[.listings[] | select(.title == $t)][0] // empty')"
+			if [ -z "$listing" ]; then
+				id="$(api POST /library -d "$(jq -nc --argjson v "$head" --arg t "$title" '{version: $v, title: $t, about: "", notes: "", forked_from: null}')" | jq -r .id)"
+			else
+				id="$(jq -r .id <<<"$listing")"
+				[ "$(jq -r .latest.version <<<"$listing")" = "$head" ] ||
+					api POST "/library/$id/versions" -d "$(jq -nc --argjson v "$head" '{version: $v, notes: "scripts/seed/categories"}')" >/dev/null
+			fi
+			api PUT "/library/$id/standard" -d "$(jq -nc --argjson r "$rank" '{rank: $r}')" >/dev/null
 		done
 		# Their area: its country is one geocode, bought only under --spend-real-quota-i-am-certain.
 		if ! api GET /areas | jq -e '.areas[] | select(.slug == "clermont-ferrand")' >/dev/null; then

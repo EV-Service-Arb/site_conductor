@@ -1,7 +1,8 @@
 {
-  "trade": "Dumpster rental",
+  "trade": "gcid:dumpster_rental_service",
   "country": "FR",
-  "set_up": {
+  "title": "Dumpster rental",
+  "body": {
     "keywords": [
       {
         "text": "service de location de bennes à déchets",
@@ -24,8 +25,7 @@
         "weight": 0.6
       }
     ],
-    "google_primary": "gcid:dumpster_rental_service",
-    "google_additional": [
+    "additional": [
       {
         "id": "gcid:debris_removal_service",
         "weight": 0.5

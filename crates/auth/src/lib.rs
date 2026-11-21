@@ -138,6 +138,13 @@ pub enum Study {
 	Spend,
 }
 
+/// The library's standard listings: `Curate` ranks them.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Permission)]
+#[permission("sa:placement:library")]
+pub enum Library {
+	Curate,
+}
+
 alias!(pub SA_OPERATOR = "sa:operator", [Work::Read, Leads::Edit, Pii::See, Analysis::Read, Study::Read]);
 // Held by every member of the `sa` scope, without a grant (concierge's `<namespace>:everyone`).
 alias!(pub SA_EVERYONE = "sa:everyone", [Mcp::Use, Own::Payments, Own::Credentials]);
@@ -160,6 +167,7 @@ alias!(
 		Mcp::Use,
 		Study::Read,
 		Study::Spend,
+		Library::Curate,
 	],
 	delegates [SA_OPERATOR]
 );

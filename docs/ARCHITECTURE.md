@@ -61,7 +61,8 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          (review_archive's, once), `assistant` (the assistant's chats), `trash`
                          (what was removed, restored until purged), `oauth` (MCP clients, the
                          sessions granted them), `brands` (a gmail's in a category: name, logo,
-                         site, the kit's photos), `kit` (the review kit: a category's drafts, the offer, an owner's kits and their tally, the posted reviews matched to copies), `areas` (geography,
+                         site, the kit's photos), `categories` (a person's: versions, moves, lineage), `library`
+                         (listings, their versions, published studies), `kit` (the review kit: a category's drafts, the offer, an owner's kits and their tally, the posted reviews matched to copies), `areas` (geography,
                          everyone's: the kit's links and studies' frames)
 crates/alerts/           no I/O: the alert rules, and the notes a service publishes to the
                          conductor and their check; sites and review_archive take it too
@@ -106,7 +107,9 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
   src/grafana.rs         Grafana: its process, /grafana/, the viewers' tokens and the loopback
                          listener they work on, the services' dashboards; its own in dashboards.rs
   src/live.rs            GET /api/v1/live, and the follower of sites' change feed
-  src/gmbs.rs            /api/v1/gmails, /api/v1/gmbs, /api/v1/trades
+  src/gmbs.rs            /api/v1/gmails, /api/v1/gmbs, /api/v1/google-categories
+  src/categories.rs      /api/v1/categories, /api/v1/category-versions
+  src/library.rs         /api/v1/library: listings, their versions, the standard library
   src/connections.rs     /api/v1/gmails/{id}/{connections,imap,maps_key,business}; each gmail's inbox followed
   src/browser.rs         /api/v1/gmails/{id}/browser{,/test,/start,/stop,/film,/thread}; the runner; the viewer's
                          socket, the relay between it and a browser's devtools, a phone's passed through
@@ -129,8 +132,9 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
                          `search`/`call`/`execute`/`poll`, `open` (a view) and `run` (a binding); what the
                          level holds is proposed, the user confirms it, and a cell waiting on it goes on
   src/areas.rs           /api/v1/areas, and the cities and localities they are drawn from
-  src/placement.rs       /api/v1/placement: a study's Definition built from the areas and trades, and built by
-                         placement's library in process; a pull held, what the study lacks bought, charged
+  src/placement.rs       /api/v1/placement, /api/v1/library/studies: a study's Definition built from an area
+                         and a category version, or kept frozen when published, and built by placement's
+                         library in process; a pull held, what the study lacks bought, charged
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
                          work in `serve`
   src/telegram.rs        the Bot API, its long poll
@@ -177,7 +181,8 @@ POST /auth/logout    CSRF; every session of the user is closed
   `sa:placement:study:read` / `:spend` for placement's studies and pulls,
   `sa:own:payments` / `:credentials` for what only the caller's own sign-in does (claiming,
   spending settings and the wallet; their Claude, linking Telegram, authorizing an MCP client),
-  none for the rest (the caller's own gmails, GMBs, trades, tokens, alerts, chats and review kit). Each fresh
+  `sa:placement:library:curate` for the standard library's ranks, none for the rest (the caller's
+  own gmails, GMBs, categories, tokens, alerts, chats and review kit, and the library). Each fresh
   `GetMe` upserts the user (`users`: id, email, name), whom tokens and gmails belong to.
 - **The catalog.** `serve` publishes `Catalog::collect("sa", PANEL_BUILD_EPOCH)` — the whole `sa`
   namespace, every service's permissions — with `PublishCatalog` before it serves (the image
@@ -284,7 +289,7 @@ second block below to it.
   nested under their pages) is the front end's one page, which shows the view the location
   parses as; below a nest the path is the element's to route. The bundles run on this origin:
   their builds are trusted as the conductor's own code is.
-- **Windows are routes, pages and hotbar entries.** Every window (a GBP, a gmail, a trade, a brand,
+- **Windows are routes, pages and hotbar entries.** Every window (a GBP, a gmail, a category, the library, a brand,
   the categories, the trash, Add a GBP, a review kit) is a key of one closed union (`WinKey`,
   `entities/gmb/model/windows.ts`: how it reads from and writes to Home's params, its page, its
   entry), drawn by one registry (`views/windows`: title, icon, body, the same over the map and as
@@ -327,19 +332,23 @@ archives, and every studied definition for its `fit`), on a blocking thread, and
 answer only through its `Held`: here, this conductor's queries cache.
 
 ```text
-GET  /placement/study?area&category ─ the area, the caller's category (or none) → Definition ─▶ build, kept per id
+GET  /placement/study?area&version ── the area, a category version the caller reads (or none) → Definition ─▶ build, kept per id
+GET  /placement/studies/{sha} ─────── a published study's frozen Definition ─▶ the same build, the same keeping
      ◀── the payload ── the front end hands it to the overlay (wasm, built with the front end)
 POST /placement/study/pull?…        ─ since: when the first pull since the study's last whole one began
      asks ─▶ [Ask], each bought into the queries cache (`gop`), asked again until none ─▶ build ◀── the payload
      a whole pull forgets since; a stopped one keeps it, so its retry buys only what it did not
 ```
 
-A category is its studies' whole definition; an area applies it. Its competitors are tiered by
-which of its Google categories' searches found them, first match wins: the primary's (its name and
-each keyword), then one per additional category (its name alone), Excluded checked before any.
-Each additional tier weighs against the primary's 1, as each keyword against the primary's name.
+A study is an area and a category version: the version is its whole definition, the area applies
+it, and one `define` builds the `Definition` for every study route, naming each gcid in the
+country's language. Its competitors are tiered by which of its Google categories' searches found
+them, first match wins: the trade's (its name and each keyword), then one per additional category
+(its name alone), Excluded checked before any. Each additional tier weighs against the trade's 1,
+as each keyword against the trade's name. A published study keeps its definition, the area's
+geometry frozen in it (areas move); loading it builds over the same queries cache and buys nothing.
 
-The conductor decides what cannot be studied, by why (`no_google_category`, `another_country`,
+The conductor decides what cannot be studied, by why (`another_country`,
 `unstudied`: an area in a country placement holds no base for); the front end only renders it. A study
 never spends; a pull (`sa:placement:study:spend`) buys the Places searches it lacks at the puller's
 tokens (Tokens and GBPs). Placement buys nothing: the conductor is the one center of data
@@ -577,16 +586,25 @@ PUT    /gmbs/{id}/country
 GET    /map
 POST   /map/street_view
 POST   /map/load
-GET    /trades
-POST   /trades
-PATCH  /trades/{id}
-DELETE /trades/{id}
-PUT    /trades/{id}/{country}
-DELETE /trades/{id}/{country}
-GET    /trades/{id}/{country}/kit
-POST   /trades/{id}/{country}/kit/drafts
-PATCH  /trades/{id}/{country}/kit/drafts/{draft}
-DELETE /trades/{id}/{country}/kit/drafts/{draft}
+GET    /categories
+PUT    /categories/{trade}/{country}
+DELETE /categories/{trade}/{country}
+POST   /categories/{trade}/{country}/head
+GET    /categories/{trade}/{country}/history
+GET    /category-versions/{id}
+GET    /categories/{trade}/{country}/kit
+POST   /categories/{trade}/{country}/kit/drafts
+PATCH  /categories/{trade}/{country}/kit/drafts/{draft}
+DELETE /categories/{trade}/{country}/kit/drafts/{draft}
+GET    /library
+POST   /library
+GET    /library/{id}
+POST   /library/{id}/versions
+POST   /library/{id}/withdraw
+PUT    /library/{id}/standard               placement:library:curate
+POST   /library/studies
+GET    /library/studies
+POST   /library/studies/{sha}/withdraw
 GET    /brands
 POST   /brands
 PATCH  /brands/{id}
@@ -611,6 +629,8 @@ PUT    /areas/{slug}
 GET    /placement/catalog                   study:read
 GET    /placement/study                     study:read, slow
 POST   /placement/study/pull                study:spend, fresh, slow
+GET    /placement/studies/{sha}             study:read, slow
+POST   /placement/studies/{sha}/pull        study:spend, fresh, slow
 GET    /kit/cities
 GET    /kit/cities/{place_id}
 GET    /kit/locality
@@ -664,7 +684,7 @@ tells it what is open, its views (`ROUTES`) and the bindings bound now.
 ids, so they are deleted, with their members and marks. Owner and members write (turns, a title,
 invites; a member leaves); `general: view` lets anyone holding a `sa` permission read one, 403 on
 any write; anyone else is answered 404. Turns are written whole from an index, on the version
-read; a body ≤ 4 MiB (images ride as data URLs), a chat's turns ≤ 16 MiB, else 413. Before the import (below) the gmail, GMB and trade
+read; a body ≤ 4 MiB (images ride as data URLs), a chat's turns ≤ 16 MiB, else 413. Before the import (below) the gmail, GMB and category
 writes and every tokens route answer 503.
 **Connected sites** (`GET /sources/sites`): for every active site key at once, its landing's own
 report and sites' view of it, all asked together (joined, nothing spawned):
@@ -949,7 +969,7 @@ priced in money, so an account overshoots by its hours behind.
   place is set once, on any move while it has none (with Google's address, point and country),
   and must be by the time it is verified. A GBP is created with its trade.
 - **A draft's must-haves** are what Google's form asks and what stands behind it: name, category
-  (set up, with its primary Google category), service areas (≤ 20), phone, a site page (sites' link), the hidden address with whether
+  (a trade, a country, and the owner's category there), service areas (≤ 20), phone, a site page (sites' link), the hidden address with whether
   customers visit, the verification film, the managing gmail, its browser (Browsers: set up, its last check
   through). The film is a reference set by hand until verif_vid fills it. How many are ready
   is advice the front end computes; the move onto Google never checks it.
@@ -957,21 +977,28 @@ priced in money, so an account overshoots by its hours behind.
   it, or manager, with its owner gmail an address recorded for reference only; none without a gmail,
   unknown until said, cleared by a transfer. A gmail usually owns up to 3 GBPs and manages up to 6
   before Google grows wary: its count shown, never refused.
-- **A GBP's category** is its trade (its owner's: Plumbing) in its own country, derived, never
-  stored: Plumbing · FR. The trade set up for a country holds its Google categories there, its
-  keywords (placement's `keywords`), the terms every GBP of the category is compared on, in the
-  country's language, and what its studies read (placement's `Category`, Placement); any
-  other term is one location's own and stays out of comparisons. Not set up there is shown so, never filled from another country. A
-  trade is deleted only once no live GBP holds it; no service stores its id.
+- **A GBP's trade** is one of Google's categories (a gcid, global): the primary it is meant to
+  have. `google_primary` is what Google says after a Sync, a fact of its own: a Sync gives a GBP
+  with no trade Google's primary, and one whose trade differs from it is an issue, never
+  overwritten. A trade is valid in a country only where Google's list has it there.
+- **A GBP's category** is its owner's category of its trade in its own country, derived, never
+  stored: Plombier · FR. A category is a person's settings for a trade in a country: its
+  additional Google categories, its keywords (placement's `keywords`, the trade's name among
+  them at weight 1), the terms every GBP of the category is compared on, in the country's
+  language, and what its studies read (placement's `Category`, Placement); any other term is one
+  location's own and stays out of comparisons. Not set up there is shown so, never filled from
+  another country. Its settings are versions and its head a pointer (Library); it is deleted only
+  while no live GBP, review draft or brand holds it, its history kept.
 - **A GBP's brand** is under its gmail and its category, at most one, optional: no brand, no kit
   photos and no logo. A gmail, trade or country moved drops it in the same write; the schema
   refuses any other. Removed, never deleted, and only while no live GBP holds it. Its own scope
   facet and window, never a setting of its gmail's or category's.
 
   ```text
-  user ─┬─ trade ── category (trade × country) ─┐
-        └─ gmail ───────────────────────────────┴─▶ brand: name prefix, logo, site, photos
-                                       GBP ── 0..1 ───┘
+  Google's list (gcid) ── trade ──┐
+  user ─┬─ category (user × trade × country) ── head ─▶ a version ─┐
+        └─ gmail ──────────────────────────────────────────────────┴─▶ brand: name prefix, logo, site, photos
+                                                      GBP ── 0..1 ───┘
   brand.site ─▶ sites' BrandId (a site key's brands ─▶ its origin); many brands, one site
   ```
 - **Google's categories** are a closed list: a gcid (`gcid:plumber`) and a name per language. A
@@ -979,10 +1006,10 @@ priced in money, so an account overshoots by its hours behind.
   name is shown in the reader's language and copied in the country's, as the form in the GBP's
   browser (its country's locale) names it. The list is `crates/panel/google_categories.json`, one
   gcid a line: `{countries, names: {lang: name}}`, named in its countries' languages and the
-  front end's. It is drawn from pulls of Google's Business Information API:
+  front end's; `GET /google-categories/{country}` serves it. It is drawn from pulls of Google's Business Information API:
   jepto/google-business-profile-categories `data/categories.json` (every gcid, its English name,
   its regions) and hypetrix.com's `wp-json/hypetrix/v1/gbp-categories?region=US&lang=<fr|ru>`
-  (US only: the 25 GB/CA-only gcids carry their English name as `ru`). A refresh dropping a gcid a trade holds makes reading it fail until a migration moves
+  (US only: the 25 GB/CA-only gcids carry their English name as `ru`). A refresh dropping a gcid a GBP, version or listing holds makes reading it fail until a migration moves
   it to what Google replaced it with.
 - **Past a draft a GBP has a gmail and a country** (the schema's CHECK on live rows): the archive
   reads its language from it. One on Google is added verifying, verified or suspended: by its
@@ -1110,6 +1137,39 @@ a review of g first seen at s (review_archive's feed) → kit_posted, decided on
   around a centre, and the locality its centre lies in, if any, an outline to see it by. One is named
   `<city> × <radius>` while its centre is in the city's circle, else by hand; a kit made from one takes
   its name and link. A kit is at `/reviews/kit/<slug>`, its slug the owner's, never `new`.
+
+## Library
+
+What is global and what is a person's:
+
+```text
+global     Google's list (the trades) · category versions · listings and their versions · published studies
+personal   categories: (owner, trade, country) ─ head ─▶ a version · their moves · GBPs, brands, kit drafts
+```
+
+```text
+Apply ─▶ a version (immutable) ◀─ head ── category ── moves: edit | adopt | update | revert (append-only)
+                 ▲                                       │ lineage: the last adopt/update since its creation
+listing ── versions n=1,2,… (each releases one) ─────────┘ upstream: a newer n than the lineage took
+published study (sha = its Definition's id) ── on a listing version
+```
+
+- **A version is shared content; history is personal.** Two people stand on one version by
+  adopting it, so lineage lives in each one's moves, never on the version. A version body names
+  nothing: gcids only, named when a study is built. An Apply equal to the head moves nothing.
+- **Who reads a version:** whoever's moves went to it, or anyone once a listing version releases
+  it. Anyone publishes, a version of their own moves; a listing releases only versions of its trade
+  and country. Ranking the standard library is `sa:placement:library:curate`'s.
+- **Released is forever.** A release is readable by everyone, for good: withdrawn hides a listing
+  or study from browsing and from whoever never used it (`library_seen`: adopted, or a study of it
+  loaded), and leaves it readable to whoever did.
+- **Never moved silently.** A newer listing version is shown (`upstream`); updating is the
+  person's move, after the diff. Adopting over an existing category is a move too; the old head
+  stays in history, and revert is a move.
+- **A study is published only on a released version**: the one its definition is of, or released
+  by the same request (a new listing, or the next version of one of the author's), else 422
+  `unreleased_category`. Loading it costs nothing for what is held; a pull is the loader's, under
+  No buy on credit and A Google answer is paid for once.
 
 ## Alerts
 
@@ -1254,8 +1314,10 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **A cloud phone bills while it runs**: nothing a test runs starts one, and one that started stops
   on every way its run ends (docs/spec/browsers.md).
 - **No two gmails share a proxy**: an exit two accounts share is a link Google can draw.
-- **The ledger is append-only, and nothing a service stores an id of is deleted.**
-  `token_ledger` and `gmb_events` refuse UPDATE and DELETE; gmails and GBPs get `removed_at`, which a restore
+- **The ledger is append-only, nothing a service stores an id of is deleted, and what is
+  released is released for good.** `token_ledger`, `gmb_events`, `category_versions`,
+  `category_moves`, `listing_versions` and `published_studies` refuse UPDATE and DELETE (a
+  published study and a listing get `withdrawn_at` once, a listing its curated rank); gmails and GBPs get `removed_at`, which a restore
   clears until `purged_at`, set once; kick-backs only `claimed_at`, once.
 - **A GBP with a place is tracked in review_archive; it is walked only while Verified.** The
   snapshot carries every GBP with a place, its state and country; the archive derives the track.

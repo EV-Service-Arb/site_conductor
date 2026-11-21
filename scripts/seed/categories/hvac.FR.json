@@ -1,7 +1,8 @@
 {
-  "trade": "HVAC",
+  "trade": "gcid:heating_contractor",
   "country": "FR",
-  "set_up": {
+  "title": "HVAC",
+  "body": {
     "keywords": [
       {
         "text": "chauffagiste",
@@ -24,8 +25,7 @@
         "weight": 1
       }
     ],
-    "google_primary": "gcid:heating_contractor",
-    "google_additional": [
+    "additional": [
       {
         "id": "gcid:hvac_contractor",
         "weight": 0.9

@@ -2,16 +2,11 @@
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::gbp::Country;
 use sqlx::SqliteConnection;
 use uuid::Uuid;
 
-use super::{
-	from_db,
-	gmbs::{GmbId, TradeId},
-	to_db,
-};
-use crate::kit::Target;
+use super::{from_db, gmbs::GmbId, to_db};
+use crate::{categories::Key, kit::Target};
 
 const KIT: &str = "SELECT k.id, k.slug, k.name, k.area, (SELECT COUNT(*) FROM kit_members m WHERE m.kit_id = k.id) FROM kits k";
 
@@ -43,16 +38,17 @@ pub struct PhotoRow {
 }
 
 /// The category's drafts not removed; `gmb`'s use and leases as of `now` (none asked: all false).
-pub async fn drafts(conn: &mut SqliteConnection, trade: i64, country: Country, gmb: Option<i64>, now: Timestamp) -> eyre::Result<Vec<DraftRow>> {
+pub async fn drafts(conn: &mut SqliteConnection, key: Key, gmb: Option<i64>, now: Timestamp) -> eyre::Result<Vec<DraftRow>> {
 	let rows: Vec<(i64, String, i64, i64, bool, bool)> = sqlx::query_as(
 		"SELECT d.id, d.text, d.created_at, \
 		 (SELECT COUNT(*) FROM kit_uses u WHERE u.draft_id = d.id), \
-		 EXISTS (SELECT 1 FROM kit_uses u WHERE u.draft_id = d.id AND u.gmb_id = $3), \
-		 EXISTS (SELECT 1 FROM kit_offered o JOIN kit_views v ON v.id = o.view_id WHERE o.draft_id = d.id AND v.gmb_id = $3 AND v.leased_until > $4) \
-		 FROM kit_drafts d WHERE d.trade_id = $1 AND d.country = $2 AND d.removed_at IS NULL ORDER BY d.id",
+		 EXISTS (SELECT 1 FROM kit_uses u WHERE u.draft_id = d.id AND u.gmb_id = $4), \
+		 EXISTS (SELECT 1 FROM kit_offered o JOIN kit_views v ON v.id = o.view_id WHERE o.draft_id = d.id AND v.gmb_id = $4 AND v.leased_until > $5) \
+		 FROM kit_drafts d WHERE d.owner = $1 AND d.trade = $2 AND d.country = $3 AND d.removed_at IS NULL ORDER BY d.id",
 	)
-	.bind(trade)
-	.bind(country.as_str())
+	.bind(key.owner)
+	.bind(key.trade.id)
+	.bind(key.country.as_str())
 	.bind(gmb)
 	.bind(to_db(now))
 	.fetch_all(&mut *conn)
@@ -100,20 +96,11 @@ pub async fn photos(conn: &mut SqliteConnection, brand: i64, gmb: Option<i64>) -
 		.collect()
 }
 
-/// Drafts the category ever had, removed ones too.
-pub async fn held(conn: &mut SqliteConnection, trade: i64, country: Option<Country>) -> eyre::Result<i64> {
-	sqlx::query_scalar("SELECT COUNT(*) FROM kit_drafts WHERE trade_id = $1 AND ($2 IS NULL OR country = $2)")
-		.bind(trade)
-		.bind(country.map(Country::as_str))
-		.fetch_one(&mut *conn)
-		.await
-		.wrap_err("counting a category's kit")
-}
-
-pub async fn add_draft(conn: &mut SqliteConnection, trade: i64, country: Country, text: &str, now: Timestamp) -> eyre::Result<i64> {
-	sqlx::query_scalar("INSERT INTO kit_drafts (trade_id, country, text, created_at) VALUES ($1, $2, $3, $4) RETURNING id")
-		.bind(trade)
-		.bind(country.as_str())
+pub async fn add_draft(conn: &mut SqliteConnection, key: Key, text: &str, now: Timestamp) -> eyre::Result<i64> {
+	sqlx::query_scalar("INSERT INTO kit_drafts (owner, trade, country, text, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING id")
+		.bind(key.owner)
+		.bind(key.trade.id)
+		.bind(key.country.as_str())
 		.bind(text)
 		.bind(to_db(now))
 		.fetch_one(&mut *conn)
@@ -122,14 +109,15 @@ pub async fn add_draft(conn: &mut SqliteConnection, trade: i64, country: Country
 }
 
 /// Draft `id` of the category, not removed: its copies so far.
-pub async fn draft_uses(conn: &mut SqliteConnection, trade: TradeId, country: Country, id: i64) -> eyre::Result<Option<i64>> {
+pub async fn draft_uses(conn: &mut SqliteConnection, key: Key, id: i64) -> eyre::Result<Option<i64>> {
 	sqlx::query_scalar(
 		"SELECT (SELECT COUNT(*) FROM kit_uses u WHERE u.draft_id = d.id) FROM kit_drafts d \
-		 WHERE d.id = $1 AND d.trade_id = $2 AND d.country = $3 AND d.removed_at IS NULL",
+		 WHERE d.id = $1 AND d.owner = $2 AND d.trade = $3 AND d.country = $4 AND d.removed_at IS NULL",
 	)
 	.bind(id)
-	.bind(trade.v)
-	.bind(country.as_str())
+	.bind(key.owner)
+	.bind(key.trade.id)
+	.bind(key.country.as_str())
 	.fetch_optional(&mut *conn)
 	.await
 	.wrap_err("loading a draft")
@@ -146,11 +134,12 @@ pub async fn set_text(conn: &mut SqliteConnection, id: i64, text: &str) -> eyre:
 }
 
 /// `false`: no such draft of the category, not removed.
-pub async fn remove_draft(conn: &mut SqliteConnection, trade: TradeId, country: Country, id: i64, now: Timestamp) -> eyre::Result<bool> {
-	let done = sqlx::query("UPDATE kit_drafts SET removed_at = $4 WHERE id = $1 AND trade_id = $2 AND country = $3 AND removed_at IS NULL")
+pub async fn remove_draft(conn: &mut SqliteConnection, key: Key, id: i64, now: Timestamp) -> eyre::Result<bool> {
+	let done = sqlx::query("UPDATE kit_drafts SET removed_at = $5 WHERE id = $1 AND owner = $2 AND trade = $3 AND country = $4 AND removed_at IS NULL")
 		.bind(id)
-		.bind(trade.v)
-		.bind(country.as_str())
+		.bind(key.owner)
+		.bind(key.trade.id)
+		.bind(key.country.as_str())
 		.bind(to_db(now))
 		.execute(&mut *conn)
 		.await
@@ -479,10 +468,11 @@ pub async fn latest(conn: &mut SqliteConnection, kit: i64, since: Timestamp, lim
 }
 
 /// `(draft, area)` of the category's drafts tagged with a place.
-pub async fn draft_places(conn: &mut SqliteConnection, trade: i64, country: Country) -> eyre::Result<Vec<(i64, String)>> {
-	sqlx::query_as("SELECT p.draft_id, p.area FROM kit_draft_places p JOIN kit_drafts d ON d.id = p.draft_id WHERE d.trade_id = $1 AND d.country = $2 ORDER BY p.area")
-		.bind(trade)
-		.bind(country.as_str())
+pub async fn draft_places(conn: &mut SqliteConnection, key: Key) -> eyre::Result<Vec<(i64, String)>> {
+	sqlx::query_as("SELECT p.draft_id, p.area FROM kit_draft_places p JOIN kit_drafts d ON d.id = p.draft_id WHERE d.owner = $1 AND d.trade = $2 AND d.country = $3 ORDER BY p.area")
+		.bind(key.owner)
+		.bind(key.trade.id)
+		.bind(key.country.as_str())
 		.fetch_all(&mut *conn)
 		.await
 		.wrap_err("listing drafts' places")

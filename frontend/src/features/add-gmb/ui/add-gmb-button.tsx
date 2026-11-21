@@ -8,7 +8,7 @@ import { useT } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
 
 /** Opens the Add a GBP panel over the home map, of a trade (`trade` first, the outline's scope's), under `gmail` if given. */
-export function AddGmbButton({ gmail, trade, labeled }: { gmail: number | null; trade: number | null; labeled?: boolean }) {
+export function AddGmbButton({ gmail, trade, labeled }: { gmail: number | null; trade: string | null; labeled?: boolean }) {
   const t = useT();
   const button = useButtonSize();
   const label = t(gmbs.gmb.add, "Add a GBP");

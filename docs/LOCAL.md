@@ -91,7 +91,9 @@ What it does (`scripts/local-stack.sh`, which the flake app runs as is):
 2. Starts playbook_web from its checkout (`_.siblings-local.json`'s `playbook`) and the conductor, whose `/mcp` then lists playbook's tools; without the checkout its forward answers 502. Then seeds, idempotently, over HTTP as the dev admin (`/auth/login?as=`; only with `--role admin`, a new state needs it): the sources `aquafix-local` (brand `aquafix`, origin
    `<aquafix>`) `vifnet-local` (brand `vifnet`, origin `<vifnet>`) and `debouchage-local`
    (brand `debouchage`, origin `<debouchage>`)
-   in the conductor, the trades `scripts/seed/categories` sets up and their area `clermont-ferrand` (its centre geocoded only
+   in the conductor, the admin's categories `scripts/seed/categories` holds (`{trade: <gcid>, country, title, body}`), each
+   released as a listing of its title and ranked standard in file order (the standard library's first listings; the same
+   files are applied to prod once), and their area `clermont-ferrand` (its centre geocoded only
    under `--spend-real-quota-i-am-certain`), each secret kept in `.local/secrets/` and reused, a key from an older run
    given its origin; the
    places `aquafix/{royat, clermont-ferrand, desgenettes, lyon-est, la-mouche, lyon-nord}` and

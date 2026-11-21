@@ -11,12 +11,12 @@ use uuid::Uuid;
 use super::{from_db, to_db};
 use crate::brands::Brand;
 
-const BRAND: &str = "SELECT b.id, b.gmail_id, b.trade_id, b.country, b.name, b.site, b.logo_sha256, b.created_at, \
+const BRAND: &str = "SELECT b.id, b.gmail_id, b.trade, b.country, b.name, b.site, b.logo_sha256, b.created_at, \
 	(SELECT COUNT(*) FROM gmbs g WHERE g.brand_id = b.id AND g.removed_at IS NULL), \
 	(SELECT COUNT(*) FROM kit_photos p WHERE p.brand_id = b.id AND p.removed_at IS NULL) \
 	FROM brands b JOIN gmails m ON m.id = b.gmail_id";
 
-type Row = (i64, i64, i64, String, String, String, Option<Vec<u8>>, i64, i64, i64);
+type Row = (i64, i64, String, String, String, String, Option<Vec<u8>>, i64, i64, i64);
 
 /// The owner's brands not removed, on gmails not removed, by name.
 pub async fn brands(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<Brand>> {
@@ -44,8 +44,8 @@ pub async fn brand_of(conn: &mut SqliteConnection, owner: Uuid, id: i64) -> eyre
 }
 
 /// A live brand of the gmail × category named `name` whatever its case, but `except`.
-pub async fn named(conn: &mut SqliteConnection, gmail: i64, trade: i64, country: Country, name: &str, except: Option<i64>) -> eyre::Result<bool> {
-	let names: Vec<String> = sqlx::query_scalar("SELECT name FROM brands WHERE gmail_id = $1 AND trade_id = $2 AND country = $3 AND removed_at IS NULL AND id IS NOT $4")
+pub async fn named(conn: &mut SqliteConnection, gmail: i64, trade: &str, country: Country, name: &str, except: Option<i64>) -> eyre::Result<bool> {
+	let names: Vec<String> = sqlx::query_scalar("SELECT name FROM brands WHERE gmail_id = $1 AND trade = $2 AND country = $3 AND removed_at IS NULL AND id IS NOT $4")
 		.bind(gmail)
 		.bind(trade)
 		.bind(country.as_str())
@@ -57,10 +57,10 @@ pub async fn named(conn: &mut SqliteConnection, gmail: i64, trade: i64, country:
 	Ok(names.iter().any(|n| n.to_lowercase() == folded))
 }
 
-/// Its name free ([`named`]); the schema refuses a gmail or trade not the owner's.
+/// Its name free ([`named`]); the schema refuses a gmail or category not the owner's.
 #[expect(clippy::too_many_arguments, reason = "the brand's columns, each named at the call site")]
-pub async fn add(conn: &mut SqliteConnection, owner: Uuid, gmail: i64, trade: i64, country: Country, name: &str, site: &BrandId, now: Timestamp) -> eyre::Result<i64> {
-	sqlx::query_scalar("INSERT INTO brands (owner, gmail_id, trade_id, country, name, site, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id")
+pub async fn add(conn: &mut SqliteConnection, owner: Uuid, gmail: i64, trade: &str, country: Country, name: &str, site: &BrandId, now: Timestamp) -> eyre::Result<i64> {
+	sqlx::query_scalar("INSERT INTO brands (owner, gmail_id, trade, country, name, site, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id")
 		.bind(owner)
 		.bind(gmail)
 		.bind(trade)
@@ -101,16 +101,6 @@ pub async fn remove(conn: &mut SqliteConnection, id: i64, now: Timestamp) -> eyr
 	Ok(())
 }
 
-/// Brands the category ever had (`None`: the trade, every country), removed ones too.
-pub async fn ever(conn: &mut SqliteConnection, trade: i64, country: Option<Country>) -> eyre::Result<i64> {
-	sqlx::query_scalar("SELECT COUNT(*) FROM brands WHERE trade_id = $1 AND ($2 IS NULL OR country = $2)")
-		.bind(trade)
-		.bind(country.map(Country::as_str))
-		.fetch_one(&mut *conn)
-		.await
-		.wrap_err("counting a category's brands")
-}
-
 pub async fn set_logo(conn: &mut SqliteConnection, id: i64, png: &[u8], sha256: &[u8; 32]) -> eyre::Result<()> {
 	sqlx::query("UPDATE brands SET logo = $2, logo_sha256 = $3 WHERE id = $1")
 		.bind(id)
@@ -136,7 +126,7 @@ pub async fn logo(conn: &mut SqliteConnection, id: i64) -> eyre::Result<Option<V
 pub async fn fitting(conn: &mut SqliteConnection, owner: Uuid, ids: &BTreeSet<i64>, brand: Option<i64>) -> eyre::Result<usize> {
 	let n: i64 = sqlx::query_scalar(
 		"SELECT COUNT(*) FROM gmbs g WHERE g.id IN (SELECT value FROM json_each($1)) AND g.owner = $2 AND g.removed_at IS NULL \
-		 AND ($3 IS NULL OR EXISTS (SELECT 1 FROM brands b WHERE b.id = $3 AND b.gmail_id IS g.gmail_id AND b.trade_id IS g.trade_id AND b.country IS g.country))",
+		 AND ($3 IS NULL OR EXISTS (SELECT 1 FROM brands b WHERE b.id = $3 AND b.gmail_id IS g.gmail_id AND b.trade IS g.trade AND b.country IS g.country))",
 	)
 	.bind(serde_json::to_string(ids).expect("ids serialize"))
 	.bind(owner)
@@ -158,11 +148,11 @@ pub async fn set_brands(conn: &mut SqliteConnection, ids: &BTreeSet<i64>, brand:
 	Ok(())
 }
 
-fn brand((id, gmail_id, trade_id, country, name, site, logo, created_at, gmbs, photos): Row) -> eyre::Result<Brand> {
+fn brand((id, gmail_id, trade, country, name, site, logo, created_at, gmbs, photos): Row) -> eyre::Result<Brand> {
 	Ok(Brand {
 		id,
 		gmail_id,
-		trade_id,
+		trade,
 		country: country.parse()?,
 		name,
 		site: BrandId::parse(&site).wrap_err_with(|| format!("brand {id}'s site"))?,

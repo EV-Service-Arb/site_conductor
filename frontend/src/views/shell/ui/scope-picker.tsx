@@ -4,12 +4,12 @@ import { Popover, PopoverContent, PopoverTrigger, Switch, cn } from "@evinvest/u
 import { ArrowUpRight, Check, ChevronDown, ChevronRight, ListFilter, Plug, Plus, Settings } from "lucide-react";
 import { type MouseEvent, useEffect, useState } from "react";
 
-import { BrandMark, NewBrand, brandKeys, chooseBrandScope, chooseCategoryScope, chooseGmailScope, covers, inCategories, openWindow, type Pattern, type Selection, under, useBrands, useScope, useTrades, scopeKeys, gmbs as gmbsKeys } from "@/entities/gmb";
+import { BrandMark, NewBrand, brandKeys, chooseBrandScope, chooseCategoryScope, chooseGmailScope, covers, inCategories, openWindow, type Pattern, type Selection, under, useBrands, useScope, useTrades, type Traded, categoryName, googleName, scopeKeys, gmbs as gmbsKeys } from "@/entities/gmb";
 import { AddGmailButton } from "@/features/add-gmail";
 import { AddGmbButton } from "@/features/add-gmb";
 import { api, ok } from "@/shared/api";
-import { type Country, type Gmail, type Gmails, type Gmb, type Trade, countryValues } from "@/shared/api/schema";
-import { useT, account } from "@/shared/i18n";
+import { type Country, type Gmail, type Gmails, type Gmb, countryValues } from "@/shared/api/schema";
+import { useLocale, useT, account } from "@/shared/i18n";
 
 import { HEADING, ON_HOVER, ROW, Remove, ResetSelection } from "./outline-parts";
 
@@ -27,23 +27,18 @@ const META = "font-normal tracking-normal normal-case";
  */
 export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmails; selection: Selection; onFlip: (gmbs: Gmb[], enabled: boolean) => Promise<void>; onChanged: () => void }) {
   const t = useT();
-  const trades = useTrades();
+  const locale = useLocale();
+  const trades = useTrades(data.gmbs);
   const scope = useScope();
   const [open, setOpen] = useState(false);
   const [opened, setOpened] = useState<ReadonlySet<number>>(new Set());
-  const openSettings = (trade: number, country: Country | undefined) => {
+  const openSettings = (trade: string, country: Country | undefined) => {
     setOpen(false);
     openWindow({ kind: "trade", trade, country: country ?? null });
   };
   const { scoped, chosen, edited, isSelected, move } = selection;
   const { gmails } = data;
-  const known = trades.status === "ok" ? trades.data : null;
-
-  // a scoped trade deleted, here or in another tab: out of the scope
-  useEffect(() => {
-    if (known !== null && scope.categories !== null && scope.categories.some((p) => p.trade !== "*" && !known.some((k) => k.id === p.trade)))
-      chooseCategoryScope(scope.categories.filter((p) => p.trade === "*" || known.some((k) => k.id === p.trade)));
-  }, [known, scope.categories]);
+  const known = trades;
 
   const byGmail = (b: Gmb) => scope.gmails === null || (b.gmail_id !== null && scope.gmails.has(b.gmail_id));
   const byCategory = (b: Gmb) => scope.categories === null || inCategories(b, scope.categories);
@@ -63,7 +58,8 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
     setOpened(next);
   };
   const name = (p: Pattern) => {
-    const trade = p.trade === "*" ? null : (known?.find((k) => k.id === p.trade)?.name ?? "…");
+    const named = known?.find((k) => k.trade.id === p.trade)?.trade;
+    const trade = p.trade === "*" ? null : named === undefined ? "…" : googleName(named, locale);
     return [trade, p.country === "*" ? null : p.country].filter(Boolean).join(" · ");
   };
   const holding = gmails.filter((g) => under(data, g.id).some(byCategory));
@@ -94,13 +90,13 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
           <span className="flex-1" />
           {known !== null && (
             <span className={META}>
-              {t(scopeKeys.categories.counts, "{trades} trades · {countries} countries", { trades: known.length, countries: new Set(known.flatMap((tr) => tr.categories.map((c) => c.country))).size })}
+              {t(scopeKeys.categories.counts, "{trades} trades · {countries} countries", { trades: known.length, countries: new Set(known.flatMap((tr) => tr.setUp)).size })}
             </span>
           )}
         </div>
         {known !== null && <Matrix all={data.gmbs} gmbs={data.gmbs.filter(byGmail)} trades={known} picked={scope.categories} onSettings={openSettings} />}
         <p className="px-2 pt-1 text-xs text-ink-soft">{t(scopeKeys.matrix.how, "Click scopes · Shift-click adds")}</p>
-        {data.gmbs.some((b) => b.trade_id === null) && <p className="px-2 text-xs text-ink-soft">{t(scopeKeys.matrix.untraded, "{n} GBPs have no trade → the outline's No category chip", { n: data.gmbs.filter((b) => b.trade_id === null).length })}</p>}
+        {data.gmbs.some((b) => b.trade === null) && <p className="px-2 text-xs text-ink-soft">{t(scopeKeys.matrix.untraded, "{n} GBPs have no trade → the outline's No category chip", { n: data.gmbs.filter((b) => b.trade === null).length })}</p>}
         <div className={cn(HEADING, "mt-1 border-t border-border pt-2")}>
           {t(scopeKeys.gmails, "Managing gmails")}
           <span className="flex-1" />
@@ -203,10 +199,11 @@ export function ScopePicker({ data, selection, onFlip, onChanged }: { data: Gmai
  * Trades by the countries that have GBPs or categories: a cell counts the GBPs of that category under the gmails picked. Blank:
  * not set up and holding none; `0`: set up and holding none; dashed, in the warning tone: GBPs there, the trade not set up.
  */
-function Matrix({ all, gmbs, trades, picked, onSettings }: { all: readonly Gmb[]; gmbs: Gmb[]; trades: readonly Trade[]; picked: readonly Pattern[] | null; onSettings: (trade: number, country: Country | undefined) => void }) {
+function Matrix({ all, gmbs, trades, picked, onSettings }: { all: readonly Gmb[]; gmbs: Gmb[]; trades: readonly Traded[]; picked: readonly Pattern[] | null; onSettings: (trade: string, country: Country | undefined) => void }) {
   const t = useT();
-  const countries = countryValues.filter((c) => all.some((b) => b.country?.code === c) || trades.some((tr) => tr.categories.some((k) => k.country === c)));
-  if (trades.length === 0) return <p className="px-2 py-1.5 text-xs text-ink-soft">{t(scopeKeys.categories.none, "No trades yet: ⚙ names one.")}</p>;
+  const locale = useLocale();
+  const countries = countryValues.filter((c) => all.some((b) => b.country?.code === c) || trades.some((tr) => tr.setUp.includes(c)));
+  if (trades.length === 0) return <p className="px-2 py-1.5 text-xs text-ink-soft">{t(scopeKeys.categories.none, "No trades yet: Categories ↗ sets one up.")}</p>;
   const pick = (p: Pattern) => (e: MouseEvent) => {
     const now = picked ?? [];
     const has = now.some((q) => same(q, p));
@@ -214,7 +211,7 @@ function Matrix({ all, gmbs, trades, picked, onSettings }: { all: readonly Gmb[]
     else chooseCategoryScope(has && now.length === 1 ? null : [p]);
   };
   const state = (p: Pattern) => (picked?.some((q) => same(q, p)) ? PICKED : null);
-  const count = (trade: number | "*", country: Country | "*") => gmbs.filter((b) => inCategories(b, [{ trade, country }])).length;
+  const count = (trade: string, country: Country | "*") => gmbs.filter((b) => inCategories(b, [{ trade, country }])).length;
   const box = "h-7 rounded-md text-xs tabular-nums outline-none hover:bg-hover/60 focus-visible:ring-2 focus-visible:ring-ring";
   const settings = (label: string, open: () => void, className: string) => (
     <button type="button" aria-label={label} title={label} onClick={open} className={cn("items-center justify-center rounded text-ink-soft outline-none hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-ring", className)}>
@@ -233,7 +230,7 @@ function Matrix({ all, gmbs, trades, picked, onSettings }: { all: readonly Gmb[]
               className={cn(box, "flex w-full items-center px-2 text-ink-soft", picked === null && PICKED)}
             >
               <span className="flex-1 text-left">{t(scopeKeys.matrix.all, "All")}</span>
-              <span>{gmbs.filter((b) => b.trade_id !== null).length}</span>
+              <span>{gmbs.filter((b) => b.trade !== null).length}</span>
             </button>
           </th>
           {countries.map((c) => {
@@ -250,7 +247,8 @@ function Matrix({ all, gmbs, trades, picked, onSettings }: { all: readonly Gmb[]
         </tr>
       </thead>
       <tbody>
-        {trades.map((tr) => {
+        {trades.map(({ trade, setUp: there }) => {
+          const tr = { id: trade.id, name: googleName(trade, locale) };
           const row: Pattern = { trade: tr.id, country: "*" };
           return (
             <tr key={tr.id}>
@@ -261,17 +259,17 @@ function Matrix({ all, gmbs, trades, picked, onSettings }: { all: readonly Gmb[]
                     aria-pressed={state(row) !== null}
                     title={t(scopeKeys.matrix.trade, "{trade} in every country", { trade: tr.name })}
                     onClick={pick(row)}
-                    className={cn(box, "flex min-w-0 flex-1 items-center gap-2 px-2 text-sm", tr.categories.length === 0 ? "text-ink-soft" : "text-ink", state(row))}
+                    className={cn(box, "flex min-w-0 flex-1 items-center gap-2 px-2 text-sm", there.length === 0 ? "text-ink-soft" : "text-ink", state(row))}
                   >
                     <span className="min-w-0 flex-1 truncate text-left">{tr.name}</span>
                     <span className="text-xs text-ink-soft">{count(tr.id, "*")}</span>
                   </button>
-                  {settings(t(scopeKeys.matrix.open, "Open {category}", { category: tr.name }), () => onSettings(tr.id, countries.find((c) => tr.categories.some((k) => k.country === c))), cn("size-5 shrink-0", ON_HOVER))}
+                  {settings(t(scopeKeys.matrix.open, "Open {category}", { category: tr.name }), () => onSettings(tr.id, countries.find((c) => there.includes(c))), cn("size-5 shrink-0", ON_HOVER))}
                 </span>
               </th>
               {countries.map((c) => {
                 const p: Pattern = { trade: tr.id, country: c };
-                const setUp = tr.categories.some((k) => k.country === c);
+                const setUp = there.includes(c);
                 const n = count(tr.id, c);
                 const covering = state(p) === null && picked !== null && picked.some((q) => covers(q, tr.id, c));
                 if (!setUp && n === 0) return <td key={c} />;
@@ -280,7 +278,7 @@ function Matrix({ all, gmbs, trades, picked, onSettings }: { all: readonly Gmb[]
                     <button
                       type="button"
                       aria-pressed={state(p) !== null}
-                      title={setUp ? `${tr.name} · ${c}` : t(scopeKeys.matrix.notSetUp, "{category}: GBPs there, not set up", { category: `${tr.name} · ${c}` })}
+                      title={setUp ? categoryName(trade, c, locale) : t(scopeKeys.matrix.notSetUp, "{category}: GBPs there, not set up", { category: categoryName(trade, c, locale) })}
                       onClick={pick(p)}
                       className={cn(
                         box,
@@ -292,7 +290,7 @@ function Matrix({ all, gmbs, trades, picked, onSettings }: { all: readonly Gmb[]
                     >
                       {n}
                     </button>
-                    {settings(t(scopeKeys.matrix.open, "Open {category}", { category: `${tr.name} · ${c}` }), () => onSettings(tr.id, c), "absolute top-0 right-0 hidden size-4 bg-popover group-hover/cell:flex group-focus-within/cell:flex")}
+                    {settings(t(scopeKeys.matrix.open, "Open {category}", { category: categoryName(trade, c, locale) }), () => onSettings(tr.id, c), "absolute top-0 right-0 hidden size-4 bg-popover group-hover/cell:flex group-focus-within/cell:flex")}
                   </td>
                 );
               })}
@@ -355,8 +353,9 @@ function Room({ n }: { n: number }) {
 function Brands({ data, onOpened }: { data: Gmails; onOpened: () => void }) {
   const t = useT();
   const scope = useScope();
+  const locale = useLocale();
   const brands = useBrands();
-  const trades = useTrades();
+  const trades = useTrades(data.gmbs);
   const [adding, setAdding] = useState(false);
   const known = brands.status === "ok" ? brands.data : null;
 
@@ -366,11 +365,14 @@ function Brands({ data, onOpened }: { data: Gmails; onOpened: () => void }) {
   }, [known, scope.brands]);
 
   if (known === null) return null;
-  const shown = known.filter((b) => (scope.gmails === null || scope.gmails.has(b.gmail_id)) && (scope.categories === null || scope.categories.some((p) => covers(p, b.trade_id, b.country))));
+  const shown = known.filter((b) => (scope.gmails === null || scope.gmails.has(b.gmail_id)) && (scope.categories === null || scope.categories.some((p) => covers(p, b.trade, b.country))));
   const gmail = scope.gmails?.size === 1 ? [...scope.gmails][0]! : null;
   const one = scope.categories?.length === 1 ? scope.categories[0]! : null;
   const category = one !== null && one.trade !== "*" && one.country !== "*" ? { trade: one.trade, country: one.country } : null;
-  const tradeName = (id: number) => (trades.status === "ok" ? trades.data.find((tr) => tr.id === id)?.name : undefined) ?? "…";
+  const tradeName = (id: string) => {
+    const named = trades?.find((tr) => tr.trade.id === id)?.trade;
+    return named === undefined ? "…" : googleName(named, locale);
+  };
   const gmailName = (id: number) => data.gmails.find((g) => g.id === id)?.gmail ?? "…";
   const toggle = (id: number) => {
     const next = new Set(scope.brands ?? []);
@@ -399,7 +401,7 @@ function Brands({ data, onOpened }: { data: Gmails; onOpened: () => void }) {
                 <BrandMark brand={b} className="size-5 text-xs" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-ink">{b.name}</span>
-                  <span className="block truncate text-xs text-ink-soft">{[gmailName(b.gmail_id), `${tradeName(b.trade_id)} · ${b.country}`].join(" · ")}</span>
+                  <span className="block truncate text-xs text-ink-soft">{[gmailName(b.gmail_id), `${tradeName(b.trade)} · ${b.country}`].join(" · ")}</span>
                 </span>
               </button>
               <span className={cn("flex items-center", ON_HOVER)}>

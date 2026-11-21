@@ -7,7 +7,6 @@ use std::collections::{BTreeMap, HashSet};
 
 use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
 use ev_lib::api::{Body, Created, Ids, JsonSchema, Params, Refusal};
-use gmaps_optimal_placement_core::{Demand, Excluded, Keyword};
 use jiff::Timestamp;
 use sa_core::{
 	gbp::{Country, OnGoogle, Role, State as GbpState},
@@ -15,7 +14,8 @@ use sa_core::{
 };
 use sa_panel::{
 	Panel, Refused,
-	gmbs::{Category, Edit, Existing, Gmail, Gmb, GoogleCategory, Trade, Unplaced},
+	categories::Mine,
+	gmbs::{Edit, Existing, Gmail, Gmb, GoogleCategory, Unplaced},
 };
 use serde::{Deserialize, Serialize};
 
@@ -54,8 +54,9 @@ pub struct GmbDto {
 	pub country: Option<sa_panel::gmbs::GbpCountry>,
 	/// `+` and digits; one live GBP's.
 	pub phone: Option<String>,
-	/// Its category is this trade in its country.
-	pub trade_id: Option<i64>,
+	/// The gcid it is meant to have as its primary: its category is the caller's of it in its
+	/// country. Google's own is `google_primary`.
+	pub trade: Option<String>,
 	/// Of its gmail and its category.
 	pub brand_id: Option<i64>,
 	/// Service areas, at most 20.
@@ -100,7 +101,7 @@ pub struct GmbDto {
 #[serde(rename_all = "snake_case")]
 pub enum MustHave {
 	Name,
-	/// Its trade set up in its country, with Google's category.
+	/// A trade, a country, and the caller's category of it there.
 	Category,
 	Areas,
 	Phone,
@@ -123,46 +124,6 @@ pub struct ReadinessDto {
 	pub unknown: Vec<MustHave>,
 }
 
-/// A trade of the caller's: Plumbing, set up in some countries.
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "Trade")]
-pub struct TradeDto {
-	pub id: i64,
-	pub name: String,
-	/// RFC 3339.
-	pub created_at: String,
-	/// By country.
-	pub categories: Vec<CategoryDto>,
-}
-
-/// A trade set up for a country: Plumbing · FR.
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "Category")]
-pub struct CategoryDto {
-	pub country: Country,
-	/// The country's language, its keywords' and Google's form's: `fr`.
-	pub lang: String,
-	/// Lowercase, in the country's language, none naming a city: the terms every GBP of the
-	/// category is scanned on, and each competitor of its studies scored on as weighed. With a
-	/// primary, its name is among them at weight 1.
-	pub keywords: Vec<Keyword>,
-	/// What Google's form is given as the category; its studies' first competitor tier.
-	pub google_primary: Option<GoogleCategoryDto>,
-	/// At most 9, in the order they are entered into Google's form: a competitor tier each.
-	pub google_additional: Vec<AdditionalDto>,
-	pub excluded: Excluded,
-	pub demand: Option<Demand>,
-}
-
-/// An additional Google category and what one competitor of its tier weighs against one of the
-/// primary's.
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "AdditionalCategory")]
-pub struct AdditionalDto {
-	pub google: GoogleCategoryDto,
-	pub weight: f64,
-}
-
 /// One of Google's categories.
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "GoogleCategory")]
@@ -178,13 +139,6 @@ pub struct GoogleCategoryDto {
 #[schemars(rename = "GoogleCategories")]
 pub struct GoogleCategoriesDto {
 	pub categories: Vec<GoogleCategoryDto>,
-}
-
-/// `GET /trades`.
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "Trades")]
-pub struct TradesDto {
-	pub trades: Vec<TradeDto>,
 }
 
 /// A gmail of the caller's.
@@ -334,19 +288,13 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::PUT, "/gmbs/{id}/country", USER, set_gmb_country),
 		ApiRoute::new(M::GET, "/map", USER, map_key),
 		ApiRoute::new(M::POST, "/map/street_view", USER, street_view),
-		ApiRoute::new(M::GET, "/trades", USER, trades),
-		ApiRoute::new(M::POST, "/trades", USER, add_trade),
-		ApiRoute::new(M::PATCH, "/trades/{id}", USER, rename_trade),
-		ApiRoute::new(M::DELETE, "/trades/{id}", USER, delete_trade),
-		ApiRoute::new(M::PUT, "/trades/{id}/{country}", USER, set_up_trade),
-		ApiRoute::new(M::DELETE, "/trades/{id}/{country}", USER, remove_category),
 		ApiRoute::new(M::GET, "/google-categories/{country}", USER, google_categories),
 	]
 }
 
 /// What a GBP's readiness stands on beside the GBP itself, read once per answer.
 struct Around {
-	trades: Vec<Trade>,
+	categories: Vec<Mine>,
 	/// The caller's gmails with their browser set up.
 	browsers: HashSet<i64>,
 	/// The GBPs a landing page shows; `None`: sites could not be read.
@@ -366,7 +314,7 @@ impl Around {
 			None => None,
 		};
 		Ok(Self {
-			trades: panel.trades(caller.user_id).await?,
+			categories: panel.categories(caller.user_id).await?,
 			browsers,
 			sites,
 		})
@@ -386,7 +334,7 @@ impl Around {
 			next: b.state.nexts().to_vec(),
 			country: b.country,
 			phone: b.phone,
-			trade_id: b.trade_id,
+			trade: b.trade,
 			brand_id: b.brand_id,
 			areas: b.areas,
 			hidden_address: b.hidden_address,
@@ -412,10 +360,12 @@ impl Around {
 		for &must in MustHave::VARIANTS {
 			let ready = match must {
 				MustHave::Name => Some(true),
-				MustHave::Category => Some(b.trade_id.zip(b.country).is_some_and(|(trade, country)| {
-					let trade = self.trades.iter().find(|t| t.id == trade).expect("a GBP's trade is its owner's");
-					trade.categories.iter().any(|c| c.country == country.code && c.google_primary.is_some())
-				})),
+				MustHave::Category => Some(
+					b.trade
+						.as_deref()
+						.zip(b.country)
+						.is_some_and(|(trade, country)| self.categories.iter().any(|c| c.trade.id == trade && c.country == country.code)),
+				),
 				MustHave::Areas => Some(!b.areas.is_empty()),
 				MustHave::Phone => Some(b.phone.is_some()),
 				MustHave::Site => self.sites.as_ref().map(|shown| shown.contains(&b.id)),
@@ -465,36 +415,6 @@ impl From<Gmail> for GmailDto {
 			tabs: vec![Tab::Connections, Tab::Browser],
 		}
 	}
-}
-
-impl From<Trade> for TradeDto {
-	fn from(t: Trade) -> Self {
-		Self {
-			id: t.id,
-			name: t.name,
-			created_at: t.created_at.to_string(),
-			categories: t
-				.categories
-				.into_iter()
-				.map(|c| CategoryDto {
-					country: c.country,
-					lang: c.country.lang().to_owned(),
-					keywords: c.keywords,
-					google_primary: c.google_primary.map(GoogleCategoryDto::from),
-					google_additional: c.google_additional.into_iter().map(|(g, weight)| AdditionalDto { google: g.into(), weight }).collect(),
-					excluded: c.excluded,
-					demand: c.demand,
-				})
-				.collect(),
-		}
-	}
-}
-
-/// A path's trade and country.
-#[derive(Deserialize, JsonSchema)]
-pub(crate) struct TradeIn {
-	pub(crate) id: i64,
-	pub(crate) country: Country,
 }
 
 /// A path's country.
@@ -628,7 +548,8 @@ async fn street_view(State(s): State<ApiState>, Spends(_, by): Spends<StreetView
 #[serde(deny_unknown_fields)]
 pub(crate) struct NewUnplaced {
 	name: String,
-	trade: i64,
+	/// A gcid Google lists in its country.
+	trade: String,
 	/// Draft, verifying or suspended.
 	state: GbpState,
 	/// Required past a draft.
@@ -670,7 +591,8 @@ pub(crate) struct NewGmb {
 	name: Option<String>,
 	/// Fills what Google lacks.
 	country: Option<Country>,
-	trade: Option<i64>,
+	/// A gcid Google lists in its country.
+	trade: Option<String>,
 }
 
 /// Adds a GBP on Google already, by its place, to the gmail.
@@ -718,8 +640,9 @@ pub(crate) struct EditBody {
 	/// `+` and digits.
 	#[serde(default, deserialize_with = "present")]
 	phone: Option<Option<String>>,
+	/// A gcid Google lists in its country.
 	#[serde(default, deserialize_with = "present")]
-	trade: Option<Option<i64>>,
+	trade: Option<Option<String>>,
 	#[serde(default, deserialize_with = "present")]
 	areas: Option<Option<Vec<String>>>,
 	#[serde(default, deserialize_with = "present")]
@@ -923,111 +846,15 @@ async fn set_gmb_country(
 #[serde(deny_unknown_fields)]
 pub(crate) struct SetTrades {
 	gmbs: Vec<i64>,
-	/// `null` takes their trade away.
-	trade: Option<i64>,
+	/// A gcid Google lists in each one's country; `null` takes their trade away.
+	trade: Option<String>,
 }
 
-/// Gives GBPs a trade, every one or none (404 one not the caller's).
+/// Gives GBPs a trade, every one or none (400 a gcid Google does not list in one's country, 404
+/// one not the caller's).
 async fn set_gmb_trades(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(SetTrades { gmbs, trade }): Body<SetTrades>) -> ApiResult<NoContent> {
-	panel.set_trades(caller.user_id, &gmbs, trade).await??;
+	panel.set_trades(caller.user_id, &gmbs, trade.as_deref()).await??;
 	tracing::info!(user_id = %caller.user_id, ?gmbs, ?trade, "GBPs given a trade");
-	Ok(NoContent)
-}
-
-/// The caller's trades, each with the countries it is set up in.
-async fn trades(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<TradesDto>> {
-	let trades = panel.trades(caller.user_id).await?;
-	Ok(Json(TradesDto {
-		trades: trades.into_iter().map(TradeDto::from).collect(),
-	}))
-}
-
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct TradeName {
-	name: String,
-}
-
-/// Adds a trade: Plumbing. 409 the caller's already, whatever its case.
-async fn add_trade(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<TradeName>) -> ApiResult<Created<TradeDto>> {
-	let added = panel.add_trade(caller.user_id, &b.name, Timestamp::now()).await??;
-	tracing::info!(user_id = %caller.user_id, trade_id = added.id, "trade added");
-	Ok(Created(TradeDto::from(added)))
-}
-
-/// Renames a trade. 409 the caller's already, whatever its case.
-async fn rename_trade(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: trade }): Ids<Id<i64>>, Body(b): Body<TradeName>) -> ApiResult<Json<TradeDto>> {
-	let renamed = panel.rename_trade(caller.user_id, trade, &b.name).await??;
-	tracing::info!(user_id = %caller.user_id, trade_id = trade, "trade renamed");
-	Ok(Json(TradeDto::from(renamed)))
-}
-
-/// Deletes a trade, its categories with it. 409 while a live GBP holds it.
-async fn delete_trade(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: trade }): Ids<Id<i64>>) -> ApiResult<NoContent> {
-	panel.delete_trade(caller.user_id, trade).await??;
-	tracing::info!(user_id = %caller.user_id, trade_id = trade, "trade deleted");
-	Ok(NoContent)
-}
-
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct SetUp {
-	/// In the country's language, each once normalized; with a primary, its name at weight 1.
-	keywords: Vec<Keyword>,
-	/// A gcid Google has in the country.
-	google_primary: Option<String>,
-	/// At most 9, only with a primary.
-	google_additional: Vec<AdditionalIn>,
-	excluded: Excluded,
-	demand: Option<Demand>,
-}
-
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct AdditionalIn {
-	/// A gcid Google has in the country.
-	id: String,
-	/// Positive.
-	weight: f64,
-}
-
-/// Sets a trade up in a country, or edits it there.
-///
-/// 400 a keyword twice once normalized, keywords without the primary's name at weight 1, a weight
-/// not positive, a gcid not Google's there or twice, additional ones past 9 or without a primary,
-/// an excluded word twice or a type that is none, a demand with an empty expression or a column
-/// twice.
-async fn set_up_trade(
-	State(panel): State<Panel>,
-	Extension(caller): Extension<Caller>,
-	Ids(TradeIn { id: trade, country }): Ids<TradeIn>,
-	Body(b): Body<SetUp>,
-) -> ApiResult<Json<TradeDto>> {
-	let SetUp {
-		keywords,
-		google_primary,
-		google_additional,
-		excluded,
-		demand,
-	} = b;
-	let google = |id: &str| GoogleCategory::find(country, id);
-	let category = Category {
-		country,
-		keywords,
-		google_primary: google_primary.as_deref().map(google).transpose()?,
-		google_additional: google_additional.iter().map(|a| google(&a.id).map(|g| (g, a.weight))).collect::<Result<_, _>>()?,
-		excluded,
-		demand,
-	};
-	let set = panel.set_up(caller.user_id, trade, category).await??;
-	tracing::info!(user_id = %caller.user_id, trade_id = trade, %country, "category set up");
-	Ok(Json(TradeDto::from(set)))
-}
-
-/// Takes a trade's set-up in a country away.
-async fn remove_category(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(TradeIn { id: trade, country }): Ids<TradeIn>) -> ApiResult<NoContent> {
-	panel.remove_category(caller.user_id, trade, country).await??;
-	tracing::info!(user_id = %caller.user_id, trade_id = trade, %country, "category removed");
 	Ok(NoContent)
 }
 

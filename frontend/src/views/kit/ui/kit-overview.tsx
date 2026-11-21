@@ -3,7 +3,7 @@
 import { Badge, Button, Skeleton, cn, toast } from "@evinvest/uikit";
 import { ChevronRight, Info, Link2, LocateOff, Pencil, QrCode } from "lucide-react";
 
-import { type KitAt, TARGET_NAME, editKit, kit as kitKeys } from "@/entities/gmb";
+import { type KitAt, TARGET_NAME, categoryName, editKit, kit as kitKeys } from "@/entities/gmb";
 import type { Kit, KitEvent, KitHappening, KitMember } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
 import { formatDistance } from "@/shared/lib/format";
@@ -39,8 +39,9 @@ export function KitOverview({ slug, go, phone }: { slug: string; go: (at: KitAt)
 
 function Header({ kit }: { kit: Kit }) {
   const t = useT();
+  const locale = useLocale();
   const button = useButtonSize();
-  const cats = [...new Set(kit.pools.map((p) => `${p.name} · ${p.country}`))].join(", ");
+  const cats = [...new Set(kit.pools.map((p) => categoryName(p.trade, p.country, locale)))].join(", ");
   return (
     <header className="flex flex-wrap items-start gap-3">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -59,6 +60,7 @@ function Header({ kit }: { kit: Kit }) {
 
 function Desk({ kit, go }: { kit: Kit; go: (at: KitAt) => void }) {
   const t = useT();
+  const locale = useLocale();
   const button = useButtonSize();
   const name = new Map(kit.gmbs.map((g) => [g.id, g.name]));
   return (
@@ -119,10 +121,10 @@ function Desk({ kit, go }: { kit: Kit; go: (at: KitAt) => void }) {
           </h3>
           <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
             {kit.pools.map((p) => (
-              <button key={`${p.trade}.${p.country}`} type="button" onClick={() => go({ kit: kit.slug, pool: `${p.trade}.${p.country}` })} className="flex flex-col gap-1 rounded-lg border border-border p-3 text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring">
+              <button key={`${p.trade.id}.${p.country}`} type="button" onClick={() => go({ kit: kit.slug, pool: `${p.trade.id}.${p.country}` })} className="flex flex-col gap-1 rounded-lg border border-border p-3 text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring">
                 <span className="flex items-baseline gap-2">
                   <span className="flex-1 text-sm font-medium text-ink">
-                    {p.name} · {p.country}
+                    {categoryName(p.trade, p.country, locale)}
                   </span>
                   <span className="text-xs text-ink-soft">{t(kitKeys.pools.open, "Open pool →")}</span>
                 </span>

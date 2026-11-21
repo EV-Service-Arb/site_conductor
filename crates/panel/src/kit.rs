@@ -24,9 +24,11 @@ use crate::{
 	Panel, Refused,
 	areas::Area,
 	brands::Brand,
+	categories::Key,
+	google_categories::GoogleCategory,
 	store::{
-		areas as areas_db, brands as brands_db,
-		gmbs::{self as gmbs_db, Gmb, GmbId, TradeId},
+		areas as areas_db, brands as brands_db, categories as categories_db,
+		gmbs::{self as gmbs_db, Gmb, GmbId},
 		kit::{self as db, Happening},
 	},
 	tokens::is_open,
@@ -239,9 +241,8 @@ pub struct Left {
 
 #[derive(Clone, Debug)]
 pub struct PoolSummary {
-	pub trade: i64,
+	pub trade: GoogleCategory,
 	pub country: Country,
-	pub name: String,
 	pub drafts: i64,
 	/// What keeps part of it from being offered as one may expect.
 	pub warnings: Vec<String>,
@@ -272,38 +273,18 @@ pub enum Event {
 }
 
 impl Panel {
-	/// The owner's category `trade` · `country`, set up.
-	async fn category_is(&self, conn: &mut sqlx::SqliteConnection, owner: Uuid, trade: i64, country: Country) -> eyre::Result<bool> {
-		Ok(gmbs_db::trade_owner(conn, trade).await? == Some(owner)
-			&& gmbs_db::trades(conn, owner)
-				.await?
-				.into_iter()
-				.any(|t| t.id == trade && t.categories.iter().any(|c| c.country == country)))
-	}
-
-	/// The owner's category's keywords; `None`: not theirs, or not set up.
-	async fn keywords_of(&self, conn: &mut sqlx::SqliteConnection, owner: Uuid, trade: i64, country: Country) -> eyre::Result<Option<Vec<String>>> {
-		Ok(gmbs_db::trades(conn, owner)
-			.await?
-			.into_iter()
-			.filter(|t| t.id == trade)
-			.flat_map(|t| t.categories)
-			.find(|c| c.country == country)
-			.map(|c| c.keywords.into_iter().map(|k| k.text).collect()))
-	}
-
 	/// The category's drafts, not removed, with their tags.
-	pub async fn kit_pool(&self, owner: Uuid, trade: i64, country: Country) -> eyre::Result<Result<Pool, Refused>> {
+	pub async fn kit_pool(&self, key: Key) -> eyre::Result<Result<Pool, Refused>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a kit")?;
-		let Some(keywords) = self.keywords_of(&mut conn, owner, trade, country).await? else {
+		let Some(keywords) = keywords_of(&mut conn, key).await? else {
 			return Ok(Err(Refused::NotFound));
 		};
 		let areas = areas_db::areas(&mut conn).await?;
-		Ok(Ok(pool(&mut conn, trade, country, &keywords, &areas).await?))
+		Ok(Ok(pool(&mut conn, key, &keywords, &areas).await?))
 	}
 
 	/// A draft of the category, offered only in `places` (none: everywhere).
-	pub async fn add_draft(&self, owner: Uuid, trade: i64, country: Country, text: &str, places: &[String], now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
+	pub async fn add_draft(&self, key: Key, text: &str, places: &[String], now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
 		let text = match draft_text(text) {
 			Ok(t) => t,
 			Err(e) => return Ok(Err(e)),
@@ -312,13 +293,13 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
-		if !self.category_is(&mut tx, owner, trade, country).await? {
+		if categories_db::head(&mut tx, key).await?.is_none() {
 			return Ok(Err(Refused::NotFound));
 		}
 		if let Err(e) = known_areas(&mut tx, places).await? {
 			return Ok(Err(e));
 		}
-		let id = db::add_draft(&mut tx, trade, country, &text, now).await?;
+		let id = db::add_draft(&mut tx, key, &text, now).await?;
 		db::set_draft_places(&mut tx, id, places).await?;
 		tx.commit().await.wrap_err("committing a draft")?;
 		Ok(Ok(id))
@@ -326,16 +307,13 @@ impl Panel {
 
 	/// Draft `id`'s text (only while no copy of it was made: a use is of the text it had) and its
 	/// places, each as given.
-	pub async fn edit_draft(&self, owner: Uuid, trade: TradeId, country: Country, id: i64, text: Option<&str>, places: Option<&[String]>) -> eyre::Result<Result<(), Refused>> {
+	pub async fn edit_draft(&self, key: Key, id: i64, text: Option<&str>, places: Option<&[String]>) -> eyre::Result<Result<(), Refused>> {
 		let text = match text.map(draft_text).transpose() {
 			Ok(t) => t,
 			Err(e) => return Ok(Err(e)),
 		};
 		let mut tx = self.store.begin_write().await?;
-		if !self.category_is(&mut tx, owner, trade.v, country).await? {
-			return Ok(Err(Refused::NotFound));
-		}
-		let Some(uses) = db::draft_uses(&mut tx, trade, country, id).await? else {
+		let Some(uses) = db::draft_uses(&mut tx, key, id).await? else {
 			return Ok(Err(Refused::NotFound));
 		};
 		if let Some(text) = text {
@@ -355,9 +333,9 @@ impl Panel {
 	}
 
 	/// A draft of the category out of every offer; its uses stay.
-	pub async fn remove_draft(&self, owner: Uuid, trade: TradeId, country: Country, id: i64, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+	pub async fn remove_draft(&self, key: Key, id: i64, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
 		let mut tx = self.store.begin_write().await?;
-		if !self.category_is(&mut tx, owner, trade.v, country).await? || !db::remove_draft(&mut tx, trade, country, id, now).await? {
+		if !db::remove_draft(&mut tx, key, id, now).await? {
 			return Ok(Err(Refused::NotFound));
 		}
 		tx.commit().await.wrap_err("committing a draft's removal")?;
@@ -656,17 +634,16 @@ impl Panel {
 			return Ok(Err(Refused::NotFound));
 		};
 		let areas = areas_db::areas(&mut conn).await?;
-		let trades = gmbs_db::trades(&mut conn, owner).await?;
 		let mut members = Vec::new();
-		let mut categories: Vec<(i64, Country)> = Vec::new();
+		let mut categories: Vec<Key> = Vec::new();
 		for (gmb, added_at) in db::members(&mut conn, k.id).await? {
 			let g = gmbs_db::gmb_of(&mut conn, Some(owner), gmb)
 				.await?
 				.ok_or_else(|| eyre::eyre!("kit {slug}'s GBP {gmb} is not its owner's"))?;
-			if let (Some(t), Some(c)) = (g.trade_id, &g.country)
-				&& !categories.contains(&(t, c.code))
+			if let Some(key) = key_of(&g)
+				&& !categories.contains(&key)
 			{
-				categories.push((t, c.code));
+				categories.push(key);
 			}
 			let target = db::target(&mut conn, gmb).await?;
 			let ranked = ranked(&mut conn, &g, &areas, now).await?;
@@ -691,11 +668,9 @@ impl Panel {
 			});
 		}
 		let mut pools = Vec::new();
-		for (trade, country) in categories {
-			let t = trades.iter().find(|t| t.id == trade).ok_or_else(|| eyre::eyre!("trade {trade} of a member is not its owner's"))?;
-			let Some(c) = t.categories.iter().find(|c| c.country == country) else { continue }; // a GBP's category not set up: nothing to offer
-			let keywords: Vec<String> = c.keywords.iter().map(|k| k.text.clone()).collect();
-			let pool = pool(&mut conn, trade, country, &keywords, &areas).await?;
+		for key in categories {
+			let Some(keywords) = keywords_of(&mut conn, key).await? else { continue }; // a GBP's category not set up: nothing to offer
+			let pool = pool(&mut conn, key, &keywords, &areas).await?;
 			let mut warnings = Vec::new();
 			let named: BTreeSet<&str> = pool.drafts.iter().flat_map(|d| d.names.iter().map(String::as_str)).collect();
 			for n in named {
@@ -705,9 +680,8 @@ impl Panel {
 				warnings.push(format!("no draft mentions: {}", pool.unmentioned.join(", ")));
 			}
 			pools.push(PoolSummary {
-				trade,
-				country,
-				name: t.name.clone(),
+				trade: key.trade,
+				country: key.country,
 				drafts: pool.drafts.len() as i64,
 				warnings,
 			});
@@ -776,12 +750,12 @@ fn allowed(places: &[String], at: Option<LatLng>, areas: &[Area]) -> bool {
 /// oldest; none without a category. The open ones, first in that order, are each given
 /// [`PHOTOS_PER_DRAFT`] of its brand's photos not saved on it, the less used first, on round them.
 async fn ranked(conn: &mut sqlx::SqliteConnection, g: &Gmb, areas: &[Area], now: Timestamp) -> eyre::Result<Vec<Ranked>> {
-	let (Some(trade), Some(country)) = (g.trade_id, g.country.as_ref().map(|c| c.code)) else {
+	let Some(key) = key_of(g) else {
 		return Ok(Vec::new());
 	};
 	let at = g.location.as_ref().map(|p| p.at);
 	let mut places: BTreeMap<i64, Vec<String>> = BTreeMap::new();
-	for (d, a) in db::draft_places(conn, trade, country).await? {
+	for (d, a) in db::draft_places(conn, key).await? {
 		places.entry(d).or_default().push(a);
 	}
 	let mut photos: Vec<RankedPhoto> = match g.brand_id {
@@ -800,7 +774,7 @@ async fn ranked(conn: &mut sqlx::SqliteConnection, g: &Gmb, areas: &[Area], now:
 		None => Vec::new(),
 	};
 	photos.sort_by_key(|p| (p.uses, p.id));
-	let mut drafts: Vec<Ranked> = db::drafts(conn, trade, country, Some(g.id), now)
+	let mut drafts: Vec<Ranked> = db::drafts(conn, key, Some(g.id), now)
 		.await?
 		.into_iter()
 		.filter(|d| allowed(places.get(&d.id).map_or(&[], Vec::as_slice), at, areas))
@@ -822,13 +796,14 @@ async fn ranked(conn: &mut sqlx::SqliteConnection, g: &Gmb, areas: &[Area], now:
 }
 
 /// The category's drafts, not removed, with what tags them.
-async fn pool(conn: &mut sqlx::SqliteConnection, trade: i64, country: Country, keywords: &[String], areas: &[Area]) -> eyre::Result<Pool> {
+async fn pool(conn: &mut sqlx::SqliteConnection, key: Key, keywords: &[String], areas: &[Area]) -> eyre::Result<Pool> {
+	let country = key.country;
 	let mut places: BTreeMap<i64, Vec<String>> = BTreeMap::new();
-	for (d, a) in db::draft_places(conn, trade, country).await? {
+	for (d, a) in db::draft_places(conn, key).await? {
 		places.entry(d).or_default().push(a);
 	}
 	let local: Vec<&Area> = areas.iter().filter(|a| a.country == country.as_str()).collect();
-	let drafts: Vec<Draft> = db::drafts(conn, trade, country, None, Timestamp::now())
+	let drafts: Vec<Draft> = db::drafts(conn, key, None, Timestamp::now())
 		.await?
 		.into_iter()
 		.map(|d| {
@@ -948,4 +923,21 @@ fn metres(a: LatLng, b: LatLng) -> f64 {
 	let (la, lb) = (a.lat.to_radians(), b.lat.to_radians());
 	let h = ((lb - la) / 2.).sin().powi(2) + la.cos() * lb.cos() * ((b.lng - a.lng).to_radians() / 2.).sin().powi(2);
 	2. * 6_371_000. * h.sqrt().asin()
+}
+
+/// GBP `g`'s category's key, once it has a trade and a country.
+fn key_of(g: &Gmb) -> Option<Key> {
+	let (trade, country) = (g.trade.as_deref()?, g.country.as_ref()?.code);
+	Some(Key {
+		owner: g.owner,
+		trade: GoogleCategory::find(country, trade).expect("a GBP's trade is checked against its country"),
+		country,
+	})
+}
+
+/// `key`'s head's keywords; none while it is not set up.
+async fn keywords_of(conn: &mut sqlx::SqliteConnection, key: Key) -> eyre::Result<Option<Vec<String>>> {
+	let Some(head) = categories_db::head(conn, key).await? else { return Ok(None) };
+	let v = categories_db::version(conn, head).await?.expect("a head is a version");
+	Ok(Some(v.body.keywords.into_iter().map(|k| k.text).collect()))
 }

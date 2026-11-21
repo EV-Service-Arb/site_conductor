@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 import { type Country, type Tab, countryValues } from "@/shared/api/schema";
 import { type At, type Home, go, setHome, useAt, viewed } from "@/shared/lib/location";
 
-/** Where in a review kit: `kit` its slug (`""`: the list); a GBP of it, or a pool (`<trade>.<country>`). */
+/** Where in a review kit: `kit` its slug (`""`: the list); a GBP of it, or a pool (`<gcid>.<country>`). */
 export type KitAt = { kit: string; gmb?: number | undefined; pool?: string | undefined };
 
 /** What the Add a GBP panel opens with: the outline's gmail and trade, when it is scoped to one. */
@@ -15,9 +15,10 @@ export type Adding = NonNullable<Home["add"]>;
 export type WinKey =
   | { kind: "gbp"; gmb: number; tab: Tab }
   | { kind: "account"; gmail: number; tab: Tab }
-  | { kind: "trade"; trade: number; country: Country | null }
+  | { kind: "trade"; trade: string; country: Country | null }
   | { kind: "brand"; brand: number }
   | { kind: "categories" }
+  | { kind: "library"; listing: number | null }
   | { kind: "trash" }
   | { kind: "add"; at: Adding }
   | { kind: "kit"; at: KitAt };
@@ -25,7 +26,7 @@ export type Kind = WinKey["kind"];
 export type KeyOf<K extends Kind> = Extract<WinKey, { kind: K }>;
 
 /** Every Home key a window reads: one floats at a time, so opening one writes its own and clears the rest. */
-const NO_WINDOW = { gmb: undefined, trade: undefined, country: undefined, brand: undefined, account: undefined, tab: undefined, step: undefined, categories: undefined, trash: undefined, add: undefined, kit: undefined, kit_gmb: undefined, kit_pool: undefined, kit_edit: undefined } as const;
+const NO_WINDOW = { gmb: undefined, trade: undefined, country: undefined, brand: undefined, account: undefined, tab: undefined, step: undefined, categories: undefined, library: undefined, trash: undefined, add: undefined, kit: undefined, kit_gmb: undefined, kit_pool: undefined, kit_edit: undefined } as const;
 
 interface Route<K extends Kind> {
   fromHome(h: Home): KeyOf<K> | null;
@@ -36,12 +37,12 @@ interface Route<K extends Kind> {
   subject(k: KeyOf<K>): string;
 }
 
-/** `<trade>.<country>`. */
-export function poolOf(pool: string): { trade: number; country: Country } {
-  const [trade, country] = pool.split(".");
+/** `<gcid>.<country>`. */
+export function poolOf(pool: string): { trade: string; country: Country } {
+  const [trade, country, ...rest] = pool.split(".");
   const c = countryValues.find((v) => v === country);
-  if (trade === undefined || !Number.isSafeInteger(Number(trade)) || c === undefined) throw new Error(`kit_pool=${pool}: not <trade>.<country>`);
-  return { trade: Number(trade), country: c };
+  if (trade === undefined || !trade.startsWith("gcid:") || c === undefined || rest.length > 0) throw new Error(`kit_pool=${pool}: not <gcid>.<country>`);
+  return { trade, country: c };
 }
 
 export const WINDOWS = {
@@ -86,6 +87,19 @@ export const WINDOWS = {
     page: () => ({ view: "categories", params: {} }),
     fromPage: (at) => (at.view === "categories" ? { kind: "categories" } : null),
     subject: () => "categories",
+  },
+  library: {
+    fromHome: (h) => {
+      if (h.library === undefined) return null;
+      if (h.library === "") return { kind: "library", listing: null };
+      const listing = Number(h.library);
+      if (!Number.isSafeInteger(listing)) throw new Error(`?library=${h.library}: not a listing's id`);
+      return { kind: "library", listing };
+    },
+    toHome: (k) => ({ library: k.listing === null ? "" : String(k.listing) }),
+    page: (k) => ({ view: "library", params: { ...(k.listing !== null && { listing: k.listing }) } }),
+    fromPage: (at) => (at.view === "library" ? { kind: "library", listing: at.params.listing ?? null } : null),
+    subject: () => "library",
   },
   trash: {
     fromHome: (h) => (h.trash === true ? { kind: "trash" } : null),

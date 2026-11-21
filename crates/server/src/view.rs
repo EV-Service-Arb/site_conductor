@@ -19,8 +19,8 @@ pub enum View {
 	Home {
 		/// The GBP whose window is open.
 		gmb: Option<i64>,
-		/// The trade whose window is open, on `country`'s tab.
-		trade: Option<i64>,
+		/// The category whose window is open: this gcid, on `country`'s tab.
+		trade: Option<String>,
 		country: Option<Country>,
 		/// The brand whose window is open.
 		brand: Option<i64>,
@@ -34,6 +34,8 @@ pub enum View {
 		log_at: Option<String>,
 		/// The categories' window.
 		categories: bool,
+		/// The library's window: a listing's id; empty, the list.
+		library: Option<String>,
 		/// The trash's window.
 		trash: bool,
 		/// The Add a GBP panel, with what it starts from.
@@ -42,7 +44,7 @@ pub enum View {
 		kit: Option<String>,
 		/// The kit's GBP open.
 		kit_gmb: Option<i64>,
-		/// The kit's pool open: `<trade id>.<country>`.
+		/// The kit's pool open: `<gcid>.<country>`.
 		kit_pool: Option<String>,
 		/// The kit's editor, its area drawn on the map.
 		kit_edit: bool,
@@ -50,7 +52,8 @@ pub enum View {
 		at: Option<(f64, f64, f64)>,
 		/// The schematic base map, not the satellite.
 		schematic: bool,
-		/// The study drawn: `<trade id>.<country>`; empty, none picked whatever the scope.
+		/// The study drawn: `<gcid>.<country>`, the caller's category's head; `v<id>`, a category
+		/// version; `s<sha>`, a published study; empty, none picked whatever the scope.
 		study: Option<String>,
 		/// The heat layer drawn.
 		heat: Option<String>,
@@ -118,7 +121,7 @@ pub enum View {
 	KitQr { slug: String, gmb: i64 },
 	/// A category's drafts and photos, from a kit.
 	#[view("/reviews/kit/{slug}/pool/{trade}/{country}")]
-	KitPool { slug: String, trade: i64, country: Country },
+	KitPool { slug: String, trade: String, country: Country },
 	/// A GBP's window as its own page.
 	#[view("/gbps/{gmb}")]
 	Gbp {
@@ -130,12 +133,15 @@ pub enum View {
 	/// A gmail's window as its own page.
 	#[view("/gmail/{account}")]
 	Gmail { account: i64, tab: Option<Tab> },
-	/// Every trade by country, as a page.
+	/// Every category of the caller's, as a page.
 	#[view("/gbps/categories")]
 	Categories,
-	/// A trade's window as its own page, on `country`'s tab.
+	/// A category's window as its own page: a gcid, on `country`'s tab.
 	#[view("/gbps/categories/{trade}")]
-	Category { trade: i64, country: Option<Country> },
+	Category { trade: String, country: Option<Country> },
+	/// The library's window as its own page, on a listing.
+	#[view("/gbps/library")]
+	Library { listing: Option<i64> },
 	/// A brand's window as its own page.
 	#[view("/brand/{brand}")]
 	Brand { brand: i64 },
@@ -144,7 +150,7 @@ pub enum View {
 	Trash,
 	/// The Add a GBP panel as a page, with what it starts from: a gmail (`account`), a trade.
 	#[view("/gbps/add")]
-	Adding { account: Option<i64>, trade: Option<i64> },
+	Adding { account: Option<i64>, trade: Option<String> },
 	/// sites' pages, its element's to route.
 	#[view("/sites", nest = "sites", key = 's', scope = 'v')]
 	Sites { below: String },
@@ -160,7 +166,7 @@ pub struct Outline {
 	gmbs: Option<Vec<i64>>,
 	/// The gmails in scope.
 	gmail: Option<Vec<i64>>,
-	/// The categories in scope: `<trade id|*>.<country|*>`.
+	/// The categories in scope: `<gcid|*>.<country|*>`.
 	category: Option<Vec<String>>,
 	/// The brands in scope.
 	brands: Option<Vec<i64>>,
@@ -201,7 +207,8 @@ pub enum Tab {
 #[derive(Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 pub struct Add {
 	gmail: Option<i64>,
-	trade: Option<i64>,
+	/// A gcid.
+	trade: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
@@ -228,6 +235,8 @@ pub enum Issue {
 	NoSite,
 	/// No category set up.
 	NoCategory,
+	/// Its trade is not the primary category Google gives it.
+	NotGooglesPrimary,
 	/// Switched off.
 	Off,
 }

@@ -2395,7 +2395,7 @@ dependencies = [
 [[package]]
 name = "gmaps_optimal_placement"
 version = "0.1.0"
-source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#61cd21b2986e3dcba7ec28d62148bed76789625b"
+source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#e43ef56f140fd5c745666637bcc29ac9aee7ea5c"
 dependencies = [
  "eyre",
  "gmaps_optimal_placement_core",
@@ -2410,7 +2410,7 @@ dependencies = [
 [[package]]
 name = "gmaps_optimal_placement_core"
 version = "0.1.0"
-source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#61cd21b2986e3dcba7ec28d62148bed76789625b"
+source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#e43ef56f140fd5c745666637bcc29ac9aee7ea5c"
 dependencies = [
  "evalexpr",
  "eyre",
@@ -2428,7 +2428,7 @@ dependencies = [
 [[package]]
 name = "gmaps_optimal_placement_overlay"
 version = "0.1.0"
-source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#61cd21b2986e3dcba7ec28d62148bed76789625b"
+source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#e43ef56f140fd5c745666637bcc29ac9aee7ea5c"
 dependencies = [
  "gmaps_optimal_placement_core",
  "js-sys",
@@ -2441,7 +2441,7 @@ dependencies = [
 [[package]]
 name = "gmaps_optimal_placement_sources"
 version = "0.1.0"
-source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#61cd21b2986e3dcba7ec28d62148bed76789625b"
+source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#e43ef56f140fd5c745666637bcc29ac9aee7ea5c"
 dependencies = [
  "csv",
  "eyre",
@@ -6211,7 +6211,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",

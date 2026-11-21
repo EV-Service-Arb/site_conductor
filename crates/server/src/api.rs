@@ -50,12 +50,12 @@ pub enum Code {
 	BrowsersNotConnected,
 	/// What this answer stands on did not answer.
 	BadGateway,
-	/// The category has no primary Google category.
-	NoGoogleCategory,
 	/// The category is set up for another country than the area's.
 	AnotherCountry,
 	/// Placement has no grid for the area's country.
 	Unstudied,
+	/// A study published on a category version no listing released.
+	UnreleasedCategory,
 	/// A pull needs more than the balance affords.
 	Unaffordable,
 	Internal,
@@ -73,7 +73,7 @@ impl ErrorCode for Code {
 			Self::TooMany => StatusCode::TOO_MANY_REQUESTS,
 			Self::Unavailable | Self::BrowsersNotConnected => StatusCode::SERVICE_UNAVAILABLE,
 			Self::BadGateway => StatusCode::BAD_GATEWAY,
-			Self::NoGoogleCategory | Self::AnotherCountry | Self::Unstudied => StatusCode::UNPROCESSABLE_ENTITY,
+			Self::AnotherCountry | Self::Unstudied | Self::UnreleasedCategory => StatusCode::UNPROCESSABLE_ENTITY,
 			Self::Unaffordable => StatusCode::PAYMENT_REQUIRED,
 			Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
 		}
@@ -94,6 +94,7 @@ impl Refuses<Refused> for Code {
 			Refused::NotFound => Self::NotFound,
 			Refused::Forbidden => Self::Forbidden,
 			Refused::Conflict(_) => Self::Conflict,
+			Refused::Unreleased(_) => Self::UnreleasedCategory,
 			Refused::TooLarge(_) => Self::TooLarge,
 			Refused::Unavailable(_) | Refused::Closed => Self::Unavailable,
 		};

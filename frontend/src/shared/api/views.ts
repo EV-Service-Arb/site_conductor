@@ -26,7 +26,7 @@ export const VIEWS = {
         ]
       },
       "category": {
-        "description": "The categories in scope: `<trade id|*>.<country|*>`.",
+        "description": "The categories in scope: `<gcid|*>.<country|*>`.",
         "items": {
           "type": "string"
         },
@@ -74,6 +74,7 @@ export const VIEWS = {
           "unlocated",
           "no_site",
           "no_category",
+          "not_googles_primary",
           "off",
           null
         ],
@@ -153,9 +154,8 @@ export const VIEWS = {
             ]
           },
           "trade": {
-            "format": "int64",
             "type": [
-              "integer",
+              "string",
               "null"
             ]
           }
@@ -240,7 +240,7 @@ export const VIEWS = {
     },
     "categories": {
       "path": "/gbps/categories",
-      "description": "Every trade by country, as a page.",
+      "description": "Every category of the caller's, as a page.",
       "params": {
         "properties": {},
         "required": [],
@@ -254,12 +254,11 @@ export const VIEWS = {
     },
     "category": {
       "path": "/gbps/categories/{trade}",
-      "description": "A trade's window as its own page, on `country`'s tab.",
+      "description": "A category's window as its own page: a gcid, on `country`'s tab.",
       "params": {
         "properties": {
           "trade": {
-            "format": "int64",
-            "type": "integer"
+            "type": "string"
           }
         },
         "required": [
@@ -414,9 +413,9 @@ export const VIEWS = {
                 ]
               },
               "trade": {
-                "format": "int64",
+                "description": "A gcid.",
                 "type": [
-                  "integer",
+                  "string",
                   "null"
                 ]
               }
@@ -526,7 +525,14 @@ export const VIEWS = {
             ]
           },
           "kit_pool": {
-            "description": "The kit's pool open: `<trade id>.<country>`.",
+            "description": "The kit's pool open: `<gcid>.<country>`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "library": {
+            "description": "The library's window: a listing's id; empty, the list.",
             "type": [
               "string",
               "null"
@@ -570,7 +576,7 @@ export const VIEWS = {
             ]
           },
           "study": {
-            "description": "The study drawn: `<trade id>.<country>`; empty, none picked whatever the scope.",
+            "description": "The study drawn: `<gcid>.<country>`, the caller's category's head; `v<id>`, a category\nversion; `s<sha>`, a published study; empty, none picked whatever the scope.",
             "type": [
               "string",
               "null"
@@ -620,10 +626,9 @@ export const VIEWS = {
             ]
           },
           "trade": {
-            "description": "The trade whose window is open, on `country`'s tab.",
-            "format": "int64",
+            "description": "The category whose window is open: this gcid, on `country`'s tab.",
             "type": [
-              "integer",
+              "string",
               "null"
             ]
           },
@@ -701,8 +706,7 @@ export const VIEWS = {
             "type": "string"
           },
           "trade": {
-            "format": "int64",
-            "type": "integer"
+            "type": "string"
           }
         },
         "required": [
@@ -757,6 +761,28 @@ export const VIEWS = {
         "type": "object"
       },
       "key": "k"
+    },
+    "library": {
+      "path": "/gbps/library",
+      "description": "The library's window as its own page, on a listing.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {
+          "listing": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      }
     },
     "members": {
       "path": "/admin/members",

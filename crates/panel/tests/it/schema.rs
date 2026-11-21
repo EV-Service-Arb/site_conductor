@@ -29,6 +29,8 @@ const ALERTS: i64 = 20261105090000;
 const GOOGLE_CATEGORIES: i64 = 20261112090000;
 /// The migration that made a category its studies' whole definition.
 const DEFINITION: i64 = 20261119130000;
+/// The migration that made a trade one of Google's categories.
+const GOOGLES: i64 = 20261121180000;
 
 /// A refresher that must not be asked: the tokens above are fresh.
 struct Never;
@@ -621,7 +623,7 @@ async fn google_labels_become_gcids() {
 	] {
 		sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&mut *conn).await.unwrap();
 	}
-	migrator.run(&mut *conn).await.unwrap();
+	migrator.run_to(GOOGLES - 1, &mut *conn).await.unwrap(); // the trades as these migrations left them
 	let categories: Vec<(String, Option<String>, String)> = sqlx::query_as("SELECT country, google_primary, google_additional FROM categories ORDER BY country")
 		.fetch_all(&mut *conn)
 		.await
@@ -633,7 +635,7 @@ async fn google_labels_become_gcids() {
 		.execute(&mut *conn)
 		.await
 		.unwrap();
-	let err = migrator.run(&mut *conn).await.unwrap_err().to_string();
+	let err = migrator.run_to(GOOGLES - 1, &mut *conn).await.unwrap_err().to_string();
 	assert!(err.contains("GB 'Plumbing contractor'"), "the down migration's gcid stays: {err}");
 	assert!(!err.contains("FR"), "the down migration's gcid stays: {err}");
 }
@@ -656,7 +658,7 @@ async fn a_category_becomes_its_studies_definition() {
 	] {
 		sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&mut *conn).await.unwrap();
 	}
-	migrator.run(&mut *conn).await.unwrap();
+	migrator.run_to(GOOGLES - 1, &mut *conn).await.unwrap(); // the trades as these migrations left them
 	let keywords: Vec<(String, String)> = sqlx::query_as("SELECT country, keywords FROM categories ORDER BY country").fetch_all(&mut *conn).await.unwrap();
 	let keywords: Vec<(String, serde_json::Value)> = keywords.into_iter().map(|(c, k)| (c, serde_json::from_str(&k).unwrap())).collect();
 	assert_eq!(
@@ -673,8 +675,128 @@ async fn a_category_becomes_its_studies_definition() {
 		.execute(&mut *conn)
 		.await
 		.unwrap();
-	let err = migrator.run(&mut *conn).await.unwrap_err().to_string();
+	let err = migrator.run_to(GOOGLES - 1, &mut *conn).await.unwrap_err().to_string();
 	assert!(err.contains("1·FR"), "{err}");
+}
+
+/// Ann's Plumbing (FR, US) and Heating (FR), Bob's Drains (FR): what every case of
+/// [`trades_become_googles_categories`] starts from, one schema before it.
+async fn trades_as_they_were(db: &TestDb) -> sqlx::pool::PoolConnection<sqlx::Sqlite> {
+	let mut conn = db.pool().await.acquire().await.unwrap();
+	sqlx::migrate!("./migrations").undo(&mut *conn, GOOGLES - 1).await.unwrap();
+	let category = |trade: i64, country: &str, gcid: &str| {
+		format!(
+			r#"INSERT INTO categories VALUES ({trade}, '{country}', '[{{"text":"plombier","weight":1.0}}]', '{gcid}', '[{{"id":"gcid:drainage_service","weight":0.5}}]', '{{"words":["magasin"],"types":[]}}', NULL)"#
+		)
+	};
+	for sql in [
+		"INSERT INTO users VALUES (x'00000000000000000000000000000001', 'ann@localhost', 'Ann', 1, 1)".to_owned(),
+		"INSERT INTO users VALUES (x'00000000000000000000000000000002', 'bob@localhost', 'Bob', 1, 1)".to_owned(),
+		"INSERT INTO trades (id, owner, name, created_at) VALUES (1, x'00000000000000000000000000000001', 'Plumbing', 5)".to_owned(),
+		"INSERT INTO trades (id, owner, name, created_at) VALUES (2, x'00000000000000000000000000000001', 'Heating', 6)".to_owned(),
+		"INSERT INTO trades (id, owner, name, created_at) VALUES (3, x'00000000000000000000000000000002', 'Drains', 7)".to_owned(),
+		category(1, "FR", "gcid:plumber"),
+		category(1, "US", "gcid:plumber"),
+		category(2, "FR", "gcid:heating_contractor"),
+		category(3, "FR", "gcid:plumber"),
+		"INSERT INTO gmails (id, owner, gmail, created_at) VALUES (1, x'00000000000000000000000000000001', 'ann@gmail.com', 1)".to_owned(),
+		"INSERT INTO gmbs (id, owner, gmail_id, name, state, country, created_at, trade_id) VALUES (10, x'00000000000000000000000000000001', 1, 'Lyon 7', 'draft', 'FR', 1, 1)".to_owned(),
+		"INSERT INTO gmbs (id, owner, name, state, created_at, trade_id) VALUES (11, x'00000000000000000000000000000001', 'Lyon 8', 'draft', 1, 2)".to_owned(),
+		"INSERT INTO brands (id, owner, gmail_id, trade_id, country, name, site, created_at) VALUES (1, x'00000000000000000000000000000001', 1, 1, 'FR', 'Aquafix', 'aquafix', 1)".to_owned(),
+		"UPDATE gmbs SET brand_id = 1 WHERE id = 10".to_owned(),
+		"INSERT INTO kit_drafts (id, trade_id, country, text, created_at) VALUES (1, 1, 'FR', 'Quick and clean.', 1)".to_owned(),
+		format!("INSERT INTO placement_pulls VALUES ('{}', 1)", "a".repeat(64)),
+	] {
+		sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&mut *conn).await.unwrap();
+	}
+	conn
+}
+
+/// Each old category becomes its owner's category of its primary Google category, its body one
+/// version and one move; GBPs, brands and drafts follow to the gcid; a pull's resume state goes.
+#[tokio::test]
+async fn trades_become_googles_categories() {
+	let db = TestDb::create().await;
+	let mut conn = trades_as_they_were(&db).await;
+	sqlx::migrate!("./migrations").run(&mut *conn).await.unwrap();
+	let categories: Vec<(String, String, String, String)> = sqlx::query_as(
+		"SELECT u.name, c.trade, c.country, m.why FROM categories c JOIN users u ON u.user_id = c.owner \
+		 JOIN category_moves m ON m.owner = c.owner AND m.trade = c.trade AND m.country = c.country AND m.to_version = c.head AND m.from_version IS NULL \
+		 ORDER BY u.name, c.trade, c.country",
+	)
+	.fetch_all(&mut *conn)
+	.await
+	.unwrap();
+	let row = |who: &str, trade: &str, country: &str| (who.to_owned(), trade.to_owned(), country.to_owned(), "edit".to_owned());
+	assert_eq!(
+		categories,
+		[
+			row("Ann", "gcid:heating_contractor", "FR"),
+			row("Ann", "gcid:plumber", "FR"),
+			row("Ann", "gcid:plumber", "US"),
+			row("Bob", "gcid:plumber", "FR")
+		]
+	);
+	let body: String = sqlx::query_scalar("SELECT v.body FROM categories c JOIN category_versions v ON v.id = c.head WHERE c.trade = 'gcid:plumber' AND c.country = 'US'")
+		.fetch_one(&mut *conn)
+		.await
+		.unwrap();
+	assert_eq!(
+		serde_json::from_str::<serde_json::Value>(&body).unwrap(),
+		json!({ "keywords": [{ "text": "plombier", "weight": 1.0 }], "additional": [{ "id": "gcid:drainage_service", "weight": 0.5 }],
+			"excluded": { "words": ["magasin"], "types": [] }, "demand": null }),
+		"the body as it was, without its primary: the trade is it"
+	);
+	let gmbs: Vec<(i64, Option<String>)> = sqlx::query_as("SELECT id, trade FROM gmbs ORDER BY id").fetch_all(&mut *conn).await.unwrap();
+	assert_eq!(
+		gmbs,
+		[(10, Some("gcid:plumber".to_owned())), (11, Some("gcid:heating_contractor".to_owned()))],
+		"by its category in its country, else the trade's only gcid"
+	);
+	let brand: (String, String) = sqlx::query_as("SELECT trade, country FROM brands").fetch_one(&mut *conn).await.unwrap();
+	assert_eq!(brand, ("gcid:plumber".to_owned(), "FR".to_owned()));
+	let draft: (uuid::Uuid, String) = sqlx::query_as("SELECT owner, trade FROM kit_drafts").fetch_one(&mut *conn).await.unwrap();
+	assert_eq!(draft, (uuid::Uuid::from_u128(1), "gcid:plumber".to_owned()));
+	let pulls: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM placement_pulls").fetch_one(&mut *conn).await.unwrap();
+	assert_eq!(pulls, 0, "resume state keyed by definitions that hashed the retired trade ids");
+}
+
+/// What the migration cannot map stops it, each offender named.
+#[tokio::test]
+async fn trades_that_map_to_no_one_gcid_stop_the_migration() {
+	for (offend, named) in [
+		(
+			vec![
+				"INSERT INTO trades (id, owner, name, created_at) VALUES (4, x'00000000000000000000000000000002', 'Painting', 1)",
+				"INSERT INTO categories VALUES (4, 'FR', '[]', NULL, '[]', '{\"words\":[],\"types\":[]}', NULL)",
+			],
+			"Painting·FR",
+		),
+		(
+			vec![
+				"INSERT INTO trades (id, owner, name, created_at) VALUES (4, x'00000000000000000000000000000002', 'Pipes', 1)",
+				"INSERT INTO categories VALUES (4, 'FR', '[]', 'gcid:plumber', '[]', '{\"words\":[],\"types\":[]}', NULL)",
+			],
+			"gcid:plumber·FR (Drains, Pipes)",
+		),
+		(
+			vec![
+				"INSERT INTO trades (id, owner, name, created_at) VALUES (4, x'00000000000000000000000000000002', 'Roofing', 1)",
+				"INSERT INTO categories VALUES (4, 'FR', '[]', 'gcid:roofing_contractor', '[]', '{\"words\":[],\"types\":[]}', NULL)",
+				"INSERT INTO categories VALUES (4, 'US', '[]', 'gcid:roofer', '[]', '{\"words\":[],\"types\":[]}', NULL)",
+				"INSERT INTO gmbs (id, owner, name, state, created_at, trade_id) VALUES (12, x'00000000000000000000000000000002', 'Toits', 'draft', 1, 4)",
+			],
+			"12 'Toits' (Roofing)",
+		),
+	] {
+		let db = TestDb::create().await;
+		let mut conn = trades_as_they_were(&db).await;
+		for sql in offend {
+			sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&mut *conn).await.unwrap();
+		}
+		let err = sqlx::migrate!("./migrations").run(&mut *conn).await.unwrap_err().to_string();
+		assert!(err.contains(named), "{named}: {err}");
+	}
 }
 
 fn origin(raw: &str) -> SiteOrigin {

@@ -1,19 +1,22 @@
 "use client";
 
-import { Button, NativeSelect, NativeSelectGroup, NativeSelectOption, Slider, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
-import { Car, ChevronRight, Crosshair, Eye, EyeOff, Flame, Grid3x3, MapPin, Settings2, SquareDashed, Store, TriangleAlert, Users, Wallet, Waves } from "lucide-react";
-import { type ComponentType, type ReactNode, useState } from "react";
+import { useResource } from "@evinvest/api/react";
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Field, FieldLabel, Input, NativeSelect, NativeSelectGroup, NativeSelectOption, Slider, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
+import { Car, ChevronRight, Crosshair, Eye, EyeOff, Flame, Grid3x3, MapPin, Settings2, SquareDashed, Store, TriangleAlert, Upload, Users, Wallet, Waves } from "lucide-react";
+import { type ComponentType, type ReactNode, useEffect, useId, useState } from "react";
 import { PANEL } from "@config";
 
-import { covers, openWindow, useScope, useTrades } from "@/entities/gmb";
-import type { Category, Country } from "@/shared/api/schema";
+import { categoryName, covers, googleName, openWindow, useCategories, useRelease, useScope } from "@/entities/gmb";
+import type { Area, Category, CategoryVersion, Country, GoogleCategory, PublishedStudy } from "@/shared/api/schema";
 import { useMe } from "@/entities/session";
-import { api } from "@/shared/api";
+import { Refused, api, ok } from "@/shared/api";
+import { formatDateTime } from "@/shared/lib/format";
+import { notifyFailure } from "@/shared/ui/notify";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
-import { type T, useT, placement as placementKeys, state, hotbar } from "@/shared/i18n";
+import { type T, useLocale, useT, placement as placementKeys, state, hotbar } from "@/shared/i18n";
 import { type Base, setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
 
-import { type Ages, type CategoryKey, type Data, type Layer, type Legend, type MapView, type Query, type Refusal, type Studied, categoryKey, pull, setMapView, studiable, useMapView, usePlacement, useStudied } from "../model/placement";
+import { type Ages, type Data, type Layer, type Legend, type MapView, type Query, type Refusal, type Studied, parseStudy, pull, setMapView, studiable, studyText, useMapView, usePlacement, useStudied } from "../model/placement";
 
 const LAYOUT = {
   column: "flex w-80 flex-col",
@@ -35,7 +38,6 @@ const STUDIES_NAME = {
 } satisfies Record<"scope" | "category", (t: T) => string>;
 
 const REFUSAL = {
-  no_google_category: (t) => t(placementKeys.refused.google, "The category has no Google category: it names the competitors"),
   another_country: (t) => t(placementKeys.refused.country, "The area is in another country than the category"),
   unstudied: (t) => t(placementKeys.refused.unstudied, "Placement does not study this category here"),
 } satisfies Record<Refusal, (t: T) => string>;
@@ -48,6 +50,7 @@ export function MapPanel() {
   const studied = useStudied(view);
   const base = useBase();
   const places = usePlacesShown();
+  const me = useMe();
 
   const ok = placement.status === "ok" ? placement : null;
   const data = ok?.data ?? null;
@@ -76,10 +79,17 @@ export function MapPanel() {
           {ok && studied.status === "ok" && (
             <>
               <Section title={t(placementKeys.study, "Study")}>
-                <StudyPicker view={view} studied={studied} countries={ok.countries} />
-                <AreaPicker view={view} studied={studied} />
-                {refused !== null && ("refused" in refused ? <Note tone="warn">{REFUSAL[refused.refused](t)}</Note> : <Note tone="error">{refused.failed}</Note>)}
-                {studied.area === null && view.area !== "" && <Note tone="warn">{t(placementKeys.pickArea, "Pick an area, or draw one: a study is bought and kept per area")}</Note>}
+                <Resolve view={view} studied={studied}>
+                  {(picked) => (
+                    <>
+                      <StudyPicker view={view} studied={studied} countries={ok.countries} picked={picked} />
+                      <AreaPicker view={view} studied={studied} country={picked?.country ?? null} />
+                      {refused !== null && ("refused" in refused ? <Note tone="warn">{REFUSAL[refused.refused](t)}</Note> : <Note tone="error">{refused.failed}</Note>)}
+                      {studied.area === null && view.area !== "" && <Note tone="warn">{t(placementKeys.pickArea, "Pick an area, or draw one: a study is bought and kept per area")}</Note>}
+                      {picked !== null && studied.area !== null && data !== null && refused === null && picked.published === null && api.mayCall("post", "/library/studies", me.permissions) && <PublishStudy picked={picked} area={studied.area} />}
+                    </>
+                  )}
+                </Resolve>
               </Section>
               {data !== null && <Heat view={view} data={data} legend={legend} />}
             </>
@@ -109,7 +119,11 @@ export function MapPanel() {
               <Row icon={MapPin} label={t(hotbar.places, "Google's places")} on={places} onToggle={() => showPlaces(!places)} />
             </Section>
           )}
-          {ok && data !== null && <DataSection view={view} data={data} ages={legend?.ages ?? null} notice={ok.notice} pulling={ok.pulling} pullFailed={ok.pullFailed} drawn={studied.status === "ok" ? studied.drawn : null} picked={studied.status === "ok" ? (studied.picked?.category ?? null) : null} />}
+          {ok && data !== null && studied.status === "ok" && (
+            <Resolve view={view} studied={studied}>
+              {(picked) => <DataSection view={view} data={data} ages={legend?.ages ?? null} notice={ok.notice} pulling={ok.pulling} pullFailed={ok.pullFailed} drawn={studied.drawn} picked={picked?.version ?? null} />}
+            </Resolve>
+          )}
           {ok && data === null && ok.notice !== null && <Note tone="warn">{ok.notice.text}</Note>}
           <Section title={t(placementKeys.base, "Base")}>
             <ToggleGroup type="single" size="sm" value={base} onValueChange={(v) => typeof v === "string" && v !== "" && setBase(v as Base)} className="px-2">
@@ -123,21 +137,54 @@ export function MapPanel() {
   );
 }
 
-type Option = { key: CategoryKey; label: string; group: "scope" | "category" };
+/** What `?study` picks, read: its version, the trade and country of it, the caller's category there, and the published study it is of. */
+type Picked = { trade: GoogleCategory; country: Country; version: CategoryVersion; head: Category | null; published: PublishedStudy | null };
 
-/** Categories placement can study, those in the outline's scope first; none: the area's grid alone. */
-function StudyPicker({ view, studied, countries }: { view: MapView; studied: Extract<Studied, { status: "ok" }>; countries: readonly string[] }) {
+/** `?study` read for what draws on it; `null` while none is picked or it is not read yet. */
+function Resolve({ view, studied, children }: { view: MapView; studied: Extract<Studied, { status: "ok" }>; children: (p: Picked | null) => ReactNode }) {
+  const { study } = view;
+  if (study === null) return children(null);
+  if (study.kind === "head") {
+    const head = studied.head!;
+    return children({ trade: head.trade, country: head.country, version: head.head, head, published: null });
+  }
+  if (study.kind === "version") return <OfVersion id={study.id} published={null}>{children}</OfVersion>;
+  return <OfPublished sha={study.sha} area={view.area}>{children}</OfPublished>;
+}
+
+function OfVersion({ id, published, children }: { id: number; published: PublishedStudy | null; children: (p: Picked | null) => ReactNode }) {
+  const read = useResource(api, "/category-versions/{id}", { params: { path: { id } } });
+  const categories = useCategories();
+  if (read.status !== "ok" || categories.status !== "ok") return children(null);
+  const v = read.data;
+  return children({ trade: v.trade, country: v.country, version: v, head: categories.data.find((c) => c.trade.id === v.trade.id && c.country === v.country) ?? null, published });
+}
+
+/** A published study, among those the caller may see; the map moved onto its own area. */
+function OfPublished({ sha, area, children }: { sha: string; area: string | null; children: (p: Picked | null) => ReactNode }) {
+  const read = useResource(api, "/library/studies");
+  const study = read.status === "ok" ? read.data.studies.find((s) => s.sha === sha) : undefined;
+  useEffect(() => {
+    if (study !== undefined && study.area !== area) setMapView({ area: study.area });
+  }, [study, area]);
+  if (read.status === "ok" && study === undefined) throw new Error(`?study=s${sha}: no published study the caller may see`);
+  if (study === undefined) return children(null);
+  return <OfVersion id={study.release.version} published={study}>{children}</OfVersion>;
+}
+
+type Option = { key: string; label: string; group: "scope" | "category" };
+
+/** A category version to study: the caller's heads (those in the outline's scope first), the picked one's history, the library's versions of its trade, and the studies published of it here; none: the area's grid alone. */
+function StudyPicker({ view, studied, countries, picked }: { view: MapView; studied: Extract<Studied, { status: "ok" }>; countries: readonly string[]; picked: Picked | null }) {
   const t = useT();
-  const trades = useTrades();
+  const locale = useLocale();
+  const categories = useCategories();
   const { categories: scope } = useScope();
-  const options: Option[] = (trades.status === "ok" ? trades.data : []).flatMap((tr) =>
-    tr.categories.flatMap((c) =>
-      studiable(c, countries)
-        ? [{ key: categoryKey(tr.id, c.country), label: `${tr.name} · ${c.country}`, group: scope !== null && scope.some((p) => covers(p, tr.id, c.country)) ? ("scope" as const) : ("category" as const) }]
-        : [],
-    ),
+  const options: Option[] = (categories.status === "ok" ? categories.data : []).flatMap((c) =>
+    studiable(c, countries) ? [{ key: studyText({ kind: "head", trade: c.trade.id, country: c.country }), label: categoryName(c.trade, c.country, locale), group: scope !== null && scope.some((p) => covers(p, c.trade.id, c.country)) ? ("scope" as const) : ("category" as const) }] : [],
   );
-  const picked = studied.picked;
+  const value = view.study === null ? "" : studyText(view.study);
+  const name = picked === null ? null : categoryName(picked.trade, picked.country, locale);
   return (
     <label className="flex h-(--control-h-sm) items-center gap-2 px-2">
       <span className="flex shrink-0 items-center gap-1.5 text-ink-mid">
@@ -147,13 +194,14 @@ function StudyPicker({ view, studied, countries }: { view: MapView; studied: Ext
       <NativeSelect
         size="sm"
         wrapperClassName="min-w-0 flex-1"
-        value={view.study ?? ""}
+        value={value}
         onChange={(e) => {
-          const study = e.currentTarget.value === "" ? null : (e.currentTarget.value as CategoryKey);
+          const study = e.currentTarget.value === "" ? null : parseStudy(e.currentTarget.value);
           setMapView({ study, ...(study !== null && view.heat === null && { heat: "demand" }) });
         }}
       >
         <NativeSelectOption value="">{t(placementKeys.gridOnly, "none · the grid alone")}</NativeSelectOption>
+        {value !== "" && !options.some((o) => o.key === value) && <NativeSelectOption value={value}>{picked === null ? "…" : picked.published !== null ? picked.published.title : `${name} · v${picked.version.id}`}</NativeSelectOption>}
         {(["scope", "category"] as const).map((group) => {
           const shown = options.filter((o) => o.group === group);
           return (
@@ -168,14 +216,66 @@ function StudyPicker({ view, studied, countries }: { view: MapView; studied: Ext
             )
           );
         })}
+        {picked?.head != null && <HistoryOptions category={picked.head} label={t(placementKeys.studies.history, "{category}: your history", { category: name! })} />}
+        {picked !== null && <LibraryOptions trade={picked.trade} country={picked.country} label={t(placementKeys.studies.library, "{category}: the library", { category: name! })} />}
+        {picked !== null && studied.area !== null && <PublishedOptions trade={picked.trade} country={picked.country} area={studied.area} label={t(placementKeys.studies.published, "Published here")} />}
       </NativeSelect>
-      <CategoryButton picked={picked === null ? null : { trade: picked.trade.id, country: picked.category.country, label: `${picked.trade.name} · ${picked.category.country}` }} />
+      <CategoryButton picked={picked === null ? null : { trade: picked.trade.id, country: picked.country, label: name! }} />
     </label>
   );
 }
 
+/** The versions its head moved through, the head aside. */
+function HistoryOptions({ category, label }: { category: Category; label: string }) {
+  const locale = useLocale();
+  const read = useResource(api, "/categories/{trade}/{country}/history", { params: { path: { trade: category.trade.id, country: category.country } } });
+  if (read.status !== "ok") return null;
+  const seen = new Map<number, string>();
+  for (const m of read.data.moves.toSorted((a, b) => b.at.localeCompare(a.at))) if (m.to !== category.head.id && !seen.has(m.to)) seen.set(m.to, m.at);
+  if (seen.size === 0) return null;
+  return (
+    <NativeSelectGroup label={label}>
+      {[...seen].map(([id, at]) => (
+        <NativeSelectOption key={id} value={studyText({ kind: "version", id })}>
+          v{id} · {formatDateTime(at, locale)}
+        </NativeSelectOption>
+      ))}
+    </NativeSelectGroup>
+  );
+}
+
+/** Each listing of the trade there, at its latest version. */
+function LibraryOptions({ trade, country, label }: { trade: GoogleCategory; country: Country; label: string }) {
+  const read = useResource(api, "/library", { params: { query: { trade: trade.id, country, sort: "rank" } } });
+  if (read.status !== "ok" || read.data.listings.length === 0) return null;
+  return (
+    <NativeSelectGroup label={label}>
+      {read.data.listings.map((l) => (
+        <NativeSelectOption key={l.id} value={studyText({ kind: "version", id: l.latest.version })}>
+          {l.title} v{l.latest.n} · {l.author}
+        </NativeSelectOption>
+      ))}
+    </NativeSelectGroup>
+  );
+}
+
+/** The studies published of the trade over this area, each named by the release it was studied under. */
+function PublishedOptions({ trade, country, area, label }: { trade: GoogleCategory; country: Country; area: Area; label: string }) {
+  const read = useResource(api, "/library/studies", { params: { query: { trade: trade.id, country, area: area.slug } } });
+  if (read.status !== "ok" || read.data.studies.length === 0) return null;
+  return (
+    <NativeSelectGroup label={label}>
+      {read.data.studies.map((s) => (
+        <NativeSelectOption key={s.sha} value={studyText({ kind: "published", sha: s.sha })}>
+          {s.title} · {s.listing_title} v{s.release.n} · {s.author}
+        </NativeSelectOption>
+      ))}
+    </NativeSelectGroup>
+  );
+}
+
 /** Where a study is defined: the picked category, else every category. */
-function CategoryButton({ picked }: { picked: { trade: number; country: Country; label: string } | null }) {
+function CategoryButton({ picked }: { picked: { trade: string; country: Country; label: string } | null }) {
   const t = useT();
   const label = picked === null ? t(placementKeys.categories, "Categories: each defines its studies") : t(placementKeys.category, "{category}: its definition", { category: picked.label });
   return (
@@ -186,9 +286,8 @@ function CategoryButton({ picked }: { picked: { trade: number; country: Country;
 }
 
 /** The areas a study can be drawn over: the picked category's country's, every one with no category; or a new one drawn. */
-function AreaPicker({ view, studied }: { view: MapView; studied: Extract<Studied, { status: "ok" }> }) {
+function AreaPicker({ view, studied, country }: { view: MapView; studied: Extract<Studied, { status: "ok" }>; country: Country | null }) {
   const t = useT();
-  const country = studied.picked?.category.country ?? null;
   const areas = studied.areas.filter((a) => country === null || a.country === country || a.slug === view.area).toSorted((a, b) => a.name.localeCompare(b.name));
   return (
     <label className="flex h-(--control-h-sm) items-center gap-2 px-2">
@@ -205,6 +304,74 @@ function AreaPicker({ view, studied }: { view: MapView; studied: Extract<Studied
         <SquareDashed aria-hidden />
       </Button>
     </label>
+  );
+}
+
+/** The study drawn published, its category version released in the same step when no listing has it yet. */
+function PublishStudy({ picked, area }: { picked: Picked; area: Area }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="px-2 py-1">
+      <Button size="sm" variant="ghost" className="w-full justify-start" onClick={() => setOpen(true)}>
+        <Upload aria-hidden />
+        {t(placementKeys.publish.open, "Publish this study…")}
+      </Button>
+      {open && <PublishStudyDialog picked={picked} area={area} onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+function PublishStudyDialog({ picked, area, onClose }: { picked: Picked; area: Area; onClose: () => void }) {
+  const t = useT();
+  const locale = useLocale();
+  const id = useId();
+  const lineage = picked.head?.head.id === picked.version.id ? picked.head.lineage : null;
+  const [title, setTitle] = useState(`${googleName(picked.trade, locale)} · ${area.name}`);
+  // a head off a listing, unedited, is that listing's release; anything else is found out by asking
+  const [releasing, setReleasing] = useState(picked.head?.head.id === picked.version.id && (lineage === null || lineage.edited));
+  const [busy, setBusy] = useState(false);
+  const { fields, release } = useRelease({ trade: picked.trade, country: picked.country, body: picked.version, lineage, fork: null, title: categoryName(picked.trade, picked.country, locale) });
+  const named = title.trim() !== "" && title.trim().length <= 100;
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const published = await ok(api.POST("/library/studies", { body: { area: area.slug, version: picked.version.id, title: title.trim(), ...(releasing && release !== null && { release }) } }));
+      onClose();
+      setMapView({ study: { kind: "published", sha: published.sha } });
+    } catch (e) {
+      if (e instanceof Refused && e.failure.code === "unreleased_category") setReleasing(true);
+      else notifyFailure(e, t);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{t(placementKeys.publish.title, "Publish this study")}</DialogTitle>
+          <DialogDescription>{t(placementKeys.publish.what, "{area} under {category} v{version}: anyone may load it, each load paid by whoever pulls it.", { area: area.name, category: categoryName(picked.trade, picked.country, locale), version: picked.version.id })}</DialogDescription>
+        </DialogHeader>
+        <Field className="flex flex-col gap-1">
+          <FieldLabel htmlFor={`${id}-title`}>{t(placementKeys.publish.name, "The study's title")}</FieldLabel>
+          <Input id={`${id}-title`} maxLength={100} value={title} onChange={(e) => setTitle(e.target.value)} />
+        </Field>
+        {releasing ? (
+          <section className="flex flex-col gap-2">
+            <p className="text-sm text-ink">{t(placementKeys.publish.release, "Its category version is no listing's yet: it is released in the same step.")}</p>
+            {fields}
+          </section>
+        ) : (
+          <p className="text-xs text-ink-soft">{t(placementKeys.publish.public, "A published study is readable by everyone, for good.")}</p>
+        )}
+        <DialogFooter>
+          <Button disabled={busy || !named || (releasing && release === null)} onClick={() => void submit()}>
+            {t(placementKeys.publish, "Publish")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -290,7 +457,7 @@ function PullButton({ searches, pulling, drawn }: { searches: number; pulling: b
   );
 }
 
-function DataSection({ view, data, ages, notice, pulling, pullFailed, drawn, picked }: { view: MapView; data: Data; ages: Ages | null; notice: { text: string; missing: number | null } | null; pulling: boolean; pullFailed: string | null; drawn: Query | null; picked: Category | null }) {
+function DataSection({ view, data, ages, notice, pulling, pullFailed, drawn, picked }: { view: MapView; data: Data; ages: Ages | null; notice: { text: string; missing: number | null } | null; pulling: boolean; pullFailed: string | null; drawn: Query | null; picked: CategoryVersion | null }) {
   const t = useT();
   const me = useMe();
   const trade = data.trade;
@@ -303,7 +470,7 @@ function DataSection({ view, data, ages, notice, pulling, pullFailed, drawn, pic
         </Fold>
       )}
       {/* a sweep never bought has no trade yet: what it lacks is the notice's */}
-      {drawn !== null && (trade !== null || notice?.missing != null) && api.mayCall("post", "/placement/study/pull", me.permissions) && (
+      {drawn !== null && (trade !== null || notice?.missing != null) && api.mayCall("post", "sha" in drawn ? "/placement/studies/{sha}/pull" : "/placement/study/pull", me.permissions) && (
         <PullButton searches={trade?.searches ?? notice!.missing!} pulling={pulling} drawn={drawn} />
       )}
       {pullFailed !== null && <Note tone="error">{pullFailed}</Note>}

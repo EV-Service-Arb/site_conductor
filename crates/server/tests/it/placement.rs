@@ -35,6 +35,7 @@ use sa_server::{
 };
 use serde_json::{Value, json};
 
+const PLUMBER: &str = "gcid:plumber";
 const EMAIL: &str = "dev-admin@localhost";
 /// The first pages of the sweep over the fixture: two searches over two tiles. One more lies behind
 /// the first of them.
@@ -158,13 +159,11 @@ impl Conductor {
 		(status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
 	}
 
-	/// A trade of the caller's, set up for `country` as `set_up` says: its `<id>.<country>`.
-	async fn trade(&mut self, name: &str, country: &str, set_up: Value) -> String {
-		let (_, trade) = self.call(Method::POST, "/api/v1/trades", json!({ "name": name })).await;
-		let id = trade["id"].as_i64().unwrap();
-		let (status, body) = self.call(Method::PUT, &format!("/api/v1/trades/{id}/{country}"), set_up).await;
+	/// `trade` set up for `country` as `settings` says: its head's version id.
+	async fn category(&mut self, trade: &str, country: &str, settings: Value) -> i64 {
+		let (status, body) = self.call(Method::PUT, &format!("/api/v1/categories/{trade}/{country}"), settings).await;
 		assert_eq!(status, StatusCode::OK, "{body}");
-		format!("{id}.{country}")
+		body["head"]["id"].as_i64().unwrap()
 	}
 
 	async fn balance(&mut self) -> Value {
@@ -186,23 +185,23 @@ impl Conductor {
 	}
 }
 
-fn set_up(primary: Option<&str>, keywords: &[(&str, Option<f64>)], demand: Value) -> Value {
+fn settings(keywords: &[(&str, Option<f64>)], demand: Value) -> Value {
 	let keywords: Vec<Value> = keywords.iter().map(|(text, weight)| json!({ "text": text, "weight": weight })).collect();
-	json!({ "keywords": keywords, "google_primary": primary, "google_additional": [], "excluded": { "words": [], "types": [] }, "demand": demand })
+	json!({ "keywords": keywords, "additional": [], "excluded": { "words": [], "types": [] }, "demand": demand })
 }
 
 fn plumbing() -> Value {
-	set_up(Some("gcid:plumber"), &[("plombier", Some(1.)), ("fuite d'eau", Some(0.5))], Value::Null)
+	settings(&[("plombier", Some(1.)), ("fuite d'eau", Some(0.5))], Value::Null)
 }
 
 #[tokio::test]
 async fn a_study_is_built_from_the_conductors_rows() {
 	let mut c = Conductor::new(operator(), 8, 1000).await;
-	let plumbing = c.trade("Plumbing", "FR", plumbing()).await;
+	let plumbing = c.category(PLUMBER, "FR", plumbing()).await;
 
-	let (status, payload) = c.call(Method::GET, &format!("/api/v1/placement/study?area=clermont&category={plumbing}"), Value::Null).await;
+	let (status, payload) = c.call(Method::GET, &format!("/api/v1/placement/study?area=clermont&version={plumbing}"), Value::Null).await;
 	assert_eq!(status, StatusCode::OK, "{payload}");
-	assert_eq!(payload["name"], "Plumbing·FR·clermont");
+	assert_eq!(payload["name"], "Plombier·FR·clermont");
 	assert_eq!(payload["notice"]["missing"], NEED, "nothing is held, and a read never buys: {payload}");
 	assert_eq!(c.searched(), 0);
 
@@ -220,20 +219,15 @@ async fn a_study_is_built_from_the_conductors_rows() {
 }
 
 #[tokio::test]
-async fn a_category_not_set_up_to_be_studied_is_refused_by_why() {
+async fn a_category_not_to_be_studied_is_refused_by_why() {
 	let mut c = Conductor::new(operator(), 8, 1000).await;
-	for (name, country, set_up, code) in [
-		("Painting", "FR", set_up(None, &[("peintre", None)], Value::Null), "no_google_category"),
-		("Cleaning", "US", set_up(Some("gcid:plumber"), &[("plumber", Some(1.))], Value::Null), "another_country"),
-	] {
-		let category = c.trade(name, country, set_up).await;
-		let (status, body) = c.call(Method::GET, &format!("/api/v1/placement/study?area=clermont&category={category}"), Value::Null).await;
-		assert_eq!((status, &body["code"]), (StatusCode::UNPROCESSABLE_ENTITY, &json!(code)), "{name}: {body}");
-	}
+	let version = c.category(PLUMBER, "US", settings(&[("plumber", Some(1.))], Value::Null)).await;
+	let (status, body) = c.call(Method::GET, &format!("/api/v1/placement/study?area=clermont&version={version}"), Value::Null).await;
+	assert_eq!((status, &body["code"]), (StatusCode::UNPROCESSABLE_ENTITY, &json!("another_country")), "{body}");
 	assert_eq!(
-		c.send(Method::GET, "/api/v1/placement/study?area=clermont&category=9999.FR", Value::Null).await.0,
+		c.send(Method::GET, "/api/v1/placement/study?area=clermont&version=999999", Value::Null).await.0,
 		StatusCode::NOT_FOUND,
-		"not a category of the caller's"
+		"not a version of the caller's"
 	);
 	assert_eq!(
 		c.send(Method::GET, "/api/v1/placement/study?area=paris", Value::Null).await.0,
@@ -252,13 +246,11 @@ async fn a_category_not_set_up_to_be_studied_is_refused_by_why() {
 #[tokio::test]
 async fn a_pull_buys_what_the_study_lacks_and_is_charged_for_it() {
 	let mut c = Conductor::new(admin(), 8, 1000).await;
-	let plumbing = c.trade("Plumbing", "FR", plumbing()).await;
-	let study = format!("/api/v1/placement/study?area=clermont&category={plumbing}");
+	let plumbing = c.category(PLUMBER, "FR", plumbing()).await;
+	let study = format!("/api/v1/placement/study?area=clermont&version={plumbing}");
 	assert_eq!(c.call(Method::GET, &study, Value::Null).await.1["notice"]["missing"], NEED, "read, and kept");
 
-	let (status, payload) = c
-		.call(Method::POST, &format!("/api/v1/placement/study/pull?area=clermont&category={plumbing}"), Value::Null)
-		.await;
+	let (status, payload) = c.call(Method::POST, &format!("/api/v1/placement/study/pull?area=clermont&version={plumbing}"), Value::Null).await;
 	assert_eq!(status, StatusCode::OK, "{payload}");
 	assert_eq!(payload["notice"], Value::Null, "built of what was bought: {payload}");
 	assert_eq!(payload["trade"]["tiers"][0]["name"], "Plombier", "named in the country's language");
@@ -278,11 +270,9 @@ async fn a_pull_buys_what_the_study_lacks_and_is_charged_for_it() {
 #[tokio::test]
 async fn a_balance_below_the_first_round_buys_nothing_and_is_told_the_need() {
 	let mut c = Conductor::new(admin(), 8, 20).await;
-	let plumbing = c.trade("Plumbing", "FR", plumbing()).await;
+	let plumbing = c.category(PLUMBER, "FR", plumbing()).await;
 
-	let (status, body) = c
-		.call(Method::POST, &format!("/api/v1/placement/study/pull?area=clermont&category={plumbing}"), Value::Null)
-		.await;
+	let (status, body) = c.call(Method::POST, &format!("/api/v1/placement/study/pull?area=clermont&version={plumbing}"), Value::Null).await;
 	assert_eq!(
 		(status, body),
 		(
@@ -298,8 +288,8 @@ async fn a_balance_below_the_first_round_buys_nothing_and_is_told_the_need() {
 #[tokio::test]
 async fn a_pull_past_its_budget_is_stopped_owed_back_and_its_retry_buys_only_the_rest() {
 	let mut c = Conductor::new(admin(), 8, NEED as i64 * 8).await;
-	let plumbing = c.trade("Plumbing", "FR", plumbing()).await;
-	let uri = format!("/api/v1/placement/study/pull?area=clermont&category={plumbing}");
+	let plumbing = c.category(PLUMBER, "FR", plumbing()).await;
+	let uri = format!("/api/v1/placement/study/pull?area=clermont&version={plumbing}");
 
 	let (status, body) = c.call(Method::POST, &uri, Value::Null).await;
 	assert_eq!((status, &body["code"]), (StatusCode::PAYMENT_REQUIRED, &json!("unaffordable")), "{body}");
@@ -329,9 +319,9 @@ async fn a_pull_past_its_budget_is_stopped_owed_back_and_its_retry_buys_only_the
 async fn a_failed_pull_is_charged_what_it_bought_and_owes_it_all_back() {
 	let mut c = Conductor::new(admin(), 8, 1000).await;
 	let unknown = json!({ "expr": "no_such_column", "columns": [], "layers": [] });
-	let fails = c.trade("Fails", "FR", set_up(Some("gcid:plumber"), &[("plombier", Some(1.))], unknown)).await;
+	let fails = c.category(PLUMBER, "FR", settings(&[("plombier", Some(1.))], unknown)).await;
 
-	let (status, _) = c.send(Method::POST, &format!("/api/v1/placement/study/pull?area=clermont&category={fails}"), Value::Null).await;
+	let (status, _) = c.send(Method::POST, &format!("/api/v1/placement/study/pull?area=clermont&version={fails}"), Value::Null).await;
 	assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "a demand over a column the grid lacks builds nothing");
 	let (_, tokens) = c.call(Method::GET, "/api/v1/tokens", Value::Null).await;
 	let bought = 3; // one search over two tiles, and the page behind the first
@@ -348,11 +338,9 @@ async fn a_failed_pull_is_charged_what_it_bought_and_owes_it_all_back() {
 #[tokio::test]
 async fn reading_studies_is_not_pulling_them() {
 	let mut c = Conductor::new(operator(), 8, 1000).await;
-	let plumbing = c.trade("Plumbing", "FR", plumbing()).await;
+	let plumbing = c.category(PLUMBER, "FR", plumbing()).await;
 
-	let (status, _) = c
-		.send(Method::POST, &format!("/api/v1/placement/study/pull?area=clermont&category={plumbing}"), Value::Null)
-		.await;
+	let (status, _) = c.send(Method::POST, &format!("/api/v1/placement/study/pull?area=clermont&version={plumbing}"), Value::Null).await;
 	assert_eq!(status, StatusCode::FORBIDDEN);
 	assert_eq!(c.searched(), 0);
 }
