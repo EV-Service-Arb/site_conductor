@@ -567,7 +567,7 @@ timed() {
 prefixed() {
 	local name="$1"
 	shift
-	"$@" 2>&1 | tee -a "$state/logs/$name.log" | awk -v p="$clr[$name] " '{ print p $0; fflush() }'
+	"$@" 2>&1 | tee -a "$state/logs/$name.log" | awk -v p="${clr}[$name] " '{ print p $0; fflush() }'
 }
 # `unbuilt <peer> <checkout>`: dev goes on without it, the conductor answering 502 for it; the
 # stack needs every part
