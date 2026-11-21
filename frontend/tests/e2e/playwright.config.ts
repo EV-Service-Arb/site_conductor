@@ -21,6 +21,7 @@ export function stackConfig({ stack, specs }: { stack: Stack; specs: { testMatch
     testDir: ".",
     ...specs,
     fullyParallel: true, // the specs share no server state: each page is its own context, over the one session
+    workers: process.env.CI ? "100%" : undefined, // a runner's cores are the run's alone; a machine's are the stack's too
     outputDir: tmp(""),
     reporter: [["list"], ["./timeline.ts", { out: tmp("timeline.txt") }]],
     globalSetup: ["./stack.ts", "./sign-in.ts"],

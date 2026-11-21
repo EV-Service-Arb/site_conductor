@@ -47,16 +47,26 @@ jobs:
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
       - id: run
         run: nix run .#test -- --severity warnings code-duplication
       - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Fetch the flake's inputs into the tarball cache
+        run: nix flake archive --store "$RUNNER_TEMP/inputs" --option substitute false > /dev/null && chmod -R u+w "$RUNNER_TEMP/inputs" && rm -rf "$RUNNER_TEMP/inputs"
+      - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Save nix eval cache
         uses: actions/cache/save@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
+      - env:
+          FAMILY: nix-eval2-${{ runner.os }}-
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
+        if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Drop older nix eval caches
+        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -129,7 +139,7 @@ jobs:
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
       - id: particle-cache-0
         name: Restore particle's cache
@@ -154,11 +164,21 @@ jobs:
         name: Drop particle's older caches
         run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
       - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Fetch the flake's inputs into the tarball cache
+        run: nix flake archive --store "$RUNNER_TEMP/inputs" --option substitute false > /dev/null && chmod -R u+w "$RUNNER_TEMP/inputs" && rm -rf "$RUNNER_TEMP/inputs"
+      - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Save nix eval cache
         uses: actions/cache/save@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
+      - env:
+          FAMILY: nix-eval2-${{ runner.os }}-
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
+        if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Drop older nix eval caches
+        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -291,7 +311,7 @@ jobs:
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
       - id: particle-cache-0
         name: Restore particle's cache
@@ -345,11 +365,21 @@ jobs:
         name: Drop particle's older caches
         run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
       - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Fetch the flake's inputs into the tarball cache
+        run: nix flake archive --store "$RUNNER_TEMP/inputs" --option substitute false > /dev/null && chmod -R u+w "$RUNNER_TEMP/inputs" && rm -rf "$RUNNER_TEMP/inputs"
+      - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Save nix eval cache
         uses: actions/cache/save@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
+      - env:
+          FAMILY: nix-eval2-${{ runner.os }}-
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
+        if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Drop older nix eval caches
+        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -421,7 +451,7 @@ jobs:
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
       - id: particle-cache-0
         name: Restore particle's cache
@@ -475,11 +505,21 @@ jobs:
         name: Drop particle's older caches
         run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
       - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Fetch the flake's inputs into the tarball cache
+        run: nix flake archive --store "$RUNNER_TEMP/inputs" --option substitute false > /dev/null && chmod -R u+w "$RUNNER_TEMP/inputs" && rm -rf "$RUNNER_TEMP/inputs"
+      - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Save nix eval cache
         uses: actions/cache/save@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
+      - env:
+          FAMILY: nix-eval2-${{ runner.os }}-
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
+        if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Drop older nix eval caches
+        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -551,16 +591,26 @@ jobs:
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
       - id: run
         run: nix run .#test -- --severity warnings rust-machete
       - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Fetch the flake's inputs into the tarball cache
+        run: nix flake archive --store "$RUNNER_TEMP/inputs" --option substitute false > /dev/null && chmod -R u+w "$RUNNER_TEMP/inputs" && rm -rf "$RUNNER_TEMP/inputs"
+      - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Save nix eval cache
         uses: actions/cache/save@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
+      - env:
+          FAMILY: nix-eval2-${{ runner.os }}-
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
+        if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Drop older nix eval caches
+        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -632,16 +682,26 @@ jobs:
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
       - id: run
         run: nix run .#test -- --severity warnings rust-sorted
       - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Fetch the flake's inputs into the tarball cache
+        run: nix flake archive --store "$RUNNER_TEMP/inputs" --option substitute false > /dev/null && chmod -R u+w "$RUNNER_TEMP/inputs" && rm -rf "$RUNNER_TEMP/inputs"
+      - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Save nix eval cache
         uses: actions/cache/save@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
+      - env:
+          FAMILY: nix-eval2-${{ runner.os }}-
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
+        if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Drop older nix eval caches
+        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -713,16 +773,26 @@ jobs:
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
       - id: run
         run: nix run .#test -- --severity warnings rust-sorted-derives
       - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Fetch the flake's inputs into the tarball cache
+        run: nix flake archive --store "$RUNNER_TEMP/inputs" --option substitute false > /dev/null && chmod -R u+w "$RUNNER_TEMP/inputs" && rm -rf "$RUNNER_TEMP/inputs"
+      - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Save nix eval cache
         uses: actions/cache/save@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
+      - env:
+          FAMILY: nix-eval2-${{ runner.os }}-
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
+        if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Drop older nix eval caches
+        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -794,16 +864,26 @@ jobs:
         name: Restore nix eval cache
         uses: actions/cache/restore@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
       - id: run
         run: nix run .#test -- --severity warnings tokei
       - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Fetch the flake's inputs into the tarball cache
+        run: nix flake archive --store "$RUNNER_TEMP/inputs" --option substitute false > /dev/null && chmod -R u+w "$RUNNER_TEMP/inputs" && rm -rf "$RUNNER_TEMP/inputs"
+      - if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Save nix eval cache
         uses: actions/cache/save@v5
         with:
-          key: nix-eval-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          key: nix-eval2-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           path: ~/.cache/nix
+      - env:
+          FAMILY: nix-eval2-${{ runner.os }}-
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
+        if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
+        name: Drop older nix eval caches
+        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
