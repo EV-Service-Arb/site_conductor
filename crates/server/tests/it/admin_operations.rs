@@ -6,7 +6,6 @@ use axum::{
 	body::Body,
 	http::{Method, StatusCode},
 };
-use sa_core::queries_cache::{Key, Scheme};
 use sa_panel::{
 	Panel,
 	seal::DataKey,
@@ -51,7 +50,6 @@ async fn an_operator_runs_none_of_them() {
 		(Method::PUT, "/api/v1/sources/aquafix-site/origin", json!({ "origin": "https://aquafix.top" })),
 		(Method::POST, "/api/v1/admin/gmails", json!({ "email": "a@b.c", "gmail": "a@gmail.com" })),
 		(Method::POST, "/api/v1/admin/imports/review-archive", empty_export()),
-		(Method::POST, "/api/v1/admin/imports/queries-cache", json!({ "scheme": "gop", "answers": {} })),
 	];
 	for (method, uri, body) in ops {
 		let (status, refused) = call(&mut b, &app, method.clone(), uri, (!body.is_null()).then_some(body)).await;
@@ -106,22 +104,4 @@ async fn the_review_archive_import_opens_tokens_once_and_a_gmail_is_added_for_a_
 	assert_eq!((status, &added["gmail"]), (StatusCode::CREATED, &json!("ann@gmail.com")), "{added}");
 	assert_eq!(panel.gmails(user.user_id).await.unwrap().0.len(), 1);
 	assert_eq!(call(&mut b, &app, Method::POST, "/api/v1/admin/gmails", Some(add)).await.0, StatusCode::CONFLICT);
-}
-
-#[tokio::test]
-async fn imported_answers_are_kept_as_of_their_own_time_and_a_newer_one_stays() {
-	let (panel, app, mut b, _db) = conductor(admin()).await;
-	let (newer, older) = (Key([1; 32]), Key([2; 32]));
-	let body = |key: Key, answer: Value, at: &str| json!({ "scheme": "gop", "answers": { key.to_string(): { "answer": answer, "fetched_at": at } } });
-	let import = "/api/v1/admin/imports/queries-cache";
-	for (key, answer, at) in [(newer, json!({ "v": 2 }), "2026-02-01T00:00:00Z"), (older, json!({ "v": 1 }), "2026-01-01T00:00:00Z")] {
-		let (status, done) = call(&mut b, &app, Method::POST, import, Some(body(key, answer, at))).await;
-		assert_eq!((status, &done["answers"]), (StatusCode::OK, &json!(1)), "{done}");
-	}
-	call(&mut b, &app, Method::POST, import, Some(body(newer, json!({ "v": 1 }), "2026-01-15T00:00:00Z"))).await;
-	let kept = |key| panel.store().cached_query(Scheme::Gop, key);
-	assert_eq!(kept(newer).await.unwrap().unwrap().answer, json!({ "v": 2 }), "an older answer never replaces a newer one");
-	assert_eq!(kept(older).await.unwrap().unwrap().answer, json!({ "v": 1 }));
-	let (status, _) = call(&mut b, &app, Method::POST, import, Some(json!({ "scheme": "nowhere", "answers": {} }))).await;
-	assert_eq!(status, StatusCode::BAD_REQUEST);
 }

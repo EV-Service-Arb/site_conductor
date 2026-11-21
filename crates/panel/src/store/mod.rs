@@ -3,7 +3,8 @@
 //! compile-time checks the `query!` macros would give. Every committed write is told on the bus
 //! by its tables (`ev_lib::sqlite`).
 //!
-//! One file, one writer at a time (WAL: readers never wait for it). Every transaction that
+//! Two files: the panel's, and the queries cache's history (`history_migrations/`), on a pool of
+//! its own that no client follows. One writer at a time on each (WAL: readers never wait for it). Every transaction that
 //! writes begins `BEGIN IMMEDIATE` ([`begin_write`]): it takes the write lock up front, so two
 //! of them queue on `busy_timeout` instead of both reading under a plain `BEGIN` and the
 //! second failing with SQLITE_BUSY when it tries to upgrade to a write. A lone statement
@@ -39,7 +40,7 @@ use jiff::Timestamp;
 use sqlx::{
 	Sqlite, SqliteConnection, SqlitePool, Transaction,
 	migrate::Migrator,
-	sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteSynchronous},
+	sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
 };
 use tracing::Instrument;
 
@@ -67,27 +68,47 @@ pub fn options(path: &Path) -> SqliteConnectOptions {
 #[derive(Clone, Debug)]
 pub struct Store {
 	pool: SqlitePool,
+	/// The queries cache's every version of an answer but the latest, in a file of its own.
+	history: SqlitePool,
 	bus: Bus,
 }
 impl Store {
-	/// Opens (creating it if need be) the database at `path` and applies the migrations it
-	/// lacks, its writes told on `bus`. There is no separate migrate step: the process that owns
-	/// the file migrates it.
-	pub async fn open(path: &Path, bus: Bus) -> eyre::Result<Self> {
-		Self::open_with(options(path), bus).await.wrap_err_with(|| format!("opening the database at {}", path.display()))
-	}
-
+	/// Opens (creating them if need be) the database at `path` and the queries cache's history at
+	/// `history`, and applies the migrations each lacks, the panel's writes told on `bus`. There is
+	/// no separate migrate step: the process that owns the files migrates them.
 	#[tracing::instrument(name = "store open", skip_all)]
-	pub async fn open_with(options: SqliteConnectOptions, bus: Bus) -> eyre::Result<Self> {
+	pub async fn open(path: &Path, history: &Path, bus: Bus) -> eyre::Result<Self> {
 		let told = bus.clone();
 		// A request waits at most 3 s for a connection, then fails: a pool drained by a burst
 		// answers 500 quickly instead of stacking every request behind it.
-		let pool = ev_lib::sqlite::pool("conductor", options, 8, Duration::from_secs(3), move |topic| told.changed(topic));
-		migrator().run(&pool).instrument(tracing::info_span!("migrate")).await.wrap_err("applying migrations")?;
-		let mut tx = pool.begin_with("BEGIN IMMEDIATE").await.wrap_err("beginning a write")?;
+		let pool = ev_lib::sqlite::pool("conductor", options(path), 8, Duration::from_secs(3), move |topic| told.changed(topic));
+		let opening = || format!("opening the database at {}", path.display());
+		migrator()
+			.run(&pool)
+			.instrument(tracing::info_span!("migrate"))
+			.await
+			.wrap_err("applying migrations")
+			.wrap_err_with(opening)?;
+		let mut tx = pool.begin_with("BEGIN IMMEDIATE").await.wrap_err("beginning a write").wrap_err_with(opening)?;
 		tokens::init_rates(&mut tx, jiff::Timestamp::now()).await?;
 		tx.commit().await.wrap_err("committing the first terms")?;
-		Ok(Self { pool, bus })
+		// Written only under the panel's write lock (`keep_query`): two connections are for reads beside it.
+		let history_pool = SqlitePoolOptions::new()
+			.max_connections(2)
+			.acquire_timeout(Duration::from_secs(3))
+			.connect_lazy_with(options(history));
+		history_migrator()
+			.run(&history_pool)
+			.instrument(tracing::info_span!("migrate history"))
+			.await
+			.wrap_err_with(|| format!("applying the migrations of the queries cache's history at {}", history.display()))?;
+		Ok(Self { pool, history: history_pool, bus })
+	}
+
+	/// Both pools closed, each file's WAL checkpointed in.
+	pub async fn close(&self) {
+		self.pool.close().await;
+		self.history.close().await;
 	}
 
 	pub fn pool(&self) -> &SqlitePool {
@@ -115,6 +136,13 @@ pub(crate) fn migrator() -> Migrator {
 	let mut m = sqlx::migrate!("./migrations");
 	// A migration the database has and this build does not know is a rollback onto a schema
 	// moved on: fine, as it was on Postgres.
+	m.set_ignore_missing(true);
+	m
+}
+
+/// The queries cache's history's schema, embedded from `history_migrations/`.
+pub(crate) fn history_migrator() -> Migrator {
+	let mut m = sqlx::migrate!("./history_migrations");
 	m.set_ignore_missing(true);
 	m
 }

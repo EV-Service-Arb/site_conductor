@@ -94,8 +94,7 @@ What it does (`scripts/local-stack.sh`, which the flake app runs as is):
    in the conductor, each secret kept in `.local/secrets/` and reused, a key from an older run
    given its origin; the
    places `aquafix/{royat, clermont-ferrand, desgenettes, lyon-est, la-mouche, lyon-nord}` and
-   `vifnet/vifnet` and `debouchage/clermont-ferrand` in sites_panel, registered with nothing set (through the conductor's `/api/sites/places`), and
-   the placement CLI's mirrored answers into the queries cache (each as of its file's time).
+   `vifnet/vifnet` and `debouchage/clermont-ferrand` in sites_panel, registered with nothing set (through the conductor's `/api/sites/places`).
 3. Starts `sites_panel serve` (its bundle from `PANEL_MFE_DIR`, the conductor's public key in
    `PANEL_ASSERTION_KEYS`), `review_archive serve` likewise (a headless Chromium on a signed-out
    profile: its Maps walks fail and say so), then `panel serve` in development, with dev sign-in, a signing key for this machine alone, `PANEL_SITES_URL`
@@ -211,14 +210,27 @@ The landings sign with the stack's own `<brand>-local` keys. Nothing walks Maps,
 GMBs come without the cache that located them: a verified one's **Sync** (its ⋮ in the outline) asks
 for its point and profile.
 
+The restore is `nix run .#prod-restore -- <replica>=<path>…` (`GITOPS_DIR` and `DEVOPS_DIR` set),
+each replica named as under the cluster's `/pvc`: `panel-data/panel.db`,
+`panel-data/queries_history.db`, …; a file already at a path is replaced once its restore is
+whole. Whoever needs a copy of prod's queries cache takes it so (the placement CLI's
+`queries_cache`). A stack's state takes no history: what it lacks of it, prod's index excepts.
+
+Prod's queries cache is the one authority, every state a copy that gives back what it bought: at
+start (a kept state) and at exit the stack runs `queries-cache-sync <state>`, which sends prod
+every version of an answer the state holds and prod lacks (`panel queries-cache`, run in prod's
+pod over `PROD_SSH` and `kubectl exec`). What prod held at the last sync is kept in the state,
+so a state with nothing new asks prod nothing. A failed sync is a warning naming its rerun, `nix
+run .#queries-cache-sync -- <state>`.
+
 ## Google
 
 The conductor's Google accounts are `~/.config/sa_conductor.nix`'s `google` (`SA_CONDUCTOR_CONFIG`
 names another): `{ google = (import ~/s/ev/_sa/accounting/google.nix).accounts; }`, its keys
 `{ env = "GOOGLE_MAPS_KEY_EVINVEST"; }` from the shell. The stack refuses to start without the
 file; `google = [ ];` is no account: a GMB is added by its place id alone and `/` has no map.
-Answers are kept in the conductor's queries cache, `.local/panel.db`: `--reset` pays for them again.
-Every start pulls the placement CLI's mirror into it, and review_archive is pointed at it. The
+Answers are kept in the conductor's queries cache, `.local/panel.db`, and given to prod's (Prod's
+data, above); review_archive is pointed at it. The
 conductor studies in the CLI's work dir (`PANEL_PLACEMENT_DIR`), so the CLI's viewer opens what it
 studied.
 

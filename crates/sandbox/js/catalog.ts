@@ -61,26 +61,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/imports/queries-cache": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Keeps paid answers a client held as files in the queries cache under `scheme`, each as of its own `fetched_at`; an answer kept already that is newer stays.
-         * @description 400 for a scheme or a key that is none.
-         */
-        post: operations["import_queries_cache"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/admin/imports/review-archive": {
         parameters: {
             query?: never;
@@ -4166,10 +4146,6 @@ export interface components {
             set_at: string;
             username: string;
         };
-        Imported: {
-            /** Format: uint */
-            answers: number;
-        };
         /**
          * @description The last `/api/internal` read per brand since `since` (the service's boot); an endpoint is absent
          *     when not read since.
@@ -4183,14 +4159,6 @@ export interface components {
         };
         Invite: {
             users: string[];
-        };
-        KeptAnswer: {
-            answer: unknown;
-            /**
-             * Format: date-time
-             * @description When it was bought: a newer answer kept already stays.
-             */
-            fetched_at: string;
         };
         /** @enum {string} */
         KeyedSourceKind: "site" | "review_archive" | "gbp" | "posthog" | "sheet" | "telephony" | "bot";
@@ -4966,14 +4934,6 @@ export interface components {
             area?: string | null;
             gmbs: number[];
             name: string;
-        };
-        QueriesCacheImport: {
-            /** @description By the request's SHA-256, 64 hex characters. */
-            answers: {
-                [key: string]: components["schemas"]["KeptAnswer"];
-            };
-            /** @description `places` or `gop`: whose digest the keys are. */
-            scheme: string;
         };
         Question: {
             /** @description What the assistant does without asking first. */
@@ -7749,10 +7709,8 @@ export type GmbPhoto = components['schemas']['GmbPhoto'];
 export type GoogleCategories = components['schemas']['GoogleCategories'];
 export type GoogleCategory = components['schemas']['GoogleCategory'];
 export type Imap = components['schemas']['Imap'];
-export type Imported = components['schemas']['Imported'];
 export type InternalReads = components['schemas']['InternalReads'];
 export type Invite = components['schemas']['Invite'];
-export type KeptAnswer = components['schemas']['KeptAnswer'];
 export type KeyedSourceKind = components['schemas']['KeyedSourceKind'];
 export type Keyword = components['schemas']['Keyword'];
 export type KeywordInput = components['schemas']['KeywordInput'];
@@ -7826,7 +7784,6 @@ export type Probe = components['schemas']['Probe'];
 export type Provider = components['schemas']['Provider'];
 export type PutArea = components['schemas']['PutArea'];
 export type PutKit = components['schemas']['PutKit'];
-export type QueriesCacheImport = components['schemas']['QueriesCacheImport'];
 export type Question = components['schemas']['Question'];
 export type ReadInternalReads = components['schemas']['ReadInternalReads'];
 export type ReadMapOfTimestamp = components['schemas']['ReadMap_of_Timestamp'];
@@ -8340,137 +8297,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Gmail"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    import_queries_cache: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["QueriesCacheImport"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Imported"];
                 };
             };
             /** @description `bad_request` */

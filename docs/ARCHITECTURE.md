@@ -486,12 +486,21 @@ PUT    /api/queries_cache/{scheme}/{key}         {answer, request, bought: {item
   served what was bought. A failed buy gives the claim up; a holder that dies lets it lapse.
 - **A PUT says what it bought** (`bought`: the catalog item and whose key, null for an answer kept
   from another bought): counted as a use in the write that keeps it.
-- **The latest answer per key stays**; an older PUT changes nothing, and nothing expires:
+- **Every version is kept, the latest served.** The latest answer per key is `queries_cache`'s
+  row in `panel.db`; every older version is in the history, `queries_history.db`
+  (`PANEL_HISTORY_DB_PATH`), keyed by when it was fetched and never changed. A version arriving
+  newer moves the row it replaces there first; one arriving older goes there; the same one again
+  is nothing. Nothing expires:
   `fresh_since` is a reader's age limit, or its re-ask.
+- **Every version keeps its request**, and the store refuses one whose key is not its SHA-256,
+  whoever writes it.
 - **Open to everyone**, reads and writes: bounded as ingest, a body ≤ 8 MiB, and rate-limited per
   client at the edge.
-- `POST /admin/imports/queries-cache` takes the answers a client kept as files, each as of its own
-  `fetched_at` (its file's time, for `local-stack`).
+- **Prod's is the one authority; every other conductor works on a copy and gives back what it
+  bought.** `panel queries-cache index` lists every version held, `export --except <index>` the
+  ones that index lacks, `import` keeps those, each as of its own `fetched_at`: run at both ends
+  by `scripts/queries-cache-sync.sh` (docs/LOCAL.md, Prod's data). A copy of prod's `panel.db`
+  needs none of its history: what it lacks of it is excepted by prod's index.
 
 ## The conductor's API, `/api/v1`
 
@@ -626,7 +635,6 @@ GET    /admin/meters                        tokens:grant
 GET    /admin/meters/readings               tokens:grant
 POST   /admin/gmails                        tokens:grant, fresh
 POST   /admin/imports/review-archive        tokens:grant, fresh
-POST   /admin/imports/queries-cache         sources:manage, fresh, slow
 GET    /assistant/chats
 POST   /assistant/chats
 GET    /assistant/chats/{id}
@@ -1251,9 +1259,10 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   clears until `purged_at`, set once; kick-backs only `claimed_at`, once.
 - **A GBP with a place is tracked in review_archive; it is walked only while Verified.** The
   snapshot carries every GBP with a place, its state and country; the archive derives the track.
-- **One file, migrated on open.** `PANEL_DB_PATH` names it (`/data/panel.db` in the image); every
-  command creates it if missing and applies the migrations it lacks first (`panel migrate` does
-  only that). A migration newer than the build is let be. Tables are STRICT, foreign keys
+- **Two files, migrated on open.** `PANEL_DB_PATH` names the panel's (`/data/panel.db` in the
+  image), `PANEL_HISTORY_DB_PATH` the queries cache's history (`/data/queries_history.db`), each
+  with its own migrations (`migrations/`, `history_migrations/`); every command creates them if
+  missing and applies the migrations each lacks first (`panel migrate` does only that). A migration newer than the build is let be. Tables are STRICT, foreign keys
   enforced, timestamps INTEGER microseconds since the epoch, UUIDs 16-byte blobs.
 - **The conductor's secrets come from the environment only** (`PANEL_DATA_KEY`, `SENTRY_DSN`,
   `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOLOGIN_TOKEN`,
@@ -1278,7 +1287,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   above the conductor. Its dir is `/data/grafana`, unreplicated: provisioned again on every start.
 - **The contract** (`nix eval .#containers.<system>.panel.contract`) names the port (the flake's `port`),
   `/health`, `APP_ENV=production`, the variables required, secret and optional,
-  `PANEL_DB_PATH`, the volume (`/data`) and the SQLite file on it to replicate, what the ingress
+  `PANEL_DB_PATH`, the volume (`/data`) and the SQLite files on it to replicate, what the ingress
   must not publish or must rate-limit, and the egress; what is not `container.implement`'s is
   nix/contract.nix. `crates/server/tests/it/contract.rs` fails when its required variables,
   `ingress.rateLimitPathPrefixes`, `ingress.excludePathPrefixes`, `consumes` or `provides` and the

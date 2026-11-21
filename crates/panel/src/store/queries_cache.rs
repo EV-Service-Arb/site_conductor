@@ -1,10 +1,12 @@
-//! The queries cache: what was paid for a query, the latest per query, and the claims of whoever
-//! is buying one (`sa_core::queries_cache`).
+//! The queries cache: what was paid for a query, the latest per query beside every older version,
+//! and the claims of whoever is buying one (`sa_core::queries_cache`).
+
+use std::collections::BTreeSet;
 
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_core::{
-	queries_cache::{Claim, Key, LEASE, Put, Scheme, Stored},
+	queries_cache::{Claim, Key, LEASE, Put, Scheme, Stored, Version},
 	usage::Billed,
 };
 
@@ -12,6 +14,7 @@ use super::{
 	Store, from_db, to_db,
 	usage::{self, CONDUCTOR, Use},
 };
+use crate::Refused;
 
 impl Store {
 	pub async fn cached_query(&self, scheme: Scheme, key: Key) -> eyre::Result<Option<Stored>> {
@@ -72,10 +75,14 @@ impl Store {
 		Ok(())
 	}
 
-	/// Keeps `answer` (JSON text) unless a newer one is kept already; any claim on the key ends.
-	/// `request` is `None` only for an answer that never kept it.
-	/// `bought`, it is counted as `source`'s use in the same write.
-	pub async fn keep_query(&self, scheme: Scheme, key: Key, answer: &str, request: Option<&str>, bought: Option<(Billed, &str)>, fetched_at: Timestamp) -> eyre::Result<()> {
+	/// A version of an answer arrives: the latest stays in `queries_cache`, every other in the
+	/// history, none is dropped; any claim on the key ends. `bought`, it is counted as `source`'s use
+	/// in the same write. Refused unless `key` is `request`'s SHA-256.
+	pub async fn keep_query(&self, scheme: Scheme, key: Key, answer: &str, request: &str, bought: Option<(Billed, &str)>, fetched_at: Timestamp) -> eyre::Result<Result<(), Refused>> {
+		if Key::of(request) != key {
+			return Ok(Err(Refused::Invalid("the key is not the SHA-256 of the request".to_owned())));
+		}
+		// Held to the end: a version reaches the history before the row it leaves changes, and no other keep moves that row meanwhile.
 		let mut tx = self.begin_write().await?;
 		if let Some((Billed { item, bill, account }, source)) = bought {
 			let used = Use {
@@ -90,27 +97,132 @@ impl Store {
 			};
 			usage::record(&mut tx, &used).await?;
 		}
-		sqlx::query(
-			"INSERT INTO queries_cache (scheme, key, answer, request, fetched_at) VALUES ($1, $2, $3, $4, $5) \
-			 ON CONFLICT (scheme, key) DO UPDATE SET answer = excluded.answer, request = excluded.request, fetched_at = excluded.fetched_at \
-			 WHERE excluded.fetched_at > queries_cache.fetched_at",
-		)
-		.bind(scheme.as_str())
-		.bind(&key.0[..])
-		.bind(answer)
-		.bind(request)
-		.bind(to_db(fetched_at))
-		.execute(&mut *tx)
-		.await
-		.wrap_err("keeping an answer")?;
+		let kept: Option<(String, i64)> = sqlx::query_as("SELECT answer, fetched_at FROM queries_cache WHERE scheme = $1 AND key = $2")
+			.bind(scheme.as_str())
+			.bind(&key.0[..])
+			.fetch_optional(&mut *tx)
+			.await
+			.wrap_err("reading an answer")?;
+		let at = to_db(fetched_at);
+		match kept {
+			None => {
+				sqlx::query("INSERT INTO queries_cache (scheme, key, answer, request, fetched_at) VALUES ($1, $2, $3, $4, $5)")
+					.bind(scheme.as_str())
+					.bind(&key.0[..])
+					.bind(answer)
+					.bind(request)
+					.bind(at)
+					.execute(&mut *tx)
+					.await
+					.wrap_err("keeping an answer")?;
+			}
+			Some((_, was)) if was == at => {}
+			Some((_, was)) if at < was => self.keep_version(scheme, key, answer, request, at).await?,
+			Some((was_answer, was)) => {
+				self.keep_version(scheme, key, &was_answer, request, was).await?; // the row's request is this one: its key is the digest of both
+				sqlx::query("UPDATE queries_cache SET answer = $3, request = $4, fetched_at = $5 WHERE scheme = $1 AND key = $2")
+					.bind(scheme.as_str())
+					.bind(&key.0[..])
+					.bind(answer)
+					.bind(request)
+					.bind(at)
+					.execute(&mut *tx)
+					.await
+					.wrap_err("keeping an answer")?;
+			}
+		}
+		// shortcut: a row imported from files lacks its request until the backfill (site_conductor#126); goes with the migration making it NOT NULL.
+		sqlx::query("UPDATE queries_cache SET request = $3 WHERE scheme = $1 AND key = $2 AND request IS NULL")
+			.bind(scheme.as_str())
+			.bind(&key.0[..])
+			.bind(request)
+			.execute(&mut *tx)
+			.await
+			.wrap_err("filling a request")?;
 		sqlx::query("DELETE FROM queries_cache_claims WHERE scheme = $1 AND key = $2")
 			.bind(scheme.as_str())
 			.bind(&key.0[..])
 			.execute(&mut *tx)
 			.await
 			.wrap_err("ending a claim")?;
-		tx.commit().await.wrap_err("keeping an answer")
+		tx.commit().await.wrap_err("keeping an answer")?;
+		Ok(Ok(()))
 	}
+
+	/// Committed on its own: kept already, it is let be.
+	async fn keep_version(&self, scheme: Scheme, key: Key, answer: &str, request: &str, at: i64) -> eyre::Result<()> {
+		sqlx::query("INSERT INTO queries_history (scheme, key, fetched_at, answer, request) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING")
+			.bind(scheme.as_str())
+			.bind(&key.0[..])
+			.bind(at)
+			.bind(answer)
+			.bind(request)
+			.execute(&self.history)
+			.await
+			.wrap_err("keeping a version of an answer")?;
+		Ok(())
+	}
+
+	/// Every version of every answer held, the latest and the history's.
+	pub async fn queries_index(&self) -> eyre::Result<BTreeSet<(Scheme, Key, Timestamp)>> {
+		// The latest first: a row a keep moves meanwhile is in the history by the time it is read.
+		let latest: Vec<(String, Vec<u8>, i64)> = sqlx::query_as("SELECT scheme, key, fetched_at FROM queries_cache")
+			.fetch_all(self.pool())
+			.await
+			.wrap_err("reading the answers' index")?;
+		let history: Vec<(String, Vec<u8>, i64)> = sqlx::query_as("SELECT scheme, key, fetched_at FROM queries_history")
+			.fetch_all(&self.history)
+			.await
+			.wrap_err("reading the history's index")?;
+		latest
+			.into_iter()
+			.chain(history)
+			.map(|(scheme, key, at)| Ok((parse_scheme(&scheme)?, from_key(key)?, from_db(at)?)))
+			.collect()
+	}
+
+	/// The version of `key`'s answer fetched at `fetched_at`, the latest's or the history's.
+	pub async fn query_version(&self, scheme: Scheme, key: Key, fetched_at: Timestamp) -> eyre::Result<Option<Version>> {
+		// The latest first, as in the index.
+		let latest: Option<(String, Option<String>)> = sqlx::query_as("SELECT answer, request FROM queries_cache WHERE scheme = $1 AND key = $2 AND fetched_at = $3")
+			.bind(scheme.as_str())
+			.bind(&key.0[..])
+			.bind(to_db(fetched_at))
+			.fetch_optional(self.pool())
+			.await
+			.wrap_err("reading an answer")?;
+		let row = match latest {
+			Some((answer, request)) => Some((
+				answer,
+				request.ok_or_else(|| eyre::eyre!("{scheme} {key} as of {fetched_at} was kept without its request: no copy of it is whole"))?,
+			)),
+			None => sqlx::query_as("SELECT answer, request FROM queries_history WHERE scheme = $1 AND key = $2 AND fetched_at = $3")
+				.bind(scheme.as_str())
+				.bind(&key.0[..])
+				.bind(to_db(fetched_at))
+				.fetch_optional(&self.history)
+				.await
+				.wrap_err("reading a version of an answer")?,
+		};
+		row.map(|(answer, request)| {
+			Ok(Version {
+				scheme,
+				key,
+				request,
+				answer: serde_json::from_str(&answer).wrap_err("a kept answer is not JSON")?,
+				fetched_at,
+			})
+		})
+		.transpose()
+	}
+}
+
+fn parse_scheme(s: &str) -> eyre::Result<Scheme> {
+	s.parse().map_err(|e: sa_core::Invalid| eyre::eyre!(e.0))
+}
+
+fn from_key(key: Vec<u8>) -> eyre::Result<Key> {
+	Ok(Key(key.try_into().map_err(|_| eyre::eyre!("a stored key is not 32 bytes"))?))
 }
 
 fn stored((answer, fetched_at): (String, i64)) -> eyre::Result<Stored> {
@@ -131,9 +243,10 @@ impl sa_places::QueriesCache for Store {
 
 	fn put(&self, scheme: Scheme, key: Key, put: Put) -> sa_places::Pending<'_, ()> {
 		Box::pin(async move {
-			self.keep_query(scheme, key, &put.answer.to_string(), Some(&put.request), put.bought.map(|b| (b, CONDUCTOR)), Timestamp::now())
+			self.keep_query(scheme, key, &put.answer.to_string(), &put.request, put.bought.map(|b| (b, CONDUCTOR)), Timestamp::now())
 				.await
-				.map_err(store_error)
+				.map_err(store_error)?
+				.map_err(|refused| sa_places::Error::QueriesCache(refused.to_string()))
 		})
 	}
 

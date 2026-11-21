@@ -444,7 +444,7 @@ async fn a_session_gone_is_found_at_the_recheck() {
 async fn a_reader_behind_is_told_to_resync() {
 	let db = TestDb::create().await;
 	let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
-	let panel = panel_with(Store::open(db.path(), Bus::new(2)).await.unwrap(), key);
+	let panel = panel_with(Store::open(db.path(), db.history(), Bus::new(2)).await.unwrap(), key);
 	let (app, addr) = alone(panel.clone(), admin(), Limits::default()).await;
 	let mut ws = open(addr, &signed_in(&app).await).await;
 	heard(&panel, [&mut ws]).await;

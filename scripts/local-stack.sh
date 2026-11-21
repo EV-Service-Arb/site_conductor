@@ -40,8 +40,7 @@ SANDBOX_PORT="${SANDBOX_PORT##*:}"
 offset=0
 # whom dev sign-in is, whatever --role: with --from-prod, prod's own account
 DEV_EMAIL="admin@evinvest.ltd"
-# prod's host, as ~/.ssh/config names it: --from-prod reads review_archive's blobs off its volume
-PROD_SSH="rpi5-ts"
+: "${PROD_SSH:?$need}" # prod's host: --from-prod reads review_archive's blobs off its volume
 AQUAFIX_PLACES=(royat clermont-ferrand desgenettes lyon-est la-mouche lyon-nord)
 VIFNET_PLACES=(vifnet)
 DEBOUCHAGE_PLACES=(clermont-ferrand)
@@ -108,8 +107,10 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [-
   from `next dev`, whose origin is then the one to open.
   --port-offset <n>: every port moved by n, beside the stack on the usual ones.
   --from-prod: prod's panel.db, sites_panel.db and review_archive.db from their litestream replicas
-  (the keys from ../devops's sops), and review_archive's blobs over ssh (PROD_SSH, rsync into
+  (prod-restore, the keys from ../devops's sops), and review_archive's blobs over ssh (PROD_SSH, rsync into
   .local-prod-blobs/, which --reset keeps), into a state with none of them; one with all of them keeps its copy.
+  Whatever the state's conductor holds of the queries cache that prod lacks goes to prod at start and at exit
+  (queries-cache-sync).
   Dev sign-in is one user whatever --role (DEV_EMAIL, at the top of the script): prod's, when copied.
   dev (--dev): --watch without the landings. A conductor or its next dev already on their ports is
   stopped, with the run that started it, and replaced; sites_panel and review_archive are started
@@ -458,21 +459,25 @@ fi
 # --fixed: on a copy of the watched dev's state, sessions included (the browser's localhost cookie is every port's), its
 # peers holding the same data; a fresh one when its database has a migration this copy changed, which the conductor would refuse
 if [ "$fixed" = 1 ] && [ "$from_prod" = 0 ] && [ "$state" != "$root/.local" ] && [ -e "$root/.local/panel.db" ]; then
-	rm -rf "$state/panel.db"* "$state/sites_panel.db"* "$state/review_archive" "$state/secrets" "$state/data-key"
+	rm -rf "$state/panel.db"* "$state/queries_history.db"* "$state/queries_cache.prod-index" "$state/sites_panel.db"* "$state/review_archive" "$state/secrets" "$state/data-key"
 	mkdir -p "$state/secrets"
 	changed=""
-	rows="$(sqlite3 "$root/.local/panel.db" "SELECT version || ' ' || lower(hex(checksum)) FROM _sqlx_migrations WHERE success")" || die "$root/.local/panel.db: no migrations table"
-	while read -r v sum; do
-		f=""
-		for c in "$src/crates/panel/migrations/$v"_*.sql; do [[ $c == *.down.sql ]] || f="$c"; done
-		[ -e "$f" ] || continue # a rollback, as the conductor takes it
-		[ "$(sha384sum <"$f" | cut -d' ' -f1)" = "$sum" ] || changed+=" $v"
-	done <<<"$rows"
+	for pair in panel.db:migrations queries_history.db:history_migrations; do
+		db="$root/.local/${pair%%:*}"
+		[ -e "$db" ] || continue # a state from before the history: the copy's conductor makes it
+		rows="$(sqlite3 "$db" "SELECT version || ' ' || lower(hex(checksum)) FROM _sqlx_migrations WHERE success")" || die "$db: no migrations table"
+		while read -r v sum; do
+			f=""
+			for c in "$src/crates/panel/${pair#*:}/$v"_*.sql; do [[ $c == *.down.sql ]] || f="$c"; done
+			[ -e "$f" ] || continue # a rollback, as the conductor takes it
+			[ "$(sha384sum <"$f" | cut -d' ' -f1)" = "$sum" ] || changed+=" ${pair%%:*}:$v"
+		done <<<"$rows"
+	done
 	if [ -n "$changed" ]; then
-		warn "--fixed: .local's panel.db applied migrations this copy has otherwise ($changed ): a fresh state"
+		warn "--fixed: .local's databases applied migrations this copy has otherwise ($changed ): a fresh state"
 	else
 		say "--fixed: a copy of .local's state"
-		for db in panel.db sites_panel.db review_archive/review_archive.db; do
+		for db in panel.db queries_history.db sites_panel.db review_archive/review_archive.db; do
 			[ ! -e "$root/.local/$db" ] || { mkdir -p "$(dirname "$state/$db")" && sqlite3 "$root/.local/$db" ".backup '$state/$db'"; }
 		done
 		[ ! -d "$root/.local/review_archive/blobs" ] || cp -al "$root/.local/review_archive/blobs" "$state/review_archive/"
@@ -482,24 +487,12 @@ if [ "$fixed" = 1 ] && [ "$from_prod" = 0 ] && [ "$state" != "$root/.local" ] &&
 fi
 # Beside the builds, waited on before the first reader. Under `timed`, so errexit is off: every step checked.
 prod_data() {
-	local gitops="${GITOPS_DIR:-$(dirname "$service_arb")/gitops}"
-	local cache="$root/.local-prod-blobs" r2_key r2_secret volume c p pids=() failed=0
-	# the replicas as gitops main configures them, not as an old checkout of it says
-	git -C "$gitops" fetch -q origin main || return 1
-	git -C "$gitops" show FETCH_HEAD:clusters/rpi5/tenants/service-arb/manifests.yaml |
-		yq eval-all '[select(.kind == "ConfigMap" and .data["litestream.yml"])][0].data["litestream.yml"]' >"$state/litestream.yml" || return 1
-	r2_key="$(sops -d --extract '["r2_access_key_id"]' "$devops/nix/secrets/host.json")" || return 1
-	r2_secret="$(sops -d --extract '["r2_secret_access_key"]' "$devops/nix/secrets/host.json")" || return 1
+	local cache="$root/.local-prod-blobs" volume c p pids=() failed=0 pairs=()
 	mkdir -p "$REVIEW_ARCHIVE_DATA_DIR" "$cache"
 	printf '*\n' >"$cache/.gitignore"
-	for c in "${copies[@]}"; do
-		(
-			unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY # the caller's would win over litestream's own variables
-			export LITESTREAM_ACCESS_KEY_ID="$r2_key" LITESTREAM_SECRET_ACCESS_KEY="$r2_secret"
-			timed "restore/$(basename "${c%%:*}" .db)" litestream restore -config "$state/litestream.yml" -o "${c%%:*}" "/pvc/${c#*:}"
-		) &
-		pids+=("$!")
-	done
+	for c in "${copies[@]}"; do pairs+=("${c#*:}=${c%%:*}"); done
+	GITOPS_DIR="${GITOPS_DIR:-$(dirname "$service_arb")/gitops}" DEVOPS_DIR="$devops" timed restore "$PROD_RESTORE" "${pairs[@]}" &
+	pids+=("$!")
 	# not replicated: read off the volume on the host, into a cache outside the state (--reset keeps it), so only what
 	# changed comes again; hard-linked into the state, as review_archive replaces a blob by a rename, never in place
 	# shellcheck disable=SC2016 # expanded on the host
@@ -786,6 +779,7 @@ panel() {
 		-u TELEGRAM_BOT_TOKEN -u SENTRY_DSN \
 		APP_ENV=development \
 		PANEL_DB_PATH="$state/panel.db" \
+		PANEL_HISTORY_DB_PATH="$state/queries_history.db" \
 		PANEL_DATA_KEY="$(cat "$state/data-key")" \
 		PANEL_PUBLIC_ORIGIN="$public_origin" \
 		PANEL_DEV_SIGN_IN="sa:$role" \
@@ -856,6 +850,15 @@ fresh=0
 if [ "$run_panel" = 1 ]; then
 	[ -e "$state/panel.db" ] || fresh=1
 fi
+# What this state's conductor holds of the queries cache, into prod's: what it bought is everyone's
+sync_queries() {
+	PANEL_BIN="$PANEL_BIN" "$QUERIES_CACHE_SYNC" "$state" ||
+		warn "prod's queries cache did not take what $state holds: rerun \`PANEL_BIN=$PANEL_BIN nix run $root#queries-cache-sync -- $state\`"
+}
+# a kept state's, which a run stopped past its trap, or whose sync failed, left behind
+if [ "$run_panel" = 1 ] && [ "$fresh" = 0 ] && [ "$restore" = 0 ]; then
+	sync_queries
+fi
 if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
 	say "seeding $state/sites_panel.db"
 	sites_panel migrate
@@ -885,13 +888,15 @@ stop_all() {
 	}
 	descendants $$
 	kill -TERM ${pids[@]+"${pids[@]}"} 2>/dev/null
+	local alive=1
 	for _ in $(seq 10); do
-		local alive=0
+		alive=0
 		for p in ${pids[@]+"${pids[@]}"}; do kill -0 "$p" 2>/dev/null && alive=1; done
-		[ "$alive" = 0 ] && return 0
+		[ "$alive" = 0 ] && break
 		sleep 1
 	done
-	kill -KILL ${pids[@]+"${pids[@]}"} 2>/dev/null
+	[ "$alive" = 0 ] || kill -KILL ${pids[@]+"${pids[@]}"} 2>/dev/null
+	[ "$run_panel" = 0 ] || sync_queries
 }
 trap stop_all EXIT
 trap 'stop_all; exit 130' INT TERM HUP
@@ -1096,20 +1101,6 @@ if [ "$run_panel" = 1 ]; then
 		[ -z "$AQUAFIX_PORT" ] || source_key aquafix-local aquafix "http://localhost:$AQUAFIX_PORT"
 		[ -z "$VIFNET_PORT" ] || source_key vifnet-local vifnet "http://localhost:$VIFNET_PORT"
 		[ -z "$DEBOUCHAGE_PORT" ] || source_key debouchage-local debouchage "http://localhost:$DEBOUCHAGE_PORT"
-		# What the placement CLI's mirror holds, into this conductor's queries cache, each answer as of its
-		# file's time (a newer answer cached stays).
-		placement_cached="$placement_dir/data/places_cache"
-		if [ -d "$placement_cached" ]; then
-			mapfile -d '' -t answers_files < <(find "$placement_cached" -maxdepth 1 -name '*.json' -print0)
-			for ((i = 0; i < ${#answers_files[@]}; i += 500)); do
-				batch=("${answers_files[@]:i:500}")
-				jq -n --arg scheme gop --rawfile times <(stat -c '%n	%Y' "${batch[@]}") '
-					($times | split("\n") | map(select(length > 0) | split("\t") | {(.[0]): (.[1] | tonumber)}) | add) as $at
-					| {scheme: $scheme, answers: (reduce inputs as $answer ({};
-						input_filename as $file | .[$file | split("/") | last | sub("\\.json$"; "")] = {answer: $answer, fetched_at: ($at[$file] | todate)}))}
-				' "${batch[@]}" | api POST /admin/imports/queries-cache --data-binary @- >/dev/null
-			done
-		fi
 		# sites' places, registered through the conductor's forward; those it knows stay as they are
 		if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
 			sites() {

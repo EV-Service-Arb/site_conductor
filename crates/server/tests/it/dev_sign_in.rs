@@ -37,10 +37,11 @@ fn panel_migrate(vars: &[(&str, &str)]) -> (Option<i32>, String) {
 
 /// Everything production requires, so that the refusal is the dev sign-in's and not a missing
 /// variable's.
-fn production(db: &str) -> Vec<(&'static str, String)> {
+fn production(db: &str, history: &str) -> Vec<(&'static str, String)> {
 	vec![
 		("APP_ENV", "production".to_owned()),
 		("PANEL_DB_PATH", db.to_owned()),
+		("PANEL_HISTORY_DB_PATH", history.to_owned()),
 		("PANEL_DATA_KEY", "0".repeat(64)),
 		("PANEL_PUBLIC_ORIGIN", ORIGIN.to_owned()),
 		("CONCIERGE_PUBLIC_ORIGIN", "https://evinvest.ltd".to_owned()),
@@ -61,7 +62,8 @@ fn production(db: &str) -> Vec<(&'static str, String)> {
 async fn the_binary_refuses_dev_sign_in_in_production() {
 	let db = TestDb::create().await;
 	let path = db.path().display().to_string();
-	let mut vars = production(&path);
+	let history = db.history().display().to_string();
+	let mut vars = production(&path, &history);
 	let (code, stderr) = panel_migrate(&vars.iter().map(|(k, v)| (*k, v.as_str())).collect::<Vec<_>>());
 	assert_eq!(code, Some(0), "the production environment alone boots: {stderr}");
 
@@ -75,10 +77,12 @@ async fn the_binary_refuses_dev_sign_in_in_production() {
 async fn the_binary_refuses_dev_sign_in_off_loopback() {
 	let db = TestDb::create().await;
 	let path = db.path().display().to_string();
+	let history = db.history().display().to_string();
 	let key = "0".repeat(64);
 	let with = |origin: &str| {
 		panel_migrate(&[
 			("PANEL_DB_PATH", path.as_str()),
+			("PANEL_HISTORY_DB_PATH", history.as_str()),
 			("PANEL_DATA_KEY", key.as_str()),
 			("PANEL_DEV_SIGN_IN", "sa:admin"),
 			("PANEL_DEV_SIGN_IN_EMAIL", "dev@localhost"),
@@ -99,10 +103,12 @@ async fn the_binary_refuses_dev_sign_in_off_loopback() {
 async fn the_binary_takes_an_alias_or_a_list_of_permissions() {
 	let db = TestDb::create().await;
 	let path = db.path().display().to_string();
+	let history = db.history().display().to_string();
 	let key = "0".repeat(64);
 	let with = |who: &str| {
 		panel_migrate(&[
 			("PANEL_DB_PATH", path.as_str()),
+			("PANEL_HISTORY_DB_PATH", history.as_str()),
 			("PANEL_DATA_KEY", key.as_str()),
 			("PANEL_DEV_SIGN_IN", who),
 			("PANEL_DEV_SIGN_IN_EMAIL", "dev@localhost"),

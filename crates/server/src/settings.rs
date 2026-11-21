@@ -19,6 +19,11 @@ ev_lib::settings! {
 		/// command opens it. A path, not a secret.
 		#[required_in("production")]
 		panel_db_path: Option<String>,
+		/// The queries cache's history, every version of an answer but the latest, e.g.
+		/// `/data/queries_history.db`: a file of its own, so a copy of PANEL_DB_PATH needs none of it.
+		/// Created and migrated with it.
+		#[required_in("production")]
+		panel_history_db_path: Option<String>,
 		/// 64 hex characters: the key PII and the sources' HMAC secrets are sealed with
 		/// (`panel gen-data-key` makes one). Losing it loses both; changing it strands them.
 		#[secret]
@@ -128,6 +133,11 @@ impl Settings {
 	pub fn db_path(&self) -> eyre::Result<&Path> {
 		let path = self.panel_db_path.as_deref().map(str::trim).filter(|p| !p.is_empty());
 		Ok(Path::new(path.ok_or_else(|| eyre::eyre!("PANEL_DB_PATH must be set"))?))
+	}
+
+	pub fn history_db_path(&self) -> eyre::Result<&Path> {
+		let path = self.panel_history_db_path.as_deref().map(str::trim).filter(|p| !p.is_empty());
+		Ok(Path::new(path.ok_or_else(|| eyre::eyre!("PANEL_HISTORY_DB_PATH must be set"))?))
 	}
 
 	pub fn data_key(&self) -> eyre::Result<DataKey> {
@@ -487,6 +497,7 @@ mod tests {
 			Settings::var_names(),
 			[
 				"PANEL_DB_PATH",
+				"PANEL_HISTORY_DB_PATH",
 				"PANEL_DATA_KEY",
 				"SENTRY_DSN",
 				"PANEL_PUBLIC_ORIGIN",
@@ -524,6 +535,7 @@ mod tests {
 			Settings::required_var_names("production"),
 			[
 				"PANEL_DB_PATH",
+				"PANEL_HISTORY_DB_PATH",
 				"PANEL_DATA_KEY",
 				"PANEL_PUBLIC_ORIGIN",
 				"CONCIERGE_PUBLIC_ORIGIN",
@@ -610,6 +622,7 @@ mod tests {
 			from(&[
 				("APP_ENV", "production"),
 				("PANEL_DB_PATH", "/data/panel.db"),
+				("PANEL_HISTORY_DB_PATH", "/data/queries_history.db"),
 				("PANEL_DATA_KEY", &key),
 				("PANEL_PUBLIC_ORIGIN", panel),
 				("CONCIERGE_PUBLIC_ORIGIN", concierge),
@@ -745,6 +758,7 @@ mod tests {
 			from(&[
 				("APP_ENV", profile),
 				("PANEL_DB_PATH", "/data/panel.db"),
+				("PANEL_HISTORY_DB_PATH", "/data/queries_history.db"),
 				("PANEL_DATA_KEY", &key),
 				("PANEL_PUBLIC_ORIGIN", "http://127.0.0.1:59120"),
 				("CONCIERGE_PUBLIC_ORIGIN", "https://evinvest.ltd"),

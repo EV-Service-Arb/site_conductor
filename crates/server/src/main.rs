@@ -42,9 +42,15 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-	/// Create the database at PANEL_DB_PATH if need be and apply the migrations it lacks, then
-	/// exit. Every command does as much on open, `serve` included; this one does nothing else.
+	/// Create the databases at PANEL_DB_PATH and PANEL_HISTORY_DB_PATH if need be and apply the
+	/// migrations each lacks, then exit. Every command does as much on open, `serve` included; this
+	/// one does nothing else.
 	Migrate,
+	/// The queries cache between two conductors' databases (`scripts/queries-cache-sync.sh`).
+	QueriesCache {
+		#[command(subcommand)]
+		cmd: QueriesCacheCmd,
+	},
 	/// The HTTP API.
 	Serve {
 		/// The dev shell sets PANEL_BIND to this machine's port.
@@ -53,6 +59,19 @@ enum Cmd {
 	},
 	/// Print a fresh PANEL_DATA_KEY.
 	GenDataKey,
+}
+
+#[derive(Subcommand)]
+enum QueriesCacheCmd {
+	/// Every version held, the latest and the history's: a JSON line `[scheme, key, fetched_at]` each.
+	Index,
+	/// Every version held that `--except` (an `index`'s output) lacks, a JSON line each.
+	Export {
+		#[arg(long)]
+		except: std::path::PathBuf,
+	},
+	/// `export`'s lines from stdin, each kept as of its own `fetched_at`.
+	Import,
 }
 
 // Sentry must be initialised before the async runtime starts, hence no #[tokio::main].
@@ -144,8 +163,9 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 		);
 		Ok(Arc::new(sa_places::Accounts::new(config.google)))
 	};
+	let open = || async { Store::open(settings.db_path()?, settings.history_db_path()?, sa_panel::live::Bus::default()).await };
 	let connect = || async {
-		let store = Store::open(settings.db_path()?, sa_panel::live::Bus::default()).await?;
+		let store = open().await?;
 		let accounts = accounts()?;
 		let keys = sa_places::Keys::new(accounts.iter().filter_map(|a| Some((a.name.clone(), a.provides.places.as_deref()?.to_owned()))).collect());
 		let rank = sa_panel::meters::ByStanding {
@@ -157,7 +177,13 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 	};
 	match cli.cmd {
 		Cmd::Migrate => {
-			Store::open(settings.db_path()?, sa_panel::live::Bus::default()).await?.pool().close().await;
+			open().await?.close().await;
+			Ok(())
+		}
+		Cmd::QueriesCache { cmd } => {
+			let store = open().await?;
+			queries_cache(&store, cmd).await?;
+			store.close().await;
 			Ok(())
 		}
 		Cmd::Serve { bind } => {
@@ -212,6 +238,52 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 			Ok(())
 		}
 	}
+}
+
+async fn queries_cache(store: &Store, cmd: QueriesCacheCmd) -> eyre::Result<()> {
+	use std::io::{BufRead, Write};
+
+	use sa_core::queries_cache::{Key, Scheme};
+
+	let mut out = std::io::BufWriter::new(std::io::stdout().lock());
+	match cmd {
+		QueriesCacheCmd::Index =>
+			for held in store.queries_index().await? {
+				serde_json::to_writer(&mut out, &held)?;
+				writeln!(out)?;
+			},
+		QueriesCacheCmd::Export { except } => {
+			let mut lacking = store.queries_index().await?;
+			let text = std::fs::read_to_string(&except).wrap_err_with(|| format!("reading the index {}", except.display()))?;
+			for (n, line) in text.lines().enumerate() {
+				let held: (Scheme, Key, jiff::Timestamp) = serde_json::from_str(line).wrap_err_with(|| format!("{} line {}", except.display(), n + 1))?;
+				lacking.remove(&held);
+			}
+			for (scheme, key, at) in &lacking {
+				let version = store
+					.query_version(*scheme, *key, *at)
+					.await?
+					.ok_or_else(|| eyre::eyre!("{scheme} {key} as of {at}: indexed, then gone"))?;
+				serde_json::to_writer(&mut out, &version)?;
+				writeln!(out)?;
+			}
+			tracing::info!(versions = lacking.len(), "exported");
+		}
+		QueriesCacheCmd::Import => {
+			let mut kept = 0_usize;
+			for (n, line) in std::io::stdin().lock().lines().enumerate() {
+				let v: sa_core::queries_cache::Version = serde_json::from_str(&line?).wrap_err_with(|| format!("line {}", n + 1))?;
+				store
+					.keep_query(v.scheme, v.key, &v.answer.to_string(), &v.request, None, v.fetched_at)
+					.await?
+					.wrap_err_with(|| format!("line {}: {} {}", n + 1, v.scheme, v.key))?;
+				kept += 1;
+			}
+			tracing::info!(versions = kept, "imported");
+		}
+	}
+	out.flush()?;
+	Ok(())
 }
 
 /// Who signs people in.

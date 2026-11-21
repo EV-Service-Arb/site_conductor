@@ -6,7 +6,6 @@ use std::{future::Future, pin::Pin, time::Duration};
 
 use jiff::Timestamp;
 use sa_core::queries_cache::{Claim, ClaimBody, Key, Put, Scheme, Stored, under};
-use sha2::{Digest, Sha256};
 
 use crate::Error;
 
@@ -85,7 +84,7 @@ impl Request<'_> {
 	}
 
 	pub fn key(&self) -> Key {
-		Key(Sha256::digest(self.preimage()).into())
+		Key::of(&self.preimage())
 	}
 }
 
