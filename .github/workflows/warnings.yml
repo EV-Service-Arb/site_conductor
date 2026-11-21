@@ -66,7 +66,10 @@ jobs:
           KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
         if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Drop older nix eval caches
-        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
+        run: |
+          gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | while read -r id; do
+            gh cache delete -R "$GITHUB_REPOSITORY" "$id" || ! gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id -q '.[].id' | grep -qx "$id"
+          done
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -178,7 +181,10 @@ jobs:
           KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
         if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Drop older nix eval caches
-        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
+        run: |
+          gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | while read -r id; do
+            gh cache delete -R "$GITHUB_REPOSITORY" "$id" || ! gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id -q '.[].id' | grep -qx "$id"
+          done
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -317,13 +323,27 @@ jobs:
         name: Restore particle's cache
         uses: actions/cache/restore@v5
         with:
-          key: particles-warnings-rust-clippy-0-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('./Cargo.lock') }}
+          key: particles-warnings-rust-clippy-0-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('./Cargo.lock', './**/Cargo.toml', './**/*.rs') }}
           path: |-
             ./target
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
           restore-keys: particles-warnings-rust-clippy-0-${{ runner.os }}-
+      - if: steps.particle-cache-0.outputs.cache-matched-key != ''
+        name: Align the checkout with particle's cache
+        run: |
+          [ -f ./target/.commit ] || exit 0
+          built=$(cat ./target/.commit)
+          git fetch -q --depth=1 origin "$built" || { echo "::notice::$built, the cached build's commit, can't be fetched: every watched file reads as changed"; exit 0; }
+          find . -path ./.git -prune -o -path ./target -prune -o -exec touch -h -d @1 {} +
+          git diff --no-renames --name-only "$built" HEAD | while read -r p; do
+            while [ "$p" != . ]; do
+              [ ! -e "$p" ] || touch -h "$p"
+              p=$(dirname "$p")
+            done
+          done
+        shell: bash
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.particle-cache-0.outputs.cache-hit != 'true'
         name: Stamp particle's cache
         run: '[ ! -d ./target ] || find ./target -type f -exec touch -a -d @1 {} +'
@@ -346,6 +366,7 @@ jobs:
             dropped=$((dropped + 1))
           done
           echo "cargo units kept: $used, dropped: $dropped"
+          git rev-parse HEAD > ./target/.commit
         shell: bash
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.particle-cache-0.outputs.cache-hit != 'true'
         name: Save particle's cache
@@ -379,7 +400,10 @@ jobs:
           KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
         if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Drop older nix eval caches
-        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
+        run: |
+          gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | while read -r id; do
+            gh cache delete -R "$GITHUB_REPOSITORY" "$id" || ! gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id -q '.[].id' | grep -qx "$id"
+          done
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -457,13 +481,27 @@ jobs:
         name: Restore particle's cache
         uses: actions/cache/restore@v5
         with:
-          key: particles-warnings-rust-doc-0-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('./Cargo.lock') }}
+          key: particles-warnings-rust-doc-0-${{ runner.os }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('./Cargo.lock', './**/Cargo.toml', './**/*.rs') }}
           path: |-
             ./target
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
           restore-keys: particles-warnings-rust-doc-0-${{ runner.os }}-
+      - if: steps.particle-cache-0.outputs.cache-matched-key != ''
+        name: Align the checkout with particle's cache
+        run: |
+          [ -f ./target/.commit ] || exit 0
+          built=$(cat ./target/.commit)
+          git fetch -q --depth=1 origin "$built" || { echo "::notice::$built, the cached build's commit, can't be fetched: every watched file reads as changed"; exit 0; }
+          find . -path ./.git -prune -o -path ./target -prune -o -exec touch -h -d @1 {} +
+          git diff --no-renames --name-only "$built" HEAD | while read -r p; do
+            while [ "$p" != . ]; do
+              [ ! -e "$p" ] || touch -h "$p"
+              p=$(dirname "$p")
+            done
+          done
+        shell: bash
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.particle-cache-0.outputs.cache-hit != 'true'
         name: Stamp particle's cache
         run: '[ ! -d ./target ] || find ./target -type f -exec touch -a -d @1 {} +'
@@ -486,6 +524,7 @@ jobs:
             dropped=$((dropped + 1))
           done
           echo "cargo units kept: $used, dropped: $dropped"
+          git rev-parse HEAD > ./target/.commit
         shell: bash
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.particle-cache-0.outputs.cache-hit != 'true'
         name: Save particle's cache
@@ -519,7 +558,10 @@ jobs:
           KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
         if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Drop older nix eval caches
-        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
+        run: |
+          gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | while read -r id; do
+            gh cache delete -R "$GITHUB_REPOSITORY" "$id" || ! gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id -q '.[].id' | grep -qx "$id"
+          done
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -610,7 +652,10 @@ jobs:
           KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
         if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Drop older nix eval caches
-        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
+        run: |
+          gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | while read -r id; do
+            gh cache delete -R "$GITHUB_REPOSITORY" "$id" || ! gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id -q '.[].id' | grep -qx "$id"
+          done
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -701,7 +746,10 @@ jobs:
           KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
         if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Drop older nix eval caches
-        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
+        run: |
+          gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | while read -r id; do
+            gh cache delete -R "$GITHUB_REPOSITORY" "$id" || ! gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id -q '.[].id' | grep -qx "$id"
+          done
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -792,7 +840,10 @@ jobs:
           KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
         if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Drop older nix eval caches
-        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
+        run: |
+          gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | while read -r id; do
+            gh cache delete -R "$GITHUB_REPOSITORY" "$id" || ! gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id -q '.[].id' | grep -qx "$id"
+          done
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
@@ -883,7 +934,10 @@ jobs:
           KEY: ${{ steps.eval-cache.outputs.cache-primary-key }}
         if: always() && steps.eval-cache.outputs.cache-hit != 'true' && github.ref_name == github.event.repository.default_branch
         name: Drop older nix eval caches
-        run: gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | xargs -r -n1 gh cache delete -R "$GITHUB_REPOSITORY"
+        run: |
+          gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id,key -q 'if any(.[]; .key == $ENV.KEY) then .[] | select(.key != $ENV.KEY) | .id else empty end' | while read -r id; do
+            gh cache delete -R "$GITHUB_REPOSITORY" "$id" || ! gh cache list -R "$GITHUB_REPOSITORY" -L 100 --key "$FAMILY" --json id -q '.[].id' | grep -qx "$id"
+          done
       - if: always() && github.ref_name == github.event.repository.default_branch && steps.lean-restore.outputs.cache-hit != 'true'
         name: Prune lean nix cache to what this run used
         run: |
