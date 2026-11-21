@@ -5467,6 +5467,10 @@
     "en": "Unresponded",
     "t": "Без ответа"
   },
+  "window.stats.appeared": {
+    "en": "{n} reviews on Google",
+    "t": "Отзывов в Google: {n}"
+  },
   "window.stats.arp": {
     "en": "avg rank, my quadrant",
     "t": "средняя позиция, мой квадрант"
@@ -5486,6 +5490,10 @@
   "window.stats.edited": {
     "en": "Edited: {n} fields",
     "t": "Изменено полей: {n}"
+  },
+  "window.stats.edits": {
+    "en": "{n} edits",
+    "t": "Правок: {n}"
   },
   "window.stats.grafana": {
     "en": "Open in Grafana",
@@ -5527,13 +5535,41 @@
     "en": "Ranking: ARP, ATRP and SoLV over the period, with the profile edits and suspensions on it",
     "t": "Ранжирование: ARP, ATRP и SoLV за период, с правками профиля и блокировками на графике"
   },
+  "window.stats.reinstatementsCleared": {
+    "en": "{n} reinstatements withdrawn",
+    "t": "Отозвано запросов на восстановление: {n}"
+  },
+  "window.stats.reinstatementsSet": {
+    "en": "{n} reinstatements asked of Google",
+    "t": "Запросов на восстановление в Google: {n}"
+  },
+  "window.stats.returned": {
+    "en": "{n} reviews back on Google",
+    "t": "Вернулось в Google отзывов: {n}"
+  },
   "window.stats.reviewsCapped": {
     "en": "kept 30 d: the 90 d range shows 30",
     "t": "хранится 30 д: диапазон 90 д показывает 30"
   },
+  "window.stats.reviewsRemoved": {
+    "en": "{n} reviews removed",
+    "t": "Удалено отзывов: {n}"
+  },
+  "window.stats.scansFailed": {
+    "en": "{n} scans of its reviews failed",
+    "t": "Сбоев проверки отзывов: {n}"
+  },
   "window.stats.solv": {
     "en": "grid points in top 3",
     "t": "точек сетки в топ-3"
+  },
+  "window.stats.suspended": {
+    "en": "{n} 5-star reviews suspended",
+    "t": "Приостановлено отзывов на 5 звёзд: {n}"
+  },
+  "window.stats.syncs": {
+    "en": "{n} syncs",
+    "t": "Синхронизаций: {n}"
   },
   "window.stats.versus": {
     "en": "vs previous {n} d",
