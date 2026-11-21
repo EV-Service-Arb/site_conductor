@@ -1,0 +1,117 @@
+{
+  "trade": "Drainage",
+  "country": "FR",
+  "set_up": {
+    "keywords": [
+      {
+        "text": "service d'évacuation des eaux",
+        "weight": 1
+      },
+      {
+        "text": "débouchage canalisation",
+        "weight": 3
+      },
+      {
+        "text": "débouchage wc",
+        "weight": 1.5
+      },
+      {
+        "text": "vidange fosse septique",
+        "weight": 1
+      },
+      {
+        "text": "hydrocurage",
+        "weight": 0.8
+      },
+      {
+        "text": "inspection caméra canalisation",
+        "weight": 0.4
+      }
+    ],
+    "google_primary": "gcid:drainage_service",
+    "google_additional": [
+      {
+        "id": "gcid:septic_system_service",
+        "weight": 0.8
+      },
+      {
+        "id": "gcid:plumber",
+        "weight": 0.5
+      }
+    ],
+    "excluded": {
+      "words": [
+        "magasin",
+        "showroom",
+        "grossiste",
+        "négoce",
+        "negoce",
+        "fourniture",
+        "leroy merlin",
+        "castorama",
+        "bricomarché",
+        "bricomarche",
+        "brico dépôt",
+        "brico depot",
+        "mr.bricolage",
+        "point.p",
+        "cedeo",
+        "brossette",
+        "richardson",
+        "lymph",
+        "massage",
+        "kiné",
+        "kine",
+        "ostéo",
+        "osteo",
+        "spanc",
+        "mairie",
+        "métropole",
+        "metropole",
+        "syndicat",
+        "régie",
+        "regie",
+        "station d'épuration",
+        "station d'epuration",
+        "piscine"
+      ],
+      "types": [
+        "hardware_store",
+        "home_improvement_store",
+        "home_goods_store",
+        "physiotherapist",
+        "spa",
+        "beauty_salon",
+        "local_government_office",
+        "city_hall"
+      ]
+    },
+    "demand": {
+      "expr": "drains * (0.7 + old_share) * (max(nv, 4000) / 22000) ^ 0.3",
+      "columns": [
+        {
+          "name": "drains",
+          "expr": "men_mais * 1.4 + men_coll * 0.8"
+        },
+        {
+          "name": "old_share",
+          "expr": "(log_av45 + log_45_70) / max(men, 1)"
+        }
+      ],
+      "layers": [
+        {
+          "name": "Pre-1970 dwellings",
+          "expr": "log_av45 + log_45_70",
+          "scale": "percentile",
+          "note": "Cast-iron and clay pipes, the root-prone outdoor runs. Where blockages recur."
+        },
+        {
+          "name": "Houses",
+          "expr": "men_mais",
+          "scale": "percentile",
+          "note": "A drain of their own to the street, and outside the mains a septic tank to empty."
+        }
+      ]
+    }
+  }
+}

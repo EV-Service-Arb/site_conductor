@@ -1101,6 +1101,22 @@ if [ "$run_panel" = 1 ]; then
 		[ -z "$AQUAFIX_PORT" ] || source_key aquafix-local aquafix "http://localhost:$AQUAFIX_PORT"
 		[ -z "$VIFNET_PORT" ] || source_key vifnet-local vifnet "http://localhost:$VIFNET_PORT"
 		[ -z "$DEBOUCHAGE_PORT" ] || source_key debouchage-local debouchage "http://localhost:$DEBOUCHAGE_PORT"
+		# The categories placement studies, each a trade set up in a country (scripts/seed/categories); a
+		# trade of that name is the caller's own, so a rerun edits it.
+		for f in "$root"/scripts/seed/categories/*.json; do
+			name="$(jq -r .trade "$f")" country="$(jq -r .country "$f")"
+			id="$(api GET /trades | jq -r --arg n "$name" '.trades[] | select(.name == $n) | .id')"
+			[ -n "$id" ] || id="$(api POST /trades -d "$(jq -nc --arg n "$name" '{name: $n}')" | jq -r .id)"
+			api PUT "/trades/$id/$country" -d "$(jq -c .set_up "$f")" >/dev/null
+		done
+		# Their area: its country is one geocode, bought only under --spend-real-quota-i-am-certain.
+		if ! api GET /areas | jq -e '.areas[] | select(.slug == "clermont-ferrand")' >/dev/null; then
+			if [ -n "$spend_flag" ]; then
+				api PUT /areas/clermont-ferrand -d '{"name": "Clermont-Ferrand", "center": {"lat": 45.75, "lng": 3.15}, "radius_m": 23463}' >/dev/null
+			else
+				say "no area clermont-ferrand: drawing it geocodes its centre, which needs --spend-real-quota-i-am-certain"
+			fi
+		fi
 		# sites' places, registered through the conductor's forward; those it knows stay as they are
 		if [ "$run_sites" = 1 ] && [ -z "${DEV_COMMAND_sites_panel:-}" ]; then
 			sites() {

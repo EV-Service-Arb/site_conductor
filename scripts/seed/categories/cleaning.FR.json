@@ -1,0 +1,130 @@
+{
+  "trade": "Cleaning",
+  "country": "FR",
+  "set_up": {
+    "keywords": [
+      {
+        "text": "service de ménage",
+        "weight": 1
+      },
+      {
+        "text": "femme de ménage",
+        "weight": 1.5
+      },
+      {
+        "text": "entreprise de nettoyage",
+        "weight": 1
+      },
+      {
+        "text": "nettoyage bureaux",
+        "weight": 0.6
+      },
+      {
+        "text": "nettoyage fin de chantier",
+        "weight": 0.3
+      }
+    ],
+    "google_primary": "gcid:house_cleaning_service",
+    "google_additional": [
+      {
+        "id": "gcid:cleaners",
+        "weight": 0.8
+      },
+      {
+        "id": "gcid:janitorial_service",
+        "weight": 0.6
+      },
+      {
+        "id": "gcid:home_help",
+        "weight": 0.35
+      }
+    ],
+    "excluded": {
+      "words": [
+        "pressing",
+        "laverie",
+        "blanchisserie",
+        "teinturerie",
+        "5 à sec",
+        "5 a sec",
+        "automobile",
+        "voiture",
+        "lavage auto",
+        "station de lavage",
+        "car wash",
+        "carrosserie",
+        "piscine",
+        "ramonage",
+        "nuisible",
+        "dératisation",
+        "deratisation",
+        "désinsectisation",
+        "desinsectisation",
+        "espaces verts",
+        "paysagiste",
+        "élagage",
+        "elagage",
+        "droguerie",
+        "infirmi",
+        "ssiad",
+        "magasin",
+        "showroom",
+        "grossiste",
+        "négoce",
+        "negoce",
+        "fourniture",
+        "leroy merlin",
+        "castorama",
+        "bricomarché",
+        "bricomarche",
+        "brico dépôt",
+        "brico depot",
+        "mr.bricolage",
+        "point.p",
+        "cedeo",
+        "brossette",
+        "richardson"
+      ],
+      "types": [
+        "car_wash",
+        "laundry",
+        "hardware_store",
+        "home_improvement_store",
+        "home_goods_store",
+        "store",
+        "health",
+        "hospital",
+        "doctor"
+      ]
+    },
+    "demand": {
+      "expr": "men_surf * (0.7 + senior_share) * (max(nv, 4000) / 22000) ^ 1.5",
+      "columns": [
+        {
+          "name": "senior_share",
+          "expr": "(ind_65_79 + ind_80p) / max(ind, 1)"
+        }
+      ],
+      "layers": [
+        {
+          "name": "Dwelling floor area (m²)",
+          "expr": "men_surf",
+          "scale": "percentile",
+          "note": "What there is to clean. Homes only — INSEE counts households, so the office towers read as empty ground."
+        },
+        {
+          "name": "Average dwelling (m²)",
+          "expr": "men_surf / max(men, 1)",
+          "scale": "linear",
+          "note": "A per-household rate, not a density — the big-house suburbs light up on a thin population."
+        },
+        {
+          "name": "Seniors 65+",
+          "expr": "ind_65_79 + ind_80p",
+          "scale": "percentile",
+          "note": "The half of the market that buys aide ménagère rather than a cleaner, and buys it every week."
+        }
+      ]
+    }
+  }
+}

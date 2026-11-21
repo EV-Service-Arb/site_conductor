@@ -1,0 +1,114 @@
+{
+  "trade": "Roofing",
+  "country": "FR",
+  "set_up": {
+    "keywords": [
+      {
+        "text": "couvreur",
+        "weight": 1
+      },
+      {
+        "text": "réparation toiture",
+        "weight": 1.2
+      },
+      {
+        "text": "fuite toiture",
+        "weight": 1
+      },
+      {
+        "text": "rénovation toiture",
+        "weight": 0.8
+      },
+      {
+        "text": "démoussage toiture",
+        "weight": 0.6
+      },
+      {
+        "text": "zinguerie",
+        "weight": 0.4
+      }
+    ],
+    "google_primary": "gcid:roofing_contractor",
+    "google_additional": [
+      {
+        "id": "gcid:carpenter",
+        "weight": 0.5
+      },
+      {
+        "id": "gcid:gutter_service",
+        "weight": 0.5
+      },
+      {
+        "id": "gcid:waterproofing_company",
+        "weight": 0.4
+      }
+    ],
+    "excluded": {
+      "words": [
+        "magasin",
+        "showroom",
+        "grossiste",
+        "négoce",
+        "negoce",
+        "matériaux",
+        "materiaux",
+        "fourniture",
+        "leroy merlin",
+        "castorama",
+        "bricomarché",
+        "bricomarche",
+        "brico dépôt",
+        "brico depot",
+        "mr.bricolage",
+        "point.p",
+        "gedimat",
+        "bigmat",
+        "tout faire",
+        "tuilerie",
+        "toit ouvrant",
+        "automobile",
+        "carrosserie",
+        "véranda",
+        "veranda",
+        "store banne"
+      ],
+      "types": [
+        "hardware_store",
+        "home_improvement_store",
+        "home_goods_store",
+        "car_repair"
+      ]
+    },
+    "demand": {
+      "expr": "roofs * (0.4 + owner_share) * (0.6 + old_share) * (max(nv, 4000) / 22000) ^ 0.6",
+      "columns": [
+        {
+          "name": "roofs",
+          "expr": "men_mais + men_coll * 0.1"
+        },
+        {
+          "name": "owner_share",
+          "expr": "men_prop / max(men, 1)"
+        },
+        {
+          "name": "old_share",
+          "expr": "(log_av45 + log_45_70) / max(men, 1)"
+        }
+      ],
+      "layers": [
+        {
+          "name": "Houses",
+          "expr": "men_mais",
+          "scale": "percentile",
+          "note": "A roof of their own. A block of flats calls the syndic’s couvreur."
+        },
+        {
+          "name": "Pre-1970 dwellings",
+          "expr": "log_av45 + log_45_70",
+          "scale": "percentile",
+          "note": "Tile roofs past their fifty years: where the rénovation is due."
+        }
+      ]
+    }
+  }
+}

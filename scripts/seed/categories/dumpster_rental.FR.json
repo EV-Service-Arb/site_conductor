@@ -1,0 +1,106 @@
+{
+  "trade": "Dumpster rental",
+  "country": "FR",
+  "set_up": {
+    "keywords": [
+      {
+        "text": "service de location de bennes à déchets",
+        "weight": 1
+      },
+      {
+        "text": "location benne",
+        "weight": 2
+      },
+      {
+        "text": "location benne gravats",
+        "weight": 1
+      },
+      {
+        "text": "big bag gravats",
+        "weight": 0.4
+      },
+      {
+        "text": "évacuation gravats",
+        "weight": 0.6
+      }
+    ],
+    "google_primary": "gcid:dumpster_rental_service",
+    "google_additional": [
+      {
+        "id": "gcid:debris_removal_service",
+        "weight": 0.5
+      },
+      {
+        "id": "gcid:waste_management_service",
+        "weight": 0.5
+      }
+    ],
+    "excluded": {
+      "words": [
+        "déchetterie",
+        "dechetterie",
+        "déchèterie",
+        "decheterie",
+        "ressourcerie",
+        "recyclerie",
+        "emmaüs",
+        "emmaus",
+        "casse auto",
+        "épave",
+        "epave",
+        "pièces auto",
+        "pieces auto",
+        "mairie",
+        "syndicat",
+        "sictom",
+        "location de voiture",
+        "garde-meuble",
+        "self stockage",
+        "sixt",
+        "europcar",
+        "hertz",
+        "ucar",
+        "rent a car",
+        "getaround"
+      ],
+      "types": [
+        "car_rental",
+        "storage",
+        "car_dealer",
+        "local_government_office",
+        "city_hall"
+      ]
+    },
+    "demand": {
+      "expr": "homes * (0.5 + owner_share) * (0.6 + old_share) * (max(nv, 4000) / 22000) ^ 0.7",
+      "columns": [
+        {
+          "name": "homes",
+          "expr": "men_mais + men_coll * 0.15"
+        },
+        {
+          "name": "owner_share",
+          "expr": "men_prop / max(men, 1)"
+        },
+        {
+          "name": "old_share",
+          "expr": "(log_av45 + log_45_70) / max(men, 1)"
+        }
+      ],
+      "layers": [
+        {
+          "name": "Houses",
+          "expr": "men_mais",
+          "scale": "percentile",
+          "note": "A skip needs a drive or a street permit: a flat orders a bag, rarely a skip."
+        },
+        {
+          "name": "Pre-1970 dwellings",
+          "expr": "log_av45 + log_45_70",
+          "scale": "percentile",
+          "note": "Where renovation rubble comes from."
+        }
+      ]
+    }
+  }
+}

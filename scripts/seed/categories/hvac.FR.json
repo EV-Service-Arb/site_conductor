@@ -1,0 +1,116 @@
+{
+  "trade": "HVAC",
+  "country": "FR",
+  "set_up": {
+    "keywords": [
+      {
+        "text": "chauffagiste",
+        "weight": 1
+      },
+      {
+        "text": "pompe à chaleur",
+        "weight": 1.5
+      },
+      {
+        "text": "climatisation",
+        "weight": 1.5
+      },
+      {
+        "text": "entretien chaudière",
+        "weight": 1
+      },
+      {
+        "text": "dépannage chaudière",
+        "weight": 1
+      }
+    ],
+    "google_primary": "gcid:heating_contractor",
+    "google_additional": [
+      {
+        "id": "gcid:hvac_contractor",
+        "weight": 0.9
+      },
+      {
+        "id": "gcid:air_conditioning_contractor",
+        "weight": 0.8
+      },
+      {
+        "id": "gcid:furnace_repair_service",
+        "weight": 0.8
+      },
+      {
+        "id": "gcid:plumber",
+        "weight": 0.4
+      },
+      {
+        "id": "gcid:chimney_services",
+        "weight": 0.3
+      }
+    ],
+    "excluded": {
+      "words": [
+        "magasin",
+        "showroom",
+        "grossiste",
+        "négoce",
+        "negoce",
+        "fourniture",
+        "leroy merlin",
+        "castorama",
+        "bricomarché",
+        "bricomarche",
+        "brico dépôt",
+        "brico depot",
+        "mr.bricolage",
+        "point.p",
+        "cedeo",
+        "brossette",
+        "richardson",
+        "climatisation automobile",
+        "clim auto",
+        "garage",
+        "pneu",
+        "carrosserie",
+        "contrôle technique",
+        "controle technique",
+        "fioul",
+        "piscine"
+      ],
+      "types": [
+        "car_repair",
+        "car_dealer",
+        "gas_station",
+        "hardware_store",
+        "home_improvement_store",
+        "home_goods_store"
+      ]
+    },
+    "demand": {
+      "expr": "heated * (0.4 + owner_share) * (max(nv, 4000) / 22000) ^ 0.8",
+      "columns": [
+        {
+          "name": "heated",
+          "expr": "men_mais + men_coll * 0.35"
+        },
+        {
+          "name": "owner_share",
+          "expr": "men_prop / max(men, 1)"
+        }
+      ],
+      "layers": [
+        {
+          "name": "Owner-occupiers",
+          "expr": "men_prop",
+          "scale": "percentile",
+          "note": "Who decides on a heat pump or a split unit, and who gets the MaPrimeRénov’ that pays for it."
+        },
+        {
+          "name": "Houses",
+          "expr": "men_mais",
+          "scale": "percentile",
+          "note": "An outdoor unit of their own. A flat waits on its copropriété."
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "trade": "Retaining wall",
+  "country": "FR",
+  "set_up": {
+    "keywords": [
+      {
+        "text": "fournisseur de murs de soutènement",
+        "weight": 1
+      },
+      {
+        "text": "mur de soutènement",
+        "weight": 3
+      },
+      {
+        "text": "enrochement",
+        "weight": 1
+      },
+      {
+        "text": "gabion",
+        "weight": 0.5
+      }
+    ],
+    "google_primary": "gcid:retaining_wall_supplier",
+    "google_additional": [
+      {
+        "id": "gcid:earth_works_company",
+        "weight": 0.6
+      },
+      {
+        "id": "gcid:masonry_contractor",
+        "weight": 0.5
+      },
+      {
+        "id": "gcid:concrete_contractor",
+        "weight": 0.4
+      },
+      {
+        "id": "gcid:landscaper",
+        "weight": 0.3
+      }
+    ],
+    "excluded": {
+      "words": [
+        "magasin",
+        "showroom",
+        "grossiste",
+        "négoce",
+        "negoce",
+        "matériaux",
+        "materiaux",
+        "fourniture",
+        "leroy merlin",
+        "castorama",
+        "bricomarché",
+        "bricomarche",
+        "brico dépôt",
+        "brico depot",
+        "mr.bricolage",
+        "point.p",
+        "gedimat",
+        "bigmat",
+        "tout faire",
+        "jardinerie",
+        "location",
+        "pépinière",
+        "pepiniere",
+        "franc-maçon",
+        "franc-macon",
+        "sculpture",
+        "funéraire",
+        "funeraire",
+        "pompes funèbres",
+        "pompes funebres",
+        "marbrerie"
+      ],
+      "types": [
+        "hardware_store",
+        "home_improvement_store",
+        "home_goods_store",
+        "funeral_home",
+        "cemetery"
+      ]
+    },
+    "demand": {
+      "expr": "men_mais * (0.3 + owner_share) * (max(nv, 4000) / 22000) ^ 1.2",
+      "columns": [
+        {
+          "name": "owner_share",
+          "expr": "men_prop / max(men, 1)"
+        }
+      ],
+      "layers": [
+        {
+          "name": "Owner-occupied houses (est.)",
+          "expr": "men_mais * men_prop / max(men, 1)",
+          "scale": "percentile",
+          "note": "Who builds a wall on their own plot. The grid has no slope: where walls are needed is the hills, which this cannot see."
+        }
+      ]
+    }
+  }
+}
