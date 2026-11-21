@@ -2307,6 +2307,10 @@
     "en": "Draft · not on Google yet",
     "t": "Черновик · ещё нет в Google"
   },
+  "kit.edit.drafts": {
+    "en": "{n} drafts",
+    "t": "Черновиков: {n}"
+  },
   "kit.edit.elsewhere": {
     "en": "Elsewhere · in the kit",
     "t": "В другом месте · в наборе"
@@ -2335,6 +2339,10 @@
     "en": "no landing page: QR opens Google's form",
     "t": "нет страницы-визитки: QR открывает форму Google"
   },
+  "kit.edit.noQr": {
+    "en": "{n} without a QR left out",
+    "t": "Без QR пропущено: {n}"
+  },
   "kit.edit.noneInside": {
     "en": "None of your GBPs is in it.",
     "t": "Ни одного из ваших GBP в нём нет."
@@ -2358,6 +2366,10 @@
   "kit.edit.place": {
     "en": "Review kit · 1 place",
     "t": "Набор для отзывов · 1 место"
+  },
+  "kit.edit.places": {
+    "en": "Review kit · {n} places",
+    "t": "Набор для отзывов · мест: {n}"
   },
   "kit.edit.print": {
     "en": "Print cards",

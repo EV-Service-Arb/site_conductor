@@ -19,8 +19,8 @@ prod() {
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 [ -e "$known" ] || : >"$known"
-here export --except "$known" >"$work/lacking"
-if [ ! -s "$work/lacking" ]; then
+here index | LC_ALL=C sort >"$work/held"
+if [ -z "$(LC_ALL=C sort "$known" | LC_ALL=C comm -23 "$work/held" -)" ]; then
 	echo "queries-cache-sync: prod holds every answer $state does" >&2
 	exit 0
 fi
