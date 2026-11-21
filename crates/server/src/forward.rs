@@ -89,7 +89,7 @@ const ROUTES: [Route; 6] = [
 ];
 
 /// The conductor's own prefixes: never a page's, nor a kit area's.
-const OWN: [Path; 15] = [
+const OWN: [Path; 14] = [
 	Path {
 		prefix: "/api",
 		rate_limited: false,
@@ -106,7 +106,7 @@ const OWN: [Path; 15] = [
 		rate_limited: true,
 		published: true,
 	},
-	// in-cluster only: the landings' and bots' ingest, the landings' review kit, the sandbox's runs
+	// in-cluster only: the landings' and bots' ingest, the landings' review kit
 	Path {
 		prefix: "/api/ingest",
 		rate_limited: false,
@@ -114,11 +114,6 @@ const OWN: [Path; 15] = [
 	},
 	Path {
 		prefix: "/api/kit",
-		rate_limited: false,
-		published: false,
-	},
-	Path {
-		prefix: crate::execute::PREFIX,
 		rate_limited: false,
 		published: false,
 	},
@@ -273,7 +268,6 @@ impl Services {
 			Service::Playbook => &self.upstreams.playbook,
 			Service::Sites => &self.upstreams.sites,
 			Service::Browsers => panic!("the runner is not forwarded: `browser` calls it"),
-			Service::Sandbox => panic!("the runner is not forwarded: `execute` calls it"),
 		};
 		let uri: Uri = format!("{}{path_and_query}", base.to_string().trim_end_matches('/'))
 			.parse()

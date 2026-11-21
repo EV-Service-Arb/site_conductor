@@ -76,6 +76,10 @@ enum QueriesCacheCmd {
 
 // Sentry must be initialised before the async runtime starts, hence no #[tokio::main].
 fn main() -> eyre::Result<()> {
+	// a sandbox worker, before anything of the conductor's is set up (docs/ARCHITECTURE.md, Code mode)
+	if std::env::args().nth(1).as_deref() == Some(sa_sandbox::WORKER) {
+		sa_sandbox::worker();
+	}
 	color_eyre::install()?;
 
 	// What nix/contract.nix's `provides` must equal (tests/it/contract.rs).
@@ -226,7 +230,6 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				settings.web()?,
 				settings.browsers()?,
 				settings.model(),
-				settings.sandbox()?,
 				settings.placement(),
 				readers,
 				bind,
@@ -303,7 +306,6 @@ async fn serve(
 	files: Option<Files>,
 	browsers: Option<sa_server::browser::Connected>,
 	model: sa_server::claude::Model,
-	sandbox: Option<sa_server::execute::Sandbox>,
 	placement: Option<sa_server::placement::Placement>,
 	readers: Vec<sa_panel::meters::google::Google>,
 	bind: SocketAddr,
@@ -404,14 +406,12 @@ async fn serve(
 	if placement.is_none() {
 		tracing::warn!("PANEL_PLACEMENT_DIR unset: no placement, its routes answer 503");
 	}
-	if sandbox.is_none() {
-		tracing::warn!("PANEL_SANDBOX_URL unset: no sandbox, the agents have no execute");
-	}
 	if model.owner().is_none() {
 		tracing::warn!("CLAUDE_CODE_OAUTH_TOKEN unset: the assistant answers only on a person's own Claude");
 	}
 	let catalog = forward.as_ref().map(|f| f.catalog().clone());
 	let browsers_followed = browsers.clone();
+	let sandbox = sa_server::execute::Sandbox::new(std::env::current_exe().wrap_err("the conductor's own binary: the sandbox's workers")?);
 	let app = http::app(
 		sign_in,
 		forward,
@@ -420,7 +420,7 @@ async fn serve(
 		bot.clone(),
 		browsers,
 		Some(model),
-		sandbox,
+		sandbox.clone(),
 		placement,
 	);
 	let app = match files {
@@ -472,7 +472,8 @@ async fn serve(
 			}
 		};
 		let meters = sa_server::meters::run(metered, readers, stopped.clone());
-		tokio::join!(bot, feed, usage, inboxes, tokens, grafana, purge, meters, catalog);
+		let workers = sandbox.run(stopped.clone());
+		tokio::join!(bot, feed, usage, inboxes, tokens, grafana, purge, meters, catalog, workers);
 	};
 	let (served, ()) = tokio::join!(server, hubs);
 	served

@@ -25099,6 +25099,7 @@
         ]
       },
       "CallInput": {
+        "description": "One operation of the catalog, as `search` names it, the caller's to run.",
         "type": "object",
         "properties": {
           "body": {

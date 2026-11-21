@@ -22,6 +22,8 @@ sa_sandbox = { path = "crates/sandbox", version = "0.1.0" }
 sa_server = { path = "crates/server", version = "0.1.0" }
 sa_trace = { path = "crates/trace", version = "0.1.0" }
 
+allocative = "=0.3.4" # starlark 0.13's maps derive it over hashbrown 0.14, which 0.3.6 left
+anyhow = "1.0.104"
 axum = "0.8.9"
 base64 = "0.23.1"
 chacha20poly1305 = "0.11.0"
@@ -45,6 +47,7 @@ hyper-util = { version = "0.1.21", features = ["client-legacy", "http1", "tokio"
 icu_locale = "2.4.0"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 jiff = "0.2.46"
+libc = "0.2.191"
 mail-parser = "1.0.1"
 percent-encoding = "2.3.2"
 prost = "0.14.6"
@@ -56,10 +59,12 @@ rustix = { version = "1.1.6", features = ["process"] }
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] } # ring, not aws-lc: aws-lc-sys rebuilds a bundled C library per target dir
 rustls-platform-verifier = "0.7.1"
 schemars = { version = "1.2.3", features = ["uuid1", "jiff02"] }
+seccompiler = "0.5.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "sqlite-bundled", "macros", "migrate", "uuid", "json"] }
+starlark = "=0.13.0" # 0.14 turns on serde_json's arbitrary_precision for the whole binary; the worker's heap cap is its hidden before_stmt hook
 strum = { version = "0.28.0", features = ["derive"] }
 subtle = "2.6.1"
 tempfile = "3.27.0"
@@ -93,4 +98,12 @@ unused_features = "allow"
 
 [workspace.lints.cargo]
 non_kebab_case_bins = "allow"
+
+# the sandbox's Starlark evaluates two orders of magnitude slower unoptimized, past what its tests can wait
+[profile.dev.package.starlark]
+opt-level = 3
+[profile.dev.package.starlark_syntax]
+opt-level = 3
+[profile.dev.package.starlark_map]
+opt-level = 3
 

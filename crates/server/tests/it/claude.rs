@@ -113,7 +113,7 @@ impl World {
 			None,
 			None,
 			Some(model),
-			None,
+			sa_server::testing::sandbox(),
 			None,
 		);
 		let mut b = Browser::default();

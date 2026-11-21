@@ -39,7 +39,6 @@
           FIGMA_STACK_PORT = local 9; # `nix run .#figma`'s (`dev --port --fixed`), the next one its own too
           E2E_STACK_PORT = local 7; # `nix run .#e2e`'s (`dev --port`), its next dev on the next
           BROWSERS_BIND = "127.0.0.1:${local 5}"; # sa_browsers' runner
-          SANDBOX_BIND = "127.0.0.1:${local 6}"; # sa_sandbox's runner
           PROD_SSH = prodSsh;
           PROD_RESTORE = lib.getExe prodRestore;
           QUERIES_CACHE_SYNC = lib.getExe queriesCacheSync;
@@ -141,11 +140,11 @@
           containerRelease = { registry = "ghcr.io/ev-service-arb"; };
           figma = { on = "publish"; }; # the render needs .local's data, the peers and a browser key, which only a developer's machine has
           jobs.default = true;
-          jobs.errors.install.packages = [ "ffmpeg" "deno" ]; # crates/browsers/tests/runner.rs cuts its films with ffmpeg; crates/sandbox's tests run Deno
+          jobs.errors.install.packages = [ "ffmpeg" ]; # crates/browsers/tests/runner.rs cuts its films with ffmpeg
           jobs.errors.exclude = [ "frontend-typecheck" ];
           jobs.errors.augment = [ (e2e // { ciCache = [ e2e.ciCache rs.ciCache ]; }) frontendTypecheck ]; # e2e: local-stack's conductor build
           jobs.warnings.exclude = [ "code-duplication" ];
-          jobs.warnings.augment = [{ name = "code-duplication"; args.excludePatterns = [ "frontend/src/shared/api/schema.ts" "frontend/src/shared/api/services/**" "frontend/src/shared/api/views.ts" "crates/sandbox/js/catalog.ts" "crates/server/src/connections.rs" ]; }]; # generated; connections.rs: its route table, alike by nature to kit.rs'
+          jobs.warnings.augment = [{ name = "code-duplication"; args.excludePatterns = [ "frontend/src/shared/api/schema.ts" "frontend/src/shared/api/services/**" "frontend/src/shared/api/views.ts" "crates/server/src/connections.rs" ]; }]; # generated; connections.rs: its route table, alike by nature to kit.rs'
           lfs = false;
           envrc.extra = "watch_file scripts/local-stack.sh"; # baked into the shell's `figma`
         };
@@ -190,43 +189,6 @@
           auditable = false; # cargo-auditable doesn't support edition 2024
           meta.description = "the panel binary";
         };
-        # sa_sandbox's runner, built alone: its image carries nothing of the conductor's
-        sandboxBin = rustPlatform.buildRustPackage {
-          pname = "sa_sandbox";
-          version = manifest.version;
-          src = pureSrc;
-          inherit cargoLock;
-          cargoBuildFlags = [ "-p" "sa_sandbox" ];
-          doCheck = false; # its tests run Deno against loopback stand-ins, in the devShell and CI
-          auditable = false;
-          meta.description = "the runner of the agents' code";
-        };
-        # what a session runs (crates/sandbox/js): the host, the prelude, the catalog and its types, @evinvest/api and typescript installed
-        sandboxJs = pkgs.buildNpmPackage {
-          pname = "${pname}-sandbox-js";
-          version = manifest.version;
-          src = lib.cleanSourceWith {
-            src = lib.cleanSource ./crates/sandbox/js;
-            filter = path: _type: baseNameOf path != "node_modules";
-          };
-          npmDepsHash = "sha256-5AWfHRXALyxr0HUUZhdRwSGd8g9/URACBbnq1DUIvO8=";
-          dontNpmBuild = true;
-          # the runner checks a cell alone, never the js it imports
-          doCheck = true;
-          nativeCheckInputs = [ pkgs.deno ];
-          checkPhase = ''
-            runHook preCheck
-            DENO_DIR="$TMPDIR/deno" deno check --no-remote --cached-only --config deno.json host.ts
-            runHook postCheck
-          '';
-          installPhase = ''
-            runHook preInstall
-            cp -r . "$out"
-            runHook postInstall
-          '';
-        };
-        sandboxPort = 59121;
-
         # The CLI must be the lock's `wasm-bindgen`: a skew is a hard error at bindgen time.
         wasmBindgen = (lib.findFirst (p: p.name == "wasm-bindgen") (throw "Cargo.lock holds no wasm-bindgen") (lib.importTOML ./Cargo.lock).package).version;
         wasm-bindgen-cli =
@@ -378,7 +340,7 @@
         multilogin = import ./nix/multilogin.nix { inherit pkgs; };
 
         contract = import ./nix/contract.nix { inherit pname; };
-        inherit (contract) provides consumes sandboxDeploy;
+        inherit (contract) provides consumes;
         deploy = contract.deploy // {
           # The Google accounts (docs/ARCHITECTURE.md, Google accounts): a literal mounted here, each
           # account's secrets named in it as `{ env = "…"; }`, from the sops-backed Secret.
@@ -409,25 +371,10 @@
             # the build, or a tag whose catalog changed boots on the previous epoch and is refused
             imageEnv = [ "PANEL_WEB_DIR=${frontend}" "PANEL_GRAFANA_SERVER=${grafanaServer}" "PANEL_BUILD_EPOCH=${toString self.lastModified}" ];
           };
-          # the agents' code (docs/ARCHITECTURE.md, Code mode), reached by the conductor alone. Its sessions are held in
-          # memory, and the conductor names them by the runner's id: one replica (v_flakes' Deployment), and a rollout
-          # ends every session, each answered as gone
-          containers.sandbox = {
-            port = sandboxPort;
-            healthPath = "/health";
-            criticality = "normal";
-            withCacert = false; # it dials the conductor alone, in plain http
-            entrypoint = [ "${sandboxBin}/bin/sa_sandbox" "serve" "--bind" "0.0.0.0:${toString sandboxPort}" ];
-            # sessions held at once, each a Deno process (its heap capped at 256 MB), beside one type checker for them
-            # all (~0.7 GB): the pod's memory is this many sessions and the checker; past it the idlest session is let go
-            env.SANDBOX_MAX = "2";
-            imageEnv = [ "SANDBOX_DENO=${pkgs.deno}/bin/deno" "SANDBOX_JS=${sandboxJs}" ];
-          };
         };
         # `implement` knows no key for these, and throws on one it does not know.
         extra = {
           ${pname} = deploy // { inherit provides consumes; };
-          "${pname}-sandbox" = sandboxDeploy;
         };
         containers = lib.mapAttrs (name: c: c // { contract = c.contract // extra.${name}; }) containerStd.containers;
 
@@ -504,7 +451,6 @@
           mold
           pkg-config
           openssl # sentry's native-tls
-          deno # sa_sandbox's runs
           placementOverlayDev
         ];
         dev = pkgs.writeShellApplication {

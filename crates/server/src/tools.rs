@@ -15,6 +15,7 @@ use ev_lib::api::{
 	openapi::{Operation, ReferenceOr},
 };
 use sa_core::{agent::Approval, prices::Item};
+use sa_sandbox::{Answer, Call};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use tower::ServiceExt;
@@ -37,11 +38,11 @@ pub struct Tools {
 	catalog: Catalog,
 	/// The whole app, set once it is built: a call goes through it as a request would.
 	app: Arc<OnceLock<Router>>,
-	/// Where `execute` runs; without it there is no `execute`.
-	sandbox: Option<Sandbox>,
+	/// Where `execute` runs.
+	sandbox: Sandbox,
 }
 impl Tools {
-	pub(crate) fn new(catalog: Catalog, sandbox: Option<Sandbox>) -> Self {
+	pub(crate) fn new(catalog: Catalog, sandbox: Sandbox) -> Self {
 		Self {
 			catalog,
 			app: Arc::new(OnceLock::new()),
@@ -49,12 +50,8 @@ impl Tools {
 		}
 	}
 
-	pub(crate) fn catalog(&self) -> &Catalog {
-		&self.catalog
-	}
-
-	pub(crate) fn sandbox(&self) -> Option<&Sandbox> {
-		self.sandbox.as_ref()
+	pub(crate) fn sandbox(&self) -> &Sandbox {
+		&self.sandbox
 	}
 
 	pub(crate) fn serve(&self, app: Router) {
@@ -66,11 +63,21 @@ impl Tools {
 		self.catalog.document().operations().map(|(p, m, op)| (p.to_owned(), m.to_owned(), op.clone())).collect()
 	}
 
-	pub fn hints(&self, id: &str) -> Option<Hints> {
-		self.operations()
+	/// What `approval` makes of `call`, as every way an agent calls holds it; refused when it names no operation.
+	pub(crate) fn gate(&self, call: &Call, approval: Approval) -> Result<Gate, String> {
+		let hints = self
+			.operations()
 			.into_iter()
-			.find(|(_, _, op)| op.operation_id.as_deref() == Some(id))
+			.find(|(_, _, op)| op.operation_id.as_deref() == Some(call.operation.as_str()))
 			.map(|(_, method, op)| hints(&method, &op))
+			.ok_or_else(|| format!("no operation {:?}: search for one", call.operation))?;
+		Ok(if hints.held_by(approval) {
+			Gate::Held
+		} else if hints.held_by(Approval::Ask) {
+			Gate::OnItsOwn
+		} else {
+			Gate::Runs
+		})
 	}
 
 	/// The operations matching `query` best, and the schemas they name; `may` says which the
@@ -196,14 +203,12 @@ impl Tools {
 	/// Runs `code` as a cell of `key`'s session, as the caller `credentials` names, its calls held as
 	/// `approval` holds them: what the agent is told of it.
 	pub(crate) async fn execute(&self, key: Key, credentials: &HeaderMap, code: String, approval: Approval, pause: bool) -> Result<Told, String> {
-		let sandbox = self.sandbox.as_ref().ok_or("no sandbox here: there is no execute")?;
-		sandbox.execute(key, credentials_of(credentials), code, approval, pause).await
+		self.sandbox.execute(self, key, credentials_of(credentials), code, approval, pause).await
 	}
 
 	/// Cell `cell` of `key`'s session, past what was told of it.
 	pub(crate) async fn poll(&self, key: Key, credentials: &HeaderMap, cell: usize, until: sa_sandbox::Until) -> Result<Told, String> {
-		let sandbox = self.sandbox.as_ref().ok_or("no sandbox here: there is no poll")?;
-		sandbox.poll(key, credentials_of(credentials), cell, until).await
+		self.sandbox.poll(key, credentials_of(credentials), cell, until).await
 	}
 
 	/// A cell as the agent reads it: a paused one's call as its proposal.
@@ -337,39 +342,39 @@ impl Tools {
 				hints: reads.clone(),
 			});
 		}
-		if self.sandbox.is_some() {
-			defs.push(Def {
-				name: "execute".into(),
-				description: format!(
-					"Runs TypeScript over the panel's operations as the person asking, apart from the panel: for work that takes several calls, or that would hand you more than you need. \
-`api` is the catalog's client (`api.GET(path, {{ params: {{ path, query }} }})`, `api.POST(path, {{ params, body }})`, …), every answer `{{ data }}` or `{{ error: {{ code, error }} }}`; the paths are absolute, as `search` names them. \
-Each run is a cell of one session, kept between runs: a later cell reads what earlier ones declared at their top level (declare a name again to change it), so fetch once and keep it. \
-The code is type-checked against the catalog and those declarations first: a type error runs nothing, and says what is wrong. What it `console.log`s comes back, {} KiB of each stream a cell at most. \
-A cell is answered after {} s at most: one still running is told by its number, and `poll` follows it; it is stopped after {} s, its session with it, and after {} calls. \
-{held} When the person agrees, the call goes on in the code; when they decline, it throws there.",
-					sa_sandbox::OUTPUT >> 10,
-					sa_sandbox::WAIT.as_secs(),
-					sa_sandbox::LIMIT.as_secs(),
-					sa_sandbox::CALLS
-				),
-				input: schema(ev_lib::api::schemars::schema_for!(Execute)),
-				hints: Hints {
-					read_only: false,
-					idempotent: false,
-					destructive: false,
-					spends: Vec::new(),
-				},
-			});
-			defs.push(Def {
-				name: "poll".into(),
-				description: format!(
-					"Follows a cell `execute` answered while it still ran: what it printed since you were last told, once it says more, ends, or waits for the person on a call, or after {} s.",
-					sa_sandbox::WAIT.as_secs()
-				),
-				input: schema(ev_lib::api::schemars::schema_for!(PollCell)),
-				hints: reads.clone(),
-			});
-		}
+		defs.push(Def {
+			name: "execute".into(),
+			description: format!(
+				"Runs Starlark (Python's syntax, a smaller language) over the panel's operations as the person asking, apart from the panel: for work that takes several calls, or that would hand you more than you need. \
+`call(operation, path = {{...}}, query = {{...}}, body = ...)` runs one by its id, as `search` names it, and returns `{{\"status\": ..., \"body\": ...}}`, whatever the status: check it. The panel's own refusal (no such operation, past {} calls, not agreed to) is status 403, its body `{{\"code\": \"refused\", \"error\": ...}}`. \
+There is no `while`, `try`, `import` or `load`: loop with `for` over a `range`, and decide on values; `json.encode` and `json.decode` are there. \
+Each run is a cell of one session, kept between runs: a later cell reads what earlier ones that ran to their end bound at their top level, so fetch once and keep it. Those values are frozen: to change one, bind the name again. A cell that fails hands on nothing. \
+What it `print`s comes back, {} KiB a cell at most; why it failed comes back too. \
+A cell is answered after {} s at most: one still running is told by its number, and `poll` follows it; it is stopped after {} s, its session with it, and so is one past {} MiB. \
+{held} When the person agrees, the call goes on in the code; when they decline, it returns the refusal.",
+				sa_sandbox::CALLS,
+				sa_sandbox::OUTPUT >> 10,
+				sa_sandbox::WAIT.as_secs(),
+				sa_sandbox::LIMIT.as_secs(),
+				sa_sandbox::HEAP >> 20
+			),
+			input: schema(ev_lib::api::schemars::schema_for!(Execute)),
+			hints: Hints {
+				read_only: false,
+				idempotent: false,
+				destructive: false,
+				spends: Vec::new(),
+			},
+		});
+		defs.push(Def {
+			name: "poll".into(),
+			description: format!(
+				"Follows a cell `execute` answered while it still ran: what it printed since you were last told, once it says more, ends, or waits for the person on a call, or after {} s.",
+				sa_sandbox::WAIT.as_secs()
+			),
+			input: schema(ev_lib::api::schemars::schema_for!(PollCell)),
+			hints: reads.clone(),
+		});
 		defs.extend(self.own(may).into_iter().map(|t| Def {
 			name: t.name,
 			description: t.description,
@@ -417,13 +422,12 @@ pub struct Open {
 	pub label: String,
 }
 
-/// TypeScript over the catalog's client, run apart, as the caller.
+/// Starlark over the catalog's operations, run apart, as the caller.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Execute {
-	/// The code: `api` is in scope, the catalog's paths absolute, as `search` names them:
-	/// `const gmbs = await api.GET("/api/v1/gmbs"); if (gmbs.error) throw new Error(gmbs.error.code);`.
-	/// What it `console.log`s is what comes back.
+	/// The code, `call` in scope: `gmbs = call("list_gmbs")` then `if gmbs["status"] != 200: fail(gmbs["body"])`.
+	/// What it `print`s is what comes back.
 	pub code: String,
 }
 
@@ -477,19 +481,6 @@ pub struct Search {
 	pub query: String,
 }
 
-#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Call {
-	/// An operation's id, as `search` names it.
-	pub operation: String,
-	/// The path's parameters by name: `{"id": 7}`.
-	pub path: Option<Map<String, Value>>,
-	/// The query's parameters by name.
-	pub query: Option<Map<String, Value>>,
-	/// The JSON body, for an operation that takes one.
-	pub body: Option<Value>,
-}
-
 /// An operation, as an agent needs it to call it.
 #[derive(Serialize)]
 pub struct Found {
@@ -520,11 +511,13 @@ impl Hints {
 	}
 }
 
-/// What an operation answered.
-#[derive(Debug, Serialize)]
-pub struct Answer {
-	pub status: u16,
-	pub body: Value,
+/// How the approval level takes a call.
+pub(crate) enum Gate {
+	Runs,
+	/// It destroys or spends, and runs on its own: an action already done.
+	OnItsOwn,
+	/// The person agrees first.
+	Held,
 }
 
 /// What `approval` holds for the person, as a tool's description says it.

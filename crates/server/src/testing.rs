@@ -21,6 +21,7 @@ use tower::ServiceExt;
 
 use crate::{
 	concierge::{Concierge, DEV_CODE, DevIdentity},
+	execute::Sandbox,
 	forward::{Forward, Services, Upstreams},
 	grafana::Grafana,
 	http,
@@ -108,6 +109,25 @@ pub async fn upstream(routes: Router) -> (String, Log) {
 	(format!("http://{addr}"), seen)
 }
 
+/// The sandbox, driven for as long as the test's runtime lives; its workers are the package's `panel`, which
+/// cargo builds beside an integration test's binary and an example's.
+pub fn sandbox() -> Sandbox {
+	let exe = std::env::current_exe().expect("the test's own binary");
+	let panel = exe
+		.parent()
+		.and_then(Path::parent)
+		.expect("cargo puts a test's binary in target/<profile>/<deps or examples>")
+		.join("panel");
+	let sandbox = Sandbox::new(panel);
+	let driven = sandbox.clone();
+	//@codestyle::skip(no-tokio-spawn)
+	tokio::spawn(async move {
+		let (_stop, stopped) = tokio::sync::watch::channel(false);
+		driven.run(stopped).await;
+	});
+	sandbox
+}
+
 /// The services, all at `base`.
 pub fn services(base: &Uri) -> Services {
 	Services::new(Upstreams {
@@ -122,7 +142,7 @@ pub fn services(base: &Uri) -> Services {
 /// service at `base`.
 pub fn app_with(panel: Panel, permissions: PermissionSet, email: &str, base: &Uri, limits: http::Limits) -> Router {
 	let (sign_in, forward) = conductor(panel, permissions, email, base);
-	http::app(sign_in, Some(forward), None, limits, None, None, None, None, None)
+	http::app(sign_in, Some(forward), None, limits, None, None, None, sandbox(), None)
 }
 
 /// What a viewer's browser and Grafana reach: the conductor of [`app_with`] with Grafana on `dir`,
@@ -130,7 +150,7 @@ pub fn app_with(panel: Panel, permissions: PermissionSet, email: &str, base: &Ur
 pub fn app_with_grafana(panel: Panel, permissions: PermissionSet, email: &str, base: &Uri, dir: &Path) -> (Router, Router, Grafana) {
 	let (sign_in, forward) = conductor(panel, permissions, email, base);
 	let grafana = Grafana::new(forward.clone(), dir.to_owned());
-	let app = http::app(sign_in, Some(forward), Some(&grafana), http::Limits::default(), None, None, None, None, None);
+	let app = http::app(sign_in, Some(forward), Some(&grafana), http::Limits::default(), None, None, None, sandbox(), None);
 	(app, grafana.loopback(), grafana)
 }
 

@@ -264,7 +264,7 @@ pub enum Target {
 	/// A view, by its URL on this origin.
 	Href(String),
 	/// An operation of `/api/v1/openapi.json`, by its id, with its arguments.
-	Call(crate::tools::Call),
+	Call(sa_sandbox::Call),
 	/// A binding of the page's keymap, by its id.
 	Binding(String),
 }

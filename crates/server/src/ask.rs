@@ -18,7 +18,7 @@ use sa_core::{
 	usage::Bill,
 };
 use sa_panel::assistant::Chat;
-use sa_sandbox::Until;
+use sa_sandbox::{Call, Until};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -30,7 +30,7 @@ use crate::{
 	execute::{CellState, Key, Told},
 	http::ApiState,
 	signin::Caller,
-	tools::{self, Search},
+	tools::{self, Gate, Search},
 };
 
 /// Model turns one question may take before the loop stops and says so.
@@ -44,8 +44,8 @@ code) for trade businesses: the managing gmails, each GBP's state (draft, verify
 leads, its reviews, tokens that pay for Google requests. You act for the person asking, with exactly their permissions.\n\
 \n\
 Tools: `search` finds the panel's operations by what they do (use it before `call`; an empty query lists them all); \
-`call` runs one by its id; `execute`, where it is given, runs code over them for what takes several, in a session \
-that keeps what it declared, and `poll` follows a cell still running. {} A proposal is confirmed by the person from the answer, so say what it will do. `open` offers a view as a link; `run` offers a binding of the page's keymap. The <page> block \
+`call` runs one by its id; `execute` runs Starlark over them for what takes several, in a session \
+that keeps what its cells bound, and `poll` follows a cell still running. {} A proposal is confirmed by the person from the answer, so say what it will do. `open` offers a view as a link; `run` offers a binding of the page's keymap. The <page> block \
 says what is open and the bindings bound now.\n\
 \n\
 Answer briefly, in the person's language. Formatting: **bold**, `- ` items, `@[label](location:<gbp id>)` to name a GBP.",
@@ -120,9 +120,7 @@ pub(crate) async fn ask(
 		approval: q.approval,
 		bindings: &q.bindings,
 	};
-	if let Some(sandbox) = state.tools.sandbox() {
-		sandbox.decide(&a.key(), None, false);
-	}
+	state.tools.sandbox().decide(&a.key(), None, false);
 	let mut turns = read.turns;
 	turns.truncate(q.from);
 	let mut history = conversation(&turns);
@@ -175,7 +173,7 @@ pub(crate) async fn act(
 	};
 	let call = call.clone();
 	let key = key(&caller, chat);
-	let resumed = state.tools.sandbox().and_then(|s| s.decide(&key, Some(&a.action), true));
+	let resumed = state.tools.sandbox().decide(&key, Some(&a.action), true);
 	if resumed.is_none() {
 		let answer = state.tools.call(&headers, call.clone()).await.map_err(|m| Refusal::new(Code::BadRequest, m))?;
 		let status = StatusCode::from_u16(answer.status).map_err(|e| eyre::eyre!("the app answered {}: {e}", answer.status))?;
@@ -384,7 +382,7 @@ impl Asking<'_> {
 				}
 				Err(e) => (json!({ "error": e.to_string() }), "Searched".to_owned()),
 			},
-			Some("call") => match serde_json::from_value::<tools::Call>(input.clone()) {
+			Some("call") => match serde_json::from_value::<Call>(input.clone()) {
 				Ok(c) => self.call(c, answer).await,
 				Err(e) => (json!({ "error": e.to_string() }), "Called".to_owned()),
 			},
@@ -433,16 +431,17 @@ impl Asking<'_> {
 
 	/// Runs `c` as the person asking, or proposes it for them to confirm when the level holds it; one
 	/// that destroys or spends and ran on its own is an action already done.
-	async fn call(&self, c: tools::Call, answer: &mut Answer) -> (Value, String) {
-		let Some(hints) = self.state.tools.hints(&c.operation) else {
-			return (json!({ "error": format!("no operation {:?}: search for one", c.operation) }), format!("Called {}", c.operation));
+	async fn call(&self, c: Call, answer: &mut Answer) -> (Value, String) {
+		let gate = match self.state.tools.gate(&c, self.approval) {
+			Ok(g) => g,
+			Err(e) => return (json!({ "error": e }), format!("Called {}", c.operation)),
 		};
 		let label = c.operation.replace('_', " ");
-		if hints.held_by(self.approval) {
+		if matches!(gate, Gate::Held) {
 			answer.actions.push(action(&label, Target::Call(c), ActionState::Proposed));
 			return (json!({ "proposed": "the person confirms it from the answer; say what it will do" }), format!("Proposed {label}"));
 		}
-		if hints.held_by(Approval::Ask) {
+		if matches!(gate, Gate::OnItsOwn) {
 			answer.actions.push(action(&label, Target::Call(c.clone()), ActionState::Done));
 		}
 		let step = format!("Called {}", c.operation);
@@ -469,7 +468,7 @@ impl Asking<'_> {
 		};
 		let label = c.operation.replace('_', " ");
 		let proposed = action(&label, Target::Call(c.clone()), ActionState::Proposed);
-		self.state.tools.sandbox().expect("a cell ran there").proposed_as(&self.key(), proposed.id.clone());
+		self.state.tools.sandbox().proposed_as(&self.key(), proposed.id.clone());
 		answer.actions.push(proposed);
 		result["note"] = json!("the cell waits for the person to agree from the answer, and goes on once they do; say what it will do");
 		(result, format!("{step}; waits on {label}"))

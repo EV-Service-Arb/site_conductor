@@ -1,6 +1,6 @@
 [package]
 name = "sa_sandbox"
-description = "Model-written code, run apart from the conductor: what a run is and what it answers (lib), and the runner (`sa_sandbox serve`) that runs it under Deno with no permission but the net to the conductor"
+description = "The sandbox worker: model-written Starlark, run in a sealed child of the conductor, and the wire between them"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -8,40 +8,29 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 
-[lib]
-test = false
-
-[[bin]]
-name = "sa_sandbox"
-path = "src/main.rs"
-test = false
+[package.metadata.cargo-machete]
+ignored = [
+    "allocative",
+] # only its version: starlark's own requirement admits ones it does not build with
 
 [dependencies]
-axum.workspace = true
-clap.workspace = true
-color-eyre.workspace = true
-eyre.workspace = true
-futures.workspace = true
-getrandom.workspace = true
-hex.workspace = true
-jiff.workspace = true
-sa_auth = { workspace = true, features = ["axum"] }
-sa_trace.workspace = true
+allocative.workspace = true
+anyhow.workspace = true
+libc.workspace = true
+rustix = { workspace = true, features = ["process"] }
+schemars.workspace = true
+seccompiler.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tempfile.workspace = true
-tokio.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-url = { workspace = true, features = ["serde"] }
+starlark.workspace = true
 
 [dev-dependencies]
-reqwest.workspace = true
-rustls.workspace = true
-sa_panel = { workspace = true, features = ["testing"] }
-sa_server = { workspace = true, features = ["testing"] }
+libc.workspace = true
 serde_json.workspace = true
-uuid.workspace = true
+
+[[test]]
+name = "sealed"
+harness = false # its binary is the worker too: started with WORKER, or a probe, it is the child
 
 [lints]
 workspace = true
