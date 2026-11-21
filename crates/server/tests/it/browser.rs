@@ -243,11 +243,9 @@ impl World {
 		added["id"].as_i64().unwrap()
 	}
 
-	/// A draft of `gmail`'s in `country`, at a point in Lyon, of a trade named as it.
+	/// A draft of `gmail`'s in `country`, at a point in Lyon, of plumbers.
 	async fn gbp(&mut self, gmail: i64, name: &str, country: &str) -> i64 {
-		let (status, trade) = self.call(Method::POST, "/api/v1/trades", Some(json!({ "name": name }))).await;
-		assert_eq!(status, StatusCode::CREATED, "{trade}");
-		let draft = json!({ "name": name, "trade": trade["id"], "state": "draft", "gmail_id": gmail, "country": country, "spots": [{ "lat": 45.75, "lng": 4.85 }] });
+		let draft = json!({ "name": name, "trade": "gcid:plumber", "state": "draft", "gmail_id": gmail, "country": country, "spots": [{ "lat": 45.75, "lng": 4.85 }] });
 		let (status, draft) = self.call(Method::POST, "/api/v1/gmbs", Some(draft)).await;
 		assert_eq!(status, StatusCode::CREATED, "{draft}");
 		draft["id"].as_i64().unwrap()

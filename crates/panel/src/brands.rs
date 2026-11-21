@@ -13,8 +13,9 @@ use uuid::Uuid;
 
 use crate::{
 	Panel, Refused,
+	categories::Key,
 	kit::PHOTO_MAX,
-	store::{brands as db, gmbs as gmbs_db},
+	store::{brands as db, categories as categories_db, gmbs as gmbs_db},
 	tokens::is_open,
 };
 
@@ -25,7 +26,8 @@ const LOGO_SIDE: u32 = 512;
 pub struct Brand {
 	pub id: i64,
 	pub gmail_id: i64,
-	pub trade_id: i64,
+	/// A gcid.
+	pub trade: String,
 	pub country: Country,
 	/// What its GBPs' names start with: "Aquafix" → "Aquafix · Guillotière".
 	pub name: String,
@@ -42,7 +44,8 @@ pub struct Brand {
 
 pub struct NewBrand {
 	pub gmail_id: i64,
-	pub trade_id: i64,
+	/// A gcid.
+	pub trade: String,
 	pub country: Country,
 	pub name: String,
 	pub site: BrandId,
@@ -63,17 +66,17 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
-		let category = gmbs_db::trades(&mut tx, owner)
-			.await?
-			.iter()
-			.any(|t| t.id == new.trade_id && t.categories.iter().any(|c| c.country == new.country));
-		if !category || gmbs_db::gmail_owner(&mut tx, new.gmail_id).await? != Some(owner) {
+		let key = match Key::try_new(owner, &new.trade, new.country) {
+			Ok(k) => k,
+			Err(r) => return Ok(Err(r)),
+		};
+		if categories_db::head(&mut tx, key).await?.is_none() || gmbs_db::gmail_owner(&mut tx, new.gmail_id).await? != Some(owner) {
 			return Ok(Err(Refused::NotFound));
 		}
-		if db::named(&mut tx, new.gmail_id, new.trade_id, new.country, &name, None).await? {
+		if db::named(&mut tx, new.gmail_id, &new.trade, new.country, &name, None).await? {
 			return Ok(Err(Refused::Conflict(format!("{name} is a brand of that gmail and category already"))));
 		}
-		let id = db::add(&mut tx, owner, new.gmail_id, new.trade_id, new.country, &name, &new.site, now).await?;
+		let id = db::add(&mut tx, owner, new.gmail_id, &new.trade, new.country, &name, &new.site, now).await?;
 		let added = db::brand_of(&mut tx, owner, id).await?.expect("added in this transaction");
 		tx.commit().await.wrap_err("committing a brand")?;
 		Ok(Ok(added))
@@ -90,7 +93,7 @@ impl Panel {
 			return Ok(Err(Refused::NotFound));
 		};
 		if let Some(n) = &name
-			&& db::named(&mut tx, b.gmail_id, b.trade_id, b.country, n, Some(id)).await?
+			&& db::named(&mut tx, b.gmail_id, &b.trade, b.country, n, Some(id)).await?
 		{
 			return Ok(Err(Refused::Conflict(format!("{n} is a brand of that gmail and category already"))));
 		}

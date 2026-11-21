@@ -28,8 +28,8 @@ const ENABLED: Field<boolean> = {
     await ok(api.PUT("/gmbs/enabled", { body: { gmbs, enabled } }));
   },
 };
-const TRADE: Field<number | null> = {
-  of: (b) => b.trade_id,
+const TRADE: Field<string | null> = {
+  of: (b) => b.trade,
   write: async (gmbs, trade) => {
     await ok(api.PUT("/gmbs/trade", { body: { gmbs, trade } }));
   },
@@ -81,6 +81,6 @@ export function switchGmbs(gmbs: Gmb[], enabled: boolean, t: T): Promise<UndoEnt
 }
 
 /** All of `gmbs` or none: one not the caller's refuses the lot. `null` takes their trade away. */
-export function setTrades(gmbs: Gmb[], trade: number | null, t: T): Promise<UndoEntry> {
+export function setTrades(gmbs: Gmb[], trade: string | null, t: T): Promise<UndoEntry> {
   return set(TRADE, gmbs, trade, t(undo.trade, "Trade set on {n}", { n: gmbs.length }), t);
 }

@@ -2,16 +2,17 @@
 
 import { useResource } from "@evinvest/api/react";
 import { Skeleton } from "@evinvest/uikit";
-import { type LucideIcon, Mail, MapPin, Plus, QrCode, Store, Tag, Trash2 } from "lucide-react";
+import { type LucideIcon, Library, Mail, MapPin, Plus, QrCode, Store, Tag, Trash2 } from "lucide-react";
 import { type ComponentType, useEffect } from "react";
 
-import { type KeyOf, type Kind, type WinKey, closeWindow, gmbs as gmbsKeys, kit as kitKeys, narrowed, scopeKeys, trash as trashKeys, under, useBrands, useGmails, useTrades, useTrash } from "@/entities/gmb";
+import { type KeyOf, type Kind, type WinKey, closeWindow, categoryName, gmbs as gmbsKeys, googleName, kit as kitKeys, narrowed, scopeKeys, trades as tradesKeys, trash as trashKeys, under, useBrands, useCategories, useGmails, useTrade, useTrades, useTrash } from "@/entities/gmb";
 import { AddPanel } from "@/features/add-gmb";
 import { api } from "@/shared/api";
-import { type T, useT } from "@/shared/i18n";
+import { type T, useLocale, useT } from "@/shared/i18n";
 import { AccountWindow } from "@/views/home/ui/account-window";
 import { BrandWindow } from "@/views/home/ui/brand-window";
 import { GbpBody, GbpTitle } from "@/views/home/ui/gbp-window";
+import { LibraryWindow } from "@/views/home/ui/library-window";
 import { CategoriesWindow, TradeWindow } from "@/views/home/ui/trade-window";
 import { TrashWindow } from "@/views/home/ui/trash-window";
 import { KitBody, KitTitle } from "@/views/kit";
@@ -42,38 +43,32 @@ function AccountBody({ k }: { k: KeyOf<"account"> }) {
 
 function TradeBody({ k, page }: { k: KeyOf<"trade">; page: boolean }) {
   const gmails = useGmails();
-  const trades = useTrades();
-  const trade = trades.status === "ok" ? (trades.data.find((tr) => tr.id === k.trade) ?? null) : undefined;
-  // deleted, here or in another tab
-  useEffect(() => {
-    if (trade === null) closeWindow(k);
-  }, [trade, k]);
-  if (gmails.status !== "ok" || trade === undefined) return <Loading />;
-  if (trade === null) return null;
-  return <TradeWindow trade={trade} country={k.country} gmbs={gmails.data.gmbs} page={page} />;
+  const categories = useCategories();
+  const trade = useTrade(k.trade, k.country);
+  if (gmails.status !== "ok" || categories.status !== "ok" || trade === null) return <Loading />;
+  return <TradeWindow trade={trade} country={k.country} categories={categories.data.filter((c) => c.trade.id === k.trade)} gmbs={gmails.data.gmbs} page={page} />;
 }
 
 function BrandBody({ k }: { k: KeyOf<"brand"> }) {
   const gmails = useGmails();
-  const trades = useTrades();
+  const categories = useCategories();
   const brands = useBrands();
   const brand = brands.status === "ok" ? (brands.data.find((b) => b.id === k.brand) ?? null) : undefined;
   // removed, here or in another tab
   useEffect(() => {
     if (brand === null) closeWindow(k);
   }, [brand, k]);
-  if (gmails.status !== "ok" || trades.status !== "ok" || brand === undefined) return <Loading />;
+  if (gmails.status !== "ok" || categories.status !== "ok" || brand === undefined) return <Loading />;
   if (brand === null) return null;
-  const trade = trades.data.find((tr) => tr.id === brand.trade_id);
-  if (trade === undefined) throw new Error(`brand ${brand.id}'s trade ${brand.trade_id} is not read: a trade holding a live brand is not deleted`);
-  return <BrandWindow trade={trade} brand={brand} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />;
+  const category = categories.data.find((c) => c.trade.id === brand.trade && c.country === brand.country);
+  if (category === undefined) throw new Error(`brand ${brand.id}'s category ${brand.trade}·${brand.country} is not read: a category holding a live brand is not deleted`);
+  return <BrandWindow trade={category.trade} brand={brand} gmbs={gmails.data.gmbs} gmails={gmails.data.gmails} />;
 }
 
 function CategoriesBody() {
   const gmails = useGmails();
-  const trades = useTrades();
-  if (gmails.status !== "ok" || trades.status !== "ok") return <Loading />;
-  return <CategoriesWindow trades={trades.data} gmbs={gmails.data.gmbs} />;
+  if (gmails.status !== "ok") return <Loading />;
+  return <CategoriesWindow gmbs={gmails.data.gmbs} />;
 }
 
 function TrashBody() {
@@ -121,6 +116,16 @@ export const FACES = {
     },
     Body: CategoriesBody,
   },
+  library: {
+    icon: Library,
+    width: 1000,
+    Title: function LibraryTitle({ k }) {
+      return <Named text={useWindowLabel()(k)} />;
+    },
+    Body: function LibraryBody({ k, page }) {
+      return <LibraryWindow listing={k.listing} page={page} />;
+    },
+  },
   trash: {
     icon: Trash2,
     width: 768,
@@ -151,6 +156,7 @@ export const faceOf = (k: WinKey) => FACES[k.kind] as Face<Kind>;
 
 const LABEL = {
   categories: (t) => t(scopeKeys.categories, "Categories"),
+  library: (t) => t(tradesKeys.library, "Library"),
   trash: (t) => t(trashKeys.title, "Trash"),
   add: (t) => t(gmbsKeys.gmb.add, "Add a GBP"),
   kits: (t) => t(kitKeys.list, "Review kits"),
@@ -160,7 +166,8 @@ const LABEL = {
 export function useWindowLabel(): (k: WinKey) => string {
   const t = useT();
   const gmails = useGmails();
-  const trades = useTrades();
+  const locale = useLocale();
+  const trades = useTrades(gmails.status === "ok" ? gmails.data.gmbs : []);
   const brands = useBrands();
   const kits = useResource(api, "/kits");
   return (k) => {
@@ -171,11 +178,16 @@ export function useWindowLabel(): (k: WinKey) => string {
       }
       case "account":
         return (gmails.status === "ok" ? gmails.data.gmails.find((g) => g.id === k.gmail)?.gmail : undefined) ?? `gmail ${k.gmail}`;
-      case "trade":
-        return [(trades.status === "ok" ? trades.data.find((tr) => tr.id === k.trade)?.name : undefined) ?? `trade ${k.trade}`, k.country].filter(Boolean).join(" · ");
+      case "trade": {
+        const trade = trades?.find((tr) => tr.trade.id === k.trade)?.trade;
+        // shortcut: a trade neither a category nor a GBP of the caller's holds any more goes by its gcid; name it off Google's list once that happens to someone
+        if (trade === undefined) return k.country === null ? k.trade : `${k.trade} · ${k.country}`;
+        return k.country === null ? googleName(trade, locale) : categoryName(trade, k.country, locale);
+      }
       case "brand":
         return (brands.status === "ok" ? brands.data.find((b) => b.id === k.brand)?.name : undefined) ?? `brand ${k.brand}`;
       case "categories":
+      case "library":
       case "trash":
       case "add":
         return LABEL[k.kind](t);

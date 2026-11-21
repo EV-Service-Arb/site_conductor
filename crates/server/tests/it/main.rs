@@ -18,6 +18,7 @@ mod gmbs;
 mod grafana;
 mod ingest;
 mod kit;
+mod library;
 mod live;
 mod mcp;
 mod meters;

@@ -1,14 +1,12 @@
 "use client";
 
 import { Button, Command, CommandEmpty, CommandInput, CommandItem, CommandList, Popover, PopoverContent, PopoverTrigger, cn } from "@evinvest/uikit";
-import { ChevronLeft, ChevronRight, ChevronsUpDown, Copy, GripVertical, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, GripVertical, Plus, X } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 
-import { googleName, trades } from "@/entities/gmb";
-import { api } from "@/shared/api";
+import { googleName, rankGoogle, trades, useGoogleList } from "@/entities/gmb";
 import type { Country, GoogleCategory } from "@/shared/api/schema";
 import { useLocale, useT, state } from "@/shared/i18n";
-import { useResource } from "@evinvest/api/react";
 import { failureText } from "@/shared/ui/failure-text";
 import { useButtonSize } from "@/shared/ui/touch";
 
@@ -20,8 +18,8 @@ const SHOWN = 50;
 /** An additional Google category and its competitor tier's weight; `null` until a person gives it one. */
 export type Tier = { google: GoogleCategory; weight: number | null };
 
-/** A category's primary and additional Google categories, off Google's list. */
-export function GoogleCategories({ country, lang, primary, additional, setPrimary, setAdditional }: { country: Country; lang: string; primary: GoogleCategory | null; additional: readonly Tier[]; setPrimary: (g: GoogleCategory) => void; setAdditional: (next: Tier[]) => void }) {
+/** A category's additional Google categories, off Google's list: its trade is the primary. */
+export function GoogleCategories({ country, lang, trade, additional, setAdditional }: { country: Country; lang: string; trade: GoogleCategory; additional: readonly Tier[]; setAdditional: (next: Tier[]) => void }) {
   const t = useT();
   const locale = useLocale();
   const button = useButtonSize();
@@ -33,26 +31,10 @@ export function GoogleCategories({ country, lang, primary, additional, setPrimar
     setAdditional(next);
   };
   const full = additional.length >= MAX_ADDITIONAL;
-  const taken = new Set([...(primary === null ? [] : [primary.id]), ...additional.map((a) => a.google.id)]);
+  const taken = new Set([trade.id, ...additional.map((a) => a.google.id)]);
 
   return (
     <>
-      <span className="flex items-center gap-2">
-        <span className="w-20 shrink-0 text-sm text-ink-soft">{t(trades.google.primary, "Primary")}</span>
-        <Picker country={country} lang={lang} exclude={primary === null ? new Set() : new Set([primary.id])} onPick={setPrimary}>
-          <Button variant="outline" size={button("sm")} className={cn("max-w-md min-w-0 flex-1 justify-between", primary === null && "border-accent-warn/60 text-accent-warn")}>
-            <span className="truncate">{primary === null ? t(trades.google.pick, "Pick Google's primary category") : googleName(primary, locale)}</span>
-            <ChevronsUpDown aria-hidden className="text-ink-soft" />
-          </Button>
-        </Picker>
-        {primary !== null && (
-          <Button type="button" variant="ghost" size={button("sm")} title={googleName(primary, lang)} onClick={() => void navigator.clipboard.writeText(googleName(primary, lang))}>
-            <Copy aria-hidden />
-            {t(trades.google.copy, "Copy")}
-          </Button>
-        )}
-      </span>
-
       <span className="flex items-start gap-2">
       <span className="flex h-7 w-20 shrink-0 items-center text-sm text-ink-soft">{t(trades.google.additional, "Additional")}</span>
       <ol className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
@@ -102,8 +84,8 @@ export function GoogleCategories({ country, lang, primary, additional, setPrimar
           </li>
         ))}
         <li>
-          {primary === null || full ? (
-            <Button variant="ghost" size={button("sm")} disabled title={(full ? t(trades.google.additional.full, "Google takes 9 at most") : t(trades.google.additional.needPrimary, "Pick the primary category first"))}>
+          {full ? (
+            <Button variant="ghost" size={button("sm")} disabled title={t(trades.google.additional.full, "Google takes 9 at most")}>
               <Plus aria-hidden />
               {t(trades.google.additional.add, "Add")}
             </Button>
@@ -121,7 +103,7 @@ export function GoogleCategories({ country, lang, primary, additional, setPrimar
         {additional.length} / {MAX_ADDITIONAL}
       </span>
       </span>
-      <p className="text-xs text-ink-soft">{(primary === null ? t(trades.google.additional.needPrimary, "Pick the primary category first") : (full ? t(trades.google.additional.full, "Google takes 9 at most") : t(trades.google.additional.order, "Typed into Google's form in this order after the primary. Each is one more query in every area's sweep: adding one makes the next pull buy it. Drag a chip, or move it with ‹ ›.")))}</p>
+      <p className="text-xs text-ink-soft">{full ? t(trades.google.additional.full, "Google takes 9 at most") : t(trades.google.additional.order, "Typed into Google's form in this order after the primary. Each is one more query in every area's sweep: adding one makes the next pull buy it. Drag a chip, or move it with ‹ ›.")}</p>
     </>
   );
 }
@@ -163,39 +145,14 @@ function Picker({ country, lang, exclude, onPick, children }: { country: Country
   );
 }
 
-const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-const WORD = /[^\p{L}\p{N}]+/u;
-
 /** Every term must match the reader's name, the country's or the gcid's slug; prefix, then word-start, then the rest. */
 function Search({ country, lang, exclude, onPick }: { country: Country; lang: string; exclude: ReadonlySet<string>; onPick: (g: GoogleCategory) => void }) {
   const t = useT();
   const locale = useLocale();
-  const list = useResource(api, "/google-categories/{country}", { params: { path: { country } } });
+  const list = useGoogleList(country);
   const [search, setSearch] = useState("");
-  const data = list.status === "ok" ? list.data.categories : null;
-  const indexed = useMemo(() => {
-    const collator = new Intl.Collator(locale);
-    return (data ?? [])
-      .map((g) => {
-        const shown = googleName(g, locale);
-        const name = fold(shown);
-        const slug = [g.id.replace(/^gcid:/, "").replaceAll("_", " "), fold(googleName(g, lang))].join(" ");
-        return { g, shown, name, slug, nameWords: name.split(WORD), words: [...name.split(WORD), ...slug.split(WORD)] };
-      })
-      .sort((a, b) => collator.compare(a.shown, b.shown));
-  }, [data, lang, locale]);
-  const terms = fold(search).split(/\s+/).filter((x) => x !== "");
-  const whole = terms.join(" ");
-  const ranked = indexed
-    .filter((x) => !exclude.has(x.g.id) && terms.every((term) => x.name.includes(term) || x.slug.includes(term)))
-    .map((x) => {
-      const starts = (words: string[]) => terms.every((term) => words.some((w) => w.startsWith(term)));
-      // the name, shown and typed, before the slug
-      return { x, rank: [x.name.startsWith(whole), x.slug.startsWith(whole), starts(x.nameWords), starts(x.words), true].indexOf(true) };
-    })
-    // stable: the collator's order within a rank
-    .sort((a, b) => a.rank - b.rank)
-    .map(({ x }) => x);
+  const data = list.status === "ok" ? list.data : null;
+  const ranked = useMemo(() => rankGoogle(data ?? [], search, locale, lang), [data, search, locale, lang]).filter((x) => !exclude.has(x.g.id));
 
   return (
     <Command shouldFilter={false} search={search} onSearchChange={setSearch}>

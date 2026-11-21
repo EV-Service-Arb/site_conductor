@@ -51,14 +51,14 @@ async fn a_gmb_is_switched_by_its_owner_and_review_archive_is_told() {
 	let owner = person(&p, "owner@localhost").await;
 	let other = person(&p, "other@localhost").await;
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
-	let trade = p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap().id;
+	let trade = "gcid:plumber".to_owned();
 	let existing = |place: &str, name: &str| Existing {
 		gmail_id: gmail.id,
 		place: place.to_owned(),
 		state: sa_core::gbp::OnGoogle::Verified,
 		name: Some(name.to_owned()),
 		country: Some(Country::FR),
-		trade: Some(trade),
+		trade: Some(trade.clone()),
 	};
 	let one = p
 		.add_gmb(Some(Spender::new(owner)), existing("ChIJLU7jZClu5kcR4PcOOO6p3I0", "One"), now())

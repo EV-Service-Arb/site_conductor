@@ -221,6 +221,16 @@ impl Browser {
 		assert!(self.jar.contains_key("sa_session"));
 	}
 
+	/// Signed in as `email` (dev sign-in's `?as=`), with the configured one's permissions.
+	pub async fn sign_in_as(&mut self, app: &Router, email: &str) {
+		let login = format!("/auth/login?as={}", email.replace('@', "%40"));
+		let (_, headers) = self.send(app, Method::GET, &login, &[], false).await;
+		let location = headers[header::LOCATION].to_str().unwrap().strip_prefix(ORIGIN).unwrap().to_owned();
+		assert!(location.starts_with(&format!("/auth/callback?code={DEV_CODE}")));
+		self.send(app, Method::GET, &location, &[], false).await;
+		assert!(self.jar.contains_key("sa_session"));
+	}
+
 	/// The `Cookie` header this browser sends.
 	pub fn cookie(&self) -> String {
 		self.jar.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join("; ")

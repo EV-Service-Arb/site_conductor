@@ -1,12 +1,18 @@
 //! Placement's studies (docs/ARCHITECTURE.md, Placement): the conductor builds a study's
-//! [`Definition`] from its own areas and trades, and placement's library builds it, in process, out
-//! of the work dir and this conductor's queries cache.
+//! [`Definition`] from one of its areas and a category version, and placement's library builds it,
+//! in process, out of the work dir and this conductor's queries cache. A published study is a
+//! definition kept frozen, built the same way.
 //!
 //! ```text
-//! GET  /placement/catalog                  → the countries placement holds a base for
-//! GET  /placement/study?area&category      → Definition → its payload, built once and kept
-//! POST /placement/study/pull?area&category → held: what the study lacks, each search bought, asked
-//!                                            again until it lacks none → built again, charged what was bought
+//! GET  /placement/catalog                   → the countries placement holds a base for
+//! GET  /placement/study?area&version        → Definition → its payload, built once and kept
+//! POST /placement/study/pull?area&version   → held: what the study lacks, each search bought, asked
+//!                                             again until it lacks none → built again, charged what was bought
+//! GET  /placement/studies/{sha}             a published one, as the study above
+//! POST /placement/studies/{sha}/pull        as the pull above, charged to whoever pulls
+//! POST /library/studies                     publish: on a released version, or releasing it
+//! GET  /library/studies?trade&country&area
+//! POST /library/studies/{sha}/withdraw
 //! ```
 
 use std::{
@@ -21,27 +27,32 @@ use axum::{
 	body::Bytes,
 	extract::State,
 	http::{Method, header},
-	response::{IntoResponse, Response},
+	response::{IntoResponse, NoContent, Response},
 };
 use ev_lib::api::{
-	GenContext, JsonSchema, OperationOutput, Params, Refusal,
+	Body, Created, GenContext, Ids, JsonSchema, OperationOutput, Params, Refusal,
 	openapi::{MediaType, Operation, Response as Answer, SchemaObject, StatusCode as Status},
 };
 use gmaps_optimal_placement::{Held, Work};
-use gmaps_optimal_placement_core::{Additional, Area, Ask, Category, Country, Definition, Gcid, LatLng, SEARCH_TEXT};
+use gmaps_optimal_placement_core::{Area, Ask, Country, Definition, LatLng, SEARCH_TEXT};
+use jiff::Timestamp;
 use sa_auth::Study;
 use sa_core::{
 	gbp,
 	prices::{PlacementRequest, Spends},
 	queries_cache::{Key, Scheme, gop},
 };
-use sa_panel::{gmbs::GoogleCategory, store::Store};
+use sa_panel::{
+	library::{NewListing, Release},
+	store::Store,
+};
 use serde::{Deserialize, Serialize};
 use strum::VariantArray;
 
 use crate::{
 	api::{ApiResult, Code},
 	http::{ApiRoute, ApiState, Flags, Gate, SLOW, USER},
+	library::PublishedStudyDto,
 	signin::{Caller, Freshness},
 };
 
@@ -93,6 +104,11 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/placement/catalog", USER.needs(Study::Read), catalog),
 		ApiRoute::new(M::GET, "/placement/study", SLOW.needs(Study::Read), study),
 		ApiRoute::new(M::POST, "/placement/study/pull", PULL.needs(Study::Spend), pull),
+		ApiRoute::new(M::GET, "/placement/studies/{sha}", SLOW.needs(Study::Read), published_study),
+		ApiRoute::new(M::POST, "/placement/studies/{sha}/pull", PULL.needs(Study::Spend), pull_published_study),
+		ApiRoute::new(M::POST, "/library/studies", USER, publish_study),
+		ApiRoute::new(M::GET, "/library/studies", USER, published_studies),
+		ApiRoute::new(M::POST, "/library/studies/{sha}/withdraw", USER, withdraw_study),
 	]
 }
 
@@ -100,9 +116,61 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 struct StudyIn {
 	/// The area's slug.
 	area: String,
-	/// `<trade id>.<country>`: one of the caller's trades as set up for a country. None: the area's
+	/// A category version the caller may read: one of theirs, or a released one. None: the area's
 	/// grid alone, nothing billed.
-	category: Option<String>,
+	version: Option<i64>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct ShaIn {
+	/// A published study's definition id.
+	sha: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(rename = "PublishStudy")]
+struct PublishIn {
+	/// The area's slug: its geometry is frozen into the study.
+	area: String,
+	/// The category version it is a study of.
+	version: i64,
+	/// 1 to 100 characters.
+	title: String,
+	/// Releases `version` in the same write; without it, the version must be released already.
+	release: Option<ReleaseIn>,
+}
+
+/// How a version is released: a new listing, or the next version of one of the caller's.
+#[derive(Deserialize, JsonSchema)]
+#[serde(tag = "as", rename_all = "snake_case", deny_unknown_fields)]
+#[schemars(rename = "StudyRelease")]
+enum ReleaseIn {
+	New {
+		title: String,
+		about: String,
+		notes: String,
+		forked_from: Option<i64>,
+	},
+	Next {
+		listing: i64,
+		notes: String,
+	},
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct StudiesIn {
+	/// A gcid.
+	trade: Option<String>,
+	country: Option<gbp::Country>,
+	/// An area's slug.
+	area: Option<String>,
+}
+
+#[derive(JsonSchema, Serialize)]
+#[schemars(rename = "PublishedStudies")]
+struct StudiesDto {
+	studies: Vec<PublishedStudyDto>,
 }
 
 /// The countries placement holds a base for.
@@ -159,22 +227,35 @@ async fn catalog(State(s): State<ApiState>) -> ApiResult<Json<Catalog>> {
 	}))
 }
 
-/// A study of an area: under one of the caller's categories, or the area's grid alone; never spends.
-/// Built on the first read and kept, out of what is held: a study whose searches are not all there
-/// opens on what is, and its notice says how many it lacks.
+/// A study of an area: under a category version the caller may read, or the area's grid alone;
+/// never spends. Built on the first read and kept, out of what is held: a study whose searches are
+/// not all there opens on what is, and its notice says how many it lacks.
 ///
-/// 404 no such area or category of the caller's; 422 a category with `no_google_category`, set up
-/// for `another_country`, or an area where placement holds no base (`unstudied`); 503 placement not
-/// connected.
+/// 404 no such area, or a version the caller may not read; 422 a version of `another_country`, or
+/// an area where placement holds no base (`unstudied`); 503 placement not connected.
 async fn study(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Params(at): Params<StudyIn>) -> ApiResult<Payload> {
 	let p = connected(&s)?.clone();
-	let def = define(&s, &caller, at).await?;
+	let def = define(&s, &caller, &at.area, at.version).await?;
+	opened(&s, &p, def).await
+}
+
+/// A published study, built as a study is: of what is held, nothing bought.
+///
+/// 404 one the caller may not see; 503 placement not connected.
+async fn published_study(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(ShaIn { sha }): Ids<ShaIn>) -> ApiResult<Payload> {
+	let p = connected(&s)?.clone();
+	let def = s.sign_in.panel.published_study(caller.user_id, &sha, Timestamp::now()).await??.definition;
+	opened(&s, &p, def).await
+}
+
+/// `def`'s payload: the one kept, else built of what is held and kept.
+async fn opened(s: &ApiState, p: &Placement, def: Definition) -> ApiResult<Payload> {
 	let slot = p.slot(&def.id());
 	let mut slot = slot.lock().await;
 	if let Some(built) = &*slot {
 		return Ok(Payload(built.clone()));
 	}
-	let built = built(&s, &p, def).await?;
+	let built = built(s, p, def).await?;
 	*slot = Some(built.clone());
 	Ok(Payload(built))
 }
@@ -186,13 +267,25 @@ async fn study(State(s): State<ApiState>, Extension(caller): Extension<Caller>, 
 /// unpriced. What it bought is charged, and owed back when the pull failed.
 async fn pull(State(s): State<ApiState>, Spends(caller, _): Spends<PlacementRequest, Caller>, Params(at): Params<StudyIn>) -> ApiResult<Payload> {
 	let p = connected(&s)?.clone();
-	let def = define(&s, &caller, at).await?;
+	let def = define(&s, &caller, &at.area, at.version).await?;
+	pulled(&s, &caller, &p, def).await
+}
+
+/// Builds a published study again, buying what it lacks at the caller's tokens, as a pull does.
+async fn pull_published_study(State(s): State<ApiState>, Spends(caller, _): Spends<PlacementRequest, Caller>, Ids(ShaIn { sha }): Ids<ShaIn>) -> ApiResult<Payload> {
+	let p = connected(&s)?.clone();
+	let def = s.sign_in.panel.published_study(caller.user_id, &sha, Timestamp::now()).await??.definition;
+	pulled(&s, &caller, &p, def).await
+}
+
+/// `def` built again, what it lacks bought at `caller`'s tokens.
+async fn pulled(s: &ApiState, caller: &Caller, p: &Placement, def: Definition) -> ApiResult<Payload> {
 	let sha = def.id();
 	let slot = p.slot(&sha);
 	let mut slot = slot.lock().await;
 	let held = s.sign_in.panel.pull(caller.user_id).await??;
-	let pulled = match bought(&s, &p, &def, &held).await {
-		Ok(()) => built(&s, &p, def).await,
+	let pulled = match bought(s, p, &def, &held).await {
+		Ok(()) => built(s, p, def).await,
 		Err(e) => Err(e),
 	};
 	held.paid(&sha, pulled.is_err()).await?;
@@ -263,46 +356,58 @@ fn connected(s: &ApiState) -> ApiResult<&Placement> {
 	s.placement.as_ref().ok_or_else(|| Refusal::new(Code::Unavailable, "placement not connected".to_owned()))
 }
 
-/// The study of `at`, as the conductor's own areas and the caller's trades say it.
-async fn define(s: &ApiState, caller: &Caller, at: StudyIn) -> ApiResult<Definition> {
-	let area = s.sign_in.panel.area(&at.area).await?.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
+/// Publishes a study of an area under a category version: on the version's release, or releasing it
+/// in the same write. Readable by everyone, for good.
+///
+/// As a study is refused, and: 400 a title empty or past 100 characters; 409 published already;
+/// 422 `unreleased_category`, a version no listing released and no `release`.
+async fn publish_study(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Body(b): Body<PublishIn>) -> ApiResult<Created<PublishedStudyDto>> {
+	let def = define(&s, &caller, &b.area, Some(b.version)).await?;
+	let release = b.release.map(|r| match r {
+		ReleaseIn::New { title, about, notes, forked_from } => Release::New(NewListing { title, about, notes, forked_from }),
+		ReleaseIn::Next { listing, notes } => Release::Next { listing, notes },
+	});
+	let published = s.sign_in.panel.publish_study(caller.user_id, &def, b.version, &b.title, release, Timestamp::now()).await??;
+	tracing::info!(user_id = %caller.user_id, sha = %published.sha, listing = published.listing, "study published");
+	Ok(Created(PublishedStudyDto::of(published)?))
+}
+
+/// The published studies the caller may see, of a trade, a country and an area when given.
+async fn published_studies(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Params(at): Params<StudiesIn>) -> ApiResult<Json<StudiesDto>> {
+	let studies = s.sign_in.panel.published_studies(caller.user_id, at.trade.as_deref(), at.country, at.area.as_deref()).await?;
+	Ok(Json(StudiesDto {
+		studies: studies.into_iter().map(PublishedStudyDto::of).collect::<eyre::Result<_>>()?,
+	}))
+}
+
+/// Withdraws a study the caller published: hidden from whoever never used its listing.
+async fn withdraw_study(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Ids(ShaIn { sha }): Ids<ShaIn>) -> ApiResult<NoContent> {
+	s.sign_in.panel.withdraw_study(caller.user_id, &sha, Timestamp::now()).await??;
+	tracing::info!(user_id = %caller.user_id, %sha, "published study withdrawn");
+	Ok(NoContent)
+}
+
+/// The study of `area` under `version`, as the conductor's own areas and the caller's reading of
+/// that version say it: the one function every study's definition is built by.
+async fn define(s: &ApiState, caller: &Caller, area: &str, version: Option<i64>) -> ApiResult<Definition> {
+	let area = s.sign_in.panel.area(area).await?.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
 	let unstudied = || Refusal::new(Code::Unstudied, format!("{} is in {}, where nothing is studied", area.name, area.country));
 	let of_area: gbp::Country = area.country.parse().map_err(|_| unstudied())?;
-	let country: Country = of_area.as_str().parse().map_err(|_| unstudied())?; // no Country: none of placement's bases
-	let category = match at.category {
+	let category = match version {
 		None => None,
-		Some(key) => {
-			let (trade, of) = key
-				.split_once('.')
-				.and_then(|(t, c)| Some((t.parse::<i64>().ok()?, c.parse::<gbp::Country>().ok()?)))
-				.ok_or_else(|| Refusal::new(Code::BadRequest, format!("category {key:?}: not <trade id>.<country>")))?;
-			let trades = s.sign_in.panel.trades(caller.user_id).await?;
-			let (trade, c) = trades
-				.iter()
-				.find(|t| t.id == trade)
-				.and_then(|t| t.categories.iter().find(|c| c.country == of).map(|c| (t, c)))
-				.ok_or_else(|| Refusal::new(Code::NotFound, "not found"))?;
-			let named = format!("{} · {of}", trade.name);
-			let primary = c.google_primary.ok_or_else(|| Refusal::new(Code::NoGoogleCategory, format!("{named} has no Google category")))?;
-			if of != of_area {
-				return Err(Refusal::new(Code::AnotherCountry, format!("{named} is not set up for {of_area}, where {} is", area.name)));
+		Some(id) => {
+			let v = s.sign_in.panel.version(caller.user_id, id).await??;
+			if v.country != of_area {
+				return Err(Refusal::new(
+					Code::AnotherCountry,
+					format!("version {id} is of {}, not {of_area}, where {} is", v.country, area.name),
+				));
 			}
-			let gcid = |g: GoogleCategory| Gcid {
-				id: g.id.to_owned(),
-				name: g.names.get(of.lang()).expect("google_categories.json names each in its countries' languages").clone(),
-			};
-			Some(Category {
-				trade: u64::try_from(trade.id).expect("a trade's id is a rowid"),
-				name: trade.name.clone(),
-				country,
-				primary: gcid(primary),
-				additional: c.google_additional.iter().map(|&(g, weight)| Additional { google: gcid(g), weight }).collect(),
-				keywords: c.keywords.clone(),
-				excluded: c.excluded.clone(),
-				demand: c.demand.clone(),
-			})
+			Some(v)
 		}
 	};
+	let country: Country = of_area.as_str().parse().map_err(|_| unstudied())?; // no Country: none of placement's bases
+	let category = category.map(|v| v.category(country)).transpose()?;
 	let def = Definition {
 		area: Area::Circle {
 			slug: area.slug,

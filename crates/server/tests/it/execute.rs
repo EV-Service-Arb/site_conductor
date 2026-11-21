@@ -30,10 +30,10 @@ const SPENDS_THEN_REMOVES: &str = r#"spent = call("buy_map", body = {"account": 
 print("spent", spent["body"].get("code", "ok") if type(spent["body"]) == "dict" else "ok")
 if spent["status"] == 403 and spent["body"]["code"] == "refused":
     fail(spent["body"]["error"])
-gone = call("delete_trade", path = {"id": 7})
+gone = call("delete_category", path = {"trade": "gcid:plumber", "country": "FR"})
 print("removed", gone["body"]["code"])"#;
 
-const REMOVES: &str = r#"gone = call("delete_trade", path = {"id": 7})
+const REMOVES: &str = r#"gone = call("delete_category", path = {"trade": "gcid:plumber", "country": "FR"})
 print("removed", gone["body"]["code"])
 if gone["status"] == 403:
     fail(gone["body"]["error"])"#;
@@ -81,7 +81,7 @@ fn end(text: &str) -> Value {
 	json!({ "stop_reason": "end_turn", "content": [{ "type": "text", "text": text }] })
 }
 
-/// The conductor, its asker signed in with a chat and their own Claude, trades open.
+/// The conductor, its asker signed in with a chat and their own Claude, GBPs open.
 struct Stack {
 	app: Router,
 	b: Browser,
@@ -250,15 +250,15 @@ async fn the_level_holds_in_code_what_it_holds_in_a_call() {
 	assert_eq!(declined["state"], threw(), "a new question declines what waited: {declined}");
 	assert!(declined["stderr"].as_str().unwrap().contains("declined"), "{declined}");
 	let paused = s.result(3, 1);
-	assert_eq!(paused["state"]["paused"]["operation"], "delete_trade", "{paused}");
+	assert_eq!(paused["state"]["paused"]["operation"], "delete_category", "{paused}");
 	assert!(paused["stdout"].as_str().unwrap().starts_with("spent "), "spending ran: {paused}");
-	assert_eq!(Stack::actions(&spent), pairs(&[("buy_map", "done"), ("delete_trade", "proposed")]));
+	assert_eq!(Stack::actions(&spent), pairs(&[("buy_map", "done"), ("delete_category", "proposed")]));
 
 	let acted = s.ask("act").await;
 	let ran = s.result(5, 1);
 	assert_eq!(ran["state"], done(), "{ran}");
 	assert!(ran["stdout"].as_str().unwrap().contains("removed "), "{ran}");
-	assert_eq!(Stack::actions(&acted), pairs(&[("buy_map", "done"), ("delete_trade", "done")]));
+	assert_eq!(Stack::actions(&acted), pairs(&[("buy_map", "done"), ("delete_category", "done")]));
 }
 
 /// A later cell reads what Done cells bound, frozen; one that failed hands on nothing; a name bound again
@@ -360,7 +360,7 @@ async fn signing_out_ends_the_session() {
 async fn a_paused_cell_goes_on_once_the_person_agrees() {
 	let mut s = Stack::new(vec![round(vec![execute("e1", REMOVES)]), end("Agree to remove it?"), end("It is removed.")]).await;
 	let said = s.ask("ask").await;
-	assert_eq!(Stack::actions(&said), pairs(&[("delete_trade", "proposed")]));
+	assert_eq!(Stack::actions(&said), pairs(&[("delete_category", "proposed")]));
 	let act = json!({ "turn": said["id"], "action": said["actions"][0]["id"] });
 	let (status, chat) = s.b.call(&s.app, Method::POST, &format!("/api/v1/assistant/chats/{}/act", s.chat), Some(act)).await;
 	assert_eq!(status, 200, "{chat}");
@@ -425,7 +425,7 @@ async fn the_idlest_session_makes_room_a_running_one_does_not() {
 	let evicted = s.result(rounds + 3, 0);
 	assert!(evicted["error"].as_str().unwrap().contains("no longer holds this session"), "{evicted}");
 	s.ask_in(newest, "ask").await;
-	assert_eq!(s.result(rounds + 5, 0)["state"]["paused"]["operation"], "delete_trade");
+	assert_eq!(s.result(rounds + 5, 0)["state"]["paused"]["operation"], "delete_category");
 	s.ask_in(idle, "ask").await;
 	let busy = s.result(rounds + 7, 0);
 	assert!(busy["error"].as_str().unwrap().contains("busy"), "none idle, none let go: {busy}");

@@ -5,7 +5,7 @@ import { Badge, Button, NativeSelect, NativeSelectOption, Skeleton, Tabs, TabsLi
 import { CalendarClock, ChevronLeft, ChevronRight, Copy, ExternalLink, Globe, Hash, History, ImageIcon, Mail, MapPin, MonitorSmartphone, Pencil, Phone, QrCode, RefreshCw, ShieldAlert, ShieldCheck, Star, Store, Tag, UserCog, Video } from "lucide-react";
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 
-import { CategoryChip, NewBrand, type KeyOf, type Listed, LiveReviews, ROLE_NAME, STATE_NAME, STATE_TONE, closeWindow, gmbPhotoSrc, googleName, narrowed, openWindow, readyCount, under, syncGmb, useBrands, useGmails, useGmbTags, useOnMap, gmbs as gmbsKeys, windowKeys } from "@/entities/gmb";
+import { CategoryChip, NewBrand, type KeyOf, type Listed, LiveReviews, ROLE_NAME, STATE_NAME, STATE_TONE, closeWindow, gmbPhotoSrc, googleName, TradeName, useGoogleList, narrowed, openWindow, readyCount, under, syncGmb, useBrands, useGmails, useGmbTags, useOnMap, gmbs as gmbsKeys, windowKeys } from "@/entities/gmb";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { api, ok, reviewArchive } from "@/shared/api";
 import { type Changed, type Closed, type Country, type GbpRole, type Gmail, type Gmb, type GmbEdit, type LogDto, type LoggedDto, type Tab, gbpRoleValues, mustHaveValues } from "@/shared/api/schema";
@@ -323,7 +323,16 @@ function Profile({ listed }: { listed: Listed }) {
           {gmb.state === "verified" ? t(windowKeys.profile.noPhotos, "No photos: Sync pulls Google's") : t(windowKeys.profile.offGoogle, "Not on Maps: no photos from Google")}
         </div>
       )}
-      {primary !== null && <p className="px-5 pt-3 text-sm text-ink-soft">{primary}</p>}
+      {primary !== null && (
+        <p className="flex flex-wrap gap-x-2 px-5 pt-3 text-sm text-ink-soft">
+          {primary}
+          {gmb.trade !== null && gmb.trade !== gmb.google_primary && (
+            <span className="text-accent-warn">
+              {t(windowKeys.profile.tradeApart, "on Google; its trade here is")} <TradeName gcid={gmb.trade} country={gmb.country?.code ?? null} />
+            </span>
+          )}
+        </p>
+      )}
       <Actions listed={listed} />
       <dl className="flex flex-col gap-3 border-t border-border px-5 py-4 text-sm">
         <Fact icon={<MapPin aria-hidden />} value={gmb.address ?? (gmb.location && t(windowKeys.planned, "planned · {at}", { at: `${gmb.location.lat.toFixed(3)}, ${gmb.location.lng.toFixed(3)}` }))} note={[gmb.customers_visit === null ? null : gmb.customers_visit ? t(windowKeys.profile.visit, "customers visit") : t(windowKeys.profile.serviceArea, "service area"), gmb.location && (gmb.location.placed ? t(windowKeys.profile.pinByHand, "pin placed by hand") : t(windowKeys.profile.pinGoogle, "pin from Google"))]} />
@@ -358,10 +367,10 @@ function Profile({ listed }: { listed: Listed }) {
         <Fact icon={<Mail aria-hidden />} value={gmail?.gmail ?? t(windowKeys.profile.noGmail, "No gmail yet")} action={gmail && <Go label={t(windowKeys.profile.connections, "Connections")} onClick={() => openWindow({ kind: "account", gmail: gmail.id, tab: "connections" })} />} />
         {gmail && <Fact icon={<UserCog aria-hidden />} value={<RoleEditor gmb={gmb} gmail={gmail} />} />}
         <Fact icon={<Tag aria-hidden />} value={<CategoryChip gmb={gmb} />} />
-        {gmail && gmb.trade_id !== null && gmb.country !== null && (
+        {gmail && gmb.trade !== null && gmb.country !== null && (
           <Fact
             icon={<Store aria-hidden />}
-            value={<BrandEditor gmb={gmb} gmail={gmail.id} trade={gmb.trade_id} country={gmb.country.code} />}
+            value={<BrandEditor gmb={gmb} gmail={gmail.id} trade={gmb.trade} country={gmb.country.code} />}
             action={gmb.brand_id !== null && <Go label={t(windowKeys.profile.brand, "Brand")} onClick={() => openWindow({ kind: "brand", brand: gmb.brand_id! })} />}
           />
         )}
@@ -372,12 +381,12 @@ function Profile({ listed }: { listed: Listed }) {
 }
 
 /** Its brand: one of its gmail's in its category, or none; a new one is made under both. */
-function BrandEditor({ gmb, gmail, trade, country }: { gmb: Gmb; gmail: number; trade: number; country: Country }) {
+function BrandEditor({ gmb, gmail, trade, country }: { gmb: Gmb; gmail: number; trade: string; country: Country }) {
   const t = useT();
   const gmails = useGmails();
   const brands = useBrands();
   const [adding, setAdding] = useState(false);
-  const fits = brands.status === "ok" ? brands.data.filter((b) => b.gmail_id === gmail && b.trade_id === trade && b.country === country) : [];
+  const fits = brands.status === "ok" ? brands.data.filter((b) => b.gmail_id === gmail && b.trade === trade && b.country === country) : [];
   const give = async (brand: number | null) => {
     try {
       await ok(api.PUT("/gmbs/brand", { body: { gmbs: [gmb.id], brand } }));
@@ -490,9 +499,9 @@ function CopyButton({ text }: { text: string }) {
 /** Google's primary category in the reader's language, once the country's list is read. */
 function GooglePrimary({ country, id }: { country: Country; id: string }) {
   const locale = useLocale();
-  const list = useResource(api, "/google-categories/{country}", { params: { path: { country } } });
+  const list = useGoogleList(country);
   if (list.status !== "ok") return null;
-  const g = list.data.categories.find((c) => c.id === id);
+  const g = list.data.find((c) => c.id === id);
   if (g === undefined) throw new Error(`${id} is not among ${country}'s Google categories`);
   return <>{googleName(g, locale)}</>;
 }

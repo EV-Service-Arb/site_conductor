@@ -98,7 +98,7 @@ function Member({ slug, members, at, go, onSet }: { slug: string; members: reado
 
 function Offered({ drafts, cat, brand }: { drafts: readonly KitRanked[]; cat: NonNullable<KitMember["category"]>; brand: number | null }) {
   const t = useT();
-  const pool = useResource(api, "/trades/{id}/{country}/kit", { params: { path: { id: cat.trade, country: cat.country } } });
+  const pool = useResource(api, "/categories/{trade}/{country}/kit", { params: { path: { trade: cat.trade, country: cat.country } } });
   const tags = new Map<number, KitDraft>(pool.status === "ok" ? pool.data.drafts.map((d) => [d.id, d]) : []);
   const went = drafts.filter((d) => d.went_here);
   return (

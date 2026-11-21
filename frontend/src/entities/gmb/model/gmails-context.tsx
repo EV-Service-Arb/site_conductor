@@ -5,7 +5,7 @@ import { type UndoEntry, useUndo } from "@evinvest/uikit";
 import { type ReactNode, createContext, useContext, useMemo } from "react";
 
 import { type Failure, api, reviewArchive, sites as sitesApi } from "@/shared/api";
-import type { Brand, Gmails, Trade, Trash } from "@/shared/api/schema";
+import type { Brand, Category, Gmails, Trash } from "@/shared/api/schema";
 import type { MyGmbs } from "@/shared/api/services/review_archive";
 import type { GmbPlace } from "@/shared/api/services/sites";
 
@@ -15,7 +15,7 @@ type Read<T> = Resource<T, Failure> & { reload: () => void };
 
 interface Gmbs {
   gmails: Read<Gmails>;
-  trades: Read<{ trades: Trade[] }>;
+  categories: Read<{ categories: Category[] }>;
   brands: Read<{ brands: Brand[] }>;
   archive: Read<MyGmbs>;
   sites: Read<{ [gmb: string]: GmbPlace }>;
@@ -24,16 +24,16 @@ interface Gmbs {
 
 const GmbsContext = createContext<Gmbs | null>(null);
 
-/** One read each of the caller's gmails, their trades and the services' tags on their GMBs, for the outline and the page beside it: a change made in one is seen by the other. */
+/** One read each of the caller's gmails, their categories and the services' tags on their GMBs, for the outline and the page beside it: a change made in one is seen by the other. */
 export function GmailsProvider({ children }: { children: ReactNode }) {
   const gmails = useResource(api, "/gmails");
-  const trades = useResource(api, "/trades");
+  const categories = useResource(api, "/categories");
   const brands = useResource(api, "/brands");
   const archive = useResource(reviewArchive, "/me/gmbs");
   // refused to whoever sees no sites: their GMBs have no sites tags
   const sites = useResource(sitesApi, "/gmbs");
   const trash = useResource(api, "/trash");
-  return <GmbsContext value={{ gmails, trades, brands, archive, sites, trash }}>{children}</GmbsContext>;
+  return <GmbsContext value={{ gmails, categories, brands, archive, sites, trash }}>{children}</GmbsContext>;
 }
 
 function useGmbs(): Gmbs {
@@ -57,9 +57,9 @@ export function useTrash(): Read<Trash> {
   return useGmbs().trash;
 }
 
-export function useTrades(): Read<Trade[]> {
-  const trades = useGmbs().trades;
-  return trades.status === "ok" ? { ...trades, data: trades.data.trades } : trades;
+export function useCategories(): Read<Category[]> {
+  const categories = useGmbs().categories;
+  return categories.status === "ok" ? { ...categories, data: categories.data.categories } : categories;
 }
 
 export function useBrands(): Read<Brand[]> {
@@ -67,10 +67,10 @@ export function useBrands(): Read<Brand[]> {
   return brands.status === "ok" ? { ...brands, data: brands.data.brands } : brands;
 }
 
-/** The services' reads, and their tags and the trades as an issue is judged by: one not answered yet has none. */
+/** The services' reads, and their tags and the categories as an issue is judged by: one not answered yet has none. */
 export function useGmbTags(): { archive: Gmbs["archive"]; sites: Gmbs["sites"]; tags: Tags } {
   const { archive, sites } = useGmbs();
-  const trades = useTrades();
+  const categories = useCategories();
   const gmbs = archive.status === "ok" ? archive.data.gmbs : null;
   const places = sites.status === "ok" ? sites.data : null;
   // the keys are GMB ids, as the schemas' patterns have them
@@ -82,7 +82,7 @@ export function useGmbTags(): { archive: Gmbs["archive"]; sites: Gmbs["sites"]; 
     tags: {
       archive: byGmb,
       sites: placed,
-      trades: trades.status === "ok" ? trades.data : null,
+      categories: categories.status === "ok" ? categories.data : null,
     },
   };
 }

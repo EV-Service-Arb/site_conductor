@@ -1,7 +1,8 @@
 {
-  "trade": "Cleaning",
+  "trade": "gcid:house_cleaning_service",
   "country": "FR",
-  "set_up": {
+  "title": "Cleaning",
+  "body": {
     "keywords": [
       {
         "text": "service de ménage",
@@ -24,8 +25,7 @@
         "weight": 0.3
       }
     ],
-    "google_primary": "gcid:house_cleaning_service",
-    "google_additional": [
+    "additional": [
       {
         "id": "gcid:cleaners",
         "weight": 0.8

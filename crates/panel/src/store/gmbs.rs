@@ -4,19 +4,16 @@
 use std::collections::BTreeSet;
 
 use eyre::WrapErr;
-use gmaps_optimal_placement_core::{Demand, Excluded, Keyword};
 use jiff::Timestamp;
 use sa_core::gbp::{Country, Managed, Role, State};
 use sa_places::LatLng;
-use serde::{Deserialize, Serialize};
 use sqlx::SqliteConnection;
 use uuid::Uuid;
 
 use super::{from_db, to_db};
-use crate::google_categories::GoogleCategory;
 
-const GMB: &str = "SELECT b.id, b.gmail_id, b.place_id, b.name, b.address, b.state, b.country, b.country_by IS NOT NULL AS country_by_hand, b.phone, \
-	b.trade_id, b.brand_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.role, b.owner_gmail, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, b.website, b.hours, b.google_primary, b.synced_at, \
+const GMB: &str = "SELECT b.id, b.owner, b.gmail_id, b.place_id, b.name, b.address, b.state, b.country, b.country_by IS NOT NULL AS country_by_hand, b.phone, \
+	b.trade, b.brand_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.role, b.owner_gmail, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, b.website, b.hours, b.google_primary, b.synced_at, \
 	(SELECT json_group_array(json_object('id', p.id, 'author', p.author)) FROM (SELECT * FROM gmb_photos p WHERE p.gmb_id = b.id ORDER BY p.n) p) AS photos, NOT EXISTS (SELECT 1 FROM gmbs_off o WHERE o.gmb_id = b.id) AS enabled, \
 	(SELECT json_group_array(json_object('lat', s.lat, 'lng', s.lng, 'label', s.label, 'note', s.note)) FROM (SELECT * FROM gmb_spots s WHERE s.gmb_id = b.id ORDER BY s.pos) s) AS spots FROM gmbs b";
 
@@ -28,12 +25,6 @@ type GmailRow = (i64, Uuid, String, i64, bool);
 /// A GBP, by its id.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GmbId {
-	pub v: i64,
-}
-
-/// A trade, by its id.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct TradeId {
 	pub v: i64,
 }
 
@@ -50,6 +41,7 @@ pub struct Gmail {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Gmb {
 	pub id: i64,
+	pub owner: Uuid,
 	/// `None`: a draft no gmail manages yet.
 	pub gmail_id: Option<i64>,
 	/// `None` while a draft, and only then.
@@ -59,8 +51,8 @@ pub struct Gmb {
 	pub state: State,
 	pub country: Option<GbpCountry>,
 	pub phone: Option<String>,
-	/// Its category is this trade in its country.
-	pub trade_id: Option<i64>,
+	/// The gcid it is meant to have as its primary: its category is its owner's of it in its country.
+	pub trade: Option<String>,
 	/// Of its gmail and its category.
 	pub brand_id: Option<i64>,
 	/// Its service areas, none to 20.
@@ -155,8 +147,8 @@ pub struct NewGmb<'a> {
 	pub at: Option<LatLng>,
 	/// Placed by hand, not Google's.
 	pub at_by_hand: bool,
-	/// The owner's.
-	pub trade_id: Option<i64>,
+	/// A gcid Google lists.
+	pub trade: Option<&'a str>,
 }
 
 /// What a GBP's log holds, a row each (`gmb_events`).
@@ -190,8 +182,8 @@ pub enum Event {
 		to: Option<i64>,
 	},
 	Trade {
-		from: Option<i64>,
-		to: Option<i64>,
+		from: Option<Traded>,
+		to: Option<Traded>,
 	},
 	Brand {
 		from: Option<i64>,
@@ -229,6 +221,15 @@ pub enum Event {
 		/// From the gmail.
 		sent: bool,
 	},
+}
+
+/// A trade as its log names it.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, schemars::JsonSchema, serde::Serialize)]
+#[serde(untagged)]
+pub enum Traded {
+	Gcid(String),
+	/// A trade a person named, by its retired id: the log keeps what it was told.
+	Retired(i64),
 }
 
 /// A field of a GBP, before and after.
@@ -474,7 +475,7 @@ pub async fn taken(conn: &mut SqliteConnection, u: Unique<'_>, except: Option<i6
 /// `id` explicit only on import. Its name and place are free ([`taken`]).
 pub async fn add_gmb(conn: &mut SqliteConnection, id: Option<i64>, new: &NewGmb<'_>, now: Timestamp) -> eyre::Result<Gmb> {
 	let added: i64 = sqlx::query_scalar(
-		"INSERT INTO gmbs (id, owner, gmail_id, place_id, name, address, state, country, country_by, lat, lng, placed_by, created_at, trade_id) \
+		"INSERT INTO gmbs (id, owner, gmail_id, place_id, name, address, state, country, country_by, lat, lng, placed_by, created_at, trade) \
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $9 THEN $2 END, $10, $11, CASE WHEN $12 THEN $2 END, $13, $14) RETURNING id",
 	)
 	.bind(id)
@@ -490,7 +491,7 @@ pub async fn add_gmb(conn: &mut SqliteConnection, id: Option<i64>, new: &NewGmb<
 	.bind(new.at.map(|a| a.lng))
 	.bind(new.at_by_hand)
 	.bind(to_db(now))
-	.bind(new.trade_id)
+	.bind(new.trade)
 	.fetch_one(&mut *conn)
 	.await
 	.wrap_err("adding a GMB")?;
@@ -523,12 +524,12 @@ pub async fn move_to(conn: &mut SqliteConnection, id: GmbId, gmail_id: i64) -> e
 }
 
 /// `e`'s fields but the name and the gmail, which move by their own rules; the phone free
-/// ([`taken`]), the trade the owner's, another one dropping the brand, a role but manager the owner gmail.
+/// ([`taken`]), another trade dropping the brand, a role but manager the owner gmail.
 pub async fn set_fields(conn: &mut SqliteConnection, id: i64, e: &crate::gmbs::Edit) -> eyre::Result<()> {
 	let areas = e.areas.as_ref().map(|a| a.as_ref().map(|a| serde_json::to_string(a).expect("strings serialize")));
 	sqlx::query(
-		"UPDATE gmbs SET phone = CASE WHEN $2 THEN $3 ELSE phone END, trade_id = CASE WHEN $4 THEN $5 ELSE trade_id END, \
-		 brand_id = CASE WHEN $4 AND trade_id IS NOT $5 THEN NULL ELSE brand_id END, \
+		"UPDATE gmbs SET phone = CASE WHEN $2 THEN $3 ELSE phone END, trade = CASE WHEN $4 THEN $5 ELSE trade END, \
+		 brand_id = CASE WHEN $4 AND trade IS NOT $5 THEN NULL ELSE brand_id END, \
 		 areas = CASE WHEN $6 THEN $7 ELSE areas END, hidden_address = CASE WHEN $8 THEN $9 ELSE hidden_address END, \
 		 customers_visit = CASE WHEN $10 THEN $11 ELSE customers_visit END, film = CASE WHEN $12 THEN $13 ELSE film END, \
 		 role = CASE WHEN $14 THEN $15 ELSE role END, \
@@ -538,7 +539,7 @@ pub async fn set_fields(conn: &mut SqliteConnection, id: i64, e: &crate::gmbs::E
 	.bind(e.phone.is_some())
 	.bind(e.phone.clone().flatten())
 	.bind(e.trade.is_some())
-	.bind(e.trade.flatten())
+	.bind(e.trade.clone().flatten())
 	.bind(areas.is_some())
 	.bind(areas.flatten())
 	.bind(e.hidden_address.is_some())
@@ -694,8 +695,7 @@ pub async fn unplace(conn: &mut SqliteConnection, owner: Uuid, gmb_id: i64) -> e
 	Ok(Ok(()))
 }
 
-/// GBP `id`'s profile as `s` says, its photos replaced; with no trade, it takes the one trade of
-/// its owner's set up in its country with its Google primary category, if just one is.
+/// GBP `id`'s profile as `s` says, its photos replaced; with no trade, it takes Google's primary.
 pub async fn sync(conn: &mut SqliteConnection, id: i64, s: &Synced<'_>, now: Timestamp) -> eyre::Result<()> {
 	sqlx::query("UPDATE gmbs SET name = $2, address = $3, phone = $4, website = $5, hours = $6, google_primary = $7, synced_at = $8 WHERE id = $1")
 		.bind(id)
@@ -709,16 +709,11 @@ pub async fn sync(conn: &mut SqliteConnection, id: i64, s: &Synced<'_>, now: Tim
 		.execute(&mut *conn)
 		.await
 		.wrap_err("syncing a GBP")?;
-	sqlx::query(
-		"UPDATE gmbs SET trade_id = (SELECT c.trade_id FROM categories c JOIN trades t ON t.id = c.trade_id \
-		 WHERE t.owner = gmbs.owner AND c.country = gmbs.country AND c.google_primary = gmbs.google_primary) \
-		 WHERE id = $1 AND trade_id IS NULL AND (SELECT count(*) FROM categories c JOIN trades t ON t.id = c.trade_id \
-		 WHERE t.owner = gmbs.owner AND c.country = gmbs.country AND c.google_primary = gmbs.google_primary) = 1",
-	)
-	.bind(id)
-	.execute(&mut *conn)
-	.await
-	.wrap_err("giving a synced GBP its trade")?;
+	sqlx::query("UPDATE gmbs SET trade = google_primary WHERE id = $1 AND trade IS NULL AND google_primary IS NOT NULL")
+		.bind(id)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("giving a synced GBP its trade")?;
 	sqlx::query("DELETE FROM gmb_photos WHERE gmb_id = $1")
 		.bind(id)
 		.execute(&mut *conn)
@@ -848,199 +843,13 @@ pub async fn managed(conn: &mut SqliteConnection) -> eyre::Result<Vec<Managed>> 
 		.collect()
 }
 
-/// A trade of its owner's: Plumbing, set up in some countries.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Trade {
-	pub id: i64,
-	pub name: String,
-	pub created_at: Timestamp,
-	/// By country.
-	pub categories: Vec<Category>,
-}
-
-/// A trade set up for a country: Plumbing · FR.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Category {
-	pub country: Country,
-	/// [`gmaps_optimal_placement_core::weighed`]; with a primary, its name among them at weight 1.
-	pub keywords: Vec<Keyword>,
-	/// Google's category it is typed into Google's form as.
-	pub google_primary: Option<GoogleCategory>,
-	/// Google's additional categories, in the order they are entered, each a competitor tier's weight.
-	pub google_additional: Vec<(GoogleCategory, f64)>,
-	pub excluded: Excluded,
-	pub demand: Option<Demand>,
-}
-
-/// The owner's trades, by name.
-pub async fn trades(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<Trade>> {
-	let rows: Vec<(i64, String, i64)> = sqlx::query_as("SELECT id, name, created_at FROM trades WHERE owner = $1 ORDER BY lower(name), id")
-		.bind(owner)
-		.fetch_all(&mut *conn)
-		.await
-		.wrap_err("listing trades")?;
-	let categories: Vec<CategoryRow> = sqlx::query_as(
-		"SELECT c.trade_id, c.country, c.keywords, c.google_primary, c.google_additional, c.excluded, c.demand FROM categories c JOIN trades t ON t.id = c.trade_id \
-		 WHERE t.owner = $1 ORDER BY c.country",
-	)
-	.bind(owner)
-	.fetch_all(&mut *conn)
-	.await
-	.wrap_err("listing categories")?;
-	let mut trades = rows
-		.into_iter()
-		.map(|(id, name, created_at)| {
-			Ok(Trade {
-				id,
-				name,
-				created_at: from_db(created_at)?,
-				categories: vec![],
-			})
-		})
-		.collect::<eyre::Result<Vec<_>>>()?;
-	for CategoryRow {
-		trade_id,
-		country,
-		keywords,
-		google_primary,
-		google_additional,
-		excluded,
-		demand,
-	} in categories
-	{
-		let trade = trades.iter_mut().find(|t| t.id == trade_id).expect("joined on the owner's trades");
-		let c: Country = country.parse()?;
-		// A gcid a refresh of the list dropped: its rows need migrating to what Google replaced it with.
-		let google = |id: &str| GoogleCategory::find(c, id).wrap_err_with(|| format!("trade {trade_id}'s Google category in {country}"));
-		let additional: Vec<AdditionalRow> = serde_json::from_str(&google_additional).wrap_err_with(|| format!("trade {trade_id}'s additional Google categories in {country}"))?;
-		trade.categories.push(Category {
-			country: c,
-			keywords: serde_json::from_str(&keywords).wrap_err_with(|| format!("trade {trade_id}'s keywords in {country}"))?,
-			google_primary: google_primary.as_deref().map(google).transpose()?,
-			google_additional: additional.iter().map(|a| Ok((google(&a.id)?, a.weight))).collect::<eyre::Result<_>>()?,
-			excluded: serde_json::from_str(&excluded).wrap_err_with(|| format!("trade {trade_id}'s excluded in {country}"))?,
-			demand: demand
-				.map(|d| serde_json::from_str(&d))
-				.transpose()
-				.wrap_err_with(|| format!("trade {trade_id}'s demand in {country}"))?,
-		});
-	}
-	Ok(trades)
-}
-
-/// The owner of trade `id`.
-pub async fn trade_owner(conn: &mut SqliteConnection, id: i64) -> eyre::Result<Option<Uuid>> {
-	sqlx::query_scalar("SELECT owner FROM trades WHERE id = $1")
-		.bind(id)
-		.fetch_optional(&mut *conn)
-		.await
-		.wrap_err("loading a trade")
-}
-
-/// The owner's trade named `name` whatever its case, but `except`.
-pub async fn trade_named(conn: &mut SqliteConnection, owner: Uuid, name: &str, except: Option<i64>) -> eyre::Result<Option<i64>> {
-	let names: Vec<(i64, String)> = sqlx::query_as("SELECT id, name FROM trades WHERE owner = $1 AND id IS NOT $2")
-		.bind(owner)
-		.bind(except)
-		.fetch_all(&mut *conn)
-		.await
-		.wrap_err("listing trades' names")?;
-	let folded = name.to_lowercase();
-	Ok(names.into_iter().find(|(_, n)| n.to_lowercase() == folded).map(|(id, _)| id))
-}
-
-/// Its name free ([`trade_named`]).
-pub async fn add_trade(conn: &mut SqliteConnection, owner: Uuid, name: &str, now: Timestamp) -> eyre::Result<i64> {
-	sqlx::query_scalar("INSERT INTO trades (owner, name, created_at) VALUES ($1, $2, $3) RETURNING id")
-		.bind(owner)
-		.bind(name)
-		.bind(to_db(now))
-		.fetch_one(&mut *conn)
-		.await
-		.wrap_err("adding a trade")
-}
-
-/// Its name free ([`trade_named`]).
-pub async fn rename_trade(conn: &mut SqliteConnection, id: i64, name: &str) -> eyre::Result<()> {
-	sqlx::query("UPDATE trades SET name = $2 WHERE id = $1")
-		.bind(id)
-		.bind(name)
-		.execute(&mut *conn)
-		.await
-		.wrap_err("renaming a trade")?;
-	Ok(())
-}
-
-/// How many live GBPs hold trade `id`.
-pub async fn trade_holders(conn: &mut SqliteConnection, id: i64) -> eyre::Result<i64> {
-	sqlx::query_scalar("SELECT COUNT(*) FROM gmbs WHERE trade_id = $1 AND removed_at IS NULL")
-		.bind(id)
-		.fetch_one(&mut *conn)
-		.await
-		.wrap_err("counting a trade's GMBs")
-}
-
-/// Trade `id` and its categories, the removed GBPs giving it up; the schema refuses it while a live
-/// one holds it.
-pub async fn delete_trade(conn: &mut SqliteConnection, id: i64) -> eyre::Result<()> {
-	sqlx::query("UPDATE gmbs SET trade_id = NULL WHERE trade_id = $1 AND removed_at IS NOT NULL")
-		.bind(id)
-		.execute(&mut *conn)
-		.await
-		.wrap_err("giving a trade up")?;
-	sqlx::query("DELETE FROM trades WHERE id = $1").bind(id).execute(&mut *conn).await.wrap_err("deleting a trade")?;
-	Ok(())
-}
-
-/// Trade `id` set up for `c.country` as `c` says, over what it was.
-pub async fn set_up(conn: &mut SqliteConnection, id: i64, c: &Category) -> eyre::Result<()> {
-	sqlx::query(
-		"INSERT INTO categories (trade_id, country, keywords, google_primary, google_additional, excluded, demand) VALUES ($1, $2, $3, $4, $5, $6, $7) \
-		 ON CONFLICT (trade_id, country) DO UPDATE SET keywords = excluded.keywords, google_primary = excluded.google_primary, \
-		 google_additional = excluded.google_additional, excluded = excluded.excluded, demand = excluded.demand",
-	)
-	.bind(id)
-	.bind(c.country.as_str())
-	.bind(serde_json::to_string(&c.keywords).expect("keywords serialize"))
-	.bind(c.google_primary.map(|g| g.id))
-	.bind(
-		serde_json::to_string(
-			&c.google_additional
-				.iter()
-				.map(|(g, weight)| AdditionalRow {
-					id: g.id.to_owned(),
-					weight: *weight,
-				})
-				.collect::<Vec<_>>(),
-		)
-		.expect("rows serialize"),
-	)
-	.bind(serde_json::to_string(&c.excluded).expect("excluded serializes"))
-	.bind(c.demand.as_ref().map(|d| serde_json::to_string(d).expect("a demand serializes")))
-	.execute(&mut *conn)
-	.await
-	.wrap_err("setting a category up")?;
-	Ok(())
-}
-
-/// `false`: trade `id` is not set up there.
-pub async fn remove_category(conn: &mut SqliteConnection, id: i64, country: Country) -> eyre::Result<bool> {
-	let done = sqlx::query("DELETE FROM categories WHERE trade_id = $1 AND country = $2")
-		.bind(id)
-		.bind(country.as_str())
-		.execute(&mut *conn)
-		.await
-		.wrap_err("removing a category")?;
-	Ok(done.rows_affected() == 1)
-}
-
-/// Each of `ids` given `trade`, the owner's, another one dropping the brand. `false`: one is no
+/// Each of `ids` given `trade`, another one dropping the brand. `false`: one is no
 /// GBP of the owner's not removed, and the others may be written: roll back.
-pub async fn set_trades(conn: &mut SqliteConnection, owner: Uuid, ids: &BTreeSet<i64>, trade: Option<i64>) -> eyre::Result<bool> {
+pub async fn set_trades(conn: &mut SqliteConnection, owner: Uuid, ids: &BTreeSet<i64>, trade: Option<&str>) -> eyre::Result<bool> {
 	let asked = i64::try_from(ids.len()).expect("a few ids");
 	let ids = serde_json::to_string(ids).expect("ids serialize");
 	let done = sqlx::query(
-		"UPDATE gmbs SET trade_id = $3, brand_id = CASE WHEN trade_id IS $3 THEN brand_id END \
+		"UPDATE gmbs SET trade = $3, brand_id = CASE WHEN trade IS $3 THEN brand_id END \
 		 WHERE id IN (SELECT value FROM json_each($1)) AND owner = $2 AND removed_at IS NULL",
 	)
 	.bind(&ids)
@@ -1050,12 +859,6 @@ pub async fn set_trades(conn: &mut SqliteConnection, owner: Uuid, ids: &BTreeSet
 	.await
 	.wrap_err("setting GMBs' trade")?;
 	Ok(i64::try_from(done.rows_affected()).expect("a few rows") == asked)
-}
-
-#[derive(Deserialize, Serialize)]
-struct AdditionalRow {
-	id: String,
-	weight: f64,
 }
 
 /// What `before` → `after` logs: its moves, and the fields changed, as a Sync's or a hand's.
@@ -1074,10 +877,10 @@ fn diff(before: &Gmb, after: &Gmb, synced: bool) -> Vec<Event> {
 			to: after.gmail_id,
 		});
 	}
-	if before.trade_id != after.trade_id {
+	if before.trade != after.trade {
 		events.push(Event::Trade {
-			from: before.trade_id,
-			to: after.trade_id,
+			from: before.trade.clone().map(Traded::Gcid),
+			to: after.trade.clone().map(Traded::Gcid),
 		});
 	}
 	if before.brand_id != after.brand_id {
@@ -1127,19 +930,9 @@ fn diff(before: &Gmb, after: &Gmb, synced: bool) -> Vec<Event> {
 }
 
 #[derive(sqlx::FromRow)]
-struct CategoryRow {
-	trade_id: i64,
-	country: String,
-	keywords: String,
-	google_primary: Option<String>,
-	google_additional: String,
-	excluded: String,
-	demand: Option<String>,
-}
-
-#[derive(sqlx::FromRow)]
 struct GmbRow {
 	id: i64,
+	owner: Uuid,
 	gmail_id: Option<i64>,
 	place_id: Option<String>,
 	name: String,
@@ -1148,7 +941,7 @@ struct GmbRow {
 	country: Option<String>,
 	country_by_hand: bool,
 	phone: Option<String>,
-	trade_id: Option<i64>,
+	trade: Option<String>,
 	brand_id: Option<i64>,
 	areas: Option<String>,
 	hidden_address: Option<String>,
@@ -1190,6 +983,7 @@ fn gmb(r: GmbRow) -> eyre::Result<Gmb> {
 	};
 	Ok(Gmb {
 		id: r.id,
+		owner: r.owner,
 		gmail_id: r.gmail_id,
 		place_id: r.place_id,
 		name: r.name,
@@ -1197,7 +991,7 @@ fn gmb(r: GmbRow) -> eyre::Result<Gmb> {
 		state: r.state.parse()?,
 		country: r.country.as_deref().map(str::parse).transpose()?.map(|code| GbpCountry { code, by_hand: r.country_by_hand }),
 		phone: r.phone,
-		trade_id: r.trade_id,
+		trade: r.trade,
 		brand_id: r.brand_id,
 		areas: r
 			.areas

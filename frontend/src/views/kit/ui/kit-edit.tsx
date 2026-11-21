@@ -6,7 +6,7 @@ import { Check, CircleSlash, Copy, Printer, Smartphone, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { AreaDraw, type Drawn, categoryName, categoryOf, closeWindow, editKit, kit as kitKeys, move, openWindow, pageOf, saveArea, useGmails, useGmbTags, windowKeys } from "@/entities/gmb";
+import { AreaDraw, type Drawn, categoryName, googleName, useTrade, closeWindow, editKit, kit as kitKeys, move, openWindow, pageOf, saveArea, useGmails, useGmbTags, windowKeys } from "@/entities/gmb";
 import { Refused, api, ok } from "@/shared/api";
 import type { Area, Gmb, Kit } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
@@ -218,10 +218,11 @@ function Row({ gmb, d, on, toggle }: { gmb: Gmb; d: number | null; on: boolean; 
 /** Its category, its stars, and what its QR does. */
 function What({ gmb }: { gmb: Gmb }) {
   const t = useT();
+  const locale = useLocale();
   const { tags } = useGmbTags();
   const kit = useResource(api, "/gmbs/{id}/kit", { params: { path: { id: gmb.id }, query: { since: SINCE } } });
-  const placed = tags.trades === null ? null : categoryOf(gmb, tags.trades);
-  const category = placed === null || placed.status === "no_trade" ? null : placed.status === "set_up" ? categoryName(placed.trade, placed.category.country) : placed.trade.name;
+  const trade = useTrade(gmb.trade, gmb.country?.code ?? null);
+  const category = trade === null ? null : gmb.country === null ? googleName(trade, locale) : categoryName(trade, gmb.country.code, locale);
   const archive = tags.archive?.get(gmb.id);
   const stars = archive === undefined || archive.rating === null ? null : `★ ${archive.rating.toFixed(1)}${archive.reviews === null ? "" : ` (${archive.reviews})`}`;
   const qr =

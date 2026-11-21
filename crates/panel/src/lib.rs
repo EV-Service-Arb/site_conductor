@@ -22,6 +22,7 @@ pub mod assistant;
 pub mod brands;
 pub mod browsers;
 mod business;
+pub mod categories;
 pub mod claude;
 pub mod connections;
 pub mod gmbs;
@@ -30,6 +31,7 @@ mod imap;
 pub mod import;
 pub mod inbox;
 pub mod kit;
+pub mod library;
 pub mod live;
 pub mod meters;
 pub mod oauth;
@@ -101,6 +103,9 @@ pub enum Refused {
 	Forbidden,
 	#[error("{0}")]
 	Conflict(String),
+	/// A study published on a category version no listing released.
+	#[error("{0}")]
+	Unreleased(String),
 	#[error("{0}")]
 	TooLarge(String),
 	/// Something it relies on refused or did not answer: the message says what.

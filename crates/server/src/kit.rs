@@ -39,7 +39,7 @@ use sa_core::{
 };
 use sa_panel::{
 	Grant, Panel, SignedBatch,
-	gmbs::TradeId,
+	categories::Key,
 	kit::{Event, Funnel, Kit, Offer, PHOTO_MAX, Pool, PutKit, Ranked, Scope, Target},
 	store::kit::Happening,
 };
@@ -53,8 +53,9 @@ use crate::{
 	api::{ApiResult, Code, Id},
 	areas::SlugIn,
 	brands::BrandDto,
+	categories::CategoryIn,
 	forward::Services,
-	gmbs::TradeIn,
+	gmbs::GoogleCategoryDto,
 	http::{ApiRoute, ApiState, Limits, USER},
 	ingest,
 	signin::Caller,
@@ -262,10 +263,11 @@ pub(crate) enum KitBlock {
 	NoPage,
 }
 
-#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitCategory")]
 pub(crate) struct CategoryDto {
-	pub trade: i64,
+	/// A gcid.
+	pub trade: String,
 	pub country: Country,
 }
 
@@ -300,9 +302,8 @@ pub(crate) struct MemberDto {
 #[derive(Clone, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "KitPoolSummary")]
 pub(crate) struct PoolSummaryDto {
-	pub trade: i64,
+	pub trade: GoogleCategoryDto,
 	pub country: Country,
-	pub name: String,
 	pub drafts: i64,
 	pub warnings: Vec<String>,
 }
@@ -508,10 +509,10 @@ fn ranked(drafts: Vec<Ranked>, target: Option<Target>) -> Vec<RankedDto> {
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
 	vec![
-		ApiRoute::new(M::GET, "/trades/{id}/{country}/kit", USER, kit_pool),
-		ApiRoute::new(M::POST, "/trades/{id}/{country}/kit/drafts", USER, add_kit_draft),
-		ApiRoute::new(M::PATCH, "/trades/{id}/{country}/kit/drafts/{draft}", USER, edit_kit_draft),
-		ApiRoute::new(M::DELETE, "/trades/{id}/{country}/kit/drafts/{draft}", USER, remove_kit_draft),
+		ApiRoute::new(M::GET, "/categories/{trade}/{country}/kit", USER, kit_pool),
+		ApiRoute::new(M::POST, "/categories/{trade}/{country}/kit/drafts", USER, add_kit_draft),
+		ApiRoute::new(M::PATCH, "/categories/{trade}/{country}/kit/drafts/{draft}", USER, edit_kit_draft),
+		ApiRoute::new(M::DELETE, "/categories/{trade}/{country}/kit/drafts/{draft}", USER, remove_kit_draft),
 		ApiRoute::new(M::GET, "/gmbs/{id}/kit", USER, gmb_kit),
 		ApiRoute::new(M::PUT, "/gmbs/{id}/kit", USER, set_gmb_kit),
 		ApiRoute::new(M::POST, "/gmbs/{id}/kit/shown", USER, kit_shown),
@@ -524,7 +525,8 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 
 #[derive(Deserialize, JsonSchema)]
 struct DraftIn {
-	id: i64,
+	/// A gcid.
+	trade: String,
 	country: Country,
 	draft: i64,
 }
@@ -613,20 +615,16 @@ impl OperationInput for Image {
 }
 
 /// The category's drafts.
-async fn kit_pool(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(TradeIn { id: trade, country }): Ids<TradeIn>) -> ApiResult<Json<PoolDto>> {
-	Ok(Json(panel.kit_pool(caller.user_id, trade, country).await??.into()))
+async fn kit_pool(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(at): Ids<CategoryIn>) -> ApiResult<Json<PoolDto>> {
+	Ok(Json(panel.kit_pool(at.key(&caller)?).await??.into()))
 }
 
 /// Adds a draft to the category; answers the category's drafts.
-async fn add_kit_draft(
-	State(panel): State<Panel>,
-	Extension(caller): Extension<Caller>,
-	Ids(TradeIn { id: trade, country }): Ids<TradeIn>,
-	Body(b): Body<NewDraftDto>,
-) -> ApiResult<Created<PoolDto>> {
-	let draft = panel.add_draft(caller.user_id, trade, country, &b.text, &b.places, Timestamp::now()).await??;
-	tracing::info!(user_id = %caller.user_id, trade_id = trade, %country, draft, "kit draft added");
-	Ok(Created(panel.kit_pool(caller.user_id, trade, country).await??.into()))
+async fn add_kit_draft(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(at): Ids<CategoryIn>, Body(b): Body<NewDraftDto>) -> ApiResult<Created<PoolDto>> {
+	let key = at.key(&caller)?;
+	let draft = panel.add_draft(key, &b.text, &b.places, Timestamp::now()).await??;
+	tracing::info!(user_id = %caller.user_id, trade = key.trade.id, country = %key.country, draft, "kit draft added");
+	Ok(Created(panel.kit_pool(key).await??.into()))
 }
 
 /// Edits a draft's text or its places; answers the category's drafts.
@@ -635,18 +633,17 @@ async fn add_kit_draft(
 async fn edit_kit_draft(
 	State(panel): State<Panel>,
 	Extension(caller): Extension<Caller>,
-	Ids(DraftIn { id: trade, country, draft }): Ids<DraftIn>,
+	Ids(DraftIn { trade, country, draft }): Ids<DraftIn>,
 	Body(b): Body<EditDraftDto>,
 ) -> ApiResult<Json<PoolDto>> {
-	panel
-		.edit_draft(caller.user_id, TradeId { v: trade }, country, draft, b.text.as_deref(), b.places.as_deref())
-		.await??;
-	Ok(Json(panel.kit_pool(caller.user_id, trade, country).await??.into()))
+	let key = Key::try_new(caller.user_id, &trade, country)?;
+	panel.edit_draft(key, draft, b.text.as_deref(), b.places.as_deref()).await??;
+	Ok(Json(panel.kit_pool(key).await??.into()))
 }
 
 /// Removes a draft: out of every offer, its uses kept.
-async fn remove_kit_draft(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(DraftIn { id: trade, country, draft }): Ids<DraftIn>) -> ApiResult<NoContent> {
-	panel.remove_draft(caller.user_id, TradeId { v: trade }, country, draft, Timestamp::now()).await??;
+async fn remove_kit_draft(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(DraftIn { trade, country, draft }): Ids<DraftIn>) -> ApiResult<NoContent> {
+	panel.remove_draft(Key::try_new(caller.user_id, &trade, country)?, draft, Timestamp::now()).await??;
 	Ok(NoContent)
 }
 
@@ -800,7 +797,7 @@ async fn kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Id
 			state: m.gmb.state,
 			address: m.gmb.address,
 			location: m.gmb.location.map(|p| p.at),
-			category: m.gmb.trade_id.zip(m.gmb.country).map(|(trade, c)| CategoryDto { trade, country: c.code }),
+			category: m.gmb.trade.clone().zip(m.gmb.country).map(|(trade, c)| CategoryDto { trade, country: c.code }),
 			target: m.target,
 			tally: m.tally.into(),
 			left: LeftDto {
@@ -818,9 +815,8 @@ async fn kit(State(s): State<ApiState>, Extension(caller): Extension<Caller>, Id
 		pools: pools
 			.into_iter()
 			.map(|p| PoolSummaryDto {
-				trade: p.trade,
+				trade: p.trade.into(),
 				country: p.country,
-				name: p.name,
 				drafts: p.drafts,
 				warnings: p.warnings,
 			})

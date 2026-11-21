@@ -1,7 +1,8 @@
 {
-  "trade": "Roofing",
+  "trade": "gcid:roofing_contractor",
   "country": "FR",
-  "set_up": {
+  "title": "Roofing",
+  "body": {
     "keywords": [
       {
         "text": "couvreur",
@@ -28,8 +29,7 @@
         "weight": 0.4
       }
     ],
-    "google_primary": "gcid:roofing_contractor",
-    "google_additional": [
+    "additional": [
       {
         "id": "gcid:carpenter",
         "weight": 0.5

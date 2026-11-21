@@ -6,7 +6,7 @@ import { useT, placement as placementKeys } from "@/shared/i18n";
 
 import type { Overlay } from "@/shared/placement_overlay/placement_overlay";
 
-import { type Legend, type Query, attach, landed, useMapView, usePayload, usePlacement, useStudied } from "../model/placement";
+import { type Legend, type Payload, type Query, attach, landed, useAreaPayload, useMapView, usePlacement, usePublishedPayload, useStudied } from "../model/placement";
 
 /** gmaps_optimal_placement's drawing on `map`, as the panel's URL state says: the picked category's study over the picked area; and its legend. */
 export function PlacementOverlay({ map }: { map: google.maps.Map }) {
@@ -62,9 +62,20 @@ export function PlacementOverlay({ map }: { map: google.maps.Map }) {
   );
 }
 
-/** The payload of `drawn`, read and handed to the overlay; why it is not, told to the panel. */
 function Study({ live, drawn, attached }: { live: Overlay; drawn: Query; attached: string }) {
-  const payload = usePayload(drawn);
+  return "sha" in drawn ? <Published live={live} sha={drawn.sha} attached={attached} /> : <OfArea live={live} drawn={drawn} attached={attached} />;
+}
+
+function OfArea({ live, drawn, attached }: { live: Overlay; drawn: Extract<Query, { area: string }>; attached: string }) {
+  return <Shown live={live} payload={useAreaPayload(drawn)} attached={attached} />;
+}
+
+function Published({ live, sha, attached }: { live: Overlay; sha: string; attached: string }) {
+  return <Shown live={live} payload={usePublishedPayload(sha)} attached={attached} />;
+}
+
+/** The payload of what is drawn, handed to the overlay; why it is not, told to the panel. */
+function Shown({ live, payload, attached }: { live: Overlay; payload: Payload; attached: string }) {
   const shown = payload.status === "ok" ? (payload.fresh ? payload.payload : undefined) : payload.status === "loading" ? undefined : null;
   useEffect(() => {
     if (shown !== undefined) live.show(shown, false);

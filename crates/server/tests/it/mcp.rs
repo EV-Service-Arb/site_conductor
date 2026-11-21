@@ -47,20 +47,25 @@ async fn a_client_signs_in_and_acts_as_its_user() {
 	assert!(!error, "{me}");
 	assert_eq!(me["body"]["email"], "dev@localhost");
 
-	let (added, error) = client.tool(&app, "call", json!({ "operation": "add_trade", "body": { "name": "Plumbing" } })).await;
+	let (added, error) = client.tool(&app, "call", json!({ "operation": "apply_category", "path": { "trade": "gcid:plumber", "country": "FR" }, "body": { "keywords": [{ "text": "plombier", "weight": 1.0 }], "additional": [], "excluded": { "words": [], "types": [] }, "demand": null } })).await;
 	assert!(!error, "a write with a bearer needs no CSRF: {added}");
-	let trade = added["body"]["id"].clone();
-	let (proposal, error) = client.tool(&app, "call", json!({ "operation": "delete_trade", "path": { "id": trade } })).await;
+	let (proposal, error) = client
+		.tool(&app, "call", json!({ "operation": "delete_category", "path": { "trade": "gcid:plumber", "country": "FR" } }))
+		.await;
 	assert!(!error);
 	assert_eq!(proposal["proposed"]["method"], "DELETE", "{proposal}");
-	let (trades, _) = client.tool(&app, "call", json!({ "operation": "trades" })).await;
-	assert_eq!(trades["body"]["trades"].as_array().unwrap().len(), 1, "nothing ran: {trades}");
+	let (categories, _) = client.tool(&app, "call", json!({ "operation": "categories" })).await;
+	assert_eq!(categories["body"]["categories"].as_array().unwrap().len(), 1, "nothing ran: {categories}");
 	let (deleted, error) = client
-		.tool(&app, "call", json!({ "operation": "delete_trade", "path": { "id": trade }, "confirmed": true }))
+		.tool(
+			&app,
+			"call",
+			json!({ "operation": "delete_category", "path": { "trade": "gcid:plumber", "country": "FR" }, "confirmed": true }),
+		)
 		.await;
 	assert!(!error, "{deleted}");
-	let (trades, _) = client.tool(&app, "call", json!({ "operation": "trades" })).await;
-	assert_eq!(trades["body"]["trades"].as_array().unwrap().len(), 0);
+	let (categories, _) = client.tool(&app, "call", json!({ "operation": "categories" })).await;
+	assert_eq!(categories["body"]["categories"].as_array().unwrap().len(), 0);
 
 	let gate = |auth: String| {
 		let app = app.clone();
@@ -180,7 +185,9 @@ async fn a_grant_with_the_spend_scope_spends_on_its_own() {
 	let (spent, _) = client.tool(&app, "call", json!({ "operation": "buy_map", "body": { "account": "nope" } })).await;
 	assert!(spent.get("proposed").is_none(), "ran: {spent}");
 	assert!(spent.get("status").is_some(), "ran: {spent}");
-	let (removed, _) = client.tool(&app, "call", json!({ "operation": "delete_trade", "path": { "id": 7 } })).await;
+	let (removed, _) = client
+		.tool(&app, "call", json!({ "operation": "delete_category", "path": { "trade": "gcid:plumber", "country": "FR" } }))
+		.await;
 	assert_eq!(removed["proposed"]["method"], "DELETE", "{removed}");
 }
 
@@ -243,25 +250,29 @@ async fn a_client_that_elicits_asks_its_user_before_what_the_grant_holds() {
 	let call = listed["result"]["tools"].as_array().unwrap().iter().find(|t| t["name"] == "call").cloned().unwrap();
 	assert!(call["inputSchema"]["properties"].get("confirmed").is_none(), "{call}");
 	let (_, refused) = client
-		.rpc(&app, "tools/call", json!({ "name": "call", "arguments": { "operation": "trades", "confirmed": true } }))
+		.rpc(&app, "tools/call", json!({ "name": "call", "arguments": { "operation": "categories", "confirmed": true } }))
 		.await;
 	assert!(refused["error"]["message"].as_str().unwrap().contains("asks its user itself"), "{refused}");
 
-	let (added, _) = client.tool(&app, "call", json!({ "operation": "add_trade", "body": { "name": "Plumbing" } })).await;
-	let trade = added["body"]["id"].clone();
-	let mut events = client.tool_streamed(&app, "call", json!({ "operation": "delete_trade", "path": { "id": trade } })).await;
+	let (applied, _) = client.tool(&app, "call", json!({ "operation": "apply_category", "path": { "trade": "gcid:plumber", "country": "FR" }, "body": { "keywords": [{ "text": "plombier", "weight": 1.0 }], "additional": [], "excluded": { "words": [], "types": [] }, "demand": null } })).await;
+	assert_eq!(applied["status"], 200, "{applied}");
+	let mut events = client
+		.tool_streamed(&app, "call", json!({ "operation": "delete_category", "path": { "trade": "gcid:plumber", "country": "FR" } }))
+		.await;
 	let asked = events.next().await.unwrap();
 	assert_eq!(asked["method"], "elicitation/create", "{asked}");
 	assert_eq!(asked["params"]["requestedSchema"]["properties"]["approve"]["type"], "boolean");
 	assert!(asked["params"]["message"].as_str().unwrap().contains("DELETE"), "{asked}");
-	let (trades, _) = client.tool(&app, "call", json!({ "operation": "trades" })).await;
-	assert_eq!(trades["body"]["trades"].as_array().unwrap().len(), 1, "nothing ran while it waits");
+	let (categories, _) = client.tool(&app, "call", json!({ "operation": "categories" })).await;
+	assert_eq!(categories["body"]["categories"].as_array().unwrap().len(), 1, "nothing ran while it waits");
 	assert_eq!(client.answer(&app, &asked["id"], json!({ "action": "decline" })).await, StatusCode::ACCEPTED);
 	let (declined, _) = testing::tool_result(&events.next().await.unwrap());
 	assert!(declined["declined"].is_string(), "{declined}");
 	assert!(events.next().await.is_none());
 
-	let mut events = client.tool_streamed(&app, "call", json!({ "operation": "delete_trade", "path": { "id": trade } })).await;
+	let mut events = client
+		.tool_streamed(&app, "call", json!({ "operation": "delete_category", "path": { "trade": "gcid:plumber", "country": "FR" } }))
+		.await;
 	let asked = events.next().await.unwrap();
 	assert_eq!(
 		client.answer(&app, &asked["id"], json!({ "action": "accept", "content": { "approve": true } })).await,
@@ -270,6 +281,6 @@ async fn a_client_that_elicits_asks_its_user_before_what_the_grant_holds() {
 	let (deleted, error) = testing::tool_result(&events.next().await.unwrap());
 	assert!(!error, "{deleted}");
 	assert!(deleted["status"] == 204, "{deleted}");
-	let (trades, _) = client.tool(&app, "call", json!({ "operation": "trades" })).await;
-	assert_eq!(trades["body"]["trades"].as_array().unwrap().len(), 0);
+	let (categories, _) = client.tool(&app, "call", json!({ "operation": "categories" })).await;
+	assert_eq!(categories["body"]["categories"].as_array().unwrap().len(), 0);
 }

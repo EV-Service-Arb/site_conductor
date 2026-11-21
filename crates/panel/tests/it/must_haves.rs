@@ -40,15 +40,11 @@ async fn opened(db: &TestDb) -> (Panel, Uuid) {
 	(p, owner)
 }
 
-/// A draft of `owner`'s, of their trade (added the first time).
+/// A draft of `owner`'s, a plumber.
 async fn draft(p: &Panel, owner: Uuid, name: &str) -> Gmb {
-	let trade = match p.trades(owner).await.unwrap().first() {
-		Some(t) => t.id,
-		None => p.add_trade(owner, "Plumbing", now()).await.unwrap().unwrap().id,
-	};
 	let unplaced = Unplaced {
 		name: name.to_owned(),
-		trade,
+		trade: "gcid:plumber".to_owned(),
 		state: sa_core::gbp::State::Draft,
 		gmail_id: None,
 		country: None,
@@ -74,11 +70,11 @@ async fn must_haves_are_stored_and_cleared() {
 	let db = TestDb::create().await;
 	let (p, owner) = opened(&db).await;
 	let draft = draft(&p, owner, "Plombier Lyon 7").await;
-	let trade = p.add_trade(owner, "Heating", now()).await.unwrap().unwrap();
+	let trade = "gcid:heating_contractor".to_owned();
 
 	let set = Edit {
 		phone: Some(Some(" +33 (4) 78-00.00.01 ".to_owned())),
-		trade: Some(Some(trade.id)),
+		trade: Some(Some(trade.clone())),
 		areas: Some(Some(vec![" Lyon 7e ".to_owned(), "Villeurbanne".to_owned()])),
 		hidden_address: Some(Some("12 rue de Marseille, Lyon".to_owned())),
 		customers_visit: Some(Some(false)),
@@ -86,10 +82,10 @@ async fn must_haves_are_stored_and_cleared() {
 		..Edit::default()
 	};
 	let edited = p.edit_gmb(owner, draft.id, set).await.unwrap().unwrap();
-	let fields = |g: &Gmb| (g.phone.clone(), g.trade_id, g.areas.clone(), g.hidden_address.clone(), g.customers_visit, g.film.clone());
+	let fields = |g: &Gmb| (g.phone.clone(), g.trade.clone(), g.areas.clone(), g.hidden_address.clone(), g.customers_visit, g.film.clone());
 	let want = (
 		Some("+33478000001".to_owned()),
-		Some(trade.id),
+		Some(trade),
 		vec!["Lyon 7e".to_owned(), "Villeurbanne".to_owned()],
 		Some("12 rue de Marseille, Lyon".to_owned()),
 		Some(false),

@@ -1648,24 +1648,24 @@
     "t": "Ниш: {trades} · стран: {countries} · GBP с нишей: {held} из {of}"
   },
   "categories.how": {
-    "en": "a cell opens that country's tab · ⋯ renames or deletes the trade",
-    "t": "ячейка открывает вкладку страны · ⋯ переименовать или удалить нишу"
+    "en": "a cell opens that country's tab",
+    "t": "ячейка открывает вкладку этой страны"
   },
   "categories.keywords": {
     "en": "{n} keywords",
     "t": "ключевых слов: {n}"
   },
-  "categories.new.why": {
-    "en": "A new trade has no country yet: a cell's Set up gives it one.",
-    "t": "У новой ниши нет страны: «Настроить» в ячейке добавляет её."
+  "categories.new": {
+    "en": "Set up a trade in",
+    "t": "Настроить профессию в"
   },
-  "categories.noGoogle": {
-    "en": "no Google category",
-    "t": "нет категории Google"
+  "categories.new.pick": {
+    "en": "A trade to set up",
+    "t": "Профессия для настройки"
   },
   "categories.none": {
-    "en": "No trades yet: name one below.",
-    "t": "Ниш ещё нет: назовите ниже."
+    "en": "No trades yet: set one up below.",
+    "t": "Профессий пока нет: настройте первую ниже."
   },
   "categories.open": {
     "en": "Open {trade}",
@@ -1954,6 +1954,10 @@
   "gmbs.issue.no_site": {
     "en": "No site",
     "t": "Нет сайта"
+  },
+  "gmbs.issue.not_googles_primary": {
+    "en": "Not Google's primary",
+    "t": "Не основная у Google"
   },
   "gmbs.issue.off": {
     "en": "Off",
@@ -2731,17 +2735,9 @@
     "en": "the category and Google's categories wait for the country",
     "t": "категория и категории Google ждут страну"
   },
-  "launch.category.noPrimary": {
-    "en": "{category} has no primary Google category yet",
-    "t": "у {category} ещё нет основной категории Google"
-  },
   "launch.category.notSetUp": {
-    "en": "{category} not set up: no Google category to type",
-    "t": "{category} не настроена: нечего вводить в Google"
-  },
-  "launch.category.open": {
-    "en": "Open {category}",
-    "t": "Открыть {category}"
+    "en": "{category} not set up: no keywords nor additional categories",
+    "t": "{category}: не настроено — нет ни ключевых слов, ни дополнительных категорий"
   },
   "launch.category.setUp": {
     "en": "Set up {category}",
@@ -2880,8 +2876,8 @@
     "t": "до 20 · покрывают место съёмки видео"
   },
   "launch.why.category": {
-    "en": "its trade, set up in its country with Google's category",
-    "t": "ниша, настроенная в её стране, с категорией Google"
+    "en": "its trade, Google's primary category, set up in its country",
+    "t": "его профиль деятельности, основная категория Google, настроенная в его стране"
   },
   "launch.why.film": {
     "en": "the verification film from the kit (verif_vid)",
@@ -3211,6 +3207,34 @@
     "en": "pressure on",
     "t": "давление вкл."
   },
+  "placement.publish": {
+    "en": "Publish",
+    "t": "Опубликовать"
+  },
+  "placement.publish.name": {
+    "en": "The study's title",
+    "t": "Название исследования"
+  },
+  "placement.publish.open": {
+    "en": "Publish this study…",
+    "t": "Опубликовать это исследование…"
+  },
+  "placement.publish.public": {
+    "en": "A published study is readable by everyone, for good.",
+    "t": "Опубликованное исследование доступно всем, навсегда."
+  },
+  "placement.publish.release": {
+    "en": "Its category version is no listing's yet: it is released in the same step.",
+    "t": "Версия его категории пока не принадлежит ни одному листингу: она выпускается в том же шаге."
+  },
+  "placement.publish.title": {
+    "en": "Publish this study",
+    "t": "Опубликовать это исследование"
+  },
+  "placement.publish.what": {
+    "en": "{area} under {category} v{version}: anyone may load it, each load paid by whoever pulls it.",
+    "t": "{area} в категории {category} v{version}: любой может его загрузить, каждую загрузку оплачивает тот, кто её выполняет."
+  },
   "placement.pull": {
     "en": "Pull latest · {n} searches",
     "t": "Загрузить свежее · {n} запросов"
@@ -3235,10 +3259,6 @@
     "en": "The area is in another country than the category",
     "t": "Область находится в другой стране, чем категория"
   },
-  "placement.refused.google": {
-    "en": "The category has no Google category: it names the competitors",
-    "t": "У категории нет категории Google: она обозначает конкурентов"
-  },
   "placement.refused.unstudied": {
     "en": "Placement does not study this category here",
     "t": "Placement не изучает эту категорию здесь"
@@ -3246,6 +3266,18 @@
   "placement.studies.category": {
     "en": "Other categories",
     "t": "Другие категории"
+  },
+  "placement.studies.history": {
+    "en": "{category}: your history",
+    "t": "{category}: ваша история"
+  },
+  "placement.studies.library": {
+    "en": "{category}: the library",
+    "t": "{category}: библиотека"
+  },
+  "placement.studies.published": {
+    "en": "Published here",
+    "t": "Опубликовано здесь"
   },
   "placement.studies.scope": {
     "en": "In scope",
@@ -3380,8 +3412,8 @@
     "t": "{n} категорий"
   },
   "scope.categories.none": {
-    "en": "No trades yet: ⚙ names one.",
-    "t": "Ниш ещё нет: ⚙ — добавить."
+    "en": "No trades yet: Categories ↗ sets one up.",
+    "t": "Профессий пока нет: добавить можно в разделе «Категории» ↗."
   },
   "scope.everyApp": {
     "en": "scope applies in every app",
@@ -3823,6 +3855,18 @@
     "en": "Worth {usd}: a token is {rate} of what we spend for you",
     "t": "Стоимость {usd}: один токен равен {rate} от суммы, которую мы тратим на вас"
   },
+  "trades.adopt.title": {
+    "en": "Use {listing} v{n}?",
+    "t": "Использовать {listing} v{n}?"
+  },
+  "trades.adopt.use": {
+    "en": "Use it",
+    "t": "Использовать"
+  },
+  "trades.adopt.what": {
+    "en": "Your {category} moves onto it, as below. Its history keeps where it was: Revert takes it back.",
+    "t": "{category} перейдёт на неё, как показано ниже. История останется где была: «Откатить» вернёт всё обратно."
+  },
   "trades.competitors": {
     "en": "Competitors",
     "t": "Конкуренты"
@@ -3834,10 +3878,6 @@
   "trades.competitors.additional.what": {
     "en": "what searching its name finds",
     "t": "что находится по поиску его названия"
-  },
-  "trades.competitors.none": {
-    "en": "No primary Google category: nothing names its competitors.",
-    "t": "Нет основной категории Google: некому назвать его конкурентов."
   },
   "trades.competitors.order": {
     "en": "First match wins, in this order. A Google category added on the left is a tier here.",
@@ -3983,6 +4023,34 @@
     "en": "per cell of the country's grid",
     "t": "на каждую ячейку сетки страны"
   },
+  "trades.diff.additional": {
+    "en": "Additional category",
+    "t": "Дополнительная категория"
+  },
+  "trades.diff.demand": {
+    "en": "Demand",
+    "t": "Спрос"
+  },
+  "trades.diff.keyword": {
+    "en": "Keyword",
+    "t": "Ключевое слово"
+  },
+  "trades.diff.order": {
+    "en": "Order of the additional ones",
+    "t": "Порядок дополнительных"
+  },
+  "trades.diff.same": {
+    "en": "Both say the same.",
+    "t": "Оба говорят одно и то же."
+  },
+  "trades.diff.type": {
+    "en": "Excluded type",
+    "t": "Исключённый тип"
+  },
+  "trades.diff.word": {
+    "en": "Excluded word",
+    "t": "Исключённое слово"
+  },
   "trades.excluded": {
     "en": "Excluded",
     "t": "Исключено"
@@ -4031,10 +4099,6 @@
     "en": "Move {category} later",
     "t": "Сдвинуть {category} позже"
   },
-  "trades.google.additional.needPrimary": {
-    "en": "Pick the primary category first",
-    "t": "Сначала выберите основную категорию"
-  },
   "trades.google.additional.order": {
     "en": "Typed into Google's form in this order after the primary. Each is one more query in every area's sweep: adding one makes the next pull buy it. Drag a chip, or move it with ‹ ›.",
     "t": "Вводятся в форму Google в этом порядке после основной. Каждая — ещё один запрос в обходе каждой области: добавление одной заставит следующую загрузку купить её. Перетащите метку или переместите её кнопками ‹ ›."
@@ -4047,10 +4111,6 @@
     "en": "Google categories",
     "t": "Категории Google"
   },
-  "trades.google.copy": {
-    "en": "Copy",
-    "t": "Копировать"
-  },
   "trades.google.more": {
     "en": "{n} more: keep typing",
     "t": "Ещё {n}: уточните запрос"
@@ -4059,13 +4119,9 @@
     "en": "Google lists no such category",
     "t": "У Google нет такой категории"
   },
-  "trades.google.pick": {
-    "en": "Pick Google's primary category",
-    "t": "Выберите основную категорию Google"
-  },
-  "trades.google.primary": {
-    "en": "Primary",
-    "t": "Основная"
+  "trades.google.primaryIs": {
+    "en": "Primary: {trade}, the trade itself",
+    "t": "Основная: {trade}, сама профессия"
   },
   "trades.google.search": {
     "en": "Search Google's categories",
@@ -4074,6 +4130,82 @@
   "trades.google.where": {
     "en": "typed into Google's form in {lang}",
     "t": "вводится в форму Google на языке: {lang}"
+  },
+  "trades.head": {
+    "en": "Head",
+    "t": "Актуальная версия"
+  },
+  "trades.head.at": {
+    "en": "v{id} · {at}",
+    "t": "v{id} · {at}"
+  },
+  "trades.head.edited": {
+    "en": "{listing} v{n} · edited",
+    "t": "{listing} v{n} · изменена"
+  },
+  "trades.head.listing": {
+    "en": "{listing} v{n}",
+    "t": "{listing} v{n}"
+  },
+  "trades.head.listingOpen": {
+    "en": "its listing ↗",
+    "t": "её карточка ↗"
+  },
+  "trades.head.own": {
+    "en": "your own",
+    "t": "ваша собственная"
+  },
+  "trades.head.upstream": {
+    "en": "v{n} out",
+    "t": "вышла v{n}"
+  },
+  "trades.head.withdrawn": {
+    "en": "withdrawn",
+    "t": "отозвана"
+  },
+  "trades.head.withdrawnWhat": {
+    "en": "{listing} is withdrawn: no newer version will come of it.",
+    "t": "{listing} отозвана: новых версий у неё не будет."
+  },
+  "trades.history": {
+    "en": "History",
+    "t": "История"
+  },
+  "trades.history.adopt": {
+    "en": "Adopted",
+    "t": "Принята"
+  },
+  "trades.history.counted": {
+    "en": "History {n}",
+    "t": "История {n}"
+  },
+  "trades.history.diff": {
+    "en": "Diff",
+    "t": "Различия"
+  },
+  "trades.history.edit": {
+    "en": "Edited",
+    "t": "Изменена"
+  },
+  "trades.history.head": {
+    "en": "the head",
+    "t": "актуальная версия"
+  },
+  "trades.history.library": {
+    "en": "off the library",
+    "t": "из библиотеки"
+  },
+  "trades.history.revert": {
+    "en": "Reverted",
+    "t": "Откат"
+  },
+  "trades.history.revertTo": {
+    "en": "Revert to v{id}",
+    "t": "Откатить к v{id}"
+  },
+  "trades.history.update": {
+    "en": "Updated",
+    "t": "Обновлена"
   },
   "trades.keywords.add": {
     "en": "Add a keyword in {lang} — no city: the grid point is the place",
@@ -4103,25 +4235,153 @@
     "en": "Every GBP of the category is scanned on these. Placement scores a competitor by how it ranks for each, weighed so; a keyword with no weight is scanned, not scored.",
     "t": "По этим словам сканируется каждая GBP категории. Выдача оценивает конкурента по тому, как он ранжируется по каждому слову, с учётом весов; слово без веса сканируется, но не оценивается."
   },
-  "trades.new": {
-    "en": "New trade…",
-    "t": "Новая ниша…"
+  "trades.library": {
+    "en": "Library",
+    "t": "Библиотека"
   },
-  "trades.new.add": {
-    "en": "Add the trade",
-    "t": "Добавить нишу"
+  "trades.library.anyCountry": {
+    "en": "Every country",
+    "t": "Все страны"
   },
-  "trades.new.name": {
-    "en": "A trade's name: Plumbing",
-    "t": "Название ниши: Сантехника"
+  "trades.library.by": {
+    "en": "by {author}, {at}",
+    "t": "от {author}, {at}"
+  },
+  "trades.library.compare": {
+    "en": "Compare with mine",
+    "t": "Сравнить с моей"
+  },
+  "trades.library.definition": {
+    "en": "Definition · v{n}",
+    "t": "Определение · v{n}"
+  },
+  "trades.library.diff": {
+    "en": "diff",
+    "t": "различия"
+  },
+  "trades.library.fork": {
+    "en": "Fork",
+    "t": "Форк"
+  },
+  "trades.library.forkedFrom": {
+    "en": "forked from listing {id}",
+    "t": "форк карточки {id}"
+  },
+  "trades.library.from": {
+    "en": "v{n} against v{m}",
+    "t": "v{n} против v{m}"
+  },
+  "trades.library.fromMine": {
+    "en": "v{n} against your head",
+    "t": "v{n} против вашей актуальной"
+  },
+  "trades.library.kind": {
+    "en": "Which listings",
+    "t": "Какие карточки"
+  },
+  "trades.library.kind.community": {
+    "en": "Community",
+    "t": "Сообщество"
+  },
+  "trades.library.kind.mine": {
+    "en": "Mine",
+    "t": "Мои"
+  },
+  "trades.library.kind.standard": {
+    "en": "Standard",
+    "t": "Стандартные"
+  },
+  "trades.library.noNotes": {
+    "en": "no notes",
+    "t": "без заметок"
+  },
+  "trades.library.noStudies": {
+    "en": "No study published on it yet.",
+    "t": "Исследований по ней пока нет."
+  },
+  "trades.library.none": {
+    "en": "No listing matches.",
+    "t": "Ни одна карточка не подходит."
+  },
+  "trades.library.rank": {
+    "en": "Standard rank",
+    "t": "Место в стандарте"
+  },
+  "trades.library.rank.drop": {
+    "en": "Out of the standard",
+    "t": "Убрать из стандарта"
+  },
+  "trades.library.rank.set": {
+    "en": "Make standard",
+    "t": "Сделать стандартной"
+  },
+  "trades.library.rank.short": {
+    "en": "rank",
+    "t": "место"
+  },
+  "trades.library.ranked": {
+    "en": "standard #{rank}",
+    "t": "стандарт №{rank}"
+  },
+  "trades.library.search": {
+    "en": "Search titles, abouts and trades",
+    "t": "Поиск по названиям, описаниям и профессиям"
+  },
+  "trades.library.sort": {
+    "en": "Sort",
+    "t": "Сортировка"
+  },
+  "trades.library.sort.rank": {
+    "en": "Rank",
+    "t": "Место"
+  },
+  "trades.library.sort.recent": {
+    "en": "Recent",
+    "t": "Новые"
+  },
+  "trades.library.sort.used": {
+    "en": "Most used",
+    "t": "Самые используемые"
+  },
+  "trades.library.standard": {
+    "en": "standard",
+    "t": "стандарт"
+  },
+  "trades.library.studies": {
+    "en": "Studies · {n}",
+    "t": "Исследования · {n}"
+  },
+  "trades.library.use": {
+    "en": "Use",
+    "t": "Использовать"
+  },
+  "trades.library.useVersion": {
+    "en": "Use v{n}",
+    "t": "Использовать v{n}"
+  },
+  "trades.library.usedBy": {
+    "en": "used by {n}",
+    "t": "используют: {n}"
+  },
+  "trades.library.usedByCount": {
+    "en": "{n} people have their category on one of its versions.",
+    "t": "Число людей, чья категория стоит на одной из её версий: {n}."
+  },
+  "trades.library.usedByTitle": {
+    "en": "Used by",
+    "t": "Используют"
+  },
+  "trades.library.versions": {
+    "en": "Versions",
+    "t": "Версии"
+  },
+  "trades.library.withdraw": {
+    "en": "Withdraw",
+    "t": "Отозвать"
   },
   "trades.none": {
     "en": "No trade",
     "t": "Без ниши"
-  },
-  "trades.option.notSetUp": {
-    "en": "{trade} — not set up in {country}",
-    "t": "{trade} — не настроена в {country}"
   },
   "trades.overview": {
     "en": "Overview",
@@ -4195,25 +4455,97 @@
     "en": "Pick a trade",
     "t": "Выберите нишу"
   },
+  "trades.picker.google": {
+    "en": "Google's trades",
+    "t": "Профессии Google"
+  },
+  "trades.picker.library": {
+    "en": "Browse the library…",
+    "t": "Открыть библиотеку…"
+  },
+  "trades.picker.nothing": {
+    "en": "No trade nor listing matches",
+    "t": "Нет подходящих профессий и карточек"
+  },
+  "trades.picker.search": {
+    "en": "Search trades and listings",
+    "t": "Поиск профессий и карточек"
+  },
+  "trades.picker.standard": {
+    "en": "Standard library · {country}",
+    "t": "Стандартная библиотека · {country}"
+  },
+  "trades.picker.standardAll": {
+    "en": "Standard library",
+    "t": "Стандартная библиотека"
+  },
+  "trades.picker.used": {
+    "en": "Used",
+    "t": "Использованные"
+  },
+  "trades.picker.yours": {
+    "en": "Yours",
+    "t": "Ваши"
+  },
+  "trades.release.about": {
+    "en": "About",
+    "t": "Описание"
+  },
+  "trades.release.as": {
+    "en": "Release as",
+    "t": "Опубликовать как"
+  },
+  "trades.release.dialog": {
+    "en": "Publish {category}",
+    "t": "Публикация: {category}"
+  },
+  "trades.release.dialog.what": {
+    "en": "Its head, as it stands, into the library: anyone may use it, fork it, and be told of your next versions.",
+    "t": "Её актуальная версия как есть попадёт в библиотеку: любой сможет использовать её, форкнуть и узнавать о ваших следующих версиях."
+  },
+  "trades.release.forked": {
+    "en": "Forked from {listing}",
+    "t": "Форк {listing}"
+  },
+  "trades.release.new": {
+    "en": "A new listing",
+    "t": "Новая карточка"
+  },
+  "trades.release.next": {
+    "en": "{listing} v{n}, the next version",
+    "t": "{listing} v{n}, следующая версия"
+  },
+  "trades.release.notes": {
+    "en": "Notes",
+    "t": "Заметки"
+  },
+  "trades.release.notes.what": {
+    "en": "What this version changes, and why",
+    "t": "Что меняет эта версия и почему"
+  },
+  "trades.release.open": {
+    "en": "Publish…",
+    "t": "Опубликовать…"
+  },
+  "trades.release.public": {
+    "en": "A release is readable by everyone, for good: withdrawing it later hides it from new readers only.",
+    "t": "Релиз виден всем и навсегда: если отозвать его позже, он скроется только от новых читателей."
+  },
+  "trades.release.publish": {
+    "en": "Publish",
+    "t": "Опубликовать"
+  },
+  "trades.release.since": {
+    "en": "Since {listing} v{n}",
+    "t": "После {listing} v{n}"
+  },
+  "trades.release.title": {
+    "en": "Title",
+    "t": "Название"
+  },
   "trades.set": {
     "en": "Set trade · {n}",
     "t": "Ниша · {n}"
-  },
-  "trades.set.notSetUp": {
-    "en": "{category} {n} · not set up",
-    "t": "{category} {n} · не настроена"
-  },
-  "trades.set.nowhere": {
-    "en": "{n} no country",
-    "t": "{n} без страны"
-  },
-  "trades.set.title": {
-    "en": "Set the trade of {n}",
-    "t": "Ниша для {n}"
-  },
-  "trades.set.untraded": {
-    "en": "all {n} already have no trade",
-    "t": "у всех {n} ниши нет"
   },
   "trades.tiles": {
     "en": "Sections",
@@ -4223,6 +4555,22 @@
     "en": "Trade",
     "t": "Ниша"
   },
+  "trades.upstream.edited": {
+    "en": "{listing} v{n} is out; yours is v{from}, edited since.",
+    "t": "Вышла {listing} v{n}; у вас v{from}, с правками."
+  },
+  "trades.upstream.review": {
+    "en": "Review diff",
+    "t": "Посмотреть различия"
+  },
+  "trades.upstream.update": {
+    "en": "Update to v{n}",
+    "t": "Обновить до v{n}"
+  },
+  "trades.upstream.what": {
+    "en": "{listing} v{n} is out; yours is v{from}.",
+    "t": "Вышла {listing} v{n}; у вас v{from}."
+  },
   "trades.window.countries": {
     "en": "Countries",
     "t": "Страны"
@@ -4231,14 +4579,6 @@
     "en": "Country",
     "t": "Страна"
   },
-  "trades.window.delete": {
-    "en": "Delete {trade}",
-    "t": "Удалить {trade}"
-  },
-  "trades.window.delete.body": {
-    "en": "Its categories go with it. No GBP holds it.",
-    "t": "Её категории удалятся с ней. Ни один GBP её не держит."
-  },
   "trades.window.delete.held": {
     "en": "{n} GBPs hold it: give them another trade first",
     "t": "{n} GBP в этой нише: сначала дайте им другую"
@@ -4246,6 +4586,10 @@
   "trades.window.gbps": {
     "en": "{gbps} GBPs",
     "t": "GBP: {gbps}"
+  },
+  "trades.window.listings": {
+    "en": "Or start off a listing",
+    "t": "Или начать с карточки"
   },
   "trades.window.more": {
     "en": "More",
@@ -4258,10 +4602,6 @@
   "trades.window.pickCountry": {
     "en": "Not set up anywhere yet: add a country.",
     "t": "Нигде не настроена: добавьте страну."
-  },
-  "trades.window.rename": {
-    "en": "Rename",
-    "t": "Переименовать"
   },
   "trades.window.scope": {
     "en": "Scope the outline to it",
@@ -4283,13 +4623,17 @@
     "en": "No longer set up {category}",
     "t": "Снять настройку {category}"
   },
+  "trades.window.unset.body": {
+    "en": "Its settings go; its history is kept, and setting it up again starts over.",
+    "t": "Её настройки удаляются; история сохраняется, а при повторной настройке всё начнётся заново."
+  },
   "trades.window.waiting": {
     "en": "{n} GBPs wait for {category}.",
     "t": "{n} GBP ждут {category}."
   },
   "trades.window.willAsk": {
-    "en": "It will ask: Google's categories · keywords in its language, weighed · what is never a competitor · its demand.",
-    "t": "Она спросит: категории Google · ключевые слова на её языке, с весами · что никогда не конкурент · её спрос."
+    "en": "Set up, it holds its name as its one keyword; its Definition asks the rest: additional categories · keywords, weighed · what is never a competitor · its demand.",
+    "t": "После настройки её название — единственное ключевое слово; остальное спросит Определение: дополнительные категории · ключевые слова с весом · что никогда не конкурент · спрос."
   },
   "trash.address": {
     "en": "Address",
@@ -5211,6 +5555,10 @@
     "en": "synced from Google {ago}",
     "t": "синхронизировано с Google {ago}"
   },
+  "window.profile.tradeApart": {
+    "en": "on Google; its trade here is",
+    "t": "в Google; её категория здесь —"
+  },
   "window.profile.visit": {
     "en": "customers visit",
     "t": "клиенты приходят"
@@ -5469,7 +5817,7 @@
   },
   "window.stats.appeared": {
     "en": "{n} reviews on Google",
-    "t": "Отзывов в Google: {n}"
+    "t": "Отзывов на Google: {n}"
   },
   "window.stats.arp": {
     "en": "avg rank, my quadrant",
@@ -5545,7 +5893,7 @@
   },
   "window.stats.returned": {
     "en": "{n} reviews back on Google",
-    "t": "Вернулось в Google отзывов: {n}"
+    "t": "Отзывов вернулось на Google: {n}"
   },
   "window.stats.reviewsCapped": {
     "en": "kept 30 d: the 90 d range shows 30",
@@ -5557,7 +5905,7 @@
   },
   "window.stats.scansFailed": {
     "en": "{n} scans of its reviews failed",
-    "t": "Сбоев проверки отзывов: {n}"
+    "t": "Неудачных проверок отзывов: {n}"
   },
   "window.stats.solv": {
     "en": "grid points in top 3",
@@ -5565,7 +5913,7 @@
   },
   "window.stats.suspended": {
     "en": "{n} 5-star reviews suspended",
-    "t": "Приостановлено отзывов на 5 звёзд: {n}"
+    "t": "Приостановлено 5-звёздочных отзывов: {n}"
   },
   "window.stats.syncs": {
     "en": "{n} syncs",

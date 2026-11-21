@@ -23,14 +23,14 @@ type Filter = { keyword: string } | { place: string } | "untagged" | null;
 type Went = Map<number, Set<number>>;
 
 interface Cat {
-  trade: number;
+  trade: string;
   country: Country;
   reload: () => void;
 }
 
 /** A category's drafts (13q), one pool every kit and GBP of it draws from; from a kit, dots for its GBPs, filled where each went. Photos are its GBPs' brands'. */
-export function KitPool({ trade, country, members = [] }: { trade: number; country: Country; members?: readonly KitMember[] }) {
-  const pool = useResource(api, "/trades/{id}/{country}/kit", { params: { path: { id: trade, country } } });
+export function KitPool({ trade, country, members = [] }: { trade: string; country: Country; members?: readonly KitMember[] }) {
+  const pool = useResource(api, "/categories/{trade}/{country}/kit", { params: { path: { trade, country } } });
   const areas = useResource(api, "/areas");
   const ours = members.filter((m) => m.category?.trade === trade && m.category.country === country);
   const went = useWent(ours, pool.status === "ok" ? pool.data : null);
@@ -152,12 +152,12 @@ function DraftEditor({ cat, draft, keywords, places, onDone }: { cat: Cat; draft
   const [refused, setRefused] = useState<string | null>(null);
   const copied = draft !== null && draft.uses > 0;
   const missing = keywords.filter((k) => !(draft?.keywords ?? []).includes(k));
-  const path = { id: cat.trade, country: cat.country };
+  const path = { trade: cat.trade, country: cat.country };
   const save = async () => {
     setBusy(true);
     try {
-      if (draft === null) await ok(api.POST("/trades/{id}/{country}/kit/drafts", { params: { path }, body: { text: text.trim(), places: tagged } }));
-      else await ok(api.PATCH("/trades/{id}/{country}/kit/drafts/{draft}", { params: { path: { ...path, draft: draft.id } }, body: { ...(text.trim() !== draft.text && { text: text.trim() }), places: tagged } }));
+      if (draft === null) await ok(api.POST("/categories/{trade}/{country}/kit/drafts", { params: { path }, body: { text: text.trim(), places: tagged } }));
+      else await ok(api.PATCH("/categories/{trade}/{country}/kit/drafts/{draft}", { params: { path: { ...path, draft: draft.id } }, body: { ...(text.trim() !== draft.text && { text: text.trim() }), places: tagged } }));
       cat.reload();
       onDone();
     } catch (e) {
@@ -238,7 +238,7 @@ function Remove({ cat, id, title, onDone }: { cat: Cat; id: number; title: strin
       confirmLabel={t(kitKeys.remove, "Remove")}
       labels={{ cancel: t(move.cancel, "Cancel") }}
       onConfirm={async () => {
-        await ok(api.DELETE("/trades/{id}/{country}/kit/drafts/{draft}", { params: { path: { id: cat.trade, country: cat.country, draft: id } } }));
+        await ok(api.DELETE("/categories/{trade}/{country}/kit/drafts/{draft}", { params: { path: { trade: cat.trade, country: cat.country, draft: id } } }));
         cat.reload();
         onDone();
       }}

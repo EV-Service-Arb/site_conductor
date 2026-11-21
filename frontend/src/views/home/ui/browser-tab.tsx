@@ -4,7 +4,7 @@ import { useResource } from "@evinvest/api/react";
 import { Button, Planned, cn } from "@evinvest/uikit";
 import { Check, Copy, Keyboard, Mail, MonitorSmartphone, ShieldCheck, Smartphone, Video } from "lucide-react";
 
-import { DEVICE_NAME, type Listed, PROVIDER_NAME, STATE_NAME, categoryOf, googleName, useGmbTags, windowKeys } from "@/entities/gmb";
+import { DEVICE_NAME, LANG, type Listed, PROVIDER_NAME, STATE_NAME, googleName, useTrade, windowKeys } from "@/entities/gmb";
 import { BrowserSession, type TypeIn } from "@/features/browser-session";
 import { api } from "@/shared/api";
 import type { Browser, Device } from "@/shared/api/schema";
@@ -60,10 +60,9 @@ interface Step {
 
 function GoogleForm({ listed: { gmb, gmail }, type, browser }: { listed: Listed; type: TypeIn; browser: Browser }) {
   const t = useT();
-  const { tags } = useGmbTags();
   const [step, setStep] = useStep();
-  const placed = tags.trades === null ? null : categoryOf(gmb, tags.trades);
-  const category = placed?.status === "set_up" && placed.category.google_primary !== null ? googleName(placed.category.google_primary, placed.category.lang) : null;
+  const trade = useTrade(gmb.trade, gmb.country?.code ?? null);
+  const category = trade === null || gmb.country === null ? null : googleName(trade, LANG[gmb.country.code]);
   const phone = browser.provider === "multilogin";
   const one = (v: string | null) => (v === null ? null : [v]);
   const steps: Step[] = [

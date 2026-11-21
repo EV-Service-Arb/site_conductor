@@ -710,6 +710,160 @@ export interface paths {
         patch: operations["label_photo"];
         trace?: never;
     };
+    "/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's categories, by trade and country. */
+        get: operations["categories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{trade}/{country}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Applies settings to the caller's category of a trade in a country, setting it up if it was not: a new version, the head moved onto it. Settings equal to the head's move nothing.
+         * @description 400 a gcid Google does not list in the country, a keyword twice once normalized, keywords
+         *     without the trade's name at weight 1, a weight not positive, a gcid twice, past 9 additional
+         *     ones, an excluded word twice or a type that is none, a demand with an empty expression or a
+         *     column twice.
+         */
+        put: operations["apply_category"];
+        post?: never;
+        /**
+         * Takes the caller's category away; its history stays.
+         * @description 409 while a live GBP, a review draft or a brand holds it.
+         */
+        delete: operations["delete_category"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{trade}/{country}/head": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Moves the caller's category's head: onto a listing's version (an adopt, setting it up if it was not; an update when the listing is its lineage's and the version newer), or back to one of its own (a revert). Onto its head moves nothing.
+         * @description 400 a listing version not releasing `version`, a listing of another trade or country, a version
+         *     not of its own history; 404 a listing the caller may not see, a category not set up to revert.
+         */
+        post: operations["move_category_head"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{trade}/{country}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's category's moves since it was set up, oldest first. */
+        get: operations["category_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{trade}/{country}/kit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The category's drafts. */
+        get: operations["kit_pool"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{trade}/{country}/kit/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adds a draft to the category; answers the category's drafts. */
+        post: operations["add_kit_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{trade}/{country}/kit/drafts/{draft}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes a draft: out of every offer, its uses kept. */
+        delete: operations["remove_kit_draft"];
+        options?: never;
+        head?: never;
+        /**
+         * Edits a draft's text or its places; answers the category's drafts.
+         * @description 409 one already copied: a use is of the text it had.
+         */
+        patch: operations["edit_kit_draft"];
+        trace?: never;
+    };
+    "/category-versions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A category version: one the caller's moves went to, or one a listing released (404 otherwise). */
+        get: operations["category_version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/gmails": {
         parameters: {
             query?: never;
@@ -1135,7 +1289,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Gives GBPs a trade, every one or none (404 one not the caller's). */
+        /** Gives GBPs a trade, every one or none (400 a gcid Google does not list in one's country, 404 one not the caller's). */
         put: operations["set_gmb_trades"];
         post?: never;
         delete?: never;
@@ -1437,6 +1591,139 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The listings the caller may see: not withdrawn, their own, or ones they used. */
+        get: operations["library"];
+        put?: never;
+        /**
+         * Releases one of the caller's versions as a new listing: readable by everyone, for good.
+         * @description 400 a title empty or past 100 characters; 404 a version not the caller's, a fork of a listing
+         *     the caller may not see.
+         */
+        post: operations["publish_listing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/studies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The published studies the caller may see, of a trade, a country and an area when given. */
+        get: operations["published_studies"];
+        put?: never;
+        /**
+         * Publishes a study of an area under a category version: on the version's release, or releasing it in the same write. Readable by everyone, for good.
+         * @description As a study is refused, and: 400 a title empty or past 100 characters; 409 published already;
+         *     422 `unreleased_category`, a version no listing released and no `release`.
+         */
+        post: operations["publish_study"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/studies/{sha}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Withdraws a study the caller published: hidden from whoever never used its listing. */
+        post: operations["withdraw_study"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A listing, its versions with what each says, and the studies published on it (404 one the caller may not see). */
+        get: operations["listing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/{id}/standard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Puts a listing in the standard library at a rank, or takes it out. */
+        put: operations["rank_listing"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Releases one of the caller's versions as the next version of a listing of theirs.
+         * @description 400 a version of another trade or country; 404 a listing not theirs or withdrawn; 409 the
+         *     listing's latest already.
+         */
+        post: operations["publish_listing_version"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/{id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Withdraws a listing of the caller's: hidden from whoever never used it, readable by whoever did. */
+        post: operations["withdraw_listing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/live": {
         parameters: {
             query?: never;
@@ -1650,6 +1937,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/placement/studies/{sha}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A published study, built as a study is: of what is held, nothing bought.
+         * @description 404 one the caller may not see; 503 placement not connected.
+         */
+        get: operations["published_study"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/placement/studies/{sha}/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Builds a published study again, buying what it lacks at the caller's tokens, as a pull does. */
+        post: operations["pull_published_study"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/placement/study": {
         parameters: {
             query?: never;
@@ -1658,10 +1982,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * A study of an area: under one of the caller's categories, or the area's grid alone; never spends. Built on the first read and kept, out of what is held: a study whose searches are not all there opens on what is, and its notice says how many it lacks.
-         * @description 404 no such area or category of the caller's; 422 a category with `no_google_category`, set up
-         *     for `another_country`, or an area where placement holds no base (`unstudied`); 503 placement not
-         *     connected.
+         * A study of an area: under a category version the caller may read, or the area's grid alone; never spends. Built on the first read and kept, out of what is held: a study whose searches are not all there opens on what is, and its notice says how many it lacks.
+         * @description 404 no such area, or a version the caller may not read; 422 a version of `another_country`, or
+         *     an area where placement holds no base (`unstudied`); 503 placement not connected.
          */
         get: operations["study"];
         put?: never;
@@ -1858,121 +2181,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/trades": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The caller's trades, each with the countries it is set up in. */
-        get: operations["trades"];
-        put?: never;
-        /** Adds a trade: Plumbing. 409 the caller's already, whatever its case. */
-        post: operations["add_trade"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/trades/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Deletes a trade, its categories with it. 409 while a live GBP holds it. */
-        delete: operations["delete_trade"];
-        options?: never;
-        head?: never;
-        /** Renames a trade. 409 the caller's already, whatever its case. */
-        patch: operations["rename_trade"];
-        trace?: never;
-    };
-    "/trades/{id}/{country}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Sets a trade up in a country, or edits it there.
-         * @description 400 a keyword twice once normalized, keywords without the primary's name at weight 1, a weight
-         *     not positive, a gcid not Google's there or twice, additional ones past 9 or without a primary,
-         *     an excluded word twice or a type that is none, a demand with an empty expression or a column
-         *     twice.
-         */
-        put: operations["set_up_trade"];
-        post?: never;
-        /** Takes a trade's set-up in a country away. */
-        delete: operations["remove_category"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/trades/{id}/{country}/kit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The category's drafts. */
-        get: operations["kit_pool"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/trades/{id}/{country}/kit/drafts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Adds a draft to the category; answers the category's drafts. */
-        post: operations["add_kit_draft"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/trades/{id}/{country}/kit/drafts/{draft}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Removes a draft: out of every offer, its uses kept. */
-        delete: operations["remove_kit_draft"];
-        options?: never;
-        head?: never;
-        /**
-         * Edits a draft's text or its places; answers the category's drafts.
-         * @description 409 one already copied: a use is of the text it had.
-         */
-        patch: operations["edit_kit_draft"];
-        trace?: never;
-    };
     "/trash": {
         parameters: {
             query?: never;
@@ -2165,7 +2373,7 @@ export interface components {
         };
         /**
          * @description An additional Google category and what one competitor of its tier weighs against one of the
-         *     primary's.
+         *     trade's.
          */
         AdditionalCategory: {
             google: components["schemas"]["GoogleCategory"];
@@ -2173,7 +2381,7 @@ export interface components {
             weight: number;
         };
         AdditionalIn: {
-            /** @description A gcid Google has in the country. */
+            /** @description A gcid Google lists in the country. */
             id: string;
             /**
              * Format: double
@@ -2307,8 +2515,8 @@ export interface components {
             photos: number;
             /** @description The site (sites' brand) its pages are on; brands of other gmails may share it. */
             site: components["schemas"]["BrandId"];
-            /** Format: int64 */
-            trade_id: number;
+            /** @description A gcid. */
+            trade: string;
         };
         /**
          * @description A brand: a lowercase slug, 1–64 of `[a-z0-9_-]`, starting alphanumeric.
@@ -2399,23 +2607,70 @@ export interface components {
         Catalog: {
             countries: components["schemas"]["BaseCountry"][];
         };
-        /** @description A trade set up for a country: Plumbing · FR. */
+        Categories: {
+            categories: components["schemas"]["Category"][];
+        };
+        /** @description A category of the caller's: their settings for a trade in a country. */
         Category: {
+            country: components["schemas"]["Country"];
+            head: components["schemas"]["CategoryVersion"];
+            /** @description Where it was last adopted or updated from; `null`: its own. */
+            lineage: components["schemas"]["Lineage"] | null;
+            trade: components["schemas"]["GoogleCategory"];
+        };
+        CategoryHistory: {
+            /** @description Oldest first, since it was set up. */
+            moves: components["schemas"]["CategoryMove"][];
+        };
+        /** @description A move of a category's head. */
+        CategoryMove: {
+            /** @description RFC 3339. */
+            at: string;
+            /**
+             * Format: int64
+             * @description `null`: the category's creation.
+             */
+            from: number | null;
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: int64
+             * @description An adopt's or an update's.
+             */
+            listing_version: number | null;
+            /** Format: int64 */
+            to: number;
+            why: components["schemas"]["Why"];
+        };
+        /** @description What a version says. */
+        CategorySettings: {
+            /** @description At most 9, none the trade. */
+            additional: components["schemas"]["AdditionalIn"][];
+            demand?: components["schemas"]["Demand"] | null;
+            excluded: components["schemas"]["Excluded"];
+            /** @description In the country's language, each once normalized; the trade's name among them at weight 1. */
+            keywords: components["schemas"]["KeywordInput"][];
+        };
+        /** @description One version of a trade in a country, named for reading. */
+        CategoryVersion: {
+            /** @description At most 9, in the order they are entered into Google's form: a competitor tier each. */
+            additional: components["schemas"]["AdditionalCategory"][];
+            /** @description RFC 3339. */
+            at: string;
             country: components["schemas"]["Country"];
             demand: components["schemas"]["Demand"] | null;
             excluded: components["schemas"]["Excluded"];
-            /** @description At most 9, in the order they are entered into Google's form: a competitor tier each. */
-            google_additional: components["schemas"]["AdditionalCategory"][];
-            /** @description What Google's form is given as the category; its studies' first competitor tier. */
-            google_primary: components["schemas"]["GoogleCategory"] | null;
+            /** Format: int64 */
+            id: number;
             /**
              * @description Lowercase, in the country's language, none naming a city: the terms every GBP of the
-             *     category is scanned on, and each competitor of its studies scored on as weighed. With a
-             *     primary, its name is among them at weight 1.
+             *     category is scanned on, and each competitor of its studies scored on as weighed; the trade's
+             *     name among them at weight 1.
              */
             keywords: components["schemas"]["Keyword"][];
             /** @description The country's language, its keywords' and Google's form's: `fr`. */
             lang: string;
+            trade: components["schemas"]["GoogleCategory"];
         };
         /** @description A field of a GBP, before and after. */
         Changed: {
@@ -2604,7 +2859,7 @@ export interface components {
          * @description Which refusal, for a client to act on: its status follows from it.
          * @enum {string}
          */
-        ErrorCode: "another_country" | "bad_gateway" | "bad_request" | "browsers_not_connected" | "conflict" | "csrf" | "forbidden" | "internal" | "no_google_category" | "not_found" | "too_large" | "too_many" | "unaffordable" | "unauthenticated" | "unavailable" | "unstudied";
+        ErrorCode: "another_country" | "bad_gateway" | "bad_request" | "browsers_not_connected" | "conflict" | "csrf" | "forbidden" | "internal" | "not_found" | "too_large" | "too_many" | "unaffordable" | "unauthenticated" | "unavailable" | "unreleased_category" | "unstudied";
         /** @description Places the sweep turns up that are never competitors, checked before any tier. */
         Excluded: {
             /** @description Places types (`hardware_store`); a place whose primary type is one. */
@@ -2823,10 +3078,10 @@ export interface components {
             /** @description Its window's tabs, in order: its state's own work first. */
             tabs: components["schemas"]["TabDto"][];
             /**
-             * Format: int64
-             * @description Its category is this trade in its country.
+             * @description The gcid it is meant to have as its primary: its category is the caller's of it in its
+             *     country. Google's own is `google_primary`.
              */
-            trade_id: number | null;
+            trade: string | null;
             /** @description Google's, from its last Sync, as `hours`, `google_primary` and `photos`. */
             website: string | null;
         };
@@ -2863,10 +3118,10 @@ export interface components {
              */
             role?: components["schemas"]["GbpRole"] | null;
             /**
-             * Format: int64
+             * @description A gcid Google lists in its country.
              * @default null
              */
-            trade?: number | null;
+            trade?: string | null;
         };
         /** @description A GBP's kit. */
         GmbKit: {
@@ -2905,6 +3160,17 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /** @description Where a head moves. */
+        HeadIn: {
+            /**
+             * Format: int64
+             * @description The listing version releasing `version`: an adopt, or an update from the lineage's listing.
+             *     `null`: a revert to one of the category's own.
+             */
+            listing_version?: number | null;
+            /** Format: int64 */
+            version: number;
+        };
         Imap: {
             checked: components["schemas"]["Checked"];
             host: string;
@@ -2931,7 +3197,7 @@ export interface components {
             text: string;
             /**
              * Format: double
-             * @description What ranking for it is worth against the primary's name; None: scanned, not scored.
+             * @description What ranking for it is worth against the trade's name; None: scanned, not scored.
              */
             weight: number | null;
         };
@@ -2939,7 +3205,7 @@ export interface components {
             text: string;
             /**
              * Format: double
-             * @description What ranking for it is worth against the primary's name; None: scanned, not scored.
+             * @description What ranking for it is worth against the trade's name; None: scanned, not scored.
              */
             weight?: number | null;
         };
@@ -2961,6 +3227,16 @@ export interface components {
             note: string | null;
             service: string | null;
         };
+        /**
+         * @description Which listings a browse is of.
+         *
+         *     - `standard`: Ranked by a curator.
+         *     - `community`: Everyone else's, unranked.
+         *     - `mine`: The reader's own.
+         *     - `used`: Those the reader adopted or loaded a study of.
+         * @enum {string}
+         */
+        Kind: "standard" | "community" | "mine" | "used";
         /** @description A named selection of the caller's GBPs, over a period. */
         Kit: {
             area: string | null;
@@ -2986,8 +3262,8 @@ export interface components {
         KitBlock: "suspended" | "draft" | "verifying" | "off" | "no_page";
         KitCategory: {
             country: components["schemas"]["Country"];
-            /** Format: int64 */
-            trade: number;
+            /** @description A gcid. */
+            trade: string;
         };
         KitDraft: {
             created_at: string;
@@ -3075,9 +3351,7 @@ export interface components {
             country: components["schemas"]["Country"];
             /** Format: int64 */
             drafts: number;
-            name: string;
-            /** Format: int64 */
-            trade: number;
+            trade: components["schemas"]["GoogleCategory"];
             warnings: string[];
         };
         /** @description A draft as the offer weighs it for one GBP. */
@@ -3207,6 +3481,62 @@ export interface components {
          * @enum {string}
          */
         LedgerKind: "add" | "set" | "charge" | "accrual" | "kickback";
+        Library: {
+            listings: components["schemas"]["Listing"][];
+        };
+        Lineage: {
+            /** @description Its head is not what it took. */
+            edited: boolean;
+            /** @description What it took. */
+            from: components["schemas"]["Release"];
+            /** Format: int64 */
+            listing: number;
+            title: string;
+            /** @description The listing's latest, newer than what it took; never taken but by the caller. */
+            upstream: components["schemas"]["Release"] | null;
+            withdrawn: boolean;
+        };
+        /** @description A listing: a released category of a trade in a country, numbered versions of it. */
+        Listing: {
+            about: string;
+            /** @description The author's name. */
+            author: string;
+            country: components["schemas"]["Country"];
+            /** @description RFC 3339. */
+            created_at: string;
+            /** Format: int64 */
+            forked_from: number | null;
+            /** Format: int64 */
+            id: number;
+            latest: components["schemas"]["Release"];
+            /** @description The caller's own. */
+            mine: boolean;
+            /**
+             * Format: int64
+             * @description In the standard library, at this place.
+             */
+            standard_rank: number | null;
+            title: string;
+            trade: components["schemas"]["GoogleCategory"];
+            /**
+             * Format: int64
+             * @description Categories whose lineage it is.
+             */
+            used_by: number;
+            /** @description RFC 3339: hidden from whoever never used it. */
+            withdrawn_at: string | null;
+        };
+        ListingDetail: {
+            listing: components["schemas"]["Listing"];
+            studies: components["schemas"]["PublishedStudy"][];
+            /** @description Oldest first. */
+            versions: components["schemas"]["ListingVersion"][];
+        };
+        /** @description A listing's version and the category version it releases. */
+        ListingVersion: {
+            body: components["schemas"]["CategoryVersion"];
+            release: components["schemas"]["Release"];
+        };
         Locality: {
             /** @description ISO 3166-1 alpha-2. */
             country: string;
@@ -3265,12 +3595,10 @@ export interface components {
             /** Format: int64 */
             to: number | null;
         } | {
-            /** Format: int64 */
-            from: number | null;
+            from: components["schemas"]["Traded"] | null;
             /** @constant */
             kind: "trade";
-            /** Format: int64 */
-            to: number | null;
+            to: components["schemas"]["Traded"] | null;
         } | {
             /** Format: int64 */
             from: number | null;
@@ -3485,7 +3813,7 @@ export interface components {
         /**
          * @description What a draft needs before Google's form: the form's order, then what stands behind it.
          *
-         *     - `category`: Its trade set up in its country, with Google's category.
+         *     - `category`: A trade, a country, and the caller's category of it there.
          *     - `site`: A landing page of sites' shows it.
          *     - `hidden_address`: The address its film is shot at, and whether customers visit.
          *     - `profile`: Its gmail's browser set up.
@@ -3493,15 +3821,15 @@ export interface components {
          */
         MustHave: "name" | "areas" | "phone" | "film" | "gmail" | "category" | "site" | "hidden_address" | "profile";
         /** @enum {string} */
-        Need: "sa:admin:sources:manage" | "sa:admin:tokens:grant" | "sa:admin:trash:keep" | "sa:members:act_as" | "sa:own:credentials" | "sa:own:payments" | "sa:placement:study:read" | "sa:placement:study:spend" | "sa:playbook:mcp:use" | "sa:review_archive:archive:operate" | "sa:sites:analysis:experiments:edit" | "sa:sites:analysis:read" | "sa:sites:work:invoices:create" | "sa:sites:work:leads:edit" | "sa:sites:work:pii:see" | "sa:sites:work:places:edit" | "sa:sites:work:pricing:edit" | "sa:sites:work:read" | "sa:admin" | "sa:everyone" | "sa:operator";
+        Need: "sa:admin:sources:manage" | "sa:admin:tokens:grant" | "sa:admin:trash:keep" | "sa:members:act_as" | "sa:own:credentials" | "sa:own:payments" | "sa:placement:library:curate" | "sa:placement:study:read" | "sa:placement:study:spend" | "sa:playbook:mcp:use" | "sa:review_archive:archive:operate" | "sa:sites:analysis:experiments:edit" | "sa:sites:analysis:read" | "sa:sites:work:invoices:create" | "sa:sites:work:leads:edit" | "sa:sites:work:pii:see" | "sa:sites:work:places:edit" | "sa:sites:work:pricing:edit" | "sa:sites:work:read" | "sa:admin" | "sa:everyone" | "sa:operator";
         NewBrand: {
             country: components["schemas"]["Country"];
             /** Format: int64 */
             gmail: number;
             name: string;
             site: components["schemas"]["BrandId"];
-            /** Format: int64 */
-            trade: number;
+            /** @description A gcid: the caller's category of it in `country`. */
+            trade: string;
         };
         NewChat: {
             /**
@@ -3522,13 +3850,30 @@ export interface components {
             name?: string | null;
             place_id: string;
             state: components["schemas"]["OnGoogle"];
-            /** Format: int64 */
-            trade?: number | null;
+            /** @description A gcid Google lists in its country. */
+            trade?: string | null;
         };
         NewKitDraft: {
             /** @description Area slugs; none: everywhere. */
             places: string[];
             text: string;
+        };
+        /** @description A new listing's first version. */
+        NewListing: {
+            about: string;
+            /**
+             * Format: int64
+             * @description The listing it was forked from.
+             */
+            forked_from?: number | null;
+            notes: string;
+            /** @description 1 to 100 characters. */
+            title: string;
+            /**
+             * Format: int64
+             * @description One the caller's moves went to.
+             */
+            version: number;
         };
         /** @description The key and its secret, shown this once. */
         NewSourceKey: {
@@ -3553,8 +3898,16 @@ export interface components {
             spots?: components["schemas"]["SpotInput"][];
             /** @description Draft, verifying or suspended. */
             state: components["schemas"]["State"];
-            /** Format: int64 */
-            trade: number;
+            /** @description A gcid Google lists in its country. */
+            trade: string;
+        };
+        NextListingVersion: {
+            notes: string;
+            /**
+             * Format: int64
+             * @description One the caller's moves went to, of the listing's trade and country.
+             */
+            version: number;
         };
         On: {
             on: boolean;
@@ -3596,7 +3949,7 @@ export interface components {
             people: components["schemas"]["Person"][];
         };
         /** @enum {string} */
-        Permission: "sa:admin:sources:manage" | "sa:admin:tokens:grant" | "sa:admin:trash:keep" | "sa:members:act_as" | "sa:own:credentials" | "sa:own:payments" | "sa:placement:study:read" | "sa:placement:study:spend" | "sa:playbook:mcp:use" | "sa:review_archive:archive:operate" | "sa:sites:analysis:experiments:edit" | "sa:sites:analysis:read" | "sa:sites:work:invoices:create" | "sa:sites:work:leads:edit" | "sa:sites:work:pii:see" | "sa:sites:work:places:edit" | "sa:sites:work:pricing:edit" | "sa:sites:work:read";
+        Permission: "sa:admin:sources:manage" | "sa:admin:tokens:grant" | "sa:admin:trash:keep" | "sa:members:act_as" | "sa:own:credentials" | "sa:own:payments" | "sa:placement:library:curate" | "sa:placement:study:read" | "sa:placement:study:spend" | "sa:playbook:mcp:use" | "sa:review_archive:archive:operate" | "sa:sites:analysis:experiments:edit" | "sa:sites:analysis:read" | "sa:sites:work:invoices:create" | "sa:sites:work:leads:edit" | "sa:sites:work:pii:see" | "sa:sites:work:places:edit" | "sa:sites:work:pricing:edit" | "sa:sites:work:read";
         /** @description Someone a chat names: its owner, a member, one to invite. */
         Person: {
             email: string;
@@ -3686,6 +4039,43 @@ export interface components {
          * @enum {string}
          */
         Provider: "multilogin" | "multilogin_browser" | "gologin";
+        PublishStudy: {
+            /** @description The area's slug: its geometry is frozen into the study. */
+            area: string;
+            /** @description Releases `version` in the same write; without it, the version must be released already. */
+            release?: components["schemas"]["StudyRelease"] | null;
+            /** @description 1 to 100 characters. */
+            title: string;
+            /**
+             * Format: int64
+             * @description The category version it is a study of.
+             */
+            version: number;
+        };
+        PublishedStudies: {
+            studies: components["schemas"]["PublishedStudy"][];
+        };
+        /** @description A study published on a released category version. */
+        PublishedStudy: {
+            /** @description Its area's slug, as it was frozen. */
+            area: string;
+            /** @description RFC 3339. */
+            at: string;
+            /** @description The author's name. */
+            author: string;
+            country: components["schemas"]["Country"];
+            /** Format: int64 */
+            listing: number;
+            listing_title: string;
+            /** @description The release its settings are. */
+            release: components["schemas"]["Release"];
+            /** @description Its definition's id: `GET /placement/studies/{sha}`. */
+            sha: string;
+            title: string;
+            trade: components["schemas"]["GoogleCategory"];
+            /** @description RFC 3339. */
+            withdrawn_at: string | null;
+        };
         PutArea: {
             center: components["schemas"]["LatLng"];
             /** @description A locality's place id, from `/kit/cities`. */
@@ -3715,6 +4105,13 @@ export interface components {
             /** @description The page the question is asked on: what is open. */
             url: string;
         };
+        RankIn: {
+            /**
+             * Format: int64
+             * @description `null`: out of the standard library.
+             */
+            rank?: number | null;
+        };
         ReadInternalReads: {
             /** @constant */
             state: "read";
@@ -3740,6 +4137,26 @@ export interface components {
             missing: components["schemas"]["MustHave"][];
             /** @description Not known now: sites could not be read. */
             unknown: components["schemas"]["MustHave"][];
+        };
+        /** @description A listing's numbered version. */
+        Release: {
+            /**
+             * Format: int64
+             * @description The listing version's id.
+             */
+            id: number;
+            /** Format: int64 */
+            listing: number;
+            /** Format: int64 */
+            n: number;
+            notes: string;
+            /** @description RFC 3339. */
+            published_at: string;
+            /**
+             * Format: int64
+             * @description The category version it releases.
+             */
+            version: number;
         };
         ReportSources: {
             experiments: components["schemas"]["SourceState"];
@@ -3957,11 +4374,8 @@ export interface components {
         };
         SetTrades: {
             gmbs: number[];
-            /**
-             * Format: int64
-             * @description `null` takes their trade away.
-             */
-            trade?: number | null;
+            /** @description A gcid Google lists in each one's country; `null` takes their trade away. */
+            trade?: string | null;
         };
         /** @description `PUT /trash/settings`. */
         SetTrashSettings: {
@@ -3972,16 +4386,6 @@ export interface components {
             keep_days: number;
             /** @description Absent: left as it is. Present: `sa:admin:trash:keep` only. */
             never_purge?: boolean | null;
-        };
-        SetUp: {
-            demand?: components["schemas"]["Demand"] | null;
-            excluded: components["schemas"]["Excluded"];
-            /** @description At most 9, only with a primary. */
-            google_additional: components["schemas"]["AdditionalIn"][];
-            /** @description A gcid Google has in the country. */
-            google_primary?: string | null;
-            /** @description In the country's language, each once normalized; with a primary, its name at weight 1. */
-            keywords: components["schemas"]["KeywordInput"][];
         };
         Site: {
             brands: string[];
@@ -3996,6 +4400,15 @@ export interface components {
             kitstart: string;
             sources: components["schemas"]["ReportSources"];
         };
+        /**
+         * @description A browse's order.
+         *
+         *     - `rank`: The standard library's rank first, then the newest.
+         *     - `recent`: The newest version first.
+         *     - `used`: The most used first.
+         * @enum {string}
+         */
+        Sort: "rank" | "recent" | "used";
         Source: {
             /** @description `null`: read, but nowhere in the panel to open. */
             href: string | null;
@@ -4138,6 +4551,22 @@ export interface components {
          * @enum {string}
          */
         Stop: "at_free" | "never";
+        /** @description How a version is released: a new listing, or the next version of one of the caller's. */
+        StudyRelease: {
+            about: string;
+            /** @constant */
+            as: "new";
+            /** Format: int64 */
+            forked_from?: number | null;
+            notes: string;
+            title: string;
+        } | {
+            /** @constant */
+            as: "next";
+            /** Format: int64 */
+            listing: number;
+            notes: string;
+        };
         /** @description A place what is being typed may be heading for. */
         Suggestion: {
             /** @description Its name, or the address's first line. */
@@ -4282,23 +4711,8 @@ export interface components {
              */
             token_usd: number;
         };
-        /** @description A trade of the caller's: Plumbing, set up in some countries. */
-        Trade: {
-            /** @description By country. */
-            categories: components["schemas"]["Category"][];
-            /** @description RFC 3339. */
-            created_at: string;
-            /** Format: int64 */
-            id: number;
-            name: string;
-        };
-        TradeName: {
-            name: string;
-        };
-        /** @description `GET /trades`. */
-        Trades: {
-            trades: components["schemas"]["Trade"][];
-        };
+        /** @description A trade as its log names it. */
+        Traded: string | number;
         /** @description `GET /trash`. */
         Trash: {
             gmails: components["schemas"]["TrashedGmail"][];
@@ -4480,6 +4894,16 @@ export interface components {
             west: number;
         };
         /**
+         * @description Why a category's head moved.
+         *
+         *     - `edit`: A version of its own, applied.
+         *     - `adopt`: A listing's version, taken.
+         *     - `update`: Its listing's newer version, taken.
+         *     - `revert`: Back to one of its own history's.
+         * @enum {string}
+         */
+        Why: "edit" | "adopt" | "update" | "revert";
+        /**
          * @description Why the conductor closed the socket: its close frame's code.
          * @enum {integer}
          */
@@ -4619,7 +5043,12 @@ export type CallInput = components['schemas']['CallInput'];
 export type Caller = components['schemas']['Caller'];
 export type Candidates = components['schemas']['Candidates'];
 export type Catalog = components['schemas']['Catalog'];
+export type Categories = components['schemas']['Categories'];
 export type Category = components['schemas']['Category'];
+export type CategoryHistory = components['schemas']['CategoryHistory'];
+export type CategoryMove = components['schemas']['CategoryMove'];
+export type CategorySettings = components['schemas']['CategorySettings'];
+export type CategoryVersion = components['schemas']['CategoryVersion'];
 export type Changed = components['schemas']['Changed'];
 export type Chat = components['schemas']['Chat'];
 export type ChatSummary = components['schemas']['ChatSummary'];
@@ -4667,6 +5096,7 @@ export type GmbKit = components['schemas']['GmbKit'];
 export type GmbPhoto = components['schemas']['GmbPhoto'];
 export type GoogleCategories = components['schemas']['GoogleCategories'];
 export type GoogleCategory = components['schemas']['GoogleCategory'];
+export type HeadIn = components['schemas']['HeadIn'];
 export type Imap = components['schemas']['Imap'];
 export type InternalReads = components['schemas']['InternalReads'];
 export type Invite = components['schemas']['Invite'];
@@ -4674,6 +5104,7 @@ export type KeyedSourceKind = components['schemas']['KeyedSourceKind'];
 export type Keyword = components['schemas']['Keyword'];
 export type KeywordInput = components['schemas']['KeywordInput'];
 export type Kickback = components['schemas']['Kickback'];
+export type Kind = components['schemas']['Kind'];
 export type Kit = components['schemas']['Kit'];
 export type KitBlock = components['schemas']['KitBlock'];
 export type KitCategory = components['schemas']['KitCategory'];
@@ -4697,6 +5128,11 @@ export type Layer = components['schemas']['Layer'];
 export type Ledger = components['schemas']['Ledger'];
 export type LedgerEntry = components['schemas']['LedgerEntry'];
 export type LedgerKind = components['schemas']['LedgerKind'];
+export type Library = components['schemas']['Library'];
+export type Lineage = components['schemas']['Lineage'];
+export type Listing = components['schemas']['Listing'];
+export type ListingDetail = components['schemas']['ListingDetail'];
+export type ListingVersion = components['schemas']['ListingVersion'];
 export type Locality = components['schemas']['Locality'];
 export type LogDto = components['schemas']['LogDto'];
 export type LoggedDto = components['schemas']['LoggedDto'];
@@ -4721,8 +5157,10 @@ export type NewChat = components['schemas']['NewChat'];
 export type NewGmail = components['schemas']['NewGmail'];
 export type NewGmb = components['schemas']['NewGmb'];
 export type NewKitDraft = components['schemas']['NewKitDraft'];
+export type NewListing = components['schemas']['NewListing'];
 export type NewSourceKey = components['schemas']['NewSourceKey'];
 export type NewUnplaced = components['schemas']['NewUnplaced'];
+export type NextListingVersion = components['schemas']['NextListingVersion'];
 export type On = components['schemas']['On'];
 export type OnGoogle = components['schemas']['OnGoogle'];
 export type OpenApi = components['schemas']['OpenApi'];
@@ -4741,12 +5179,17 @@ export type PricedItem = components['schemas']['PricedItem'];
 export type Prices = components['schemas']['Prices'];
 export type Probe = components['schemas']['Probe'];
 export type Provider = components['schemas']['Provider'];
+export type PublishStudy = components['schemas']['PublishStudy'];
+export type PublishedStudies = components['schemas']['PublishedStudies'];
+export type PublishedStudy = components['schemas']['PublishedStudy'];
 export type PutArea = components['schemas']['PutArea'];
 export type PutKit = components['schemas']['PutKit'];
 export type Question = components['schemas']['Question'];
+export type RankIn = components['schemas']['RankIn'];
 export type ReadInternalReads = components['schemas']['ReadInternalReads'];
 export type ReadMapOfTimestamp = components['schemas']['ReadMap_of_Timestamp'];
 export type Readiness = components['schemas']['Readiness'];
+export type Release = components['schemas']['Release'];
 export type ReportSources = components['schemas']['ReportSources'];
 export type ReviewArchiveExport = components['schemas']['ReviewArchiveExport'];
 export type Role = components['schemas']['Role'];
@@ -4767,9 +5210,9 @@ export type SetPrices = components['schemas']['SetPrices'];
 export type SetSpots = components['schemas']['SetSpots'];
 export type SetTrades = components['schemas']['SetTrades'];
 export type SetTrashSettings = components['schemas']['SetTrashSettings'];
-export type SetUp = components['schemas']['SetUp'];
 export type Site = components['schemas']['Site'];
 export type SiteReport = components['schemas']['SiteReport'];
+export type Sort = components['schemas']['Sort'];
 export type Source = components['schemas']['Source'];
 export type SourceInput = components['schemas']['SourceInput'];
 export type SourceKey = components['schemas']['SourceKey'];
@@ -4785,6 +5228,7 @@ export type StartBrowser = components['schemas']['StartBrowser'];
 export type State = components['schemas']['State'];
 export type Step = components['schemas']['Step'];
 export type Stop = components['schemas']['Stop'];
+export type StudyRelease = components['schemas']['StudyRelease'];
 export type Suggestion = components['schemas']['Suggestion'];
 export type Suggestions = components['schemas']['Suggestions'];
 export type Switch = components['schemas']['Switch'];
@@ -4796,9 +5240,7 @@ export type Title = components['schemas']['Title'];
 export type TokenHolder = components['schemas']['TokenHolder'];
 export type TokenHolders = components['schemas']['TokenHolders'];
 export type Tokens = components['schemas']['Tokens'];
-export type Trade = components['schemas']['Trade'];
-export type TradeName = components['schemas']['TradeName'];
-export type Trades = components['schemas']['Trades'];
+export type Traded = components['schemas']['Traded'];
 export type Trash = components['schemas']['Trash'];
 export type TrashSettings = components['schemas']['TrashSettings'];
 export type TrashedGbp = components['schemas']['TrashedGbp'];
@@ -4812,6 +5254,7 @@ export type Usage = components['schemas']['Usage'];
 export type UsageDay = components['schemas']['UsageDay'];
 export type Vendor = components['schemas']['Vendor'];
 export type Viewport = components['schemas']['Viewport'];
+export type Why = components['schemas']['Why'];
 export type BrowserClose = components['schemas']['BrowserClose'];
 export type BrowserIn = components['schemas']['BrowserIn'];
 export type BrowserOut = components['schemas']['BrowserOut'];
@@ -4913,7 +5356,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5040,7 +5483,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5172,7 +5615,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5302,7 +5745,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5430,7 +5873,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5563,7 +6006,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5691,7 +6134,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5824,7 +6267,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5952,7 +6395,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6088,7 +6531,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6226,7 +6669,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6359,7 +6802,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6487,7 +6930,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6615,7 +7058,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6749,7 +7192,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6883,7 +7326,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7011,7 +7454,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7143,7 +7586,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7271,7 +7714,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7398,7 +7841,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7527,7 +7970,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7660,7 +8103,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7786,7 +8229,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7914,7 +8357,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8046,7 +8489,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8176,7 +8619,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8304,7 +8747,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8434,7 +8877,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8568,7 +9011,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8700,7 +9143,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8834,7 +9277,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8968,7 +9411,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9102,7 +9545,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9231,7 +9674,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9363,7 +9806,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9497,7 +9940,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9631,7 +10074,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9762,7 +10205,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9890,7 +10333,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10022,7 +10465,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10150,7 +10593,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10284,7 +10727,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10414,7 +10857,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10550,7 +10993,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10680,7 +11123,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10816,7 +11259,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10948,7 +11391,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11078,7 +11521,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11214,7 +11657,1335 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    categories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Categories"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    apply_category: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                country: components["schemas"]["Country"];
+                /** @description `gcid:plumber`. */
+                trade: string;
+            };
+            cookie?: never;
+        };
+        /** @description What a version says. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategorySettings"];
+            };
+        };
+        responses: {
+            /** @description A category of the caller's: their settings for a trade in a country. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete_category: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                country: components["schemas"]["Country"];
+                /** @description `gcid:plumber`. */
+                trade: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    move_category_head: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                country: components["schemas"]["Country"];
+                /** @description `gcid:plumber`. */
+                trade: string;
+            };
+            cookie?: never;
+        };
+        /** @description Where a head moves. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HeadIn"];
+            };
+        };
+        responses: {
+            /** @description A category of the caller's: their settings for a trade in a country. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    category_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                country: components["schemas"]["Country"];
+                /** @description `gcid:plumber`. */
+                trade: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryHistory"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    kit_pool: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                country: components["schemas"]["Country"];
+                /** @description `gcid:plumber`. */
+                trade: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A category's drafts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KitPool"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    add_kit_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                country: components["schemas"]["Country"];
+                /** @description `gcid:plumber`. */
+                trade: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewKitDraft"];
+            };
+        };
+        responses: {
+            /** @description A category's drafts. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KitPool"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    remove_kit_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                country: components["schemas"]["Country"];
+                draft: number;
+                /** @description A gcid. */
+                trade: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    edit_kit_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                country: components["schemas"]["Country"];
+                draft: number;
+                /** @description A gcid. */
+                trade: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditKitDraft"];
+            };
+        };
+        responses: {
+            /** @description A category's drafts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KitPool"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    category_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One version of a trade in a country, named for reading. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryVersion"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11342,7 +13113,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11474,7 +13245,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11602,7 +13373,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11734,7 +13505,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11867,7 +13638,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11995,7 +13766,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12127,7 +13898,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12255,7 +14026,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12387,7 +14158,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12515,7 +14286,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12644,7 +14415,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12777,7 +14548,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12910,7 +14681,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13038,7 +14809,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13167,7 +14938,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13296,7 +15067,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13425,7 +15196,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13559,7 +15330,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13692,7 +15463,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13820,7 +15591,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13949,7 +15720,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14082,7 +15853,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14210,7 +15981,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14339,7 +16110,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14471,7 +16242,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14601,7 +16372,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14731,7 +16502,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14864,7 +16635,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14997,7 +16768,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15127,7 +16898,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15255,7 +17026,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15390,7 +17161,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15522,7 +17293,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15654,7 +17425,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15788,7 +17559,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15919,7 +17690,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16051,7 +17822,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16179,7 +17950,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16314,7 +18085,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16445,7 +18216,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16579,7 +18350,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16713,7 +18484,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16843,7 +18614,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16973,7 +18744,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17104,7 +18875,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17233,7 +19004,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17363,7 +19134,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17490,7 +19261,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17622,7 +19393,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17754,7 +19525,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17882,7 +19653,1192 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    library: {
+        parameters: {
+            query: {
+                country?: components["schemas"]["Country"] | null;
+                kind?: components["schemas"]["Kind"] | null;
+                /** @description In the title, the about or the trade's names, whatever its case. */
+                q?: string | null;
+                sort: components["schemas"]["Sort"];
+                /** @description A gcid. */
+                trade?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Library"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    publish_listing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A new listing's first version. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewListing"];
+            };
+        };
+        responses: {
+            /** @description A listing: a released category of a trade in a country, numbered versions of it. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Listing"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    published_studies: {
+        parameters: {
+            query?: {
+                /** @description An area's slug. */
+                area?: string | null;
+                country?: components["schemas"]["Country"] | null;
+                /** @description A gcid. */
+                trade?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedStudies"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    publish_study: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishStudy"];
+            };
+        };
+        responses: {
+            /** @description A study published on a released category version. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedStudy"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    withdraw_study: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A published study's definition id. */
+                sha: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingDetail"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    rank_listing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RankIn"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    publish_listing_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NextListingVersion"];
+            };
+        };
+        responses: {
+            /** @description A listing: a released category of a trade in a country, numbered versions of it. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Listing"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    withdraw_listing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18012,7 +20968,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18143,7 +21099,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18276,7 +21232,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18409,7 +21365,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18604,7 +21560,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18730,7 +21686,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18857,7 +21813,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18989,7 +21945,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19115,7 +22071,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19243,7 +22199,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19371,7 +22327,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19564,7 +22520,269 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    published_study: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A published study's definition id. */
+                sha: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description placement's payload, for the map's overlay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    pull_published_study: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A published study's definition id. */
+                sha: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description placement's payload, for the map's overlay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19617,10 +22835,10 @@ export interface operations {
                 /** @description The area's slug. */
                 area: string;
                 /**
-                 * @description `<trade id>.<country>`: one of the caller's trades as set up for a country. None: the area's
+                 * @description A category version the caller may read: one of theirs, or a released one. None: the area's
                  *     grid alone, nothing billed.
                  */
-                category?: string | null;
+                version?: number | null;
             };
             header?: never;
             path?: never;
@@ -19700,7 +22918,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19753,10 +22971,10 @@ export interface operations {
                 /** @description The area's slug. */
                 area: string;
                 /**
-                 * @description `<trade id>.<country>`: one of the caller's trades as set up for a country. None: the area's
+                 * @description A category version the caller may read: one of theirs, or a released one. None: the area's
                  *     grid alone, nothing billed.
                  */
-                category?: string | null;
+                version?: number | null;
             };
             header?: never;
             path?: never;
@@ -19836,7 +23054,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19963,7 +23181,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20095,7 +23313,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20222,7 +23440,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20350,7 +23568,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20482,7 +23700,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20610,7 +23828,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20738,7 +23956,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20871,7 +24089,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21002,7 +24220,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21130,1325 +24348,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    trades: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `GET /trades`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Trades"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    add_trade: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TradeName"];
-            };
-        };
-        responses: {
-            /** @description A trade of the caller's: Plumbing, set up in some countries. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Trade"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    delete_trade: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    rename_trade: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TradeName"];
-            };
-        };
-        responses: {
-            /** @description A trade of the caller's: Plumbing, set up in some countries. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Trade"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    set_up_trade: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                country: components["schemas"]["Country"];
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetUp"];
-            };
-        };
-        responses: {
-            /** @description A trade of the caller's: Plumbing, set up in some countries. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Trade"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    remove_category: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                country: components["schemas"]["Country"];
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    kit_pool: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                country: components["schemas"]["Country"];
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A category's drafts. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KitPool"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    add_kit_draft: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                country: components["schemas"]["Country"];
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NewKitDraft"];
-            };
-        };
-        responses: {
-            /** @description A category's drafts. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KitPool"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    remove_kit_draft: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                country: components["schemas"]["Country"];
-                draft: number;
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description no content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    edit_kit_draft: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                country: components["schemas"]["Country"];
-                draft: number;
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EditKitDraft"];
-            };
-        };
-        responses: {
-            /** @description A category's drafts. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KitPool"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22576,7 +24476,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22704,7 +24604,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22832,7 +24732,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22960,7 +24860,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23088,7 +24988,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23219,7 +25119,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `no_google_category`, `unstudied` */
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23284,32 +25184,35 @@ export const closedValues: ReadonlyArray<FlattenedDeepRequired<components>["sche
 export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Country"]> = ["FR", "US", "CA", "GB"];
 export const destinationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DestinationKind"]> = ["channel", "private", "group"];
 export const deviceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Device"]> = ["pixel_7", "galaxy_s23", "redmi_note_14"];
-export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["another_country", "bad_gateway", "bad_request", "browsers_not_connected", "conflict", "csrf", "forbidden", "internal", "no_google_category", "not_found", "too_large", "too_many", "unaffordable", "unauthenticated", "unavailable", "unstudied"];
+export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["another_country", "bad_gateway", "bad_request", "browsers_not_connected", "conflict", "csrf", "forbidden", "internal", "not_found", "too_large", "too_many", "unaffordable", "unauthenticated", "unavailable", "unreleased_category", "unstudied"];
 export const feedbackValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Feedback"]> = ["up", "down"];
 export const fieldValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Field"]> = ["name", "place_id", "address", "phone", "website", "hours", "google_primary", "country", "point", "photos", "areas", "hidden_address", "customers_visit", "spots", "role", "owner_gmail"];
 export const flowKindDtoValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FlowKindDto"]> = ["renewal", "purchase", "set", "spend", "grant_claimed", "refund", "granted"];
 export const gbpRoleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GbpRole"]> = ["owner", "manager"];
 export const generalAccessValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["GeneralAccess"]> = ["none", "view"];
 export const keyedSourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KeyedSourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "bot"];
+export const kindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Kind"]> = ["standard", "community", "mine", "used"];
 export const kitBlockValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitBlock"]> = ["suspended", "draft", "verifying", "off", "no_page"];
 export const kitHappeningValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitHappening"]> = ["shown", "scanned", "opened", "copied", "saved", "posted", "reviewed", "gone"];
 export const kitTargetValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitTarget"]> = ["google", "drafts", "one_tap"];
 export const ledgerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["LedgerKind"]> = ["add", "set", "charge", "accrual", "kickback"];
 export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MentionKind"]> = ["location"];
 export const mustHaveValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MustHave"]> = ["name", "areas", "phone", "film", "gmail", "category", "site", "hidden_address", "profile"];
-export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:members:act_as", "sa:own:credentials", "sa:own:payments", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
+export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:members:act_as", "sa:own:credentials", "sa:own:payments", "sa:placement:library:curate", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
 export const onGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OnGoogle"]> = ["verifying", "verified", "suspended"];
-export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Permission"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:members:act_as", "sa:own:credentials", "sa:own:payments", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
+export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Permission"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:members:act_as", "sa:own:credentials", "sa:own:payments", "sa:placement:library:curate", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
 export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "places.profile", "places.photo", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "placement.search", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic", "claude.input", "claude.cache_write", "claude.cache_read", "claude.output"];
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
 export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "payment_received", "source_silent", "booked", "access_requested", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed"];
 export const scaleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scale"]> = ["linear", "percentile"];
 export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scope"]> = ["conductor", "review_archive", "browsers", "placement"];
+export const sortValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Sort"]> = ["rank", "recent", "used"];
 export const sourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SourceKind"]> = ["site", "review_archive", "gbp", "posthog", "sheet", "telephony", "panel", "booking", "bot"];
 export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["State"]> = ["draft", "verifying", "verified", "suspended"];
 export const stopValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Stop"]> = ["at_free", "never"];
 export const tabValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tab"]> = ["profile", "log", "launch", "browser", "connections", "stats", "ranking", "reviews", "verification", "appeal"];
 export const vendorValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Vendor"]> = ["google"];
+export const whyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Why"]> = ["edit", "adopt", "update", "revert"];
 export const browserCloseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BrowserClose"]> = [4401, 4404, 4409, 4410, 1000, 1001, 1003, 1007];
 export const touchPhaseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["TouchPhase"]> = ["start", "move", "end"];

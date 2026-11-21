@@ -23,7 +23,7 @@ use crate::{
 };
 pub use crate::{
 	google_categories::GoogleCategory,
-	store::gmbs::{Category, Changed, Event, EventKind, Field, GbpCountry, Gmail, Gmb, GmbId, GmbPhoto, Logged, Point, Spot, Trade, TradeId},
+	store::gmbs::{Changed, Event, EventKind, Field, GbpCountry, Gmail, Gmb, GmbId, GmbPhoto, Logged, Point, Spot, Traded},
 };
 
 /// The rows of a page of a GBP's log.
@@ -40,16 +40,16 @@ pub struct Existing {
 	/// Used when Google gives none, as `country`.
 	pub name: Option<String>,
 	pub country: Option<Country>,
-	/// The owner's.
-	pub trade: Option<i64>,
+	/// A gcid Google lists in its country.
+	pub trade: Option<String>,
 }
 
 /// A GBP no place is known of yet: a draft, or one on Google not on Maps.
 #[derive(Clone, Debug)]
 pub struct Unplaced {
 	pub name: String,
-	/// The owner's.
-	pub trade: i64,
+	/// A gcid Google lists in its country.
+	pub trade: String,
 	/// Not verified: a verified GBP is on Maps, added by its place ([`Existing`]).
 	pub state: State,
 	/// The owner's; past a draft, required.
@@ -71,8 +71,8 @@ pub struct Edit {
 	pub gmail_id: Option<i64>,
 	/// One live GBP's.
 	pub phone: Option<Option<String>>,
-	/// The owner's.
-	pub trade: Option<Option<i64>>,
+	/// A gcid Google lists in its country.
+	pub trade: Option<Option<String>>,
 	/// 1 to 20, none twice.
 	pub areas: Option<Option<Vec<String>>>,
 	pub hidden_address: Option<Option<String>>,
@@ -115,12 +115,14 @@ impl Edit {
 	}
 }
 
-/// `trade`, if any, is `owner`'s.
-async fn trade_is(conn: &mut sqlx::SqliteConnection, owner: Uuid, trade: Option<i64>) -> eyre::Result<bool> {
-	Ok(match trade {
-		None => true,
-		Some(t) => db::trade_owner(conn, t).await? == Some(owner),
-	})
+/// `trade`, if any, is a gcid Google lists in `country`, or anywhere while a GBP has none.
+fn trade_listed(trade: Option<&str>, country: Option<Country>) -> Result<(), Refused> {
+	let listed = match (trade, country) {
+		(None, _) => return Ok(()),
+		(Some(t), Some(c)) => GoogleCategory::find(c, t),
+		(Some(t), None) => GoogleCategory::listed(t),
+	};
+	listed.map(drop).map_err(|e| Refused::Invalid(e.to_string()))
 }
 
 pub(crate) fn places_error(e: sa_places::Error) -> eyre::Result<Refused> {
@@ -293,8 +295,8 @@ impl Panel {
 		})
 	}
 
-	/// A GBP no place is known of: its name, which no live GBP has, the owner's trade; past a
-	/// draft, the owner's gmail and its country.
+	/// A GBP no place is known of: its name, which no live GBP has, its trade; past a draft, the
+	/// owner's gmail and its country.
 	pub async fn create_gmb(&self, owner: Uuid, u: Unplaced, now: Timestamp) -> eyre::Result<Result<Gmb, Refused>> {
 		let checked = name(&u.name).and_then(|n| {
 			if u.state == State::Verified {
@@ -310,6 +312,7 @@ impl Panel {
 				_ => Vec::new(),
 			};
 			u.at.map(on_earth).transpose()?;
+			trade_listed(Some(&u.trade), u.country)?;
 			Ok((n, spots))
 		});
 		let (name, spots) = match checked {
@@ -319,9 +322,6 @@ impl Panel {
 		let mut tx = self.store.begin_write().await?;
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
-		}
-		if !trade_is(&mut tx, owner, Some(u.trade)).await? {
-			return Ok(Err(Refused::NotFound));
 		}
 		if let Some(g) = u.gmail_id
 			&& db::gmail_owner(&mut tx, g).await? != Some(owner)
@@ -351,7 +351,7 @@ impl Panel {
 			country_by_hand: u.country.is_some(),
 			at: u.at,
 			at_by_hand: u.at.is_some(),
-			trade_id: Some(u.trade),
+			trade: Some(&u.trade),
 		};
 		let mut added = db::add_gmb(&mut tx, None, &new, now).await?;
 		if !spots.is_empty() {
@@ -395,6 +395,9 @@ impl Panel {
 			(Ok(c), Ok(n)) => (c, n),
 			(Err(r), _) | (_, Err(r)) => return Ok(Err(r)),
 		};
+		if let Err(r) = trade_listed(e.trade.as_deref(), Some(country)) {
+			return Ok(Err(r));
+		}
 		let mut tx = self.store.begin_write().await?;
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
@@ -403,9 +406,6 @@ impl Panel {
 			Some(o) if owner.is_none_or(|owner| owner == o) => o,
 			_ => return Ok(Err(Refused::NotFound)),
 		};
-		if !trade_is(&mut tx, gmail_owner, e.trade).await? {
-			return Ok(Err(Refused::NotFound));
-		}
 		if let Some(why) = db::taken(
 			&mut tx,
 			Unique {
@@ -430,7 +430,7 @@ impl Panel {
 			country_by_hand: by_hand,
 			at: place.as_ref().and_then(|p| p.location),
 			at_by_hand: false,
-			trade_id: e.trade,
+			trade: e.trade.as_deref(),
 		};
 		let added = db::add_gmb(&mut tx, None, &new, now).await?;
 		db::log(&mut tx, Some(added.id), added.gmail_id, owner, now, &Event::Added { state: added.state }).await?;
@@ -466,8 +466,8 @@ impl Panel {
 		if let Some(n) = &edit.name {
 			db::rename(&mut tx, id, n).await?;
 		}
-		if !trade_is(&mut tx, owner, edit.trade.flatten()).await? {
-			return Ok(Err(Refused::NotFound));
+		if let Err(r) = trade_listed(edit.trade.clone().flatten().as_deref(), gbp.country.map(|c| c.code)) {
+			return Ok(Err(r));
 		}
 		let moved = edit.gmail_id.is_some_and(|g| gbp.gmail_id != Some(g));
 		let role = edit.role.unwrap_or(if moved { None } else { gbp.role });
@@ -793,161 +793,9 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
-	/// The owner's trades, each with the countries it is set up for.
-	pub async fn trades(&self, owner: Uuid) -> eyre::Result<Vec<Trade>> {
-		db::trades(&mut *self.store.pool().acquire().await.wrap_err("a connection for trades")?, owner).await
-	}
-
-	/// A trade of the owner's, set up nowhere yet: its name, no other of theirs whatever its case.
-	pub async fn add_trade(&self, owner: Uuid, raw: &str, now: Timestamp) -> eyre::Result<Result<Trade, Refused>> {
-		let Some(name) = trade_name(raw) else {
-			return Ok(Err(Refused::Invalid("a trade's name is not empty".to_owned())));
-		};
-		let mut tx = self.store.begin_write().await?;
-		if !is_open(&mut tx).await? {
-			return Ok(Err(Refused::Closed));
-		}
-		if db::trade_named(&mut tx, owner, &name, None).await?.is_some() {
-			return Ok(Err(Refused::Conflict(format!("{name} is one of your trades already"))));
-		}
-		let id = db::add_trade(&mut tx, owner, &name, now).await?;
-		let added = trade_of(&mut tx, owner, id).await?.expect("added in this transaction");
-		tx.commit().await.wrap_err("committing a trade")?;
-		Ok(Ok(added))
-	}
-
-	pub async fn rename_trade(&self, owner: Uuid, id: i64, raw: &str) -> eyre::Result<Result<Trade, Refused>> {
-		let Some(name) = trade_name(raw) else {
-			return Ok(Err(Refused::Invalid("a trade's name is not empty".to_owned())));
-		};
-		let mut tx = self.store.begin_write().await?;
-		if !is_open(&mut tx).await? {
-			return Ok(Err(Refused::Closed));
-		}
-		if db::trade_owner(&mut tx, id).await? != Some(owner) {
-			return Ok(Err(Refused::NotFound));
-		}
-		if db::trade_named(&mut tx, owner, &name, Some(id)).await?.is_some() {
-			return Ok(Err(Refused::Conflict(format!("{name} is one of your trades already"))));
-		}
-		db::rename_trade(&mut tx, id, &name).await?;
-		let renamed = trade_of(&mut tx, owner, id).await?.expect("read in this transaction");
-		tx.commit().await.wrap_err("committing a trade's name")?;
-		Ok(Ok(renamed))
-	}
-
-	/// The owner's trade `id` and its categories, while no live GBP holds it.
-	pub async fn delete_trade(&self, owner: Uuid, id: i64) -> eyre::Result<Result<(), Refused>> {
-		let mut tx = self.store.begin_write().await?;
-		if !is_open(&mut tx).await? {
-			return Ok(Err(Refused::Closed));
-		}
-		if db::trade_owner(&mut tx, id).await? != Some(owner) {
-			return Ok(Err(Refused::NotFound));
-		}
-		match db::trade_holders(&mut tx, id).await? {
-			0 => {}
-			n => return Ok(Err(Refused::Conflict(format!("{n} GBPs hold trade {id}: give them another first")))),
-		}
-		if crate::store::kit::held(&mut tx, id, None).await? > 0 {
-			return Ok(Err(Refused::Conflict(format!("trade {id} has review drafts: their uses are kept"))));
-		}
-		if crate::store::brands::ever(&mut tx, id, None).await? > 0 {
-			return Ok(Err(Refused::Conflict(format!("trade {id} has brands: their photos' uses are kept"))));
-		}
-		db::delete_trade(&mut tx, id).await?;
-		tx.commit().await.wrap_err("committing a trade's deletion")?;
-		Ok(Ok(()))
-	}
-
-	/// The owner's trade `id` set up for `c.country` as `c` says, over what it was: the keywords in
-	/// [`gmaps_optimal_placement_core::keywords`]' form and weighed, the primary's name among them at weight 1, at
-	/// most 9 additional Google categories beside a primary, none twice, each weighed; the excluded
-	/// words trimmed lowercase.
-	pub async fn set_up(&self, owner: Uuid, id: i64, c: Category) -> eyre::Result<Result<Trade, Refused>> {
-		let texts = match gmaps_optimal_placement_core::keywords(&c.keywords.iter().map(|k| k.text.clone()).collect::<Vec<_>>()) {
-			Ok(k) => k,
-			Err(e) => return Ok(Err(Refused::Invalid(e.to_string()))),
-		};
-		let keywords: Vec<_> = texts
-			.into_iter()
-			.zip(&c.keywords)
-			.map(|(text, k)| gmaps_optimal_placement_core::Keyword { text, weight: k.weight })
-			.collect();
-		let excluded = gmaps_optimal_placement_core::Excluded {
-			words: c.excluded.words.iter().map(|w| w.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()).collect(),
-			types: c.excluded.types.clone(),
-		};
-		let checked = gmaps_optimal_placement_core::weighed(&keywords)
-			.and_then(|()| excluded.check())
-			.and_then(|()| c.demand.as_ref().map_or(Ok(()), gmaps_optimal_placement_core::Demand::check));
-		if let Err(e) = checked {
-			return Ok(Err(Refused::Invalid(e.to_string())));
-		}
-		if let Some((g, w)) = c.google_additional.iter().find(|(_, w)| !(w.is_finite() && *w > 0.)) {
-			return Ok(Err(Refused::Invalid(format!("Google category {} weighs {w}: a weight is positive", g.id))));
-		}
-		if let Some(p) = c.google_primary {
-			let name = p.names.get(c.country.lang()).expect("google_categories.json names each in its countries' languages");
-			let primary = match gmaps_optimal_placement_core::keywords(std::slice::from_ref(name)) {
-				Ok(k) => k.into_iter().next().expect("one in, one out"),
-				Err(e) => return Ok(Err(Refused::Invalid(e.to_string()))),
-			};
-			if !keywords.iter().any(|k| k.text == primary && k.weight == Some(1.)) {
-				return Ok(Err(Refused::Invalid(format!(
-					"the keywords carry the primary's name {primary:?} at weight 1: the rest are weighed against it"
-				))));
-			}
-		}
-		if c.google_additional.len() > 9 {
-			return Ok(Err(Refused::Invalid("Google takes at most 9 additional categories".to_owned())));
-		}
-		if c.google_primary.is_none() && !c.google_additional.is_empty() {
-			return Ok(Err(Refused::Invalid("additional Google categories need a primary one".to_owned())));
-		}
-		let mut seen = BTreeSet::new();
-		if let Some(twice) = c.google_primary.iter().chain(c.google_additional.iter().map(|(g, _)| g)).find(|g| !seen.insert(g.id)) {
-			return Ok(Err(Refused::Invalid(format!("Google category {} twice", twice.id))));
-		}
-		let c = Category { keywords, excluded, ..c };
-		let mut tx = self.store.begin_write().await?;
-		if !is_open(&mut tx).await? {
-			return Ok(Err(Refused::Closed));
-		}
-		if db::trade_owner(&mut tx, id).await? != Some(owner) {
-			return Ok(Err(Refused::NotFound));
-		}
-		db::set_up(&mut tx, id, &c).await?;
-		let set = trade_of(&mut tx, owner, id).await?.expect("read in this transaction");
-		tx.commit().await.wrap_err("committing a category")?;
-		Ok(Ok(set))
-	}
-
-	/// The owner's trade `id` no longer set up in `country`: its GBPs there are not set up.
-	pub async fn remove_category(&self, owner: Uuid, id: i64, country: Country) -> eyre::Result<Result<(), Refused>> {
-		let mut tx = self.store.begin_write().await?;
-		if !is_open(&mut tx).await? {
-			return Ok(Err(Refused::Closed));
-		}
-		if db::trade_owner(&mut tx, id).await? != Some(owner) {
-			return Ok(Err(Refused::NotFound));
-		}
-		if crate::store::kit::held(&mut tx, id, Some(country)).await? > 0 {
-			return Ok(Err(Refused::Conflict(format!("{country} has review drafts: their uses are kept"))));
-		}
-		if crate::store::brands::ever(&mut tx, id, Some(country)).await? > 0 {
-			return Ok(Err(Refused::Conflict(format!("{country} has brands: their photos' uses are kept"))));
-		}
-		if !db::remove_category(&mut tx, id, country).await? {
-			return Ok(Err(Refused::NotFound));
-		}
-		tx.commit().await.wrap_err("committing a category's removal")?;
-		Ok(Ok(()))
-	}
-
-	/// Every one of `ids` given the owner's `trade` (`None`: none), or none of them: each must be
-	/// the owner's, not removed.
-	pub async fn set_trades(&self, owner: Uuid, ids: &[i64], trade: Option<i64>) -> eyre::Result<Result<(), Refused>> {
+	/// Every one of `ids` given `trade` (`None`: none), or none of them: each must be the owner's,
+	/// not removed, in a country Google lists it in.
+	pub async fn set_trades(&self, owner: Uuid, ids: &[i64], trade: Option<&str>) -> eyre::Result<Result<(), Refused>> {
 		let ids: BTreeSet<i64> = ids.iter().copied().collect();
 		if ids.is_empty() {
 			return Ok(Err(Refused::Invalid("no GBP to give a trade".to_owned())));
@@ -957,19 +805,14 @@ impl Panel {
 			return Ok(Err(Refused::Closed));
 		}
 		let befores = db::of_ids(&mut tx, &ids).await?;
-		if !trade_is(&mut tx, owner, trade).await? || !db::set_trades(&mut tx, owner, &ids, trade).await? {
+		if let Some(r) = befores.iter().find_map(|b| trade_listed(trade, b.country.map(|c| c.code)).err()) {
+			return Ok(Err(r));
+		}
+		if !db::set_trades(&mut tx, owner, &ids, trade).await? {
 			return Ok(Err(Refused::NotFound));
 		}
 		db::record_since(&mut tx, Some(owner), Timestamp::now(), &befores).await?;
 		tx.commit().await.wrap_err("committing GBPs' trade")?;
 		Ok(Ok(()))
 	}
-}
-
-fn trade_name(raw: &str) -> Option<String> {
-	Some(raw.trim()).filter(|n| !n.is_empty()).map(str::to_owned)
-}
-
-async fn trade_of(conn: &mut sqlx::SqliteConnection, owner: Uuid, id: i64) -> eyre::Result<Option<Trade>> {
-	Ok(db::trades(conn, owner).await?.into_iter().find(|t| t.id == id))
 }

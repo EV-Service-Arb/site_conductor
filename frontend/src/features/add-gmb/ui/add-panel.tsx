@@ -6,7 +6,7 @@ import { useEffect, useId, useState } from "react";
 import {
   type Adding,
   STATE_NAME,
-  TradeSelect,
+  TradePicker,
   gmbs,
   closeWindow,
   openWindow,
@@ -47,7 +47,7 @@ export function AddPanel({ at, page }: { at: Adding; page: boolean }) {
   const id = useId();
   const gmails = useGmails();
   const [state, setState] = useState<State>("draft");
-  const [trade, setTrade] = useState<number | null>(scopedTrade ?? null);
+  const [trade, setTrade] = useState<string | null>(scopedTrade ?? null);
   const [name, setName] = useState("");
   const [gmail, setGmail] = useState<number | null>(scopedGmail ?? null);
   const [picked, setPicked] = useState<Place | null>(null);
@@ -103,7 +103,6 @@ export function AddPanel({ at, page }: { at: Adding; page: boolean }) {
   return (
     <section aria-label={title} className="flex flex-col">
       <p className="px-6 pt-4 pb-3 text-sm text-ink-soft">{STATE_HINT[state](t)}</p>
-      {/* no <form>: the trade select holds its own, for a new trade */}
       <div className="flex flex-1 flex-col gap-4 px-6 pb-6">
         <ToggleGroup
           type="single"
@@ -127,7 +126,7 @@ export function AddPanel({ at, page }: { at: Adding; page: boolean }) {
         </ToggleGroup>
         <Field className="flex flex-col gap-1">
           <FieldLabel>{t(trades.trade, "Trade")}</FieldLabel>
-          <TradeSelect value={trade} onPick={setTrade} label={t(trades.trade, "Trade")} country={where} className="w-full" />
+          <TradePicker value={trade} onPick={setTrade} label={t(trades.trade, "Trade")} country={where} className="w-full" />
         </Field>
         {verified ? (
           <Field className="flex flex-col gap-1">

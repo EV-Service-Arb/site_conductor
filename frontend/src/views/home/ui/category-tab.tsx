@@ -2,15 +2,17 @@
 
 import { useResource } from "@evinvest/api/react";
 import { Button, Input, NativeSelect, NativeSelectOption, Slider, Tabs, TabsList, TabsTrigger, Textarea, cn } from "@evinvest/uikit";
-import { LayoutGrid, Lock, Map as MapIcon, Plus, Settings2, X } from "lucide-react";
+import { History as HistoryIcon, LayoutGrid, Lock, Map as MapIcon, Plus, Settings2, Upload, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { BrandMark, STATE_NAME, googleName, kit, openWindow, select, trades as tradesKeys, useBrands, useTrades } from "@/entities/gmb";
-import { categoryKey, setMapView } from "@/features/placement-overlay";
+import { BrandMark, HeadBadges, PublishDialog, STATE_NAME, VersionDiff, VersionRead, adoptRelease, categoryName, googleName, kit, normalized, openWindow, revertCategory, select, trades as tradesKeys, useBrands, useCategories } from "@/entities/gmb";
+import { setMapView } from "@/features/placement-overlay";
 import { Refused, api, ok } from "@/shared/api";
-import { type Category, type Demand, type Excluded, type Gmb, type GoogleCategory, type Keyword, type State, type Trade, scaleValues, stateValues } from "@/shared/api/schema";
-import { useLocale, useT } from "@/shared/i18n";
+import { type Category, type CategoryMove, type Demand, type Excluded, type Gmb, type Keyword, type State, type Why, scaleValues, stateValues } from "@/shared/api/schema";
+import { type T, state, useLocale, useT } from "@/shared/i18n";
+import { formatDateTime } from "@/shared/lib/format";
 import { failureText } from "@/shared/ui/failure-text";
+import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 import { KitPool } from "@/views/kit";
 
@@ -24,30 +26,34 @@ const HINT = "font-normal tracking-normal normal-case";
 /** STATE_TONE's, as a fill. */
 const FILL: Record<State, string> = { verified: "bg-positive", verifying: "bg-accent-warn", suspended: "bg-accent-error", draft: "bg-ink-soft" };
 
-/** What the category's studies read, as staged: the API's Category with its Google categories' weights possibly not given yet. */
-type Draft = { primary: GoogleCategory | null; additional: Tier[]; keywords: Keyword[]; excluded: Excluded; demand: Demand | null };
-type Tile = "overview" | "definition" | "kit";
+const WHY_NAME = {
+  edit: (t) => t(tradesKeys.history.edit, "Edited"),
+  adopt: (t) => t(tradesKeys.history.adopt, "Adopted"),
+  update: (t) => t(tradesKeys.history.update, "Updated"),
+  revert: (t) => t(tradesKeys.history.revert, "Reverted"),
+} satisfies Record<Why, (t: T) => string>;
 
-const draftOf = (c: Category): Draft => ({ primary: c.google_primary, additional: c.google_additional, keywords: c.keywords, excluded: c.excluded, demand: c.demand });
+/** What the category's studies read, as staged: its additional Google categories' weights possibly not given yet. */
+type Draft = { additional: Tier[]; keywords: Keyword[]; excluded: Excluded; demand: Demand | null };
+type Tile = "overview" | "definition" | "history" | "kit";
 
-/** As sa_core::gbp::keywords stores a keyword. */
-const normalized = (s: string) => s.trim().split(/\s+/).join(" ").toLowerCase();
+const draftOf = (c: Category): Draft => ({ additional: c.head.additional, keywords: c.head.keywords, excluded: c.head.excluded, demand: c.head.demand });
 
-/** The primary's name as its keyword: the reference every other is weighed against. */
-const nameOf = (g: GoogleCategory, lang: string) => normalized(googleName(g, lang));
-
-/** A set-up category: what holds it now, and what Google and its studies read; its review kit's drafts beside. A page wide enough splits Overview beside the rest, as a GBP's window does. */
-export function CategoryTab({ trade, category, here, page }: { trade: Trade; category: Category; here: readonly Gmb[]; page: boolean }) {
+/** A set-up category: what holds it now, and what Google and its studies read; its history and its review kit's drafts beside. A page wide enough splits Overview beside the rest, as a GBP's window does. */
+export function CategoryTab({ category, here, page }: { category: Category; here: readonly Gmb[]; page: boolean }) {
   const t = useT();
+  const locale = useLocale();
   const [setBox, wide] = useSplit(page);
   const [tile, setTile] = useState<Tile>("overview");
   const [draft, setDraft] = useState<Draft | null>(null);
   const brands = useBrands();
   const areas = useAreasOf(category, here);
-  const pool = useResource(api, "/trades/{id}/{country}/kit", { params: { path: { id: trade.id, country: category.country } } });
+  const path = { params: { path: { trade: category.trade.id, country: category.country } } };
+  const pool = useResource(api, "/categories/{trade}/{country}/kit", path);
+  const history = useMoves(category);
   const base = draftOf(category);
   const staged = draft === null ? 0 : unapplied(base, draft);
-  const nBrands = brands.status === "ok" ? brands.data.filter((b) => b.trade_id === trade.id && b.country === category.country).length : null;
+  const nBrands = brands.status === "ok" ? brands.data.filter((b) => b.trade === category.trade.id && b.country === category.country).length : null;
   const label = {
     overview: (
       <>
@@ -63,18 +69,26 @@ export function CategoryTab({ trade, category, here, page }: { trade: Trade; cat
         {staged > 0 && <span className="font-mono text-xs text-accent-warn tabular-nums">{t(tradesKeys.definition.unapplied, "{n} unapplied", { n: staged })}</span>}
       </>
     ),
+    history: (
+      <>
+        <HistoryIcon aria-hidden />
+        {history.status === "ok" ? t(tradesKeys.history.counted, "History {n}", { n: history.data.moves.length }) : t(tradesKeys.history, "History")}
+      </>
+    ),
     kit: pool.status === "ok" ? t(kit.pane.draftsCounted, "Drafts {drafts}", { drafts: pool.data.drafts.length }) : t(kit.pane.drafts, "Drafts"),
   } satisfies Record<Tile, ReactNode>;
   const body = (shown: Tile) => {
     switch (shown) {
       case "overview":
-        return <Overview trade={trade} category={category} here={here} areas={areas} />;
+        return <Overview category={category} here={here} areas={areas} />;
       case "definition":
-        return <Definition key={`${trade.id}.${category.country}`} trade={trade} category={category} base={base} draft={draft ?? base} staged={staged} setDraft={setDraft} />;
+        return <Definition key={`${category.trade.id}.${category.country}`} category={category} base={base} draft={draft ?? base} staged={staged} setDraft={setDraft} />;
+      case "history":
+        return <History category={category} moves={history} />;
       case "kit":
         return (
           <div className="p-6">
-            <KitPool trade={trade.id} country={category.country} />
+            <KitPool trade={category.trade.id} country={category.country} />
           </div>
         );
     }
@@ -95,30 +109,153 @@ export function CategoryTab({ trade, category, here, page }: { trade: Trade; cat
   const right: Tile = tile === "overview" ? "definition" : tile;
   return (
     <div ref={setBox} className="flex min-h-0 flex-1 flex-col">
+      <Head category={category} onHistory={() => setTile("history")} />
       {wide ? (
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,36rem)_minmax(0,1fr)] divide-x divide-border">
           <section className="flex min-h-0 flex-col overflow-y-auto">
             <h3 className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-4 text-sm font-semibold text-ink [&_svg]:size-4">
               {label.overview}
               <span className="flex-1" />
-              <span className="text-xs font-normal text-ink-soft">{t(tradesKeys.overview.what, "what holds {category} now", { category: `${trade.name} · ${category.country}` })}</span>
+              <span className="text-xs font-normal text-ink-soft">{t(tradesKeys.overview.what, "what holds {category} now", { category: categoryName(category.trade, category.country, locale) })}</span>
             </h3>
             {body("overview")}
           </section>
           <section className="flex min-h-0 flex-col overflow-y-auto">
-            {strip(["definition", "kit"], right)}
+            {strip(["definition", "history", "kit"], right)}
             {body(right)}
           </section>
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          {strip(["overview", "definition", "kit"], tile)}
+          {strip(["overview", "definition", "history", "kit"], tile)}
           {body(tile)}
         </div>
       )}
     </div>
   );
 }
+
+/** Where its head stands, and Publish…; a newer release of the listing it came from, offered after its diff and never taken unasked. */
+function Head({ category, onHistory }: { category: Category; onHistory: () => void }) {
+  const t = useT();
+  const locale = useLocale();
+  const button = useButtonSize();
+  const categories = useCategories();
+  const [publishing, setPublishing] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const { lineage } = category;
+  const upstream = lineage?.upstream ?? null;
+  const update = async () => {
+    if (upstream === null) throw new Error("an update with no newer release");
+    try {
+      await adoptRelease(category.trade.id, category.country, upstream);
+      setReviewing(false);
+      categories.reload();
+    } catch (e) {
+      notifyFailure(e, t);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2 border-b border-border px-6 py-2">
+      <span className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-ink-soft">{t(tradesKeys.head, "Head")}</span>
+        <button type="button" onClick={onHistory} className="rounded font-mono text-xs text-ink-soft outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+          {t(tradesKeys.head.at, "v{id} · {at}", { id: category.head.id, at: formatDateTime(category.head.at, locale) })}
+        </button>
+        <HeadBadges category={category} />
+        {lineage !== null && (
+          <button type="button" onClick={() => openWindow({ kind: "library", listing: lineage.listing })} className="rounded text-xs text-ink-soft underline-offset-2 outline-none hover:text-ink hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+            {t(tradesKeys.head.listingOpen, "its listing ↗")}
+          </button>
+        )}
+        <span className="flex-1" />
+        <Button variant="outline" size={button("sm")} onClick={() => setPublishing(true)}>
+          <Upload aria-hidden />
+          {t(tradesKeys.release.open, "Publish…")}
+        </Button>
+      </span>
+      {upstream !== null && lineage !== null && (
+        <div className="flex flex-col gap-2 rounded-lg border border-accent-warn/40 bg-accent-warn/5 px-3 py-2">
+          <span className="flex flex-wrap items-center gap-2 text-sm text-ink">
+            <span className="min-w-0 flex-1">
+              {lineage.edited
+                ? t(tradesKeys.upstream.edited, "{listing} v{n} is out; yours is v{from}, edited since.", { listing: lineage.title, n: upstream.n, from: lineage.from.n })
+                : t(tradesKeys.upstream.what, "{listing} v{n} is out; yours is v{from}.", { listing: lineage.title, n: upstream.n, from: lineage.from.n })}
+            </span>
+            <Button variant="outline" size={button("sm")} aria-pressed={reviewing} onClick={() => setReviewing(!reviewing)}>
+              {t(tradesKeys.upstream.review, "Review diff")}
+            </Button>
+            {reviewing && (
+              <Button size={button("sm")} onClick={() => void update()}>
+                {t(tradesKeys.upstream.update, "Update to v{n}", { n: upstream.n })}
+              </Button>
+            )}
+          </span>
+          {upstream.notes !== "" && <p className="text-xs text-ink-soft">{upstream.notes}</p>}
+          {reviewing && <VersionRead id={upstream.version}>{(v) => <VersionDiff from={category.head} to={v} />}</VersionRead>}
+        </div>
+      )}
+      {lineage?.withdrawn === true && <p className="text-xs text-accent-warn">{t(tradesKeys.head.withdrawnWhat, "{listing} is withdrawn: no newer version will come of it.", { listing: lineage.title })}</p>}
+      {publishing && <PublishDialog category={category} fork={null} onClose={() => setPublishing(false)} />}
+    </div>
+  );
+}
+
+/** Every move of its head, newest first; one off the head goes back with Revert, after its diff. */
+function History({ category, moves }: { category: Category; moves: ReturnType<typeof useMoves> }) {
+  const t = useT();
+  const locale = useLocale();
+  const button = useButtonSize();
+  const categories = useCategories();
+  const [open, setOpen] = useState<number | null>(null);
+  if (moves.status === "loading") return <p className="p-6 text-sm text-ink-soft">{t(state.loading, "Loading…")}</p>;
+  if (moves.status === "error") return <p className="p-6 text-sm text-accent-error">{failureText(moves.failure, t)}</p>;
+  const revert = async (m: CategoryMove) => {
+    try {
+      await revertCategory(category.trade.id, category.country, m.to);
+      setOpen(null);
+      categories.reload();
+      moves.reload();
+    } catch (e) {
+      notifyFailure(e, t);
+    }
+  };
+  return (
+    <ol className="flex flex-col divide-y divide-border p-6">
+      {moves.data.moves.toSorted((a, b) => b.at.localeCompare(a.at)).map((m) => {
+        const head = m.to === category.head.id;
+        return (
+          <li key={m.id} className="flex flex-col gap-2 py-2">
+            <span className="flex items-center gap-3 text-sm">
+              <span className="w-24 shrink-0 font-medium text-ink">{WHY_NAME[m.why](t)}</span>
+              <span className="font-mono text-xs text-ink-soft tabular-nums">{m.from === null ? `v${m.to}` : `v${m.from} → v${m.to}`}</span>
+              {m.listing_version !== null && <span className="text-xs text-ink-soft">{t(tradesKeys.history.library, "off the library")}</span>}
+              <span className="flex-1" />
+              <span className="text-xs text-ink-soft">{formatDateTime(m.at, locale)}</span>
+              {head ? (
+                <span className="w-20 text-right text-xs text-ink-soft">{t(tradesKeys.history.head, "the head")}</span>
+              ) : (
+                <Button variant="ghost" size={button("sm")} className="w-20" aria-pressed={open === m.id} onClick={() => setOpen(open === m.id ? null : m.id)}>
+                  {t(tradesKeys.history.diff, "Diff")}
+                </Button>
+              )}
+            </span>
+            {open === m.id && (
+              <div className="flex flex-col gap-2 pl-24">
+                <VersionRead id={m.to}>{(v) => <VersionDiff from={category.head} to={v} />}</VersionRead>
+                <Button size={button("sm")} className="self-start" onClick={() => void revert(m)}>
+                  {t(tradesKeys.history.revertTo, "Revert to v{id}", { id: m.to })}
+                </Button>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+const useMoves = (c: Category) => useResource(api, "/categories/{trade}/{country}/history", { params: { path: { trade: c.trade.id, country: c.country } } });
 
 /** The areas the category's GBPs stand in, most held first, each with how many. */
 function useAreasOf(category: Category, here: readonly Gmb[]): { slug: string; name: string; gbps: number }[] | null {
@@ -138,10 +275,10 @@ function metres(a: { lat: number; lng: number }, b: { lat: number; lng: number }
   return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
 }
 
-function Overview({ trade, category, here, areas }: { trade: Trade; category: Category; here: readonly Gmb[]; areas: { slug: string; name: string; gbps: number }[] | null }) {
+function Overview({ category, here, areas }: { category: Category; here: readonly Gmb[]; areas: { slug: string; name: string; gbps: number }[] | null }) {
   const t = useT();
   const brands = useBrands();
-  const mine = brands.status === "ok" ? brands.data.filter((b) => b.trade_id === trade.id && b.country === category.country) : null;
+  const mine = brands.status === "ok" ? brands.data.filter((b) => b.trade === category.trade.id && b.country === category.country) : null;
   const brandless = here.filter((b) => b.brand_id === null);
   const byState = stateValues.map((s) => ({ state: s, gbps: here.filter((b) => b.state === s) })).filter((x) => x.gbps.length > 0);
   const row = "flex w-full items-center gap-3 border-t border-border py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -218,7 +355,7 @@ function Overview({ trade, category, here, areas }: { trade: Trade; category: Ca
           <div key={a.slug} className="flex items-center gap-3 border-t border-border py-2">
             <span className="min-w-0 flex-1 truncate text-sm text-ink">{a.name}</span>
             <span className="w-20 text-sm text-ink-soft tabular-nums">{t(tradesKeys.overview.areas.gbps, "{n} GBPs", { n: a.gbps })}</span>
-            <Button variant="ghost" size="sm" onClick={() => setMapView({ area: a.slug, study: categoryKey(trade.id, category.country) })}>
+            <Button variant="ghost" size="sm" onClick={() => setMapView({ area: a.slug, study: { kind: "head", trade: category.trade.id, country: category.country } })}>
               <MapIcon aria-hidden />
               {t(tradesKeys.overview.areas.map, "Map")}
             </Button>
@@ -238,34 +375,23 @@ function unapplied(base: Draft, d: Draft): number {
   const [tw, tn] = [tiers(base.additional), tiers(d.additional)];
   const additional = tn.filter((x) => !tw.includes(x)).length + tw.filter((x) => !tn.includes(x)).length || Number(tw.join() !== tn.join());
   const apart = (a: readonly string[], b: readonly string[]) => a.filter((x) => !b.includes(x)).length + b.filter((x) => !a.includes(x)).length;
-  return (
-    Number(base.primary?.id !== d.primary?.id) +
-    keywords +
-    additional +
-    apart(base.excluded.words, d.excluded.words) +
-    apart(base.excluded.types, d.excluded.types) +
-    Number(JSON.stringify(base.demand) !== JSON.stringify(d.demand))
-  );
+  return keywords + additional + apart(base.excluded.words, d.excluded.words) + apart(base.excluded.types, d.excluded.types) + Number(JSON.stringify(base.demand) !== JSON.stringify(d.demand));
 }
 
-/** What Google and every study of the category read, staged until applied: the whole of it is PUT at once. */
-function Definition({ trade, category, base, draft, staged, setDraft }: { trade: Trade; category: Category; base: Draft; draft: Draft; staged: number; setDraft: (d: Draft | null) => void }) {
+/** What Google and every study of the category read, staged until applied: the whole of it is PUT at once, a new version its head moves onto. */
+function Definition({ category, base, draft, staged, setDraft }: { category: Category; base: Draft; draft: Draft; staged: number; setDraft: (d: Draft | null) => void }) {
   const t = useT();
   const locale = useLocale();
   const button = useButtonSize();
-  const trades = useTrades();
+  const categories = useCategories();
   const [refused, setRefused] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
-  const lang = new Intl.DisplayNames([locale], { type: "language" }).of(category.lang) ?? category.lang;
-  const name = `${trade.name} · ${category.country}`;
+  const { trade, country, head } = category;
+  const lang = new Intl.DisplayNames([locale], { type: "language" }).of(head.lang) ?? head.lang;
+  const name = categoryName(trade, country, locale);
   const change = (c: Partial<Draft>) => {
     setRefused(null);
     setDraft({ ...draft, ...c });
-  };
-  const setPrimary = (g: GoogleCategory) => {
-    const was = draft.primary === null ? null : nameOf(draft.primary, category.lang);
-    const now = nameOf(g, category.lang);
-    change({ primary: g, additional: draft.additional.filter((a) => a.google.id !== g.id), keywords: [{ text: now, weight: 1 }, ...draft.keywords.filter((k) => k.text !== was && k.text !== now)] });
   };
   const unweighed = draft.additional.filter((a) => a.weight === null);
   const added = draft.additional.some((a) => !base.additional.some((b) => b.google.id === a.google.id));
@@ -273,11 +399,10 @@ function Definition({ trade, category, base, draft, staged, setDraft }: { trade:
     setApplying(true);
     try {
       await ok(
-        api.PUT("/trades/{id}/{country}", {
-          params: { path: { id: trade.id, country: category.country } },
+        api.PUT("/categories/{trade}/{country}", {
+          params: { path: { trade: trade.id, country } },
           body: {
-            google_primary: draft.primary?.id ?? null,
-            google_additional: draft.additional.map((a) => {
+            additional: draft.additional.map((a) => {
               if (a.weight === null) throw new Error(`${a.google.id} unweighed: Apply is disabled until each tier has a weight`);
               return { id: a.google.id, weight: a.weight };
             }),
@@ -288,7 +413,7 @@ function Definition({ trade, category, base, draft, staged, setDraft }: { trade:
         }),
       );
       setDraft(null);
-      trades.reload();
+      categories.reload();
     } catch (e) {
       if (!(e instanceof Refused)) throw e;
       if (e.failure.code !== "unauthenticated") setRefused(failureText(e.failure, t));
@@ -308,13 +433,14 @@ function Definition({ trade, category, base, draft, staged, setDraft }: { trade:
               <span className="flex-1" />
               <span className={HINT}>{t(tradesKeys.google.where, "typed into Google's form in {lang}", { lang })}</span>
             </h4>
-            <GoogleCategories country={category.country} lang={category.lang} primary={draft.primary} additional={draft.additional} setPrimary={setPrimary} setAdditional={(additional) => change({ additional })} />
+            <p className="text-sm text-ink">{t(tradesKeys.google.primaryIs, "Primary: {trade}, the trade itself", { trade: googleName(trade, locale) })}</p>
+            <GoogleCategories country={country} lang={head.lang} trade={trade} additional={draft.additional} setAdditional={(additional) => change({ additional })} />
           </section>
-          <Keywords lang={lang} primary={draft.primary === null ? null : nameOf(draft.primary, category.lang)} keywords={draft.keywords} set={(keywords) => change({ keywords })} />
+          <Keywords lang={lang} primary={normalized(googleName(trade, head.lang))} keywords={draft.keywords} set={(keywords) => change({ keywords })} />
         </div>
         <div className="flex flex-col gap-6">
           <Heading title={t(tradesKeys.definition.placement, "To placement")} what={t(tradesKeys.definition.placement.what, "What every area's study of it is built from. The map's sliders try other weights for one view.")} />
-          <Competitors primary={draft.primary} additional={draft.additional} set={(additional) => change({ additional })} />
+          <Competitors primary={googleName(trade, locale)} additional={draft.additional} set={(additional) => change({ additional })} />
           <ExcludedEditor excluded={draft.excluded} set={(excluded) => change({ excluded })} />
           <DemandEditor demand={draft.demand} set={(demand) => change({ demand })} />
         </div>
@@ -419,7 +545,7 @@ function Keywords({ lang, primary, keywords, set }: { lang: string; primary: str
 }
 
 /** Its tiers, derived: the primary's, then one per additional Google category in order, each weighed against the primary. */
-function Competitors({ primary, additional, set }: { primary: GoogleCategory | null; additional: readonly Tier[]; set: (t: Tier[]) => void }) {
+function Competitors({ primary, additional, set }: { primary: string; additional: readonly Tier[]; set: (t: Tier[]) => void }) {
   const t = useT();
   const locale = useLocale();
   return (
@@ -429,20 +555,16 @@ function Competitors({ primary, additional, set }: { primary: GoogleCategory | n
         <span className="flex-1" />
         <span className={HINT}>{t(tradesKeys.competitors.what, "one tier per Google category")}</span>
       </h4>
-      {primary === null ? (
-        <p className="text-sm text-accent-warn">{t(tradesKeys.competitors.none, "No primary Google category: nothing names its competitors.")}</p>
-      ) : (
-        <ol className="flex flex-col divide-y divide-border">
-          <TierRow n={1} name={googleName(primary, locale)} kind={t(tradesKeys.competitors.primary, "primary")} what={t(tradesKeys.competitors.primary.what, "what searching its name or a keyword finds")}>
-            <Weight label={t(tradesKeys.competitors.reference, "the reference")} value={1} locked />
+      <ol className="flex flex-col divide-y divide-border">
+        <TierRow n={1} name={primary} kind={t(tradesKeys.competitors.primary, "primary")} what={t(tradesKeys.competitors.primary.what, "what searching its name or a keyword finds")}>
+          <Weight label={t(tradesKeys.competitors.reference, "the reference")} value={1} locked />
+        </TierRow>
+        {additional.map((a, i) => (
+          <TierRow key={a.google.id} n={i + 2} name={googleName(a.google, locale)} kind={t(tradesKeys.competitors.additional, "additional")} what={a.weight === null ? t(tradesKeys.competitors.unweighed, "not weighed yet: give it a weight") : t(tradesKeys.competitors.additional.what, "what searching its name finds")} warn={a.weight === null}>
+            <Weight label={t(tradesKeys.competitors.weigh, "Weight of one {tier}", { tier: googleName(a.google, locale) })} value={a.weight} set={(w) => set(additional.map((x, j) => (j === i ? { ...x, weight: w } : x)))} />
           </TierRow>
-          {additional.map((a, i) => (
-            <TierRow key={a.google.id} n={i + 2} name={googleName(a.google, locale)} kind={t(tradesKeys.competitors.additional, "additional")} what={a.weight === null ? t(tradesKeys.competitors.unweighed, "not weighed yet: give it a weight") : t(tradesKeys.competitors.additional.what, "what searching its name finds")} warn={a.weight === null}>
-              <Weight label={t(tradesKeys.competitors.weigh, "Weight of one {tier}", { tier: googleName(a.google, locale) })} value={a.weight} set={(w) => set(additional.map((x, j) => (j === i ? { ...x, weight: w } : x)))} />
-            </TierRow>
-          ))}
-        </ol>
-      )}
+        ))}
+      </ol>
       <p className="text-xs text-ink-soft">{t(tradesKeys.competitors.order, "First match wins, in this order. A Google category added on the left is a tier here.")}</p>
     </section>
   );
