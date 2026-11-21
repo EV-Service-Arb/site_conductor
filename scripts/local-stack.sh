@@ -162,12 +162,15 @@ window=0
 	exit 1
 }
 
-say() { printf '\033[1m▶ %s\033[0m\n' "$*" >&2; }
+# erases the ticker's line, which every other line on the terminal starts by
+clr=""
+[ ! -t 2 ] || clr=$'\r\033[K'
+say() { printf '%s\033[1m▶ %s\033[0m\n' "$clr" "$*" >&2; }
 die() {
-	printf '\033[31m✗ %s\033[0m\n' "$*" >&2
+	printf '%s\033[31m✗ %s\033[0m\n' "$clr" "$*" >&2
 	exit 1
 }
-warn() { printf '\033[33m! %s\033[0m\n' "$*" >&2; }
+warn() { printf '%s\033[33m! %s\033[0m\n' "$clr" "$*" >&2; }
 
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "run this from inside the conductor's checkout"
 [ -f "$root/crates/server/Cargo.toml" ] || die "$root is not the conductor's checkout"
@@ -242,6 +245,23 @@ VIFNET_DIR="${VIFNET_DIR:-$service_arb/sites/vifnet}"
 DEBOUCHAGE_DIR="${DEBOUCHAGE_DIR:-$service_arb/sites/debouchage}"
 
 busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+# A run stopped past its trap (SIGKILL, a closed terminal) leaves its parts serving, which the next run would take as
+# peers over a state not its own. Each part's environment names its run's state (`export state` below), whose pid
+# file only a live run holds.
+# grep: exit 1 is no part left over, 2 a process of another user's or one gone meanwhile
+for s in $(grep -ahoz "^state=$root/\.local[^/]*$" /proc/[0-9]*/environ 2>/dev/null | tr '\0' '\n' | sort -u || true); do
+	s="${s#state=}"
+	! kill -0 "$(cat "$s/pid" 2>/dev/null)" 2>/dev/null || continue
+	mapfile -t left < <(grep -lzx "state=$s" /proc/[0-9]*/environ 2>/dev/null | cut -d/ -f3 || true)
+	[ "${#left[@]}" != 0 ] || continue
+	warn "stopping what a run gone since left serving on $s: pids ${left[*]}"
+	kill -TERM "${left[@]}" 2>/dev/null || true # some exit on their parent's TERM before theirs
+	for _ in $(seq 10); do
+		kill -0 "${left[@]}" 2>/dev/null || break
+		sleep 1
+	done
+	kill -KILL "${left[@]}" 2>/dev/null || true # gone by now, mostly
+done
 # --fixed beside the watched dev, never on its ports: in a window, the first free pair down from the range's top, one not claimed by a starting run's pid
 if [ "$window" = 1 ]; then
 	range="${SA_PORT_RANGE:?$need}"
@@ -432,7 +452,6 @@ if [ "$from_prod" = 1 ]; then
 fi
 # --fixed: on a copy of the watched dev's state, sessions included (the browser's localhost cookie is every port's), its
 # peers holding the same data; a fresh one when its database has a migration this copy changed, which the conductor would refuse
-copied=0
 if [ "$fixed" = 1 ] && [ "$from_prod" = 0 ] && [ "$state" != "$root/.local" ] && [ -e "$root/.local/panel.db" ]; then
 	rm -rf "$state/panel.db"* "$state/sites_panel.db"* "$state/review_archive" "$state/secrets" "$state/data-key"
 	mkdir -p "$state/secrets"
@@ -454,7 +473,6 @@ if [ "$fixed" = 1 ] && [ "$from_prod" = 0 ] && [ "$state" != "$root/.local" ] &&
 		[ ! -d "$root/.local/review_archive/blobs" ] || cp -al "$root/.local/review_archive/blobs" "$state/review_archive/"
 		[ ! -d "$root/.local/secrets" ] || cp -a "$root/.local/secrets/." "$state/secrets/"
 		cp "$root/.local/data-key" "$state/data-key" # what the copied sessions and secrets are sealed with
-		copied=1
 	fi
 fi
 # Beside the builds, waited on before the first reader. Under `timed`, so errexit is off: every step checked.
@@ -489,6 +507,22 @@ prod_data() {
 }
 
 # ── the builds ───────────────────────────────────────────────────────────────────────────
+
+# On a terminal, until the URLs: a spinner and each top-level `timed` span still running, with its age
+ticker() {
+	local frames='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' i=0 open
+	while sleep 0.2; do
+		open="$(awk -F'\t' -v now="$(date +%s%3N)" '$1 !~ /\// { if ($3 == "") o[$1] = $2; else delete o[$1] }
+			END { for (n in o) printf "  %s %ds", n, (now - o[n]) / 1000 }' "$STACK_TIMELINE")"
+		i=$(((i + 1) % 10))
+		if [ -n "$open" ]; then printf '\r\033[K\033[2m%s%s\033[0m' "${frames:i:1}" "$open" >&2; else printf '\r\033[K' >&2; fi
+	done
+}
+ticker_pid=""
+[ ! -t 2 ] || {
+	ticker &
+	ticker_pid=$!
+}
 
 # `in_shell <checkout> <command…>`: in that checkout, under its own dev shell's toolchain; under `timed`,
 # the shell's realisation and the command are spans of their own
@@ -533,7 +567,7 @@ timed() {
 prefixed() {
 	local name="$1"
 	shift
-	"$@" 2>&1 | tee -a "$state/logs/$name.log" | awk -v p="[$name] " '{ print p $0; fflush() }'
+	"$@" 2>&1 | tee -a "$state/logs/$name.log" | awk -v p="$clr[$name] " '{ print p $0; fflush() }'
 }
 # `unbuilt <peer> <checkout>`: dev goes on without it, the conductor answering 502 for it; the
 # stack needs every part
@@ -828,7 +862,8 @@ fi
 # script alone and stop_all stops the rest.
 set -m
 stop_all() {
-	trap - INT TERM EXIT
+	trap - EXIT
+	trap '' INT TERM HUP # a second Ctrl-C would leave the parts serving
 	set +e # a closed terminal fails the writes below; under -e that would leave every part running
 	rm -f "$state/args" "$state/pid" "$state/src"
 	echo >&2
@@ -854,7 +889,7 @@ stop_all() {
 	kill -KILL ${pids[@]+"${pids[@]}"} 2>/dev/null
 }
 trap stop_all EXIT
-trap 'stop_all; exit 130' INT TERM
+trap 'stop_all; exit 130' INT TERM HUP
 
 # Polls `url` while `pid` lives, at most `tries` seconds.
 wait_for() {
@@ -1141,10 +1176,9 @@ if [ "$sites" = 1 ]; then
 	done
 fi
 
-# a copy holds the watched dev's session; a fresh state signs in
-landing="/"
-[ "$copied" = 1 ] || landing="/auth/login?return_to=/"
-[ "$window" = 0 ] || xdg-open "$public_origin$landing" >"$state/logs/browser.log" 2>&1
+# dev sign-in's own session: the browser's localhost cookie may be any other stack's
+[ "$window" = 0 ] || xdg-open "$public_origin/auth/login?return_to=/" >"$state/logs/browser.log" 2>&1
+[ -z "$ticker_pid" ] || { kill "$ticker_pid"; printf '%s' "$clr" >&2; }
 
 {
 	echo

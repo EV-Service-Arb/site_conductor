@@ -59,9 +59,9 @@ crates whose sources differ compile: cargo tells sources apart by checksum (`che
 and a build script's `rerun-if-changed` paths stay relative to its package. The front end is the copy's static export.
 The peers run unwatched from their checkouts. Without `--port` it takes the first free pair down from `SA_PORT_RANGE`'s
 top (52899–52900, then 52897–52898, …), with a state of its own (`.local-port-<n>`): it never replaces a watched dev,
-nor one another. Its state starts as a copy of `.local/`'s databases, keys and sessions, so the browser's `localhost`
-cookie (every port's) is signed in there too; when a migration `.local/panel.db` applied differs in the copy, a fresh
-state, signed in through `/auth/login`. Once up, it opens in the default browser (`xdg-open`); Ctrl-C stops it.
+nor one another. Its state starts as a copy of `.local/`'s databases, keys and sessions;
+when a migration `.local/panel.db` applied differs in the copy, a fresh state. Once up, it opens through `/auth/login` (dev
+sign-in) in the default browser (`xdg-open`); Ctrl-C stops it.
 
 A conductor or its `next dev` already listening on their ports (another run's, another
 checkout's) is stopped, together with the run that started it and whatever else that run served,
@@ -114,7 +114,8 @@ What it does (`scripts/local-stack.sh`, which the flake app runs as is):
 5. Prints the URLs, prefixes every log line with whose it is, and stops everything on Ctrl-C
    (or when the conductor, sites_panel or review_archive stops). Started from a non-interactive shell (an agent's, in the
    background), SIGINT does not reach it: stop it with `kill <pid>` (SIGTERM), which does the
-   same. Each part runs in a process group of its own, so the caller's shell is never hit.
+   same. Each part runs in a process group of its own, so the caller's shell is never hit. A run gone without
+   stopping its parts (SIGKILL, a closed terminal) has them stopped at the next run's start.
 
 Iterating on the backend: `cargo build -p sa_server`, then
 `PANEL_BIN=$PWD/target/debug/panel nix run .#local-stack` (the same as
