@@ -131,14 +131,6 @@ impl Store {
 					.wrap_err("keeping an answer")?;
 			}
 		}
-		// shortcut: a row imported from files lacks its request until the backfill (site_conductor#126); goes with the migration making it NOT NULL.
-		sqlx::query("UPDATE queries_cache SET request = $3 WHERE scheme = $1 AND key = $2 AND request IS NULL")
-			.bind(scheme.as_str())
-			.bind(&key.0[..])
-			.bind(request)
-			.execute(&mut *tx)
-			.await
-			.wrap_err("filling a request")?;
 		sqlx::query("DELETE FROM queries_cache_claims WHERE scheme = $1 AND key = $2")
 			.bind(scheme.as_str())
 			.bind(&key.0[..])
@@ -184,7 +176,7 @@ impl Store {
 	/// The version of `key`'s answer fetched at `fetched_at`, the latest's or the history's.
 	pub async fn query_version(&self, scheme: Scheme, key: Key, fetched_at: Timestamp) -> eyre::Result<Option<Version>> {
 		// The latest first, as in the index.
-		let latest: Option<(String, Option<String>)> = sqlx::query_as("SELECT answer, request FROM queries_cache WHERE scheme = $1 AND key = $2 AND fetched_at = $3")
+		let latest: Option<(String, String)> = sqlx::query_as("SELECT answer, request FROM queries_cache WHERE scheme = $1 AND key = $2 AND fetched_at = $3")
 			.bind(scheme.as_str())
 			.bind(&key.0[..])
 			.bind(to_db(fetched_at))
@@ -192,10 +184,7 @@ impl Store {
 			.await
 			.wrap_err("reading an answer")?;
 		let row = match latest {
-			Some((answer, request)) => Some((
-				answer,
-				request.ok_or_else(|| eyre::eyre!("{scheme} {key} as of {fetched_at} was kept without its request: no copy of it is whole"))?,
-			)),
+			Some(row) => Some(row),
 			None => sqlx::query_as("SELECT answer, request FROM queries_history WHERE scheme = $1 AND key = $2 AND fetched_at = $3")
 				.bind(scheme.as_str())
 				.bind(&key.0[..])
