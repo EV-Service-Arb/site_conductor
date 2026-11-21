@@ -305,6 +305,12 @@ export const VIEWS = {
       },
       "query": {
         "properties": {
+          "log_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "step": {
             "format": "uint8",
             "maximum": 255,
@@ -521,6 +527,13 @@ export const VIEWS = {
           },
           "kit_pool": {
             "description": "The kit's pool open: `<trade id>.<country>`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "log_at": {
+            "description": "The GBP's Log tab: the moment it is scrolled to.",
             "type": [
               "string",
               "null"

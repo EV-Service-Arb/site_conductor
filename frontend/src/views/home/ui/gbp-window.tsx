@@ -3,7 +3,7 @@
 import { useResource } from "@evinvest/api/react";
 import { Badge, Button, NativeSelect, NativeSelectOption, Skeleton, Tabs, TabsList, TabsTrigger, cn, toast } from "@evinvest/uikit";
 import { CalendarClock, ChevronLeft, ChevronRight, Copy, ExternalLink, Globe, Hash, History, ImageIcon, Mail, MapPin, MonitorSmartphone, Pencil, Phone, QrCode, RefreshCw, ShieldAlert, ShieldCheck, Star, Store, Tag, UserCog, Video } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 
 import { CategoryChip, NewBrand, type KeyOf, type Listed, LiveReviews, ROLE_NAME, STATE_NAME, STATE_TONE, closeWindow, gmbPhotoSrc, googleName, narrowed, openWindow, readyCount, under, syncGmb, useBrands, useGmails, useGmbTags, useOnMap, gmbs as gmbsKeys, windowKeys } from "@/entities/gmb";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
@@ -12,7 +12,7 @@ import { type Changed, type Closed, type Country, type GbpRole, type Gmail, type
 import type { GmbEvent } from "@/shared/api/services/review_archive";
 import { type T, useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
-import { ViewLink } from "@/shared/lib/location";
+import { ViewLink, useAt } from "@/shared/lib/location";
 import { ago } from "@/shared/lib/time";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -225,7 +225,7 @@ function LocationHeader({ k, listed: { gmb, gmail } }: { k: Key; listed: Listed 
         {[
           gmb.address,
           gmb.phone,
-          gmb.website ?? (site && t(windowKeys.header.site, "its site")),
+          gmb.website !== null ? <Website url={gmb.website} /> : site && t(windowKeys.header.site, "its site"),
           gmb.place_id && <span className="font-mono">{gmb.place_id}</span>,
           gmail?.gmail,
         ]
@@ -233,6 +233,26 @@ function LocationHeader({ k, listed: { gmb, gmail } }: { k: Key; listed: Listed 
           .flatMap((part, i) => (i === 0 ? [<span key={i}>{part}</span>] : [<span key={`d${i}`}>{dot}</span>, <span key={i}>{part}</span>]))}
       </p>
     </header>
+  );
+}
+
+/** Its site as written, a top-level domain other than .com marked: those rank weaker. */
+function Website({ url }: { url: string }) {
+  const t = useT();
+  const host = /^(?:[a-z][a-z0-9+.-]*:\/\/)?([^/:?#\s]+)/i.exec(url)?.[1];
+  const dot = host?.lastIndexOf(".") ?? -1;
+  // free text, not a URL: nothing to mark
+  if (host === undefined || dot < 0 || host.slice(dot + 1).toLowerCase() === "com") return <>{url}</>;
+  const from = url.indexOf(host) + dot;
+  const to = from + host.length - dot;
+  return (
+    <>
+      {url.slice(0, from)}
+      <span className="text-accent-warn" title={t(windowKeys.header.notCom, "Not .com: other domains rank weaker")}>
+        {url.slice(from, to)}
+      </span>
+      {url.slice(to)}
+    </>
   );
 }
 
@@ -325,7 +345,7 @@ function Profile({ listed }: { listed: Listed }) {
         <Fact icon={<Phone aria-hidden />} value={gmb.phone && <a href={`tel:${gmb.phone}`}>{gmb.phone}</a>} />
         <Fact
           icon={<Globe aria-hidden />}
-          value={gmb.website}
+          value={gmb.website && <Website url={gmb.website} />}
           note={[site && t(windowKeys.profile.site, "its site · {n} leads in 7 days", { n: site.leads_7d })]}
           action={gmb.website !== null && /^https?:\/\//.test(gmb.website) && <a href={gmb.website} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-ink-soft hover:text-ink">{t(windowKeys.profile.openSite, "Open")}<ExternalLink aria-hidden className="size-3" /></a>}
         />
@@ -637,6 +657,9 @@ function Log({ gmb, gmail }: { gmb: number; gmail: string | null }) {
   const theirsPaged = usePaged(theirs.status === "ok" ? theirs.data : null, (before: string) => ok(reviewArchive.GET("/me/gmbs/{gmb}/events", { params: { path: { gmb }, query: { before } } })));
   const [topic, setTopic] = useState<Topic | null>(null);
   const [busy, setBusy] = useState(false);
+  const at = useAt();
+  const focus = at.view === "gbp" || at.view === "home" ? (at.params.log_at ?? null) : null;
+  const box = useRef<HTMLDivElement>(null);
   if (ours.status === "loading" || (archiveKnows && theirs.status === "loading")) return <Skeleton className="m-4 h-64" />;
   if (ours.status === "error")
     return (
@@ -680,8 +703,11 @@ function Log({ gmb, gmail }: { gmb: number; gmail: string | null }) {
     }
   };
   const chip = (on: boolean) => cn("flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", on ? "border-ink bg-ink text-background" : "border-border text-ink hover:bg-hover");
+  // newest first: the first line at or before it is the one it names
+  const target = focus === null ? undefined : shown.find((l) => Date.parse(l.at) <= Date.parse(focus))?.key;
   return (
-    <div className="flex flex-col">
+    <div ref={box} className="flex flex-col">
+      {focus !== null && <Reach key={focus} box={box} target={target ?? null} more={target === undefined && older && !busy ? more : null} />}
       <div className="flex gap-1.5 overflow-x-auto border-b border-border px-4 py-3">
         <button type="button" className={chip(topic === null)} onClick={() => setTopic(null)}>
           {t(windowKeys.log.all, "All")} <span className="tabular-nums opacity-70">{read.length}</span>
@@ -698,7 +724,7 @@ function Log({ gmb, gmail }: { gmb: number; gmail: string | null }) {
           <h4 className="pb-2 font-mono text-xs text-ink-soft uppercase">{day}</h4>
           <ol className="flex flex-col gap-3">
             {ls.map((l) => (
-              <li key={l.key} className="flex items-start gap-3">
+              <li key={l.key} data-line={l.key} className={cn("flex items-start gap-3", l.key === target && "-mx-2 rounded-md bg-hover px-2 py-1")}>
                 <time dateTime={l.at} className="w-10 shrink-0 pt-0.5 font-mono text-xs text-ink-soft tabular-nums">
                   {new Date(l.at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
                 </time>
@@ -715,6 +741,20 @@ function Log({ gmb, gmail }: { gmb: number; gmail: string | null }) {
       )}
     </div>
   );
+}
+
+/** Reads older pages back until `target`'s line is read, then scrolls it into view, once. */
+function Reach({ box, target, more }: { box: RefObject<HTMLDivElement | null>; target: string | null; more: (() => Promise<void>) | null }) {
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current) return;
+    if (target === null) return void more?.();
+    done.current = true;
+    const line = box.current!.querySelector(`[data-line="${CSS.escape(target)}"]`);
+    if (line === null) throw new Error(`log line ${target} is shown, yet not drawn`);
+    line.scrollIntoView({ block: "center" });
+  });
+  return null;
 }
 
 function Mark({ icon, tone }: { icon: ReactNode; tone: "info" | "warn" | "error" | "positive" | "muted" }) {

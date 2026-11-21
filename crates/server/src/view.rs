@@ -30,6 +30,8 @@ pub enum View {
 		tab: Option<Tab>,
 		/// The GBP's Browser tab: the step of Google's form it is on, 1 to 8.
 		step: Option<u8>,
+		/// The GBP's Log tab: the moment it is scrolled to.
+		log_at: Option<String>,
 		/// The categories' window.
 		categories: bool,
 		/// The trash's window.
@@ -119,7 +121,12 @@ pub enum View {
 	KitPool { slug: String, trade: i64, country: Country },
 	/// A GBP's window as its own page.
 	#[view("/gbps/{gmb}")]
-	Gbp { gmb: i64, tab: Option<Tab>, step: Option<u8> },
+	Gbp {
+		gmb: i64,
+		tab: Option<Tab>,
+		step: Option<u8>,
+		log_at: Option<String>,
+	},
 	/// A gmail's window as its own page.
 	#[view("/gmail/{account}")]
 	Gmail { account: i64, tab: Option<Tab> },

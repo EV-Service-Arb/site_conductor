@@ -9,7 +9,8 @@ import { type Listed, STATE_NAME, useGmbTags, windowKeys } from "@/entities/gmb"
 import { Refused, api, ok, reviewArchive, sites } from "@/shared/api";
 import type { LogDto } from "@/shared/api/schema";
 import type { GmbEvent } from "@/shared/api/services/review_archive";
-import { useLocale, useT } from "@/shared/i18n";
+import { type T, useLocale, useT } from "@/shared/i18n";
+import { type At, ViewLink, useAt } from "@/shared/lib/location";
 import { ago } from "@/shared/lib/time";
 import { ErrorState } from "@/shared/ui/error-state";
 
@@ -128,7 +129,7 @@ export function StatsTab({ listed }: { listed: Listed }) {
             {live !== null && live.some((d) => d !== null) && <Bars values={live.map((d) => (d === null ? null : d.live))} label={t(windowKeys.stats.liveReviews, "Live reviews")} />}
           </section>
         </div>
-        <Changes gmb={gmb} since={now - days * DAY} />
+        <Changes gmb={gmb} since={now - days * DAY} now={now} />
       </div>
     </div>
   );
@@ -173,12 +174,29 @@ function Bars({ values, label }: { values: (number | null)[]; label?: string }) 
   );
 }
 
-type Change = { at: string; key: string; title: string };
+type Change = { at: string; kind: string; title: (n: number) => string };
 
-/** What changed on it: the conductor's edits, syncs and state moves with the archive's events, newest first. */
-function Changes({ gmb, since }: { gmb: number; since: number }) {
+const ARCHIVE = {
+  appeared: [(t) => t(windowKeys.log.appeared, "A review on Google"), (t, n) => t(windowKeys.stats.appeared, "{n} reviews on Google", { n })],
+  suspended: [(t) => t(windowKeys.log.suspended, "A 5-star review suspended"), (t, n) => t(windowKeys.stats.suspended, "{n} 5-star reviews suspended", { n })],
+  removed: [(t) => t(windowKeys.log.reviewRemoved, "A review removed"), (t, n) => t(windowKeys.stats.reviewsRemoved, "{n} reviews removed", { n })],
+  returned: [(t) => t(windowKeys.log.returned, "A review back on Google"), (t, n) => t(windowKeys.stats.returned, "{n} reviews back on Google", { n })],
+  reinstatement_set: [(t) => t(windowKeys.log.reinstatementSet, "Reinstatement asked of Google"), (t, n) => t(windowKeys.stats.reinstatementsSet, "{n} reinstatements asked of Google", { n })],
+  reinstatement_cleared: [(t) => t(windowKeys.log.reinstatementCleared, "Reinstatement withdrawn"), (t, n) => t(windowKeys.stats.reinstatementsCleared, "{n} reinstatements withdrawn", { n })],
+  scan_failed: [(t) => t(windowKeys.log.scanFailed, "A scan of its reviews failed"), (t, n) => t(windowKeys.stats.scansFailed, "{n} scans of its reviews failed", { n })],
+} satisfies Record<GmbEvent["kind"], [(t: T) => string, (t: T, n: number) => string]>;
+
+/** The bucket a change is counted in: the days back within the last week, the weeks back before, as its "ago" reads them. */
+function bucket(at: string, now: number): string {
+  const age = now - Date.parse(at);
+  return age < 7 * DAY ? `d${Math.floor(age / DAY)}` : `w${Math.floor(age / (7 * DAY))}`;
+}
+
+/** What changed on it: the conductor's edits, syncs and state moves with the archive's events, alike ones counted together per bucket, newest first. */
+function Changes({ gmb, since, now }: { gmb: number; since: number; now: number }) {
   const t = useT();
   const locale = useLocale();
+  const at = useAt();
   const ours = useResource(api, "/gmbs/{id}/log", { params: { path: { id: gmb } } });
   const theirs = useResource(reviewArchive, "/me/gmbs/{gmb}/events", { params: { path: { gmb } } });
   // a GBP the archive was never told of (a draft, one with no place) has no events there
@@ -186,43 +204,55 @@ function Changes({ gmb, since }: { gmb: number; since: number }) {
   if (ours.status === "loading" || (archiveKnows && theirs.status === "loading")) return <Skeleton className="h-64" />;
   if (ours.status === "error") return <ErrorState failure={ours.failure} onRetry={ours.reload} />;
   if (archiveKnows && theirs.status === "error") return <ErrorState failure={theirs.failure} onRetry={theirs.reload} />;
-  const theirTitle = (e: Exclude<GmbEvent, { kind: "scan_failed" }>) =>
-    ({
-      appeared: t(windowKeys.log.appeared, "A review on Google"),
-      suspended: t(windowKeys.log.suspended, "A 5-star review suspended"),
-      removed: t(windowKeys.log.reviewRemoved, "A review removed"),
-      returned: t(windowKeys.log.returned, "A review back on Google"),
-      reinstatement_set: t(windowKeys.log.reinstatementSet, "Reinstatement asked of Google"),
-      reinstatement_cleared: t(windowKeys.log.reinstatementCleared, "Reinstatement withdrawn"),
-    })[e.kind];
   const lines: Change[] = [
     ...(ours.data as LogDto).events.flatMap((e): Change[] => {
       switch (e.kind) {
-        case "state":
-          return [{ at: e.at, key: `c${e.id}`, title: `${STATE_NAME[e.from](t)} → ${STATE_NAME[e.to](t)}` }];
+        case "state": {
+          const move = `${STATE_NAME[e.from](t)} → ${STATE_NAME[e.to](t)}`;
+          return [{ at: e.at, kind: `state:${e.from}:${e.to}`, title: (n) => (n === 1 ? move : `${move} ×${n}`) }];
+        }
         case "edited":
-          return [{ at: e.at, key: `c${e.id}`, title: t(windowKeys.stats.edited, "Edited: {n} fields", { n: e.changes.length }) }];
+          return [{ at: e.at, kind: "edited", title: (n) => (n === 1 ? t(windowKeys.stats.edited, "Edited: {n} fields", { n: e.changes.length }) : t(windowKeys.stats.edits, "{n} edits", { n })) }];
         case "synced":
-          return [{ at: e.at, key: `c${e.id}`, title: e.changes.length === 0 ? t(windowKeys.log.syncedSame, "Sync: nothing changed on Google") : t(windowKeys.log.synced, "Sync: {n} fields changed on Google", { n: e.changes.length }) }];
+          return [
+            {
+              at: e.at,
+              kind: "synced",
+              title: (n) => (n > 1 ? t(windowKeys.stats.syncs, "{n} syncs", { n }) : e.changes.length === 0 ? t(windowKeys.log.syncedSame, "Sync: nothing changed on Google") : t(windowKeys.log.synced, "Sync: {n} fields changed on Google", { n: e.changes.length })),
+            },
+          ];
         default:
           return [];
       }
     }),
-    ...(theirs.status === "ok" ? theirs.data.events : []).map((e, i): Change => ({ at: e.at, key: `a${e.at}${i}${e.kind}`, title: e.kind === "scan_failed" ? t(windowKeys.log.scanFailed, "A scan of its reviews failed") : theirTitle(e) })),
+    ...(theirs.status === "ok" ? theirs.data.events : []).map((e): Change => ({ at: e.at, kind: e.kind, title: (n) => (n === 1 ? ARCHIVE[e.kind][0](t) : ARCHIVE[e.kind][1](t, n)) })),
   ]
     .filter((l) => Date.parse(l.at) >= since)
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  // newest first, so each group's first change is its newest
+  const groups = new Map<string, { first: Change; n: number }>();
+  for (const l of lines) {
+    const key = `${l.kind}|${bucket(l.at, now)}`;
+    const g = groups.get(key);
+    if (g === undefined) groups.set(key, { first: l, n: 1 });
+    else g.n += 1;
+  }
+  const inLog = (log_at: string): At => {
+    if (at.view === "gbp") return { view: "gbp", params: { gmb, tab: "log", log_at } };
+    if (at.view !== "home") throw new Error(`a GBP's stats on ${at.view}`);
+    return { view: "home", params: { ...at.params, tab: "log", log_at } };
+  };
   return (
     <section className="flex flex-col gap-2 rounded-panel border border-border p-3">
       <h3 className="text-sm font-semibold text-ink">{t(windowKeys.stats.changes, "Changes")}</h3>
-      {lines.length === 0 && <p className="text-sm text-ink-soft">{t(windowKeys.stats.none, "Nothing changed in this period.")}</p>}
+      {groups.size === 0 && <p className="text-sm text-ink-soft">{t(windowKeys.stats.none, "Nothing changed in this period.")}</p>}
       <ol className="flex flex-col gap-2">
-        {lines.map((l) => (
-          <li key={l.key} className="flex items-baseline gap-2 text-sm">
-            <span className="min-w-0 flex-1 text-ink">{l.title}</span>
-            <time dateTime={l.at} className="shrink-0 text-xs text-ink-soft">
-              {ago(l.at, locale)}
-            </time>
+        {[...groups].map(([key, { first, n }]) => (
+          <li key={key} className="flex items-baseline gap-2 text-sm">
+            <span className="min-w-0 flex-1 text-ink">{first.title(n)}</span>
+            <ViewLink to={inLog(first.at)} title={t(windowKeys.stats.inLog, "In the log")} className="shrink-0 text-xs text-ink-soft underline-offset-2 hover:text-ink hover:underline">
+              <time dateTime={first.at}>{ago(first.at, locale)}</time>
+            </ViewLink>
           </li>
         ))}
       </ol>

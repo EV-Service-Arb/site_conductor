@@ -4627,6 +4627,10 @@
     "en": "Open its trade",
     "t": "Открыть её нишу"
   },
+  "window.center": {
+    "en": "To the middle",
+    "t": "В центр"
+  },
   "window.close": {
     "en": "Close the window",
     "t": "Закрыть окно"
@@ -4842,6 +4846,10 @@
   "window.header.next": {
     "en": "Next in view",
     "t": "Следующий в просмотре"
+  },
+  "window.header.notCom": {
+    "en": "Not .com: other domains rank weaker",
+    "t": "Не .com: другие домены ранжируются хуже"
   },
   "window.header.previous": {
     "en": "Previous in view",
@@ -5083,6 +5091,10 @@
     "en": "Verification",
     "t": "Верификация"
   },
+  "window.minimize": {
+    "en": "To the hotbar",
+    "t": "На панель"
+  },
   "window.planned": {
     "en": "planned · {at}",
     "t": "план · {at}"
@@ -5258,6 +5270,10 @@
   "window.ranking.trades.unread": {
     "en": "Its category is not read yet.",
     "t": "Его категория пока не прочитана."
+  },
+  "window.resize": {
+    "en": "Resize",
+    "t": "Изменить размер"
   },
   "window.reviews.active": {
     "en": "Active",
@@ -5474,6 +5490,10 @@
   "window.stats.grafana": {
     "en": "Open in Grafana",
     "t": "Открыть в Grafana"
+  },
+  "window.stats.inLog": {
+    "en": "In the log",
+    "t": "В журнале"
   },
   "window.stats.leads": {
     "en": "Leads",
