@@ -48,7 +48,17 @@ async fn main() {
 		},
 		Some(token.into()),
 	);
-	let app = http::app(SignIn::new(p, Concierge::dev(who), config), None, None, Default::default(), None, None, Some(model), None, None);
+	let app = http::app(
+		SignIn::new(p, Concierge::dev(who), config),
+		None,
+		None,
+		Default::default(),
+		None,
+		None,
+		Some(model),
+		sa_server::testing::sandbox(),
+		None,
+	);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let json = [("content-type", "application/json")];

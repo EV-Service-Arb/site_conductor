@@ -32,15 +32,13 @@
       "GOLOGIN_TOKEN"
       "MULTILOGIN_TOKEN"
       "PANEL_BROWSERS_URL"
-      # the agents' `execute`: sa_sandbox's runner (below); unset, there is none
-      "PANEL_SANDBOX_URL"
       # the in-page assistant's model (a Claude subscription); unset, asking it answers 503
       "CLAUDE_CODE_OAUTH_TOKEN"
     ];
     ingress = {
-      # in-cluster only, by service DNS: the landings' and bots' ingest, the landings' review kit, the sandbox's runs
+      # in-cluster only, by service DNS: the landings' and bots' ingest, the landings' review kit
       # (docs/ARCHITECTURE.md, Deploy requirements)
-      excludePathPrefixes = [ "/api/ingest" "/api/kit" "/api/run" ];
+      excludePathPrefixes = [ "/api/ingest" "/api/kit" ];
       # per client IP at the edge; the conductor bounds concurrency, not who calls. /api/hooks/booking:
       # the booking providers' webhooks, forwarded to sites (public, signature-checked there).
       # /api/queries_cache: open to everyone, so this is its only guard. /mcp/register: open too.
@@ -63,8 +61,6 @@
     kit = "/api/kit/v1";
     # the queries cache (docs/ARCHITECTURE.md, Queries cache): review_archive's and placement's
     queries_cache = "/api/queries_cache";
-    # a sandbox's run, back to its caller's operations (docs/ARCHITECTURE.md, Code mode)
-    run = "/api/run";
   };
   # The services the forward reaches (docs/ARCHITECTURE.md, Forward), by contract name: devops
   # sets each variable to the peer's in-cluster origin and opens the egress to it.
@@ -72,13 +68,5 @@
     PANEL_SITES_URL = "sites_panel";
     PANEL_REVIEW_ARCHIVE_URL = "review_archive";
     PANEL_PLAYBOOK_URL = "playbook_web";
-    PANEL_SANDBOX_URL = "${pname}-sandbox";
-  };
-  # The sandbox's deploy: the conductor's public keys (its assertion is all it trusts), and the conductor's
-  # `/api/run` its only peer; no host off-cluster.
-  sandboxDeploy = {
-    requiredEnv = [ "PANEL_ASSERTION_KEYS" "SANDBOX_CONDUCTOR_URL" ];
-    egress.hosts = [ ];
-    consumes.SANDBOX_CONDUCTOR_URL = "${pname}.run";
   };
 }

@@ -107,7 +107,7 @@ impl Conductor {
 			None,
 			None,
 			None,
-			None,
+			sa_server::testing::sandbox(),
 			Some(Placement::new(dir.path().to_owned())),
 		);
 		let mut b = Browser::default();
@@ -373,7 +373,7 @@ async fn a_person_reads_the_prices_and_sets_above_what_they_are_asked() {
 async fn without_placement_its_studies_are_not_connected() {
 	let db = TestDb::create().await;
 	let (sign_in, _) = sa_server::testing::conductor(panel(&db).await, operator(), EMAIL, &"http://127.0.0.1:9".parse().unwrap());
-	let app = sa_server::http::app(sign_in, None, None, Default::default(), None, None, None, None, None);
+	let app = sa_server::http::app(sign_in, None, None, Default::default(), None, None, None, sa_server::testing::sandbox(), None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (status, _, body) = b.send_body(&app, Method::GET, "/api/v1/placement/catalog", &[], false, Body::empty()).await;

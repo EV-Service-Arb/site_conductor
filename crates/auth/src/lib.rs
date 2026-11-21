@@ -174,8 +174,6 @@ pub enum Service {
 	Sites,
 	/// sa_browsers' runner: told by the conductor alone, nobody's permissions.
 	Browsers,
-	/// sa_sandbox's runner: told by the conductor alone, nobody's permissions.
-	Sandbox,
 }
 
 impl Service {
@@ -191,7 +189,6 @@ impl Service {
 			Self::Playbook => "sa:playbook:",
 			Self::Sites => "sa:sites:",
 			Self::Browsers => "sa:browsers:",
-			Self::Sandbox => "sa:sandbox:",
 		}
 	}
 
@@ -200,7 +197,7 @@ impl Service {
 		match self {
 			Self::Sites => Some("/api/v1/openapi.json"),
 			Self::ReviewArchive | Self::Playbook => Some("/openapi.json"),
-			Self::Browsers | Self::Sandbox => None,
+			Self::Browsers => None,
 		}
 	}
 

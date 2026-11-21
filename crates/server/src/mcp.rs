@@ -24,7 +24,7 @@ use axum::{
 };
 use futures::{SinkExt, StreamExt, channel::mpsc};
 use sa_core::agent::Approval;
-use sa_sandbox::{Ended, IDLE, Until};
+use sa_sandbox::{Call, Ended, IDLE, Until};
 use serde_json::{Value, json};
 use tokio::sync::oneshot;
 use uuid::Uuid;
@@ -35,7 +35,7 @@ use crate::{
 	execute::{CellState, Key, PAUSE, Told},
 	oauth,
 	signin::{self, Caller, Freshness, SignIn},
-	tools::{self, Def, Tools},
+	tools::{self, Def, Gate, Tools},
 };
 
 /// Newest first; the first is answered to a client asking for one not here.
@@ -86,9 +86,7 @@ impl Sessions {
 			idle
 		};
 		for id in idle {
-			if let Some(sandbox) = tools.sandbox() {
-				sandbox.close(&Key::Mcp(id)).await;
-			}
+			tools.sandbox().close(&Key::Mcp(id));
 		}
 		let mut bytes = [0; 32];
 		getrandom::fill(&mut bytes).expect("the OS has randomness");
@@ -146,9 +144,7 @@ async fn end(State(m): State<Mcp>, headers: HeaderMap) -> Response {
 		Err(res) => return *res,
 	};
 	m.sessions.0.lock().expect("never held across a panic").remove(&s.id);
-	if let Some(sandbox) = m.tools.sandbox() {
-		sandbox.close(&Key::Mcp(s.id.clone())).await;
-	}
+	m.tools.sandbox().close(&Key::Mcp(s.id.clone()));
 	StatusCode::NO_CONTENT.into_response()
 }
 
@@ -264,7 +260,7 @@ enum Work {
 	/// A cell, from its first answer.
 	Cell(Told),
 	/// A held call, once the user agrees.
-	Call { call: tools::Call, own: bool },
+	Call { call: Call, own: bool },
 }
 
 async fn call(m: &Mcp, caller: &Caller, s: &Session, headers: &HeaderMap, params: Value, streams: bool) -> Result<Reply, (i64, String)> {
@@ -307,16 +303,17 @@ async fn call(m: &Mcp, caller: &Caller, s: &Session, headers: &HeaderMap, params
 		Some(_) => return Err((-32602, "confirmed is a boolean".to_owned())),
 	};
 	let (c, own) = match name {
-		"call" => (serde_json::from_value::<tools::Call>(Value::Object(args)).map_err(invalid)?, false),
+		"call" => (serde_json::from_value::<Call>(Value::Object(args)).map_err(invalid)?, false),
 		_ => match m.tools.own(|p| may(caller, p)).into_iter().find(|t| t.name == name) {
 			Some(t) => (t.call(args), true),
 			None => return Err((-32602, format!("no tool {name}: search, call, or one tools/list names"))),
 		},
 	};
-	let Some(hints) = m.tools.hints(&c.operation) else {
-		return Ok(Reply::Now(text(&json!({ "error": format!("no operation {:?}: search for one", c.operation) }), true)));
+	let gate = match m.tools.gate(&c, approval(caller)) {
+		Ok(g) => g,
+		Err(e) => return Ok(Reply::Now(text(&json!({ "error": e }), true))),
 	};
-	if hints.held_by(approval(caller)) && !confirmed {
+	if matches!(gate, Gate::Held) && !confirmed {
 		if asks {
 			return Ok(Reply::Asking(Work::Call { call: c, own }));
 		}
@@ -333,7 +330,7 @@ async fn call(m: &Mcp, caller: &Caller, s: &Session, headers: &HeaderMap, params
 	Ok(Reply::Now(run(m, headers, c, own).await))
 }
 
-async fn run(m: &Mcp, headers: &HeaderMap, c: tools::Call, own: bool) -> Value {
+async fn run(m: &Mcp, headers: &HeaderMap, c: Call, own: bool) -> Value {
 	match m.tools.call(&bearer(headers), c).await {
 		Ok(a) => {
 			let ok = StatusCode::from_u16(a.status).is_ok_and(|s| s.is_success());
@@ -382,7 +379,7 @@ async fn converse(m: &Mcp, s: &Session, headers: &HeaderMap, work: Work, mut out
 			},
 		Work::Cell(mut so_far) => {
 			let key = Key::Mcp(s.id.clone());
-			let sandbox = m.tools.sandbox().expect("a cell ran there");
+			let sandbox = m.tools.sandbox();
 			while let CellState::Paused(call) = &so_far.state {
 				let agreed = ask(m, s, &call.clone(), &mut out).await;
 				sandbox.decide(&key, None, agreed);
@@ -398,7 +395,7 @@ async fn converse(m: &Mcp, s: &Session, headers: &HeaderMap, work: Work, mut out
 }
 
 /// Asks the user, through the client, to agree to `call`: whether they did within [`PAUSE`].
-async fn ask(m: &Mcp, s: &Session, call: &tools::Call, out: &mut mpsc::Sender<Value>) -> bool {
+async fn ask(m: &Mcp, s: &Session, call: &Call, out: &mut mpsc::Sender<Value>) -> bool {
 	let mut bytes = [0; 16];
 	getrandom::fill(&mut bytes).expect("the OS has randomness");
 	let id = format!("ask-{}", hex::encode(bytes));

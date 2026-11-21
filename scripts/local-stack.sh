@@ -35,8 +35,6 @@ PANEL_PORT="${PANEL_PORT##*:}"
 WEB_DEV_PORT="${PANEL_WEB_PORT:?$need}"
 BROWSERS_PORT="${BROWSERS_BIND:?$need}"
 BROWSERS_PORT="${BROWSERS_PORT##*:}"
-SANDBOX_PORT="${SANDBOX_BIND:?$need}"
-SANDBOX_PORT="${SANDBOX_PORT##*:}"
 offset=0
 # whom dev sign-in is, whatever --role: with --from-prod, prod's own account
 DEV_EMAIL="admin@evinvest.ltd"
@@ -115,8 +113,8 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [-
   dev (--dev): --watch without the landings. A conductor or its next dev already on their ports is
   stopped, with the run that started it, and replaced; sites_panel and review_archive are started
   unless they already answer on their ports, a peer without a checkout skipped with a warning.
-  --port <n>: the conductor on n and its next dev on n+1, in SA_PORT_RANGE, with a state of its own; no browsers' nor
-  sandbox's runner, whose ports are the stack's on the usual ones.
+  --port <n>: the conductor on n and its next dev on n+1, in SA_PORT_RANGE, with a state of its own; no browsers'
+  runner, whose port is the stack's on the usual one.
   --no-peers: neither built nor started: sites_panel, review_archive, playbook; the conductor answers 502 for them.
   --fixed [<rev>]: nothing watched; the conductor and its static front end built once from a copy of this checkout
   as it is now, or at <rev> (a commit, a tag), into this checkout's build dir: only what differs compiles. Without --port,
@@ -216,7 +214,7 @@ if [ "$fixed" = 1 ]; then
 		[ -n "$fixed_rev" ] || for f in HEAD logs/HEAD; do touch -r "$(git -C "$root" rev-parse --path-format=absolute --git-path "$f")" "$src/.git/$f"; done
 		# gitignored, and read by the builds; the installs hard-linked (npm ci replaces what it changes), the overlay copied (rebuilt in place)
 		[ ! -e "$root/frontend/_.js-local.json" ] || cp "$root/frontend/_.js-local.json" "$src/frontend/"
-		for d in frontend/node_modules crates/sandbox/js/node_modules; do [ ! -d "$root/$d" ] || cp -al "$root/$d" "$src/$d"; done
+		[ ! -d "$root/frontend/node_modules" ] || cp -al "$root/frontend/node_modules" "$src/frontend/node_modules"
 		[ ! -d "$root/frontend/src/shared/placement_overlay" ] || cp -a "$root/frontend/src/shared/placement_overlay" "$src/frontend/src/shared/"
 		# the newest copy's Turbopack cache: the export compiles only what differs
 		prev=""
@@ -314,7 +312,6 @@ opens=""
 [ "$window" = 0 ] || opens=" (opened in the browser once up)"
 printf '%s\033[1;34m▶ %s%s\033[0m\n' "$clr" "$url" "$opens" >&2
 BROWSERS_PORT=$((BROWSERS_PORT + offset)) # a sibling's, as the others are
-SANDBOX_PORT=$((SANDBOX_PORT + offset))
 SITES_PORT="$(shell_port "$SITES_DIR" PANEL_BIND)"
 REVIEW_ARCHIVE_PORT="$(shell_port "$REVIEW_ARCHIVE_DIR" REVIEW_ARCHIVE_SERVER_BIND)"
 PLAYBOOK_PORT="$(shell_port "$PLAYBOOK_DIR" PORT)"
@@ -621,7 +618,7 @@ if [ "$run_panel" = 1 ] && { [ "$watch" = 1 ] || [ "$fixed" = 1 ]; }; then
 fi
 # The conductor's and its runners' binaries in one build, each watched rebuild too: another -p set unifies features
 # otherwise, a second variant of shared deps built cold under the build dir's lock.
-conductor_packages="-p sa_server -p sa_sandbox"
+conductor_packages="-p sa_server"
 [ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ] || conductor_packages+=" -p sa_browsers"
 build_sites() {
 	retried in_shell "$SITES_DIR" cargo b -q -p panel_server &&
@@ -753,19 +750,6 @@ if [ -n "$browsers_origin" ] && [ "$dev" = 1 ] && busy "$BROWSERS_PORT"; then
 	warn "port $BROWSERS_PORT is another stack's browsers' runner: none here, the gmails' browsers say they are not connected"
 	browsers_origin=""
 fi
-# The agents' `execute` once crates/sandbox/js has its packages: @evinvest/api comes through its _.js-local.json until published.
-sandbox_origin=""
-if [ "$run_panel" = 1 ] && [ "$side" = 0 ]; then
-	sandbox_js="$src/crates/sandbox/js"
-	[ "$sandbox_js/node_modules/.package-lock.json" -nt "$sandbox_js/package.json" ] || timed sandbox-js in_shell "$root" bash -c "cd crates/sandbox/js && npm install --no-audit --no-fund >&2"
-	if [ -d "$sandbox_js/node_modules/@evinvest/api" ]; then
-		sandbox_origin="http://127.0.0.1:$SANDBOX_PORT"
-	fi
-	if [ -n "$sandbox_origin" ] && [ "$dev" = 1 ] && busy "$SANDBOX_PORT"; then
-		warn "port $SANDBOX_PORT is another stack's sandbox runner: none here, the agents have no execute"
-		sandbox_origin=""
-	fi
-fi
 # The Google accounts, their keys named in it from the environment (docs/ARCHITECTURE.md, Google accounts).
 conductor_config="${SA_CONDUCTOR_CONFIG:-$HOME/.config/sa_conductor.nix}"
 [ -f "$conductor_config" ] || { echo "no conductor config at $conductor_config (SA_CONDUCTOR_CONFIG): its \`google\` accounts, \`[]\` for none" >&2; exit 1; }
@@ -790,7 +774,6 @@ panel() {
 		PANEL_REVIEW_ARCHIVE_URL="$review_archive_origin" \
 		PANEL_PLACEMENT_DIR="$placement_dir" \
 		PANEL_BROWSERS_URL="$browsers_origin" \
-		PANEL_SANDBOX_URL="$sandbox_origin" \
 		GOLOGIN_TOKEN="${browsers_origin:+${GOLOGIN_TOKEN:-}}" \
 		MULTILOGIN_TOKEN="${browsers_origin:+${MULTILOGIN_TOKEN:-}}" \
 		PANEL_GRAFANA_SERVER="$PANEL_GRAFANA_SERVER" \
@@ -948,20 +931,10 @@ browsers() {
 		PANEL_ASSERTION_KEYS="$assertion_public" \
 		"$state/target/debug/sa_browsers" "$@"
 }
-# sa_sandbox's runner: each run Deno, net to this conductor's /api/run alone
-sandbox() {
-	SANDBOX_BIND="127.0.0.1:$SANDBOX_PORT" \
-		SANDBOX_MAX=2 \
-		SANDBOX_DENO="$(command -v deno)" \
-		SANDBOX_JS="$src/crates/sandbox/js" \
-		SANDBOX_CONDUCTOR_URL="http://127.0.0.1:$PANEL_PORT/api/run" \
-		PANEL_ASSERTION_KEYS="$assertion_public" \
-		"$state/target/debug/sa_sandbox" "$@"
-}
-export -f panel sites_panel review_archive browsers sandbox playbook
-export state conductor_config spend_flag public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_dir browsers_origin sandbox_origin \
+export -f panel sites_panel review_archive browsers playbook
+export state conductor_config spend_flag public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_dir browsers_origin \
 	PANEL_GRAFANA_SERVER PANEL_BIN SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR REVIEW_ARCHIVE_DATA_DIR REVIEW_ARCHIVE_PORT \
-	PANEL_PORT SITES_PORT BROWSERS_PORT SANDBOX_PORT root src PLAYBOOK_BIN PLAYBOOK_PORT playbook_origin
+	PANEL_PORT SITES_PORT BROWSERS_PORT root src PLAYBOOK_BIN PLAYBOOK_PORT playbook_origin
 watched() {
 	local dir="$1"
 	shift
@@ -1041,19 +1014,9 @@ if [ -n "$browsers_origin" ]; then
 	serving browsers "$root" "$own_cargo b -q $conductor_packages" "browsers serve" -e rs,toml,lock &
 	essential+=("$!")
 elif [ "$side" = 1 ]; then
-	say "--port: no browsers' nor sandbox's runner, whose ports are the stack's on the usual ones"
+	say "--port: no browsers' runner, whose port is the stack's on the usual one"
 elif [ -z "${GOLOGIN_TOKEN:-}${MULTILOGIN_TOKEN:-}" ]; then
 	say "GOLOGIN_TOKEN and MULTILOGIN_TOKEN unset: no browsers' runner; the gmails' browsers say they are not connected"
-fi
-
-if [ -n "$sandbox_origin" ]; then
-	say "starting the sandbox's runner on $sandbox_origin"
-	busy "$SANDBOX_PORT" && die "port $SANDBOX_PORT is taken: the sandbox's runner's"
-	[ "$watch" = 1 ] || [ "$fixed" = 1 ] || timed sandbox in_shell "$root" bash -c "$own_cargo b -q -p sa_sandbox" # under --watch, the conductor's build
-	serving sandbox "$root" "$own_cargo b -q $conductor_packages" "sandbox serve" -e rs,toml,lock &
-	essential+=("$!")
-elif [ "$run_panel" = 1 ] && [ ! -d "$root/crates/sandbox/js/node_modules/@evinvest/api" ]; then
-	say "crates/sandbox/js has no @evinvest/api (its _.js-local.json names the checkout until it is published): no sandbox, the agents have no execute"
 fi
 
 if [ "$run_panel" = 1 ]; then

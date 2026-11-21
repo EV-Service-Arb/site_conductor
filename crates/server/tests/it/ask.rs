@@ -81,7 +81,7 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 		None,
 		None,
 		Some(model),
-		None,
+		sa_server::testing::sandbox(),
 		None,
 	);
 	let mut b = Browser::default();
@@ -189,7 +189,7 @@ async fn the_approval_level_holds_only_what_it_does_not_cover() {
 		None,
 		None,
 		Some(model),
-		None,
+		sa_server::testing::sandbox(),
 		None,
 	);
 	let mut b = Browser::default();

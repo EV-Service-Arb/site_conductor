@@ -45,7 +45,7 @@ impl Person {
 			None,
 			None,
 			None,
-			None,
+			sa_server::testing::sandbox(),
 			None,
 		);
 		let mut browser = Browser::default();

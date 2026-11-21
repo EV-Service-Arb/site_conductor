@@ -72,10 +72,9 @@ crates/browsers/         sa_browsers: the devices a browser poses as, a launch's
                          frames (lib); the runner (`sa_browsers serve`): Orbita headless, Mimic through
                          the Multilogin app's launcher, a browser's devtools passed to the conductor
                          alone, a film made the camera; a cloud phone's life and its viewer over adb
-crates/sandbox/          sa_sandbox: a session of the agents' code and what it answers, its limits (lib); the
-                         runner (`sa_sandbox serve`): each session one Deno process, each cell type-checked
-                         first against the cells before it by the runner's one `deno lsp`, no permission
-                         but the net to the conductor's `/api/run`; `js/`, what a session runs
+crates/sandbox/          sa_sandbox: the worker (Starlark, sealed by rlimits and seccomp before it reads a
+                         cell), the wire between it and the conductor, the limits; the conductor's binary
+                         is the worker when started as one
 crates/places/           Google Places: a place from what a person pastes (an id, a Maps URL, a
                          search), its point; suggestions as one types (Autocomplete, no session
                          token); a locality's viewport, the one around a point (Geocoding), a
@@ -123,7 +122,8 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
                          documents, pulled and merged under their forward prefixes
   src/tools.rs           an agent's `search`, `call`, `execute` and `poll` over the catalog: a call runs through
                          the app with the caller's credentials, as their own request would
-  src/execute.rs         `execute`, `poll`: sessions in sa_sandbox, a cell's token; /api/run, its way back
+  src/execute.rs         `execute`, `poll`: the sessions, each a worker of this binary, driven in `serve`; a
+                         cell's calls relayed as its caller's, held as the level holds them
   src/claude.rs          the Claude API; /api/v1/me/claude: a person's own Claude, connected
   src/ask.rs             the in-page assistant's loop (`POST /assistant/chats/{id}/ask`): Claude with
                          `search`/`call`/`execute`/`poll`, `open` (a view) and `run` (a binding); what the
@@ -245,7 +245,6 @@ second block below to it.
 /api/queries_cache        public, rate-limited    open to everyone
 /api/ingest               in-cluster
 /api/kit                  in-cluster
-/api/run                  in-cluster              a sandbox's cells (Code mode)
 /auth                     public, rate-limited
 /mcp                      public
 /mcp/register             public, rate-limited    open (RFC 7591)
@@ -729,48 +728,49 @@ DELETE /mcp           its session ends, the sandbox's with it
 
 ## Code mode
 
-`execute { code }` and `poll { cell }`, on both transports where `PANEL_SANDBOX_URL` is set:
-TypeScript over the catalog's client, for work that takes several calls. It runs in sa_sandbox's
-pod, never here, as a cell of a session that outlives a reply.
+`execute { code }` and `poll { cell }`, on both transports: Starlark over the catalog's operations, for
+work that takes several calls. It runs in a sealed child of the conductor, a worker, as a cell of a
+session that outlives a reply.
 
 ```text
-agent ─execute─▶ conductor: the caller's session (a chat and its asker, or the MCP session's), opened if none
-   POST /sessions ─▶ sa_sandbox: deno run js/host.ts, a nonce on its stdin; its dir a config scope of the checker
-   POST /sessions/{s}/cells {code, token} (Conductor assertion, aud sandbox)
-      js/names.ts (the runner's one, kept running): the code's top-level declarations
-      cell_N.ts = the code + imports of what the cells before declared + exports of its own + `import { api }`
-      deno lsp (the runner's one): cell_N's diagnostics in its session's scope; an error runs nothing
-      host.ts: the cell's token set, `await import(cell_N.ts)` ── Bearer token ──▶ conductor /api/run/<path>
-   /api/run: the live cell's token, under CALLS ─ one operation of the catalog (static segments
-             before parameters) ─ held by the level? it waits for the person (PAUSE): agreed, on; else
-             `refused` : the request through the app as the caller, its Set-Cookie dropped
-   GET /sessions/{s}/cells/{N}?stdout&stderr&until ◀── execute: to its end; poll: until it says more;
-             either answered at WAIT, or at once on a held call: `paused`, the call's proposal
+conductor (holds the secrets)
+  Sandbox: sessions by Key (chat+asker | MCP session), driven by one future `serve` joins
+    │  spawn <conductor's own binary> __sa_sandbox_worker: env cleared, stdin/stdout/stderr only
+    ▼
+  worker (one per session, kept while the session lives)
+    1. rlimits: data (its binary's + twice HEAP), CPU (LIMIT), open files (3)
+    2. no_new_privs + seccomp allowlist: read fd 0, write fds 1 and 2, its memory, futex, clocks,
+       getrandom, signals' masks, exit. Anything else kills it (SIGSYS). Unsealed, it runs nothing.
+    3. Starlark: each cell a Module seeded with what earlier Done cells bound (frozen)
+       call(operation, path=, query=, body=) ─ Up::Call, a JSON line ─┐
+       print(...)                            ─ Up::Print ─────────────┤
+                                                                      ▼
+  Sandbox: CALLS, the level (held: the person, PAUSE), then Tools::call as the caller's credentials
+           ─ Down::Answer {status, body}, a JSON line on the worker's stdin
 ```
 
 - **A session is its caller's alone**: in-page, a chat's as one person asks in it (acting as another,
-  as that pair); on MCP, the MCP session's. Chats are shared, and a session's globals hold what its
-  caller's permissions fetched.
-- **A cell sees what the cells before it declared**: their top-level declarations, types included,
-  are imported from the latest cell that ran to its end declaring each; a cell that threw hands on
-  nothing, and a name declared again is the later cell's. A cell is checked against the catalog and
-  those alone: its program is what it imports, in its session's own scope, so no session's
-  declarations reach another's. It runs only alone: one at a time.
-- **The client is the catalog's**: gen writes `crates/sandbox/js/catalog.json` with the catalog's own
-  merge over the vendored documents, and its types (`catalog.ts`) beside it. The relay's own
-  refusals are the client's hop (`refused`, 403, never a 401): the code reads them as an answer
-  and decides what follows.
-- **A session is one Deno process** with no permission but the net to the conductor's `host:port`
-  (the runner's `SANDBOX_CONDUCTOR_URL`, never a request's), `SA_RUN_URL` and reading its own
-  cells; its environment emptied, its heap 256 MB. A cell's streams are kept to `OUTPUT` (64 KiB),
-  its calls to `CALLS` (100); it is answered after `WAIT` (20 s) and killed at `LIMIT` (10 min),
-  its session with it. A session idle `IDLE` (30 min) is let go, and past `SANDBOX_MAX` the idlest
-  (none idle: 503). One the runner no longer holds answers 410: its state is gone, and the agent is
-  told so; it is never made anew empty under the same name. The limits are `sa_sandbox`'s, read by
-  both ends.
-- **A cell's calls are its caller's own**: each goes through the gate with the caller's credentials
-  as of their latest request about the session, so a rotated session is followed and a signed-out
-  one ends the session (the prelude's exit 3). A cell's token dies with the cell.
+  as that pair); on MCP, the MCP session's. Chats are shared, and a session's names hold what its
+  caller's permissions fetched. Each session is a worker of its own, so no session's names reach another's.
+- **A cell sees what the cells before it bound**: the top-level names of every cell that ended Done,
+  frozen (to change one, bind it again; a name bound again is the later cell's); a cell that failed
+  hands on nothing. It runs only alone: one at a time.
+- **The language is Starlark** (starlark-rust): no `load`, no `while`, recursion bounded by the
+  evaluator's call stack and time by `LIMIT`; the standard library, `json` and `print`. Its one global
+  is `call`, the `call` tool's arguments (`sa_sandbox::Call`: an operation id as `search` names it, path,
+  query, body), returning its answer as `{status, body}`. Starlark has no try/except, so every outcome is
+  a value: the conductor's own refusals (not an operation, past `CALLS`, declined, no answer within
+  `PAUSE`) come back as status 403, `{code: "refused", error}`, for the code to decide on.
+- **Bounded:** a cell's output is kept to `OUTPUT` (64 KiB) a stream, its calls to `CALLS` (100); it is
+  answered after `WAIT` (20 s) and killed at `LIMIT` (10 min), its session with it (`Killed`). Past
+  `HEAP` of Starlark's own heap accounting the session dies, told why, and the data rlimit is the
+  kernel's backstop (`Died`, as any signal). A session idle `IDLE` (30 min) is let go, and past `MAX`
+  sessions the idlest; none idle, a new one is refused as busy. A session whose worker ended answers
+  the next execute that its state is gone, once; it is never made anew empty under the same name. The
+  limits are `sa_sandbox`'s.
+- **A cell's calls are its caller's own**: each runs through the app with the caller's credentials as
+  of their latest request about the session, so a rotated session is followed, and a 401 ends the
+  session (`SignedOut`).
 - **A held call waits in the relay, and the cell with it.** In-page, it is an action in the answer;
   `act` lets it run there and resumes the answer: a new turn, the model told what the code did next.
   A new question in the chat declines it. On MCP, a client that declared `elicitation` is asked on
@@ -1247,10 +1247,10 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **A gmail's browser is driven only through the conductor**, its devtools no one else's, a phone's
   viewer only through it; the runner holds none of the conductor's secrets: a launch brings a token
   for that run alone (GoLogin's 3 minutes, Multilogin's 3 hours) and the proxy.
-- **Model-written code runs only in sa_sandbox**, its own pod: Deno with no permission but the net to
-  the conductor's `/api/run`, which is never public. It holds no secret but its cell's token, which
-  opens only the catalog's operations, as their caller, while the cell lasts, and none the caller's
-  approval level holds until the person agrees.
+- **Model-written code runs only in a sandbox worker**: Starlark in a child of the conductor with an
+  empty environment, no syscall but its pipes and its own memory (seccomp), its memory and time capped.
+  It holds no secret and reaches nothing but the catalog's operations, as their caller, through that
+  pipe while its cell lasts, and none the caller's approval level holds until the person agrees.
 - **A cloud phone bills while it runs**: nothing a test runs starts one, and one that started stops
   on every way its run ends (docs/spec/browsers.md).
 - **No two gmails share a proxy**: an exit two accounts share is a link Google can draw.
@@ -1299,9 +1299,9 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   URLs and egress devops derives.
 - **The landings, outbound on :443.** The Connected sites page asks each site key's origin; the
   origins are data, so the egress is public :443, not a host list.
-- **Ingest, the kit and the runs stay inside the cluster.** Their senders reach them by service DNS;
-  the IngressRoute that publishes `sa.evinvest.ltd` must not route `/api/ingest`, `/api/kit` nor
-  `/api/run`, and the NetworkPolicy lets in only the pods that send.
+- **Ingest and the kit stay inside the cluster.** Their senders reach them by service DNS;
+  the IngressRoute that publishes `sa.evinvest.ltd` must not route `/api/ingest` nor `/api/kit`,
+  and the NetworkPolicy lets in only the pods that send.
 - **sites_panel within reach, and only through here.** The conductor calls `PANEL_SITES_URL` for
   everything it forwards and for its hubs; sites has no public route of its own (the landings
   reach its `/api/internal` in-cluster).
@@ -1341,14 +1341,13 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   address. The conductor too dials those proxies (a set-up's check, to `ip-api.com:80` through them),
   `api.gologin.com:443` and `api.multilogin.com:443`. Multilogin's account auto-stop (Account
   settings) at 40 min is the backstop by hand.
-- **The sandbox.** sa_sandbox is its own pod (`panel-sandbox`; the conductor's `PANEL_SANDBOX_URL`,
-  in-cluster only), holding its sessions in memory: one replica, which the conductor's own record of
-  them (in memory too) names by the runner's id; a rollout ends every session, each then answered as
-  gone. `SANDBOX_MAX` sessions at once, each a Deno process (heap 256 MB), and one type checker
-  for them all (`deno lsp`, ~0.7 GB resident with nine sessions' scopes), the
-  conductor's public keys (`PANEL_ASSERTION_KEYS`), Deno and `crates/sandbox/js` with its packages
-  in the image. Its egress is DNS and the conductor's `/api/run` alone, which the public
-  IngressRoute must not route.
+- **The sandbox's workers, in the conductor's pod.** Up to `MAX` (4) children of the conductor's own
+  binary, each capped by its data rlimit at what the binary holds plus twice `HEAP` (24 MiB): the pod's
+  memory limit has `MAX` × that (≤ 200 Mi) above the conductor. A worker idles at ~5 MiB of its own (its binary's
+  pages are the conductor's), ~9 MiB holding 10 000 GBP-sized dicts, ~30 MiB at `HEAP`. The sessions live in the conductor's
+  memory, so a rollout ends every one, each then answered as gone. The runtime must let a process set
+  no_new_privs and install a seccomp filter (`seccomp(2)` not denied by the container's own profile):
+  a worker that cannot seal itself runs nothing, and `execute` says why. Nothing new in the image.
 - **Telegram, outbound only.** With `TELEGRAM_BOT_TOKEN` the pods need egress to
   `api.telegram.org:443`; no webhook is set on the bot (`getUpdates` refuses to run while one is).
 - **`/api/v1/live` through the public IngressRoute, as a WebSocket.** Nothing in front may buffer

@@ -108,7 +108,7 @@ pub fn app(
 	telegram: Option<Telegram>,
 	browsers: Option<browser::Connected>,
 	model: Option<Model>,
-	sandbox: Option<Sandbox>,
+	sandbox: Sandbox,
 	placement: Option<placement::Placement>,
 ) -> Router {
 	let auth = Router::new()
@@ -118,7 +118,6 @@ pub fn app(
 		.route(connections::BUSINESS_CALLBACK, get(connections::business_callback));
 	let auth = bounded(auth, limits.auth_concurrent, limits.auth_timeout).with_state(sign_in.clone());
 	let catalog = forward.as_ref().map_or_else(|| Catalog::new(document()), |f| f.catalog().clone());
-	let runs = sandbox.is_some();
 	let tools = Tools::new(catalog.clone(), sandbox);
 	let agents = mcp::Mcp {
 		sign_in: sign_in.clone(),
@@ -187,11 +186,6 @@ pub fn app(
 	let app = match grafana {
 		Some(grafana) => app.merge(grafana.routes()),
 		None => app,
-	};
-	let app = if runs {
-		app.merge(bounded(Sandbox::routes(tools.clone()), limits.api_concurrent, limits.api_timeout))
-	} else {
-		app
 	};
 	let app = app.layer(middleware::map_response(nosniff));
 	tools.serve(app.clone());

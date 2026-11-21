@@ -38,7 +38,7 @@ async fn a_client_signs_in_and_acts_as_its_user() {
 	assert_eq!(init["result"]["protocolVersion"], "2025-06-18");
 	let (_, listed) = client.rpc(&app, "tools/list", json!({})).await;
 	let names: Vec<&str> = listed["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-	assert_eq!(names, ["search", "call"]);
+	assert_eq!(names, ["search", "call", "execute", "poll"]);
 
 	let (found, _) = client.tool(&app, "search", json!({ "query": "move a GBP" })).await;
 	assert!(found["operations"].as_array().unwrap().iter().any(|o| o["id"] == "move_gmb"), "{found}");
@@ -128,7 +128,17 @@ async fn a_services_own_tool_is_listed_and_answers_as_it_came() {
 	let (base, seen) = testing::upstream(routes).await;
 	let (sign_in, forward) = testing::conductor(panel.clone(), operator(), "dev@localhost", &base.parse().unwrap());
 	forward.catalog().follow(testing::services(&base.parse().unwrap()), tokio::sync::watch::channel(true).1).await;
-	let app = sa_server::http::app(sign_in, Some(forward), None, sa_server::http::Limits::default(), None, None, None, None, None);
+	let app = sa_server::http::app(
+		sign_in,
+		Some(forward),
+		None,
+		sa_server::http::Limits::default(),
+		None,
+		None,
+		None,
+		sa_server::testing::sandbox(),
+		None,
+	);
 	let (bearer, _, _) = mcp_grant(&app, "ask").await;
 
 	let (init, client) = Mcp::initialize(&app, &bearer, json!({})).await;

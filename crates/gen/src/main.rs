@@ -2,9 +2,7 @@
 //! generated from; the services' documents, copied in from their checkouts (`_.siblings-local.json`
 //! at the repo's root, gitignored, names each one's root; [`DOCUMENTS`] where each commits it);
 //! and the views' table (`VIEWS`, for `@evinvest/views`), the services' nested in the conductor's.
-//! All into `frontend/src/shared/api/`, committed; the `generated` pre-commit hook re-runs it. And the
-//! catalog those documents make, as the conductor merges them, for the sandbox's client
-//! (`crates/sandbox/js/catalog.json`).
+//! All into `frontend/src/shared/api/`, committed; the `generated` pre-commit hook re-runs it.
 
 use std::{
 	collections::BTreeMap,
@@ -66,7 +64,6 @@ fn main() {
 	}
 	std::fs::create_dir_all(&vendored).expect("frontend/src/shared/api is writable");
 	let mut table = <View as Views>::table().clone();
-	let mut catalog = Vec::new();
 	for (service, source) in sources {
 		let copy = vendored.join(format!("{service}.json"));
 		if let Some(source) = source {
@@ -85,14 +82,7 @@ fn main() {
 			let views = serde_json::from_value(views.clone()).unwrap_or_else(|e| panic!("{service}'s x-views: {e}"));
 			table.nest(service.as_str(), views).unwrap_or_else(|e| panic!("{service}'s views in the conductor's: {e}"));
 		}
-		catalog.push((service, theirs));
 	}
-	let catalog = sa_server::catalog::merged(catalog).unwrap_or_else(|e| panic!("the catalog of the vendored documents: {e:#}"));
-	std::fs::write(
-		Path::new(env!("CARGO_MANIFEST_DIR")).join("../sandbox/js/catalog.json"),
-		serde_json::to_string_pretty(&catalog).expect("the catalog serializes") + "\n",
-	)
-	.expect("crates/sandbox/js is writable");
 	let views = serde_json::to_string_pretty(&table).expect("the table serializes");
 	std::fs::write(
 		api.join("views.ts"),

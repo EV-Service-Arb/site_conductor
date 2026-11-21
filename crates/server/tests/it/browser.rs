@@ -216,7 +216,7 @@ impl World {
 			None,
 			Some(connected),
 			None,
-			None,
+			sa_server::testing::sandbox(),
 			None,
 		);
 		let mut b = Browser::default();
@@ -765,7 +765,7 @@ async fn without_a_runner_every_browser_route_says_so_by_its_code() {
 		None,
 		None,
 		None,
-		None,
+		sa_server::testing::sandbox(),
 		None,
 	);
 	let mut b = Browser::default();

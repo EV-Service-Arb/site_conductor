@@ -2363,6 +2363,7 @@ export interface components {
             redirect_uri: string;
             set_at: string;
         };
+        /** @description One operation of the catalog, as `search` names it, the caller's to run. */
         CallInput: {
             /** @description The JSON body, for an operation that takes one. */
             body?: unknown;
