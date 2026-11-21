@@ -307,6 +307,11 @@ else
 	PANEL_PORT=$((PANEL_PORT + offset))
 	WEB_DEV_PORT=$((WEB_DEV_PORT + offset))
 fi
+url="http://localhost:$PANEL_PORT"
+[ "$watch" = 0 ] || url="http://localhost:$WEB_DEV_PORT"
+opens=""
+[ "$window" = 0 ] || opens=" (opened in the browser once up)"
+printf '%s\033[1;34m▶ %s%s\033[0m\n' "$clr" "$url" "$opens" >&2
 BROWSERS_PORT=$((BROWSERS_PORT + offset)) # a sibling's, as the others are
 SANDBOX_PORT=$((SANDBOX_PORT + offset))
 SITES_PORT="$(shell_port "$SITES_DIR" PANEL_BIND)"
@@ -1183,7 +1188,7 @@ fi
 {
 	echo
 	echo "────────────────────────────────────────────────────────────────────────"
-	echo " panel    $public_origin   (opens signed in: dev sign-in, $role)"
+	printf ' panel    \033[1;34m%s\033[0m   (opens signed in: dev sign-in, %s)\n' "$public_origin" "$role"
 	echo "          leads $public_origin/sites/leads   places $public_origin/sites/places   connected sites $public_origin/sources"
 	answers "$REVIEW_ARCHIVE_PORT" && echo "          review_archive $public_origin/review_archive   Grafana $public_origin/grafana/"
 	answers "$SITES_PORT" && echo " sites    $sites_origin   (behind the conductor: its /api/internal for the landings)"
