@@ -18,7 +18,7 @@ use eyre::WrapErr;
 use jiff::{Timestamp, civil::Date, tz::TimeZone};
 use sa_core::{
 	gbp::Snapshot,
-	prices::{Item, Rate},
+	prices::{Item, Rate, Scope},
 	tokens::{Charge, ChargePage, Renewal, split},
 };
 use sqlx::SqliteConnection;
@@ -369,7 +369,12 @@ impl Panel {
 			balances.insert(u.user_id, db::renewed(&mut tx, u.user_id, now, &self.renewal).await?);
 		}
 		let gmbs = gmbs_db::managed(&mut tx).await?;
-		let prices = db::rates(&mut tx).await?.into_iter().map(|(i, r)| (i, r.price())).collect();
+		let prices = db::rates(&mut tx)
+			.await?
+			.into_iter()
+			.filter(|(i, _)| i.scope() == Scope::ReviewArchive)
+			.map(|(i, r)| (i, r.price()))
+			.collect(); // an archive whose sa_core predates an item refuses the snapshot naming it
 		tx.commit().await.wrap_err("committing the snapshot's renewals")?;
 		Ok(Some(Snapshot {
 			gmbs,

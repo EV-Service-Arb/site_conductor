@@ -14,7 +14,7 @@ use axum::{
 	response::{IntoResponse, Response},
 	routing::get,
 };
-use sa_core::prices::{Item, MapLoad, PlacesRequest};
+use sa_core::prices::{Item, MapLoad, PlacesRequest, Scope};
 use sa_panel::{
 	Panel,
 	import::Export,
@@ -332,6 +332,7 @@ async fn every_priced_item_is_the_admins_to_price_and_the_archive_is_told() {
 	let told = w.panel.snapshot(jiff::Timestamp::now()).await.unwrap().unwrap().prices;
 	assert_eq!(told.get(&"walk.open".parse().unwrap()), Some(&7));
 	assert_eq!(told.get(&"walk.step".parse().unwrap()), Some(&0), "×0: free");
+	assert!(told.keys().all(|i| i.scope() == Scope::ReviewArchive), "only what the archive walks: {told:?}");
 
 	for refused in [
 		json!({ "multipliers": { "walk.fly": 1 }, "costs": {} }),
