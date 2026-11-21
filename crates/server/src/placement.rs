@@ -52,6 +52,8 @@ const PULL: Gate = sa_auth::Gate::USER.with(Flags {
 	slow: true,
 });
 
+type Slot = Arc<tokio::sync::Mutex<Option<Bytes>>>;
+
 /// Placement's work dir, and every payload built over it.
 #[derive(Clone)]
 pub struct Placement {
@@ -70,8 +72,6 @@ impl Placement {
 		self.built.lock().expect("no holder panics").entry(sha.to_owned()).or_default().clone()
 	}
 }
-
-type Slot = Arc<tokio::sync::Mutex<Option<Bytes>>>;
 
 /// The answers this conductor's queries cache keeps, read from the blocking thread a build runs on.
 struct Cached {
