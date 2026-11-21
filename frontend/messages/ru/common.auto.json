@@ -713,15 +713,15 @@
   },
   "area.badName": {
     "en": "A name needs a Latin letter or a digit: its link is made of them.",
-    "t": "В названии нужна латинская буква или цифра: из них составляется ссылка."
+    "t": "В названии нужна латинская буква или цифра: из них состоит ссылка."
   },
   "area.clear": {
     "en": "Pick another",
-    "t": "Выбрать другую"
+    "t": "Выбрать другое"
   },
   "area.leftCity": {
     "en": "The centre is out of {city}: name the area",
-    "t": "Центр находится за пределами {city}: задайте название области"
+    "t": "Центр за пределами города {city}: назовите район"
   },
   "area.name": {
     "en": "Its name",
@@ -729,7 +729,7 @@
   },
   "area.orClick": {
     "en": "or click the map: its city, else a circle around the point",
-    "t": "или нажмите на карту: будет выбран её город, а если его нет — круг вокруг точки"
+    "t": "или щёлкните по карте: его город, иначе круг вокруг точки"
   },
   "area.otherRadius": {
     "en": "Another radius",
@@ -2277,7 +2277,7 @@
   },
   "kit.edit.addByTicking": {
     "en": "add by ticking",
-    "t": "добавьте галочками"
+    "t": "добавьте, отметив галочкой"
   },
   "kit.edit.copied": {
     "en": "Link copied",
@@ -2305,11 +2305,7 @@
   },
   "kit.edit.draft": {
     "en": "Draft · not on Google yet",
-    "t": "Черновик · ещё не в Google"
-  },
-  "kit.edit.drafts": {
-    "en": "{n} drafts",
-    "t": "Черновиков: {n}"
+    "t": "Черновик · ещё нет в Google"
   },
   "kit.edit.elsewhere": {
     "en": "Elsewhere · in the kit",
@@ -2337,15 +2333,11 @@
   },
   "kit.edit.noPage": {
     "en": "no landing page: QR opens Google's form",
-    "t": "нет посадочной страницы: QR открывает форму Google"
-  },
-  "kit.edit.noQr": {
-    "en": "{n} without a QR left out",
-    "t": "Пропущено без QR: {n}"
+    "t": "нет страницы-визитки: QR открывает форму Google"
   },
   "kit.edit.noneInside": {
     "en": "None of your GBPs is in it.",
-    "t": "Ни один из ваших GBP в него не входит."
+    "t": "Ни одного из ваших GBP в нём нет."
   },
   "kit.edit.off": {
     "en": "kit off for it: no QR",
@@ -2353,7 +2345,7 @@
   },
   "kit.edit.offMaps": {
     "en": "Not on Maps yet, nothing to review",
-    "t": "Ещё нет на Картах, оставлять отзыв не на чем"
+    "t": "Ещё нет на Картах, отзывы оставлять не на чем"
   },
   "kit.edit.open": {
     "en": "Open",
@@ -2367,10 +2359,6 @@
     "en": "Review kit · 1 place",
     "t": "Набор для отзывов · 1 место"
   },
-  "kit.edit.places": {
-    "en": "Review kit · {n} places",
-    "t": "Набор для отзывов · мест: {n}"
-  },
   "kit.edit.print": {
     "en": "Print cards",
     "t": "Печать карточек"
@@ -2381,7 +2369,7 @@
   },
   "kit.edit.scan": {
     "en": "scan with your phone to take it out; signed-in only",
-    "t": "отсканируйте телефоном, чтобы убрать его; только для вошедших"
+    "t": "отсканируйте телефоном, чтобы забрать; только для вошедших"
   },
   "kit.edit.selectAll": {
     "en": "select all",
@@ -2389,11 +2377,11 @@
   },
   "kit.edit.suspended": {
     "en": "Suspended · nothing to review while suspended",
-    "t": "Приостановлен · пока он приостановлен, оставлять отзывы не на чем"
+    "t": "Заблокировано · пока заблокировано, оставлять отзывы не на чем"
   },
   "kit.edit.taken": {
     "en": "You have a kit at /kit/{slug} already: ",
-    "t": "У вас уже есть набор по адресу /kit/{slug}: "
+    "t": "Набор по адресу /kit/{slug} у вас уже есть: "
   },
   "kit.edit.title": {
     "en": "Review kit · {name}",
@@ -2405,11 +2393,11 @@
   },
   "kit.edit.unnamed": {
     "en": "named once its area is",
-    "t": "получит название, когда появится его район"
+    "t": "получит название, когда его получит район"
   },
   "kit.edit.verifying": {
     "en": "Verifying · not on Maps yet, nothing to review",
-    "t": "Проверяется · ещё нет на Картах, оставлять отзыв не на чем"
+    "t": "Проверяется · ещё нет на Картах, отзывы оставлять не на чем"
   },
   "kit.editGbps": {
     "en": "Add or drop GBPs",
@@ -2509,7 +2497,7 @@
   },
   "kit.list.none": {
     "en": "No kit yet: a kit is the GBPs in one area you collect reviews in together.",
-    "t": "Наборов пока нет: набор — это GBP одного района, по которым вы вместе собираете отзывы."
+    "t": "Наборов пока нет: набор — это GBP в одном районе, для которых вы собираете отзывы вместе."
   },
   "kit.list.title": {
     "en": "Kits",
@@ -3101,7 +3089,7 @@
   },
   "placement.category": {
     "en": "{category}: its definition",
-    "t": "{category}: определение категории"
+    "t": "{category}: определение"
   },
   "placement.competitors": {
     "en": "Competitors",
@@ -3277,7 +3265,7 @@
   },
   "placement.unweighted": {
     "en": "Scanned, not scored: no weight",
-    "t": "Просканировано, не оценено: нет веса"
+    "t": "Просканировано, не оценено: без веса"
   },
   "prices.cost.label": {
     "en": "{item}: cost in tokens {per}",
@@ -3833,23 +3821,23 @@
   },
   "trades.competitors.additional.what": {
     "en": "what searching its name finds",
-    "t": "что находится по её названию"
+    "t": "что находится по поиску его названия"
   },
   "trades.competitors.none": {
     "en": "No primary Google category: nothing names its competitors.",
-    "t": "Нет основной категории Google: некому назвать конкурентов."
+    "t": "Нет основной категории Google: некому назвать его конкурентов."
   },
   "trades.competitors.order": {
     "en": "First match wins, in this order. A Google category added on the left is a tier here.",
-    "t": "Побеждает первое совпадение, в этом порядке. Категория Google, добавленная слева, становится здесь уровнем."
+    "t": "Побеждает первое совпадение, в таком порядке. Категория Google, добавленная слева, становится здесь уровнем."
   },
   "trades.competitors.primary": {
     "en": "primary",
-    "t": "основная"
+    "t": "основные"
   },
   "trades.competitors.primary.what": {
     "en": "what searching its name or a keyword finds",
-    "t": "что находится по её названию или ключевому слову"
+    "t": "что находится по поиску его названия или ключевого слова"
   },
   "trades.competitors.reference": {
     "en": "the reference",
@@ -3861,7 +3849,7 @@
   },
   "trades.competitors.weigh": {
     "en": "Weight of one {tier}",
-    "t": "Вес одного уровня «{tier}»"
+    "t": "Вес одного уровня {tier}"
   },
   "trades.competitors.what": {
     "en": "one tier per Google category",
@@ -3873,11 +3861,11 @@
   },
   "trades.definition.applies": {
     "en": "rebuilds the studies of {category}'s pulled areas from what is held · no search bought",
-    "t": "пересобирает исследования выгруженных областей категории {category} из имеющихся данных · поиск не покупается"
+    "t": "пересобирает исследования подтянутых областей {category} из имеющихся данных · поиск не покупается"
   },
   "trades.definition.applies.added": {
     "en": "a Google category added: the next pull buys its sweep",
-    "t": "добавлена категория Google: следующая выгрузка купит её обход"
+    "t": "добавлена категория Google: следующая загрузка купит её обход"
   },
   "trades.definition.apply": {
     "en": "Apply",
@@ -3889,19 +3877,19 @@
   },
   "trades.definition.google": {
     "en": "To Google",
-    "t": "Для Google"
+    "t": "В Google"
   },
   "trades.definition.google.what": {
     "en": "What its GBPs are filed under and scanned on.",
-    "t": "Под чем регистрируются и по чему сканируются её GBP."
+    "t": "Под чем его GBP записаны и по чему сканируются."
   },
   "trades.definition.placement": {
     "en": "To placement",
-    "t": "Для размещения"
+    "t": "В выдачу"
   },
   "trades.definition.placement.what": {
     "en": "What every area's study of it is built from. The map's sliders try other weights for one view.",
-    "t": "Из чего строится исследование этой категории в каждой области. Ползунки на карте пробуют другие веса для одного вида."
+    "t": "Из чего строится исследование его в каждой области. Ползунки на карте пробуют другие веса для одного вида."
   },
   "trades.definition.unapplied": {
     "en": "{n} unapplied",
@@ -3909,7 +3897,7 @@
   },
   "trades.definition.unweighed": {
     "en": "Weigh {categories}'s tier first: a weight is a person's to give",
-    "t": "Сначала задайте вес уровня {categories}: вес назначает человек"
+    "t": "Сначала задайте вес уровня {categories}: вес задаёт человек"
   },
   "trades.demand": {
     "en": "Demand",
@@ -3937,7 +3925,7 @@
   },
   "trades.demand.columns": {
     "en": "Derived columns, in order: what the expression reads beside the grid's",
-    "t": "Вычисляемые столбцы по порядку: что выражение читает рядом со столбцами сетки"
+    "t": "Производные столбцы по порядку: что выражение читает рядом со столбцами сетки"
   },
   "trades.demand.expr": {
     "en": "Expression",
@@ -3957,7 +3945,7 @@
   },
   "trades.demand.layer.note": {
     "en": "Note",
-    "t": "Примечание"
+    "t": "Заметка"
   },
   "trades.demand.layer.remove": {
     "en": "Remove layer {name}",
@@ -3973,7 +3961,7 @@
   },
   "trades.demand.none": {
     "en": "No demand surface.",
-    "t": "Поверхности спроса нет."
+    "t": "Нет поверхности спроса."
   },
   "trades.demand.remove": {
     "en": "Drop the demand surface",
@@ -4037,7 +4025,7 @@
   },
   "trades.google.additional.order": {
     "en": "Typed into Google's form in this order after the primary. Each is one more query in every area's sweep: adding one makes the next pull buy it. Drag a chip, or move it with ‹ ›.",
-    "t": "Вводятся в форму Google в этом порядке после основной. Каждая — ещё один запрос в обходе каждой области: добавление категории заставит следующую выгрузку купить её. Перетащите чип или сдвиньте его кнопками ‹ ›."
+    "t": "Вводятся в форму Google в этом порядке после основной. Каждая — ещё один запрос в обходе каждой области: добавление одной заставит следующую загрузку купить её. Перетащите метку или переместите её кнопками ‹ ›."
   },
   "trades.google.additional.remove": {
     "en": "Remove {category}",
@@ -4077,7 +4065,7 @@
   },
   "trades.keywords.add": {
     "en": "Add a keyword in {lang} — no city: the grid point is the place",
-    "t": "Добавить ключевое слово ({lang}) — без города: место задаёт точка сетки"
+    "t": "Добавьте ключевое слово на языке {lang} — без города: местом служит точка сетки"
   },
   "trades.keywords.reference": {
     "en": "the primary's name · the reference",
@@ -4093,7 +4081,7 @@
   },
   "trades.keywords.weigh": {
     "en": "Weight of {keyword}",
-    "t": "Вес слова «{keyword}»"
+    "t": "Вес ключевого слова {keyword}"
   },
   "trades.keywords.weight": {
     "en": "Keywords · weight",
@@ -4101,7 +4089,7 @@
   },
   "trades.keywords.why": {
     "en": "Every GBP of the category is scanned on these. Placement scores a competitor by how it ranks for each, weighed so; a keyword with no weight is scanned, not scored.",
-    "t": "По этим словам сканируются все GBP категории. Размещение оценивает конкурента по тому, как он ранжируется по каждому из них, с учётом веса; слово без веса сканируется, но не оценивается."
+    "t": "По этим словам сканируется каждая GBP категории. Выдача оценивает конкурента по тому, как он ранжируется по каждому слову, с учётом весов; слово без веса сканируется, но не оценивается."
   },
   "trades.new": {
     "en": "New trade…",
@@ -4141,11 +4129,11 @@
   },
   "trades.overview.areas.none": {
     "en": "None of its GBPs stands in an area yet: draw one on the map.",
-    "t": "Ни один из её GBP пока не входит в область: нарисуйте её на карте."
+    "t": "Ни одна его GBP пока не лежит в области: нарисуйте её на карте."
   },
   "trades.overview.areas.what": {
     "en": "where its GBPs are · the map opens on its study",
-    "t": "где находятся её GBP · карта открывается на её исследовании"
+    "t": "где его GBP · карта открывается на его исследовании"
   },
   "trades.overview.brands": {
     "en": "Brands",
@@ -4169,19 +4157,19 @@
   },
   "trades.overview.brands.none": {
     "en": "No brand yet: a GBP's Profile names one.",
-    "t": "Брендов пока нет: бренд указывается в профиле GBP."
+    "t": "Брендов пока нет: его называет профиль GBP."
   },
   "trades.overview.brands.what": {
     "en": "name, logo and site its GBPs show",
-    "t": "название, логотип и сайт, которые показывают её GBP"
+    "t": "название, логотип и сайт, которые показывают его GBP"
   },
   "trades.overview.chip": {
     "en": "a chip scopes the outline",
-    "t": "чип ограничивает структуру"
+    "t": "метка ограничивает структуру"
   },
   "trades.overview.counts": {
     "en": "{brands} brands · {areas} areas",
-    "t": "брендов: {brands} · областей: {areas}"
+    "t": "Брендов: {brands} · регионов: {areas}"
   },
   "trades.overview.gbps": {
     "en": "GBPs",
@@ -4289,7 +4277,7 @@
   },
   "trades.window.willAsk": {
     "en": "It will ask: Google's categories · keywords in its language, weighed · what is never a competitor · its demand.",
-    "t": "Она спросит: категории Google · ключевые слова на её языке с весами · что никогда не конкурент · её спрос."
+    "t": "Она спросит: категории Google · ключевые слова на её языке, с весами · что никогда не конкурент · её спрос."
   },
   "trash.address": {
     "en": "Address",
