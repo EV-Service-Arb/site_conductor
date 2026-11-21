@@ -3,7 +3,7 @@
 //! compile-time checks the `query!` macros would give. Every committed write is told on the bus
 //! by its tables (`ev_lib::sqlite`).
 //!
-//! Two files: the panel's, and the queries cache's history ([`history_migrator`]), on a pool of
+//! Two files: the panel's, and the queries cache's history (`history_migrations/`), on a pool of
 //! its own that no client follows. One writer at a time on each (WAL: readers never wait for it). Every transaction that
 //! writes begins `BEGIN IMMEDIATE` ([`begin_write`]): it takes the write lock up front, so two
 //! of them queue on `busy_timeout` instead of both reading under a plain `BEGIN` and the
