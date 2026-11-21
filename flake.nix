@@ -40,6 +40,24 @@
           E2E_STACK_PORT = local 7; # `nix run .#e2e`'s (`dev --port`), its next dev on the next
           BROWSERS_BIND = "127.0.0.1:${local 5}"; # sa_browsers' runner
           SANDBOX_BIND = "127.0.0.1:${local 6}"; # sa_sandbox's runner
+          PROD_SSH = prodSsh;
+          PROD_RESTORE = lib.getExe prodRestore;
+          QUERIES_CACHE_SYNC = lib.getExe queriesCacheSync;
+        };
+
+        # prod's host, as ~/.ssh/config names it
+        prodSsh = "rpi5-ts";
+        # prod's SQLite files from their litestream replicas; local-stack's --from-prod, and whoever needs a copy
+        prodRestore = pkgs.writeShellApplication {
+          name = "prod-restore";
+          runtimeInputs = with pkgs; [ coreutils git litestream sops yq-go ];
+          text = builtins.readFile ./scripts/prod-restore.sh;
+        };
+        # a state's answers into prod's queries cache; PANEL_BIN the caller's, so local-stack builds no conductor of Nix's for it
+        queriesCacheSync = pkgs.writeShellApplication {
+          name = "queries-cache-sync";
+          runtimeInputs = with pkgs; [ coreutils openssh ];
+          text = "export PROD_SSH=${prodSsh}\n" + builtins.readFile ./scripts/queries-cache-sync.sh;
         };
 
         # `nix run .#gen`: the conductor's OpenAPI document (crates/gen) and the front end's client
@@ -350,6 +368,8 @@
         # litestream — which is what `sqlite` below asks for. One writer: one pod, replaced
         # (Recreate), never two at once on the volume.
         dbPath = "/data/panel.db";
+        # the queries cache's every version of an answer but the latest: its own file, replicated beside it
+        historyDbPath = "/data/queries_history.db";
         # the config file, in the image the deploy's literal `sa_conductor.json` mounted (docs/ARCHITECTURE.md, Deploy requirements)
         configPath = "/etc/settings/sa_conductor.json";
 
@@ -369,7 +389,7 @@
           containers."" = {
             inherit port;
             mounts = [ "/data" ];
-            sqlite = [ dbPath ];
+            sqlite = [ dbPath historyDbPath ];
             # Grafana's own sqlite: its state is provisioned again on every start
             unreplicated = [ "/data/grafana" ];
             healthPath = "/health";
@@ -382,6 +402,7 @@
             env = {
               APP_ENV = "production";
               PANEL_DB_PATH = dbPath;
+              PANEL_HISTORY_DB_PATH = historyDbPath;
               PANEL_GRAFANA_DIR = "/data/grafana";
             };
             # the epoch versions the sa catalog `serve` publishes to concierge: it must travel with
@@ -460,7 +481,7 @@
         # app does not depend on them, so naming a cargo build skips the Nix one.
         localStack = pkgs.writeShellApplication {
           name = "local-stack";
-          runtimeInputs = with pkgs; [ coreutils curl gawk jq git gnused iproute2 procps util-linux nodejs_22 watchexec litestream sops yq-go openssh gnutar sqlite ];
+          runtimeInputs = with pkgs; [ coreutils curl gawk jq git gnused iproute2 procps util-linux nodejs_22 watchexec sops openssh gnutar sqlite ];
           text = lib.concatStrings (lib.mapAttrsToList (k: v: "export ${k}=${v}\n") localEnv) + builtins.readFile ./scripts/local-stack.sh;
         };
 
@@ -504,6 +525,15 @@
           dev = { type = "app"; program = lib.getExe dev; meta.description = "the conductor and its peers under watch: a conductor already serving is replaced, a peer used (docs/LOCAL.md)"; };
           e2e = { type = "app"; program = lib.getExe e2e.program; meta.description = "the front end's behaviour over a stack of its own (frontend/tests/e2e, the renders aside); args go to `playwright test`"; };
           figma = { type = "app"; program = lib.getExe figma; meta.description = "the front end's screens into Figma, crawled over a stack of its own on a copy of .local's data, gridded on a new page of figmaFile"; };
+          prod-restore = { type = "app"; program = lib.getExe prodRestore; meta.description = "prod's SQLite files from their litestream replicas: <replica>=<path>…, GITOPS_DIR and DEVOPS_DIR set (docs/LOCAL.md)"; };
+          queries-cache-sync = {
+            type = "app";
+            program = lib.getExe (pkgs.writeShellApplication {
+              name = "queries-cache-sync";
+              text = ''PANEL_BIN="''${PANEL_BIN:-${bin}/bin/panel}" exec ${lib.getExe queriesCacheSync} "$@"'';
+            });
+            meta.description = "a local state's answers (<state>: its panel.db and queries_history.db) into prod's queries cache (docs/LOCAL.md)";
+          };
           local-stack = { type = "app"; program = lib.getExe localStack; meta.description = "the conductor, its Grafana, sites_panel, review_archive and the landings, wired together on this machine (docs/LOCAL.md)"; };
         };
 

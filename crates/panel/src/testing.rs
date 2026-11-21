@@ -32,16 +32,19 @@ pub async fn priced(panel: &Panel, items: &[(sa_core::prices::Item, i64)]) {
 	panel.set_prices(&multipliers, &costs, "admin@localhost", Timestamp::now()).await.unwrap().unwrap();
 }
 
-/// A database that lives as long as this value.
+/// A database and its queries cache's history, that live as long as this value.
 pub struct TestDb {
 	path: PathBuf,
+	history: PathBuf,
 }
 
 impl TestDb {
 	/// A fresh database, migrated: a copy of [`migrated`]'s.
 	pub async fn create() -> Self {
 		let db = Self::empty().await;
-		std::fs::copy(migrated().await, &db.path).expect("copying the migrated database");
+		let (path, history) = migrated().await;
+		std::fs::copy(path, &db.path).expect("copying the migrated database");
+		std::fs::copy(history, &db.history).expect("copying the migrated history");
 		db
 	}
 
@@ -54,16 +57,25 @@ impl TestDb {
 				tracing_subscriber::registry().with(spans).init();
 			}
 		});
-		Self { path: std::env::temp_dir().join(format!("panel_test_{}.db", Uuid::now_v7().simple())) }
+		let id = Uuid::now_v7().simple();
+		let dir = std::env::temp_dir();
+		Self {
+			path: dir.join(format!("panel_test_{id}.db")),
+			history: dir.join(format!("panel_test_{id}_history.db")),
+		}
 	}
 
 	pub fn path(&self) -> &Path {
 		&self.path
 	}
 
+	pub fn history(&self) -> &Path {
+		&self.history
+	}
+
 	/// A store on this database, migrated (opening migrates).
 	pub async fn store(&self) -> Store {
-		Store::open(&self.path, crate::live::Bus::default()).await.expect("opening the test database")
+		Store::open(&self.path, &self.history, crate::live::Bus::default()).await.expect("opening the test database")
 	}
 
 	/// A plain pool on this database, for assertions the engine has no API for. Migrated
@@ -218,30 +230,39 @@ pub struct Told {
 	pub through: Timestamp,
 }
 
-/// A database migrated once per state of migrations/, shared by every test process: migrating one takes seconds.
+/// A database and a history migrated once per state of migrations/ and history_migrations/, shared by
+/// every test process: migrating one takes seconds.
 #[tracing::instrument]
-async fn migrated() -> PathBuf {
+async fn migrated() -> (PathBuf, PathBuf) {
 	let mut h = std::hash::DefaultHasher::new();
-	for m in store::migrator().iter() {
+	for m in store::migrator().iter().chain(store::history_migrator().iter()) {
 		std::hash::Hash::hash(&(m.version, &*m.checksum), &mut h);
 	}
 	let path = std::env::temp_dir().join(format!("panel_test_migrated_{:x}.db", std::hash::Hasher::finish(&h)));
+	let history = path.with_extension("history.db");
 	let lock = std::fs::File::create(path.with_extension("lock")).expect("the migrated test database's lock");
 	lock.lock().expect("locking the migrated test database"); // one process migrates; the rest wait for it
 	if !path.exists() {
-		let part = path.with_extension("part");
-		Store::open(&part, crate::live::Bus::default()).await.expect("migrating the shared test database").pool().close().await;
-		assert!(!Path::new(&format!("{}-wal", part.display())).exists(), "the last connection's close checkpoints the WAL in");
-		std::fs::rename(&part, &path).expect("publishing the migrated test database");
+		let (part, history_part) = (path.with_extension("part"), path.with_extension("history.part"));
+		Store::open(&part, &history_part, crate::live::Bus::default())
+			.await
+			.expect("migrating the shared test database")
+			.close()
+			.await;
+		for p in [&part, &history_part] {
+			assert!(!Path::new(&format!("{}-wal", p.display())).exists(), "the last connection's close checkpoints the WAL in");
+		}
+		std::fs::rename(&history_part, &history).expect("publishing the migrated test history");
+		std::fs::rename(&part, &path).expect("publishing the migrated test database"); // last: its presence says both are there
 	}
-	path
+	(path, history)
 }
 
 impl Drop for TestDb {
 	fn drop(&mut self) {
 		// The WAL and its index sit beside the file; a pool still open only keeps them a while.
-		for suffix in ["", "-wal", "-shm"] {
-			let mut path = self.path.clone().into_os_string();
+		for (file, suffix) in [&self.path, &self.history].into_iter().flat_map(|f| ["", "-wal", "-shm"].map(|s| (f, s))) {
+			let mut path = file.clone().into_os_string();
 			path.push(suffix);
 			match std::fs::remove_file(&path) {
 				Ok(()) => {}

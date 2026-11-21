@@ -37,7 +37,6 @@ use sa_core::{
 };
 use sa_panel::{gmbs::GoogleCategory, store::Store};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use strum::VariantArray;
 
 use crate::{
@@ -80,7 +79,7 @@ struct Cached {
 }
 impl Held for Cached {
 	fn held(&self, ask: &Ask) -> eyre::Result<Option<(serde_json::Value, SystemTime)>> {
-		let key = Key(Sha256::digest(gop(SEARCH_TEXT, &ask.body)).into());
+		let key = Key::of(&gop(SEARCH_TEXT, &ask.body));
 		Ok(self
 			.rt
 			.block_on(self.store.cached_query(Scheme::Gop, key))?

@@ -1136,6 +1136,7 @@ async fn serve_publishes_the_catalog_first() {
 	let fake = FakeConcierge::default();
 	let addr = serve_fake(fake.clone()).await;
 	let path = db.path().display().to_string();
+	let history = db.history().display().to_string();
 	let config = tempfile::NamedTempFile::with_suffix(".json").unwrap();
 	std::fs::write(config.path(), r#"{ "google": [] }"#).unwrap();
 	let config = config.path().display().to_string();
@@ -1146,6 +1147,7 @@ async fn serve_publishes_the_catalog_first() {
 			.envs([
 				("APP_ENV", "development"),
 				("PANEL_DB_PATH", path.as_str()),
+				("PANEL_HISTORY_DB_PATH", history.as_str()),
 				("PANEL_DATA_KEY", &"0".repeat(64)),
 				("PANEL_PUBLIC_ORIGIN", PANEL),
 				("CONCIERGE_PUBLIC_ORIGIN", "http://concierge.test"),

@@ -5,8 +5,8 @@
   # read by the devops generator. crates/server/tests/it/contract.rs holds it to the binary's `--print-*`.
   deploy = {
     # Settings::required_var_names("production"): the pod exits 78 without any of them.
-    # PANEL_DB_PATH is the container's own env (below); the rest the deploy supplies.
-    requiredEnv = [ "PANEL_DB_PATH" "PANEL_DATA_KEY" "PANEL_PUBLIC_ORIGIN" "CONCIERGE_PUBLIC_ORIGIN" "CONCIERGE_GRPC_ADDR" "RP_CLIENT_SECRET_SA" "PANEL_ASSERTION_KEY" "PANEL_REVIEW_ARCHIVE_URL" "PANEL_PLAYBOOK_URL" "PANEL_SITES_URL" "TOKENS_START_CAP_MULTIPLE" ];
+    # PANEL_DB_PATH and PANEL_HISTORY_DB_PATH are the container's own env (the flake's); the rest the deploy supplies.
+    requiredEnv = [ "PANEL_DB_PATH" "PANEL_HISTORY_DB_PATH" "PANEL_DATA_KEY" "PANEL_PUBLIC_ORIGIN" "CONCIERGE_PUBLIC_ORIGIN" "CONCIERGE_GRPC_ADDR" "RP_CLIENT_SECRET_SA" "PANEL_ASSERTION_KEY" "PANEL_REVIEW_ARCHIVE_URL" "PANEL_PLAYBOOK_URL" "PANEL_SITES_URL" "TOKENS_START_CAP_MULTIPLE" ];
     # from the sops-backed Secret, never literal env
     secretEnv = [
       "PANEL_DATA_KEY"

@@ -13,6 +13,7 @@ use std::{fmt, str::FromStr};
 
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::Invalid;
 
@@ -22,7 +23,8 @@ pub const PREFIX: &str = "/api/queries_cache";
 pub const LEASE: jiff::SignedDuration = jiff::SignedDuration::from_secs(30);
 
 /// Whose digest a key is: each client derives its own from its requests.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Scheme {
 	/// `sa_places`: the conductor's and review_archive's Places requests.
 	Places,
@@ -60,8 +62,14 @@ impl fmt::Display for Scheme {
 }
 
 /// A request's SHA-256, 64 hex characters on the wire.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Key(pub [u8; 32]);
+
+impl Key {
+	pub fn of(request: &str) -> Self {
+		Self(Sha256::digest(request).into())
+	}
+}
 
 impl FromStr for Key {
 	type Err = Invalid;
@@ -75,6 +83,18 @@ impl FromStr for Key {
 impl fmt::Display for Key {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(&hex::encode(self.0))
+	}
+}
+
+impl Serialize for Key {
+	fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+		s.collect_str(self)
+	}
+}
+
+impl<'de> Deserialize<'de> for Key {
+	fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+		String::deserialize(d)?.parse().map_err(|e: Invalid| serde::de::Error::custom(e.0))
 	}
 }
 
@@ -111,6 +131,17 @@ pub struct Put {
 	pub request: String,
 	/// What it was bought as; `None`, kept from another answer bought, nothing billed for it.
 	pub bought: Option<crate::usage::Billed>,
+}
+
+/// One version of an answer, a line of `panel queries-cache export` and `import`: what moves
+/// between two conductors' databases.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Version {
+	pub scheme: Scheme,
+	pub key: Key,
+	pub request: String,
+	pub answer: serde_json::Value,
+	pub fetched_at: Timestamp,
 }
 
 /// What a [`Scheme::Gop`] key is the digest of: the request's URL, as Google serves it, and its body.

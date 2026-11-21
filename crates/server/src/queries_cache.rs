@@ -23,7 +23,6 @@ use sa_core::{
 	usage::Bill,
 };
 use sa_panel::Panel;
-use sha2::{Digest, Sha256};
 use tower::{BoxError, ServiceBuilder};
 use tower_http::timeout::{RequestBodyTimeoutLayer, TimeoutLayer};
 
@@ -74,9 +73,6 @@ async fn query(State(panel): State<Panel>, Path((scheme, key)): Path<(String, St
 				Ok(p) => p,
 				Err(e) => return error(StatusCode::BAD_REQUEST, format!("not an answer: {e}")),
 			};
-			if <[u8; 32]>::from(Sha256::digest(&put.request)) != key.0 {
-				return error(StatusCode::BAD_REQUEST, "the key is not the SHA-256 of the request");
-			}
 			if let Some(b) = &put.bought {
 				match (b.bill, b.item.meter().is_some(), &b.account) {
 					(Bill::Theirs, _, None) | (Bill::Ours, false, None) => {}
@@ -88,16 +84,12 @@ async fn query(State(panel): State<Panel>, Path((scheme, key)): Path<(String, St
 				}
 			}
 			store
-				.keep_query(
-					scheme,
-					key,
-					&put.answer.to_string(),
-					Some(&put.request),
-					put.bought.map(|b| (b, scheme.as_str())),
-					Timestamp::now(),
-				)
+				.keep_query(scheme, key, &put.answer.to_string(), &put.request, put.bought.map(|b| (b, scheme.as_str())), Timestamp::now())
 				.await
-				.map(|()| StatusCode::NO_CONTENT.into_response())
+				.map(|kept| match kept {
+					Ok(()) => StatusCode::NO_CONTENT.into_response(),
+					Err(refused) => error(StatusCode::BAD_REQUEST, refused.to_string()),
+				})
 		}
 		(method, claim) => unreachable!("the router mounts no {method} on a {} path", if claim { "claim" } else { "key" }),
 	};

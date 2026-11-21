@@ -521,177 +521,6 @@
         "x-permission": "sa:admin:tokens:grant"
       }
     },
-    "/admin/imports/queries-cache": {
-      "post": {
-        "tags": [
-          "admin"
-        ],
-        "summary": "Keeps paid answers a client held as files in the queries cache under `scheme`, each as of its own `fetched_at`; an answer kept already that is newer stays.",
-        "description": "400 for a scheme or a key that is none.",
-        "operationId": "import_queries_cache",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/QueriesCacheImport"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Imported"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`bad_request`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthenticated`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "`unaffordable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`csrf`, `forbidden`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`conflict`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "`too_large`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`another_country`, `no_google_category`, `unstudied`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "`too_many`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`internal`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "`bad_gateway`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "`browsers_not_connected`, `unavailable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "x-errors": {
-          "another_country": 422,
-          "bad_gateway": 502,
-          "bad_request": 400,
-          "browsers_not_connected": 503,
-          "conflict": 409,
-          "csrf": 403,
-          "forbidden": 403,
-          "internal": 500,
-          "no_google_category": 422,
-          "not_found": 404,
-          "too_large": 413,
-          "too_many": 429,
-          "unaffordable": 402,
-          "unauthenticated": 401,
-          "unavailable": 503,
-          "unstudied": 422
-        },
-        "x-permission": "sa:admin:sources:manage"
-      }
-    },
     "/admin/imports/review-archive": {
       "post": {
         "tags": [
@@ -27006,19 +26835,6 @@
           "checked"
         ]
       },
-      "Imported": {
-        "type": "object",
-        "properties": {
-          "answers": {
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "answers"
-        ]
-      },
       "InternalReads": {
         "description": "The last `/api/internal` read per brand since `since` (the service's boot); an endpoint is absent\nwhen not read since.",
         "type": "object",
@@ -27054,22 +26870,6 @@
         "additionalProperties": false,
         "required": [
           "users"
-        ]
-      },
-      "KeptAnswer": {
-        "type": "object",
-        "properties": {
-          "answer": true,
-          "fetched_at": {
-            "description": "When it was bought: a newer answer kept already stays.",
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "answer",
-          "fetched_at"
         ]
       },
       "KeyedSourceKind": {
@@ -29478,27 +29278,6 @@
         "required": [
           "name",
           "gmbs"
-        ]
-      },
-      "QueriesCacheImport": {
-        "type": "object",
-        "properties": {
-          "answers": {
-            "description": "By the request's SHA-256, 64 hex characters.",
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/KeptAnswer"
-            }
-          },
-          "scheme": {
-            "description": "`places` or `gop`: whose digest the keys are.",
-            "type": "string"
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "scheme",
-          "answers"
         ]
       },
       "Question": {

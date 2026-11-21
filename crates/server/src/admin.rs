@@ -1,10 +1,8 @@
 //! What an operator once ran as `panel` commands: the conductor's own admin operations, each behind
 //! one of the conductor's admin permissions and a fresh read of it.
 
-use std::collections::BTreeMap;
-
 use axum::{
-	Extension, Json,
+	Extension,
 	extract::{DefaultBodyLimit, State},
 	http::Method,
 	response::NoContent,
@@ -12,27 +10,19 @@ use axum::{
 use ev_lib::api::{Body, Created, Ids, JsonSchema};
 use jiff::Timestamp;
 use sa_auth::{Sources, Tokens};
-use sa_core::{
-	ids::SiteOrigin,
-	queries_cache::{Key, Scheme},
-};
+use sa_core::ids::SiteOrigin;
 use sa_panel::{Panel, import::Export};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{
 	api::{ApiResult, KeyId},
 	gmbs::GmailDto,
-	http::{ApiRoute, FRESH, Flags, Gate},
-	signin::{Caller, Freshness},
+	http::{ApiRoute, FRESH},
+	signin::Caller,
 };
 
-/// A review_archive export, or a cache of answers, is megabytes.
+/// A review_archive export is megabytes.
 const MAX_IMPORT: usize = 256 * 1024 * 1024;
-
-const SLOW_FRESH: Gate = sa_auth::Gate::USER.with(Flags {
-	freshness: Freshness::Fresh,
-	slow: true,
-});
 
 pub(crate) fn routes() -> Vec<ApiRoute> {
 	use Method as M;
@@ -41,7 +31,6 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::PUT, "/sources/{key_id}/origin", FRESH.needs(Sources::Manage), set_origin),
 		ApiRoute::new(M::POST, "/admin/gmails", FRESH.needs(Tokens::Grant), add_gmail_for),
 		ApiRoute::new(M::POST, "/admin/imports/review-archive", FRESH.needs(Tokens::Grant), import_review_archive).layer(big),
-		ApiRoute::new(M::POST, "/admin/imports/queries-cache", SLOW_FRESH.needs(Sources::Manage), import_queries_cache).layer(big),
 	]
 }
 
@@ -90,44 +79,4 @@ async fn import_review_archive(State(panel): State<Panel>, Extension(caller): Ex
 	panel.import_review_archive(export).await??;
 	tracing::info!(user_id = %caller.user_id, "imported from review_archive");
 	Ok(NoContent)
-}
-
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct QueriesCacheImport {
-	/// `places` or `gop`: whose digest the keys are.
-	scheme: String,
-	/// By the request's SHA-256, 64 hex characters.
-	answers: BTreeMap<String, KeptAnswer>,
-}
-
-#[derive(Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct KeptAnswer {
-	answer: serde_json::Value,
-	/// When it was bought: a newer answer kept already stays.
-	fetched_at: Timestamp,
-}
-
-#[derive(JsonSchema, Serialize)]
-pub(crate) struct Imported {
-	answers: usize,
-}
-
-/// Keeps paid answers a client held as files in the queries cache under `scheme`, each as of its
-/// own `fetched_at`; an answer kept already that is newer stays.
-///
-/// 400 for a scheme or a key that is none.
-async fn import_queries_cache(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<QueriesCacheImport>) -> ApiResult<Json<Imported>> {
-	let scheme: Scheme = b.scheme.parse()?;
-	let answers = b
-		.answers
-		.into_iter()
-		.map(|(key, kept)| Ok((key.parse::<Key>()?, kept)))
-		.collect::<Result<Vec<_>, sa_core::Invalid>>()?;
-	for (key, kept) in &answers {
-		panel.store().keep_query(scheme, *key, &kept.answer.to_string(), None, None, kept.fetched_at).await?;
-	}
-	tracing::info!(user_id = %caller.user_id, %scheme, answers = answers.len(), "answers cached");
-	Ok(Json(Imported { answers: answers.len() }))
 }
