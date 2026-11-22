@@ -21,6 +21,7 @@ eyre.workspace = true
 jiff.workspace = true
 reqwest.workspace = true
 rustls.workspace = true
+sa_auth.workspace = true
 sa_core.workspace = true
 schemars = { workspace = true, optional = true }
 serde.workspace = true

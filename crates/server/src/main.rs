@@ -165,7 +165,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 			settings.app_env != "production" || !config.google.is_empty(),
 			"production needs a Google account in the config file's `google`"
 		);
-		Ok(Arc::new(sa_places::Accounts::new(config.google)))
+		Ok(Arc::new(sa_places::Accounts::new(config.google, config.slices)))
 	};
 	let open = || async { Store::open(settings.db_path()?, settings.history_db_path()?, sa_panel::live::Bus::default()).await };
 	let connect = || async {

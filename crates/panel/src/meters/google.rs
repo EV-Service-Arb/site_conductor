@@ -5,13 +5,16 @@ use std::{sync::Mutex, time::Duration};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use eyre::{WrapErr, bail, eyre};
-use jiff::{SignedDuration, Timestamp};
+use jiff::{SignedDuration, Timestamp, civil::Date};
 use ring::{rand::SystemRandom, signature::RsaKeyPair};
-use sa_core::meters::{Meter, Vendor};
+use sa_core::{
+	google::BALANCES,
+	meters::{Meter, Vendor},
+};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{Reader, Reading};
+use super::{Bill, Day, Draw, Lever, Reader, Reading, Tier};
 
 const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const SCOPE: &str = "https://www.googleapis.com/auth/bigquery.readonly";
@@ -90,30 +93,42 @@ impl Google {
 		let base = format!("https://bigquery.googleapis.com/bigquery/v2/projects/{}/queries", self.project);
 		let body = json!({ "query": sql, "useLegacySql": false, "parameterMode": "NAMED", "queryParameters": params, "timeoutMs": 60000 });
 		let mut page = call(self.http.post(&base).bearer_auth(&token).json(&body)).await?;
-		for _ in 0..WAITS {
+		let mut rows = Vec::new();
+		let mut waits = 0;
+		loop {
 			if page["jobComplete"] == true {
-				eyre::ensure!(page["pageToken"].is_null(), "BigQuery paged a reading of a few rows");
-				return page["rows"]
-					.as_array()
-					.map_or(&[][..], Vec::as_slice)
-					.iter()
-					.map(|row| {
-						let cells = row["f"].as_array().ok_or_else(|| eyre!("a row with no cells: {row}"))?;
-						Ok(cells.iter().map(|c| c["v"].clone()).collect())
-					})
-					.collect();
+				for row in page["rows"].as_array().map_or(&[][..], Vec::as_slice) {
+					let cells = row["f"].as_array().ok_or_else(|| eyre!("a row with no cells: {row}"))?;
+					rows.push(cells.iter().map(|c| c["v"].clone()).collect());
+				}
+				if page["pageToken"].is_null() {
+					return Ok(rows);
+				}
+			} else {
+				waits += 1;
+				eyre::ensure!(waits <= WAITS, "BigQuery did not finish a query of the export in {WAITS} minutes");
 			}
 			let job = page["jobReference"]["jobId"].as_str().ok_or_else(|| eyre!("no jobId in {page}"))?.to_owned();
 			let location = page["jobReference"]["location"].as_str().ok_or_else(|| eyre!("no location in {page}"))?.to_owned();
-			page = call(
-				self.http
-					.get(format!("{base}/{job}"))
-					.bearer_auth(&token)
-					.query(&[("location", location.as_str()), ("timeoutMs", "60000")]),
-			)
-			.await?;
+			let mut ask = vec![("location", location), ("timeoutMs", "60000".to_owned())];
+			if let Some(t) = page["pageToken"].as_str() {
+				ask.push(("pageToken", t.to_owned()));
+			}
+			page = call(self.http.get(format!("{base}/{job}")).bearer_auth(&token).query(&ask)).await?;
 		}
-		Err(eyre!("BigQuery did not finish the meters' query in {WAITS} minutes"))
+	}
+
+	/// The export's dataset's `guard` table exists: the guard has ticked there.
+	async fn guarded(&self) -> eyre::Result<bool> {
+		let (project, rest) = self.table.split_once('.').expect("checked when made: project.dataset.table");
+		let dataset = rest.split_once('.').expect("checked when made: project.dataset.table").0;
+		let url = format!("https://bigquery.googleapis.com/bigquery/v2/projects/{project}/datasets/{dataset}/tables/guard");
+		let resp = self.http.get(url).bearer_auth(self.token(Timestamp::now()).await?).send().await.wrap_err("asking Google")?;
+		match resp.status() {
+			reqwest::StatusCode::OK => Ok(true),
+			reqwest::StatusCode::NOT_FOUND => Ok(false),
+			status => bail!("Google answered {status} of the guard's table: {}", resp.text().await.unwrap_or_default()), // the status is the refusal; its body only details it
+		}
 	}
 }
 
@@ -176,6 +191,136 @@ impl Reader for Google {
 			})
 			.collect()
 	}
+
+	async fn bill(&self, since: Date) -> eyre::Result<Bill> {
+		let table = &self.table;
+		let now = Timestamp::now();
+		// partitions by export day: a day's usage is exported that day or after, Pacific or UTC
+		let since_param = json!([{ "name": "since", "parameterType": { "type": "DATE" }, "parameterValue": { "value": since.to_string() } }]);
+		let pruned = "_PARTITIONTIME >= TIMESTAMP_SUB(TIMESTAMP(@since), INTERVAL 1 DAY) AND DATE(usage_start_time) >= @since";
+		let days = self
+			.query(
+				&format!(
+					"SELECT FORMAT_DATE('%F', DATE(usage_start_time)), service.description, sku.description, currency, SUM(cost), \
+					 SUM((SELECT IFNULL(SUM(c.amount), 0) FROM UNNEST(credits) c WHERE c.type IN {BALANCES})), \
+					 SUM((SELECT IFNULL(SUM(c.amount), 0) FROM UNNEST(credits) c WHERE c.type NOT IN {BALANCES})) \
+					 FROM `{table}` WHERE {pruned} GROUP BY 1, 2, 3, 4"
+				),
+				since_param.clone(),
+				now,
+			)
+			.await?
+			.iter()
+			.map(|r| {
+				Ok(Day {
+					day: string(&r[0], "a day")?.parse().wrap_err("the export's day")?,
+					service: string(&r[1], "a service")?,
+					sku: string(&r[2], "a SKU")?,
+					currency: string(&r[3], "a currency")?,
+					cost_micros: micros(&r[4], "cost")?,
+					credit_micros: micros(&r[5], "credits")?,
+					discount_micros: micros(&r[6], "discounts")?,
+				})
+			})
+			.collect::<eyre::Result<_>>()?;
+		let draws = self
+			.query(
+				&format!(
+					"SELECT c.id, UNIX_SECONDS(TIMESTAMP_TRUNC(export_time, HOUR)), SUM(c.amount) FROM `{table}`, UNNEST(credits) c \
+					 WHERE c.type IN {BALANCES} GROUP BY 1, 2"
+				),
+				json!([]),
+				now,
+			)
+			.await?
+			.iter()
+			.map(|r| {
+				Ok(Draw {
+					credit: string(&r[0], "a credit's id")?,
+					hour: Timestamp::from_second(string(&r[1], "an hour")?.parse().wrap_err("the export's hour")?)?,
+					amount_micros: micros(&r[2], "a draw")?,
+				})
+			})
+			.collect::<eyre::Result<_>>()?;
+		let tiers = self
+			.query(
+				&format!(
+					"SELECT invoice.month, service.description, sku.description, ANY_VALUE(usage.pricing_unit), SUM(usage.amount_in_pricing_units), \
+					 SUM(IF(price.effective_price > 0, usage.amount_in_pricing_units, 0)), MIN(IF(price.effective_price > 0, price.tier_start_amount, NULL)), \
+					 SUM(cost), SUM((SELECT IFNULL(SUM(c.amount), 0) FROM UNNEST(credits) c WHERE c.type NOT IN {BALANCES})) \
+					 FROM `{table}` WHERE {pruned} GROUP BY 1, 2, 3"
+				),
+				since_param,
+				now,
+			)
+			.await?
+			.iter()
+			.map(|r| {
+				Ok(Tier {
+					month: string(&r[0], "a month")?,
+					service: string(&r[1], "a service")?,
+					sku: string(&r[2], "a SKU")?,
+					unit: r[3].as_str().map(str::to_owned),
+					units: opt_f64(&r[4], "units")?.unwrap_or(0.0),           // SUM of none: no usage in pricing units
+					paid_units: opt_f64(&r[5], "paid units")?.unwrap_or(0.0), // likewise
+					free_to: opt_f64(&r[6], "where its priced tier starts")?,
+					cost_micros: micros(&r[7], "cost")?,
+					free_micros: micros(&r[8], "discounts")?,
+				})
+			})
+			.collect::<eyre::Result<_>>()?;
+		let guard = match self.guarded().await? {
+			false => None,
+			true => {
+				let guard = format!("`{}.guard`", table.rsplit_once('.').expect("checked when made: project.dataset.table").0);
+				let rows = self
+					.query(
+						&format!("SELECT tick, category, project, lever, allow, real, setting, state, today, action, list FROM {guard} WHERE tick = (SELECT MAX(tick) FROM {guard})"),
+						json!([]),
+						now,
+					)
+					.await?;
+				Some(
+					rows.iter()
+						.map(|r| {
+							Ok(Lever {
+								tick: Timestamp::from_second(string(&r[0], "a tick")?.parse().wrap_err("the guard's tick")?)?,
+								slice: string(&r[1], "a slice")?,
+								project: r[2].as_str().map(str::to_owned),
+								lever: string(&r[3], "a lever")?,
+								allow: opt_f64(&r[4], "an allow")?,
+								real: opt_f64(&r[5], "real money")?,
+								setting: opt_f64(&r[6], "a setting")?,
+								state: r[7].as_str().map(str::to_owned),
+								today: r[8].as_str().map(str::parse).transpose().wrap_err("the guard's today")?,
+								action: r[9].as_str().map(str::to_owned),
+								list: r[10].as_str().map(str::to_owned),
+							})
+						})
+						.collect::<eyre::Result<_>>()?,
+				)
+			}
+		};
+		Ok(Bill { days, draws, tiers, guard })
+	}
+}
+
+/// `v`, BigQuery's decimal string, in millionths.
+fn micros(v: &Value, what: &str) -> eyre::Result<i64> {
+	let n: f64 = v
+		.as_str()
+		.ok_or_else(|| eyre!("the export gave {what} as {v}"))?
+		.parse()
+		.wrap_err_with(|| format!("the export's {what}"))?;
+	Ok((n * 1e6).round() as i64)
+}
+
+fn opt_f64(v: &Value, what: &str) -> eyre::Result<Option<f64>> {
+	v.as_str().map(|s| s.parse().wrap_err_with(|| format!("the export's {what}"))).transpose()
+}
+
+fn string(v: &Value, what: &str) -> eyre::Result<String> {
+	v.as_str().map(str::to_owned).ok_or_else(|| eyre!("the export gave {what} as {v}"))
 }
 
 async fn call(req: reqwest::RequestBuilder) -> eyre::Result<Value> {

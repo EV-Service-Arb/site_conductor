@@ -842,6 +842,192 @@
         "x-permission": "sa:admin:tokens:grant"
       }
     },
+    "/admin/meters/bill": {
+      "get": {
+        "tags": [
+          "meters"
+        ],
+        "summary": "Each account's days in a window, by slice and SKU, and its latest month's tiers: what the sa-meters dashboard draws the bill from.",
+        "operationId": "bill",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "description": "Unix milliseconds.",
+            "required": true,
+            "schema": {
+              "description": "Unix milliseconds.",
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "description": "Unix milliseconds, at most 400 days after `from`.",
+            "required": true,
+            "schema": {
+              "description": "Unix milliseconds, at most 400 days after `from`.",
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`GET /admin/meters/bill`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bill2"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:admin:tokens:grant"
+      }
+    },
     "/admin/meters/readings": {
       "get": {
         "tags": [
@@ -26851,6 +27037,145 @@
           "theirs"
         ]
       },
+      "Bill2": {
+        "description": "`GET /admin/meters/bill`.",
+        "type": "object",
+        "properties": {
+          "days": {
+            "description": "In the window, oldest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BillDay"
+            }
+          },
+          "tiers": {
+            "description": "Each account's latest invoice month.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BillTier"
+            }
+          }
+        },
+        "required": [
+          "days",
+          "tiers"
+        ]
+      },
+      "BillDay": {
+        "description": "A day's use of one SKU on an account, in its currency.",
+        "type": "object",
+        "properties": {
+          "account": {
+            "type": "string"
+          },
+          "credit": {
+            "description": "What credits' balances paid of it.",
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "day": {
+            "description": "RFC 3339, the day's midnight UTC.",
+            "type": "string"
+          },
+          "discount": {
+            "description": "What discounts took off.",
+            "type": "number",
+            "format": "double"
+          },
+          "paid": {
+            "description": "What was billed.",
+            "type": "number",
+            "format": "double"
+          },
+          "service": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "slice": {
+            "type": "string"
+          },
+          "used": {
+            "description": "At list price.",
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "account",
+          "day",
+          "slice",
+          "service",
+          "sku",
+          "currency",
+          "used",
+          "credit",
+          "discount",
+          "paid"
+        ]
+      },
+      "BillTier": {
+        "description": "An SKU's units this invoice month on an account.",
+        "type": "object",
+        "properties": {
+          "account": {
+            "type": "string"
+          },
+          "free": {
+            "description": "What free tiers and discounts took off.",
+            "type": "number",
+            "format": "double"
+          },
+          "free_to": {
+            "description": "Where its first priced tier starts; `null`, none reached.",
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "list": {
+            "description": "At list price, in the account's currency.",
+            "type": "number",
+            "format": "double"
+          },
+          "paid_units": {
+            "type": "number",
+            "format": "double"
+          },
+          "service": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "units": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "account",
+          "service",
+          "sku",
+          "unit",
+          "units",
+          "free_to",
+          "paid_units",
+          "list",
+          "free"
+        ]
+      },
       "Bound": {
         "description": "A binding of the page's keymap, as the page has it bound now.",
         "type": "object",
@@ -30572,8 +30897,40 @@
             "type": "number",
             "format": "double"
           },
+          "allowances": {
+            "description": "Each slice's real money against its allowance, and its levers, at the guard's last tick.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MeterAllowance"
+            }
+          },
+          "bill_read": {
+            "description": "RFC 3339: when the bill was last read; `null`, never.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "browser": {
             "type": "boolean"
+          },
+          "credits": {
+            "description": "Each configured credit's balance.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MeterCredit"
+            }
+          },
+          "guard": {
+            "description": "The guard's last tick; `null` before it ticked, or before the bill was read.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeterGuard"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "name": {
             "type": "string"
@@ -30592,6 +30949,13 @@
                 "type": "null"
               }
             ]
+          },
+          "unnamed_credits": {
+            "description": "Credits the export draws on that the config names not.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -30599,7 +30963,12 @@
           "places",
           "browser",
           "allow",
-          "spend"
+          "spend",
+          "credits",
+          "unnamed_credits",
+          "allowances",
+          "guard",
+          "bill_read"
         ]
       },
       "MeterAccountUse": {
@@ -30650,6 +31019,171 @@
           "delta",
           "used",
           "left"
+        ]
+      },
+      "MeterAllowance": {
+        "description": "A slice's allowance as the guard held it.",
+        "type": "object",
+        "properties": {
+          "allowed": {
+            "description": "Real money a month, past credits and free tiers.",
+            "type": "number",
+            "format": "double"
+          },
+          "headroom": {
+            "type": "number",
+            "format": "double"
+          },
+          "levers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MeterLever"
+            }
+          },
+          "real": {
+            "description": "What it spent of that this month.",
+            "type": "number",
+            "format": "double"
+          },
+          "slice": {
+            "type": "string"
+          },
+          "state": {
+            "description": "`within` or `over`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slice",
+          "allowed",
+          "real",
+          "headroom",
+          "state",
+          "levers"
+        ]
+      },
+      "MeterCredit": {
+        "description": "A credit's balance, in its account's currency.",
+        "type": "object",
+        "properties": {
+          "as_of": {
+            "description": "RFC 3339: the later of the console's reading and the bill's.",
+            "type": "string"
+          },
+          "binds": {
+            "description": "`spent`, `ends` or `ended`.",
+            "type": "string"
+          },
+          "days_left": {
+            "description": "To whichever comes first.",
+            "type": "number",
+            "format": "double"
+          },
+          "ends": {
+            "type": "string"
+          },
+          "left": {
+            "description": "The console's reading less what the export drew since.",
+            "type": "number",
+            "format": "double"
+          },
+          "name": {
+            "type": "string"
+          },
+          "per_day": {
+            "description": "At the last 14 days' pace; `null` before any draw.",
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "runs_out": {
+            "description": "The day it is spent at that pace; `null`, never.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "left",
+          "as_of",
+          "per_day",
+          "runs_out",
+          "ends",
+          "days_left",
+          "binds"
+        ]
+      },
+      "MeterGuard": {
+        "description": "The guard's last tick on an account.",
+        "type": "object",
+        "properties": {
+          "holds_this_list": {
+            "description": "Whether it held the definition this conductor runs (`sa_core::google::digest`).",
+            "type": "boolean"
+          },
+          "tick": {
+            "description": "RFC 3339.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tick",
+          "holds_this_list"
+        ]
+      },
+      "MeterLever": {
+        "description": "One lever the guard set.",
+        "type": "object",
+        "properties": {
+          "action": {
+            "description": "What the tick changed.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lever": {
+            "type": "string"
+          },
+          "project": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "setting": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "state": {
+            "description": "What it was before.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "today": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "required": [
+          "project",
+          "lever",
+          "setting",
+          "state",
+          "today",
+          "action"
         ]
       },
       "MeterReading": {

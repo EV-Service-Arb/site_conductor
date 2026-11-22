@@ -1,10 +1,12 @@
 //! A Google place from what a person pastes. The id, or a Maps URL carrying it, needs nothing;
 //! a URL with only a name in it is looked up with the Places API (New). Every Places request
-//! goes through [`Google`]: the queries cache answers what was paid for once; else the [`Payer`]'s
-//! own keys are asked first, then the [`Keys`] rotation, an [`Account`]'s key by its [`Rank`],
-//! which the payer's [`Purse`] pays for.
+//! goes through [`Google`]: the queries cache answers what was paid for once; else, [`Here`], the
+//! [`Payer`]'s own keys are asked first, then the [`Keys`] rotation, an [`Account`]'s key by its
+//! [`Rank`], which the payer's [`Purse`] pays for; or, [`Remote`], the conductor buys it for the
+//! person a [`Vouched`] names.
 
 mod accounts;
+mod buy;
 mod keys;
 pub mod parse;
 mod queries_cache;
@@ -12,16 +14,14 @@ mod queries_cache;
 use std::{sync::Arc, time::Duration};
 
 pub use accounts::{Account, Accounts, Export, Key, Provides};
+use buy::Buy;
+pub use buy::Here;
 pub use keys::{Keys, Spent};
 use parse::Parsed;
 use queries_cache::Request;
-pub use queries_cache::{Pending, QueriesCache, Remote};
+pub use queries_cache::{Pending, QueriesCache, Remote, Vouched};
 pub use sa_core::geo::{LatLng, Viewport};
-use sa_core::{
-	prices::PlacesRequest,
-	queries_cache::{Claim, Put, Scheme},
-	usage::{Bill, Billed},
-};
+use sa_core::{prices::PlacesRequest, queries_cache::Scheme};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
@@ -202,15 +202,12 @@ pub enum Ask {
 	Since(jiff::Timestamp),
 }
 
-/// The Places API (New), through the queries cache and the keys.
+/// The Places API (New), every answer through the queries cache: bought `Here`, on the payer's
+/// keys and the rotation, or by the conductor for the person a `Remote` caller's assertion names.
 #[derive(Debug)]
-pub struct Google {
+pub struct Google<B = Here> {
 	http: reqwest::Client,
-	keys: Keys,
-	rank: Arc<dyn Rank>,
-	cache: Arc<dyn QueriesCache>,
-	/// Buy what the queries cache lacks; off, only cached answers are served.
-	spend: bool,
+	buyer: B,
 	/// `…/v1/places`.
 	base: String,
 	/// `…/v4/geocode/location`.
@@ -220,21 +217,131 @@ pub struct Google {
 impl Google {
 	/// With no keys, a place id still resolves, unnamed and unlocated.
 	pub fn try_new(keys: Keys, rank: Arc<dyn Rank>, cache: Arc<dyn QueriesCache>) -> Result<Self, Error> {
+		Self::with(Here::new(keys, rank, cache))
+	}
+
+	/// Buy what the queries cache lacks; off, only cached answers are served.
+	pub fn spend(self, yes: bool) -> Self {
+		Self {
+			buyer: self.buyer.spend(yes),
+			..self
+		}
+	}
+
+	/// A text search of `body` under the field `mask`, a study's, bought for `payer` unless the
+	/// queries cache holds an answer fetched since `since`.
+	pub async fn asked(&self, mask: &str, body: &str, since: jiff::Timestamp, payer: &Payer<'_>) -> Result<(), Error> {
+		let url = format!("{}:searchText", self.base);
+		let req = Request {
+			method: "POST",
+			url: &url,
+			mask,
+			body,
+			scheme: Scheme::Gop,
+			sku: PlacesRequest::Search,
+			subject: "a study's sweep",
+		};
+		self.ask(&req, None, Ask::Since(since), payer).await.map(drop)
+	}
+
+	/// The answer to `request` (a [`sa_core::queries_cache::Put::request`]'s preimage another process sent), kept unless
+	/// fetched before `fresh_since`, else bought for `payer`: refused unless it is a request this
+	/// crate makes of Places, whose SKU, and so its price, is read off its field mask.
+	pub async fn bought(&self, request: &str, fresh_since: Option<jiff::Timestamp>, payer: &Payer<'_>) -> Result<serde_json::Value, Error> {
+		let invalid = || Error::Invalid(format!("{request:?} is no Places request of sa_places'"));
+		let mut parts = request.splitn(4, '\n');
+		let (Some(method), Some(url), Some(mask), Some(body)) = (parts.next(), parts.next(), parts.next(), parts.next()) else {
+			return Err(invalid());
+		};
+		let v1 = self.base.strip_suffix("/places").expect("the base is …/v1/places");
+		let plain = |s: &str, also: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || "-_".contains(c) || also.contains(c));
+		let place = || url.strip_prefix(&format!("{}/", self.base)).filter(|id| plain(id, "")).map(str::to_owned).ok_or_else(invalid);
+		let text = |field: &str| -> Result<String, Error> {
+			let body: serde_json::Value = serde_json::from_str(body).map_err(|_| invalid())?;
+			body[field].as_str().map(str::to_owned).ok_or_else(invalid)
+		};
+		let (sku, subject) = match (method, mask, body) {
+			("GET", DETAILS_MASK | LOCALITY_MASK | REVIEW_LINK_MASK, "") => (PlacesRequest::Details, place()?),
+			("GET", PROFILE_MASK, "") => (PlacesRequest::Profile, place()?),
+			("GET", GEOCODE_MASK, "") => {
+				let rest = url.strip_prefix(&format!("{}/", self.geocode)).ok_or_else(invalid)?;
+				let (point, types) = rest.split_once('?').ok_or_else(invalid)?;
+				if !matches!(types, "types=locality" | "types=country") || !plain(point, ".,") {
+					return Err(invalid());
+				}
+				(PlacesRequest::Geocode, point.to_owned())
+			}
+			("GET", "", "") => {
+				let name = url
+					.strip_prefix(&format!("{v1}/"))
+					.and_then(|u| u.strip_suffix("/media?maxWidthPx=1200&skipHttpRedirect=true"))
+					.filter(|n| n.starts_with("places/") && n.contains("/photos/") && plain(n, "/"))
+					.ok_or_else(invalid)?;
+				(PlacesRequest::Photo, name.to_owned())
+			}
+			("POST", SEARCH_MASK, _) if url == format!("{}:searchText", self.base) => (PlacesRequest::Search, text("textQuery")?),
+			("POST", AUTOCOMPLETE_MASK, _) if url == format!("{}:autocomplete", self.base) => (PlacesRequest::Autocomplete, text("input")?),
+			_ => return Err(invalid()),
+		};
+		let req = Request {
+			method,
+			url,
+			mask,
+			body,
+			scheme: Scheme::Places,
+			sku,
+			subject: &subject,
+		};
+		assert_eq!(req.preimage(), request, "a request rebuilt from its own preimage");
+		self.buyer.ask(&self.http, &req, fresh_since, payer).await
+	}
+
+	/// Whether `key` answers for Places: a details request asking only the id, which Google does
+	/// not bill, so it is neither cached nor paid for. Answering, it is back in at once.
+	pub async fn probe(&self, key: &str) -> Result<(), Error> {
+		let resp = self
+			.http
+			.get(format!("{}/{PROBE_PLACE}", self.base))
+			.header("X-Goog-Api-Key", key)
+			.header("X-Goog-FieldMask", "id")
+			.send()
+			.await?;
+		let status = resp.status();
+		let text = resp.text().await?;
+		tracing::info!(key = %format!("…{}", keys::tail(key)), %status, "Places key probed");
+		if status.is_success() {
+			self.buyer.keys.back(key);
+			return Ok(());
+		}
+		Err(Error::OwnKey {
+			tail: keys::tail(key).to_owned(),
+			said: said(&text),
+		})
+	}
+
+	/// Why an own key sits out, if it does.
+	pub fn sat_out(&self, key: &str) -> Option<Spent> {
+		self.buyer.keys.out(key)
+	}
+}
+
+impl Google<Remote> {
+	/// Every answer bought or served by the conductor whose queries cache is `url` (`<origin>/api/queries_cache`).
+	pub fn remote(url: &str) -> Result<Self, Error> {
+		Self::with(Remote::try_new(url)?)
+	}
+}
+
+impl<B> Google<B> {
+	fn with(buyer: B) -> Result<Self, Error> {
 		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		let http = reqwest::Client::builder().connect_timeout(Duration::from_secs(5)).timeout(Duration::from_secs(10)).build()?;
 		Ok(Self {
 			http,
-			keys,
-			rank,
-			cache,
-			spend: false,
+			buyer,
 			base: GOOGLE.to_owned(),
 			geocode: "https://geocode.googleapis.com/v4/geocode/location".to_owned(),
 		})
-	}
-
-	pub fn spend(self, yes: bool) -> Self {
-		Self { spend: yes, ..self }
 	}
 
 	/// Places at `base` (`…/v1/places`), its geocoding at `base/geocode`, in place of Google's own: a stub's.
@@ -246,10 +353,12 @@ impl Google {
 			..self
 		}
 	}
+}
 
+impl<'p, B: Buy<'p>> Google<B> {
 	/// The place id in `input`, and the place unless there is no key: one place only, an
 	/// ambiguous name is refused with what it may mean.
-	pub async fn resolve(&self, input: &str, payer: &Payer<'_>) -> Result<(String, Option<Place>), Error> {
+	pub async fn resolve(&self, input: &str, payer: &B::For) -> Result<(String, Option<Place>), Error> {
 		match parsed(input).await? {
 			Parsed::PlaceId(id) if self.keyless(payer) => Ok((id, None)),
 			Parsed::PlaceId(id) | Parsed::Alias(id) => {
@@ -274,7 +383,7 @@ impl Google {
 
 	/// Every place `input` may mean, each as [`Self::resolve`] gives one: the one its id names,
 	/// else each Places hit bearing the name in the URL.
-	pub async fn candidates(&self, input: &str, payer: &Payer<'_>) -> Result<Vec<(String, Option<Place>)>, Error> {
+	pub async fn candidates(&self, input: &str, payer: &B::For) -> Result<Vec<(String, Option<Place>)>, Error> {
 		let places = match parsed(input).await? {
 			Parsed::PlaceId(id) if self.keyless(payer) => return Ok(vec![(id, None)]),
 			Parsed::PlaceId(id) | Parsed::Alias(id) => vec![self.details(&id, Ask::Cached, payer).await?],
@@ -285,9 +394,9 @@ impl Google {
 
 	/// The place with this id, under the id Google now gives it: a moved or merged place answers
 	/// with its newer one.
-	pub async fn details(&self, place_id: &str, ask: Ask, payer: &Payer<'_>) -> Result<Place, Error> {
+	pub async fn details(&self, place_id: &str, ask: Ask, payer: &B::For) -> Result<Place, Error> {
 		let url = format!("{}/{place_id}", self.base);
-		let (json, _) = match self.ask(&Request::details(&url), None, ask, payer).await {
+		let json = match self.ask(&Request::details(&url), None, ask, payer).await {
 			Err(Error::Api { status: 400 | 404, .. }) => return Err(Error::Invalid(format!("Places knows no place {place_id:?}"))),
 			r => r?,
 		};
@@ -295,14 +404,14 @@ impl Google {
 	}
 
 	/// The place with this id and what its profile shows, under the id Google now gives it.
-	pub async fn profile(&self, place_id: &str, ask: Ask, payer: &Payer<'_>) -> Result<Profile, Error> {
+	pub async fn profile(&self, place_id: &str, ask: Ask, payer: &B::For) -> Result<Profile, Error> {
 		let url = format!("{}/{place_id}", self.base);
 		let req = Request {
 			mask: PROFILE_MASK,
 			sku: PlacesRequest::Profile,
 			..Request::details(&url)
 		};
-		let (json, _) = match self.ask(&req, None, ask, payer).await {
+		let json = match self.ask(&req, None, ask, payer).await {
 			Err(Error::Api { status: 400 | 404, .. }) => return Err(Error::Invalid(format!("Places knows no place {place_id:?}"))),
 			r => r?,
 		};
@@ -311,7 +420,7 @@ impl Google {
 
 	/// The bytes of photo `name` (a [`PhotoRef`]'s), at most 1200 px wide: its link asked of Places,
 	/// then fetched.
-	pub async fn photo(&self, name: &str, payer: &Payer<'_>) -> Result<Vec<u8>, Error> {
+	pub async fn photo(&self, name: &str, payer: &B::For) -> Result<Vec<u8>, Error> {
 		#[derive(Deserialize)]
 		#[serde(rename_all = "camelCase")]
 		struct Resp {
@@ -328,13 +437,13 @@ impl Google {
 			sku: PlacesRequest::Photo,
 			subject: name,
 		};
-		let (json, _) = self.ask(&req, None, Ask::Cached, payer).await?;
+		let json = self.ask(&req, None, Ask::Cached, payer).await?;
 		let uri = serde_json::from_value::<Resp>(json)?.photo_uri;
 		Ok(self.http.get(&uri).send().await?.error_for_status()?.bytes().await?.to_vec())
 	}
 
 	/// The city or town `place_id` names, with its viewport.
-	pub async fn locality(&self, place_id: &str, payer: &Payer<'_>) -> Result<Locality, Error> {
+	pub async fn locality(&self, place_id: &str, payer: &B::For) -> Result<Locality, Error> {
 		#[derive(Deserialize)]
 		#[serde(rename_all = "camelCase")]
 		struct Resp {
@@ -350,7 +459,7 @@ impl Google {
 			mask: LOCALITY_MASK,
 			..Request::details(&url)
 		};
-		let (json, _) = match self.ask(&req, None, Ask::Cached, payer).await {
+		let json = match self.ask(&req, None, Ask::Cached, payer).await {
 			Err(Error::Api { status: 400 | 404, .. }) => return Err(Error::Invalid(format!("Places knows no place {place_id:?}"))),
 			r => r?,
 		};
@@ -376,7 +485,7 @@ impl Google {
 
 	/// The locality (Google's `locality`: a city or town) the point lies in; `None` outside any.
 	/// The point is rounded to about 10 m, so a click beside another asks nothing new.
-	pub async fn locality_at(&self, at: LatLng, payer: &Payer<'_>) -> Result<Option<Locality>, Error> {
+	pub async fn locality_at(&self, at: LatLng, payer: &B::For) -> Result<Option<Locality>, Error> {
 		#[derive(Deserialize)]
 		struct Resp {
 			#[serde(default)]
@@ -409,7 +518,7 @@ impl Google {
 			sku: PlacesRequest::Geocode,
 			subject: &point,
 		};
-		let (json, _) = self.ask(&req, None, Ask::Cached, payer).await?;
+		let json = self.ask(&req, None, Ask::Cached, payer).await?;
 		let Some(g) = serde_json::from_value::<Resp>(json)?.results.into_iter().next() else {
 			return Ok(None);
 		};
@@ -430,7 +539,7 @@ impl Google {
 	}
 
 	/// The ISO 3166-1 alpha-2 code of the country the point lies in; `None` outside any (at sea).
-	pub async fn country_at(&self, at: LatLng, payer: &Payer<'_>) -> Result<Option<String>, Error> {
+	pub async fn country_at(&self, at: LatLng, payer: &B::For) -> Result<Option<String>, Error> {
 		#[derive(Deserialize)]
 		struct Resp {
 			#[serde(default)]
@@ -453,7 +562,7 @@ impl Google {
 			sku: PlacesRequest::Geocode,
 			subject: &point,
 		};
-		let (json, _) = self.ask(&req, None, Ask::Cached, payer).await?;
+		let json = self.ask(&req, None, Ask::Cached, payer).await?;
 		let Some(g) = serde_json::from_value::<Resp>(json)?.results.into_iter().next() else {
 			return Ok(None);
 		};
@@ -471,7 +580,7 @@ impl Google {
 	}
 
 	/// The link that opens Google's review form for `place_id` (`googleMapsLinks.writeAReviewUri`).
-	pub async fn review_link(&self, place_id: &str, payer: &Payer<'_>) -> Result<String, Error> {
+	pub async fn review_link(&self, place_id: &str, payer: &B::For) -> Result<String, Error> {
 		#[derive(Deserialize)]
 		#[serde(rename_all = "camelCase")]
 		struct Resp {
@@ -487,7 +596,7 @@ impl Google {
 			mask: REVIEW_LINK_MASK,
 			..Request::details(&url)
 		};
-		let (json, _) = match self.ask(&req, None, Ask::Cached, payer).await {
+		let json = match self.ask(&req, None, Ask::Cached, payer).await {
 			Err(Error::Api { status: 400 | 404, .. }) => return Err(Error::Invalid(format!("Places knows no place {place_id:?}"))),
 			r => r?,
 		};
@@ -497,7 +606,7 @@ impl Google {
 	/// The places `input` may be heading for, within `regions` (ISO 3166-1 alpha-2, at most 15),
 	/// of `types` (Google's primary types or a collection such as `(cities)`; none: any).
 	/// No session token: each answer is its request's, so the queries cache serves it again.
-	pub async fn suggest(&self, input: &str, regions: &[&str], types: &[&str], payer: &Payer<'_>) -> Result<Vec<Suggestion>, Error> {
+	pub async fn suggest(&self, input: &str, regions: &[&str], types: &[&str], payer: &B::For) -> Result<Vec<Suggestion>, Error> {
 		#[derive(Deserialize)]
 		struct Resp {
 			#[serde(default)]
@@ -539,7 +648,7 @@ impl Google {
 			sku: PlacesRequest::Autocomplete,
 			subject: &input,
 		};
-		let (json, _) = self.ask(&req, Some(SEARCH_AGE), Ask::Cached, payer).await?;
+		let json = self.ask(&req, Some(SEARCH_AGE), Ask::Cached, payer).await?;
 		Ok(serde_json::from_value::<Resp>(json)?
 			.suggestions
 			.into_iter()
@@ -552,9 +661,9 @@ impl Google {
 			.collect())
 	}
 
-	/// Text search: every hit bearing the name searched for, best first. Each place it pays for is
-	/// cached as that place's details.
-	async fn search(&self, query: &str, near: Option<(f64, f64)>, payer: &Payer<'_>) -> Result<Vec<Place>, Error> {
+	/// Text search: every hit bearing the name searched for, best first. Each place a search pays
+	/// for is kept as that place's details ([`Here`]).
+	async fn search(&self, query: &str, near: Option<(f64, f64)>, payer: &B::For) -> Result<Vec<Place>, Error> {
 		#[derive(Deserialize)]
 		struct Resp {
 			#[serde(default)]
@@ -575,25 +684,10 @@ impl Google {
 			sku: PlacesRequest::Search,
 			subject: query,
 		};
-		let (json, paid) = self.ask(&req, Some(SEARCH_AGE), Ask::Cached, payer).await?;
+		let json = self.ask(&req, Some(SEARCH_AGE), Ask::Cached, payer).await?;
 		let mut named = Vec::new();
 		for raw in serde_json::from_value::<Resp>(json)?.places {
 			let place = Place::from(serde_json::from_value::<Hit>(raw.clone())?);
-			if paid {
-				let details = format!("{}/{}", self.base, place.place_id);
-				let req = Request::details(&details);
-				self.cache
-					.put(
-						Scheme::Places,
-						req.key(),
-						Put {
-							answer: raw.clone(),
-							request: req.preimage(),
-							bought: None,
-						},
-					)
-					.await?;
-			}
 			if place.name.as_ref().is_some_and(|n| n.eq_ignore_ascii_case(query)) {
 				named.push(place);
 			}
@@ -604,192 +698,20 @@ impl Google {
 		Ok(named)
 	}
 
-	/// A text search of `body` under the field `mask`, a study's, bought for `payer` unless the
-	/// queries cache holds an answer fetched since `since`.
-	pub async fn asked(&self, mask: &str, body: &str, since: jiff::Timestamp, payer: &Payer<'_>) -> Result<(), Error> {
-		let url = format!("{}:searchText", self.base);
-		let req = Request {
-			method: "POST",
-			url: &url,
-			mask,
-			body,
-			scheme: Scheme::Gop,
-			sku: PlacesRequest::Search,
-			subject: "a study's sweep",
-		};
-		self.ask(&req, None, Ask::Since(since), payer).await.map(drop)
-	}
-
-	/// The answer to `req`, and whether it was paid for now: from the cache unless older than
-	/// `max_age`, else claimed there and bought with the first key not sitting out.
-	async fn ask(&self, req: &Request<'_>, max_age: Option<Duration>, ask: Ask, payer: &Payer<'_>) -> Result<(serde_json::Value, bool), Error> {
-		let key = req.key();
+	/// The answer to `req`: the one kept, unless older than `max_age` or than `ask` takes, else
+	/// bought for `payer`.
+	async fn ask(&self, req: &Request<'_>, max_age: Option<Duration>, ask: Ask, payer: &B::For) -> Result<serde_json::Value, Error> {
 		let now = jiff::Timestamp::now();
 		let fresh_since = match ask {
 			Ask::Cached => max_age.map(|age| now - jiff::SignedDuration::try_from(age).expect("an age of seconds")),
 			Ask::Afresh => Some(now),
 			Ask::Since(since) => Some(since),
 		};
-		if ask != Ask::Afresh
-			&& let Some(kept) = self.cache.get(req.scheme, key).await?
-			&& fresh_since.is_none_or(|since| kept.fetched_at >= since)
-		{
-			return Ok((kept.answer, false));
-		}
-		if self.keyless(payer) {
-			return Err(Error::Invalid("asking Google Places needs an API key, and none is set".into()));
-		}
-		if !self.spend {
-			return Err(Error::Unbought);
-		}
-		loop {
-			match self.cache.claim(req.scheme, key, fresh_since).await? {
-				Claim::Stored(kept) => return Ok((kept.answer, false)),
-				Claim::Held { .. } => tokio::time::sleep(Duration::from_millis(500)).await,
-				Claim::Granted { .. } => break,
-			}
-		}
-		let bought = self.buy(req, payer).await;
-		if bought.is_err()
-			&& let Err(e) = self.cache.release(req.scheme, key).await
-		{
-			// the buy's error is the one to tell; the claim lapses with its lease anyway
-			tracing::warn!(error = %e, "releasing a claim after a failed buy");
-		}
-		let (answer, hold, account) = bought?;
-		let bill = match account {
-			None => Bill::Theirs,
-			Some(_) => Bill::Ours,
-		};
-		self.cache
-			.put(
-				req.scheme,
-				key,
-				Put {
-					answer: answer.clone(),
-					request: req.preimage(),
-					bought: Some(Billed {
-						item: req.sku.into(),
-						bill,
-						account,
-					}),
-				},
-			)
-			.await?;
-		if let Some(hold) = hold {
-			let label = match req.sku {
-				PlacesRequest::Details => format!("Places details · {}", req.subject),
-				PlacesRequest::Search => format!("Places search · {:?}", req.subject),
-				PlacesRequest::Autocomplete => format!("Places autocomplete · {:?}", req.subject),
-				PlacesRequest::Geocode => format!("Geocoding · {}", req.subject),
-				PlacesRequest::Profile => format!("Places profile · {}", req.subject),
-				PlacesRequest::Photo => format!("Places photo · {}", req.subject),
-			};
-			hold.paid(Bought { key, sku: req.sku, label }).await?;
-		}
-		Ok((answer, true))
+		self.buyer.ask(&self.http, req, fresh_since, payer).await
 	}
 
-	/// `req` asked of Google with the first key not sitting out: the payer's own, then the
-	/// rotation's by its accounts' rank, held in their purse before the first of those is asked;
-	/// the hold, to be paid once the answer is kept, and the account that paid (`None`: the payer's
-	/// own key).
-	async fn buy(&self, req: &Request<'_>, payer: &Payer<'_>) -> Result<(serde_json::Value, Option<Box<dyn Hold>>, Option<String>), Error> {
-		let mut tried = Vec::new();
-		let mut hold: Option<Box<dyn Hold>> = None;
-		let mut rank = None;
-		loop {
-			let (api_key, account) = match self.keys.own(&payer.own, &tried) {
-				Some(key) => (key, None),
-				None => {
-					let rank = match &rank {
-						Some(r) => r,
-						None => rank.insert(self.rank.rank(req.sku, &self.keys.accounts()).await?),
-					};
-					let (account, key) = self.keys.rotation(&payer.own, &tried, rank).map_err(Error::Exhausted)?;
-					(key, Some(account))
-				}
-			};
-			if account.is_some()
-				&& hold.is_none()
-				&& let Some(purse) = payer.purse
-			{
-				hold = Some(purse.hold(req.sku).await?);
-			}
-			let r = match req.method {
-				"POST" => self.http.post(req.url).header(reqwest::header::CONTENT_TYPE, "application/json").body(req.body.to_owned()),
-				"GET" => self.http.get(req.url),
-				other => unreachable!("Places is asked by GET and POST only, not {other}"),
-			};
-			let r = r.header("X-Goog-Api-Key", api_key.as_str());
-			let r = match req.mask {
-				"" => r, // a photo's media takes no field mask
-				mask => r.header("X-Goog-FieldMask", mask),
-			};
-			let resp = r.send().await?;
-			let status = resp.status();
-			tracing::info!(method = req.method, url = req.url, %status, ?account, "Places asked");
-			let text = resp.text().await?;
-			if status.is_success() {
-				let answer = serde_json::from_str(&text).map_err(|e| Error::Api {
-					asked: format!("{} {}", req.method, req.url),
-					status: 200,
-					body: format!("not JSON ({e}), paid for and not kept: {text}"),
-				})?;
-				return Ok((answer, hold, account));
-			}
-			match (Spent::of(&text), account) {
-				(Some(why), _) => {
-					self.keys.sit_out(&api_key, why);
-					tried.push(api_key);
-				}
-				(None, None) => {
-					return Err(Error::OwnKey {
-						tail: keys::tail(&api_key).to_owned(),
-						said: said(&text),
-					});
-				}
-				(None, Some(_)) => {
-					return Err(Error::Api {
-						asked: format!("{} {}", req.method, req.url),
-						status: status.as_u16(),
-						body: text,
-					});
-				}
-			}
-		}
-	}
-
-	/// Whether `key` answers for Places: a details request asking only the id, which Google does
-	/// not bill, so it is neither cached nor paid for. Answering, it is back in at once.
-	pub async fn probe(&self, key: &str) -> Result<(), Error> {
-		let resp = self
-			.http
-			.get(format!("{}/{PROBE_PLACE}", self.base))
-			.header("X-Goog-Api-Key", key)
-			.header("X-Goog-FieldMask", "id")
-			.send()
-			.await?;
-		let status = resp.status();
-		let text = resp.text().await?;
-		tracing::info!(key = %format!("…{}", keys::tail(key)), %status, "Places key probed");
-		if status.is_success() {
-			self.keys.back(key);
-			return Ok(());
-		}
-		Err(Error::OwnKey {
-			tail: keys::tail(key).to_owned(),
-			said: said(&text),
-		})
-	}
-
-	/// Why an own key sits out, if it does.
-	pub fn sat_out(&self, key: &str) -> Option<Spent> {
-		self.keys.out(key)
-	}
-
-	fn keyless(&self, payer: &Payer<'_>) -> bool {
-		payer.own.is_empty() && self.keys.is_empty()
+	fn keyless(&self, payer: &B::For) -> bool {
+		self.buyer.keyless(payer)
 	}
 }
 

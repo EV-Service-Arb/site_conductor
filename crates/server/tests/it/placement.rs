@@ -49,6 +49,8 @@ struct Conductor {
 	app: Router,
 	/// Searches Places answered.
 	searched: Arc<AtomicUsize>,
+	/// What Places was sent.
+	places: sa_server::testing::Log,
 	b: Browser,
 }
 
@@ -74,7 +76,8 @@ impl Conductor {
 				false => Json(json!({ "places": [plumber] })),
 			}
 		};
-		let (places, _) = upstream(Router::new().route("/v1/places:searchText", post(search))).await;
+		let probe = |axum::extract::Path(id): axum::extract::Path<String>| async move { Json(json!({ "id": id })) };
+		let (places, log) = upstream(Router::new().route("/v1/places:searchText", post(search)).route("/v1/places/{id}", axum::routing::get(probe))).await;
 		let google = Google::try_new(Keys::new(vec![("house".to_owned(), "k".to_owned())]), Arc::new(sa_places::InOrder), Arc::new(db.store().await))
 			.unwrap()
 			.spend(true)
@@ -83,7 +86,7 @@ impl Conductor {
 			db.store().await,
 			DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(),
 			google,
-			sa_places::Accounts::new(vec![account("house", Some("k"), None)]),
+			sa_places::Accounts::new(vec![account("house", Some("k"), None)], vec![]),
 		);
 		p.import_review_archive(Export {
 			people: vec![],
@@ -119,6 +122,7 @@ impl Conductor {
 			panel: p.clone(),
 			app,
 			searched,
+			places: log,
 			b,
 		};
 		c.call(Method::GET, "/api/v1/tokens", Value::Null).await; // the gate records who they are, whom the area is by
@@ -265,6 +269,29 @@ async fn a_pull_buys_what_the_study_lacks_and_is_charged_for_it() {
 		(&json!(-(NEED as i64 + 1) * 8), &json!("charge"), &json!("placement"), &json!(c.studied()[0])),
 		"{charge}"
 	);
+}
+
+#[tokio::test]
+async fn a_pull_buys_on_its_callers_own_maps_key_first_and_charges_only_the_rotation() {
+	let mut c = Conductor::new(admin(), 8, 1000).await;
+	let (status, gmail) = c.call(Method::POST, "/api/v1/gmails", json!({ "gmail": "a@gmail.com" })).await;
+	assert_eq!(status, StatusCode::CREATED, "{gmail}");
+	let (status, set) = c.call(Method::PUT, &format!("/api/v1/gmails/{}/maps_key", gmail["id"]), json!({ "key": "own-key-1234" })).await;
+	assert_eq!(status, StatusCode::OK, "{set}");
+	let plumbing = c.category(PLUMBER, "FR", plumbing()).await;
+
+	let (status, payload) = c.call(Method::POST, &format!("/api/v1/placement/study/pull?area=clermont&version={plumbing}"), Value::Null).await;
+	assert_eq!(status, StatusCode::OK, "{payload}");
+	let keys: Vec<String> = c
+		.places
+		.lock()
+		.unwrap()
+		.iter()
+		.filter(|s| s.path_and_query.ends_with(":searchText"))
+		.map(|s| s.headers["x-goog-api-key"].to_str().unwrap().to_owned())
+		.collect();
+	assert_eq!(keys, vec!["own-key-1234"; NEED + 1], "every search on the caller's own key");
+	assert_eq!(c.balance().await, 1000, "which is free");
 }
 
 #[tokio::test]

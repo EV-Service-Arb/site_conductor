@@ -7,6 +7,7 @@
 //! POST   /api/queries_cache/{scheme}/{key}/claim   ClaimBody → 200 Claim
 //! DELETE /api/queries_cache/{scheme}/{key}/claim   → 204
 //! PUT    /api/queries_cache/{scheme}/{key}         Put → 204
+//! POST   /api/queries_cache/places/{key}/buy       BuyBody, x-sa-assertion → 200 {answer} | BuyRefused
 //! ```
 
 use std::{fmt, str::FromStr};
@@ -131,6 +132,42 @@ pub struct Put {
 	pub request: String,
 	/// What it was bought as; `None`, kept from another answer bought, nothing billed for it.
 	pub bought: Option<crate::usage::Billed>,
+}
+
+/// A Places request the conductor buys, or serves as kept, for the person the conductor's own
+/// assertion on it names (`x-sa-assertion`, one it signed for the service asking).
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct BuyBody {
+	/// What [`Put::request`] keeps: the key's preimage.
+	pub request: String,
+	/// An answer fetched before this is as good as none.
+	pub fresh_since: Option<Timestamp>,
+	/// Their GBP the request is about: its gmail's key goes first.
+	pub gbp: Option<i64>,
+}
+
+/// Why a buy was refused: its answer's body.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, thiserror::Error)]
+#[serde(tag = "refused", rename_all = "snake_case")]
+pub enum BuyRefused {
+	/// Not a request sa_places makes of Places, or naming a GBP not theirs, or what Places can make nothing of.
+	#[error("{why}")]
+	Invalid { why: String },
+	/// No assertion the conductor signed, alive, of a person.
+	#[error("unauthenticated: {why}")]
+	Unauthenticated { why: String },
+	/// Their balance is below the price.
+	#[error("{why}")]
+	Unpaid { why: String },
+	/// Places refused it.
+	#[error("Places, {asked}: {status}: {body}")]
+	Places { asked: String, status: u16, body: String },
+	/// This conductor buys no Google answer.
+	#[error("the conductor buys no Google answer: it was started without --spend-real-quota-i-am-certain")]
+	Unbought,
+	/// Every key sits out, or the conductor failed.
+	#[error("{why}")]
+	Unavailable { why: String },
 }
 
 /// One version of an answer, a line of `panel queries-cache export` and `import`: what moves

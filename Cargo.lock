@@ -4989,6 +4989,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sa_guard"
+version = "0.1.0"
+dependencies = [
+ "eyre",
+ "jiff",
+ "regex",
+ "reqwest",
+ "rustls",
+ "sa_core",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "sa_panel"
 version = "0.1.0"
 dependencies = [
@@ -5046,6 +5061,7 @@ dependencies = [
  "jiff",
  "reqwest",
  "rustls",
+ "sa_auth",
  "sa_core",
  "schemars",
  "serde",

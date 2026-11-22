@@ -370,6 +370,8 @@ pub enum Refused {
 	Expiry,
 	#[error("carries a permission outside its service")]
 	Slice,
+	#[error("vouches for no person")]
+	Person,
 }
 
 /// The panel's signing key: `<kid>:<base64 of the 32-byte Ed25519 seed>`.
@@ -419,6 +421,31 @@ pub struct Request<'a> {
 /// request's method and path (and a source's, its body), and it is alive at `now` (unix seconds).
 pub fn verify(keys: &Keys, token: &str, aud: Service, request: Request, now: i64) -> Result<Assertion, Refused> {
 	let Request { method, path, body } = request;
+	let assertion = alive(keys, token, aud, now)?;
+	if assertion.method != method || assertion.path != path {
+		return Err(Refused::Request);
+	}
+	if let Principal::Source(source) = &assertion.principal {
+		let digest = body.map(|b| hex::encode(Sha256::digest(b)));
+		if digest.as_deref() != Some(source.body_sha256.as_str()) {
+			return Err(Refused::Body);
+		}
+	}
+	Ok(assertion)
+}
+
+/// The person a User assertion the panel signed for `aud` names, alive at `now`, whichever request
+/// of `aud`'s it opened: what `aud` hands back to the panel as that person's say for the Places
+/// buys the request makes (docs/ARCHITECTURE.md, Queries cache).
+pub fn vouched(keys: &Keys, token: &str, aud: Service, now: i64) -> Result<User, Refused> {
+	match alive(keys, token, aud, now)?.principal {
+		Principal::User(user) => Ok(user),
+		Principal::Source(_) | Principal::Conductor => Err(Refused::Person),
+	}
+}
+
+/// An assertion the panel signed for `aud`, alive at `now`, its permissions within `aud`'s.
+fn alive(keys: &Keys, token: &str, aud: Service, now: i64) -> Result<Assertion, Refused> {
 	let mut parts = token.split('.');
 	let (Some(header), Some(claims), Some(signature), None) = (parts.next(), parts.next(), parts.next(), parts.next()) else {
 		return Err(Refused::Malformed);
@@ -435,24 +462,13 @@ pub fn verify(keys: &Keys, token: &str, aud: Service, request: Request, now: i64
 	if assertion.aud != aud {
 		return Err(Refused::Audience);
 	}
-	if assertion.method != method || assertion.path != path {
-		return Err(Refused::Request);
-	}
 	if assertion.exp <= now || assertion.exp > now + TTL + 5 {
 		return Err(Refused::Expiry);
 	}
-	match &assertion.principal {
-		Principal::User(user) =>
-			if !user.permissions.iter().all(|p| p.starts_with(aud.prefix())) {
-				return Err(Refused::Slice);
-			},
-		Principal::Source(source) => {
-			let digest = body.map(|b| hex::encode(Sha256::digest(b)));
-			if digest.as_deref() != Some(source.body_sha256.as_str()) {
-				return Err(Refused::Body);
-			}
-		}
-		Principal::Conductor => {}
+	if let Principal::User(user) = &assertion.principal
+		&& !user.permissions.iter().all(|p| p.starts_with(aud.prefix()))
+	{
+		return Err(Refused::Slice);
 	}
 	Ok(assertion)
 }

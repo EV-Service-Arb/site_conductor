@@ -68,7 +68,7 @@ impl Shelf {
 			db.store().await,
 			DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(),
 			google,
-			sa_places::Accounts::new(vec![account("house", Some("k"), None)]),
+			sa_places::Accounts::new(vec![account("house", Some("k"), None)], vec![]),
 		);
 		p.import_review_archive(Export {
 			people: vec![],

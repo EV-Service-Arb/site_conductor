@@ -175,7 +175,7 @@ pub fn app(
 		.route("/health", get(|| async { "ok" }))
 		.merge(auth)
 		.merge(agents)
-		.merge(queries_cache::routes(sign_in.panel.clone(), &limits))
+		.merge(queries_cache::routes(sign_in.panel.clone(), &limits, forward.as_ref().map(|f| f.services().vouchers())))
 		.nest("/api/v1", v1);
 	let app = match forward {
 		Some(forward) => app

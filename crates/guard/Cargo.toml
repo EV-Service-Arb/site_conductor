@@ -1,0 +1,29 @@
+[package]
+name = "sa_guard"
+description = "the guard: holds each slice's real money on Google to its allow in nix/google.nix, and the meters' APIs to their daily pace, from Cloud Run"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[[bin]]
+name = "guard"
+path = "src/main.rs"
+
+[dependencies]
+eyre.workspace = true
+jiff = { workspace = true, features = ["serde", "tzdb-bundle-always"] }
+regex.workspace = true
+reqwest = { workspace = true, features = ["blocking", "query"] }
+rustls.workspace = true
+sa_core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

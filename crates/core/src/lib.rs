@@ -23,6 +23,7 @@ pub mod dashboards;
 pub mod feeds;
 pub mod gbp;
 pub mod geo;
+pub mod google;
 pub mod ids;
 pub mod meters;
 pub mod notify;

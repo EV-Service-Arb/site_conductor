@@ -14,6 +14,9 @@ use serde::{Serialize, Serializer};
 
 use crate::prices::Item;
 
+/// The slice of every account's `allow` (nix/google.nix) the meters fall in.
+pub const SLICE: &str = "maps";
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -55,8 +58,12 @@ pub struct Meter {
 	pub id: &'static str,
 	/// As the vendor names it.
 	pub name: &'static str,
+	/// The API it is asked through, whose daily quotas pace it: Google's service name.
+	pub api: &'static str,
 	/// Free units a period.
 	pub free: i64,
+	/// Micro-USD a unit past the free ones, the vendor's list price.
+	pub price: i64,
 	pub stop: Stop,
 }
 impl Meter {
@@ -67,21 +74,30 @@ impl Meter {
 }
 
 macro_rules! metered {
-	($($vendor:ident $id:literal $name:literal, $free:literal free, $stop:ident;)+) => {
+	($($vendor:ident $id:literal $name:literal on $api:literal, $free:literal free then $price:literal, $stop:ident;)+) => {
 		/// Every meter.
-		pub const ALL: &[Meter] = &[$(Meter { vendor: Vendor::$vendor, id: $id, name: $name, free: $free, stop: Stop::$stop },)+];
+		pub const ALL: &[Meter] = &[$(Meter { vendor: Vendor::$vendor, id: $id, name: $name, api: $api, free: $free, price: $price, stop: Stop::$stop },)+];
 	};
 }
 
+// free units and list prices: developers.google.com/maps/billing-and-pricing/pricing
 metered! {
-	Google "658E-F885-E11A" "Dynamic Street View", 5000 free, AtFree;
-	Google "FAF4-3B2D-51B2" "Dynamic Maps", 10000 free, Never;
-	Google "4ED6-464A-2AFC" "Places API Place Details Pro", 5000 free, Never;
-	Google "4FDA-34B1-A910" "Places API Text Search Pro", 5000 free, Never;
-	Google "4EF4-B17C-B31A" "Autocomplete Requests", 10000 free, Never;
-	Google "BAC8-4E68-E261" "Geocoding", 10000 free, Never;
-	Google "2D9A-3DE0-3766" "Places API Place Details Enterprise", 1000 free, Never;
-	Google "DCD1-FE97-8C71" "Places API Place Details Photos", 1000 free, Never;
+	Google "658E-F885-E11A" "Dynamic Street View" on "maps-backend.googleapis.com", 5000 free then 14000, AtFree;
+	Google "FAF4-3B2D-51B2" "Dynamic Maps" on "maps-backend.googleapis.com", 10000 free then 7000, Never;
+	Google "4ED6-464A-2AFC" "Places API Place Details Pro" on "places.googleapis.com", 5000 free then 17000, Never;
+	Google "4FDA-34B1-A910" "Places API Text Search Pro" on "places.googleapis.com", 5000 free then 32000, Never;
+	Google "4EF4-B17C-B31A" "Autocomplete Requests" on "places.googleapis.com", 10000 free then 2830, Never;
+	Google "BAC8-4E68-E261" "Geocoding" on "geocoding-backend.googleapis.com", 10000 free then 5000, Never;
+	Google "2D9A-3DE0-3766" "Places API Place Details Enterprise" on "places.googleapis.com", 1000 free then 20000, Never;
+	Google "DCD1-FE97-8C71" "Places API Place Details Photos" on "places.googleapis.com", 1000 free then 7000, Never;
+}
+
+/// How the meters on `api` that only count (a stop at free is the conductor's to hold) pace it a
+/// month: their least free units, and their dearest list price past them (micro-USD); `None`,
+/// nothing of ours counts on it.
+pub fn pace(api: &str) -> Option<(i64, i64)> {
+	let counted = || ALL.iter().filter(|m| m.api == api && m.stop == Stop::Never);
+	Some((counted().map(|m| m.free).min()?, counted().map(|m| m.price).max()?))
 }
 
 impl fmt::Display for Meter {

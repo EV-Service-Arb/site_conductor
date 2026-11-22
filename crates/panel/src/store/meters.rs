@@ -1,5 +1,5 @@
 //! The vendors' readings of each meter ([`sa_core::meters`]) on each account, only ever added, and
-//! our own uses of its items on that account after one.
+//! our own uses of its items on that account after one; and each account's bill as last read.
 
 use eyre::WrapErr;
 use jiff::Timestamp;
@@ -140,4 +140,27 @@ pub(crate) async fn spend(conn: &mut SqliteConnection, account: &str, period_sta
 		})),
 		_ => unreachable!("a reading has its currency and its through"),
 	}
+}
+
+/// `account`'s bill, replacing the one read before.
+pub(crate) async fn put_bill(conn: &mut SqliteConnection, account: &str, bill: &crate::meters::Bill, read_at: Timestamp) -> eyre::Result<()> {
+	sqlx::query("INSERT INTO google_bills (account, bill, read_at) VALUES ($1, $2, $3) ON CONFLICT (account) DO UPDATE SET bill = excluded.bill, read_at = excluded.read_at")
+		.bind(account)
+		.bind(serde_json::to_string(bill).expect("a bill serializes"))
+		.bind(to_db(read_at))
+		.execute(conn)
+		.await
+		.wrap_err_with(|| format!("keeping {account}'s bill"))?;
+	Ok(())
+}
+
+/// `account`'s bill as last read, and when; `None`, never.
+pub(crate) async fn bill(conn: &mut SqliteConnection, account: &str) -> eyre::Result<Option<(crate::meters::Bill, Timestamp)>> {
+	let row: Option<(String, i64)> = sqlx::query_as("SELECT bill, read_at FROM google_bills WHERE account = $1")
+		.bind(account)
+		.fetch_optional(conn)
+		.await
+		.wrap_err_with(|| format!("reading {account}'s bill"))?;
+	row.map(|(bill, at)| Ok((serde_json::from_str(&bill).wrap_err_with(|| format!("{account}'s bill as kept"))?, from_db(at)?)))
+		.transpose()
 }

@@ -213,7 +213,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Asks Google about a tracked place again: its id, name and address become what Google gives now. */
+        /** Asks Google about a tracked place again: its id, name and address become what Google gives now, the member paying as their GMB's gmail. */
         post: operations["relink_track"];
         delete?: never;
         options?: never;
@@ -343,7 +343,7 @@ export interface paths {
         /** Every watched place. */
         get: operations["list_targets"];
         put?: never;
-        /** Watches a place: a place id, or a Maps URL, resolved through Places. */
+        /** Watches a place: a place id, or a Maps URL, resolved through Places, the caller paying. */
         post: operations["add_target"];
         delete?: never;
         options?: never;
