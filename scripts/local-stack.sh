@@ -14,7 +14,7 @@
 #   nix run .#dev [-- --port <n>]          the conductor, sites_panel and review_archive under --watch,
 #                                          a peer started unless it already serves, a conductor already
 #                                          serving stopped and replaced; the conductor on n
-#   nix run .#dev -- --fixed [<rev>]       the same unwatched, the conductor as this checkout is now, or at <rev>;
+#   nix run .#dev -- --fixed [<rev>]       (or --frozen) the same unwatched, the conductor as this checkout is now, or at <rev>;
 #                                          beside the watched one, on the first free pair down from SA_PORT_RANGE's top;
 #                                          on a copy of .local's state, opened in the default browser
 #
@@ -65,7 +65,7 @@ while [ $# -gt 0 ]; do
 	--from-prod) from_prod=1 ;;
 	--dev) dev=1 ;;
 	--no-peers) no_peers=1 ;;
-	--fixed)
+	--fixed | --frozen)
 		fixed=1
 		if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
 			fixed_rev="$2"
@@ -96,7 +96,7 @@ while [ $# -gt 0 ]; do
 	-h | --help)
 		cat <<'EOF'
 local-stack [--reset] [--no-sites] [--watch] [--role admin|operator] [--port-offset <n>] [--from-prod] [--spend-real-quota-i-am-certain]
-dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [--fixed [<rev>]]
+dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [--fixed|--frozen [<rev>]]
 
   The conductor (dev sign-in, its Grafana at /grafana/), sites_panel, review_archive, aquafix,
   vifnet and debouchage, wired together, each on the port its dev shell sets. State in .local/
@@ -116,11 +116,11 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [-
   --port <n>: the conductor on n and its next dev on n+1, in SA_PORT_RANGE, with a state of its own; no browsers'
   runner, whose port is the stack's on the usual one.
   --no-peers: neither built nor started: sites_panel, review_archive, playbook; the conductor answers 502 for them.
-  --fixed [<rev>]: nothing watched; the conductor and its static front end built once from a copy of this checkout
+  --fixed (--frozen) [<rev>]: nothing watched; the conductor and its static front end built once from a copy of this checkout
   as it is now, or at <rev> (a commit, a tag), into this checkout's build dir: only what differs compiles. Without --port,
   on the first free pair down from SA_PORT_RANGE's top, beside a watched dev and other --fixed runs, never replacing them.
-  On a copy of .local's state (its sessions too; a fresh one when a migration it applied differs in the copy). Without
-  --port and --port-offset, opened in the default browser (xdg-open).
+  On a copy of .local's state (its sessions too; a fresh one when the copy's conductor does not migrate it). Without
+  --port and --port-offset, opened in the default browser (xdg-open), and at exit .local takes back what it did (docs/LOCAL.md).
 EOF
 		exit 0
 		;;
@@ -484,33 +484,31 @@ if [ "$from_prod" = 1 ]; then
 	esac
 fi
 # --fixed: on a copy of the watched dev's state, sessions included (the browser's localhost cookie is every port's), its
-# peers holding the same data; a fresh one when its database has a migration this copy changed, which the conductor would refuse
-if [ "$fixed" = 1 ] && [ "$from_prod" = 0 ] && [ "$state" != "$root/.local" ] && [ -e "$root/.local/panel.db" ]; then
-	rm -rf "$state/panel.db"* "$state/queries_history.db"* "$state/queries_cache.prod-index" "$state/sites_panel.db"* "$state/review_archive" "$state/secrets" "$state/data-key"
+# peers holding the same data
+copied=0
+local_dbs=(panel.db queries_history.db sites_panel.db review_archive/review_archive.db)
+# .local's databases as they are, to tell at exit whether anything wrote them since the copy
+local_print() {
+	local db f
+	for db in "${local_dbs[@]}"; do
+		for f in "$root/.local/$db" "$root/.local/$db-wal"; do [ ! -e "$f" ] || cat "$f"; done
+	done | sha256sum
+}
+drop_copy() {
+	rm -rf "$state/panel.db"* "$state/queries_history.db"* "$state/queries_cache.prod-index" "$state/sites_panel.db"* "$state/review_archive" "$state/secrets" "$state/data-key" "$state/local-at-copy"
 	mkdir -p "$state/secrets"
-	changed=""
-	for pair in panel.db:migrations queries_history.db:history_migrations; do
-		db="$root/.local/${pair%%:*}"
-		[ -e "$db" ] || continue # a state from before the history: the copy's conductor makes it
-		rows="$(sqlite3 "$db" "SELECT version || ' ' || lower(hex(checksum)) FROM _sqlx_migrations WHERE success")" || die "$db: no migrations table"
-		while read -r v sum; do
-			f=""
-			for c in "$src/crates/panel/${pair#*:}/$v"_*.sql; do [[ $c == *.down.sql ]] || f="$c"; done
-			[ -e "$f" ] || continue # a rollback, as the conductor takes it
-			[ "$(sha384sum <"$f" | cut -d' ' -f1)" = "$sum" ] || changed+=" ${pair%%:*}:$v"
-		done <<<"$rows"
+}
+if [ "$fixed" = 1 ] && [ "$from_prod" = 0 ] && [ "$state" != "$root/.local" ] && [ -e "$root/.local/panel.db" ]; then
+	drop_copy
+	say "--fixed: a copy of .local's state"
+	local_print >"$state/local-at-copy"
+	for db in "${local_dbs[@]}"; do
+		[ ! -e "$root/.local/$db" ] || { mkdir -p "$(dirname "$state/$db")" && sqlite3 "$root/.local/$db" ".backup '$state/$db'"; }
 	done
-	if [ -n "$changed" ]; then
-		warn "--fixed: .local's databases applied migrations this copy has otherwise ($changed ): a fresh state"
-	else
-		say "--fixed: a copy of .local's state"
-		for db in panel.db queries_history.db sites_panel.db review_archive/review_archive.db; do
-			[ ! -e "$root/.local/$db" ] || { mkdir -p "$(dirname "$state/$db")" && sqlite3 "$root/.local/$db" ".backup '$state/$db'"; }
-		done
-		[ ! -d "$root/.local/review_archive/blobs" ] || cp -al "$root/.local/review_archive/blobs" "$state/review_archive/"
-		[ ! -d "$root/.local/secrets" ] || cp -a "$root/.local/secrets/." "$state/secrets/"
-		cp "$root/.local/data-key" "$state/data-key" # what the copied sessions and secrets are sealed with
-	fi
+	[ ! -d "$root/.local/review_archive/blobs" ] || cp -al "$root/.local/review_archive/blobs" "$state/review_archive/"
+	[ ! -d "$root/.local/secrets" ] || cp -a "$root/.local/secrets/." "$state/secrets/"
+	cp "$root/.local/data-key" "$state/data-key" # what the copied sessions and secrets are sealed with
+	copied=1
 fi
 # Beside the builds, waited on before the first reader. Under `timed`, so errexit is off: every step checked.
 prod_data() {
@@ -715,6 +713,14 @@ elif [ -z "${PANEL_WEB_DIR:-}" ]; then
 	PANEL_WEB_DIR="$state/build/frontend"
 fi
 [ -x "$PANEL_BIN" ] || die "PANEL_BIN $PANEL_BIN is not an executable"
+# this run's conductor on <dir>'s databases alone: the caller's environment is not its
+on_dbs() { env -i PATH="$PATH" PANEL_DB_PATH="$1/panel.db" PANEL_HISTORY_DB_PATH="$1/queries_history.db" RUST_LOG=warn "$PANEL_BIN" "${@:2}"; }
+if [ "$copied" = 1 ] && ! migrated="$(on_dbs "$state" migrate 2>&1)"; then
+	warn "--fixed: this conductor does not migrate .local's copy: a fresh state"
+	echo "$migrated" >&2
+	drop_copy
+	copied=0
+fi
 if [ "$run_sites" = 1 ] && [ "$watch" = 0 ] && [ -z "${SITES_BIN:-}" ]; then
 	[ -f "$SITES_DIR/flake.nix" ] || die "no sites_panel checkout at $SITES_DIR: _.siblings-local.json names it"
 	say "building sites_panel ($SITES_DIR#bin)"
@@ -910,6 +916,39 @@ stop_all() {
 	done
 	[ "$alive" = 0 ] || kill -KILL ${pids[@]+"${pids[@]}"} 2>/dev/null
 	[ "$run_panel" = 0 ] || sync_queries
+	[ "$copied" = 0 ] || [ "$window" = 0 ] || sync_local
+}
+# A window's --fixed gives .local back what it did: its databases whole while they are at this checkout's migrations
+# (the watched dev's) and nothing wrote or serves .local since the copy; else the answers .local's queries cache lacks.
+sync_local() {
+	local pair f v db index
+	# each of the checkout's applied as it is; one applied that it lacks, a rollback, as the conductor takes it
+	for pair in panel.db:migrations queries_history.db:history_migrations; do
+		for f in "$root/crates/panel/${pair#*:}"/*.sql; do
+			[[ $f != *.down.sql ]] || continue
+			v="${f##*/}"
+			[ "$(sqlite3 "$state/${pair%%:*}" "SELECT lower(hex(checksum)) FROM _sqlx_migrations WHERE success AND version = ${v%%_*}")" = "$(sha384sum <"$f" | cut -d' ' -f1)" ] || {
+				warn "--fixed: $state is at other migrations than this checkout's (${pair%%:*}: ${v%.up.sql}): .local takes nothing back"
+				return
+			}
+		done
+	done
+	if ! holds "$root/.local" && [ "$(local_print)" = "$(cat "$state/local-at-copy")" ]; then
+		for db in "${local_dbs[@]}"; do
+			[ ! -e "$state/$db" ] || sqlite3 "$state/$db" ".backup '$root/.local/$db'"
+		done
+		[ ! -d "$state/review_archive/blobs" ] || { mkdir -p "$root/.local/review_archive/blobs" && cp -al --update=none "$state/review_archive/blobs/." "$root/.local/review_archive/blobs/"; }
+		cp -a "$state/secrets/." "$root/.local/secrets/"
+		say "--fixed: .local took $state's databases"
+		return
+	fi
+	index="$(mktemp)"
+	if on_dbs "$root/.local" queries-cache index >"$index" && on_dbs "$state" queries-cache export --except "$index" | on_dbs "$root/.local" queries-cache import; then
+		say "--fixed: .local moved on since the copy: it took only the queries cache's answers it lacked"
+	else
+		warn "--fixed: .local did not take $state's queries cache answers"
+	fi
+	rm -f "$index"
 }
 trap stop_all EXIT
 trap 'stop_all; exit 130' INT TERM HUP
