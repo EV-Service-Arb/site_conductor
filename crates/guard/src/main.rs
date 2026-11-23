@@ -756,7 +756,7 @@ fn seen(google: &Google, table: &str, now: Timestamp, month: &str, day_began: Ti
 	{
 		let (project, dataset, billing) = export(table)?;
 		let bq = BigQuery::with_token(google.token.clone(), project);
-		let published = bq.query(&format!("SELECT definition, digest FROM `{project}.{dataset}.definition` ORDER BY at DESC LIMIT 1"))?;
+		let published = bq.query(&format!("SELECT definition, digest FROM `{project}.{dataset}.definition` ORDER BY `at` DESC LIMIT 1"))?;
 		let [row] = published.as_slice() else {
 			bail!("the conductor has published no definition beside it: set its hold in the admin's meters card");
 		};

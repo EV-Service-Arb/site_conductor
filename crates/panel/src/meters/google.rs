@@ -200,7 +200,9 @@ impl Reader for Google {
 	}
 
 	async fn published(&self, now: Timestamp) -> eyre::Result<Option<String>> {
-		let rows = self.query(&format!("SELECT digest FROM {} ORDER BY at DESC LIMIT 1", self.definitions()), json!([]), now).await?;
+		let rows = self
+			.query(&format!("SELECT digest FROM {} ORDER BY `at` DESC LIMIT 1", self.definitions()), json!([]), now)
+			.await?;
 		rows.first().map(|r| string(&r[0], "a digest")).transpose()
 	}
 
